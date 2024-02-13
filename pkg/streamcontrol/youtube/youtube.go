@@ -15,15 +15,11 @@ import (
 	"google.golang.org/api/youtube/v3"
 )
 
-type StreamProfile struct {
-	Tags []string
-}
-
 type YouTube struct {
 	YouTubeService *youtube.Service
 }
 
-var _ streamctl.StreamController[StreamProfile] = (*YouTube)(nil)
+var _ streamcontrol.StreamController[StreamProfile] = (*YouTube)(nil)
 
 func New(
 	ctx context.Context,
@@ -158,6 +154,7 @@ func (yt *YouTube) updateActiveBroadcasts(
 func (yt *YouTube) ApplyProfile(
 	ctx context.Context,
 	profile StreamProfile,
+	customArgs ...any,
 ) error {
 	return yt.updateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
 		if broadcast.Snippet == nil {

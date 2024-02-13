@@ -1,4 +1,4 @@
-package streamctl
+package streamcontrol
 
 import (
 	"context"
@@ -25,7 +25,7 @@ type StreamControllerCommons interface {
 type StreamController[ProfileType StreamProfile] interface {
 	StreamControllerCommons
 
-	ApplyProfile(ctx context.Context, profile ProfileType) error
+	ApplyProfile(ctx context.Context, profile ProfileType, customArgs ...any) error
 	StartStream(ctx context.Context, title string, description string, profile ProfileType, customArgs ...any) error
 }
 
@@ -37,7 +37,7 @@ type AbstractStreamController interface {
 
 type abstractStreamController struct {
 	StreamController       StreamControllerCommons
-	applyProfile           func(ctx context.Context, profile StreamProfile) error
+	applyProfile           func(ctx context.Context, profile StreamProfile, customArgs ...any) error
 	startStream            func(ctx context.Context, title string, description string, profile StreamProfile, customArgs ...any) error
 	StreamProfileTypeValue reflect.Type
 }
@@ -49,8 +49,9 @@ func (c *abstractStreamController) GetImplementation() StreamControllerCommons {
 func (c *abstractStreamController) ApplyProfile(
 	ctx context.Context,
 	profile StreamProfile,
+	customArgs ...any,
 ) error {
-	return c.applyProfile(ctx, profile)
+	return c.applyProfile(ctx, profile, customArgs...)
 }
 
 func (c *abstractStreamController) SetTitle(
@@ -106,12 +107,12 @@ func ToAbstract[T StreamProfile](c StreamController[T]) AbstractStreamController
 	profileType := reflect.TypeOf(zeroProfile)
 	return &abstractStreamController{
 		StreamController: c,
-		applyProfile: func(ctx context.Context, _profile StreamProfile) error {
+		applyProfile: func(ctx context.Context, _profile StreamProfile, customArgs ...any) error {
 			profile, ok := _profile.(T)
 			if !ok {
 				return ErrInvalidStreamProfileType{Expected: zeroProfile, Received: _profile}
 			}
-			return c.ApplyProfile(ctx, profile)
+			return c.ApplyProfile(ctx, profile, customArgs...)
 		},
 		startStream: func(ctx context.Context, title string, description string, _profile StreamProfile, customArgs ...any) error {
 			profile, ok := _profile.(T)

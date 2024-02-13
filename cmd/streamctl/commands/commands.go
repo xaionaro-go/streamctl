@@ -113,8 +113,8 @@ const (
 	idYoutube = "youtube"
 )
 
-func newConfig() streamctl.Config {
-	cfg := streamctl.Config{}
+func newConfig() streamcontrol.Config {
+	cfg := streamcontrol.Config{}
 	twitch.InitConfig(cfg, idTwitch)
 	youtube.InitConfig(cfg, idYoutube)
 	return cfg
@@ -126,8 +126,8 @@ func generateConfig(cmd *cobra.Command, args []string) {
 		logger.Panicf(cmd.Context(), "file '%s' already exists", cfgPath)
 	}
 	cfg := newConfig()
-	cfg[idTwitch].StreamProfiles = map[string]streamctl.StreamProfile{"some_profile": twitch.StreamProfile{}}
-	cfg[idYoutube].StreamProfiles = map[string]streamctl.StreamProfile{"some_profile": youtube.StreamProfile{}}
+	cfg[idTwitch].StreamProfiles = map[string]streamcontrol.StreamProfile{"some_profile": twitch.StreamProfile{}}
+	cfg[idYoutube].StreamProfiles = map[string]streamcontrol.StreamProfile{"some_profile": youtube.StreamProfile{}}
 	err := writeConfigToPath(cmd.Context(), cfgPath, cfg)
 	if err != nil {
 		logger.Panic(cmd.Context(), err)
@@ -137,7 +137,7 @@ func generateConfig(cmd *cobra.Command, args []string) {
 func writeConfigToPath(
 	ctx context.Context,
 	cfgPath string,
-	cfg streamctl.Config,
+	cfg streamcontrol.Config,
 ) error {
 	b, err := yaml.Marshal(cfg)
 	if err != nil {
@@ -151,12 +151,12 @@ func writeConfigToPath(
 	return nil
 }
 
-func saveConfig(ctx context.Context, cfg streamctl.Config) error {
+func saveConfig(ctx context.Context, cfg streamcontrol.Config) error {
 	cfgPath := getConfigPath()
 	return writeConfigToPath(ctx, cfgPath, cfg)
 }
 
-func readConfigFromPath(cfgPath string, cfg *streamctl.Config) error {
+func readConfigFromPath(cfgPath string, cfg *streamcontrol.Config) error {
 	b, err := os.ReadFile(cfgPath)
 	if err != nil {
 		return fmt.Errorf("unable to read file '%s': %w", cfgPath, err)
@@ -168,7 +168,7 @@ func readConfigFromPath(cfgPath string, cfg *streamctl.Config) error {
 	return nil
 }
 
-func readConfig() streamctl.Config {
+func readConfig() streamcontrol.Config {
 	cfgPath := getConfigPath()
 	cfg := newConfig()
 	err := readConfigFromPath(cfgPath, &cfg)
@@ -183,10 +183,10 @@ func readConfig() streamctl.Config {
 	return cfg
 }
 
-func getStreamControllers(ctx context.Context, cfg streamctl.Config) streamctl.StreamControllers {
+func getStreamControllers(ctx context.Context, cfg streamcontrol.Config) streamcontrol.StreamControllers {
 	var saveConfigLock sync.Mutex
-	var result streamctl.StreamControllers
-	twitchCfg := streamctl.GetPlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile](ctx, cfg, idTwitch)
+	var result streamcontrol.StreamControllers
+	twitchCfg := streamcontrol.GetPlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile](ctx, cfg, idTwitch)
 	if twitchCfg == nil {
 		logger.Infof(ctx, "twitch config was not found")
 	} else {
@@ -194,9 +194,9 @@ func getStreamControllers(ctx context.Context, cfg streamctl.Config) streamctl.S
 			func(c twitch.Config) error {
 				saveConfigLock.Lock()
 				defer saveConfigLock.Unlock()
-				cfg[idTwitch] = &streamctl.AbstractPlatformConfig{
+				cfg[idTwitch] = &streamcontrol.AbstractPlatformConfig{
 					Config:         c.Config,
-					StreamProfiles: streamctl.ToAbstractStreamProfiles(c.StreamProfiles),
+					StreamProfiles: streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
 				}
 				return saveConfig(ctx, cfg)
 			},
@@ -204,9 +204,9 @@ func getStreamControllers(ctx context.Context, cfg streamctl.Config) streamctl.S
 		if err != nil {
 			logger.Panic(ctx, err)
 		}
-		result = append(result, streamctl.ToAbstract(twitch))
+		result = append(result, streamcontrol.ToAbstract(twitch))
 	}
-	youtubeCfg := streamctl.GetPlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile](ctx, cfg, idYoutube)
+	youtubeCfg := streamcontrol.GetPlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile](ctx, cfg, idYoutube)
 	if youtubeCfg == nil {
 		logger.Infof(ctx, "youtube config was not found")
 	} else {
@@ -214,9 +214,9 @@ func getStreamControllers(ctx context.Context, cfg streamctl.Config) streamctl.S
 			func(c youtube.Config) error {
 				saveConfigLock.Lock()
 				defer saveConfigLock.Unlock()
-				cfg[idYoutube] = &streamctl.AbstractPlatformConfig{
+				cfg[idYoutube] = &streamcontrol.AbstractPlatformConfig{
 					Config:         c.Config,
-					StreamProfiles: streamctl.ToAbstractStreamProfiles(c.StreamProfiles),
+					StreamProfiles: streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
 				}
 				return saveConfig(ctx, cfg)
 			},
@@ -224,7 +224,7 @@ func getStreamControllers(ctx context.Context, cfg streamctl.Config) streamctl.S
 		if err != nil {
 			logger.Panic(ctx, err)
 		}
-		result = append(result, streamctl.ToAbstract(youtube))
+		result = append(result, streamcontrol.ToAbstract(youtube))
 	}
 	return result
 }
@@ -261,7 +261,7 @@ func streamStart(cmd *cobra.Command, args []string) {
 	youtubeTemplateBroadcastIDs, err := cmd.Flags().GetStringArray("youtube-templates")
 	assertNoError(ctx, err)
 
-	var profiles []streamctl.StreamProfile
+	var profiles []streamcontrol.StreamProfile
 	for _, platCfg := range cfg {
 		p := platCfg.StreamProfiles[profileName]
 		if p == nil {
@@ -270,7 +270,13 @@ func streamStart(cmd *cobra.Command, args []string) {
 		profiles = append(profiles, p)
 	}
 
-	assertNoError(ctx, streamControllers.StartStream(ctx, title, description, profiles, youtube.FlagBroadcastTemplateIDs(youtubeTemplateBroadcastIDs)))
+	assertNoError(ctx, streamControllers.StartStream(
+		ctx,
+		title, description,
+		profiles,
+		youtube.FlagBroadcastTemplateIDs(youtubeTemplateBroadcastIDs),
+		twitchStreamProfileSaver{cfg: cfg, profileName: profileName},
+	))
 	assertNoError(ctx, streamControllers.Flush(ctx))
 }
 
@@ -279,4 +285,19 @@ func streamEnd(cmd *cobra.Command, args []string) {
 	streamControllers := getStreamControllers(ctx, cfg)
 	assertNoError(ctx, streamControllers.EndStream(ctx))
 	assertNoError(ctx, streamControllers.Flush(ctx))
+}
+
+type twitchStreamProfileSaver struct {
+	cfg         streamcontrol.Config
+	profileName string
+}
+
+var _ twitch.SaveProfileHandler = (*twitchStreamProfileSaver)(nil)
+
+func (h *twitchStreamProfileSaver) SaveProfile(
+	ctx context.Context,
+	streamProfile twitch.StreamProfile,
+) error {
+	h.cfg[idTwitch].StreamProfiles[h.profileName] = streamProfile
+	return saveConfig(ctx, h.cfg)
 }

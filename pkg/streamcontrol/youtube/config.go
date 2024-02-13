@@ -1,7 +1,7 @@
 package youtube
 
 import (
-	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	streamctl "github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"golang.org/x/oauth2"
 )
 
@@ -15,4 +15,8 @@ type Config = streamctl.PlatformConfig[PlatformSpecificConfig, StreamProfile]
 
 func InitConfig(cfg streamctl.Config, id string) {
 	streamctl.InitConfig(cfg, id, Config{})
+}
+
+type StreamProfile struct {
+	Tags []string
 }

@@ -1,4 +1,4 @@
-package streamctl
+package streamcontrol
 
 import (
 	"context"

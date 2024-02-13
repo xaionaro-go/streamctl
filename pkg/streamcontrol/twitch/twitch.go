@@ -7,27 +7,18 @@ import (
 
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/hashicorp/go-multierror"
 	"github.com/nicklaw5/helix/v2"
+	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 )
-
-type StreamProfile struct {
-	Language string
-	Tags     []string
-}
-
-type ConfigStorage interface {
-	Get(k string) any
-	Set(k string, v any)
-	Save() error
-}
 
 type Twitch struct {
 	client        *helix.Client
 	broadcasterID string
 }
 
-var _ streamctl.StreamController[StreamProfile] = (*Twitch)(nil)
+var _ streamcontrol.StreamController[StreamProfile] = (*Twitch)(nil)
 
 func New(
 	ctx context.Context,
@@ -92,14 +83,63 @@ func (t *Twitch) editChannelInfo(
 	return nil
 }
 
+type SaveProfileHandler interface {
+	SaveProfile(context.Context, StreamProfile) error
+}
+
 func (t *Twitch) ApplyProfile(
 	ctx context.Context,
 	profile StreamProfile,
+	customArgs ...any,
 ) error {
+	if profile.CategoryName != "" {
+		if profile.CategoryID != "" {
+			logger.Warnf(ctx, "both category name and ID are set; these are contradicting stream profile settings; prioritizing the name")
+		}
+		categoryID, err := t.getCategoryID(profile.CategoryName)
+		if err == nil {
+			profile.CategoryID = categoryID
+			profile.CategoryName = ""
+			saveProfile(ctx, profile, customArgs...)
+		} else {
+			logger.Errorf(ctx, "unable to get the category ID: %v", err)
+		}
+	}
 	return t.editChannelInfo(ctx, &helix.EditChannelInformationParams{
 		BroadcasterLanguage: profile.Language,
 		Tags:                profile.Tags,
+		GameID:              profile.CategoryID,
 	})
+}
+
+func saveProfile(ctx context.Context, profile StreamProfile, customArgs ...any) {
+	for _, arg := range customArgs {
+		saver, ok := arg.(SaveProfileHandler)
+		if !ok {
+			continue
+		}
+		if err := saver.SaveProfile(ctx, profile); err != nil {
+			logger.Errorf(ctx, "unable to save profile: %v: %#+v", err, profile)
+		}
+	}
+}
+
+func (t *Twitch) getCategoryID(
+	categoryName string,
+) (string, error) {
+	resp, err := t.client.GetGames(&helix.GamesParams{
+		Names: []string{categoryName},
+	})
+	if err != nil {
+		return "", fmt.Errorf("unable to query the category info (of name '%s'): %w", categoryName, err)
+	}
+
+	if len(resp.Data.Games) != 1 {
+		return "", fmt.Errorf("expected exactly 1 result, but received %d", len(resp.Data.Games))
+	}
+	categoryInfo := resp.Data.Games[0]
+
+	return categoryInfo.ID, nil
 }
 
 func (t *Twitch) SetTitle(
@@ -144,8 +184,11 @@ func (t *Twitch) StartStream(
 	profile StreamProfile,
 	customArgs ...any,
 ) error {
-	// Twitch starts a stream automatically, nothing to do:
-	return nil
+	return multierror.Append(
+		t.SetTitle(ctx, title),
+		t.SetDescription(ctx, description),
+		t.ApplyProfile(ctx, profile, customArgs...),
+	).ErrorOrNil()
 }
 
 func (t *Twitch) EndStream(
@@ -183,12 +226,21 @@ func getClient(
 
 		if cfg.Config.UserAccessToken == "" {
 			if cfg.Config.ClientCode == "" {
-				url := client.GetAuthorizationURL(&helix.AuthorizationURLParams{
+				authURL := client.GetAuthorizationURL(&helix.AuthorizationURLParams{
 					ResponseType: "code", // or "token"
 					Scopes:       []string{"channel:manage:broadcast"},
 				})
 
-				return nil, fmt.Errorf("not supported, yet; the auth URL is <%s>, please inject the ClientCode manually", url)
+				oauthHandler := oauthhandler.NewOAuth2Handler(authURL, func(code string) error {
+					cfg.Config.ClientCode = code
+					err = safeCfgFn(cfg)
+					errmon.ObserveErrorCtx(ctx, err)
+					return nil
+				}, "")
+				err := oauthHandler.Handle(ctx)
+				if err != nil {
+					return nil, fmt.Errorf("unable to get or exchange the oauth code to a token: %w", err)
+				}
 			}
 
 			resp, err := client.RequestUserAccessToken(cfg.Config.ClientCode)
