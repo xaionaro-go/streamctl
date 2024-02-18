@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	l := zap.Default().WithLevel(commands.LoggerLevel)
+	l := zap.Default()
 	ctx := context.Background()
 	ctx = logger.CtxWithLogger(ctx, l)
 	logger.Default = func() logger.Logger {

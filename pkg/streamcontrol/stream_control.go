@@ -2,6 +2,7 @@ package streamcontrol
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"sync"
@@ -12,6 +13,26 @@ import (
 )
 
 type StreamProfile interface {
+}
+
+func ConvertStreamProfiles[T StreamProfile](
+	ctx context.Context,
+	m map[string]StreamProfile,
+) error {
+	for k, v := range m {
+		var profile T
+		b, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Errorf("unable to serialize: %w: %#+v", err, v)
+		}
+		err = json.Unmarshal(b, &profile)
+		if err != nil {
+			return fmt.Errorf("unable to deserialize: %w: <%s>", err, b)
+		}
+		m[k] = profile
+		logger.Debugf(ctx, "converted %#+v to %#+v", v, profile)
+	}
+	return nil
 }
 
 type StreamControllerCommons interface {
@@ -89,7 +110,7 @@ func (c *abstractStreamController) StartStream(
 	profile StreamProfile,
 	customArgs ...any,
 ) error {
-	return c.startStream(ctx, title, description, profile)
+	return c.startStream(ctx, title, description, profile, customArgs...)
 }
 
 func (c *abstractStreamController) EndStream(
@@ -108,6 +129,9 @@ func ToAbstract[T StreamProfile](c StreamController[T]) AbstractStreamController
 	return &abstractStreamController{
 		StreamController: c,
 		applyProfile: func(ctx context.Context, _profile StreamProfile, customArgs ...any) error {
+			if _profile == nil {
+				return nil
+			}
 			profile, ok := _profile.(T)
 			if !ok {
 				return ErrInvalidStreamProfileType{Expected: zeroProfile, Received: _profile}
@@ -115,6 +139,9 @@ func ToAbstract[T StreamProfile](c StreamController[T]) AbstractStreamController
 			return c.ApplyProfile(ctx, profile, customArgs...)
 		},
 		startStream: func(ctx context.Context, title string, description string, _profile StreamProfile, customArgs ...any) error {
+			if _profile == nil {
+				return nil
+			}
 			profile, ok := _profile.(T)
 			if !ok {
 				return ErrInvalidStreamProfileType{Expected: zeroProfile, Received: _profile}
@@ -216,7 +243,9 @@ func (s StreamControllers) StartStream(
 		m[reflect.TypeOf(p)] = p
 	}
 	return s.concurrently(func(c AbstractStreamController) error {
-		if err := c.StartStream(ctx, title, description, m[c.StreamProfileType()], customArgs...); err != nil {
+		profile := m[c.StreamProfileType()]
+		logger.Debugf(ctx, "profile == %#+v", profile)
+		if err := c.StartStream(ctx, title, description, profile, customArgs...); err != nil {
 			return fmt.Errorf("StreamController %T return error: %w", c.GetImplementation(), err)
 		}
 		return nil

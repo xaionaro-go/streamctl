@@ -65,6 +65,23 @@ var (
 		Run:  streamEnd,
 	}
 
+	YouTube = &cobra.Command{
+		Use:  "youtube",
+		Args: cobra.ExactArgs(0),
+	}
+
+	YouTubeListBroadcasts = &cobra.Command{
+		Use:  "list-broadcasts",
+		Args: cobra.ExactArgs(0),
+		Run:  youTubeListBroadcasts,
+	}
+
+	YouTubeListStreams = &cobra.Command{
+		Use:  "list-streams",
+		Args: cobra.ExactArgs(0),
+		Run:  youTubeListStreams,
+	}
+
 	LoggerLevel = logger.LevelWarning
 )
 
@@ -81,6 +98,9 @@ func init() {
 	Root.AddCommand(SetDescription)
 	Root.AddCommand(StreamStart)
 	Root.AddCommand(StreamEnd)
+	YouTube.AddCommand(YouTubeListBroadcasts)
+	YouTube.AddCommand(YouTubeListStreams)
+	Root.AddCommand(YouTube)
 }
 
 func getConfigPath() string {
@@ -143,9 +163,14 @@ func writeConfigToPath(
 	if err != nil {
 		return fmt.Errorf("unable to serialize config %#+v: %w", cfg, err)
 	}
-	err = os.WriteFile(cfgPath, b, 0750)
+	pathNew := cfgPath + ".new"
+	err = os.WriteFile(pathNew, b, 0750)
 	if err != nil {
-		return fmt.Errorf("unable to write config to file '%s': %w", cfgPath, err)
+		return fmt.Errorf("unable to write config to file '%s': %w", pathNew, err)
+	}
+	err = os.Rename(pathNew, cfgPath)
+	if err != nil {
+		return fmt.Errorf("cannot move '%s' to '%s': %w", pathNew, cfgPath, err)
 	}
 	logger.Infof(ctx, "wrote to '%s' config <%s>", cfgPath, b)
 	return nil
@@ -156,7 +181,11 @@ func saveConfig(ctx context.Context, cfg streamcontrol.Config) error {
 	return writeConfigToPath(ctx, cfgPath, cfg)
 }
 
-func readConfigFromPath(cfgPath string, cfg *streamcontrol.Config) error {
+func readConfigFromPath(
+	ctx context.Context,
+	cfgPath string,
+	cfg *streamcontrol.Config,
+) error {
 	b, err := os.ReadFile(cfgPath)
 	if err != nil {
 		return fmt.Errorf("unable to read file '%s': %w", cfgPath, err)
@@ -165,68 +194,113 @@ func readConfigFromPath(cfgPath string, cfg *streamcontrol.Config) error {
 	if err != nil {
 		return fmt.Errorf("unable to unserialize config: %w: <%s>", err, b)
 	}
+
+	err = streamcontrol.ConvertStreamProfiles[twitch.StreamProfile](ctx, (*cfg)[idTwitch].StreamProfiles)
+	if err != nil {
+		return fmt.Errorf("unable to convert stream profiles of twitch: %w: <%s>", err, b)
+	}
+	logger.Debugf(ctx, "final stream profiles of twitch: %#+v", (*cfg)[idTwitch].StreamProfiles)
+
+	err = streamcontrol.ConvertStreamProfiles[youtube.StreamProfile](ctx, (*cfg)[idYoutube].StreamProfiles)
+	if err != nil {
+		return fmt.Errorf("unable to convert stream profiles of twitch: %w: <%s>", err, b)
+	}
+	logger.Debugf(ctx, "final stream profiles of youtube: %#+v", (*cfg)[idYoutube].StreamProfiles)
+
 	return nil
 }
 
-func readConfig() streamcontrol.Config {
+func readConfig(ctx context.Context) streamcontrol.Config {
 	cfgPath := getConfigPath()
 	cfg := newConfig()
-	err := readConfigFromPath(cfgPath, &cfg)
+	err := readConfigFromPath(ctx, cfgPath, &cfg)
 	if err != nil {
-		logger.Panic(Root.Context(), err)
+		logger.Panic(ctx, err)
 	}
-	if b, err := json.Marshal(cfg); err == nil {
-		logger.Debugf(Root.Context(), "cfg == %s", b)
-	} else {
-		logger.Debugf(Root.Context(), "cfg == %#+v", cfg)
+	if logger.FromCtx(ctx).Level() >= logger.LevelDebug {
+		if b, err := json.Marshal(cfg); err == nil {
+			logger.Debugf(ctx, "cfg == %s", b)
+		} else {
+			logger.Debugf(ctx, "cfg == %#+v", cfg)
+		}
 	}
 	return cfg
 }
 
-func getStreamControllers(ctx context.Context, cfg streamcontrol.Config) streamcontrol.StreamControllers {
-	var saveConfigLock sync.Mutex
-	var result streamcontrol.StreamControllers
-	twitchCfg := streamcontrol.GetPlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile](ctx, cfg, idTwitch)
-	if twitchCfg == nil {
+var saveConfigLock sync.Mutex
+
+func getTwitchStreamController(
+	ctx context.Context,
+	cfg streamcontrol.Config,
+) (*twitch.Twitch, error) {
+	platCfg := streamcontrol.GetPlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile](ctx, cfg, idTwitch)
+	if platCfg == nil {
 		logger.Infof(ctx, "twitch config was not found")
-	} else {
-		twitch, err := twitch.New(ctx, *twitchCfg,
-			func(c twitch.Config) error {
-				saveConfigLock.Lock()
-				defer saveConfigLock.Unlock()
-				cfg[idTwitch] = &streamcontrol.AbstractPlatformConfig{
-					Config:         c.Config,
-					StreamProfiles: streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
-				}
-				return saveConfig(ctx, cfg)
-			},
-		)
-		if err != nil {
-			logger.Panic(ctx, err)
-		}
+		return nil, nil
+	}
+
+	logger.Debugf(ctx, "twitch config: %#+v", platCfg)
+	return twitch.New(ctx, *platCfg,
+		func(c twitch.Config) error {
+			saveConfigLock.Lock()
+			defer saveConfigLock.Unlock()
+			cfg[idTwitch] = &streamcontrol.AbstractPlatformConfig{
+				Config:         c.Config,
+				StreamProfiles: streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
+			}
+			return saveConfig(ctx, cfg)
+		},
+	)
+}
+
+func getYouTubeStreamController(
+	ctx context.Context,
+	cfg streamcontrol.Config,
+) (*youtube.YouTube, error) {
+	platCfg := streamcontrol.GetPlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile](ctx, cfg, idYoutube)
+	if platCfg == nil {
+		logger.Infof(ctx, "youtube config was not found")
+		return nil, nil
+	}
+
+	logger.Debugf(ctx, "youtube config: %#+v", platCfg)
+	return youtube.New(ctx, *platCfg,
+		func(c youtube.Config) error {
+			saveConfigLock.Lock()
+			defer saveConfigLock.Unlock()
+			cfg[idYoutube] = &streamcontrol.AbstractPlatformConfig{
+				Config:         c.Config,
+				StreamProfiles: streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
+			}
+			return saveConfig(ctx, cfg)
+		},
+	)
+}
+
+func getStreamControllers(ctx context.Context, cfg streamcontrol.Config) streamcontrol.StreamControllers {
+	var result streamcontrol.StreamControllers
+
+	twitch, err := getTwitchStreamController(ctx, cfg)
+	if err != nil {
+		logger.Panic(ctx, err)
+	}
+	if twitch != nil {
 		result = append(result, streamcontrol.ToAbstract(twitch))
 	}
-	youtubeCfg := streamcontrol.GetPlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile](ctx, cfg, idYoutube)
-	if youtubeCfg == nil {
-		logger.Infof(ctx, "youtube config was not found")
-	} else {
-		youtube, err := youtube.New(ctx, *youtubeCfg,
-			func(c youtube.Config) error {
-				saveConfigLock.Lock()
-				defer saveConfigLock.Unlock()
-				cfg[idYoutube] = &streamcontrol.AbstractPlatformConfig{
-					Config:         c.Config,
-					StreamProfiles: streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
-				}
-				return saveConfig(ctx, cfg)
-			},
-		)
-		if err != nil {
-			logger.Panic(ctx, err)
-		}
+
+	youtube, err := getYouTubeStreamController(ctx, cfg)
+	if err != nil {
+		logger.Panic(ctx, err)
+	}
+	if youtube != nil {
 		result = append(result, streamcontrol.ToAbstract(youtube))
 	}
+
 	return result
+}
+
+func ctxAndCfg(ctx context.Context) (context.Context, streamcontrol.Config) {
+	return ctx, readConfig(ctx)
 }
 
 func assertNoError(ctx context.Context, err error) {
@@ -236,21 +310,21 @@ func assertNoError(ctx context.Context, err error) {
 }
 
 func setTitle(cmd *cobra.Command, args []string) {
-	ctx, cfg := cmd.Context(), readConfig()
+	ctx, cfg := ctxAndCfg(cmd.Context())
 	streamControllers := getStreamControllers(ctx, cfg)
 	assertNoError(ctx, streamControllers.SetTitle(ctx, args[0]))
 	assertNoError(ctx, streamControllers.Flush(ctx))
 }
 
 func setDescription(cmd *cobra.Command, args []string) {
-	ctx, cfg := cmd.Context(), readConfig()
+	ctx, cfg := ctxAndCfg(cmd.Context())
 	streamControllers := getStreamControllers(ctx, cfg)
 	assertNoError(ctx, streamControllers.SetDescription(ctx, args[0]))
 	assertNoError(ctx, streamControllers.Flush(ctx))
 }
 
 func streamStart(cmd *cobra.Command, args []string) {
-	ctx, cfg := cmd.Context(), readConfig()
+	ctx, cfg := ctxAndCfg(cmd.Context())
 	streamControllers := getStreamControllers(ctx, cfg)
 	title, err := cmd.Flags().GetString("title")
 	assertNoError(ctx, err)
@@ -260,6 +334,11 @@ func streamStart(cmd *cobra.Command, args []string) {
 	assertNoError(ctx, err)
 	youtubeTemplateBroadcastIDs, err := cmd.Flags().GetStringArray("youtube-templates")
 	assertNoError(ctx, err)
+	logger.Debugf(
+		ctx,
+		"title == '%s'; description == '%s'; profile == '%s', youtube-templates == %s",
+		title, description, profileName, youtubeTemplateBroadcastIDs,
+	)
 
 	var profiles []streamcontrol.StreamProfile
 	for _, platCfg := range cfg {
@@ -270,6 +349,7 @@ func streamStart(cmd *cobra.Command, args []string) {
 		profiles = append(profiles, p)
 	}
 
+	logger.Debugf(ctx, "profiles == %#+v", profiles)
 	assertNoError(ctx, streamControllers.StartStream(
 		ctx,
 		title, description,
@@ -281,7 +361,7 @@ func streamStart(cmd *cobra.Command, args []string) {
 }
 
 func streamEnd(cmd *cobra.Command, args []string) {
-	ctx, cfg := cmd.Context(), readConfig()
+	ctx, cfg := ctxAndCfg(cmd.Context())
 	streamControllers := getStreamControllers(ctx, cfg)
 	assertNoError(ctx, streamControllers.EndStream(ctx))
 	assertNoError(ctx, streamControllers.Flush(ctx))
@@ -300,4 +380,52 @@ func (h *twitchStreamProfileSaver) SaveProfile(
 ) error {
 	h.cfg[idTwitch].StreamProfiles[h.profileName] = streamProfile
 	return saveConfig(ctx, h.cfg)
+}
+
+func youTubeListStreams(cmd *cobra.Command, args []string) {
+	ctx, cfg := ctxAndCfg(cmd.Context())
+	youTube, err := getYouTubeStreamController(ctx, cfg)
+	if err != nil {
+		logger.Panic(ctx, err)
+	}
+
+	if youTube == nil {
+		logger.Panic(ctx, "no youtube configuration provided")
+	}
+
+	streams, err := youTube.ListStreams(ctx)
+	if err != nil {
+		logger.Panic(ctx, err)
+	}
+	for _, stream := range streams {
+		b, err := json.Marshal(stream)
+		if err != nil {
+			logger.Panicf(ctx, "unable to serialize stream info: %v: %#+v", err, *stream)
+		}
+		fmt.Printf("%s\n", b)
+	}
+}
+
+func youTubeListBroadcasts(cmd *cobra.Command, args []string) {
+	ctx, cfg := ctxAndCfg(cmd.Context())
+	youTube, err := getYouTubeStreamController(ctx, cfg)
+	if err != nil {
+		logger.Panic(ctx, err)
+	}
+
+	if youTube == nil {
+		logger.Panic(ctx, "no youtube configuration provided")
+	}
+
+	streams, err := youTube.ListBroadcasts(ctx)
+	if err != nil {
+		logger.Panic(ctx, err)
+	}
+	for _, stream := range streams {
+		b, err := json.Marshal(stream)
+		if err != nil {
+			logger.Panicf(ctx, "unable to serialize stream info: %v: %#+v", err, *stream)
+		}
+		fmt.Printf("%s\n", b)
+	}
 }

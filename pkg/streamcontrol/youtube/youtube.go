@@ -223,6 +223,7 @@ func (yt *YouTube) StartStream(
 			break
 		}
 	}
+	logger.Debugf(ctx, "templateBroadcastIDs == %v; customArgs == %v", templateBroadcastIDs, customArgs)
 
 	var broadcasts []*youtube.LiveBroadcast
 	for _, templateBroadcastID := range templateBroadcastIDs {
@@ -248,7 +249,7 @@ func (yt *YouTube) StartStream(
 		setTitle(broadcast, title)
 		setDescription(broadcast, description)
 		setProfile(broadcast, profile)
-		_, err := yt.YouTubeService.LiveBroadcasts.Insert([]string{"snippet", "contentDetails"}, broadcast).Context(ctx).Do()
+		_, err := yt.YouTubeService.LiveBroadcasts.Insert([]string{"snippet", "contentDetails", "monetizationDetails", "status"}, broadcast).Context(ctx).Do()
 		if err != nil {
 			return fmt.Errorf("unable to create a broadcast: %w", err)
 		}
@@ -284,4 +285,34 @@ func (yt *YouTube) Flush(
 	// Unfortunately, we do not support sending accumulated changes, and we change things immediately right away.
 	// So nothing to do here:
 	return nil
+}
+
+func (yt *YouTube) ListStreams(
+	ctx context.Context,
+) ([]*youtube.LiveStream, error) {
+	response, err := yt.YouTubeService.
+		LiveStreams.
+		List([]string{"id", "snippet", "cdn", "status"}).
+		Mine(true).
+		MaxResults(20).
+		Context(ctx).Do()
+	if err != nil {
+		return nil, fmt.Errorf("unable to query the list of streams: %w", err)
+	}
+	return response.Items, nil
+}
+
+func (yt *YouTube) ListBroadcasts(
+	ctx context.Context,
+) ([]*youtube.LiveBroadcast, error) {
+	response, err := yt.YouTubeService.
+		LiveBroadcasts.
+		List([]string{"id", "snippet", "contentDetails", "monetizationDetails", "status"}).
+		Mine(true).
+		MaxResults(20).
+		Context(ctx).Do()
+	if err != nil {
+		return nil, fmt.Errorf("unable to query the list of broadcasts: %w", err)
+	}
+	return response.Items, nil
 }

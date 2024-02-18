@@ -42,6 +42,7 @@ func (cfg *Config) UnmarshalYAML(b []byte) error {
 			return fmt.Errorf("unable to unmarshal YAML of platform-config %s: %w", b, err)
 		}
 		(*cfg)[k].Config = cfgCfg
+		(*cfg)[k].StreamProfiles = v.StreamProfiles
 	}
 
 	for k := range *cfg {
