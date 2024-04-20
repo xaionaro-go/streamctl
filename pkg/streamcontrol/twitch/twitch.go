@@ -48,7 +48,7 @@ func New(
 }
 
 func getUserID(
-	ctx context.Context,
+	_ context.Context,
 	client *helix.Client,
 	login string,
 ) (string, error) {
@@ -92,24 +92,29 @@ func (t *Twitch) ApplyProfile(
 	profile StreamProfile,
 	customArgs ...any,
 ) error {
-	if profile.CategoryName != "" {
-		if profile.CategoryID != "" {
+	if profile.CategoryName != nil {
+		if profile.CategoryID != nil {
 			logger.Warnf(ctx, "both category name and ID are set; these are contradicting stream profile settings; prioritizing the name")
 		}
-		categoryID, err := t.getCategoryID(profile.CategoryName)
+		categoryID, err := t.getCategoryID(*profile.CategoryName)
 		if err == nil {
-			profile.CategoryID = categoryID
-			profile.CategoryName = ""
+			profile.CategoryID = &categoryID
+			profile.CategoryName = nil
 			saveProfile(ctx, profile, customArgs...)
 		} else {
 			logger.Errorf(ctx, "unable to get the category ID: %v", err)
 		}
 	}
-	return t.editChannelInfo(ctx, &helix.EditChannelInformationParams{
-		BroadcasterLanguage: profile.Language,
-		Tags:                profile.Tags,
-		GameID:              profile.CategoryID,
-	})
+	params := &helix.EditChannelInformationParams{
+		Tags: profile.Tags,
+	}
+	if profile.Language != nil {
+		params.BroadcasterLanguage = *profile.Language
+	}
+	if profile.CategoryID != nil {
+		params.GameID = *profile.CategoryID
+	}
+	return t.editChannelInfo(ctx, params)
 }
 
 func saveProfile(ctx context.Context, profile StreamProfile, customArgs ...any) {

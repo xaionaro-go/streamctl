@@ -12,12 +12,38 @@ import (
 	"github.com/hashicorp/go-multierror"
 )
 
+type StreamProfileBase struct {
+	Parent ProfileName
+	Order  int
+}
+
+func (profile StreamProfileBase) GetParent() (ProfileName, bool) {
+	if profile.Parent == "" {
+		return "", false
+	}
+	return profile.Parent, true
+}
+
+func (profile StreamProfileBase) GetOrder() int {
+	return profile.Order
+}
+
+func (profile *StreamProfileBase) SetOrder(v int) {
+	profile.Order = v
+}
+
+type AbstractStreamProfile interface {
+	GetParent() (ProfileName, bool)
+	GetOrder() int
+}
+
 type StreamProfile interface {
+	AbstractStreamProfile
 }
 
 func ConvertStreamProfiles[T StreamProfile](
 	ctx context.Context,
-	m map[string]StreamProfile,
+	m map[ProfileName]AbstractStreamProfile,
 ) error {
 	for k, v := range m {
 		var profile T
@@ -51,15 +77,15 @@ type StreamController[ProfileType StreamProfile] interface {
 }
 
 type AbstractStreamController interface {
-	StreamController[StreamProfile]
+	StreamController[AbstractStreamProfile]
 	GetImplementation() StreamControllerCommons
 	StreamProfileType() reflect.Type
 }
 
 type abstractStreamController struct {
 	StreamController       StreamControllerCommons
-	applyProfile           func(ctx context.Context, profile StreamProfile, customArgs ...any) error
-	startStream            func(ctx context.Context, title string, description string, profile StreamProfile, customArgs ...any) error
+	applyProfile           func(ctx context.Context, profile AbstractStreamProfile, customArgs ...any) error
+	startStream            func(ctx context.Context, title string, description string, profile AbstractStreamProfile, customArgs ...any) error
 	StreamProfileTypeValue reflect.Type
 }
 
@@ -69,7 +95,7 @@ func (c *abstractStreamController) GetImplementation() StreamControllerCommons {
 
 func (c *abstractStreamController) ApplyProfile(
 	ctx context.Context,
-	profile StreamProfile,
+	profile AbstractStreamProfile,
 	customArgs ...any,
 ) error {
 	return c.applyProfile(ctx, profile, customArgs...)
@@ -107,7 +133,7 @@ func (c *abstractStreamController) StartStream(
 	ctx context.Context,
 	title string,
 	description string,
-	profile StreamProfile,
+	profile AbstractStreamProfile,
 	customArgs ...any,
 ) error {
 	return c.startStream(ctx, title, description, profile, customArgs...)
@@ -128,7 +154,7 @@ func ToAbstract[T StreamProfile](c StreamController[T]) AbstractStreamController
 	profileType := reflect.TypeOf(zeroProfile)
 	return &abstractStreamController{
 		StreamController: c,
-		applyProfile: func(ctx context.Context, _profile StreamProfile, customArgs ...any) error {
+		applyProfile: func(ctx context.Context, _profile AbstractStreamProfile, customArgs ...any) error {
 			if _profile == nil {
 				return nil
 			}
@@ -138,7 +164,7 @@ func ToAbstract[T StreamProfile](c StreamController[T]) AbstractStreamController
 			}
 			return c.ApplyProfile(ctx, profile, customArgs...)
 		},
-		startStream: func(ctx context.Context, title string, description string, _profile StreamProfile, customArgs ...any) error {
+		startStream: func(ctx context.Context, title string, description string, _profile AbstractStreamProfile, customArgs ...any) error {
 			if _profile == nil {
 				return nil
 			}
@@ -156,7 +182,7 @@ type StreamControllers []AbstractStreamController
 
 func (s StreamControllers) ApplyProfiles(
 	ctx context.Context,
-	profiles []StreamProfile,
+	profiles []AbstractStreamProfile,
 ) error {
 	m := map[reflect.Type]AbstractStreamController{}
 	for _, c := range s {
@@ -166,7 +192,7 @@ func (s StreamControllers) ApplyProfiles(
 	errCh := make(chan error)
 	for _, p := range profiles {
 		wg.Add(1)
-		go func(p StreamProfile) {
+		go func(p AbstractStreamProfile) {
 			defer wg.Done()
 			profileType := reflect.TypeOf(p)
 			c, ok := m[profileType]
@@ -235,10 +261,10 @@ func (s StreamControllers) StartStream(
 	ctx context.Context,
 	title string,
 	description string,
-	profiles []StreamProfile,
+	profiles []AbstractStreamProfile,
 	customArgs ...any,
 ) error {
-	m := map[reflect.Type]StreamProfile{}
+	m := map[reflect.Type]AbstractStreamProfile{}
 	for _, p := range profiles {
 		m[reflect.TypeOf(p)] = p
 	}

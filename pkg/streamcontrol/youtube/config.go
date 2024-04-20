@@ -5,6 +5,8 @@ import (
 	"golang.org/x/oauth2"
 )
 
+const ID = streamctl.PlatformName("youtube")
+
 type PlatformSpecificConfig struct {
 	ClientID     string
 	ClientSecret string
@@ -13,10 +15,12 @@ type PlatformSpecificConfig struct {
 
 type Config = streamctl.PlatformConfig[PlatformSpecificConfig, StreamProfile]
 
-func InitConfig(cfg streamctl.Config, id string) {
-	streamctl.InitConfig(cfg, id, Config{})
+func InitConfig(cfg streamctl.Config) {
+	streamctl.InitConfig(cfg, ID, Config{})
 }
 
 type StreamProfile struct {
+	streamctl.StreamProfileBase `yaml:",omitempty,inline,alias"`
+
 	Tags []string
 }

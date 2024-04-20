@@ -3,8 +3,8 @@ package streamcontrol
 import "fmt"
 
 type ErrInvalidStreamProfileType struct {
-	Received StreamProfile
-	Expected StreamProfile
+	Received AbstractStreamProfile
+	Expected AbstractStreamProfile
 }
 
 var _ error = ErrInvalidStreamProfileType{}
@@ -14,7 +14,7 @@ func (e ErrInvalidStreamProfileType) Error() string {
 }
 
 type ErrNoStreamControllerForProfile struct {
-	StreamProfile StreamProfile
+	StreamProfile AbstractStreamProfile
 }
 
 func (e ErrNoStreamControllerForProfile) Error() string {

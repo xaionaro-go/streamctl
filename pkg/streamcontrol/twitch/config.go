@@ -4,6 +4,8 @@ import (
 	streamctl "github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 )
 
+const ID = streamctl.PlatformName("twitch")
+
 type PlatformSpecificConfig struct {
 	Channel         string
 	ClientID        string
@@ -17,13 +19,15 @@ type PlatformSpecificConfig struct {
 
 type Config = streamctl.PlatformConfig[PlatformSpecificConfig, StreamProfile]
 
-func InitConfig(cfg streamctl.Config, id string) {
-	streamctl.InitConfig(cfg, id, Config{})
+func InitConfig(cfg streamctl.Config) {
+	streamctl.InitConfig(cfg, ID, Config{})
 }
 
 type StreamProfile struct {
-	Language     string
+	streamctl.StreamProfileBase `yaml:",omitempty,inline,alias"`
+
 	Tags         []string
-	CategoryName string
-	CategoryID   string
+	Language     *string
+	CategoryName *string
+	CategoryID   *string
 }

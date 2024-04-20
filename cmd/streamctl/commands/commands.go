@@ -129,14 +129,14 @@ func expandPath(rawPath string) string {
 }
 
 const (
-	idTwitch  = "twitch"
-	idYoutube = "youtube"
+	idTwitch  = twitch.ID
+	idYoutube = youtube.ID
 )
 
 func newConfig() streamcontrol.Config {
 	cfg := streamcontrol.Config{}
-	twitch.InitConfig(cfg, idTwitch)
-	youtube.InitConfig(cfg, idYoutube)
+	twitch.InitConfig(cfg)
+	youtube.InitConfig(cfg)
 	return cfg
 }
 
@@ -146,8 +146,8 @@ func generateConfig(cmd *cobra.Command, args []string) {
 		logger.Panicf(cmd.Context(), "file '%s' already exists", cfgPath)
 	}
 	cfg := newConfig()
-	cfg[idTwitch].StreamProfiles = map[string]streamcontrol.StreamProfile{"some_profile": twitch.StreamProfile{}}
-	cfg[idYoutube].StreamProfiles = map[string]streamcontrol.StreamProfile{"some_profile": youtube.StreamProfile{}}
+	cfg[idTwitch].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{"some_profile": twitch.StreamProfile{}}
+	cfg[idYoutube].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{"some_profile": youtube.StreamProfile{}}
 	err := writeConfigToPath(cmd.Context(), cfgPath, cfg)
 	if err != nil {
 		logger.Panic(cmd.Context(), err)
@@ -340,9 +340,9 @@ func streamStart(cmd *cobra.Command, args []string) {
 		title, description, profileName, youtubeTemplateBroadcastIDs,
 	)
 
-	var profiles []streamcontrol.StreamProfile
+	var profiles []streamcontrol.AbstractStreamProfile
 	for _, platCfg := range cfg {
-		p := platCfg.StreamProfiles[profileName]
+		p := platCfg.StreamProfiles[streamcontrol.ProfileName(profileName)]
 		if p == nil {
 			continue
 		}
@@ -378,7 +378,7 @@ func (h *twitchStreamProfileSaver) SaveProfile(
 	ctx context.Context,
 	streamProfile twitch.StreamProfile,
 ) error {
-	h.cfg[idTwitch].StreamProfiles[h.profileName] = streamProfile
+	h.cfg[idTwitch].StreamProfiles[streamcontrol.ProfileName(h.profileName)] = streamProfile
 	return saveConfig(ctx, h.cfg)
 }
 
