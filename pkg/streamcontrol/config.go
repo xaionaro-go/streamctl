@@ -126,12 +126,22 @@ func GetPlatformConfig[T any, S StreamProfile](
 		logger.Debugf(ctx, "config '%s' was not found in cfg: %#+v", id, cfg)
 		return nil
 	}
+
+	return ConvertPlatformConfig[T, S](ctx, platCfg, id)
+}
+
+func ConvertPlatformConfig[T any, S StreamProfile](
+	ctx context.Context,
+	platCfg *AbstractPlatformConfig,
+	id PlatformName,
+) *PlatformConfig[T, S] {
 	platCfgCfg, ok := platCfg.Config.(*T)
 	if !ok {
 		var zeroValue T
 		logger.Errorf(ctx, "unable to get the config: expected type '%T', but received type '%T'", zeroValue, platCfg.Config)
 		return nil
 	}
+
 	return &PlatformConfig[T, S]{
 		Config:         *platCfgCfg,
 		StreamProfiles: GetStreamProfiles[S](platCfg.StreamProfiles),

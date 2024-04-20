@@ -4,6 +4,8 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"os"
+	"path"
 	"runtime/debug"
 	"sort"
 	"strings"
@@ -33,10 +35,15 @@ type Profile struct {
 }
 
 type Panel struct {
-	startStopMutex        sync.Mutex
-	updateTimerHandler    *updateTimerHandler
-	panelConfig           config
-	streamConfig          streamcontrol.Config
+	saveConfigLock     sync.Mutex
+	startStopMutex     sync.Mutex
+	updateTimerHandler *updateTimerHandler
+	panelConfig        config
+	streamConfig       streamConfig
+	streamControllers  struct {
+		Twitch  *twitch.Twitch
+		YouTube *youtube.YouTube
+	}
 	profilesOrder         []streamcontrol.ProfileName
 	profilesOrderFiltered []streamcontrol.ProfileName
 	selectedProfileName   *streamcontrol.ProfileName
@@ -68,6 +75,14 @@ func (p *Panel) Loop(ctx context.Context) error {
 	p.defaultContext = ctx
 	logger.Debug(ctx, "config", p.panelConfig)
 
+	if err := p.initStreamControllers(); err != nil {
+		return fmt.Errorf("unable to initialize stream controllers: %w", err)
+	}
+
+	if err := p.loadConfig(); err != nil {
+		return fmt.Errorf("unable to load the config '%s': %w", p.configPath, err)
+	}
+
 	a := fyneapp.New()
 	p.initMainWindow(ctx, a)
 
@@ -75,32 +90,82 @@ func (p *Panel) Loop(ctx context.Context) error {
 	return nil
 }
 
+func expandPath(rawPath string) (string, error) {
+	switch {
+	case strings.HasPrefix(rawPath, "~/"):
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("unable to get user home dir: %w", err)
+		}
+		return path.Join(homeDir, rawPath[2:]), nil
+	}
+	return rawPath, nil
+}
+
+func (p *Panel) getExpandedConfigPath() (string, error) {
+	return expandPath(p.configPath)
+}
+
+func (p *Panel) loadConfig() error {
+	return readConfigFromPath(p.defaultContext, p.configPath, &p.streamConfig)
+}
+
+func (p *Panel) savePlatformConfig(
+	platID streamcontrol.PlatformName,
+	platCfg *streamcontrol.AbstractPlatformConfig,
+) error {
+	p.saveConfigLock.Lock()
+	defer p.saveConfigLock.Unlock()
+	p.streamConfig.ControllersConfig[platID] = platCfg
+	return p.saveConfig()
+}
+
+func (p *Panel) initStreamControllers() error {
+	for platName, cfg := range p.streamConfig.ControllersConfig {
+		var err error
+		switch strings.ToLower(string(platName)) {
+		case strings.ToLower(string(twitch.ID)):
+			p.streamControllers.Twitch, err = newTwitch(p.defaultContext, cfg, func(cfg *streamcontrol.AbstractPlatformConfig) error {
+				return p.savePlatformConfig(twitch.ID, cfg)
+			})
+		case strings.ToLower(string(youtube.ID)):
+			p.streamControllers.YouTube, err = newYouTube(p.defaultContext, cfg, func(cfg *streamcontrol.AbstractPlatformConfig) error {
+				return p.savePlatformConfig(youtube.ID, cfg)
+			})
+		}
+		if err != nil {
+			return fmt.Errorf("unable to initialize '%s': %w", platName, err)
+		}
+	}
+	return nil
+}
+
 func (p *Panel) onProfileCreatedOrUpdated(profile Profile) {
 	logger.Trace(p.defaultContext, "onProfileCreatedOrUpdated(%s)", profile.Name)
 	for platformName, platformProfile := range profile.PerPlatform {
-		p.streamConfig[platformName].StreamProfiles[profile.Name] = platformProfile
+		p.streamConfig.ControllersConfig[platformName].StreamProfiles[profile.Name] = platformProfile
 	}
 	p.rearrangeProfiles()
 	p.saveConfig()
 }
 
 func (p *Panel) onProfileDeleted(profileName streamcontrol.ProfileName) {
-	for platformName := range p.streamConfig {
-		delete(p.streamConfig[platformName].StreamProfiles, profileName)
+	for platformName := range p.streamConfig.ControllersConfig {
+		delete(p.streamConfig.ControllersConfig[platformName].StreamProfiles, profileName)
 	}
 	p.rearrangeProfiles()
 	p.saveConfig()
 }
 
-func (p *Panel) saveConfig() {
-	panic("not implemented")
+func (p *Panel) saveConfig() error {
+	return writeConfigToPath(p.defaultContext, p.configPath, p.streamConfig)
 }
 
 func (p *Panel) getProfile(profileName streamcontrol.ProfileName) Profile {
 	prof := Profile{
 		Name: profileName,
 	}
-	for platName, platCfg := range p.streamConfig {
+	for platName, platCfg := range p.streamConfig.ControllersConfig {
 		platProf, ok := platCfg.GetStreamProfile(profileName)
 		if !ok {
 			continue
@@ -111,8 +176,8 @@ func (p *Panel) getProfile(profileName streamcontrol.ProfileName) Profile {
 }
 
 func (p *Panel) rearrangeProfiles() {
-	var curProfilesMap map[streamcontrol.ProfileName]*Profile
-	for platName, platCfg := range p.streamConfig {
+	curProfilesMap := map[streamcontrol.ProfileName]*Profile{}
+	for platName, platCfg := range p.streamConfig.ControllersConfig {
 		for profName, platProf := range platCfg.StreamProfiles {
 			prof := curProfilesMap[profName]
 			if prof == nil {
@@ -165,7 +230,7 @@ func (p *Panel) refilterProfiles() {
 	for _, profileName := range p.profilesOrder {
 		titleMatch := strings.Contains(strings.ToLower(string(profileName)), filterValue)
 		subValueMatch := false
-		for _, platCfg := range p.streamConfig {
+		for _, platCfg := range p.streamConfig.ControllersConfig {
 			prof, ok := platCfg.GetStreamProfile(profileName)
 			if !ok {
 				continue
@@ -230,7 +295,7 @@ func (p *Panel) profilesListItemUpdate(
 	profileName := streamcontrol.ProfileName(p.profilesOrderFiltered[itemID])
 	profile := p.getProfile(profileName)
 
-	w.SetText(fmt.Sprintf("%s", profile.Name))
+	w.SetText(string(profile.Name))
 }
 
 func ptrCopy[T any](v T) *T {
@@ -330,13 +395,14 @@ func (p *Panel) onStartStopButton() {
 	p.startStopButton.Refresh()
 }
 
-func (p *Panel) newProfileWindow(ctx context.Context, a fyne.App) fyne.Window {
+func (p *Panel) newProfileWindow(_ context.Context, a fyne.App) fyne.Window {
 	w := a.NewWindow("Create a profile")
 	w.Resize(fyne.NewSize(400, 300))
 	activityTitle := widget.NewEntry()
 	activityTitle.SetPlaceHolder("title")
 	activityDescription := widget.NewMultiLineEntry()
 	activityDescription.SetPlaceHolder("description")
+	twitchCategory := widget.NewSelectEntry()
 	tagsEntryField := widget.NewEntry()
 	tagsEntryField.SetPlaceHolder("add a tag")
 	s := tagsEntryField.Size()
