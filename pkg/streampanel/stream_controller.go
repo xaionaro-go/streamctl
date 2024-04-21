@@ -19,7 +19,7 @@ func newTwitch(
 	error,
 ) {
 	platCfg := streamcontrol.ConvertPlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile](
-		ctx, cfg, twitch.ID,
+		ctx, cfg,
 	)
 	if platCfg == nil {
 		return nil, fmt.Errorf("twitch config was not found")
@@ -45,7 +45,7 @@ func newYouTube(
 	error,
 ) {
 	platCfg := streamcontrol.ConvertPlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile](
-		ctx, cfg, twitch.ID,
+		ctx, cfg,
 	)
 	if platCfg == nil {
 		return nil, fmt.Errorf("youtube config was not found")

@@ -180,24 +180,43 @@ func GetPlatformConfig[T any, S StreamProfile](
 		return nil
 	}
 
-	return ConvertPlatformConfig[T, S](ctx, platCfg, id)
+	return ConvertPlatformConfig[T, S](ctx, platCfg)
 }
 
 func ConvertPlatformConfig[T any, S StreamProfile](
 	ctx context.Context,
 	platCfg *AbstractPlatformConfig,
-	id PlatformName,
 ) *PlatformConfig[T, S] {
-	platCfgCfg, ok := platCfg.Config.(*T)
-	if !ok {
-		var zeroValue T
-		logger.Errorf(ctx, "unable to get the config: expected type '%T', but received type '%T'", zeroValue, platCfg.Config)
-		return nil
-	}
-
 	return &PlatformConfig[T, S]{
-		Config:         *platCfgCfg,
+		Config:         GetPlatformSpecificConfig[T](ctx, platCfg.Config),
 		StreamProfiles: GetStreamProfiles[S](platCfg.StreamProfiles),
+	}
+}
+
+func GetPlatformSpecificConfig[T any](
+	ctx context.Context,
+	platCfgCfg any,
+) T {
+	switch platCfgCfg := platCfgCfg.(type) {
+	case T:
+		return platCfgCfg
+	case RawMessage:
+		var v T
+		err := yaml.Unmarshal(platCfgCfg, &v)
+		if err != nil {
+			panic(err)
+		}
+		return v
+	case *RawMessage:
+		var v T
+		err := yaml.Unmarshal(*platCfgCfg, &v)
+		if err != nil {
+			panic(err)
+		}
+		return v
+	default:
+		var zeroValue T
+		panic(fmt.Errorf("unable to get the config: expected type '%T' or RawMessage, but received type '%T'", zeroValue, platCfgCfg))
 	}
 }
 

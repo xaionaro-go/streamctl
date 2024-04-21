@@ -293,7 +293,7 @@ func getClient(
 func (t *Twitch) GetAllCategories(
 	ctx context.Context,
 ) ([]helix.Game, error) {
-	var allCategories []helix.Game
+	categoriesMap := map[string]helix.Game{}
 	var pagination *helix.Pagination
 	for {
 		params := &helix.TopGamesParams{
@@ -303,7 +303,9 @@ func (t *Twitch) GetAllCategories(
 			params.After = pagination.Cursor
 		}
 
+		logger.FromCtx(ctx).Tracef("requesting top games with params: %#+v", *params)
 		resp, err := t.client.GetTopGames(params)
+		logger.FromCtx(ctx).Tracef("requesting top games result: e:%v; resp:%#+v", err, resp)
 		if err != nil {
 			return nil, fmt.Errorf("unable to get the list of games: %w", err)
 		}
@@ -312,8 +314,29 @@ func (t *Twitch) GetAllCategories(
 			break
 		}
 
-		allCategories = append(allCategories, resp.Data.Games...)
+		newCategoriesCount := 0
+		for _, g := range resp.Data.Games {
+			if oldG, ok := categoriesMap[g.ID]; ok {
+				logger.Tracef(ctx, "got a duplicate game: %#+v == %#+v", g, oldG)
+				continue
+			}
+			categoriesMap[g.ID] = g
+			newCategoriesCount++
+		}
+
+		if newCategoriesCount == 0 {
+			break
+		}
+
 		pagination = &resp.Data.Pagination
+		logger.FromCtx(ctx).Tracef("I have %d categories now; new categories: %d", len(categoriesMap), newCategoriesCount)
 	}
+	logger.FromCtx(ctx).Tracef("%d categories in total")
+
+	allCategories := make([]helix.Game, 0, len(categoriesMap))
+	for _, c := range categoriesMap {
+		allCategories = append(allCategories, c)
+	}
+
 	return allCategories, nil
 }

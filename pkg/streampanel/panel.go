@@ -17,6 +17,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/go-ng/xmath"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -50,10 +51,6 @@ type Panel struct {
 	selectedProfileName   *streamcontrol.ProfileName
 	defaultContext        context.Context
 
-	onces struct {
-		twitchDataInit sync.Once
-	}
-
 	mainWindow           fyne.Window
 	startStopButton      *widget.Button
 	activitiesListWidget fyne.Widget
@@ -80,51 +77,54 @@ func (p *Panel) Loop(ctx context.Context) error {
 	p.defaultContext = ctx
 	logger.Debug(ctx, "config", p.config)
 
-	if err := p.initStreamControllers(); err != nil {
-		return fmt.Errorf("unable to initialize stream controllers: %w", err)
-	}
-
 	if err := p.loadData(); err != nil {
 		return fmt.Errorf("unable to load the data '%s': %w", p.dataPath, err)
+	}
+
+	if err := p.initStreamControllers(); err != nil {
+		return fmt.Errorf("unable to initialize stream controllers: %w", err)
 	}
 
 	a := fyneapp.New()
 	p.initMainWindow(ctx, a)
 
-	go p.initTwitchData(a)
+	p.initTwitchData(a)
 
 	p.mainWindow.ShowAndRun()
 	return nil
 }
 
 func (p *Panel) initTwitchData(a fyne.App) {
-	p.onces.twitchDataInit.Do(func() {
-		logger.FromCtx(p.defaultContext).Debugf("initializing Twitch data")
-		defer logger.FromCtx(p.defaultContext).Debugf("endof initializing Twitch data")
+	logger.FromCtx(p.defaultContext).Debugf("initializing Twitch data")
+	defer logger.FromCtx(p.defaultContext).Debugf("endof initializing Twitch data")
 
-		if len(p.data.Cache.Twitch.Categories) != 0 {
-			logger.FromCtx(p.defaultContext).Debugf("already have categories")
-			return
-		}
+	if c := len(p.data.Cache.Twitch.Categories); c != 0 {
+		logger.FromCtx(p.defaultContext).Debugf("already have categories (count: %d)", c)
+		return
+	}
 
-		twitch := p.streamControllers.Twitch
-		if twitch == nil {
-			logger.FromCtx(p.defaultContext).Debugf("twitch controller is not initialized")
-			return
-		}
+	twitch := p.streamControllers.Twitch
+	if twitch == nil {
+		logger.FromCtx(p.defaultContext).Debugf("twitch controller is not initialized")
+		return
+	}
 
-		allCategories, err := twitch.GetAllCategories(p.defaultContext)
-		if err != nil {
-			p.displayError(a, err)
-			return
-		}
+	allCategories, err := twitch.GetAllCategories(p.defaultContext)
+	if err != nil {
+		p.displayError(a, err)
+		return
+	}
 
-		logger.FromCtx(p.defaultContext).Debugf("got categories: %#+v", allCategories)
+	logger.FromCtx(p.defaultContext).Debugf("got categories: %#+v", allCategories)
 
+	func() {
 		p.dataLock.Lock()
 		defer p.dataLock.Unlock()
 		p.data.Cache.Twitch.Categories = allCategories
-	})
+	}()
+
+	err = p.saveData()
+	errmon.ObserveErrorCtx(p.defaultContext, err)
 }
 
 func expandPath(rawPath string) (string, error) {
@@ -169,6 +169,8 @@ func (p *Panel) savePlatformConfig(
 	platID streamcontrol.PlatformName,
 	platCfg *streamcontrol.AbstractPlatformConfig,
 ) error {
+	logger.FromCtx(p.defaultContext).Debugf("savePlatformConfig('%s', '%#+v')", platID, platCfg)
+	defer logger.FromCtx(p.defaultContext).Debugf("endof savePlatformConfig('%s', '%#+v')", platID, platCfg)
 	p.dataLock.Lock()
 	defer p.dataLock.Unlock()
 	p.data.Backends[platID] = platCfg
@@ -205,6 +207,7 @@ func (p *Panel) onProfileCreatedOrUpdated(profile Profile) {
 }
 
 func (p *Panel) onProfileDeleted(profileName streamcontrol.ProfileName) {
+	logger.Trace(p.defaultContext, "onProfileDeleted(%s)", profileName)
 	for platformName := range p.data.Backends {
 		delete(p.data.Backends[platformName].StreamProfiles, profileName)
 	}
@@ -456,22 +459,12 @@ func (p *Panel) onStartStopButton() {
 }
 
 func (p *Panel) newProfileWindow(_ context.Context, a fyne.App) fyne.Window {
-	p.initTwitchData(a)
 	w := a.NewWindow("Create a profile")
 	w.Resize(fyne.NewSize(400, 300))
 	activityTitle := widget.NewEntry()
 	activityTitle.SetPlaceHolder("title")
 	activityDescription := widget.NewMultiLineEntry()
 	activityDescription.SetPlaceHolder("description")
-
-	if p.streamControllers.Twitch != nil {
-		var options []string
-		for _, category := range p.data.Cache.Twitch.Categories {
-			options = append(options, category.Name)
-		}
-		twitchCategory := widget.NewSelectEntry(options)
-		_ = twitchCategory
-	}
 
 	tagsEntryField := widget.NewEntry()
 	tagsEntryField.SetPlaceHolder("add a tag")
@@ -493,26 +486,44 @@ func (p *Panel) newProfileWindow(_ context.Context, a fyne.App) fyne.Window {
 		tagsContainer.Add(tagContainer)
 		tagsEntryField.SetText("")
 	}
+
+	var bottomContent []fyne.CanvasObject
+	if p.streamControllers.Twitch != nil {
+		var options []string
+		for _, category := range p.data.Cache.Twitch.Categories {
+			options = append(options, category.Name)
+		}
+		sort.Slice(options, func(i, j int) bool {
+			return options[i] < options[j]
+		})
+		twitchCategory := widget.NewSelectEntry(options)
+		bottomContent = append(bottomContent, twitchCategory)
+	}
+
+	bottomContent = append(bottomContent,
+		container.NewAdaptiveGrid(1,
+			tagsContainer,
+			tagsEntryField,
+		),
+		widget.NewButton("Create", func() {
+			if tagsEntryField.Text != "" {
+				tagsEntryField.OnSubmitted(tagsEntryField.Text)
+			}
+			err := fmt.Errorf("creating a profile is not implemented")
+			if err != nil {
+				p.displayError(a, err)
+				return
+			}
+			w.Close()
+		}),
+	)
+
 	w.SetContent(container.NewBorder(
 		container.NewVBox(
 			activityTitle,
 		),
 		container.NewVBox(
-			container.NewAdaptiveGrid(1,
-				tagsContainer,
-				tagsEntryField,
-			),
-			widget.NewButton("Create", func() {
-				if tagsEntryField.Text != "" {
-					tagsEntryField.OnSubmitted(tagsEntryField.Text)
-				}
-				err := fmt.Errorf("creating a profile is not implemented")
-				if err != nil {
-					p.displayError(a, err)
-					return
-				}
-				w.Close()
-			}),
+			bottomContent...,
 		),
 		nil,
 		nil,
