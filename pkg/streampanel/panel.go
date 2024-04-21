@@ -35,11 +35,12 @@ type Profile struct {
 }
 
 type Panel struct {
-	saveConfigLock     sync.Mutex
+	dataLock sync.Mutex
+	data     panelData
+
+	config             config
 	startStopMutex     sync.Mutex
 	updateTimerHandler *updateTimerHandler
-	panelConfig        config
-	streamConfig       streamConfig
 	streamControllers  struct {
 		Twitch  *twitch.Twitch
 		YouTube *youtube.YouTube
@@ -49,22 +50,26 @@ type Panel struct {
 	selectedProfileName   *streamcontrol.ProfileName
 	defaultContext        context.Context
 
+	onces struct {
+		twitchDataInit sync.Once
+	}
+
 	mainWindow           fyne.Window
 	startStopButton      *widget.Button
 	activitiesListWidget fyne.Widget
 	commentField         *widget.Entry
 
-	configPath  string
+	dataPath    string
 	filterValue string
 }
 
 func New(
-	configPath string,
+	dataPath string,
 	opts ...Option,
 ) *Panel {
 	return &Panel{
-		configPath:  configPath,
-		panelConfig: Options(opts).Config(),
+		dataPath: dataPath,
+		config:   Options(opts).Config(),
 	}
 }
 
@@ -73,21 +78,53 @@ func (p *Panel) Loop(ctx context.Context) error {
 		return fmt.Errorf("Loop was already used, and cannot be used the second time")
 	}
 	p.defaultContext = ctx
-	logger.Debug(ctx, "config", p.panelConfig)
+	logger.Debug(ctx, "config", p.config)
 
 	if err := p.initStreamControllers(); err != nil {
 		return fmt.Errorf("unable to initialize stream controllers: %w", err)
 	}
 
-	if err := p.loadConfig(); err != nil {
-		return fmt.Errorf("unable to load the config '%s': %w", p.configPath, err)
+	if err := p.loadData(); err != nil {
+		return fmt.Errorf("unable to load the data '%s': %w", p.dataPath, err)
 	}
 
 	a := fyneapp.New()
 	p.initMainWindow(ctx, a)
 
+	go p.initTwitchData(a)
+
 	p.mainWindow.ShowAndRun()
 	return nil
+}
+
+func (p *Panel) initTwitchData(a fyne.App) {
+	p.onces.twitchDataInit.Do(func() {
+		logger.FromCtx(p.defaultContext).Debugf("initializing Twitch data")
+		defer logger.FromCtx(p.defaultContext).Debugf("endof initializing Twitch data")
+
+		if len(p.data.Cache.Twitch.Categories) != 0 {
+			logger.FromCtx(p.defaultContext).Debugf("already have categories")
+			return
+		}
+
+		twitch := p.streamControllers.Twitch
+		if twitch == nil {
+			logger.FromCtx(p.defaultContext).Debugf("twitch controller is not initialized")
+			return
+		}
+
+		allCategories, err := twitch.GetAllCategories(p.defaultContext)
+		if err != nil {
+			p.displayError(a, err)
+			return
+		}
+
+		logger.FromCtx(p.defaultContext).Debugf("got categories: %#+v", allCategories)
+
+		p.dataLock.Lock()
+		defer p.dataLock.Unlock()
+		p.data.Cache.Twitch.Categories = allCategories
+	})
 }
 
 func expandPath(rawPath string) (string, error) {
@@ -102,26 +139,44 @@ func expandPath(rawPath string) (string, error) {
 	return rawPath, nil
 }
 
-func (p *Panel) getExpandedConfigPath() (string, error) {
-	return expandPath(p.configPath)
+func (p *Panel) getExpandedDataPath() (string, error) {
+	return expandPath(p.dataPath)
 }
 
-func (p *Panel) loadConfig() error {
-	return readConfigFromPath(p.defaultContext, p.configPath, &p.streamConfig)
+func (p *Panel) loadData() error {
+	dataPath, err := p.getExpandedDataPath()
+	if err != nil {
+		return fmt.Errorf("unable to get the path to the data file: %w", err)
+	}
+
+	_, err = os.Stat(dataPath)
+	switch {
+	case err == nil:
+		return readPanelDataFromPath(p.defaultContext, dataPath, &p.data)
+	case os.IsNotExist(err):
+		logger.FromCtx(p.defaultContext).Debugf("cannot find file '%s', creating", dataPath)
+		p.data = newPanelData()
+		if err := p.saveData(); err != nil {
+			logger.FromCtx(p.defaultContext).Errorf("cannot create file '%s': %v", dataPath, err)
+		}
+		return nil
+	default:
+		return fmt.Errorf("unable to access file '%s': %w", dataPath, err)
+	}
 }
 
 func (p *Panel) savePlatformConfig(
 	platID streamcontrol.PlatformName,
 	platCfg *streamcontrol.AbstractPlatformConfig,
 ) error {
-	p.saveConfigLock.Lock()
-	defer p.saveConfigLock.Unlock()
-	p.streamConfig.ControllersConfig[platID] = platCfg
-	return p.saveConfig()
+	p.dataLock.Lock()
+	defer p.dataLock.Unlock()
+	p.data.Backends[platID] = platCfg
+	return p.saveData()
 }
 
 func (p *Panel) initStreamControllers() error {
-	for platName, cfg := range p.streamConfig.ControllersConfig {
+	for platName, cfg := range p.data.Backends {
 		var err error
 		switch strings.ToLower(string(platName)) {
 		case strings.ToLower(string(twitch.ID)):
@@ -143,29 +198,34 @@ func (p *Panel) initStreamControllers() error {
 func (p *Panel) onProfileCreatedOrUpdated(profile Profile) {
 	logger.Trace(p.defaultContext, "onProfileCreatedOrUpdated(%s)", profile.Name)
 	for platformName, platformProfile := range profile.PerPlatform {
-		p.streamConfig.ControllersConfig[platformName].StreamProfiles[profile.Name] = platformProfile
+		p.data.Backends[platformName].StreamProfiles[profile.Name] = platformProfile
 	}
 	p.rearrangeProfiles()
-	p.saveConfig()
+	p.saveData()
 }
 
 func (p *Panel) onProfileDeleted(profileName streamcontrol.ProfileName) {
-	for platformName := range p.streamConfig.ControllersConfig {
-		delete(p.streamConfig.ControllersConfig[platformName].StreamProfiles, profileName)
+	for platformName := range p.data.Backends {
+		delete(p.data.Backends[platformName].StreamProfiles, profileName)
 	}
 	p.rearrangeProfiles()
-	p.saveConfig()
+	p.saveData()
 }
 
-func (p *Panel) saveConfig() error {
-	return writeConfigToPath(p.defaultContext, p.configPath, p.streamConfig)
+func (p *Panel) saveData() error {
+	dataPath, err := p.getExpandedDataPath()
+	if err != nil {
+		return fmt.Errorf("unable to get the path to the data file: %w", err)
+	}
+
+	return writePanelDataToPath(p.defaultContext, dataPath, p.data)
 }
 
 func (p *Panel) getProfile(profileName streamcontrol.ProfileName) Profile {
 	prof := Profile{
 		Name: profileName,
 	}
-	for platName, platCfg := range p.streamConfig.ControllersConfig {
+	for platName, platCfg := range p.data.Backends {
 		platProf, ok := platCfg.GetStreamProfile(profileName)
 		if !ok {
 			continue
@@ -177,7 +237,7 @@ func (p *Panel) getProfile(profileName streamcontrol.ProfileName) Profile {
 
 func (p *Panel) rearrangeProfiles() {
 	curProfilesMap := map[streamcontrol.ProfileName]*Profile{}
-	for platName, platCfg := range p.streamConfig.ControllersConfig {
+	for platName, platCfg := range p.data.Backends {
 		for profName, platProf := range platCfg.StreamProfiles {
 			prof := curProfilesMap[profName]
 			if prof == nil {
@@ -230,7 +290,7 @@ func (p *Panel) refilterProfiles() {
 	for _, profileName := range p.profilesOrder {
 		titleMatch := strings.Contains(strings.ToLower(string(profileName)), filterValue)
 		subValueMatch := false
-		for _, platCfg := range p.streamConfig.ControllersConfig {
+		for _, platCfg := range p.data.Backends {
 			prof, ok := platCfg.GetStreamProfile(profileName)
 			if !ok {
 				continue
@@ -396,13 +456,23 @@ func (p *Panel) onStartStopButton() {
 }
 
 func (p *Panel) newProfileWindow(_ context.Context, a fyne.App) fyne.Window {
+	p.initTwitchData(a)
 	w := a.NewWindow("Create a profile")
 	w.Resize(fyne.NewSize(400, 300))
 	activityTitle := widget.NewEntry()
 	activityTitle.SetPlaceHolder("title")
 	activityDescription := widget.NewMultiLineEntry()
 	activityDescription.SetPlaceHolder("description")
-	twitchCategory := widget.NewSelectEntry()
+
+	if p.streamControllers.Twitch != nil {
+		var options []string
+		for _, category := range p.data.Cache.Twitch.Categories {
+			options = append(options, category.Name)
+		}
+		twitchCategory := widget.NewSelectEntry(options)
+		_ = twitchCategory
+	}
+
 	tagsEntryField := widget.NewEntry()
 	tagsEntryField.SetPlaceHolder("add a tag")
 	s := tagsEntryField.Size()

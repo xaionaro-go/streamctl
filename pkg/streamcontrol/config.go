@@ -2,6 +2,7 @@ package streamcontrol
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"reflect"
 
@@ -74,36 +75,88 @@ func (cfg PlatformConfig[T, S]) GetStreamProfile(name ProfileName) (S, bool) {
 
 type AbstractPlatformConfig = PlatformConfig[any, AbstractStreamProfile]
 
+type RawMessage json.RawMessage
+
+var _ yaml.BytesUnmarshaler = (*RawMessage)(nil)
+var _ yaml.BytesMarshaler = (*RawMessage)(nil)
+
+func (RawMessage) GetParent() (ProfileName, bool) {
+	panic("the value is not parsed; don't use the platform config directly, and use function GetPlatformConfig instead")
+}
+func (RawMessage) GetOrder() int {
+	panic("the value is not parsed; don't use the platform config directly, and use function GetPlatformConfig instead")
+}
+
+func (m *RawMessage) UnmarshalJSON(b []byte) error {
+	return (*json.RawMessage)(m).UnmarshalJSON(b)
+}
+
+func (m *RawMessage) UnmarshalYAML(b []byte) error {
+	if m == nil {
+		return fmt.Errorf("a nil receiver")
+	}
+	*m = append((*m)[0:0], b...)
+	return nil
+}
+
+func (m RawMessage) MarshalJSON() ([]byte, error) {
+	v := map[string]any{}
+	err := yaml.Unmarshal(m, &v)
+	if err != nil {
+		return nil, fmt.Errorf("unable to unmarshal YAML: %w", err)
+	}
+	return json.Marshal(v)
+}
+
+func (m RawMessage) MarshalYAML() ([]byte, error) {
+	if m == nil {
+		return []byte("null"), nil
+	}
+	return m, nil
+}
+
+type unparsedPlatformConfig = PlatformConfig[RawMessage, RawMessage]
+
 type PlatformName string
 
 type Config map[PlatformName]*AbstractPlatformConfig
 
+var _ yaml.BytesUnmarshaler = (*Config)(nil)
+
 func (cfg *Config) UnmarshalYAML(b []byte) error {
-	t := map[PlatformName]*AbstractPlatformConfig{}
+	t := map[PlatformName]*unparsedPlatformConfig{}
 	err := yaml.Unmarshal(b, &t)
 	if err != nil {
-		return fmt.Errorf("unable to unmarshal YAML of the root of the config: %w", err)
+		return fmt.Errorf("unable to unmarshal YAML of the root of the config: %w; config: <%s>", err, b)
+	}
+
+	if *cfg == nil {
+		*cfg = make(Config)
 	}
 
 	for k, v := range t {
-		b, err := yaml.Marshal(v.Config)
-		if err != nil {
-			return fmt.Errorf("unable to re-marshal YAML of config %#+v: %w", v, err)
-		}
-
 		vOrig, ok := (*cfg)[k]
 		if !ok {
-			continue
+			(*cfg)[k] = &PlatformConfig[any, AbstractStreamProfile]{
+				Config:         &RawMessage{},
+				StreamProfiles: make(StreamProfiles[AbstractStreamProfile]),
+			}
+			vOrig = (*cfg)[k]
 		}
 
 		cfgCfg := vOrig.Config
 
-		err = yaml.Unmarshal(b, cfgCfg)
+		err = yaml.Unmarshal(v.Config, cfgCfg)
 		if err != nil {
 			return fmt.Errorf("unable to unmarshal YAML of platform-config %s: %w", b, err)
 		}
 		(*cfg)[k].Config = cfgCfg
-		(*cfg)[k].StreamProfiles = v.StreamProfiles
+		for platName := range (*cfg)[k].StreamProfiles {
+			delete((*cfg)[k].StreamProfiles, platName)
+		}
+		for platName, v := range v.StreamProfiles {
+			(*cfg)[k].StreamProfiles[platName] = v
+		}
 	}
 
 	for k := range *cfg {
@@ -150,13 +203,19 @@ func ConvertPlatformConfig[T any, S StreamProfile](
 
 func GetStreamProfiles[S StreamProfile](streamProfiles map[ProfileName]AbstractStreamProfile) StreamProfiles[S] {
 	s := make(map[ProfileName]S, len(streamProfiles))
-	for k, pI := range streamProfiles {
-		p, ok := pI.(S)
-		if !ok {
-			var zeroS S
-			panic(fmt.Errorf("expected type %T, but received type %T", zeroS, pI))
+	for k, p := range streamProfiles {
+		switch p := p.(type) {
+		case S:
+			s[k] = p
+		case RawMessage:
+			var v S
+			if err := json.Unmarshal(p, &v); err != nil {
+				panic(err)
+			}
+			s[k] = v
+		default:
+			panic(fmt.Errorf("do not know how to convert type %T", p))
 		}
-		s[k] = p
 	}
 	return s
 }

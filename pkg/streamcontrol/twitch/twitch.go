@@ -289,3 +289,31 @@ func getClient(
 
 	return client, nil
 }
+
+func (t *Twitch) GetAllCategories(
+	ctx context.Context,
+) ([]helix.Game, error) {
+	var allCategories []helix.Game
+	var pagination *helix.Pagination
+	for {
+		params := &helix.TopGamesParams{
+			First: 100,
+		}
+		if pagination != nil {
+			params.After = pagination.Cursor
+		}
+
+		resp, err := t.client.GetTopGames(params)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get the list of games: %w", err)
+		}
+
+		if len(resp.Data.Games) == 0 {
+			break
+		}
+
+		allCategories = append(allCategories, resp.Data.Games...)
+		pagination = &resp.Data.Pagination
+	}
+	return allCategories, nil
+}

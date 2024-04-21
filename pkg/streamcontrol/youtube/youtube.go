@@ -126,9 +126,7 @@ func (yt *YouTube) iterateActiveBroadcasts(
 
 	for _, broadcast := range broadcasts.Items {
 		if err := callback(broadcast); err != nil {
-			if err != nil {
-				return fmt.Errorf("got an error with broadcast %v: %w", broadcast.Id, err)
-			}
+			return fmt.Errorf("got an error with broadcast %v: %w", broadcast.Id, err)
 		}
 	}
 	return nil
