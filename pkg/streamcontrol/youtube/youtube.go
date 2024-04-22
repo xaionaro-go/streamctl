@@ -30,17 +30,59 @@ func New(
 		return nil, fmt.Errorf("'clientid' or/and 'clientsecret' is/are not set; go to https://console.cloud.google.com/apis/credentials and create an app if it not created, yet")
 	}
 
-	if cfg.Config.Token == nil {
+	isNewToken := false
+	getNewToken := func() error {
 		t, err := getToken(ctx, cfg)
 		if err != nil {
-			return nil, fmt.Errorf("unable to get an access token: %w", err)
+			return fmt.Errorf("unable to get an access token: %w", err)
 		}
 		cfg.Config.Token = t
 		err = safeCfgFn(cfg)
 		errmon.ObserveErrorCtx(ctx, err)
+		isNewToken = true
+		return nil
+	}
+
+	if cfg.Config.Token == nil {
+		err := getNewToken()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	tokenSource := getAuthCfg(cfg).TokenSource(ctx, cfg.Config.Token)
+
+	checkToken := func() error {
+		logger.Debugf(ctx, "checking if the token changed")
+		token, err := tokenSource.Token()
+		if err != nil {
+			logger.Errorf(ctx, "unable to get a token: %v", err)
+			return err
+		}
+		if token.AccessToken == cfg.Config.Token.AccessToken {
+			logger.Debugf(ctx, "the token have not change")
+			return err
+		}
+		logger.Debugf(ctx, "the token have changed")
+		cfg.Config.Token = token
+		return safeCfgFn(cfg)
+	}
+
+	if !isNewToken {
+		if err := checkToken(); err != nil {
+			logger.Errorf(ctx, "unable to get a token: %v", err)
+			err := getNewToken()
+			if err != nil {
+				return nil, err
+			}
+			tokenSource = getAuthCfg(cfg).TokenSource(ctx, cfg.Config.Token)
+		}
+	}
+
+	if err := checkToken(); err != nil {
+		return nil, fmt.Errorf("the token is invalid: %w", err)
+	}
+
 	youtubeService, err := youtube.NewService(ctx, option.WithTokenSource(tokenSource))
 	if err != nil {
 		return nil, err
@@ -57,19 +99,7 @@ func New(
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				logger.Debugf(ctx, "checking if the token changed")
-				token, err := tokenSource.Token()
-				if err != nil {
-					logger.Errorf(ctx, "unable to get a token: %v", err)
-					continue
-				}
-				if token.AccessToken == cfg.Config.Token.AccessToken {
-					logger.Debugf(ctx, "the token have not change")
-					continue
-				}
-				logger.Debugf(ctx, "the token have changed")
-				cfg.Config.Token = token
-				err = safeCfgFn(cfg)
+				err := checkToken()
 				errmon.ObserveErrorCtx(ctx, err)
 			}
 		}
@@ -224,7 +254,7 @@ func (yt *YouTube) StartStream(
 	logger.Debugf(ctx, "templateBroadcastIDs == %v; customArgs == %v", templateBroadcastIDs, customArgs)
 
 	var broadcasts []*youtube.LiveBroadcast
-	for _, templateBroadcastID := range templateBroadcastIDs {
+	for _, templateBroadcastID := range append(templateBroadcastIDs, profile.TemplateBroadcastIDs...) {
 		response, err := yt.YouTubeService.LiveBroadcasts.
 			List([]string{"id", "snippet", "contentDetails", "monetizationDetails", "status"}).
 			Id(templateBroadcastID).
@@ -300,6 +330,8 @@ func (yt *YouTube) ListStreams(
 	return response.Items, nil
 }
 
+type LiveBroadcast = youtube.LiveBroadcast
+
 func (yt *YouTube) ListBroadcasts(
 	ctx context.Context,
 ) ([]*youtube.LiveBroadcast, error) {
@@ -307,7 +339,7 @@ func (yt *YouTube) ListBroadcasts(
 		LiveBroadcasts.
 		List([]string{"id", "snippet", "contentDetails", "monetizationDetails", "status"}).
 		Mine(true).
-		MaxResults(20).
+		MaxResults(1000).
 		Context(ctx).Do()
 	if err != nil {
 		return nil, fmt.Errorf("unable to query the list of broadcasts: %w", err)

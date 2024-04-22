@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"runtime"
 	"runtime/pprof"
@@ -17,8 +19,9 @@ func main() {
 	loggerLevel := logger.LevelWarning
 	pflag.Var(&loggerLevel, "log-level", "Log level")
 	configPath := pflag.String("config-path", "~/.streampanel.yaml", "the path to the config file")
+	netPprofAddr := pflag.String("go-net-pprof-addr", "", "address to listen to for net/pprof requests")
 	cpuProfile := pflag.String("go-profile-cpu", "", "file to write cpu profile to")
-	memProfile := pflag.String("go-profile-mem", "", "file to write memory profile to")
+	heapProfile := pflag.String("go-profile-heap", "", "file to write memory profile to")
 	pflag.Parse()
 	l := zap.Default().WithLevel(loggerLevel)
 
@@ -34,16 +37,23 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	if *memProfile != "" {
-		f, err := os.Create(*memProfile)
+	if *heapProfile != "" {
+		f, err := os.Create(*heapProfile)
 		if err != nil {
-			l.Fatalf("unable to create file '%s': %v", *memProfile, err)
+			l.Fatalf("unable to create file '%s': %v", *heapProfile, err)
 		}
 		defer f.Close()
 		runtime.GC()
 		if err := pprof.WriteHeapProfile(f); err != nil {
-			l.Fatalf("unable to write to file '%s': %v", *memProfile, err)
+			l.Fatalf("unable to write to file '%s': %v", *heapProfile, err)
 		}
+	}
+
+	if *netPprofAddr != "" {
+		go func() {
+			l.Infof("starting to listen for net/pprof requests at '%s'", *netPprofAddr)
+			l.Error(http.ListenAndServe(*netPprofAddr, nil))
+		}()
 	}
 
 	ctx := context.Background()

@@ -22,5 +22,6 @@ func InitConfig(cfg streamctl.Config) {
 type StreamProfile struct {
 	streamctl.StreamProfileBase `yaml:",omitempty,inline,alias"`
 
-	Tags []string
+	TemplateBroadcastIDs []string
+	Tags                 []string
 }

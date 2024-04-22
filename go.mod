@@ -2,6 +2,9 @@ module github.com/xaionaro-go/streamctl
 
 go 1.21
 
+// The original go-yaml is very slow, using the improved version instead
+replace github.com/goccy/go-yaml v1.11.3 => github.com/yoelsusanto/go-yaml v0.0.0-20240324162521-2018c1ab915b
+
 require (
 	github.com/facebookincubator/go-belt v0.0.0-20230703220935-39cd348f1a38
 	github.com/goccy/go-yaml v1.11.3

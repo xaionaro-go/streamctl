@@ -19,6 +19,9 @@ type panelData struct {
 		Twitch struct {
 			Categories []helix.Game
 		}
+		Youtube struct {
+			Broadcasts []*youtube.LiveBroadcast
+		}
 	}
 }
 

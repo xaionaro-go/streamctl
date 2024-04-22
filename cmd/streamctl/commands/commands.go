@@ -346,6 +346,7 @@ func streamStart(cmd *cobra.Command, args []string) {
 		if p == nil {
 			continue
 		}
+
 		profiles = append(profiles, p)
 	}
 

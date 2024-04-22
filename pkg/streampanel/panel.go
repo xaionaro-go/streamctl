@@ -25,10 +25,6 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 )
 
-const (
-	delayAutoSubmit = time.Second * 30
-)
-
 type Profile struct {
 	Name        streamcontrol.ProfileName
 	PerPlatform map[streamcontrol.PlatformName]streamcontrol.AbstractStreamProfile
@@ -86,9 +82,12 @@ func (p *Panel) Loop(ctx context.Context) error {
 	}
 
 	a := fyneapp.New()
-	p.initMainWindow(ctx, a)
-
 	p.initTwitchData(a)
+	p.normalizeTwitchData()
+	p.initYoutubeData(a)
+	p.normalizeYoutubeData()
+
+	p.initMainWindow(ctx, a)
 
 	p.mainWindow.ShowAndRun()
 	return nil
@@ -125,6 +124,53 @@ func (p *Panel) initTwitchData(a fyne.App) {
 
 	err = p.saveData()
 	errmon.ObserveErrorCtx(p.defaultContext, err)
+}
+
+func (p *Panel) normalizeTwitchData() {
+	s := p.data.Cache.Twitch.Categories
+	sort.Slice(s, func(i, j int) bool {
+		return s[i].Name < s[j].Name
+	})
+}
+
+func (p *Panel) initYoutubeData(a fyne.App) {
+	logger.FromCtx(p.defaultContext).Debugf("initializing Youtube data")
+	defer logger.FromCtx(p.defaultContext).Debugf("endof initializing Youtube data")
+
+	if c := len(p.data.Cache.Youtube.Broadcasts); c != 0 {
+		logger.FromCtx(p.defaultContext).Debugf("already have broadcasts (count: %d)", c)
+		return
+	}
+
+	youtube := p.streamControllers.YouTube
+	if youtube == nil {
+		logger.FromCtx(p.defaultContext).Debugf("youtube controller is not initialized")
+		return
+	}
+
+	broadcasts, err := youtube.ListBroadcasts(p.defaultContext)
+	if err != nil {
+		p.displayError(a, err)
+		return
+	}
+
+	logger.FromCtx(p.defaultContext).Debugf("got broadcasts: %#+v", broadcasts)
+
+	func() {
+		p.dataLock.Lock()
+		defer p.dataLock.Unlock()
+		p.data.Cache.Youtube.Broadcasts = broadcasts
+	}()
+
+	err = p.saveData()
+	errmon.ObserveErrorCtx(p.defaultContext, err)
+}
+
+func (p *Panel) normalizeYoutubeData() {
+	s := p.data.Cache.Youtube.Broadcasts
+	sort.Slice(s, func(i, j int) bool {
+		return s[i].Snippet.Title < s[j].Snippet.Title
+	})
 }
 
 func expandPath(rawPath string) (string, error) {
@@ -458,7 +504,20 @@ func (p *Panel) onStartStopButton() {
 	p.startStopButton.Refresh()
 }
 
+func cleanTwitchCategoryName(in string) string {
+	return strings.ToLower(strings.Trim(in, " "))
+}
+
+func cleanYoutubeRecordingName(in string) string {
+	return strings.ToLower(strings.Trim(in, " "))
+}
+
 func (p *Panel) newProfileWindow(_ context.Context, a fyne.App) fyne.Window {
+	var (
+		twitchProfile  *twitch.StreamProfile
+		youtubeProfile *youtube.StreamProfile
+	)
+
 	w := a.NewWindow("Create a profile")
 	w.Resize(fyne.NewSize(400, 300))
 	activityTitle := widget.NewEntry()
@@ -489,15 +548,127 @@ func (p *Panel) newProfileWindow(_ context.Context, a fyne.App) fyne.Window {
 
 	var bottomContent []fyne.CanvasObject
 	if p.streamControllers.Twitch != nil {
-		var options []string
-		for _, category := range p.data.Cache.Twitch.Categories {
-			options = append(options, category.Name)
+		twitchProfile = &twitch.StreamProfile{}
+
+		twitchCategory := widget.NewEntry()
+		twitchCategory.SetPlaceHolder("twitch category")
+
+		selectTwitchCategoryBox := container.NewHBox()
+		bottomContent = append(bottomContent, selectTwitchCategoryBox)
+		twitchCategory.OnChanged = func(text string) {
+			selectTwitchCategoryBox.RemoveAll()
+			if text == "" {
+				return
+			}
+			text = cleanTwitchCategoryName(text)
+			count := 0
+			for _, cat := range p.data.Cache.Twitch.Categories {
+				if strings.Contains(cleanTwitchCategoryName(cat.Name), text) {
+					selectedTwitchCategoryContainer := container.NewHBox()
+					catName := cat.Name
+					tagContainerRemoveButton := widget.NewButtonWithIcon(catName, theme.ContentAddIcon(), func() {
+						twitchCategory.OnSubmitted(catName)
+					})
+					selectedTwitchCategoryContainer.Add(tagContainerRemoveButton)
+					selectTwitchCategoryBox.Add(selectedTwitchCategoryContainer)
+					count++
+					if count > 10 {
+						break
+					}
+				}
+			}
 		}
-		sort.Slice(options, func(i, j int) bool {
-			return options[i] < options[j]
-		})
-		twitchCategory := widget.NewSelectEntry(options)
+
+		selectedTwitchCategoryBox := container.NewHBox()
+		bottomContent = append(bottomContent, selectedTwitchCategoryBox)
+		twitchCategory.OnSubmitted = func(text string) {
+			if text == "" {
+				return
+			}
+			text = cleanTwitchCategoryName(text)
+			for _, cat := range p.data.Cache.Twitch.Categories {
+				if cleanTwitchCategoryName(cat.Name) == text {
+					selectedTwitchCategoryBox.RemoveAll()
+					selectedTwitchCategoryContainer := container.NewHBox()
+					catName := cat.Name
+					tagContainerRemoveButton := widget.NewButtonWithIcon(catName, theme.ContentClearIcon(), func() {
+						selectedTwitchCategoryBox.Remove(selectedTwitchCategoryContainer)
+						twitchProfile.CategoryName = nil
+					})
+					selectedTwitchCategoryContainer.Add(tagContainerRemoveButton)
+					selectedTwitchCategoryBox.Add(selectedTwitchCategoryContainer)
+					twitchProfile.CategoryName = &catName
+					go func() {
+						time.Sleep(100 * time.Millisecond)
+						twitchCategory.SetText("")
+					}()
+					return
+				}
+			}
+		}
 		bottomContent = append(bottomContent, twitchCategory)
+	}
+
+	if p.streamControllers.YouTube != nil {
+		youtubeProfile = &youtube.StreamProfile{}
+
+		youtubeTemplate := widget.NewEntry()
+		youtubeTemplate.SetPlaceHolder("youtube live recording template")
+
+		selectYoutubeTemplateBox := container.NewHBox()
+		bottomContent = append(bottomContent, selectYoutubeTemplateBox)
+		youtubeTemplate.OnChanged = func(text string) {
+			selectYoutubeTemplateBox.RemoveAll()
+			if text == "" {
+				return
+			}
+			text = cleanYoutubeRecordingName(text)
+			count := 0
+			for _, bc := range p.data.Cache.Youtube.Broadcasts {
+				if strings.Contains(cleanYoutubeRecordingName(bc.Snippet.Title), text) {
+					selectedYoutubeRecordingsContainer := container.NewHBox()
+					recName := bc.Snippet.Title
+					tagContainerRemoveButton := widget.NewButtonWithIcon(recName, theme.ContentAddIcon(), func() {
+						youtubeTemplate.OnSubmitted(recName)
+					})
+					selectedYoutubeRecordingsContainer.Add(tagContainerRemoveButton)
+					selectYoutubeTemplateBox.Add(selectedYoutubeRecordingsContainer)
+					count++
+					if count > 10 {
+						break
+					}
+				}
+			}
+		}
+
+		selectedYoutubeBroadcastBox := container.NewHBox()
+		bottomContent = append(bottomContent, selectedYoutubeBroadcastBox)
+		youtubeTemplate.OnSubmitted = func(text string) {
+			if text == "" {
+				return
+			}
+			text = cleanYoutubeRecordingName(text)
+			for _, bc := range p.data.Cache.Youtube.Broadcasts {
+				if cleanYoutubeRecordingName(bc.Snippet.Title) == text {
+					selectedYoutubeBroadcastBox.RemoveAll()
+					selectedYoutubeBroadcastContainer := container.NewHBox()
+					recName := bc.Snippet.Title
+					tagContainerRemoveButton := widget.NewButtonWithIcon(recName, theme.ContentClearIcon(), func() {
+						selectedYoutubeBroadcastBox.Remove(selectedYoutubeBroadcastContainer)
+						youtubeProfile.TemplateBroadcastIDs = youtubeProfile.TemplateBroadcastIDs[:0]
+					})
+					selectedYoutubeBroadcastContainer.Add(tagContainerRemoveButton)
+					selectedYoutubeBroadcastBox.Add(selectedYoutubeBroadcastContainer)
+					youtubeProfile.TemplateBroadcastIDs = append(youtubeProfile.TemplateBroadcastIDs, bc.Id)
+					go func() {
+						time.Sleep(100 * time.Millisecond)
+						youtubeTemplate.SetText("")
+					}()
+					return
+				}
+			}
+		}
+		bottomContent = append(bottomContent, youtubeTemplate)
 	}
 
 	bottomContent = append(bottomContent,
