@@ -208,11 +208,12 @@ func getClient(
 	cfg Config,
 	safeCfgFn func(Config) error,
 ) (*helix.Client, error) {
-	client, err := helix.NewClient(&helix.Options{
+	options := &helix.Options{
 		ClientID:     cfg.Config.ClientID,
 		ClientSecret: cfg.Config.ClientSecret,
-		RedirectURI:  "http://localhost/",
-	})
+		RedirectURI:  "http://localhost:8091/",
+	}
+	client, err := helix.NewClient(options)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create a helix client object: %w", err)
 	}
@@ -236,13 +237,23 @@ func getClient(
 					Scopes:       []string{"channel:manage:broadcast"},
 				})
 
-				oauthHandler := oauthhandler.NewOAuth2Handler(authURL, func(code string) error {
-					cfg.Config.ClientCode = code
-					err = safeCfgFn(cfg)
-					errmon.ObserveErrorCtx(ctx, err)
-					return nil
-				}, "")
-				err := oauthHandler.Handle(ctx)
+				arg := oauthhandler.OAuthHandlerArgument{
+					AuthURL:     authURL,
+					RedirectURL: options.RedirectURI,
+					ExchangeFn: func(code string) error {
+						cfg.Config.ClientCode = code
+						err = safeCfgFn(cfg)
+						errmon.ObserveErrorCtx(ctx, err)
+						return nil
+					},
+				}
+
+				oauthHandler := cfg.Config.CustomOAuthHandler
+				if oauthHandler == nil {
+					oauthHandler = oauthhandler.OAuth2HandlerViaCLI
+				}
+
+				err := oauthHandler(ctx, arg)
 				if err != nil {
 					return nil, fmt.Errorf("unable to get or exchange the oauth code to a token: %w", err)
 				}

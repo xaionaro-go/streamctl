@@ -6,47 +6,36 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os/exec"
 	"runtime"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 )
 
-type OAuth2Handler struct {
-	authURL      string
-	exchangeFn   func(code string) error
-	receiverAddr string
-}
-
-func NewOAuth2Handler(
-	authURL string,
-	exchangeFn func(code string) error,
-	receiverAddr string,
-) *OAuth2Handler {
-	return &OAuth2Handler{
-		authURL:      authURL,
-		exchangeFn:   exchangeFn,
-		receiverAddr: receiverAddr,
-	}
+type OAuthHandlerArgument struct {
+	AuthURL     string
+	RedirectURL string
+	ExchangeFn  func(code string) error
 }
 
 // it is guaranteed exchangeFn was called if error is nil.
-func (h *OAuth2Handler) Handle(ctx context.Context) error {
-	if h.receiverAddr != "" {
-		err := h.handleViaBrowser()
+func OAuth2Handler(ctx context.Context, arg OAuthHandlerArgument) error {
+	if arg.RedirectURL != "" {
+		err := OAuth2HandlerViaBrowser(ctx, arg)
 		if err == nil {
 			return nil
 		}
 		logger.Errorf(ctx, "unable to authenticate automatically: %v", err)
 	}
-	return h.handleViaCLI()
+	return OAuth2HandlerViaCLI(ctx, arg)
 }
 
-func (h *OAuth2Handler) handleViaCLI() error {
+func OAuth2HandlerViaCLI(ctx context.Context, arg OAuthHandlerArgument) error {
 	fmt.Printf(
 		"It is required to get an oauth2 token. "+
 			"Please open the link below in the browser:\n\n\t%s\n\n",
-		h.authURL,
+		arg.AuthURL,
 	)
 
 	fmt.Printf("Enter the code: ")
@@ -54,30 +43,35 @@ func (h *OAuth2Handler) handleViaCLI() error {
 	if _, err := fmt.Scan(&code); err != nil {
 		log.Fatalf("Unable to read authorization code %v", err)
 	}
-	return h.exchangeFn(code)
+	return arg.ExchangeFn(code)
 }
 
-func (h *OAuth2Handler) handleViaBrowser() error {
-	codeCh, err := h.newCodeReceiver()
+func OAuth2HandlerViaBrowser(ctx context.Context, arg OAuthHandlerArgument) error {
+	codeCh, err := NewCodeReceiver(arg.RedirectURL)
 	if err != nil {
 		return err
 	}
 
-	err = launchBrowser(h.authURL)
+	err = LaunchBrowser(arg.AuthURL)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Your browser has been launched (URL: %s).\nPlease approve the permissions.\n", h.authURL)
+	fmt.Printf("Your browser has been launched (URL: %s).\nPlease approve the permissions.\n", arg.AuthURL)
 
 	// Wait for the web server to get the code.
 	code := <-codeCh
-	return h.exchangeFn(code)
+	return arg.ExchangeFn(code)
 }
 
-func (h *OAuth2Handler) newCodeReceiver() (codeCh chan string, err error) {
+func NewCodeReceiver(redirectURL string) (codeCh chan string, err error) {
+	urlParsed, err := url.Parse(redirectURL)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse URL '%s': %w", redirectURL, err)
+	}
+
 	// this function was mostly borrowed from https://developers.google.com/youtube/v3/code_samples/go#authorize_a_request
-	listener, err := net.Listen("tcp", h.receiverAddr)
+	listener, err := net.Listen("tcp", urlParsed.Host)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +88,7 @@ func (h *OAuth2Handler) newCodeReceiver() (codeCh chan string, err error) {
 	return codeCh, nil
 }
 
-func launchBrowser(url string) error {
+func LaunchBrowser(url string) error {
 	switch runtime.GOOS {
 	case "darwin":
 		return exec.Command("open", url).Start()

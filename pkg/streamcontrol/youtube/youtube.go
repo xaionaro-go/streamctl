@@ -122,18 +122,26 @@ func getAuthCfg(cfg Config) *oauth2.Config {
 
 func getToken(ctx context.Context, cfg Config) (*oauth2.Token, error) {
 	googleAuthCfg := getAuthCfg(cfg)
-	authURL := googleAuthCfg.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
 
 	var tok *oauth2.Token
-	oauthHandler := oauthhandler.NewOAuth2Handler(authURL, func(code string) error {
-		_tok, err := googleAuthCfg.Exchange(ctx, code)
-		if err != nil {
-			return fmt.Errorf("unable to get a token: %w", err)
-		}
-		tok = _tok
-		return nil
-	}, "")
-	err := oauthHandler.Handle(ctx)
+	oauthHandlerArg := oauthhandler.OAuthHandlerArgument{
+		AuthURL:     googleAuthCfg.AuthCodeURL("state-token", oauth2.AccessTypeOffline),
+		RedirectURL: googleAuthCfg.RedirectURL,
+		ExchangeFn: func(code string) error {
+			_tok, err := googleAuthCfg.Exchange(ctx, code)
+			if err != nil {
+				return fmt.Errorf("unable to get a token: %w", err)
+			}
+			tok = _tok
+			return nil
+		},
+	}
+
+	oauthHandler := cfg.Config.CustomOAuthHandler
+	if oauthHandler == nil {
+		oauthHandler = oauthhandler.OAuth2HandlerViaCLI
+	}
+	err := oauthHandler(ctx, oauthHandlerArg)
 	if err != nil {
 		return nil, err
 	}

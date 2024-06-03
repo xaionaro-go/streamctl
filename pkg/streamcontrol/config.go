@@ -200,6 +200,8 @@ func GetPlatformSpecificConfig[T any](
 	switch platCfgCfg := platCfgCfg.(type) {
 	case T:
 		return platCfgCfg
+	case *T:
+		return *platCfgCfg
 	case RawMessage:
 		var v T
 		err := yaml.Unmarshal(platCfgCfg, &v)

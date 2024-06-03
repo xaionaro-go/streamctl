@@ -5,7 +5,9 @@ import (
 	_ "embed"
 	"fmt"
 	"os"
+	"os/exec"
 	"path"
+	"runtime"
 	"runtime/debug"
 	"sort"
 	"strings"
@@ -20,6 +22,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/go-ng/xmath"
+	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
@@ -35,6 +38,7 @@ type Panel struct {
 	dataLock sync.Mutex
 	data     panelData
 
+	app                fyne.App
 	config             config
 	startStopMutex     sync.Mutex
 	updateTimerHandler *updateTimerHandler
@@ -77,23 +81,24 @@ func (p *Panel) Loop(ctx context.Context) error {
 		return fmt.Errorf("unable to load the data '%s': %w", p.dataPath, err)
 	}
 
+	p.app = fyneapp.New()
+
 	if err := p.initStreamControllers(); err != nil {
 		return fmt.Errorf("unable to initialize stream controllers: %w", err)
 	}
 
-	a := fyneapp.New()
-	p.initTwitchData(a)
+	p.initTwitchData()
 	p.normalizeTwitchData()
-	p.initYoutubeData(a)
+	p.initYoutubeData()
 	p.normalizeYoutubeData()
 
-	p.initMainWindow(ctx, a)
+	p.initMainWindow(ctx)
 
 	p.mainWindow.ShowAndRun()
 	return nil
 }
 
-func (p *Panel) initTwitchData(a fyne.App) {
+func (p *Panel) initTwitchData() {
 	logger.FromCtx(p.defaultContext).Debugf("initializing Twitch data")
 	defer logger.FromCtx(p.defaultContext).Debugf("endof initializing Twitch data")
 
@@ -110,7 +115,7 @@ func (p *Panel) initTwitchData(a fyne.App) {
 
 	allCategories, err := twitch.GetAllCategories(p.defaultContext)
 	if err != nil {
-		p.displayError(a, err)
+		p.displayError(err)
 		return
 	}
 
@@ -133,7 +138,7 @@ func (p *Panel) normalizeTwitchData() {
 	})
 }
 
-func (p *Panel) initYoutubeData(a fyne.App) {
+func (p *Panel) initYoutubeData() {
 	logger.FromCtx(p.defaultContext).Debugf("initializing Youtube data")
 	defer logger.FromCtx(p.defaultContext).Debugf("endof initializing Youtube data")
 
@@ -150,7 +155,7 @@ func (p *Panel) initYoutubeData(a fyne.App) {
 
 	broadcasts, err := youtube.ListBroadcasts(p.defaultContext)
 	if err != nil {
-		p.displayError(a, err)
+		p.displayError(err)
 		return
 	}
 
@@ -223,6 +228,77 @@ func (p *Panel) savePlatformConfig(
 	return p.saveData()
 }
 
+func (p *Panel) oauthHandlerTwitch(ctx context.Context, arg oauthhandler.OAuthHandlerArgument) error {
+	logger.Infof(ctx, "oauthHandlerTwitch: %#+v", arg)
+	defer logger.Infof(ctx, "/oauthHandlerTwitch")
+	return p.oauthHandler(ctx, arg)
+}
+
+func (p *Panel) oauthHandlerYouTube(ctx context.Context, arg oauthhandler.OAuthHandlerArgument) error {
+	logger.Infof(ctx, "oauthHandlerYouTube: %#+v", arg)
+	defer logger.Infof(ctx, "/oauthHandlerYouTube")
+	return p.oauthHandler(ctx, arg)
+}
+
+func (p *Panel) oauthHandler(ctx context.Context, arg oauthhandler.OAuthHandlerArgument) error {
+	codeCh, err := oauthhandler.NewCodeReceiver(arg.RedirectURL)
+	if err != nil {
+		return err
+	}
+
+	if err := p.openBrowser(arg.AuthURL); err != nil {
+		return fmt.Errorf("unable to open browser with URL '%s': %w", arg.AuthURL, err)
+	}
+
+	logger.Infof(ctx, "Your browser has been launched (URL: %s).\nPlease approve the permissions.\n", arg.AuthURL)
+
+	// Wait for the web server to get the code.
+	code := <-codeCh
+	logger.Debugf(ctx, "received the auth code")
+	return arg.ExchangeFn(code)
+}
+
+func (p *Panel) openBrowser(authURL string) error {
+	var browserCmd string
+	switch runtime.GOOS {
+	case "darwin":
+		browserCmd = "open"
+	case "linux":
+		browserCmd = "xdg-open"
+	default:
+		return oauthhandler.LaunchBrowser(authURL)
+	}
+
+	waitCh := make(chan struct{})
+
+	w := p.app.NewWindow("Browser selection window")
+	browserField := widget.NewEntry()
+	browserField.PlaceHolder = "command to execute the browser"
+	browserField.OnSubmitted = func(s string) {
+		close(waitCh)
+	}
+	okButton := widget.NewButton("OK", func() {
+		close(waitCh)
+	})
+	w.SetContent(container.NewBorder(
+		browserField,
+		okButton,
+		nil,
+		nil,
+		nil,
+	))
+
+	go w.ShowAndRun()
+	<-waitCh
+	w.Close()
+
+	if browserField.Text != "" {
+		browserCmd = browserField.Text
+	}
+
+	return exec.Command(browserCmd, authURL).Start()
+}
+
 func (p *Panel) initStreamControllers() error {
 	for platName, cfg := range p.data.Backends {
 		var err error
@@ -230,11 +306,11 @@ func (p *Panel) initStreamControllers() error {
 		case strings.ToLower(string(twitch.ID)):
 			p.streamControllers.Twitch, err = newTwitch(p.defaultContext, cfg, func(cfg *streamcontrol.AbstractPlatformConfig) error {
 				return p.savePlatformConfig(twitch.ID, cfg)
-			})
+			}, p.oauthHandlerTwitch)
 		case strings.ToLower(string(youtube.ID)):
 			p.streamControllers.YouTube, err = newYouTube(p.defaultContext, cfg, func(cfg *streamcontrol.AbstractPlatformConfig) error {
 				return p.savePlatformConfig(youtube.ID, cfg)
-			})
+			}, p.oauthHandlerYouTube)
 		}
 		if err != nil {
 			return fmt.Errorf("unable to initialize '%s': %w", platName, err)
@@ -432,8 +508,8 @@ func (p *Panel) setFilter(filter string) {
 	p.refilterProfiles()
 }
 
-func (p *Panel) initMainWindow(ctx context.Context, a fyne.App) {
-	w := a.NewWindow("TimeTracker")
+func (p *Panel) initMainWindow(ctx context.Context) {
+	w := p.app.NewWindow("StreamPanel")
 
 	p.startStopButton = widget.NewButtonWithIcon("", theme.MediaPlayIcon(), p.onStartStopButton)
 	p.startStopButton.Importance = widget.SuccessImportance
@@ -449,7 +525,7 @@ func (p *Panel) initMainWindow(ctx context.Context, a fyne.App) {
 	topPanel := container.NewVBox(
 		container.NewHBox(
 			widget.NewButtonWithIcon("Profile", theme.ContentAddIcon(), func() {
-				p.newProfileWindow(ctx, a)
+				p.newProfileWindow(ctx)
 			}),
 		),
 		profileFilter,
@@ -512,13 +588,13 @@ func cleanYoutubeRecordingName(in string) string {
 	return strings.ToLower(strings.Trim(in, " "))
 }
 
-func (p *Panel) newProfileWindow(_ context.Context, a fyne.App) fyne.Window {
+func (p *Panel) newProfileWindow(_ context.Context) fyne.Window {
 	var (
 		twitchProfile  *twitch.StreamProfile
 		youtubeProfile *youtube.StreamProfile
 	)
 
-	w := a.NewWindow("Create a profile")
+	w := p.app.NewWindow("Create a profile")
 	w.Resize(fyne.NewSize(400, 300))
 	activityTitle := widget.NewEntry()
 	activityTitle.SetPlaceHolder("title")
@@ -682,7 +758,7 @@ func (p *Panel) newProfileWindow(_ context.Context, a fyne.App) fyne.Window {
 			}
 			err := fmt.Errorf("creating a profile is not implemented")
 			if err != nil {
-				p.displayError(a, err)
+				p.displayError(err)
 				return
 			}
 			w.Close()
@@ -704,8 +780,8 @@ func (p *Panel) newProfileWindow(_ context.Context, a fyne.App) fyne.Window {
 	return w
 }
 
-func (p *Panel) displayError(a fyne.App, err error) {
-	w := a.NewWindow("Got an error: " + err.Error())
+func (p *Panel) displayError(err error) {
+	w := p.app.NewWindow("Got an error: " + err.Error())
 	errorMessage := fmt.Sprintf("Error: %v\n\nstack trace:\n%s", err, debug.Stack())
 	w.Resize(fyne.NewSize(400, 300))
 	w.SetContent(widget.NewLabelWithStyle(errorMessage, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))

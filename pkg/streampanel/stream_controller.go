@@ -14,6 +14,7 @@ func newTwitch(
 	ctx context.Context,
 	cfg *streamcontrol.AbstractPlatformConfig,
 	saveCfgFunc func(*streamcontrol.AbstractPlatformConfig) error,
+	customOAuthHandler twitch.OAuthHandler,
 ) (
 	*twitch.Twitch,
 	error,
@@ -26,6 +27,7 @@ func newTwitch(
 	}
 
 	logger.Debugf(ctx, "twitch config: %#+v", platCfg)
+	platCfg.Config.CustomOAuthHandler = customOAuthHandler
 	return twitch.New(ctx, *platCfg,
 		func(c twitch.Config) error {
 			return saveCfgFunc(&streamcontrol.AbstractPlatformConfig{
@@ -40,6 +42,7 @@ func newYouTube(
 	ctx context.Context,
 	cfg *streamcontrol.AbstractPlatformConfig,
 	saveCfgFunc func(*streamcontrol.AbstractPlatformConfig) error,
+	customOAuthHandler youtube.OAuthHandler,
 ) (
 	*youtube.YouTube,
 	error,
@@ -52,6 +55,7 @@ func newYouTube(
 	}
 
 	logger.Debugf(ctx, "youtube config: %#+v", platCfg)
+	platCfg.Config.CustomOAuthHandler = customOAuthHandler
 	return youtube.New(ctx, *platCfg,
 		func(c youtube.Config) error {
 			return saveCfgFunc(&streamcontrol.AbstractPlatformConfig{
