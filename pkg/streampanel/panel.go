@@ -29,9 +29,9 @@ import (
 )
 
 type Profile struct {
+	ProfileMetadata
 	Name        streamcontrol.ProfileName
 	PerPlatform map[streamcontrol.PlatformName]streamcontrol.AbstractStreamProfile
-	MaxOrder    int
 }
 
 type Panel struct {
@@ -51,10 +51,11 @@ type Panel struct {
 	selectedProfileName   *streamcontrol.ProfileName
 	defaultContext        context.Context
 
-	mainWindow           fyne.Window
-	startStopButton      *widget.Button
-	activitiesListWidget fyne.Widget
-	commentField         *widget.Entry
+	mainWindow             fyne.Window
+	startStopButton        *widget.Button
+	profilesListWidget     *widget.List
+	streamTitleField       *widget.Entry
+	streamDescriptionField *widget.Entry
 
 	dataPath    string
 	filterValue string
@@ -77,13 +78,13 @@ func (p *Panel) Loop(ctx context.Context) error {
 	p.defaultContext = ctx
 	logger.Debug(ctx, "config", p.config)
 
-	if err := p.loadData(); err != nil {
+	if err := p.loadData(ctx); err != nil {
 		return fmt.Errorf("unable to load the data '%s': %w", p.dataPath, err)
 	}
 
 	p.app = fyneapp.New()
 
-	if err := p.initStreamControllers(); err != nil {
+	if err := p.initStreamControllers(ctx); err != nil {
 		return fmt.Errorf("unable to initialize stream controllers: %w", err)
 	}
 
@@ -93,6 +94,7 @@ func (p *Panel) Loop(ctx context.Context) error {
 	p.normalizeYoutubeData()
 
 	p.initMainWindow(ctx)
+	p.rearrangeProfiles(ctx)
 
 	p.mainWindow.ShowAndRun()
 	return nil
@@ -194,7 +196,7 @@ func (p *Panel) getExpandedDataPath() (string, error) {
 	return expandPath(p.dataPath)
 }
 
-func (p *Panel) loadData() error {
+func (p *Panel) loadData(ctx context.Context) error {
 	dataPath, err := p.getExpandedDataPath()
 	if err != nil {
 		return fmt.Errorf("unable to get the path to the data file: %w", err)
@@ -203,12 +205,12 @@ func (p *Panel) loadData() error {
 	_, err = os.Stat(dataPath)
 	switch {
 	case err == nil:
-		return readPanelDataFromPath(p.defaultContext, dataPath, &p.data)
+		return readPanelDataFromPath(ctx, dataPath, &p.data)
 	case os.IsNotExist(err):
-		logger.FromCtx(p.defaultContext).Debugf("cannot find file '%s', creating", dataPath)
+		logger.Debugf(ctx, "cannot find file '%s', creating", dataPath)
 		p.data = newPanelData()
 		if err := p.saveData(); err != nil {
-			logger.FromCtx(p.defaultContext).Errorf("cannot create file '%s': %v", dataPath, err)
+			logger.Errorf(ctx, "cannot create file '%s': %v", dataPath, err)
 		}
 		return nil
 	default:
@@ -217,11 +219,12 @@ func (p *Panel) loadData() error {
 }
 
 func (p *Panel) savePlatformConfig(
+	ctx context.Context,
 	platID streamcontrol.PlatformName,
 	platCfg *streamcontrol.AbstractPlatformConfig,
 ) error {
-	logger.FromCtx(p.defaultContext).Debugf("savePlatformConfig('%s', '%#+v')", platID, platCfg)
-	defer logger.FromCtx(p.defaultContext).Debugf("endof savePlatformConfig('%s', '%#+v')", platID, platCfg)
+	logger.Debugf(ctx, "savePlatformConfig('%s', '%#+v')", platID, platCfg)
+	defer logger.Debugf(ctx, "endof savePlatformConfig('%s', '%#+v')", platID, platCfg)
 	p.dataLock.Lock()
 	defer p.dataLock.Unlock()
 	p.data.Backends[platID] = platCfg
@@ -299,17 +302,17 @@ func (p *Panel) openBrowser(authURL string) error {
 	return exec.Command(browserCmd, authURL).Start()
 }
 
-func (p *Panel) initStreamControllers() error {
+func (p *Panel) initStreamControllers(ctx context.Context) error {
 	for platName, cfg := range p.data.Backends {
 		var err error
 		switch strings.ToLower(string(platName)) {
 		case strings.ToLower(string(twitch.ID)):
-			p.streamControllers.Twitch, err = newTwitch(p.defaultContext, cfg, func(cfg *streamcontrol.AbstractPlatformConfig) error {
-				return p.savePlatformConfig(twitch.ID, cfg)
+			p.streamControllers.Twitch, err = newTwitch(ctx, cfg, func(cfg *streamcontrol.AbstractPlatformConfig) error {
+				return p.savePlatformConfig(ctx, twitch.ID, cfg)
 			}, p.oauthHandlerTwitch)
 		case strings.ToLower(string(youtube.ID)):
-			p.streamControllers.YouTube, err = newYouTube(p.defaultContext, cfg, func(cfg *streamcontrol.AbstractPlatformConfig) error {
-				return p.savePlatformConfig(youtube.ID, cfg)
+			p.streamControllers.YouTube, err = newYouTube(ctx, cfg, func(cfg *streamcontrol.AbstractPlatformConfig) error {
+				return p.savePlatformConfig(ctx, youtube.ID, cfg)
 			}, p.oauthHandlerYouTube)
 		}
 		if err != nil {
@@ -319,22 +322,35 @@ func (p *Panel) initStreamControllers() error {
 	return nil
 }
 
-func (p *Panel) onProfileCreatedOrUpdated(profile Profile) {
-	logger.Trace(p.defaultContext, "onProfileCreatedOrUpdated(%s)", profile.Name)
+func (p *Panel) profileCreateOrUpdate(ctx context.Context, profile Profile) error {
+	logger.Tracef(ctx, "profileCreateOrUpdate(%s)", profile.Name)
 	for platformName, platformProfile := range profile.PerPlatform {
 		p.data.Backends[platformName].StreamProfiles[profile.Name] = platformProfile
+		logger.Tracef(ctx, "profileCreateOrUpdate(%s): p.data.Backends[%s].StreamProfiles[%s] = %#+v", profile.Name, platformName, profile.Name, platformProfile)
 	}
-	p.rearrangeProfiles()
-	p.saveData()
+	p.data.ProfileMetadata[profile.Name] = profile.ProfileMetadata
+
+	logger.Tracef(ctx, "profileCreateOrUpdate(%s): p.data.Backends == %#+v", profile.Name, p.data.Backends)
+	p.rearrangeProfiles(ctx)
+	if err := p.saveData(); err != nil {
+		return fmt.Errorf("unable to save the profile: %w", err)
+	}
+	return nil
 }
 
-func (p *Panel) onProfileDeleted(profileName streamcontrol.ProfileName) {
-	logger.Trace(p.defaultContext, "onProfileDeleted(%s)", profileName)
+func (p *Panel) profileDelete(ctx context.Context, profileName streamcontrol.ProfileName) error {
+	logger.Tracef(p.defaultContext, "onProfileDeleted(%s)", profileName)
 	for platformName := range p.data.Backends {
 		delete(p.data.Backends[platformName].StreamProfiles, profileName)
 	}
-	p.rearrangeProfiles()
-	p.saveData()
+	delete(p.data.ProfileMetadata, profileName)
+
+	p.rearrangeProfiles(ctx)
+	if err := p.saveData(); err != nil {
+		return fmt.Errorf("unable to save the profile: %w", err)
+	}
+
+	return nil
 }
 
 func (p *Panel) saveData() error {
@@ -348,7 +364,9 @@ func (p *Panel) saveData() error {
 
 func (p *Panel) getProfile(profileName streamcontrol.ProfileName) Profile {
 	prof := Profile{
-		Name: profileName,
+		ProfileMetadata: p.data.ProfileMetadata[profileName],
+		Name:            profileName,
+		PerPlatform:     map[streamcontrol.PlatformName]streamcontrol.AbstractStreamProfile{},
 	}
 	for platName, platCfg := range p.data.Backends {
 		platProf, ok := platCfg.GetStreamProfile(profileName)
@@ -360,14 +378,15 @@ func (p *Panel) getProfile(profileName streamcontrol.ProfileName) Profile {
 	return prof
 }
 
-func (p *Panel) rearrangeProfiles() {
+func (p *Panel) rearrangeProfiles(ctx context.Context) {
 	curProfilesMap := map[streamcontrol.ProfileName]*Profile{}
 	for platName, platCfg := range p.data.Backends {
 		for profName, platProf := range platCfg.StreamProfiles {
 			prof := curProfilesMap[profName]
 			if prof == nil {
 				prof = &Profile{
-					Name: profName,
+					Name:        profName,
+					PerPlatform: map[streamcontrol.PlatformName]streamcontrol.AbstractStreamProfile{},
 				}
 				curProfilesMap[profName] = prof
 			}
@@ -377,8 +396,9 @@ func (p *Panel) rearrangeProfiles() {
 	}
 
 	curProfiles := make([]Profile, 0, len(curProfilesMap))
-	for _, profile := range curProfilesMap {
+	for idx, profile := range curProfilesMap {
 		curProfiles = append(curProfiles, *profile)
+		logger.Tracef(ctx, "rearrangeProfiles(): curProfiles[%3d] = %#+v", idx, *profile)
 	}
 
 	sort.Slice(curProfiles, func(i, j int) bool {
@@ -392,14 +412,15 @@ func (p *Panel) rearrangeProfiles() {
 	} else {
 		p.profilesOrder = p.profilesOrder[:0]
 	}
-	for _, profile := range curProfiles {
+	for idx, profile := range curProfiles {
 		p.profilesOrder = append(p.profilesOrder, profile.Name)
+		logger.Tracef(ctx, "rearrangeProfiles(): profilesOrder[%3d] = %#+v", idx, profile)
 	}
 
-	p.refilterProfiles()
+	p.refilterProfiles(ctx)
 }
 
-func (p *Panel) refilterProfiles() {
+func (p *Panel) refilterProfiles(ctx context.Context) {
 	if cap(p.profilesOrderFiltered) < len(p.profilesOrder) {
 		p.profilesOrderFiltered = make([]streamcontrol.ProfileName, 0, len(p.profilesOrder)*2)
 	} else {
@@ -408,6 +429,9 @@ func (p *Panel) refilterProfiles() {
 	if p.filterValue == "" {
 		p.profilesOrderFiltered = p.profilesOrderFiltered[:len(p.profilesOrder)]
 		copy(p.profilesOrderFiltered, p.profilesOrder)
+		logger.Tracef(ctx, "refilterProfiles(): profilesOrderFiltered <- p.profilesOrder: %#+v", p.profilesOrder)
+		logger.Tracef(ctx, "refilterProfiles(): p.profilesListWidget.Refresh()")
+		p.profilesListWidget.Refresh()
 		return
 	}
 
@@ -440,10 +464,13 @@ func (p *Panel) refilterProfiles() {
 		}
 
 		if titleMatch || subValueMatch {
+			logger.Tracef(ctx, "refilterProfiles(): profilesOrderFiltered[%3d] = %s", len(p.profilesOrderFiltered), profileName)
 			p.profilesOrderFiltered = append(p.profilesOrderFiltered, profileName)
 		}
 	}
-	p.activitiesListWidget.Refresh()
+
+	logger.Tracef(ctx, "refilterProfiles(): p.profilesListWidget.Refresh()")
+	p.profilesListWidget.Refresh()
 }
 
 func containTagSubstringCI(tags []string, s string) bool {
@@ -487,7 +514,7 @@ func ptrCopy[T any](v T) *T {
 	return &v
 }
 
-func (p *Panel) onActivitiesListSelect(
+func (p *Panel) onProfilesListSelect(
 	id widget.ListItemID,
 ) {
 	p.startStopButton.Enable()
@@ -495,44 +522,101 @@ func (p *Panel) onActivitiesListSelect(
 	shouldRestart := p.updateTimerHandler != nil
 	if shouldRestart {
 		p.startStopButton.OnTapped()
-		p.commentField.SetText("")
 	}
-	p.selectedProfileName = ptrCopy(p.profilesOrder[id])
+	profileName := p.profilesOrder[id]
+	profile := p.getProfile(profileName)
+	p.selectedProfileName = ptrCopy(profileName)
+	p.streamTitleField.SetText(profile.DefaultStreamTitle)
+	p.streamDescriptionField.SetText(profile.DefaultStreamDescription)
 	if shouldRestart {
 		p.startStopButton.OnTapped()
 	}
 }
 
-func (p *Panel) setFilter(filter string) {
+func (p *Panel) onProfilesListUnselect(
+	_ widget.ListItemID,
+) {
+	if p.updateTimerHandler != nil {
+		p.startStopButton.OnTapped()
+		p.streamTitleField.SetText("")
+	}
+	p.startStopButton.Disable()
+}
+
+func (p *Panel) setFilter(ctx context.Context, filter string) {
 	p.filterValue = filter
-	p.refilterProfiles()
+	p.refilterProfiles(ctx)
 }
 
 func (p *Panel) initMainWindow(ctx context.Context) {
 	w := p.app.NewWindow("StreamPanel")
 
-	p.startStopButton = widget.NewButtonWithIcon("", theme.MediaPlayIcon(), p.onStartStopButton)
+	profileFilter := widget.NewEntry()
+	profileFilter.SetPlaceHolder("filter")
+	profileFilter.OnChanged = func(s string) {
+		p.setFilter(ctx, s)
+	}
+
+	selectedProfileButtons := []*widget.Button{
+		widget.NewButtonWithIcon("", theme.ContentCopyIcon(), func() {
+			p.cloneProfileWindow(ctx)
+		}),
+		widget.NewButtonWithIcon("", theme.DocumentIcon(), func() {
+			p.editProfileWindow(ctx)
+		}),
+		widget.NewButtonWithIcon("", theme.ContentRemoveIcon(), func() {
+			p.deleteProfileWindow(ctx)
+		}),
+	}
+
+	buttonPanel := container.NewHBox(
+		widget.NewRichTextWithText("Profile:"),
+		widget.NewButtonWithIcon("", theme.ContentAddIcon(), func() {
+			p.newProfileWindow(ctx)
+		}),
+	)
+
+	for _, button := range selectedProfileButtons {
+		button.Disable()
+		buttonPanel.Add(button)
+	}
+
+	topPanel := container.NewVBox(
+		buttonPanel,
+		profileFilter,
+	)
+
+	p.startStopButton = widget.NewButtonWithIcon("Start stream", theme.MediaRecordIcon(), p.onStartStopButton)
 	p.startStopButton.Importance = widget.SuccessImportance
 	p.startStopButton.Disable()
 
 	profilesList := widget.NewList(p.profilesListLength, p.profilesListItemCreate, p.profilesListItemUpdate)
 	profilesList.OnSelected = func(id widget.ListItemID) {
-		p.onActivitiesListSelect(id)
+		p.onProfilesListSelect(id)
+		for _, button := range selectedProfileButtons {
+			button.Enable()
+		}
 	}
-	profileFilter := widget.NewEntry()
-	profileFilter.SetPlaceHolder("filter")
-	profileFilter.OnChanged = p.setFilter
-	topPanel := container.NewVBox(
-		container.NewHBox(
-			widget.NewButtonWithIcon("Profile", theme.ContentAddIcon(), func() {
-				p.newProfileWindow(ctx)
-			}),
-		),
-		profileFilter,
-	)
+	profilesList.OnUnselected = func(id widget.ListItemID) {
+		p.onProfilesListUnselect(id)
+		for _, button := range selectedProfileButtons {
+			button.Disable()
+		}
+	}
+	p.streamTitleField = widget.NewEntry()
+	p.streamTitleField.SetPlaceHolder("stream title")
+	p.streamTitleField.OnSubmitted = func(s string) {
+		if p.updateTimerHandler == nil {
+			return
+		}
 
-	p.commentField = widget.NewEntry()
-	p.commentField.OnSubmitted = func(s string) {
+		p.startStopButton.OnTapped()
+		p.startStopButton.OnTapped()
+	}
+
+	p.streamDescriptionField = widget.NewMultiLineEntry()
+	p.streamDescriptionField.SetPlaceHolder("stream description")
+	p.streamDescriptionField.OnSubmitted = func(s string) {
 		if p.updateTimerHandler == nil {
 			return
 		}
@@ -543,7 +627,8 @@ func (p *Panel) initMainWindow(ctx context.Context) {
 
 	bottomPanel := container.NewAdaptiveGrid(
 		1,
-		p.commentField,
+		p.streamTitleField,
+		p.streamDescriptionField,
 		p.startStopButton,
 	)
 	w.SetContent(container.NewBorder(
@@ -556,7 +641,7 @@ func (p *Panel) initMainWindow(ctx context.Context) {
 
 	w.Show()
 	p.mainWindow = w
-	p.activitiesListWidget = profilesList
+	p.profilesListWidget = profilesList
 }
 
 func (p *Panel) onStartStopButton() {
@@ -564,14 +649,16 @@ func (p *Panel) onStartStopButton() {
 	defer p.startStopMutex.Unlock()
 
 	if p.updateTimerHandler != nil {
-		p.startStopButton.Icon = theme.MediaPlayIcon()
+		p.startStopButton.SetText("Start stream")
+		p.startStopButton.Icon = theme.MediaRecordIcon()
 		p.startStopButton.Importance = widget.SuccessImportance
 		p.updateTimerHandler.Stop()
 		panic("stream stopping is not implemented")
 		p.updateTimerHandler = nil
 		p.startStopButton.SetText("")
 	} else {
-		p.startStopButton.Icon = theme.DownloadIcon()
+		p.startStopButton.SetText("Stop stream")
+		p.startStopButton.Icon = theme.MediaStopIcon()
 		p.startStopButton.Importance = widget.DangerImportance
 		p.updateTimerHandler = newUpdateTimerHandler(p.startStopButton)
 		panic("stream starting is not implemented")
@@ -588,18 +675,120 @@ func cleanYoutubeRecordingName(in string) string {
 	return strings.ToLower(strings.Trim(in, " "))
 }
 
-func (p *Panel) newProfileWindow(_ context.Context) fyne.Window {
+func (p *Panel) editProfileWindow(ctx context.Context) fyne.Window {
+	oldProfile := p.getProfile(*p.selectedProfileName)
+	return p.profileWindow(
+		ctx,
+		fmt.Sprintf("Edit the profile '%s'", oldProfile.Name),
+		oldProfile,
+		func(ctx context.Context, profile Profile) error {
+			if err := p.profileCreateOrUpdate(ctx, profile); err != nil {
+				return fmt.Errorf("unable to create profile '%s': %w", profile.Name, err)
+			}
+			if profile.Name != oldProfile.Name {
+				if err := p.profileDelete(ctx, oldProfile.Name); err != nil {
+					return fmt.Errorf("unable to delete profile '%s': %w", oldProfile.Name, err)
+				}
+			}
+			p.profilesListWidget.UnselectAll()
+			return nil
+		},
+	)
+}
+
+func (p *Panel) cloneProfileWindow(ctx context.Context) fyne.Window {
+	oldProfile := p.getProfile(*p.selectedProfileName)
+	return p.profileWindow(
+		ctx,
+		"Create a profile",
+		oldProfile,
+		func(ctx context.Context, profile Profile) error {
+			if oldProfile.Name == profile.Name {
+				return fmt.Errorf("profile with name '%s' already exists", profile.Name)
+			}
+			if err := p.profileCreateOrUpdate(ctx, profile); err != nil {
+				return err
+			}
+			p.profilesListWidget.UnselectAll()
+			return nil
+		},
+	)
+}
+
+func (p *Panel) deleteProfileWindow(ctx context.Context) fyne.Window {
+	w := p.app.NewWindow("Delete the profile?")
+
+	yesButton := widget.NewButton("YES", func() {
+		err := p.profileDelete(ctx, *p.selectedProfileName)
+		if err != nil {
+			p.displayError(err)
+		}
+		p.profilesListWidget.UnselectAll()
+		w.Close()
+	})
+
+	noButton := widget.NewButton("NO", func() {
+		w.Close()
+	})
+
+	w.SetContent(container.NewBorder(
+		nil,
+		container.NewHBox(
+			yesButton, noButton,
+		),
+		nil,
+		nil,
+		widget.NewRichTextWithText(fmt.Sprintf("Delete profile '%s'", *p.selectedProfileName)),
+	))
+	w.Show()
+	return w
+}
+
+func (p *Panel) newProfileWindow(ctx context.Context) fyne.Window {
+	return p.profileWindow(
+		ctx,
+		"Create a profile",
+		Profile{},
+		func(ctx context.Context, profile Profile) error {
+			oldProfile := p.getProfile(profile.Name)
+			if oldProfile.Name == profile.Name {
+				return fmt.Errorf("profile with name '%s' already exists", profile.Name)
+			}
+			if err := p.profileCreateOrUpdate(ctx, profile); err != nil {
+				return err
+			}
+			p.profilesListWidget.UnselectAll()
+			return nil
+		},
+	)
+}
+
+func ptr[T any](in T) *T {
+	return &in
+}
+
+func (p *Panel) profileWindow(
+	ctx context.Context,
+	windowName string,
+	values Profile,
+	commitFn func(context.Context, Profile) error,
+) fyne.Window {
 	var (
 		twitchProfile  *twitch.StreamProfile
 		youtubeProfile *youtube.StreamProfile
 	)
 
-	w := p.app.NewWindow("Create a profile")
+	w := p.app.NewWindow(windowName)
 	w.Resize(fyne.NewSize(400, 300))
-	activityTitle := widget.NewEntry()
-	activityTitle.SetPlaceHolder("title")
-	activityDescription := widget.NewMultiLineEntry()
-	activityDescription.SetPlaceHolder("description")
+	profileName := widget.NewEntry()
+	profileName.SetPlaceHolder("profile name")
+	profileName.SetText(string(values.Name))
+	defaultStreamTitle := widget.NewEntry()
+	defaultStreamTitle.SetPlaceHolder("default stream title")
+	defaultStreamTitle.SetText(values.DefaultStreamTitle)
+	defaultStreamDescription := widget.NewMultiLineEntry()
+	defaultStreamDescription.SetPlaceHolder("default stream description")
+	defaultStreamDescription.SetText(values.DefaultStreamDescription)
 
 	tagsEntryField := widget.NewEntry()
 	tagsEntryField.SetPlaceHolder("add a tag")
@@ -608,23 +797,40 @@ func (p *Panel) newProfileWindow(_ context.Context) fyne.Window {
 	tags := map[string]struct{}{}
 	tagsEntryField.Resize(s)
 	tagsContainer := container.NewHBox()
-	tagsEntryField.OnSubmitted = func(text string) {
-		tags[text] = struct{}{}
+
+	addTag := func(tag string) {
+		if tag == "" {
+			return
+		}
+		if _, ok := tags[tag]; ok {
+			return
+		}
+		tags[tag] = struct{}{}
 		tagContainer := container.NewHBox(
-			widget.NewLabel(text),
+			widget.NewLabel(tag),
 		)
 		tagContainerRemoveButton := widget.NewButtonWithIcon("", theme.ContentClearIcon(), func() {
 			tagsContainer.Remove(tagContainer)
-			delete(tags, text)
+			delete(tags, tag)
 		})
 		tagContainer.Add(tagContainerRemoveButton)
 		tagsContainer.Add(tagContainer)
+	}
+	tagsEntryField.OnSubmitted = func(text string) {
+		addTag(text)
 		tagsEntryField.SetText("")
 	}
 
 	var bottomContent []fyne.CanvasObject
 	if p.streamControllers.Twitch != nil {
-		twitchProfile = &twitch.StreamProfile{}
+		if platProfile := values.PerPlatform[twitch.ID]; platProfile != nil {
+			twitchProfile = ptr(streamcontrol.GetPlatformSpecificConfig[twitch.StreamProfile](ctx, platProfile))
+			for _, tag := range twitchProfile.Tags {
+				addTag(tag)
+			}
+		} else {
+			twitchProfile = &twitch.StreamProfile{}
+		}
 
 		twitchCategory := widget.NewEntry()
 		twitchCategory.SetPlaceHolder("twitch category")
@@ -657,6 +863,32 @@ func (p *Panel) newProfileWindow(_ context.Context) fyne.Window {
 
 		selectedTwitchCategoryBox := container.NewHBox()
 		bottomContent = append(bottomContent, selectedTwitchCategoryBox)
+
+		setSelectedTwitchCategory := func(catName string) {
+			selectedTwitchCategoryBox.RemoveAll()
+			selectedTwitchCategoryContainer := container.NewHBox()
+			tagContainerRemoveButton := widget.NewButtonWithIcon(catName, theme.ContentClearIcon(), func() {
+				selectedTwitchCategoryBox.Remove(selectedTwitchCategoryContainer)
+				twitchProfile.CategoryName = nil
+			})
+			selectedTwitchCategoryContainer.Add(tagContainerRemoveButton)
+			selectedTwitchCategoryBox.Add(selectedTwitchCategoryContainer)
+			twitchProfile.CategoryName = &catName
+		}
+
+		if twitchProfile.CategoryName != nil {
+			setSelectedTwitchCategory(*twitchProfile.CategoryName)
+		}
+		if twitchProfile.CategoryID != nil {
+			catID := *twitchProfile.CategoryID
+			for _, cat := range p.data.Cache.Twitch.Categories {
+				if cat.ID == catID {
+					setSelectedTwitchCategory(cat.Name)
+					break
+				}
+			}
+		}
+
 		twitchCategory.OnSubmitted = func(text string) {
 			if text == "" {
 				return
@@ -664,16 +896,7 @@ func (p *Panel) newProfileWindow(_ context.Context) fyne.Window {
 			text = cleanTwitchCategoryName(text)
 			for _, cat := range p.data.Cache.Twitch.Categories {
 				if cleanTwitchCategoryName(cat.Name) == text {
-					selectedTwitchCategoryBox.RemoveAll()
-					selectedTwitchCategoryContainer := container.NewHBox()
-					catName := cat.Name
-					tagContainerRemoveButton := widget.NewButtonWithIcon(catName, theme.ContentClearIcon(), func() {
-						selectedTwitchCategoryBox.Remove(selectedTwitchCategoryContainer)
-						twitchProfile.CategoryName = nil
-					})
-					selectedTwitchCategoryContainer.Add(tagContainerRemoveButton)
-					selectedTwitchCategoryBox.Add(selectedTwitchCategoryContainer)
-					twitchProfile.CategoryName = &catName
+					setSelectedTwitchCategory(cat.Name)
 					go func() {
 						time.Sleep(100 * time.Millisecond)
 						twitchCategory.SetText("")
@@ -686,7 +909,14 @@ func (p *Panel) newProfileWindow(_ context.Context) fyne.Window {
 	}
 
 	if p.streamControllers.YouTube != nil {
-		youtubeProfile = &youtube.StreamProfile{}
+		if platProfile := values.PerPlatform[youtube.ID]; platProfile != nil {
+			youtubeProfile = ptr(streamcontrol.GetPlatformSpecificConfig[youtube.StreamProfile](ctx, platProfile))
+			for _, tag := range youtubeProfile.Tags {
+				addTag(tag)
+			}
+		} else {
+			youtubeProfile = &youtube.StreamProfile{}
+		}
 
 		youtubeTemplate := widget.NewEntry()
 		youtubeTemplate.SetPlaceHolder("youtube live recording template")
@@ -719,6 +949,29 @@ func (p *Panel) newProfileWindow(_ context.Context) fyne.Window {
 
 		selectedYoutubeBroadcastBox := container.NewHBox()
 		bottomContent = append(bottomContent, selectedYoutubeBroadcastBox)
+
+		setSelectedYoutubeBroadcast := func(bc *youtube.LiveBroadcast) {
+			selectedYoutubeBroadcastBox.RemoveAll()
+			selectedYoutubeBroadcastContainer := container.NewHBox()
+			recName := bc.Snippet.Title
+			tagContainerRemoveButton := widget.NewButtonWithIcon(recName, theme.ContentClearIcon(), func() {
+				selectedYoutubeBroadcastBox.Remove(selectedYoutubeBroadcastContainer)
+				youtubeProfile.TemplateBroadcastIDs = youtubeProfile.TemplateBroadcastIDs[:0]
+			})
+			selectedYoutubeBroadcastContainer.Add(tagContainerRemoveButton)
+			selectedYoutubeBroadcastBox.Add(selectedYoutubeBroadcastContainer)
+			youtubeProfile.TemplateBroadcastIDs = []string{bc.Id}
+		}
+
+		for _, bcID := range youtubeProfile.TemplateBroadcastIDs {
+			for _, bc := range p.data.Cache.Youtube.Broadcasts {
+				if bc.Id != bcID {
+					continue
+				}
+				setSelectedYoutubeBroadcast(bc)
+			}
+		}
+
 		youtubeTemplate.OnSubmitted = func(text string) {
 			if text == "" {
 				return
@@ -726,16 +979,7 @@ func (p *Panel) newProfileWindow(_ context.Context) fyne.Window {
 			text = cleanYoutubeRecordingName(text)
 			for _, bc := range p.data.Cache.Youtube.Broadcasts {
 				if cleanYoutubeRecordingName(bc.Snippet.Title) == text {
-					selectedYoutubeBroadcastBox.RemoveAll()
-					selectedYoutubeBroadcastContainer := container.NewHBox()
-					recName := bc.Snippet.Title
-					tagContainerRemoveButton := widget.NewButtonWithIcon(recName, theme.ContentClearIcon(), func() {
-						selectedYoutubeBroadcastBox.Remove(selectedYoutubeBroadcastContainer)
-						youtubeProfile.TemplateBroadcastIDs = youtubeProfile.TemplateBroadcastIDs[:0]
-					})
-					selectedYoutubeBroadcastContainer.Add(tagContainerRemoveButton)
-					selectedYoutubeBroadcastBox.Add(selectedYoutubeBroadcastContainer)
-					youtubeProfile.TemplateBroadcastIDs = append(youtubeProfile.TemplateBroadcastIDs, bc.Id)
+					setSelectedYoutubeBroadcast(bc)
 					go func() {
 						time.Sleep(100 * time.Millisecond)
 						youtubeTemplate.SetText("")
@@ -752,11 +996,32 @@ func (p *Panel) newProfileWindow(_ context.Context) fyne.Window {
 			tagsContainer,
 			tagsEntryField,
 		),
-		widget.NewButton("Create", func() {
+		widget.NewButton("Save", func() {
 			if tagsEntryField.Text != "" {
 				tagsEntryField.OnSubmitted(tagsEntryField.Text)
 			}
-			err := fmt.Errorf("creating a profile is not implemented")
+			_tags := make([]string, len(tags))
+			for k := range tags {
+				_tags = append(_tags, k)
+			}
+			profile := Profile{
+				Name:        streamcontrol.ProfileName(profileName.Text),
+				PerPlatform: map[streamcontrol.PlatformName]streamcontrol.AbstractStreamProfile{},
+				ProfileMetadata: ProfileMetadata{
+					DefaultStreamTitle:       defaultStreamTitle.Text,
+					DefaultStreamDescription: defaultStreamDescription.Text,
+					MaxOrder:                 0,
+				},
+			}
+			if twitchProfile != nil {
+				twitchProfile.Tags = _tags
+				profile.PerPlatform[twitch.ID] = twitchProfile
+			}
+			if youtubeProfile != nil {
+				youtubeProfile.Tags = _tags
+				profile.PerPlatform[youtube.ID] = youtubeProfile
+			}
+			err := commitFn(ctx, profile)
 			if err != nil {
 				p.displayError(err)
 				return
@@ -767,14 +1032,15 @@ func (p *Panel) newProfileWindow(_ context.Context) fyne.Window {
 
 	w.SetContent(container.NewBorder(
 		container.NewVBox(
-			activityTitle,
+			profileName,
+			defaultStreamTitle,
 		),
 		container.NewVBox(
 			bottomContent...,
 		),
 		nil,
 		nil,
-		activityDescription,
+		defaultStreamDescription,
 	))
 	w.Show()
 	return w

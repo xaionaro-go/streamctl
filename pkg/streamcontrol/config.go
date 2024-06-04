@@ -36,14 +36,31 @@ func (profiles StreamProfiles[S]) Get(name ProfileName) (S, bool) {
 	}
 
 	result := hierarchy[len(hierarchy)-1]
-	v := reflect.ValueOf(&result).Elem()
+	valueOfHierarchyItem := func(idx int) reflect.Value {
+		item := hierarchy[idx]
+		v := reflect.ValueOf(&item).Elem()
+		if v.Kind() == reflect.Interface {
+			v = v.Elem()
+		}
+		if v.Kind() == reflect.Pointer {
+			v = v.Elem()
+		}
+		return v
+	}
+	v := valueOfHierarchyItem(len(hierarchy) - 1)
+	if v.Kind() == reflect.Interface {
+		v = v.Elem()
+	}
+	if v.Kind() == reflect.Pointer {
+		v = v.Elem()
+	}
 	for i := 0; i < v.NumField(); i++ {
 		fv := v.Field(i)
 		if !fv.CanSet() {
 			continue
 		}
 		for h := len(hierarchy) - 1; h >= 0; h-- {
-			nv := reflect.ValueOf(hierarchy[h]).Field(i)
+			nv := valueOfHierarchyItem(h).Field(i)
 			if isNil(nv) {
 				continue
 			}

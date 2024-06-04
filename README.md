@@ -1,3 +1,8 @@
+# GUI: `streampanel`
+
+`<TBD>`
+
+# CLI: `streamctl`
 ```
 xaionaro@void:~/go/src/github.com/xaionaro-go/streamctl$ go run ./cmd/streamctl/
 Usage:

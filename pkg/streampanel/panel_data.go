@@ -13,9 +13,16 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 )
 
+type ProfileMetadata struct {
+	DefaultStreamTitle       string
+	DefaultStreamDescription string
+	MaxOrder                 int
+}
+
 type panelData struct {
-	Backends streamcontrol.Config
-	Cache    struct {
+	Backends        streamcontrol.Config
+	ProfileMetadata map[streamcontrol.ProfileName]ProfileMetadata
+	Cache           struct {
 		Twitch struct {
 			Categories []helix.Game
 		}
@@ -30,7 +37,8 @@ func newPanelData() panelData {
 	twitch.InitConfig(cfg)
 	youtube.InitConfig(cfg)
 	return panelData{
-		Backends: cfg,
+		Backends:        cfg,
+		ProfileMetadata: map[streamcontrol.ProfileName]ProfileMetadata{},
 	}
 }
 

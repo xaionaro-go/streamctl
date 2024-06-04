@@ -1,6 +1,8 @@
 
-android21:
-	gomobile bind -target=android -androidapi 21 ./pkg/streampanel/
+streampanel-android:
+	cd cmd/streampanel
+	fyne package -release -os android
 
-ios:
-	gomobile bind -target=ios ./pkg/streampanel/
+streampanel-ios:
+	cd cmd/streampanel
+	fyne package -release -os ios
