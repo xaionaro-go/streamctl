@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -22,6 +23,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/go-ng/xmath"
+	"github.com/xaionaro-go/gorex"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
@@ -40,7 +42,7 @@ type Panel struct {
 
 	app                fyne.App
 	config             config
-	startStopMutex     sync.Mutex
+	startStopMutex     gorex.Mutex
 	updateTimerHandler *updateTimerHandler
 	streamControllers  struct {
 		Twitch  *twitch.Twitch
@@ -59,6 +61,9 @@ type Panel struct {
 
 	dataPath    string
 	filterValue string
+
+	youtubeCheck *widget.Check
+	twitchCheck  *widget.Check
 }
 
 func New(
@@ -75,6 +80,10 @@ func (p *Panel) Loop(ctx context.Context) error {
 	if p.defaultContext != nil {
 		return fmt.Errorf("Loop was already used, and cannot be used the second time")
 	}
+	p.startStopMutex = gorex.Mutex{
+		InfiniteContext: ctx,
+	}
+
 	p.defaultContext = ctx
 	logger.Debug(ctx, "config", p.config)
 
@@ -84,19 +93,36 @@ func (p *Panel) Loop(ctx context.Context) error {
 
 	p.app = fyneapp.New()
 
-	if err := p.initStreamControllers(ctx); err != nil {
-		return fmt.Errorf("unable to initialize stream controllers: %w", err)
-	}
+	go func() {
+		if err := p.initStreamControllers(ctx); err != nil {
+			err = fmt.Errorf("unable to initialize stream controllers: %w", err)
+			p.displayError(err)
+			return
+		}
 
-	p.initTwitchData()
-	p.normalizeTwitchData()
-	p.initYoutubeData()
-	p.normalizeYoutubeData()
+		var wg sync.WaitGroup
 
-	p.initMainWindow(ctx)
-	p.rearrangeProfiles(ctx)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			p.initTwitchData()
+			p.normalizeTwitchData()
+		}()
 
-	p.mainWindow.ShowAndRun()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			p.initYoutubeData()
+			p.normalizeYoutubeData()
+		}()
+
+		wg.Wait()
+
+		p.initMainWindow(ctx)
+		p.rearrangeProfiles(ctx)
+	}()
+
+	p.app.Run()
 	return nil
 }
 
@@ -267,7 +293,11 @@ func (p *Panel) openBrowser(authURL string) error {
 	case "darwin":
 		browserCmd = "open"
 	case "linux":
-		browserCmd = "xdg-open"
+		if envBrowser := os.Getenv("BROWSER"); envBrowser != "" {
+			browserCmd = envBrowser
+		} else {
+			browserCmd = "xdg-open"
+		}
 	default:
 		return oauthhandler.LaunchBrowser(authURL)
 	}
@@ -275,6 +305,8 @@ func (p *Panel) openBrowser(authURL string) error {
 	waitCh := make(chan struct{})
 
 	w := p.app.NewWindow("Browser selection window")
+	promptText := widget.NewRichTextWithText("It is required to confirm access in Twitch/YouTube using browser. Select a browser for that (or leave the field empty for auto-selection):")
+	promptText.Wrapping = fyne.TextWrapWord
 	browserField := widget.NewEntry()
 	browserField.PlaceHolder = "command to execute the browser"
 	browserField.OnSubmitted = func(s string) {
@@ -284,16 +316,19 @@ func (p *Panel) openBrowser(authURL string) error {
 		close(waitCh)
 	})
 	w.SetContent(container.NewBorder(
-		browserField,
+		container.NewVBox(
+			promptText,
+			browserField,
+		),
 		okButton,
 		nil,
 		nil,
 		nil,
 	))
 
-	go w.ShowAndRun()
+	w.Show()
 	<-waitCh
-	w.Close()
+	w.Hide()
 
 	if browserField.Text != "" {
 		browserCmd = browserField.Text
@@ -302,18 +337,136 @@ func (p *Panel) openBrowser(authURL string) error {
 	return exec.Command(browserCmd, authURL).Start()
 }
 
+var twitchAppsCreateLink, _ = url.Parse("https://dev.twitch.tv/console/apps/create")
+
+func (p *Panel) inputTwitchUserInfo(
+	ctx context.Context,
+	cfg *streamcontrol.PlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile],
+) error {
+	w := p.app.NewWindow("Input Twitch user info")
+	w.Resize(fyne.NewSize(600, 200))
+
+	channelField := widget.NewEntry()
+	channelField.SetPlaceHolder("channel ID (copy&paste it from the browser: https://www.twitch.tv/<the channel ID is here>)")
+	clientIDField := widget.NewEntry()
+	clientIDField.SetPlaceHolder("client ID")
+	clientSecretField := widget.NewEntry()
+	clientSecretField.SetPlaceHolder("client secret")
+	instructionText := widget.NewRichText(
+		&widget.TextSegment{Text: "Go to\n", Style: widget.RichTextStyle{Inline: true}},
+		&widget.HyperlinkSegment{Text: twitchAppsCreateLink.String(), URL: twitchAppsCreateLink},
+		&widget.TextSegment{Text: `,` + "\n" + `create an application (enter "http://localhost:8091/" as the "OAuth Redirect URLs" value), then click "Manage" then "New Secret", and copy&paste client ID and client secret.`, Style: widget.RichTextStyle{Inline: true}},
+	)
+	instructionText.Wrapping = fyne.TextWrapWord
+
+	waitCh := make(chan struct{})
+	okButton := widget.NewButtonWithIcon("OK", theme.ConfirmIcon(), func() {
+		close(waitCh)
+	})
+
+	w.SetContent(container.NewBorder(
+		widget.NewRichTextWithText("Enter Twitch user info:"),
+		okButton,
+		nil,
+		nil,
+		container.NewVBox(
+			channelField,
+			clientIDField,
+			clientSecretField,
+			instructionText,
+		),
+	))
+	w.Show()
+	<-waitCh
+	w.Hide()
+
+	cfg.Config.AuthType = "user"
+	cfg.Config.Channel = channelField.Text
+	cfg.Config.ClientID = clientIDField.Text
+	cfg.Config.ClientSecret = clientSecretField.Text
+
+	return nil
+}
+
+var youtubeCredentialsCreateLink, _ = url.Parse("https://console.cloud.google.com/apis/credentials/oauthclient")
+
+func (p *Panel) inputYouTubeUserInfo(
+	ctx context.Context,
+	cfg *streamcontrol.PlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile],
+) error {
+	w := p.app.NewWindow("Input YouTube user info")
+	w.Resize(fyne.NewSize(600, 200))
+
+	clientIDField := widget.NewEntry()
+	clientIDField.SetPlaceHolder("client ID")
+	clientSecretField := widget.NewEntry()
+	clientSecretField.SetPlaceHolder("client secret")
+	instructionText := widget.NewRichText(
+		&widget.TextSegment{Text: "Go to\n", Style: widget.RichTextStyle{Inline: true}},
+		&widget.HyperlinkSegment{Text: youtubeCredentialsCreateLink.String(), URL: youtubeCredentialsCreateLink},
+		&widget.TextSegment{Text: `,` + "\n" + `configure "consent screen" (note: you may add yourself into Test Users to avoid problems further on, and don't forget to add "YouTube Data API v3" scopes) and go back to` + "\n", Style: widget.RichTextStyle{Inline: true}},
+		&widget.HyperlinkSegment{Text: youtubeCredentialsCreateLink.String(), URL: youtubeCredentialsCreateLink},
+		&widget.TextSegment{Text: `,` + "\n" + `choose "Desktop app", confirm and copy&paste client ID and client secret.`, Style: widget.RichTextStyle{Inline: true}},
+	)
+	instructionText.Wrapping = fyne.TextWrapWord
+
+	waitCh := make(chan struct{})
+	okButton := widget.NewButtonWithIcon("OK", theme.ConfirmIcon(), func() {
+		close(waitCh)
+	})
+
+	w.SetContent(container.NewBorder(
+		widget.NewRichTextWithText("Enter YouTube user info:"),
+		okButton,
+		nil,
+		nil,
+		container.NewVBox(
+			clientIDField,
+			clientSecretField,
+			instructionText,
+		),
+	))
+	w.Show()
+	<-waitCh
+	w.Hide()
+
+	cfg.Config.ClientID = clientIDField.Text
+	cfg.Config.ClientSecret = clientSecretField.Text
+
+	return nil
+}
+
 func (p *Panel) initStreamControllers(ctx context.Context) error {
-	for platName, cfg := range p.data.Backends {
+	platNames := make([]streamcontrol.PlatformName, 0, len(p.data.Backends))
+	for platName := range p.data.Backends {
+		platNames = append(platNames, platName)
+	}
+	sort.Slice(platNames, func(i, j int) bool {
+		return platNames[i] < platNames[j]
+	})
+	for _, platName := range platNames {
+		cfg := p.data.Backends[platName]
 		var err error
 		switch strings.ToLower(string(platName)) {
 		case strings.ToLower(string(twitch.ID)):
-			p.streamControllers.Twitch, err = newTwitch(ctx, cfg, func(cfg *streamcontrol.AbstractPlatformConfig) error {
-				return p.savePlatformConfig(ctx, twitch.ID, cfg)
-			}, p.oauthHandlerTwitch)
+			p.streamControllers.Twitch, err = newTwitch(
+				ctx,
+				cfg,
+				p.inputTwitchUserInfo,
+				func(cfg *streamcontrol.AbstractPlatformConfig) error {
+					return p.savePlatformConfig(ctx, twitch.ID, cfg)
+				},
+				p.oauthHandlerTwitch)
 		case strings.ToLower(string(youtube.ID)):
-			p.streamControllers.YouTube, err = newYouTube(ctx, cfg, func(cfg *streamcontrol.AbstractPlatformConfig) error {
-				return p.savePlatformConfig(ctx, youtube.ID, cfg)
-			}, p.oauthHandlerYouTube)
+			p.streamControllers.YouTube, err = newYouTube(
+				ctx,
+				cfg,
+				p.inputYouTubeUserInfo,
+				func(cfg *streamcontrol.AbstractPlatformConfig) error {
+					return p.savePlatformConfig(ctx, youtube.ID, cfg)
+				},
+				p.oauthHandlerYouTube,
+			)
 		}
 		if err != nil {
 			return fmt.Errorf("unable to initialize '%s': %w", platName, err)
@@ -550,6 +703,7 @@ func (p *Panel) setFilter(ctx context.Context, filter string) {
 
 func (p *Panel) initMainWindow(ctx context.Context) {
 	w := p.app.NewWindow("StreamPanel")
+	w.Resize(fyne.NewSize(400, 600))
 
 	profileFilter := widget.NewEntry()
 	profileFilter.SetPlaceHolder("filter")
@@ -625,11 +779,21 @@ func (p *Panel) initMainWindow(ctx context.Context) {
 		p.startStopButton.OnTapped()
 	}
 
-	bottomPanel := container.NewAdaptiveGrid(
-		1,
+	p.twitchCheck = widget.NewCheck("Twitch", nil)
+	p.twitchCheck.SetChecked(true)
+	p.youtubeCheck = widget.NewCheck("YouTube", nil)
+	p.youtubeCheck.SetChecked(true)
+
+	bottomPanel := container.NewVBox(
 		p.streamTitleField,
 		p.streamDescriptionField,
-		p.startStopButton,
+		container.NewBorder(
+			nil,
+			nil,
+			container.NewHBox(p.twitchCheck, p.youtubeCheck),
+			nil,
+			p.startStopButton,
+		),
 	)
 	w.SetContent(container.NewBorder(
 		topPanel,
@@ -644,24 +808,118 @@ func (p *Panel) initMainWindow(ctx context.Context) {
 	p.profilesListWidget = profilesList
 }
 
+func (p *Panel) getSelectedProfile() Profile {
+	return p.getProfile(*p.selectedProfileName)
+}
+
+func (p *Panel) startStream() {
+	p.startStopMutex.Lock()
+	defer p.startStopMutex.Unlock()
+
+	if p.startStopButton.Disabled() {
+		return
+	}
+	p.startStopButton.Disable()
+	defer p.startStopButton.Enable()
+
+	p.twitchCheck.Disable()
+	p.youtubeCheck.Disable()
+
+	p.startStopButton.SetText("Stop stream")
+	p.startStopButton.Icon = theme.MediaStopIcon()
+	p.startStopButton.Importance = widget.DangerImportance
+	if p.updateTimerHandler != nil {
+		p.updateTimerHandler.Stop()
+	}
+	p.updateTimerHandler = newUpdateTimerHandler(p.startStopButton)
+	profile := p.getSelectedProfile()
+
+	var twitchProfile *twitch.StreamProfile
+	if p.twitchCheck.Checked && p.streamControllers.Twitch != nil {
+		var err error
+		twitchProfile, err = streamcontrol.GetStreamProfile[twitch.StreamProfile](p.defaultContext, profile.PerPlatform[twitch.ID])
+		if err != nil {
+			p.displayError(fmt.Errorf("unable to get the streaming profile for Twitch: %w", err))
+			return
+		}
+	}
+
+	var youtubeProfile *youtube.StreamProfile
+	if p.youtubeCheck.Checked && p.streamControllers.YouTube != nil {
+		var err error
+		youtubeProfile, err = streamcontrol.GetStreamProfile[youtube.StreamProfile](p.defaultContext, profile.PerPlatform[youtube.ID])
+		if err != nil {
+			p.displayError(fmt.Errorf("unable to get the streaming profile for YouTube: %w", err))
+			return
+		}
+	}
+
+	if p.twitchCheck.Checked && p.streamControllers.Twitch != nil {
+		err := p.streamControllers.Twitch.StartStream(
+			p.defaultContext,
+			p.streamTitleField.Text,
+			p.streamDescriptionField.Text,
+			*twitchProfile,
+		)
+		if err != nil {
+			p.displayError(fmt.Errorf("unable to setup the stream on Twitch: %w", err))
+		}
+	}
+
+	if p.youtubeCheck.Checked && p.streamControllers.YouTube != nil {
+		err := p.streamControllers.YouTube.StartStream(
+			p.defaultContext,
+			p.streamTitleField.Text,
+			p.streamDescriptionField.Text,
+			*youtubeProfile,
+		)
+		if err != nil {
+			p.displayError(fmt.Errorf("unable to start the stream on YouTube: %w", err))
+		}
+	}
+}
+
+func (p *Panel) stopStream() {
+	p.startStopMutex.Lock()
+	defer p.startStopMutex.Unlock()
+
+	p.twitchCheck.Enable()
+	p.youtubeCheck.Enable()
+
+	p.startStopButton.SetText("Start stream")
+	p.startStopButton.Icon = theme.MediaRecordIcon()
+	p.startStopButton.Importance = widget.SuccessImportance
+
+	p.updateTimerHandler.Stop()
+	if p.updateTimerHandler != nil {
+		p.updateTimerHandler.Stop()
+	}
+	p.updateTimerHandler = nil
+	p.startStopButton.SetText("")
+
+	if p.streamControllers.Twitch != nil {
+		err := p.streamControllers.Twitch.EndStream(p.defaultContext)
+		if err != nil {
+			p.displayError(fmt.Errorf("unable to stop the stream on Twitch: %w", err))
+		}
+	}
+
+	if p.streamControllers.YouTube != nil {
+		err := p.streamControllers.YouTube.EndStream(p.defaultContext)
+		if err != nil {
+			p.displayError(fmt.Errorf("unable to stop the stream on YouTube: %w", err))
+		}
+	}
+}
+
 func (p *Panel) onStartStopButton() {
 	p.startStopMutex.Lock()
 	defer p.startStopMutex.Unlock()
 
 	if p.updateTimerHandler != nil {
-		p.startStopButton.SetText("Start stream")
-		p.startStopButton.Icon = theme.MediaRecordIcon()
-		p.startStopButton.Importance = widget.SuccessImportance
-		p.updateTimerHandler.Stop()
-		panic("stream stopping is not implemented")
-		p.updateTimerHandler = nil
-		p.startStopButton.SetText("")
+		p.stopStream()
 	} else {
-		p.startStopButton.SetText("Stop stream")
-		p.startStopButton.Icon = theme.MediaStopIcon()
-		p.startStopButton.Importance = widget.DangerImportance
-		p.updateTimerHandler = newUpdateTimerHandler(p.startStopButton)
-		panic("stream starting is not implemented")
+		p.startStream()
 	}
 
 	p.startStopButton.Refresh()
@@ -750,8 +1008,15 @@ func (p *Panel) newProfileWindow(ctx context.Context) fyne.Window {
 		"Create a profile",
 		Profile{},
 		func(ctx context.Context, profile Profile) error {
-			oldProfile := p.getProfile(profile.Name)
-			if oldProfile.Name == profile.Name {
+			found := false
+			for _, platCfg := range p.data.Backends {
+				_, ok := platCfg.GetStreamProfile(profile.Name)
+				if ok {
+					found = true
+					break
+				}
+			}
+			if found {
 				return fmt.Errorf("profile with name '%s' already exists", profile.Name)
 			}
 			if err := p.profileCreateOrUpdate(ctx, profile); err != nil {
@@ -1002,6 +1267,9 @@ func (p *Panel) profileWindow(
 			}
 			_tags := make([]string, len(tags))
 			for k := range tags {
+				if k == "" {
+					continue
+				}
 				_tags = append(_tags, k)
 			}
 			profile := Profile{
@@ -1050,6 +1318,13 @@ func (p *Panel) displayError(err error) {
 	w := p.app.NewWindow("Got an error: " + err.Error())
 	errorMessage := fmt.Sprintf("Error: %v\n\nstack trace:\n%s", err, debug.Stack())
 	w.Resize(fyne.NewSize(400, 300))
-	w.SetContent(widget.NewLabelWithStyle(errorMessage, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
+	textWidget := widget.NewMultiLineEntry()
+	textWidget.SetText(errorMessage)
+	textWidget.Wrapping = fyne.TextWrapWord
+	textWidget.TextStyle = fyne.TextStyle{
+		Bold:      true,
+		Monospace: true,
+	}
+	w.SetContent(textWidget)
 	w.Show()
 }

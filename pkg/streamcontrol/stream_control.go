@@ -41,21 +41,33 @@ type StreamProfile interface {
 	AbstractStreamProfile
 }
 
+func GetStreamProfile[T StreamProfile](
+	ctx context.Context,
+	v AbstractStreamProfile,
+) (*T, error) {
+	var profile T
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil, fmt.Errorf("unable to serialize: %w: %#+v", err, v)
+	}
+	err = json.Unmarshal(b, &profile)
+	if err != nil {
+		return nil, fmt.Errorf("unable to deserialize: %w: <%s>", err, b)
+	}
+	logger.Debugf(ctx, "converted %#+v to %#+v", v, profile)
+	return &profile, nil
+}
+
 func ConvertStreamProfiles[T StreamProfile](
 	ctx context.Context,
 	m map[ProfileName]AbstractStreamProfile,
 ) error {
 	for k, v := range m {
-		var profile T
-		b, err := json.Marshal(v)
+		profile, err := GetStreamProfile[T](ctx, v)
 		if err != nil {
-			return fmt.Errorf("unable to serialize: %w: %#+v", err, v)
+			return err
 		}
-		err = json.Unmarshal(b, &profile)
-		if err != nil {
-			return fmt.Errorf("unable to deserialize: %w: <%s>", err, b)
-		}
-		m[k] = profile
+		m[k] = *profile
 		logger.Debugf(ctx, "converted %#+v to %#+v", v, profile)
 	}
 	return nil

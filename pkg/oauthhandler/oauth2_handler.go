@@ -82,7 +82,11 @@ func NewCodeReceiver(redirectURL string) (codeCh chan string, err error) {
 		codeCh <- code
 		listener.Close()
 		w.Header().Set("Content-Type", "text/plain")
-		fmt.Fprintf(w, "Received code: %v\r\nYou can now safely close this browser window.", code)
+		if code == "" {
+			fmt.Fprintf(w, "No code received :(\r\n\r\nYou can close this browser window.")
+			return
+		}
+		fmt.Fprintf(w, "Received code: %v\r\n\r\nYou can now safely close this browser window.", code)
 	}))
 
 	return codeCh, nil

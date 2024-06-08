@@ -3,6 +3,7 @@ package twitch
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
@@ -105,8 +106,19 @@ func (t *Twitch) ApplyProfile(
 			logger.Errorf(ctx, "unable to get the category ID: %v", err)
 		}
 	}
+
+	tags := make([]string, 0, len(profile.Tags))
+	for _, tag := range profile.Tags {
+		tag = strings.ReplaceAll(tag, " ", "")
+		tag = strings.ReplaceAll(tag, "-", "")
+		if tag == "" {
+			continue
+		}
+		tags = append(tags, tag)
+	}
+
 	params := &helix.EditChannelInformationParams{
-		Tags: profile.Tags,
+		Tags: tags,
 	}
 	if profile.Language != nil {
 		params.BroadcasterLanguage = *profile.Language

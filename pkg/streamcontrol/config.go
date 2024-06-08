@@ -200,6 +200,16 @@ func GetPlatformConfig[T any, S StreamProfile](
 	return ConvertPlatformConfig[T, S](ctx, platCfg)
 }
 
+func ToAbstractPlatformConfig[T any, S StreamProfile](
+	ctx context.Context,
+	platCfg *PlatformConfig[T, S],
+) *AbstractPlatformConfig {
+	return &AbstractPlatformConfig{
+		Config:         platCfg.Config,
+		StreamProfiles: ToAbstractStreamProfiles[S](platCfg.StreamProfiles),
+	}
+}
+
 func ConvertPlatformConfig[T any, S StreamProfile](
 	ctx context.Context,
 	platCfg *AbstractPlatformConfig,
