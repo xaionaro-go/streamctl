@@ -248,6 +248,22 @@ func (yt *YouTube) InsertAdsCuePoint(
 
 type FlagBroadcastTemplateIDs []string
 
+var videoParts = []string{
+	"contentDetails",
+	"fileDetails",
+	"id",
+	"liveStreamingDetails",
+	"localizations",
+	"player",
+	"processingDetails",
+	"recordingDetails",
+	"snippet",
+	"statistics",
+	"status",
+	"suggestions",
+	"topicDetails",
+}
+
 func (yt *YouTube) StartStream(
 	ctx context.Context,
 	title string,
@@ -268,22 +284,44 @@ func (yt *YouTube) StartStream(
 	logger.Debugf(ctx, "templateBroadcastIDs == %v; customArgs == %v", templateBroadcastIDs, customArgs)
 
 	var broadcasts []*youtube.LiveBroadcast
-	for _, templateBroadcastID := range templateBroadcastIDs {
-		logger.Debugf(ctx, "getting broadcast info of %v", templateBroadcastID)
-		response, err := yt.YouTubeService.LiveBroadcasts.
-			List([]string{"id", "snippet", "contentDetails", "monetizationDetails", "status"}).
-			Id(templateBroadcastID).
-			Context(ctx).Do()
-		if err != nil {
-			return fmt.Errorf("unable to get the list of active broadcasts: %w", err)
+	var videos []*youtube.Video
+	if len(templateBroadcastIDs) > 0 {
+		{
+			logger.Debugf(ctx, "getting broadcast info of %v", templateBroadcastIDs)
+
+			response, err := yt.YouTubeService.LiveBroadcasts.
+				List([]string{"id", "snippet", "contentDetails", "monetizationDetails", "status"}).
+				Id(templateBroadcastIDs...).
+				Context(ctx).Do()
+			if err != nil {
+				return fmt.Errorf("unable to get the list of active broadcasts: %w", err)
+			}
+			if len(response.Items) != len(templateBroadcastIDs) {
+				return fmt.Errorf("expected %d broadcasts, but found %d", len(templateBroadcastIDs), len(response.Items))
+			}
+			broadcasts = append(broadcasts, response.Items...)
 		}
-		if len(response.Items) != 1 {
-			return fmt.Errorf("expected 1 broadcast with id %v, but found %d", templateBroadcastID, len(response.Items))
+
+		{
+			logger.Debugf(ctx, "getting video info of %v", templateBroadcastIDs)
+
+			response, err := yt.YouTubeService.Videos.List(videoParts).Id(templateBroadcastIDs...).Context(ctx).Do()
+			if err != nil {
+				return fmt.Errorf("unable to get the list of active broadcasts: %w", err)
+			}
+			if len(response.Items) != len(templateBroadcastIDs) {
+				return fmt.Errorf("expected %d videos, but found %d", len(templateBroadcastIDs), len(response.Items))
+			}
+			videos = append(videos, response.Items...)
 		}
-		broadcasts = append(broadcasts, response.Items...)
 	}
 
-	for _, broadcast := range broadcasts {
+	for idx, broadcast := range broadcasts {
+		video := videos[idx]
+
+		if video.Id != broadcast.Id {
+			return fmt.Errorf("internal error: the orders of videos and broadcasts do not match: %s != %s", video.Id, broadcast.Id)
+		}
 		now := time.Now().UTC()
 		broadcast.Id = ""
 		broadcast.Etag = ""
@@ -302,9 +340,9 @@ func (yt *YouTube) StartStream(
 
 		b, err := yaml.Marshal(broadcast)
 		if err == nil {
-			logger.Tracef(ctx, "applying %s", b)
+			logger.Tracef(ctx, "creating broadcast %s", b)
 		} else {
-			logger.Tracef(ctx, "applying %#+v", broadcast)
+			logger.Tracef(ctx, "creating broadcast %#+v", broadcast)
 		}
 
 		newBroadcast, err := yt.YouTubeService.LiveBroadcasts.Insert(
@@ -313,6 +351,21 @@ func (yt *YouTube) StartStream(
 		).Context(ctx).Do()
 		if err != nil {
 			return fmt.Errorf("unable to create a broadcast: %w", err)
+		}
+
+		video.Id = newBroadcast.Id
+		video.Snippet.PublishedAt = ""
+		video.Status.PublishAt = ""
+		video.Snippet.Tags = append(video.Snippet.Tags, profile.Tags...)
+		b, err = yaml.Marshal(video)
+		if err == nil {
+			logger.Tracef(ctx, "updating video data to %s", b)
+		} else {
+			logger.Tracef(ctx, "updating video data to %#+v", broadcast)
+		}
+		_, err = yt.YouTubeService.Videos.Update(videoParts, video).Context(ctx).Do()
+		if err != nil {
+			return fmt.Errorf("unable to update video data: %w", err)
 		}
 
 		if broadcast.Snippet.Thumbnails.Standard.Url != "" {
