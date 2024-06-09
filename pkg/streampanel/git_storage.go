@@ -1,7 +1,9 @@
 package streampanel
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha1"
 	"fmt"
 	"io"
 	"os"
@@ -208,6 +210,9 @@ func (s *gitStorage) Pull(
 		Force:     true,
 		Prune:     false,
 	})
+	if err == git.NoErrAlreadyUpToDate {
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("unable to fetch from the remote git repo: %w", err)
 	}
@@ -231,9 +236,6 @@ func (s *gitStorage) Pull(
 		CABundle:          nil,
 		ProxyOptions:      transport.ProxyOptions{},
 	})
-	if err == git.NoErrAlreadyUpToDate {
-		return nil
-	}
 	if err != nil {
 		return fmt.Errorf("unable to pull the updates in the git repo: %w", err)
 	}
@@ -289,6 +291,11 @@ func (s *gitStorage) CommitAndPush(
 		return plumbing.Hash{}, fmt.Errorf("unable to open the git's worktree: %w", err)
 	}
 
+	_, err = worktree.Add(gitRepoPanelConfigFileName)
+	if err != nil {
+		return plumbing.Hash{}, fmt.Errorf("unable to add file 'gitRepoPanelConfigFileName' to the git's worktree: %w", err)
+	}
+
 	now := time.Now()
 	signature := gitCommitter(now)
 	ts := now.Format(time.DateTime)
@@ -298,9 +305,10 @@ func (s *gitStorage) CommitAndPush(
 	}
 
 	hash, err := worktree.Commit(fmt.Sprintf("Update from '%s' at %s", host, ts), &git.CommitOptions{
-		All:       true,
-		Author:    signature,
-		Committer: signature,
+		All:               true,
+		AllowEmptyCommits: false,
+		Author:            signature,
+		Committer:         signature,
 	})
 	if err != nil {
 		return hash, fmt.Errorf("unable to commit the new config to the git repo: %w", err)
@@ -324,7 +332,7 @@ func (s *gitStorage) Close() error {
 
 func (p *Panel) initGitIfNeeded(ctx context.Context) {
 	logger.Debugf(ctx, "initGitIfNeeded")
-	if p.data.GitRepo.Enable != nil && *p.data.GitRepo.Enable {
+	if p.data.GitRepo.Enable != nil && !*p.data.GitRepo.Enable {
 		logger.Debugf(ctx, "git is disabled in the configuration")
 		return
 	}
@@ -342,10 +350,10 @@ func (p *Panel) initGitIfNeeded(ctx context.Context) {
 				p.displayError(fmt.Errorf("unable to input the git user data: %w", err))
 				continue
 			}
+			if err := p.saveData(ctx); err != nil {
+				p.displayError(err)
+			}
 			if !ok {
-				if err := p.saveData(ctx); err != nil {
-					p.displayError(err)
-				}
 				p.deinitGitStorage(ctx)
 				return
 			}
@@ -556,17 +564,45 @@ func (p *Panel) sendConfigViaGIT(
 		return fmt.Errorf("unable to open the git's worktree: %w", err)
 	}
 
-	f, err := worktree.Filesystem.OpenFile(
+	f, err := worktree.Filesystem.Open(
+		gitRepoPanelConfigFileName,
+	)
+	if err != nil {
+		return fmt.Errorf("unable to open file '%s' for reading: %w", gitRepoPanelConfigFileName, err)
+	}
+
+	b, err := io.ReadAll(f)
+	if err != nil {
+		return fmt.Errorf("unable to read file '%s': %w", gitRepoPanelConfigFileName, err)
+	}
+	f.Close()
+	sha1SumBefore := sha1.Sum(b)
+
+	var newBytes bytes.Buffer
+	latestSyncCommit := p.data.GitRepo.LatestSyncCommit
+	p.data.GitRepo.LatestSyncCommit = ""
+	err = writePanelData(ctx, &newBytes, p.data)
+	p.data.GitRepo.LatestSyncCommit = latestSyncCommit
+	if err != nil {
+		return fmt.Errorf("unable to encode the config: %w", err)
+	}
+
+	sha1SumAfter := sha1.Sum(newBytes.Bytes())
+	if bytes.Equal(sha1SumBefore[:], sha1SumAfter[:]) {
+		logger.Debugf(ctx, "the config didn't change: %X == %X", sha1SumBefore[:], sha1SumAfter[:])
+		return nil
+	}
+
+	f, err = worktree.Filesystem.OpenFile(
 		gitRepoPanelConfigFileName,
 		os.O_WRONLY|os.O_CREATE|os.O_TRUNC,
 		0644,
 	)
 	if err != nil {
-		return fmt.Errorf("unable to open file '%s': %w", gitRepoPanelConfigFileName, err)
+		return fmt.Errorf("unable to open file '%s' for writing: %w", gitRepoPanelConfigFileName, err)
 	}
-	defer f.Close()
-
-	err = writePanelData(ctx, f, p.data)
+	_, err = io.Copy(f, bytes.NewReader(newBytes.Bytes()))
+	f.Close()
 	if err != nil {
 		return fmt.Errorf("unable to write the config into virtual git repo: %w", err)
 	}
@@ -574,6 +610,9 @@ func (p *Panel) sendConfigViaGIT(
 	hash, err := p.gitStorage.CommitAndPush(ctx)
 	if !hash.IsZero() {
 		p.setLastKnownGitCommitHash(hash)
+		if err := p.saveDataToConfigFile(ctx); err != nil {
+			return fmt.Errorf("unable to store the new commit hash in the config file: %w", err)
+		}
 	}
 	if err != nil {
 		return fmt.Errorf("unable to commit&push the config into virtual git repo: %w", err)

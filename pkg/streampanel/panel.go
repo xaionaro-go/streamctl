@@ -101,6 +101,16 @@ func (p *Panel) Loop(ctx context.Context) error {
 
 	go func() {
 		p.initGitIfNeeded(ctx)
+		go func() {
+			if p.gitStorage != nil {
+				err := p.sendConfigViaGIT(ctx)
+				if err != nil {
+					p.displayError(fmt.Errorf("unable to send the config to the remote git repository: %w", err))
+				}
+			} else {
+				logger.Debugf(ctx, "git storage is not initialized")
+			}
+		}()
 
 		if err := p.initStreamControllers(ctx); err != nil {
 			err = fmt.Errorf("unable to initialize stream controllers: %w", err)
@@ -517,7 +527,7 @@ func (p *Panel) profileDelete(ctx context.Context, profileName streamcontrol.Pro
 	return nil
 }
 
-func (p *Panel) saveData(ctx context.Context) error {
+func (p *Panel) saveDataToConfigFile(ctx context.Context) error {
 	dataPath, err := p.getExpandedDataPath()
 	if err != nil {
 		return fmt.Errorf("unable to get the path to the data file: %w", err)
@@ -526,6 +536,15 @@ func (p *Panel) saveData(ctx context.Context) error {
 	err = writePanelDataToPath(ctx, dataPath, p.data)
 	if err != nil {
 		return fmt.Errorf("unable to save the config: %w", err)
+	}
+
+	return nil
+}
+
+func (p *Panel) saveData(ctx context.Context) error {
+	err := p.saveDataToConfigFile(ctx)
+	if err != nil {
+		return err
 	}
 
 	if p.gitStorage != nil {
@@ -764,6 +783,13 @@ func (p *Panel) openSettingsWindow(ctx context.Context) {
 		youtubeAlreadyLoggedIn.SetText("(already logged in)")
 	}
 
+	gitAlreadyLoggedIn := widget.NewLabel("")
+	if p.gitStorage == nil {
+		gitAlreadyLoggedIn.SetText("(not logged in)")
+	} else {
+		gitAlreadyLoggedIn.SetText("(already logged in)")
+	}
+
 	w.SetContent(container.NewBorder(
 		container.NewVBox(
 			widget.NewSeparator(),
@@ -807,6 +833,22 @@ func (p *Panel) openSettingsWindow(ctx context.Context) {
 			stopStreamCommandEntry,
 			widget.NewSeparator(),
 			widget.NewSeparator(),
+			widget.NewRichTextFromMarkdown(`# Syncing (via git)`),
+			container.NewHBox(
+				widget.NewButtonWithIcon("(Re-)login in GIT", theme.LoginIcon(), func() {
+					alreadyLoggedIn := p.gitStorage != nil
+					oldCfg := p.data.GitRepo
+					p.data.GitRepo = gitRepoConfig{}
+					p.initGitIfNeeded(ctx)
+					if p.gitStorage == nil {
+						p.data.GitRepo = oldCfg
+						if alreadyLoggedIn {
+							p.initGitIfNeeded(ctx)
+						}
+					}
+				}),
+				twitchAlreadyLoggedIn,
+			),
 		),
 		container.NewHBox(
 			cancelButton,

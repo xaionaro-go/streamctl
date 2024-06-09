@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
+	goyaml "github.com/go-yaml/yaml"
 	"github.com/goccy/go-yaml"
 	"github.com/nicklaw5/helix/v2"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -29,23 +30,25 @@ type youTubeCache struct {
 	Broadcasts []*youtube.LiveBroadcast
 }
 
+type gitRepoConfig struct {
+	Enable           *bool
+	URL              string `yaml:"url,omitempty"`
+	PrivateKey       string `yaml:"private_key,omitempty"`
+	LatestSyncCommit string `yaml:"latest_sync_commit,omitempty"`
+}
+
 type panelData struct {
 	Commands struct {
 		OnStartStream string `yaml:"on_start_stream"`
 		OnStopStream  string `yaml:"on_stop_stream"`
 	}
-	GitRepo struct {
-		Enable           *bool
-		URL              string `yaml:"url,omitempty"`
-		PrivateKey       string `yaml:"private_key,omitempty"`
-		LatestSyncCommit string `yaml:"latest_sync_commit,omitempty"`
-	}
+	GitRepo         gitRepoConfig
 	Backends        streamcontrol.Config
 	ProfileMetadata map[streamcontrol.ProfileName]ProfileMetadata
 	Cache           struct {
 		Twitch  twitchCache
 		Youtube youTubeCache
-	}
+	} `yaml:"z_cache,omitempty"`
 }
 
 func newPanelData() panelData {
@@ -145,6 +148,22 @@ func writePanelData(
 	if err != nil {
 		return fmt.Errorf("unable to serialize data %#+v: %w", cfg, err)
 	}
+
+	// have to use another YAML encoder to avoid the random-indent bug,
+	// but also have to use the initial encoder to correctly map
+	// out structures to YAML; so using both sequentially :(
+
+	m := map[string]any{}
+	err = goyaml.Unmarshal(b, &m)
+	if err != nil {
+		return fmt.Errorf("unable to unserialize data %#+v: %w", cfg, err)
+	}
+
+	b, err = goyaml.Marshal(m)
+	if err != nil {
+		return fmt.Errorf("unable to re-serialize data %#+v: %w", cfg, err)
+	}
+
 	_, err = io.Copy(w, bytes.NewBuffer(b))
 	if err != nil {
 		return fmt.Errorf("unable to write data %#+v: %w", cfg, err)
