@@ -32,6 +32,12 @@ type panelData struct {
 		OnStartStream string `yaml:"on_start_stream"`
 		OnStopStream  string `yaml:"on_stop_stream"`
 	}
+	GitRepo struct {
+		Enable           *bool
+		URL              string `yaml:"url,omitempty"`
+		PrivateKey       string `yaml:"private_key,omitempty"`
+		LatestSyncCommit string `yaml:"latest_sync_commit,omitempty"`
+	}
 	Backends        streamcontrol.Config
 	ProfileMetadata map[streamcontrol.ProfileName]ProfileMetadata
 	Cache           struct {

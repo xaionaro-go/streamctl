@@ -3,7 +3,9 @@ package streampanel
 import (
 	"bytes"
 	"context"
+	"crypto/x509"
 	_ "embed"
+	"encoding/pem"
 	"fmt"
 	"net/url"
 	"os"
@@ -65,6 +67,8 @@ type Panel struct {
 
 	youtubeCheck *widget.Check
 	twitchCheck  *widget.Check
+
+	gitStorage *gitStorage
 }
 
 func New(
@@ -93,6 +97,8 @@ func (p *Panel) Loop(ctx context.Context) error {
 	}
 
 	p.app = fyneapp.New()
+
+	p.initGitIfNeeded(ctx)
 
 	go func() {
 		if err := p.initStreamControllers(ctx); err != nil {
@@ -125,6 +131,53 @@ func (p *Panel) Loop(ctx context.Context) error {
 
 	p.app.Run()
 	return nil
+}
+
+func (p *Panel) initGitIfNeeded(ctx context.Context) {
+	if p.data.GitRepo.Enable != nil && *p.data.GitRepo.Enable {
+		logger.Debugf(ctx, "git is disabled in the configuration")
+		return
+	}
+
+	block, _ := pem.Decode([]byte(p.data.GitRepo.PrivateKey))
+	if block == nil {
+		p.data.GitRepo.Enable = ptr(false)
+		return
+	}
+
+	key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	if err != nil {
+		p.displayError(fmt.Errorf("unable to parse the private key: %w", err))
+	}
+	p.gitStorage = newGitStorage(p.data.GitRepo.URL, key)
+
+	p.gitSync(ctx)
+
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+
+			p.gitSync(ctx)
+		}
+	}()
+}
+
+func (p *Panel) gitSync(ctx context.Context) {
+	err := p.gitStorage.Sync(&p.data, func() {
+		p.onConfigUpdateViaGIT(ctx)
+	})
+	if err != nil {
+		p.displayError(fmt.Errorf("unable to sync with the remote GIT repository: %w", err))
+	}
+}
+
+func (p *Panel) onConfigUpdateViaGIT(ctx context.Context) {
+
 }
 
 func (p *Panel) initTwitchData(ctx context.Context) {
@@ -391,7 +444,8 @@ func (p *Panel) inputTwitchUserInfo(
 		return false, nil
 	}
 	cfg.Config.AuthType = "user"
-	cfg.Config.Channel = channelField.Text
+	channelWords := strings.Split(channelField.Text, "/")
+	cfg.Config.Channel = channelWords[len(channelWords)-1]
 	cfg.Config.ClientID = clientIDField.Text
 	cfg.Config.ClientSecret = clientSecretField.Text
 
@@ -464,28 +518,12 @@ func (p *Panel) initStreamControllers(ctx context.Context) error {
 		return platNames[i] < platNames[j]
 	})
 	for _, platName := range platNames {
-		cfg := p.data.Backends[platName]
 		var err error
 		switch strings.ToLower(string(platName)) {
 		case strings.ToLower(string(twitch.ID)):
-			p.streamControllers.Twitch, err = newTwitch(
-				ctx,
-				cfg,
-				p.inputTwitchUserInfo,
-				func(cfg *streamcontrol.AbstractPlatformConfig) error {
-					return p.savePlatformConfig(ctx, twitch.ID, cfg)
-				},
-				p.oauthHandlerTwitch)
+			err = p.initTwitchBackend(ctx)
 		case strings.ToLower(string(youtube.ID)):
-			p.streamControllers.YouTube, err = newYouTube(
-				ctx,
-				cfg,
-				p.inputYouTubeUserInfo,
-				func(cfg *streamcontrol.AbstractPlatformConfig) error {
-					return p.savePlatformConfig(ctx, youtube.ID, cfg)
-				},
-				p.oauthHandlerYouTube,
-			)
+			err = p.initYouTubeBackend(ctx)
 		}
 		if err != nil && err != ErrSkipBackend {
 			return fmt.Errorf("unable to initialize '%s': %w", platName, err)
@@ -720,14 +758,20 @@ func (p *Panel) setFilter(ctx context.Context, filter string) {
 	p.refilterProfiles(ctx)
 }
 
-func (p *Panel) openSettingsWindow(_ context.Context) {
+func (p *Panel) openSettingsWindow(ctx context.Context) {
 	w := p.app.NewWindow("Settings")
-	w.Resize(fyne.NewSize(400, 600))
+	w.Resize(fyne.NewSize(400, 900))
 
 	startStreamCommandEntry := widget.NewEntry()
 	startStreamCommandEntry.SetText(p.data.Commands.OnStartStream)
 	stopStreamCommandEntry := widget.NewEntry()
 	stopStreamCommandEntry.SetText(p.data.Commands.OnStopStream)
+
+	gitRepo := widget.NewEntry()
+	gitRepo.SetText(p.data.GitRepo.URL)
+
+	gitPrivateKey := widget.NewMultiLineEntry()
+	gitPrivateKey.SetText(p.data.GitRepo.PrivateKey)
 
 	cancelButton := widget.NewButtonWithIcon("Cancel", theme.CancelIcon(), func() {
 		w.Close()
@@ -743,13 +787,97 @@ func (p *Panel) openSettingsWindow(_ context.Context) {
 		w.Close()
 	})
 
+	templateInstruction := widget.NewRichTextFromMarkdown("Commands support [Go templates](https://pkg.go.dev/text/template) with two custom functions predefined:\n* `devnull` nullifies any inputs\n* `httpGET` makes an HTTP GET request and inserts the response body")
+	templateInstruction.Wrapping = fyne.TextWrapWord
+
+	gitInstruction := widget.NewRichTextFromMarkdown("We can sync the configuration among all of your devices via a git repository. To get a git repository you may, for example, use GitHub; but never use public repositories, always use private ones (because the repository will contain all the access credentials to YouTube/Twitch/whatever).")
+	gitInstruction.Wrapping = fyne.TextWrapWord
+
+	/*
+			p.streamControllers.Twitch, err = newTwitch(
+				ctx,
+				cfg,
+				p.inputTwitchUserInfo,
+				func(cfg *streamcontrol.AbstractPlatformConfig) error {
+					return p.savePlatformConfig(ctx, twitch.ID, cfg)
+				},
+				p.oauthHandlerTwitch)
+		case strings.ToLower(string(youtube.ID)):
+			p.streamControllers.YouTube, err = newYouTube(
+				ctx,
+				cfg,
+				p.inputYouTubeUserInfo,
+				func(cfg *streamcontrol.AbstractPlatformConfig) error {
+					return p.savePlatformConfig(ctx, youtube.ID, cfg)
+				},
+				p.oauthHandlerYouTube,
+			)
+	*/
+
+	twitchAlreadyLoggedIn := widget.NewLabel("")
+	if p.streamControllers.Twitch == nil {
+		twitchAlreadyLoggedIn.SetText("(not logged in)")
+	} else {
+		twitchAlreadyLoggedIn.SetText("(already logged in)")
+	}
+
+	youtubeAlreadyLoggedIn := widget.NewLabel("")
+	if p.streamControllers.YouTube == nil {
+		youtubeAlreadyLoggedIn.SetText("(not logged in)")
+	} else {
+		youtubeAlreadyLoggedIn.SetText("(already logged in)")
+	}
+
 	w.SetContent(container.NewBorder(
 		container.NewVBox(
+			widget.NewSeparator(),
+			widget.NewSeparator(),
+			widget.NewRichTextFromMarkdown(`# Streaming platforms`),
+			container.NewHBox(
+				widget.NewButtonWithIcon("(Re-)login in Twitch", theme.LoginIcon(), func() {
+					oldCfg := p.data.Backends[twitch.ID].Config
+					p.data.Backends[twitch.ID].Config = twitch.PlatformSpecificConfig{}
+					err := p.initTwitchBackend(ctx)
+					if err != nil {
+						p.displayError(err)
+						p.data.Backends[twitch.ID].Config = oldCfg
+						return
+					}
+				}),
+				twitchAlreadyLoggedIn,
+			),
+			container.NewHBox(
+				widget.NewButtonWithIcon("(Re-)login in YouTube", theme.LoginIcon(), func() {
+					oldCfg := p.data.Backends[youtube.ID].Config
+					p.data.Backends[youtube.ID].Config = youtube.PlatformSpecificConfig{}
+					err := p.initYouTubeBackend(ctx)
+					if err != nil {
+						p.displayError(err)
+						p.data.Backends[youtube.ID].Config = oldCfg
+						return
+					}
+				}),
+				youtubeAlreadyLoggedIn,
+			),
+			widget.NewSeparator(),
+			widget.NewSeparator(),
+			widget.NewRichTextFromMarkdown(`# Commands`),
+			templateInstruction,
+			widget.NewSeparator(),
 			widget.NewLabel("Run command on stream start:"),
 			startStreamCommandEntry,
 			widget.NewSeparator(),
 			widget.NewLabel("Run command on stream stop:"),
 			stopStreamCommandEntry,
+			widget.NewSeparator(),
+			widget.NewSeparator(),
+			widget.NewRichTextFromMarkdown(`# Git sync`),
+			gitInstruction,
+			widget.NewLabel("Remote repository:"),
+			gitRepo,
+			widget.NewLabel("Private key:"),
+			gitPrivateKey,
+			widget.NewSeparator(),
 			widget.NewSeparator(),
 		),
 		container.NewHBox(
@@ -761,6 +889,39 @@ func (p *Panel) openSettingsWindow(_ context.Context) {
 	))
 
 	w.Show()
+}
+
+func (p *Panel) initTwitchBackend(ctx context.Context) error {
+	twitch, err := newTwitch(
+		ctx,
+		p.data.Backends[twitch.ID],
+		p.inputTwitchUserInfo,
+		func(cfg *streamcontrol.AbstractPlatformConfig) error {
+			return p.savePlatformConfig(ctx, twitch.ID, cfg)
+		},
+		p.oauthHandlerTwitch)
+	if err != nil {
+		return err
+	}
+	p.streamControllers.Twitch = twitch
+	return nil
+}
+
+func (p *Panel) initYouTubeBackend(ctx context.Context) error {
+	youTube, err := newYouTube(
+		ctx,
+		p.data.Backends[youtube.ID],
+		p.inputYouTubeUserInfo,
+		func(cfg *streamcontrol.AbstractPlatformConfig) error {
+			return p.savePlatformConfig(ctx, youtube.ID, cfg)
+		},
+		p.oauthHandlerYouTube,
+	)
+	if err != nil {
+		return err
+	}
+	p.streamControllers.YouTube = youTube
+	return nil
 }
 
 func (p *Panel) resetCache(ctx context.Context) {
