@@ -19,16 +19,24 @@ type ProfileMetadata struct {
 	MaxOrder                 int
 }
 
+type twitchCache struct {
+	Categories []helix.Game
+}
+
+type youTubeCache struct {
+	Broadcasts []*youtube.LiveBroadcast
+}
+
 type panelData struct {
+	Commands struct {
+		OnStartStream string `yaml:"on_start_stream"`
+		OnStopStream  string `yaml:"on_stop_stream"`
+	}
 	Backends        streamcontrol.Config
 	ProfileMetadata map[streamcontrol.ProfileName]ProfileMetadata
 	Cache           struct {
-		Twitch struct {
-			Categories []helix.Game
-		}
-		Youtube struct {
-			Broadcasts []*youtube.LiveBroadcast
-		}
+		Twitch  twitchCache
+		Youtube youTubeCache
 	}
 }
 

@@ -1,6 +1,7 @@
 package streampanel
 
 import (
+	"bytes"
 	"context"
 	_ "embed"
 	"fmt"
@@ -105,14 +106,14 @@ func (p *Panel) Loop(ctx context.Context) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			p.initTwitchData()
+			p.initTwitchData(ctx)
 			p.normalizeTwitchData()
 		}()
 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			p.initYoutubeData()
+			p.initYoutubeData(ctx)
 			p.normalizeYoutubeData()
 		}()
 
@@ -126,28 +127,28 @@ func (p *Panel) Loop(ctx context.Context) error {
 	return nil
 }
 
-func (p *Panel) initTwitchData() {
-	logger.FromCtx(p.defaultContext).Debugf("initializing Twitch data")
-	defer logger.FromCtx(p.defaultContext).Debugf("endof initializing Twitch data")
+func (p *Panel) initTwitchData(ctx context.Context) {
+	logger.FromCtx(ctx).Debugf("initializing Twitch data")
+	defer logger.FromCtx(ctx).Debugf("endof initializing Twitch data")
 
 	if c := len(p.data.Cache.Twitch.Categories); c != 0 {
-		logger.FromCtx(p.defaultContext).Debugf("already have categories (count: %d)", c)
+		logger.FromCtx(ctx).Debugf("already have categories (count: %d)", c)
 		return
 	}
 
 	twitch := p.streamControllers.Twitch
 	if twitch == nil {
-		logger.FromCtx(p.defaultContext).Debugf("twitch controller is not initialized")
+		logger.FromCtx(ctx).Debugf("twitch controller is not initialized")
 		return
 	}
 
-	allCategories, err := twitch.GetAllCategories(p.defaultContext)
+	allCategories, err := twitch.GetAllCategories(ctx)
 	if err != nil {
 		p.displayError(err)
 		return
 	}
 
-	logger.FromCtx(p.defaultContext).Debugf("got categories: %#+v", allCategories)
+	logger.FromCtx(ctx).Debugf("got categories: %#+v", allCategories)
 
 	func() {
 		p.dataLock.Lock()
@@ -156,7 +157,7 @@ func (p *Panel) initTwitchData() {
 	}()
 
 	err = p.saveData()
-	errmon.ObserveErrorCtx(p.defaultContext, err)
+	errmon.ObserveErrorCtx(ctx, err)
 }
 
 func (p *Panel) normalizeTwitchData() {
@@ -166,28 +167,28 @@ func (p *Panel) normalizeTwitchData() {
 	})
 }
 
-func (p *Panel) initYoutubeData() {
-	logger.FromCtx(p.defaultContext).Debugf("initializing Youtube data")
-	defer logger.FromCtx(p.defaultContext).Debugf("endof initializing Youtube data")
+func (p *Panel) initYoutubeData(ctx context.Context) {
+	logger.FromCtx(ctx).Debugf("initializing Youtube data")
+	defer logger.FromCtx(ctx).Debugf("endof initializing Youtube data")
 
 	if c := len(p.data.Cache.Youtube.Broadcasts); c != 0 {
-		logger.FromCtx(p.defaultContext).Debugf("already have broadcasts (count: %d)", c)
+		logger.FromCtx(ctx).Debugf("already have broadcasts (count: %d)", c)
 		return
 	}
 
 	youtube := p.streamControllers.YouTube
 	if youtube == nil {
-		logger.FromCtx(p.defaultContext).Debugf("youtube controller is not initialized")
+		logger.FromCtx(ctx).Debugf("youtube controller is not initialized")
 		return
 	}
 
-	broadcasts, err := youtube.ListBroadcasts(p.defaultContext)
+	broadcasts, err := youtube.ListBroadcasts(ctx)
 	if err != nil {
 		p.displayError(err)
 		return
 	}
 
-	logger.FromCtx(p.defaultContext).Debugf("got broadcasts: %#+v", broadcasts)
+	logger.FromCtx(ctx).Debugf("got broadcasts: %#+v", broadcasts)
 
 	func() {
 		p.dataLock.Lock()
@@ -196,7 +197,7 @@ func (p *Panel) initYoutubeData() {
 	}()
 
 	err = p.saveData()
-	errmon.ObserveErrorCtx(p.defaultContext, err)
+	errmon.ObserveErrorCtx(ctx, err)
 }
 
 func (p *Panel) normalizeYoutubeData() {
@@ -342,7 +343,7 @@ var twitchAppsCreateLink, _ = url.Parse("https://dev.twitch.tv/console/apps/crea
 func (p *Panel) inputTwitchUserInfo(
 	ctx context.Context,
 	cfg *streamcontrol.PlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile],
-) error {
+) (bool, error) {
 	w := p.app.NewWindow("Input Twitch user info")
 	w.Resize(fyne.NewSize(600, 200))
 
@@ -360,13 +361,18 @@ func (p *Panel) inputTwitchUserInfo(
 	instructionText.Wrapping = fyne.TextWrapWord
 
 	waitCh := make(chan struct{})
+	skip := false
+	skipButton := widget.NewButtonWithIcon("Skip", theme.ConfirmIcon(), func() {
+		skip = true
+		close(waitCh)
+	})
 	okButton := widget.NewButtonWithIcon("OK", theme.ConfirmIcon(), func() {
 		close(waitCh)
 	})
 
 	w.SetContent(container.NewBorder(
 		widget.NewRichTextWithText("Enter Twitch user info:"),
-		okButton,
+		container.NewHBox(skipButton, okButton),
 		nil,
 		nil,
 		container.NewVBox(
@@ -380,12 +386,16 @@ func (p *Panel) inputTwitchUserInfo(
 	<-waitCh
 	w.Hide()
 
+	if skip {
+		cfg.Enable = ptr(false)
+		return false, nil
+	}
 	cfg.Config.AuthType = "user"
 	cfg.Config.Channel = channelField.Text
 	cfg.Config.ClientID = clientIDField.Text
 	cfg.Config.ClientSecret = clientSecretField.Text
 
-	return nil
+	return true, nil
 }
 
 var youtubeCredentialsCreateLink, _ = url.Parse("https://console.cloud.google.com/apis/credentials/oauthclient")
@@ -393,7 +403,7 @@ var youtubeCredentialsCreateLink, _ = url.Parse("https://console.cloud.google.co
 func (p *Panel) inputYouTubeUserInfo(
 	ctx context.Context,
 	cfg *streamcontrol.PlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile],
-) error {
+) (bool, error) {
 	w := p.app.NewWindow("Input YouTube user info")
 	w.Resize(fyne.NewSize(600, 200))
 
@@ -411,13 +421,18 @@ func (p *Panel) inputYouTubeUserInfo(
 	instructionText.Wrapping = fyne.TextWrapWord
 
 	waitCh := make(chan struct{})
+	skip := false
+	skipButton := widget.NewButtonWithIcon("Skip", theme.ConfirmIcon(), func() {
+		skip = true
+		close(waitCh)
+	})
 	okButton := widget.NewButtonWithIcon("OK", theme.ConfirmIcon(), func() {
 		close(waitCh)
 	})
 
 	w.SetContent(container.NewBorder(
 		widget.NewRichTextWithText("Enter YouTube user info:"),
-		okButton,
+		container.NewHBox(skipButton, okButton),
 		nil,
 		nil,
 		container.NewVBox(
@@ -430,10 +445,14 @@ func (p *Panel) inputYouTubeUserInfo(
 	<-waitCh
 	w.Hide()
 
+	if skip {
+		cfg.Enable = ptr(false)
+		return false, nil
+	}
 	cfg.Config.ClientID = clientIDField.Text
 	cfg.Config.ClientSecret = clientSecretField.Text
 
-	return nil
+	return true, nil
 }
 
 func (p *Panel) initStreamControllers(ctx context.Context) error {
@@ -468,7 +487,7 @@ func (p *Panel) initStreamControllers(ctx context.Context) error {
 				p.oauthHandlerYouTube,
 			)
 		}
-		if err != nil {
+		if err != nil && err != ErrSkipBackend {
 			return fmt.Errorf("unable to initialize '%s': %w", platName, err)
 		}
 	}
@@ -701,6 +720,85 @@ func (p *Panel) setFilter(ctx context.Context, filter string) {
 	p.refilterProfiles(ctx)
 }
 
+func (p *Panel) openSettingsWindow(_ context.Context) {
+	w := p.app.NewWindow("Settings")
+	w.Resize(fyne.NewSize(400, 600))
+
+	startStreamCommandEntry := widget.NewEntry()
+	startStreamCommandEntry.SetText(p.data.Commands.OnStartStream)
+	stopStreamCommandEntry := widget.NewEntry()
+	stopStreamCommandEntry.SetText(p.data.Commands.OnStopStream)
+
+	cancelButton := widget.NewButtonWithIcon("Cancel", theme.CancelIcon(), func() {
+		w.Close()
+	})
+	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
+		p.data.Commands.OnStartStream = startStreamCommandEntry.Text
+		p.data.Commands.OnStopStream = stopStreamCommandEntry.Text
+
+		if err := p.saveData(); err != nil {
+			p.displayError(err)
+		}
+
+		w.Close()
+	})
+
+	w.SetContent(container.NewBorder(
+		container.NewVBox(
+			widget.NewLabel("Run command on stream start:"),
+			startStreamCommandEntry,
+			widget.NewSeparator(),
+			widget.NewLabel("Run command on stream stop:"),
+			stopStreamCommandEntry,
+			widget.NewSeparator(),
+		),
+		container.NewHBox(
+			cancelButton,
+			saveButton,
+		),
+		nil,
+		nil,
+	))
+
+	w.Show()
+}
+
+func (p *Panel) resetCache(ctx context.Context) {
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		p.data.Cache.Twitch = twitchCache{}
+		p.initTwitchData(ctx)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		p.data.Cache.Youtube = youTubeCache{}
+		p.initYoutubeData(ctx)
+	}()
+
+	wg.Wait()
+}
+
+func (p *Panel) openMenuWindow(ctx context.Context) {
+	popupMenu := widget.NewPopUpMenu(fyne.NewMenu("menu",
+		fyne.NewMenuItem("Settings", func() {
+			p.openSettingsWindow(ctx)
+		}),
+		fyne.NewMenuItem("Reset cache", func() {
+			p.resetCache(ctx)
+		}),
+		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem("Quit", func() {
+			p.app.Quit()
+		}),
+	), p.mainWindow.Canvas())
+	popupMenu.Show()
+}
+
 func (p *Panel) initMainWindow(ctx context.Context) {
 	w := p.app.NewWindow("StreamPanel")
 	w.Resize(fyne.NewSize(400, 600))
@@ -723,7 +821,13 @@ func (p *Panel) initMainWindow(ctx context.Context) {
 		}),
 	}
 
+	menuButton := widget.NewButtonWithIcon("", theme.MenuIcon(), func() {
+		p.openMenuWindow(ctx)
+	})
+
 	buttonPanel := container.NewHBox(
+		menuButton,
+		widget.NewSeparator(),
 		widget.NewRichTextWithText("Profile:"),
 		widget.NewButtonWithIcon("", theme.ContentAddIcon(), func() {
 			p.newProfileWindow(ctx)
@@ -740,7 +844,9 @@ func (p *Panel) initMainWindow(ctx context.Context) {
 		profileFilter,
 	)
 
-	p.startStopButton = widget.NewButtonWithIcon("Start stream", theme.MediaRecordIcon(), p.onStartStopButton)
+	p.startStopButton = widget.NewButtonWithIcon("Start stream", theme.MediaRecordIcon(), func() {
+		p.onStartStopButton(ctx)
+	})
 	p.startStopButton.Importance = widget.SuccessImportance
 	p.startStopButton.Disable()
 
@@ -781,8 +887,16 @@ func (p *Panel) initMainWindow(ctx context.Context) {
 
 	p.twitchCheck = widget.NewCheck("Twitch", nil)
 	p.twitchCheck.SetChecked(true)
+	if p.streamControllers.Twitch == nil {
+		p.twitchCheck.SetChecked(false)
+		p.twitchCheck.Disable()
+	}
 	p.youtubeCheck = widget.NewCheck("YouTube", nil)
 	p.youtubeCheck.SetChecked(true)
+	if p.streamControllers.YouTube == nil {
+		p.youtubeCheck.SetChecked(false)
+		p.youtubeCheck.Disable()
+	}
 
 	bottomPanel := container.NewVBox(
 		p.streamTitleField,
@@ -812,7 +926,33 @@ func (p *Panel) getSelectedProfile() Profile {
 	return p.getProfile(*p.selectedProfileName)
 }
 
-func (p *Panel) startStream() {
+func (p *Panel) execCommand(ctx context.Context, cmdString string) {
+	cmdExpanded, err := expandCommand(cmdString)
+	if err != nil {
+		p.displayError(err)
+	}
+
+	if len(cmdExpanded) == 0 {
+		return
+	}
+
+	logger.Infof(ctx, "executing %s with arguments %v", cmdExpanded[0], cmdExpanded[1:])
+	cmd := exec.Command(cmdExpanded[0], cmdExpanded[1:]...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	go func() {
+		err := cmd.Run()
+		if err != nil {
+			p.displayError(err)
+		}
+
+		logger.Debugf(ctx, "stdout: %s", stdout.Bytes())
+		logger.Debugf(ctx, "stderr: %s", stderr.Bytes())
+	}()
+}
+
+func (p *Panel) startStream(ctx context.Context) {
 	p.startStopMutex.Lock()
 	defer p.startStopMutex.Unlock()
 
@@ -877,14 +1017,20 @@ func (p *Panel) startStream() {
 			p.displayError(fmt.Errorf("unable to start the stream on YouTube: %w", err))
 		}
 	}
+
+	p.execCommand(ctx, p.data.Commands.OnStartStream)
 }
 
-func (p *Panel) stopStream() {
+func (p *Panel) stopStream(ctx context.Context) {
 	p.startStopMutex.Lock()
 	defer p.startStopMutex.Unlock()
 
-	p.twitchCheck.Enable()
-	p.youtubeCheck.Enable()
+	if p.streamControllers.Twitch != nil {
+		p.twitchCheck.Enable()
+	}
+	if p.streamControllers.YouTube != nil {
+		p.youtubeCheck.Enable()
+	}
 
 	p.startStopButton.SetText("Start stream")
 	p.startStopButton.Icon = theme.MediaRecordIcon()
@@ -895,7 +1041,6 @@ func (p *Panel) stopStream() {
 		p.updateTimerHandler.Stop()
 	}
 	p.updateTimerHandler = nil
-	p.startStopButton.SetText("")
 
 	if p.streamControllers.Twitch != nil {
 		err := p.streamControllers.Twitch.EndStream(p.defaultContext)
@@ -910,16 +1055,18 @@ func (p *Panel) stopStream() {
 			p.displayError(fmt.Errorf("unable to stop the stream on YouTube: %w", err))
 		}
 	}
+
+	p.execCommand(ctx, p.data.Commands.OnStopStream)
 }
 
-func (p *Panel) onStartStopButton() {
+func (p *Panel) onStartStopButton(ctx context.Context) {
 	p.startStopMutex.Lock()
 	defer p.startStopMutex.Unlock()
 
 	if p.updateTimerHandler != nil {
-		p.stopStream()
+		p.stopStream(ctx)
 	} else {
-		p.startStream()
+		p.startStream(ctx)
 	}
 
 	p.startStopButton.Refresh()
@@ -1087,6 +1234,9 @@ func (p *Panel) profileWindow(
 	}
 
 	var bottomContent []fyne.CanvasObject
+
+	bottomContent = append(bottomContent, widget.NewSeparator())
+	bottomContent = append(bottomContent, widget.NewLabel("Twitch:"))
 	if p.streamControllers.Twitch != nil {
 		if platProfile := values.PerPlatform[twitch.ID]; platProfile != nil {
 			twitchProfile = ptr(streamcontrol.GetPlatformSpecificConfig[twitch.StreamProfile](ctx, platProfile))
@@ -1171,8 +1321,12 @@ func (p *Panel) profileWindow(
 			}
 		}
 		bottomContent = append(bottomContent, twitchCategory)
+	} else {
+		bottomContent = append(bottomContent, widget.NewLabel("Twitch is disabled"))
 	}
 
+	bottomContent = append(bottomContent, widget.NewSeparator())
+	bottomContent = append(bottomContent, widget.NewLabel("YouTube:"))
 	if p.streamControllers.YouTube != nil {
 		if platProfile := values.PerPlatform[youtube.ID]; platProfile != nil {
 			youtubeProfile = ptr(streamcontrol.GetPlatformSpecificConfig[youtube.StreamProfile](ctx, platProfile))
@@ -1254,10 +1408,14 @@ func (p *Panel) profileWindow(
 			}
 		}
 		bottomContent = append(bottomContent, youtubeTemplate)
+	} else {
+		bottomContent = append(bottomContent, widget.NewLabel("YouTube is disabled"))
 	}
 
 	bottomContent = append(bottomContent,
-		container.NewAdaptiveGrid(1,
+		widget.NewSeparator(),
+		container.NewVBox(
+			widget.NewLabel("common:"),
 			tagsContainer,
 			tagsEntryField,
 		),

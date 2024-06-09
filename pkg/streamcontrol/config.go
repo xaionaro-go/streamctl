@@ -80,6 +80,7 @@ func isNil(v reflect.Value) bool {
 }
 
 type PlatformConfig[T any, S StreamProfile] struct {
+	Enable         *bool
 	Config         T
 	StreamProfiles StreamProfiles[S]
 }
@@ -140,6 +141,10 @@ type Config map[PlatformName]*AbstractPlatformConfig
 
 var _ yaml.BytesUnmarshaler = (*Config)(nil)
 
+func ptr[T any](in T) *T {
+	return &in
+}
+
 func (cfg *Config) UnmarshalYAML(b []byte) error {
 	t := map[PlatformName]*unparsedPlatformConfig{}
 	err := yaml.Unmarshal(b, &t)
@@ -159,6 +164,11 @@ func (cfg *Config) UnmarshalYAML(b []byte) error {
 				StreamProfiles: make(StreamProfiles[AbstractStreamProfile]),
 			}
 			vOrig = (*cfg)[k]
+		}
+
+		(*cfg)[k].Enable = v.Enable
+		if (*cfg)[k].Enable == nil {
+			(*cfg)[k].Enable = ptr(true)
 		}
 
 		cfgCfg := vOrig.Config
@@ -205,6 +215,7 @@ func ToAbstractPlatformConfig[T any, S StreamProfile](
 	platCfg *PlatformConfig[T, S],
 ) *AbstractPlatformConfig {
 	return &AbstractPlatformConfig{
+		Enable:         platCfg.Enable,
 		Config:         platCfg.Config,
 		StreamProfiles: ToAbstractStreamProfiles[S](platCfg.StreamProfiles),
 	}
@@ -215,6 +226,7 @@ func ConvertPlatformConfig[T any, S StreamProfile](
 	platCfg *AbstractPlatformConfig,
 ) *PlatformConfig[T, S] {
 	return &PlatformConfig[T, S]{
+		Enable:         platCfg.Enable,
 		Config:         GetPlatformSpecificConfig[T](ctx, platCfg.Config),
 		StreamProfiles: GetStreamProfiles[S](platCfg.StreamProfiles),
 	}

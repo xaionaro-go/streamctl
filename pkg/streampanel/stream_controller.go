@@ -2,6 +2,7 @@ package streampanel
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
@@ -10,10 +11,12 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 )
 
+var ErrSkipBackend = errors.New("backend was skipped")
+
 func newTwitch(
 	ctx context.Context,
 	cfg *streamcontrol.AbstractPlatformConfig,
-	setUserData func(context.Context, *streamcontrol.PlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile]) error,
+	setUserData func(context.Context, *streamcontrol.PlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile]) (bool, error),
 	saveCfgFunc func(*streamcontrol.AbstractPlatformConfig) error,
 	customOAuthHandler twitch.OAuthHandler,
 ) (
@@ -27,9 +30,25 @@ func newTwitch(
 		return nil, fmt.Errorf("twitch config was not found")
 	}
 
+	if cfg.Enable != nil && *cfg.Enable == false {
+		return nil, ErrSkipBackend
+	}
+
 	hadSetNewUserData := false
 	if platCfg.Config.Channel == "" || platCfg.Config.ClientID == "" || platCfg.Config.ClientSecret == "" {
-		if err := setUserData(ctx, platCfg); err != nil {
+		ok, err := setUserData(ctx, platCfg)
+		if !ok {
+			err := saveCfgFunc(&streamcontrol.AbstractPlatformConfig{
+				Enable:         platCfg.Enable,
+				Config:         platCfg.Config,
+				StreamProfiles: streamcontrol.ToAbstractStreamProfiles(platCfg.StreamProfiles),
+			})
+			if err != nil {
+				logger.Error(ctx, err)
+			}
+			return nil, ErrSkipBackend
+		}
+		if err != nil {
 			return nil, fmt.Errorf("unable to set user info: %w", err)
 		}
 		hadSetNewUserData = true
@@ -41,6 +60,7 @@ func newTwitch(
 	twitch, err := twitch.New(ctx, *platCfg,
 		func(c twitch.Config) error {
 			return saveCfgFunc(&streamcontrol.AbstractPlatformConfig{
+				Enable:         c.Enable,
 				Config:         c.Config,
 				StreamProfiles: streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
 			})
@@ -61,7 +81,7 @@ func newTwitch(
 func newYouTube(
 	ctx context.Context,
 	cfg *streamcontrol.AbstractPlatformConfig,
-	setUserData func(context.Context, *streamcontrol.PlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile]) error,
+	setUserData func(context.Context, *streamcontrol.PlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile]) (bool, error),
 	saveCfgFunc func(*streamcontrol.AbstractPlatformConfig) error,
 	customOAuthHandler youtube.OAuthHandler,
 ) (
@@ -75,9 +95,25 @@ func newYouTube(
 		return nil, fmt.Errorf("youtube config was not found")
 	}
 
+	if cfg.Enable != nil && *cfg.Enable == false {
+		return nil, ErrSkipBackend
+	}
+
 	hadSetNewUserData := false
 	if platCfg.Config.ClientID == "" || platCfg.Config.ClientSecret == "" {
-		if err := setUserData(ctx, platCfg); err != nil {
+		ok, err := setUserData(ctx, platCfg)
+		if !ok {
+			err := saveCfgFunc(&streamcontrol.AbstractPlatformConfig{
+				Enable:         platCfg.Enable,
+				Config:         platCfg.Config,
+				StreamProfiles: streamcontrol.ToAbstractStreamProfiles(platCfg.StreamProfiles),
+			})
+			if err != nil {
+				logger.Error(ctx, err)
+			}
+			return nil, ErrSkipBackend
+		}
+		if err != nil {
 			return nil, fmt.Errorf("unable to set user info: %w", err)
 		}
 		hadSetNewUserData = true
@@ -89,6 +125,7 @@ func newYouTube(
 	yt, err := youtube.New(ctx, *platCfg,
 		func(c youtube.Config) error {
 			return saveCfgFunc(&streamcontrol.AbstractPlatformConfig{
+				Enable:         c.Enable,
 				Config:         c.Config,
 				StreamProfiles: streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
 			})
