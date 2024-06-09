@@ -547,12 +547,14 @@ func (p *Panel) saveData(ctx context.Context) error {
 		return err
 	}
 
-	if p.gitStorage != nil {
-		err = p.sendConfigViaGIT(ctx)
-		if err != nil {
-			return fmt.Errorf("unable to send the config to the remote git repository: %w", err)
+	go func() {
+		if p.gitStorage != nil {
+			err = p.sendConfigViaGIT(ctx)
+			if err != nil {
+				p.displayError(fmt.Errorf("unable to send the config to the remote git repository: %w", err))
+			}
 		}
-	}
+	}()
 
 	return nil
 }
@@ -1092,6 +1094,11 @@ func (p *Panel) startStream(ctx context.Context) {
 	}
 	p.startStopButton.Disable()
 	defer p.startStopButton.Enable()
+
+	if p.streamTitleField.Text == "" {
+		p.displayError(fmt.Errorf("title is not set"))
+		return
+	}
 
 	p.twitchCheck.Disable()
 	p.youtubeCheck.Disable()

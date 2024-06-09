@@ -1,12 +1,16 @@
 package youtube
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"time"
 
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/go-yaml/yaml"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"golang.org/x/oauth2"
@@ -259,10 +263,13 @@ func (yt *YouTube) StartStream(
 			break
 		}
 	}
+
+	templateBroadcastIDs = append(templateBroadcastIDs, profile.TemplateBroadcastIDs...)
 	logger.Debugf(ctx, "templateBroadcastIDs == %v; customArgs == %v", templateBroadcastIDs, customArgs)
 
 	var broadcasts []*youtube.LiveBroadcast
-	for _, templateBroadcastID := range append(templateBroadcastIDs, profile.TemplateBroadcastIDs...) {
+	for _, templateBroadcastID := range templateBroadcastIDs {
+		logger.Debugf(ctx, "getting broadcast info of %v", templateBroadcastID)
 		response, err := yt.YouTubeService.LiveBroadcasts.
 			List([]string{"id", "snippet", "contentDetails", "monetizationDetails", "status"}).
 			Id(templateBroadcastID).
@@ -277,17 +284,54 @@ func (yt *YouTube) StartStream(
 	}
 
 	for _, broadcast := range broadcasts {
-		broadcast.ContentDetails.EnableAutoStart = true
-		broadcast.ContentDetails.EnableAutoStop = false
-		broadcast.Snippet.ScheduledStartTime = time.Now().UTC().Format("2006-01-02T15:04:05") + ".00Z"
-		broadcast.Snippet.ScheduledEndTime = time.Now().Add(time.Hour*12).UTC().Format("2006-01-02T15:04:05") + ".00Z"
+		now := time.Now().UTC()
+		broadcast.Id = ""
+		broadcast.Etag = ""
+		broadcast.ContentDetails.BoundStreamLastUpdateTimeMs = ""
+		broadcast.ContentDetails.BoundStreamId = ""
+		broadcast.ContentDetails.MonitorStream = nil
+		broadcast.Snippet.ScheduledStartTime = now.Format("2006-01-02T15:04:05") + ".00Z"
+		broadcast.Snippet.ScheduledEndTime = now.Add(time.Hour*12).Format("2006-01-02T15:04:05") + ".00Z"
+		broadcast.Snippet.LiveChatId = ""
+		broadcast.Status.SelfDeclaredMadeForKids = broadcast.Status.MadeForKids
+		broadcast.Status.ForceSendFields = []string{"SelfDeclaredMadeForKids"}
 
 		setTitle(broadcast, title)
 		setDescription(broadcast, description)
 		setProfile(broadcast, profile)
-		_, err := yt.YouTubeService.LiveBroadcasts.Insert([]string{"snippet", "contentDetails", "monetizationDetails", "status"}, broadcast).Context(ctx).Do()
+
+		b, err := yaml.Marshal(broadcast)
+		if err == nil {
+			logger.Tracef(ctx, "applying %s", b)
+		} else {
+			logger.Tracef(ctx, "applying %#+v", broadcast)
+		}
+
+		newBroadcast, err := yt.YouTubeService.LiveBroadcasts.Insert(
+			[]string{"snippet", "contentDetails", "monetizationDetails", "status"},
+			broadcast,
+		).Context(ctx).Do()
 		if err != nil {
 			return fmt.Errorf("unable to create a broadcast: %w", err)
+		}
+
+		if broadcast.Snippet.Thumbnails.Standard.Url != "" {
+			logger.Debugf(ctx, "downloading the thumbnail")
+			resp, err := http.Get(broadcast.Snippet.Thumbnails.Standard.Url)
+			if err != nil {
+				return fmt.Errorf("unable to download the thumbnail from the template video: %w", err)
+			}
+			logger.Debugf(ctx, "reading the thumbnail")
+			thumbnail, err := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if err != nil {
+				return fmt.Errorf("unable to read the thumbnail from the response from the template video: %w", err)
+			}
+			logger.Debugf(ctx, "setting the thumbnail")
+			_, err = yt.YouTubeService.Thumbnails.Set(newBroadcast.Id).Media(bytes.NewReader(thumbnail)).Context(ctx).Do()
+			if err != nil {
+				return fmt.Errorf("unable to set the thumbnail: %w", err)
+			}
 		}
 	}
 
