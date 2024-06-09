@@ -30,7 +30,7 @@ func newTwitch(
 		return nil, fmt.Errorf("twitch config was not found")
 	}
 
-	if cfg.Enable != nil && *cfg.Enable == false {
+	if cfg.Enable != nil && !*cfg.Enable {
 		return nil, ErrSkipBackend
 	}
 
@@ -95,7 +95,7 @@ func newYouTube(
 		return nil, fmt.Errorf("youtube config was not found")
 	}
 
-	if cfg.Enable != nil && *cfg.Enable == false {
+	if cfg.Enable != nil && !*cfg.Enable {
 		return nil, ErrSkipBackend
 	}
 

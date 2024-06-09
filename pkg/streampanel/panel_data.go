@@ -1,8 +1,10 @@
 package streampanel
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
@@ -75,7 +77,15 @@ func readPanelDataFromPath(
 		return fmt.Errorf("unable to read file '%s': %w", cfgPath, err)
 	}
 
-	err = yaml.Unmarshal(b, cfg)
+	return readPanelData(ctx, b, cfg)
+}
+
+func readPanelData(
+	ctx context.Context,
+	b []byte,
+	cfg *panelData,
+) error {
+	err := yaml.Unmarshal(b, cfg)
 	if err != nil {
 		return fmt.Errorf("unable to unserialize data: %w: <%s>", err, b)
 	}
@@ -108,12 +118,13 @@ func writePanelDataToPath(
 	cfgPath string,
 	cfg panelData,
 ) error {
-	b, err := yaml.Marshal(cfg)
-	if err != nil {
-		return fmt.Errorf("unable to serialize data %#+v: %w", cfg, err)
-	}
 	pathNew := cfgPath + ".new"
-	err = os.WriteFile(pathNew, b, 0750)
+	f, err := os.OpenFile(pathNew, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0750)
+	if err != nil {
+		return fmt.Errorf("unable to open the data file '%s': %w", pathNew, err)
+	}
+	defer f.Close()
+	err = writePanelData(ctx, f, cfg)
 	if err != nil {
 		return fmt.Errorf("unable to write data to file '%s': %w", pathNew, err)
 	}
@@ -121,6 +132,22 @@ func writePanelDataToPath(
 	if err != nil {
 		return fmt.Errorf("cannot move '%s' to '%s': %w", pathNew, cfgPath, err)
 	}
-	logger.Infof(ctx, "wrote to '%s' data <%s>", cfgPath, b)
+	logger.Infof(ctx, "wrote to '%s' config %#+v", cfgPath, cfg)
+	return nil
+}
+
+func writePanelData(
+	_ context.Context,
+	w io.Writer,
+	cfg panelData,
+) error {
+	b, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("unable to serialize data %#+v: %w", cfg, err)
+	}
+	_, err = io.Copy(w, bytes.NewBuffer(b))
+	if err != nil {
+		return fmt.Errorf("unable to write data %#+v: %w", cfg, err)
+	}
 	return nil
 }

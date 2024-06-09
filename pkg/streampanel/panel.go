@@ -3,9 +3,7 @@ package streampanel
 import (
 	"bytes"
 	"context"
-	"crypto/x509"
 	_ "embed"
-	"encoding/pem"
 	"fmt"
 	"net/url"
 	"os"
@@ -44,7 +42,7 @@ type Panel struct {
 	data     panelData
 
 	app                fyne.App
-	config             config
+	config             configT
 	startStopMutex     gorex.Mutex
 	updateTimerHandler *updateTimerHandler
 	streamControllers  struct {
@@ -69,6 +67,9 @@ type Panel struct {
 	twitchCheck  *widget.Check
 
 	gitStorage *gitStorage
+
+	cancelGitSyncer context.CancelFunc
+	gitSyncerMutex  sync.Mutex
 }
 
 func New(
@@ -98,9 +99,9 @@ func (p *Panel) Loop(ctx context.Context) error {
 
 	p.app = fyneapp.New()
 
-	p.initGitIfNeeded(ctx)
-
 	go func() {
+		p.initGitIfNeeded(ctx)
+
 		if err := p.initStreamControllers(ctx); err != nil {
 			err = fmt.Errorf("unable to initialize stream controllers: %w", err)
 			p.displayError(err)
@@ -133,53 +134,6 @@ func (p *Panel) Loop(ctx context.Context) error {
 	return nil
 }
 
-func (p *Panel) initGitIfNeeded(ctx context.Context) {
-	if p.data.GitRepo.Enable != nil && *p.data.GitRepo.Enable {
-		logger.Debugf(ctx, "git is disabled in the configuration")
-		return
-	}
-
-	block, _ := pem.Decode([]byte(p.data.GitRepo.PrivateKey))
-	if block == nil {
-		p.data.GitRepo.Enable = ptr(false)
-		return
-	}
-
-	key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-	if err != nil {
-		p.displayError(fmt.Errorf("unable to parse the private key: %w", err))
-	}
-	p.gitStorage = newGitStorage(p.data.GitRepo.URL, key)
-
-	p.gitSync(ctx)
-
-	go func() {
-		ticker := time.NewTicker(time.Minute)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-			}
-
-			p.gitSync(ctx)
-		}
-	}()
-}
-
-func (p *Panel) gitSync(ctx context.Context) {
-	err := p.gitStorage.Sync(&p.data, func() {
-		p.onConfigUpdateViaGIT(ctx)
-	})
-	if err != nil {
-		p.displayError(fmt.Errorf("unable to sync with the remote GIT repository: %w", err))
-	}
-}
-
-func (p *Panel) onConfigUpdateViaGIT(ctx context.Context) {
-
-}
-
 func (p *Panel) initTwitchData(ctx context.Context) {
 	logger.FromCtx(ctx).Debugf("initializing Twitch data")
 	defer logger.FromCtx(ctx).Debugf("endof initializing Twitch data")
@@ -209,7 +163,7 @@ func (p *Panel) initTwitchData(ctx context.Context) {
 		p.data.Cache.Twitch.Categories = allCategories
 	}()
 
-	err = p.saveData()
+	err = p.saveData(ctx)
 	errmon.ObserveErrorCtx(ctx, err)
 }
 
@@ -249,7 +203,7 @@ func (p *Panel) initYoutubeData(ctx context.Context) {
 		p.data.Cache.Youtube.Broadcasts = broadcasts
 	}()
 
-	err = p.saveData()
+	err = p.saveData(ctx)
 	errmon.ObserveErrorCtx(ctx, err)
 }
 
@@ -289,7 +243,7 @@ func (p *Panel) loadData(ctx context.Context) error {
 	case os.IsNotExist(err):
 		logger.Debugf(ctx, "cannot find file '%s', creating", dataPath)
 		p.data = newPanelData()
-		if err := p.saveData(); err != nil {
+		if err := p.saveData(ctx); err != nil {
 			logger.Errorf(ctx, "cannot create file '%s': %v", dataPath, err)
 		}
 		return nil
@@ -308,7 +262,7 @@ func (p *Panel) savePlatformConfig(
 	p.dataLock.Lock()
 	defer p.dataLock.Unlock()
 	p.data.Backends[platID] = platCfg
-	return p.saveData()
+	return p.saveData(ctx)
 }
 
 func (p *Panel) oauthHandlerTwitch(ctx context.Context, arg oauthhandler.OAuthHandlerArgument) error {
@@ -542,7 +496,7 @@ func (p *Panel) profileCreateOrUpdate(ctx context.Context, profile Profile) erro
 
 	logger.Tracef(ctx, "profileCreateOrUpdate(%s): p.data.Backends == %#+v", profile.Name, p.data.Backends)
 	p.rearrangeProfiles(ctx)
-	if err := p.saveData(); err != nil {
+	if err := p.saveData(ctx); err != nil {
 		return fmt.Errorf("unable to save the profile: %w", err)
 	}
 	return nil
@@ -556,20 +510,32 @@ func (p *Panel) profileDelete(ctx context.Context, profileName streamcontrol.Pro
 	delete(p.data.ProfileMetadata, profileName)
 
 	p.rearrangeProfiles(ctx)
-	if err := p.saveData(); err != nil {
+	if err := p.saveData(ctx); err != nil {
 		return fmt.Errorf("unable to save the profile: %w", err)
 	}
 
 	return nil
 }
 
-func (p *Panel) saveData() error {
+func (p *Panel) saveData(ctx context.Context) error {
 	dataPath, err := p.getExpandedDataPath()
 	if err != nil {
 		return fmt.Errorf("unable to get the path to the data file: %w", err)
 	}
 
-	return writePanelDataToPath(p.defaultContext, dataPath, p.data)
+	err = writePanelDataToPath(ctx, dataPath, p.data)
+	if err != nil {
+		return fmt.Errorf("unable to save the config: %w", err)
+	}
+
+	if p.gitStorage != nil {
+		err = p.sendConfigViaGIT(ctx)
+		if err != nil {
+			return fmt.Errorf("unable to send the config to the remote git repository: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func (p *Panel) getProfile(profileName streamcontrol.ProfileName) Profile {
@@ -767,12 +733,6 @@ func (p *Panel) openSettingsWindow(ctx context.Context) {
 	stopStreamCommandEntry := widget.NewEntry()
 	stopStreamCommandEntry.SetText(p.data.Commands.OnStopStream)
 
-	gitRepo := widget.NewEntry()
-	gitRepo.SetText(p.data.GitRepo.URL)
-
-	gitPrivateKey := widget.NewMultiLineEntry()
-	gitPrivateKey.SetText(p.data.GitRepo.PrivateKey)
-
 	cancelButton := widget.NewButtonWithIcon("Cancel", theme.CancelIcon(), func() {
 		w.Close()
 	})
@@ -780,7 +740,7 @@ func (p *Panel) openSettingsWindow(ctx context.Context) {
 		p.data.Commands.OnStartStream = startStreamCommandEntry.Text
 		p.data.Commands.OnStopStream = stopStreamCommandEntry.Text
 
-		if err := p.saveData(); err != nil {
+		if err := p.saveData(ctx); err != nil {
 			p.displayError(err)
 		}
 
@@ -789,30 +749,6 @@ func (p *Panel) openSettingsWindow(ctx context.Context) {
 
 	templateInstruction := widget.NewRichTextFromMarkdown("Commands support [Go templates](https://pkg.go.dev/text/template) with two custom functions predefined:\n* `devnull` nullifies any inputs\n* `httpGET` makes an HTTP GET request and inserts the response body")
 	templateInstruction.Wrapping = fyne.TextWrapWord
-
-	gitInstruction := widget.NewRichTextFromMarkdown("We can sync the configuration among all of your devices via a git repository. To get a git repository you may, for example, use GitHub; but never use public repositories, always use private ones (because the repository will contain all the access credentials to YouTube/Twitch/whatever).")
-	gitInstruction.Wrapping = fyne.TextWrapWord
-
-	/*
-			p.streamControllers.Twitch, err = newTwitch(
-				ctx,
-				cfg,
-				p.inputTwitchUserInfo,
-				func(cfg *streamcontrol.AbstractPlatformConfig) error {
-					return p.savePlatformConfig(ctx, twitch.ID, cfg)
-				},
-				p.oauthHandlerTwitch)
-		case strings.ToLower(string(youtube.ID)):
-			p.streamControllers.YouTube, err = newYouTube(
-				ctx,
-				cfg,
-				p.inputYouTubeUserInfo,
-				func(cfg *streamcontrol.AbstractPlatformConfig) error {
-					return p.savePlatformConfig(ctx, youtube.ID, cfg)
-				},
-				p.oauthHandlerYouTube,
-			)
-	*/
 
 	twitchAlreadyLoggedIn := widget.NewLabel("")
 	if p.streamControllers.Twitch == nil {
@@ -869,14 +805,6 @@ func (p *Panel) openSettingsWindow(ctx context.Context) {
 			widget.NewSeparator(),
 			widget.NewLabel("Run command on stream stop:"),
 			stopStreamCommandEntry,
-			widget.NewSeparator(),
-			widget.NewSeparator(),
-			widget.NewRichTextFromMarkdown(`# Git sync`),
-			gitInstruction,
-			widget.NewLabel("Remote repository:"),
-			gitRepo,
-			widget.NewLabel("Private key:"),
-			gitPrivateKey,
 			widget.NewSeparator(),
 			widget.NewSeparator(),
 		),

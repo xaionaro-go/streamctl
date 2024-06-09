@@ -1,19 +1,19 @@
 package streampanel
 
-type config struct {
+type configT struct {
 }
 
-func defaultConfig() config {
-	return config{}
+func defaultConfig() configT {
+	return configT{}
 }
 
 type Option interface {
-	apply(cfg *config)
+	apply(cfg *configT)
 }
 
 type Options []Option
 
-func (options Options) Config() config {
+func (options Options) Config() configT {
 	cfg := defaultConfig()
 	for _, option := range options {
 		option.apply(&cfg)
