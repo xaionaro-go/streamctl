@@ -164,6 +164,10 @@ func (cfg *Config) UnmarshalYAML(b []byte) error {
 				StreamProfiles: make(StreamProfiles[AbstractStreamProfile]),
 			}
 			vOrig = (*cfg)[k]
+		} else {
+			if (*cfg)[k].StreamProfiles == nil {
+				(*cfg)[k].StreamProfiles = make(StreamProfiles[AbstractStreamProfile])
+			}
 		}
 
 		(*cfg)[k].Enable = v.Enable
@@ -182,7 +186,8 @@ func (cfg *Config) UnmarshalYAML(b []byte) error {
 			delete((*cfg)[k].StreamProfiles, platName)
 		}
 		for platName, v := range v.StreamProfiles {
-			(*cfg)[k].StreamProfiles[platName] = v
+			dst := (*cfg)[k].StreamProfiles
+			dst[platName] = v
 		}
 	}
 

@@ -15,6 +15,8 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streampanel"
 )
 
+const forceNetPProfOnAndroid = true
+
 func main() {
 	loggerLevel := logger.LevelWarning
 	pflag.Var(&loggerLevel, "log-level", "Log level")
@@ -49,11 +51,19 @@ func main() {
 		}
 	}
 
-	if *netPprofAddr != "" {
+	if *netPprofAddr != "" || (forceNetPProfOnAndroid && runtime.GOOS == "android") {
 		go func() {
+			if *netPprofAddr == "" {
+				*netPprofAddr = "localhost:0"
+			}
 			l.Infof("starting to listen for net/pprof requests at '%s'", *netPprofAddr)
 			l.Error(http.ListenAndServe(*netPprofAddr, nil))
 		}()
+	}
+
+	if oldValue := runtime.GOMAXPROCS(0); oldValue < 16 {
+		l.Infof("increased GOMAXPROCS from %d to %d", oldValue, 16)
+		runtime.GOMAXPROCS(16)
 	}
 
 	ctx := context.Background()

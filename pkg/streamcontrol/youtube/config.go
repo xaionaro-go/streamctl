@@ -28,6 +28,7 @@ func InitConfig(cfg streamctl.Config) {
 type StreamProfile struct {
 	streamctl.StreamProfileBase `yaml:",omitempty,inline,alias"`
 
+	AutoNumerate         bool
 	TemplateBroadcastIDs []string
 	Tags                 []string
 }

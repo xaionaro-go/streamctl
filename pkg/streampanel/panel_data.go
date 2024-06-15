@@ -126,8 +126,8 @@ func writePanelDataToPath(
 	if err != nil {
 		return fmt.Errorf("unable to open the data file '%s': %w", pathNew, err)
 	}
-	defer f.Close()
 	err = writePanelData(ctx, f, cfg)
+	f.Close()
 	if err != nil {
 		return fmt.Errorf("unable to write data to file '%s': %w", pathNew, err)
 	}

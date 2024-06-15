@@ -201,11 +201,17 @@ func (t *Twitch) StartStream(
 	profile StreamProfile,
 	customArgs ...any,
 ) error {
-	return multierror.Append(
-		t.SetTitle(ctx, title),
-		t.SetDescription(ctx, description),
-		t.ApplyProfile(ctx, profile, customArgs...),
-	).ErrorOrNil()
+	var result error
+	if err := t.SetTitle(ctx, title); err != nil {
+		result = multierror.Append(result, fmt.Errorf("unable to set title: %w", err))
+	}
+	if err := t.SetDescription(ctx, description); err != nil {
+		result = multierror.Append(result, fmt.Errorf("unable to set description: %w", err))
+	}
+	if err := t.ApplyProfile(ctx, profile, customArgs...); err != nil {
+		result = multierror.Append(result, fmt.Errorf("unable to apply the stream-specific profile: %w", err))
+	}
+	return multierror.Append(result).ErrorOrNil()
 }
 
 func (t *Twitch) EndStream(

@@ -27,6 +27,20 @@ var funcMap = map[string]interface{}{
 
 		return string(b)
 	},
+	"httpGETIgnoreErrors": func(urlString string) string {
+		resp, err := http.Get(urlString)
+		if err != nil {
+			return ""
+		}
+		defer resp.Body.Close()
+
+		b, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return ""
+		}
+
+		return string(b)
+	},
 }
 
 func expandTemplate(tpl string) (string, error) {
