@@ -14,10 +14,10 @@ streampanel-macos-arm64: builddir
 	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -o build/streampanel-macos-arm64 ./cmd/streampanel
 
 streampanel-android: builddir
-	cd cmd/streampanel && ANDROID_HOME=${HOME}/Android/Sdk fyne package -release -os android -o ../../build/streampanel.apk
+	cd cmd/streampanel && ANDROID_HOME=${HOME}/Android/Sdk fyne package -release -os android && mv streampanel.apk ../../build/
 
 streampanel-ios: builddir
-	cd cmd/streampanel && fyne package -release -os ios -o ../../build/streampanel.ipa
+	cd cmd/streampanel && fyne package -release -os ios && mv streampanel.ipa ../../build/
 
 streampanel-windows: builddir
 	CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc GOOS=windows go build -o build/streampanel.exe ./cmd/streampanel/

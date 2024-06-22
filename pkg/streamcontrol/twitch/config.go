@@ -32,7 +32,7 @@ func InitConfig(cfg streamctl.Config) {
 type StreamProfile struct {
 	streamctl.StreamProfileBase `yaml:",omitempty,inline,alias"`
 
-	Tags         []string
+	Tags         [10]string
 	Language     *string
 	CategoryName *string
 	CategoryID   *string

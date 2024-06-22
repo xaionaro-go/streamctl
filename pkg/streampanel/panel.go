@@ -98,18 +98,25 @@ func (p *Panel) Loop(ctx context.Context) error {
 
 	go func() {
 		loadingWindow := p.newLoadingWindow(ctx)
+		resizeWindow(loadingWindow, fyne.NewSize(600, 600))
 
-		loadingWindow.SetContent(widget.NewRichTextFromMarkdown("# Initializing remote GIT storage..."))
-		p.initGitIfNeeded(ctx)
+		loadingWindowText := widget.NewRichTextFromMarkdown("# Initializing remote GIT storage...")
+		loadingWindowText.Wrapping = fyne.TextWrapWord
+		loadingWindow.SetContent(loadingWindowText)
+		if os.Getenv("STREAMPANEL_QUICKSTART") != "" {
+			go p.initGitIfNeeded(ctx)
+		} else {
+			p.initGitIfNeeded(ctx)
+		}
 
-		loadingWindow.SetContent(widget.NewRichTextFromMarkdown("# Initializing streaming backends..."))
+		loadingWindowText.ParseMarkdown("# Initializing streaming backends...")
 		if err := p.initStreamControllers(ctx); err != nil {
 			err = fmt.Errorf("unable to initialize stream controllers: %w", err)
 			p.displayError(err)
 			return
 		}
 
-		loadingWindow.SetContent(widget.NewRichTextFromMarkdown("# Pre-downloading user data from streaming backends..."))
+		loadingWindowText.ParseMarkdown("# Pre-downloading user data from streaming backends...")
 
 		var wg sync.WaitGroup
 
@@ -129,7 +136,7 @@ func (p *Panel) Loop(ctx context.Context) error {
 
 		wg.Wait()
 
-		loadingWindow.SetContent(widget.NewRichTextFromMarkdown("# Initializing UI..."))
+		loadingWindowText.ParseMarkdown("# Initializing UI...")
 
 		p.initMainWindow(ctx)
 		p.rearrangeProfiles(ctx)
@@ -659,7 +666,7 @@ func (p *Panel) refilterProfiles(ctx context.Context) {
 
 			switch prof := prof.(type) {
 			case twitch.StreamProfile:
-				if containTagSubstringCI(prof.Tags, filterValue) {
+				if containTagSubstringCI(prof.Tags[:], filterValue) {
 					subValueMatch = true
 					break
 				}
@@ -1398,26 +1405,109 @@ func (p *Panel) profileWindow(
 	tagsEntryField.SetPlaceHolder("add a tag")
 	s := tagsEntryField.Size()
 	s.Width = 200
-	tags := map[string]struct{}{}
+	var tags []string
+	tagsMap := map[string]struct{}{}
 	tagsEntryField.Resize(s)
-	tagsContainer := container.NewHBox()
+	tagsContainer := container.NewGridWrap(fyne.NewSize(300, 30))
 
 	addTag := func(tag string) {
 		if tag == "" {
 			return
 		}
-		if _, ok := tags[tag]; ok {
+		if _, ok := tagsMap[tag]; ok {
 			return
 		}
-		tags[tag] = struct{}{}
-		tagContainer := container.NewHBox(
-			widget.NewLabel(tag),
-		)
+		tags = append(tags, tag)
+		tagsMap[tag] = struct{}{}
+		tagContainer := container.NewHBox()
+
+		getIdx := func() int {
+			for idx, tagCmp := range tags {
+				if tagCmp == tag {
+					return idx
+				}
+			}
+
+			return -1
+		}
+
+		move := func(srcIdx, dstIdx int) {
+			newTags := make([]string, 0, len(tags))
+			newObjs := make([]fyne.CanvasObject, 0, len(tags))
+
+			objs := tagsContainer.Objects
+			for i := 0; i < len(tags); i++ {
+				if i == dstIdx {
+					newTags = append(newTags, tags[srcIdx])
+					newObjs = append(newObjs, objs[srcIdx])
+				}
+				if i == srcIdx {
+					continue
+				}
+				newTags = append(newTags, tags[i])
+				newObjs = append(newObjs, objs[i])
+			}
+			if dstIdx >= len(tags) {
+				newTags = append(newTags, tags[srcIdx])
+				newObjs = append(newObjs, objs[srcIdx])
+			}
+
+			tags = newTags
+			tagsContainer.Objects = newObjs
+			tagsContainer.Refresh()
+		}
+
+		tagContainerToFirstButton := widget.NewButtonWithIcon("", theme.MediaFastRewindIcon(), func() {
+			idx := getIdx()
+			if idx < 1 {
+				return
+			}
+			move(idx, 0)
+		})
+		tagContainer.Add(tagContainerToFirstButton)
+		tagContainerToPrevButton := widget.NewButtonWithIcon("", theme.NavigateBackIcon(), func() {
+			idx := getIdx()
+			if idx < 1 {
+				return
+			}
+			move(idx, idx-1)
+		})
+		tagContainer.Add(tagContainerToPrevButton)
+		tagLabel := tag
+		overflown := false
+		for {
+			size := fyne.MeasureText(tagLabel, fyne.CurrentApp().Settings().Theme().Size("text"), fyne.TextStyle{})
+			if size.Width < 100 {
+				break
+			}
+			tagLabel = tagLabel[:len(tagLabel)-1]
+			overflown = true
+		}
+		if overflown {
+			tagLabel += "…"
+		}
+		label := widget.NewRichTextWithText(tagLabel)
+		label.Resize(fyne.NewSize(200, 30))
+		tagContainer.Add(label)
 		tagContainerRemoveButton := widget.NewButtonWithIcon("", theme.ContentClearIcon(), func() {
 			tagsContainer.Remove(tagContainer)
-			delete(tags, tag)
+			delete(tagsMap, tag)
+			for idx, tagCmp := range tags {
+				if tagCmp == tag {
+					tags = append(tags[:idx], tags[idx+1:]...)
+					break
+				}
+			}
 		})
 		tagContainer.Add(tagContainerRemoveButton)
+		tagContainerToLastButton := widget.NewButtonWithIcon("", theme.MediaFastForwardIcon(), func() {
+			idx := getIdx()
+			if idx >= len(tags)-1 {
+				return
+			}
+			move(idx, len(tags))
+		})
+		tagContainer.Add(tagContainerToLastButton)
 		tagsContainer.Add(tagContainer)
 	}
 	tagsEntryField.OnSubmitted = func(text string) {
@@ -1428,7 +1518,7 @@ func (p *Panel) profileWindow(
 	var bottomContent []fyne.CanvasObject
 
 	bottomContent = append(bottomContent, widget.NewSeparator())
-	bottomContent = append(bottomContent, widget.NewLabel("Twitch:"))
+	bottomContent = append(bottomContent, widget.NewRichTextFromMarkdown("# Twitch:"))
 	if p.streamControllers.Twitch != nil {
 		if platProfile := values.PerPlatform[twitch.ID]; platProfile != nil {
 			twitchProfile = ptr(streamcontrol.GetPlatformSpecificConfig[twitch.StreamProfile](ctx, platProfile))
@@ -1518,7 +1608,7 @@ func (p *Panel) profileWindow(
 	}
 
 	bottomContent = append(bottomContent, widget.NewSeparator())
-	bottomContent = append(bottomContent, widget.NewLabel("YouTube:"))
+	bottomContent = append(bottomContent, widget.NewRichTextFromMarkdown("# YouTube:"))
 	if p.streamControllers.YouTube != nil {
 		if platProfile := values.PerPlatform[youtube.ID]; platProfile != nil {
 			youtubeProfile = ptr(streamcontrol.GetPlatformSpecificConfig[youtube.StreamProfile](ctx, platProfile))
@@ -1532,8 +1622,10 @@ func (p *Panel) profileWindow(
 		autoNumerateCheck := widget.NewCheck("Auto-numerate", func(b bool) {
 			youtubeProfile.AutoNumerate = b
 		})
+		autoNumerateCheck.MouseOut()
 		autoNumerateCheck.SetChecked(youtubeProfile.AutoNumerate)
-		bottomContent = append(bottomContent, autoNumerateCheck)
+		autoNumerateHint := NewHintWidget(w, "When enabled, it adds the number of the stream to the stream's title.\n\nFor example 'Watching presidential debate' -> 'Watching presidential debate [#52]'.")
+		bottomContent = append(bottomContent, container.NewHBox(autoNumerateCheck, autoNumerateHint))
 
 		youtubeTemplate := widget.NewEntry()
 		youtubeTemplate.SetPlaceHolder("youtube live recording template")
@@ -1613,7 +1705,7 @@ func (p *Panel) profileWindow(
 	bottomContent = append(bottomContent,
 		widget.NewSeparator(),
 		container.NewVBox(
-			widget.NewLabel("common:"),
+			widget.NewRichTextFromMarkdown("# common:"),
 			tagsContainer,
 			tagsEntryField,
 		),
@@ -1621,8 +1713,8 @@ func (p *Panel) profileWindow(
 			if tagsEntryField.Text != "" {
 				tagsEntryField.OnSubmitted(tagsEntryField.Text)
 			}
-			_tags := make([]string, len(tags))
-			for k := range tags {
+			_tags := make([]string, 0, len(tags))
+			for _, k := range tags {
 				if k == "" {
 					continue
 				}
@@ -1638,7 +1730,15 @@ func (p *Panel) profileWindow(
 				},
 			}
 			if twitchProfile != nil {
-				twitchProfile.Tags = _tags
+				for i := 0; i < len(twitchProfile.Tags); i++ {
+					var v string
+					if i < len(_tags) {
+						v = _tags[i]
+					} else {
+						v = ""
+					}
+					twitchProfile.Tags[i] = v
+				}
 				profile.PerPlatform[twitch.ID] = twitchProfile
 			}
 			if youtubeProfile != nil {
