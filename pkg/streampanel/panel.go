@@ -12,9 +12,11 @@ import (
 	"runtime"
 	"runtime/debug"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"fyne.io/fyne/v2"
 	fyneapp "fyne.io/fyne/v2/app"
@@ -26,6 +28,7 @@ import (
 	"github.com/go-ng/xmath"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 )
@@ -45,6 +48,7 @@ type Panel struct {
 	startStopMutex     sync.Mutex
 	updateTimerHandler *updateTimerHandler
 	streamControllers  struct {
+		OBS     *obs.OBS
 		Twitch  *twitch.Twitch
 		YouTube *youtube.YouTube
 	}
@@ -62,6 +66,7 @@ type Panel struct {
 	dataPath    string
 	filterValue string
 
+	obsCheck     *widget.Check
 	youtubeCheck *widget.Check
 	twitchCheck  *widget.Check
 
@@ -297,6 +302,94 @@ func (p *Panel) savePlatformConfig(
 	return p.saveData(ctx)
 }
 
+func removeNonDigits(input string) string {
+	var result []rune
+	for _, r := range input {
+		if unicode.IsDigit(r) {
+			result = append(result, r)
+		}
+	}
+	return string(result)
+}
+
+func (p *Panel) inputOBSConnectInfo(
+	ctx context.Context,
+	cfg *streamcontrol.PlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile],
+) (bool, error) {
+	w := p.app.NewWindow("Input Twitch user info")
+	resizeWindow(w, fyne.NewSize(600, 200))
+
+	hostField := widget.NewEntry()
+	hostField.SetPlaceHolder("OBS hostname, e.g. 192.168.0.134")
+	portField := widget.NewEntry()
+	portField.OnChanged = func(s string) {
+		filtered := removeNonDigits(s)
+		if s != filtered {
+			portField.SetText(filtered)
+		}
+	}
+	portField.SetPlaceHolder("OBS port, usually it is 4455")
+	passField := widget.NewEntry()
+	passField.SetPlaceHolder("OBS password")
+	instructionText := widget.NewRichText(
+		&widget.ListSegment{Items: []widget.RichTextSegment{
+			&widget.TextSegment{Text: `Open OBS`},
+			&widget.TextSegment{Text: `Click "Tools" on the top menu`},
+			&widget.TextSegment{Text: `Select "WebSocket Server Settings"`},
+			&widget.TextSegment{Text: `Check the "Enable WebSocket server" checkbox`},
+			&widget.TextSegment{Text: `In the window click "Show Connect Info"`},
+			&widget.TextSegment{Text: `Copy the data from the connect info to the fields above`},
+		}},
+	)
+	instructionText.Wrapping = fyne.TextWrapWord
+
+	waitCh := make(chan struct{})
+	skip := false
+	skipButton := widget.NewButtonWithIcon("Skip", theme.ConfirmIcon(), func() {
+		skip = true
+		close(waitCh)
+	})
+
+	var port uint64
+	okButton := widget.NewButtonWithIcon("OK", theme.ConfirmIcon(), func() {
+		var err error
+		port, err = strconv.ParseUint(portField.Text, 10, 16)
+		if err != nil {
+			p.displayError(fmt.Errorf("unable to parse port '%s': %w", portField.Text, err))
+			return
+		}
+
+		close(waitCh)
+	})
+
+	w.SetContent(container.NewBorder(
+		widget.NewRichTextWithText("Enter OBS user info:"),
+		container.NewHBox(skipButton, okButton),
+		nil,
+		nil,
+		container.NewVBox(
+			hostField,
+			portField,
+			passField,
+			instructionText,
+		),
+	))
+	w.Show()
+	<-waitCh
+	w.Hide()
+
+	if skip {
+		cfg.Enable = ptr(false)
+		return false, nil
+	}
+
+	cfg.Config.Host = hostField.Text
+	cfg.Config.Port = uint16(port)
+	cfg.Config.Password = passField.Text
+
+	return true, nil
+}
+
 func (p *Panel) oauthHandlerTwitch(ctx context.Context, arg oauthhandler.OAuthHandlerArgument) error {
 	logger.Infof(ctx, "oauthHandlerTwitch: %#+v", arg)
 	defer logger.Infof(ctx, "/oauthHandlerTwitch")
@@ -506,6 +599,8 @@ func (p *Panel) initStreamControllers(ctx context.Context) error {
 	for _, platName := range platNames {
 		var err error
 		switch strings.ToLower(string(platName)) {
+		case strings.ToLower(string(obs.ID)):
+			err = p.initOBSBackend(ctx)
 		case strings.ToLower(string(twitch.ID)):
 			err = p.initTwitchBackend(ctx)
 		case strings.ToLower(string(youtube.ID)):
@@ -793,6 +888,13 @@ func (p *Panel) openSettingsWindow(ctx context.Context) {
 	templateInstruction := widget.NewRichTextFromMarkdown("Commands support [Go templates](https://pkg.go.dev/text/template) with two custom functions predefined:\n* `devnull` nullifies any inputs\n* `httpGET` makes an HTTP GET request and inserts the response body")
 	templateInstruction.Wrapping = fyne.TextWrapWord
 
+	obsAlreadyLoggedIn := widget.NewLabel("")
+	if p.streamControllers.OBS == nil {
+		obsAlreadyLoggedIn.SetText("(not logged in)")
+	} else {
+		obsAlreadyLoggedIn.SetText("(already logged in)")
+	}
+
 	twitchAlreadyLoggedIn := widget.NewLabel("")
 	if p.streamControllers.Twitch == nil {
 		twitchAlreadyLoggedIn.SetText("(not logged in)")
@@ -820,7 +922,29 @@ func (p *Panel) openSettingsWindow(ctx context.Context) {
 			widget.NewSeparator(),
 			widget.NewRichTextFromMarkdown(`# Streaming platforms`),
 			container.NewHBox(
+				widget.NewButtonWithIcon("(Re-)login in OBS", theme.LoginIcon(), func() {
+					if p.data.Backends[obs.ID] == nil {
+						obs.InitConfig(p.data.Backends)
+					}
+					oldEnable := p.data.Backends[obs.ID].Enable
+					oldCfg := p.data.Backends[obs.ID].Config
+					p.data.Backends[obs.ID].Enable = nil
+					p.data.Backends[obs.ID].Config = obs.PlatformSpecificConfig{}
+					err := p.initOBSBackend(ctx)
+					if err != nil {
+						p.displayError(err)
+						p.data.Backends[obs.ID].Enable = oldEnable
+						p.data.Backends[obs.ID].Config = oldCfg
+						return
+					}
+				}),
+				obsAlreadyLoggedIn,
+			),
+			container.NewHBox(
 				widget.NewButtonWithIcon("(Re-)login in Twitch", theme.LoginIcon(), func() {
+					if p.data.Backends[twitch.ID] == nil {
+						twitch.InitConfig(p.data.Backends)
+					}
 					oldEnable := p.data.Backends[twitch.ID].Enable
 					oldCfg := p.data.Backends[twitch.ID].Config
 					p.data.Backends[twitch.ID].Enable = nil
@@ -837,6 +961,9 @@ func (p *Panel) openSettingsWindow(ctx context.Context) {
 			),
 			container.NewHBox(
 				widget.NewButtonWithIcon("(Re-)login in YouTube", theme.LoginIcon(), func() {
+					if p.data.Backends[youtube.ID] == nil {
+						youtube.InitConfig(p.data.Backends)
+					}
 					oldEnable := p.data.Backends[youtube.ID].Enable
 					oldCfg := p.data.Backends[youtube.ID].Config
 					p.data.Backends[youtube.ID].Config = youtube.PlatformSpecificConfig{}
@@ -888,39 +1015,6 @@ func (p *Panel) openSettingsWindow(ctx context.Context) {
 	))
 
 	w.Show()
-}
-
-func (p *Panel) initTwitchBackend(ctx context.Context) error {
-	twitch, err := newTwitch(
-		ctx,
-		p.data.Backends[twitch.ID],
-		p.inputTwitchUserInfo,
-		func(cfg *streamcontrol.AbstractPlatformConfig) error {
-			return p.savePlatformConfig(ctx, twitch.ID, cfg)
-		},
-		p.oauthHandlerTwitch)
-	if err != nil {
-		return err
-	}
-	p.streamControllers.Twitch = twitch
-	return nil
-}
-
-func (p *Panel) initYouTubeBackend(ctx context.Context) error {
-	youTube, err := newYouTube(
-		ctx,
-		p.data.Backends[youtube.ID],
-		p.inputYouTubeUserInfo,
-		func(cfg *streamcontrol.AbstractPlatformConfig) error {
-			return p.savePlatformConfig(ctx, youtube.ID, cfg)
-		},
-		p.oauthHandlerYouTube,
-	)
-	if err != nil {
-		return err
-	}
-	p.streamControllers.YouTube = youTube
-	return nil
 }
 
 func (p *Panel) resetCache(ctx context.Context) {
@@ -1062,6 +1156,12 @@ func (p *Panel) initMainWindow(ctx context.Context) {
 		p.startStopButton.OnTapped()
 	}
 
+	p.obsCheck = widget.NewCheck("OBS", nil)
+	p.obsCheck.SetChecked(true)
+	if p.streamControllers.OBS == nil {
+		p.obsCheck.SetChecked(false)
+		p.obsCheck.Disable()
+	}
 	p.twitchCheck = widget.NewCheck("Twitch", nil)
 	p.twitchCheck.SetChecked(true)
 	if p.streamControllers.Twitch == nil {
@@ -1081,7 +1181,7 @@ func (p *Panel) initMainWindow(ctx context.Context) {
 		container.NewBorder(
 			nil,
 			nil,
-			container.NewHBox(p.twitchCheck, p.youtubeCheck),
+			container.NewHBox(p.obsCheck, p.twitchCheck, p.youtubeCheck),
 			nil,
 			p.startStopButton,
 		),
@@ -1152,6 +1252,7 @@ func (p *Panel) startStream(ctx context.Context) {
 		return
 	}
 
+	p.obsCheck.Disable()
 	p.twitchCheck.Disable()
 	p.youtubeCheck.Disable()
 
@@ -1164,10 +1265,20 @@ func (p *Panel) startStream(ctx context.Context) {
 	p.updateTimerHandler = newUpdateTimerHandler(p.startStopButton)
 	profile := p.getSelectedProfile()
 
+	var obsProfile *obs.StreamProfile
+	if p.twitchCheck.Checked && p.streamControllers.Twitch != nil {
+		var err error
+		obsProfile, err = streamcontrol.GetStreamProfile[obs.StreamProfile](ctx, profile.PerPlatform[obs.ID])
+		if err != nil {
+			p.displayError(fmt.Errorf("unable to get the streaming profile for OBS: %w", err))
+			return
+		}
+	}
+
 	var twitchProfile *twitch.StreamProfile
 	if p.twitchCheck.Checked && p.streamControllers.Twitch != nil {
 		var err error
-		twitchProfile, err = streamcontrol.GetStreamProfile[twitch.StreamProfile](p.defaultContext, profile.PerPlatform[twitch.ID])
+		twitchProfile, err = streamcontrol.GetStreamProfile[twitch.StreamProfile](ctx, profile.PerPlatform[twitch.ID])
 		if err != nil {
 			p.displayError(fmt.Errorf("unable to get the streaming profile for Twitch: %w", err))
 			return
@@ -1177,7 +1288,7 @@ func (p *Panel) startStream(ctx context.Context) {
 	var youtubeProfile *youtube.StreamProfile
 	if p.youtubeCheck.Checked && p.streamControllers.YouTube != nil {
 		var err error
-		youtubeProfile, err = streamcontrol.GetStreamProfile[youtube.StreamProfile](p.defaultContext, profile.PerPlatform[youtube.ID])
+		youtubeProfile, err = streamcontrol.GetStreamProfile[youtube.StreamProfile](ctx, profile.PerPlatform[youtube.ID])
 		if err != nil {
 			p.displayError(fmt.Errorf("unable to get the streaming profile for YouTube: %w", err))
 			return
@@ -1186,7 +1297,7 @@ func (p *Panel) startStream(ctx context.Context) {
 
 	if p.twitchCheck.Checked && p.streamControllers.Twitch != nil {
 		err := p.streamControllers.Twitch.StartStream(
-			p.defaultContext,
+			ctx,
 			p.streamTitleField.Text,
 			p.streamDescriptionField.Text,
 			*twitchProfile,
@@ -1198,13 +1309,25 @@ func (p *Panel) startStream(ctx context.Context) {
 
 	if p.youtubeCheck.Checked && p.streamControllers.YouTube != nil {
 		err := p.streamControllers.YouTube.StartStream(
-			p.defaultContext,
+			ctx,
 			p.streamTitleField.Text,
 			p.streamDescriptionField.Text,
 			*youtubeProfile,
 		)
 		if err != nil {
 			p.displayError(fmt.Errorf("unable to start the stream on YouTube: %w", err))
+		}
+	}
+
+	if p.obsCheck.Checked && p.streamControllers.OBS != nil {
+		err := p.streamControllers.OBS.StartStream(
+			ctx,
+			p.streamTitleField.Text,
+			p.streamDescriptionField.Text,
+			*obsProfile,
+		)
+		if err != nil {
+			p.displayError(fmt.Errorf("unable to start the stream on OBS: %w", err))
 		}
 	}
 
@@ -1217,6 +1340,9 @@ func (p *Panel) stopStream(ctx context.Context) {
 	p.startStopMutex.Lock()
 	defer p.startStopMutex.Unlock()
 
+	if p.streamControllers.OBS != nil {
+		p.obsCheck.Enable()
+	}
 	if p.streamControllers.Twitch != nil {
 		p.twitchCheck.Enable()
 	}
@@ -1232,9 +1358,17 @@ func (p *Panel) stopStream(ctx context.Context) {
 	}
 	p.updateTimerHandler = nil
 
+	if p.streamControllers.OBS != nil {
+		p.startStopButton.SetText("Stopping OBS...")
+		err := p.streamControllers.OBS.EndStream(ctx)
+		if err != nil {
+			p.displayError(fmt.Errorf("unable to stop the stream on OBS: %w", err))
+		}
+	}
+
 	if p.streamControllers.Twitch != nil {
 		p.startStopButton.SetText("Stopping Twitch...")
-		err := p.streamControllers.Twitch.EndStream(p.defaultContext)
+		err := p.streamControllers.Twitch.EndStream(ctx)
 		if err != nil {
 			p.displayError(fmt.Errorf("unable to stop the stream on Twitch: %w", err))
 		}
@@ -1242,7 +1376,7 @@ func (p *Panel) stopStream(ctx context.Context) {
 
 	if p.streamControllers.YouTube != nil {
 		p.startStopButton.SetText("Stopping YouTube...")
-		err := p.streamControllers.YouTube.EndStream(p.defaultContext)
+		err := p.streamControllers.YouTube.EndStream(ctx)
 		if err != nil {
 			p.displayError(fmt.Errorf("unable to stop the stream on YouTube: %w", err))
 		}
@@ -1385,6 +1519,7 @@ func (p *Panel) profileWindow(
 	commitFn func(context.Context, Profile) error,
 ) fyne.Window {
 	var (
+		obsProfile     *obs.StreamProfile
 		twitchProfile  *twitch.StreamProfile
 		youtubeProfile *youtube.StreamProfile
 	)
@@ -1518,6 +1653,22 @@ func (p *Panel) profileWindow(
 	var bottomContent []fyne.CanvasObject
 
 	bottomContent = append(bottomContent, widget.NewSeparator())
+	bottomContent = append(bottomContent, widget.NewRichTextFromMarkdown("# OBS:"))
+	if p.streamControllers.OBS != nil {
+		if platProfile := values.PerPlatform[obs.ID]; platProfile != nil {
+			obsProfile = ptr(streamcontrol.GetPlatformSpecificConfig[obs.StreamProfile](ctx, platProfile))
+		} else {
+			obsProfile = &obs.StreamProfile{}
+		}
+
+		enableRecordingCheck := widget.NewCheck("Enable recording", func(b bool) {
+			obsProfile.EnableRecording = b
+		})
+		enableRecordingCheck.SetChecked(obsProfile.EnableRecording)
+		bottomContent = append(bottomContent, enableRecordingCheck)
+	}
+
+	bottomContent = append(bottomContent, widget.NewSeparator())
 	bottomContent = append(bottomContent, widget.NewRichTextFromMarkdown("# Twitch:"))
 	if p.streamControllers.Twitch != nil {
 		if platProfile := values.PerPlatform[twitch.ID]; platProfile != nil {
@@ -1622,7 +1773,6 @@ func (p *Panel) profileWindow(
 		autoNumerateCheck := widget.NewCheck("Auto-numerate", func(b bool) {
 			youtubeProfile.AutoNumerate = b
 		})
-		autoNumerateCheck.MouseOut()
 		autoNumerateCheck.SetChecked(youtubeProfile.AutoNumerate)
 		autoNumerateHint := NewHintWidget(w, "When enabled, it adds the number of the stream to the stream's title.\n\nFor example 'Watching presidential debate' -> 'Watching presidential debate [#52]'.")
 		bottomContent = append(bottomContent, container.NewHBox(autoNumerateCheck, autoNumerateHint))
@@ -1728,6 +1878,9 @@ func (p *Panel) profileWindow(
 					DefaultStreamDescription: defaultStreamDescription.Text,
 					MaxOrder:                 0,
 				},
+			}
+			if obsProfile != nil {
+				profile.PerPlatform[obs.ID] = obsProfile
 			}
 			if twitchProfile != nil {
 				for i := 0; i < len(twitchProfile.Tags); i++ {

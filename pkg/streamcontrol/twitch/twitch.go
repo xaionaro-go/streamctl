@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
@@ -65,6 +67,10 @@ func getUserID(
 	return resp.Data.Users[0].ID, nil
 }
 
+func (t *Twitch) Close() error {
+	return nil
+}
+
 func (t *Twitch) editChannelInfo(
 	ctx context.Context,
 	params *helix.EditChannelInformationParams,
@@ -88,6 +94,32 @@ type SaveProfileHandler interface {
 	SaveProfile(context.Context, StreamProfile) error
 }
 
+func removeNonAlphanumeric(input string) string {
+	var builder strings.Builder
+	for _, r := range input {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			builder.WriteRune(r)
+		}
+	}
+	return builder.String()
+}
+
+// truncateStringByByteLength
+func truncateStringByByteLength(input string, byteLength int) string {
+	byteSlice := []byte(input)
+
+	if len(byteSlice) <= byteLength {
+		return input
+	}
+
+	truncationPoint := byteLength
+	for !utf8.Valid(byteSlice[:truncationPoint]) {
+		truncationPoint--
+	}
+
+	return string(byteSlice[:truncationPoint])
+}
+
 func (t *Twitch) ApplyProfile(
 	ctx context.Context,
 	profile StreamProfile,
@@ -109,11 +141,11 @@ func (t *Twitch) ApplyProfile(
 
 	tags := make([]string, 0, len(profile.Tags))
 	for _, tag := range profile.Tags {
-		tag = strings.ReplaceAll(tag, " ", "")
-		tag = strings.ReplaceAll(tag, "-", "")
+		tag = removeNonAlphanumeric(tag)
 		if tag == "" {
 			continue
 		}
+		tag = truncateStringByByteLength(tag, 25) // see also: https://github.com/twitchdev/issues/issues/789
 		tags = append(tags, tag)
 	}
 

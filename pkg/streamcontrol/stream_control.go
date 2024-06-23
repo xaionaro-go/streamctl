@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"reflect"
 	"sync"
 	"time"
@@ -50,11 +51,12 @@ func GetStreamProfile[T StreamProfile](
 	if err != nil {
 		return nil, fmt.Errorf("unable to serialize: %w: %#+v", err, v)
 	}
+	logger.Debugf(ctx, "JSON representation: <%s>", b)
 	err = json.Unmarshal(b, &profile)
 	if err != nil {
 		return nil, fmt.Errorf("unable to deserialize: %w: <%s>", err, b)
 	}
-	logger.Debugf(ctx, "converted %#+v to %#+v", v, profile)
+	logger.Debugf(ctx, "converted %#+v (%s) to %#+v", v, v, profile)
 	return &profile, nil
 }
 
@@ -68,12 +70,14 @@ func ConvertStreamProfiles[T StreamProfile](
 			return err
 		}
 		m[k] = *profile
-		logger.Debugf(ctx, "converted %#+v to %#+v", v, profile)
+		logger.Debugf(ctx, "converted %#+v (%s) to %#+v", v, v, profile)
 	}
 	return nil
 }
 
 type StreamControllerCommons interface {
+	io.Closer
+
 	SetTitle(ctx context.Context, title string) error
 	SetDescription(ctx context.Context, description string) error
 	InsertAdsCuePoint(ctx context.Context, ts time.Time, duration time.Duration) error
@@ -99,6 +103,10 @@ type abstractStreamController struct {
 	applyProfile           func(ctx context.Context, profile AbstractStreamProfile, customArgs ...any) error
 	startStream            func(ctx context.Context, title string, description string, profile AbstractStreamProfile, customArgs ...any) error
 	StreamProfileTypeValue reflect.Type
+}
+
+func (c *abstractStreamController) Close() error {
+	return c.StreamController.Close()
 }
 
 func (c *abstractStreamController) GetImplementation() StreamControllerCommons {

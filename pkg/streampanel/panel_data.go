@@ -12,6 +12,7 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/nicklaw5/helix/v2"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 )
@@ -53,6 +54,7 @@ type panelData struct {
 
 func newPanelData() panelData {
 	cfg := streamcontrol.Config{}
+	obs.InitConfig(cfg)
 	twitch.InitConfig(cfg)
 	youtube.InitConfig(cfg)
 	return panelData{
@@ -63,6 +65,7 @@ func newPanelData() panelData {
 
 func newSamplePanelData() panelData {
 	cfg := newPanelData()
+	cfg.Backends[obs.ID].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{"some_profile": obs.StreamProfile{}}
 	cfg.Backends[twitch.ID].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{"some_profile": twitch.StreamProfile{}}
 	cfg.Backends[youtube.ID].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{"some_profile": youtube.StreamProfile{}}
 	return cfg
@@ -95,6 +98,14 @@ func readPanelData(
 
 	if cfg.Backends == nil {
 		cfg.Backends = streamcontrol.Config{}
+	}
+
+	if cfg.Backends[obs.ID] != nil {
+		err = streamcontrol.ConvertStreamProfiles[obs.StreamProfile](ctx, cfg.Backends[obs.ID].StreamProfiles)
+		if err != nil {
+			return fmt.Errorf("unable to convert stream profiles of OBS: %w: <%s>", err, b)
+		}
+		logger.Debugf(ctx, "final stream profiles of OBS: %#+v", cfg.Backends[obs.ID].StreamProfiles)
 	}
 
 	if cfg.Backends[twitch.ID] != nil {

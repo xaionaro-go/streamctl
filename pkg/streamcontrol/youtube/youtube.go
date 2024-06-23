@@ -27,6 +27,7 @@ const copyThumbnail = false
 
 type YouTube struct {
 	YouTubeService *youtube.Service
+	CancelFunc     context.CancelFunc
 }
 
 var _ streamcontrol.StreamController[StreamProfile] = (*YouTube)(nil)
@@ -39,6 +40,8 @@ func New(
 	if cfg.Config.ClientID == "" || cfg.Config.ClientSecret == "" {
 		return nil, fmt.Errorf("'clientid' or/and 'clientsecret' is/are not set; go to https://console.cloud.google.com/apis/credentials and create an app if it not created, yet")
 	}
+
+	ctx, cancelFn := context.WithCancel(ctx)
 
 	isNewToken := false
 	getNewToken := func() error {
@@ -100,6 +103,7 @@ func New(
 
 	yt := &YouTube{
 		YouTubeService: youtubeService,
+		CancelFunc:     cancelFn,
 	}
 
 	go func() {
@@ -157,6 +161,11 @@ func getToken(ctx context.Context, cfg Config) (*oauth2.Token, error) {
 	}
 
 	return tok, nil
+}
+
+func (yt *YouTube) Close() error {
+	yt.CancelFunc()
+	return nil
 }
 
 func (yt *YouTube) iterateActiveBroadcasts(

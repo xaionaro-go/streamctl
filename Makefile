@@ -20,7 +20,7 @@ streampanel-ios: builddir
 	cd cmd/streampanel && fyne package -release -os ios && mv streampanel.ipa ../../build/
 
 streampanel-windows: builddir
-	CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc GOOS=windows go build -o build/streampanel.exe ./cmd/streampanel/
+	CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc GOOS=windows go build -ldflags "-H windowsgui" -o build/streampanel.exe ./cmd/streampanel/
 
 builddir:
 	mkdir -p build
