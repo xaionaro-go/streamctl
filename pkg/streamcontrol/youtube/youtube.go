@@ -59,6 +59,7 @@ func New(
 	if cfg.Config.Token == nil {
 		err := getNewToken()
 		if err != nil {
+			cancelFn()
 			return nil, err
 		}
 	}
@@ -86,6 +87,7 @@ func New(
 			logger.Errorf(ctx, "unable to get a token: %v", err)
 			err := getNewToken()
 			if err != nil {
+				cancelFn()
 				return nil, err
 			}
 			tokenSource = getAuthCfg(cfg).TokenSource(ctx, cfg.Config.Token)
@@ -93,11 +95,13 @@ func New(
 	}
 
 	if err := checkToken(); err != nil {
+		cancelFn()
 		return nil, fmt.Errorf("the token is invalid: %w", err)
 	}
 
 	youtubeService, err := youtube.NewService(ctx, option.WithTokenSource(tokenSource))
 	if err != nil {
+		cancelFn()
 		return nil, err
 	}
 

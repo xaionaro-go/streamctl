@@ -1,4 +1,4 @@
-package streampanel
+package config
 
 import (
 	"bytes"
@@ -10,7 +10,6 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	goyaml "github.com/go-yaml/yaml"
 	"github.com/goccy/go-yaml"
-	"github.com/nicklaw5/helix/v2"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
@@ -23,73 +22,63 @@ type ProfileMetadata struct {
 	MaxOrder                 int
 }
 
-type twitchCache struct {
-	Categories []helix.Game
-}
-
-type youTubeCache struct {
-	Broadcasts []*youtube.LiveBroadcast
-}
-
-type gitRepoConfig struct {
+type GitRepoConfig struct {
 	Enable           *bool
 	URL              string `yaml:"url,omitempty"`
 	PrivateKey       string `yaml:"private_key,omitempty"`
-	LatestSyncCommit string `yaml:"latest_sync_commit,omitempty"` // TODO: deprecate this field, it's just a non-needed mechanism (better to check against git history)
+	LatestSyncCommit string `yaml:"latest_sync_commit,omitempty"` // TODO: deprecate this field, it's just a non-needed mechanism (better to check against git history).
 }
 
-type panelData struct {
-	Commands struct {
+type Config struct {
+	CachePath *string `yaml:"cache_path"`
+	Commands  struct {
 		OnStartStream string `yaml:"on_start_stream"`
 		OnStopStream  string `yaml:"on_stop_stream"`
 	}
-	GitRepo         gitRepoConfig
+	GitRepo         GitRepoConfig
 	Backends        streamcontrol.Config
 	ProfileMetadata map[streamcontrol.ProfileName]ProfileMetadata
-	Cache           struct {
-		Twitch  twitchCache
-		Youtube youTubeCache
-	} `yaml:"z_cache,omitempty"`
 }
 
-func newPanelData() panelData {
+func NewConfig() Config {
 	cfg := streamcontrol.Config{}
 	obs.InitConfig(cfg)
 	twitch.InitConfig(cfg)
 	youtube.InitConfig(cfg)
-	return panelData{
+	return Config{
 		Backends:        cfg,
 		ProfileMetadata: map[streamcontrol.ProfileName]ProfileMetadata{},
+		CachePath:       ptr("~/.streamd.cache"),
 	}
 }
 
-func newSamplePanelData() panelData {
-	cfg := newPanelData()
+func NewSampleConfig() Config {
+	cfg := NewConfig()
 	cfg.Backends[obs.ID].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{"some_profile": obs.StreamProfile{}}
 	cfg.Backends[twitch.ID].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{"some_profile": twitch.StreamProfile{}}
 	cfg.Backends[youtube.ID].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{"some_profile": youtube.StreamProfile{}}
 	return cfg
 }
 
-var _ = newSamplePanelData
+var _ = NewSampleConfig
 
-func readPanelDataFromPath(
+func ReadConfigFromPath(
 	ctx context.Context,
 	cfgPath string,
-	cfg *panelData,
+	cfg *Config,
 ) error {
 	b, err := os.ReadFile(cfgPath)
 	if err != nil {
 		return fmt.Errorf("unable to read file '%s': %w", cfgPath, err)
 	}
 
-	return readPanelData(ctx, b, cfg)
+	return ReadConfig(ctx, b, cfg)
 }
 
-func readPanelData(
+func ReadConfig(
 	ctx context.Context,
 	b []byte,
-	cfg *panelData,
+	cfg *Config,
 ) error {
 	err := yaml.Unmarshal(b, cfg)
 	if err != nil {
@@ -127,17 +116,17 @@ func readPanelData(
 	return nil
 }
 
-func writePanelDataToPath(
+func WriteConfigToPath(
 	ctx context.Context,
 	cfgPath string,
-	cfg panelData,
+	cfg Config,
 ) error {
 	pathNew := cfgPath + ".new"
 	f, err := os.OpenFile(pathNew, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0750)
 	if err != nil {
 		return fmt.Errorf("unable to open the data file '%s': %w", pathNew, err)
 	}
-	err = writePanelData(ctx, f, cfg)
+	err = WriteConfig(ctx, f, cfg)
 	f.Close()
 	if err != nil {
 		return fmt.Errorf("unable to write data to file '%s': %w", pathNew, err)
@@ -150,10 +139,10 @@ func writePanelDataToPath(
 	return nil
 }
 
-func writePanelData(
+func WriteConfig(
 	_ context.Context,
 	w io.Writer,
-	cfg panelData,
+	cfg Config,
 ) error {
 	b, err := yaml.Marshal(cfg)
 	if err != nil {
@@ -180,4 +169,30 @@ func writePanelData(
 		return fmt.Errorf("unable to write data %#+v: %w", cfg, err)
 	}
 	return nil
+}
+
+func ReadOrCreateConfigFile(
+	ctx context.Context,
+	dataPath string,
+) (*Config, error) {
+	_, err := os.Stat(dataPath)
+	switch {
+	case err == nil:
+		data := Config{}
+		err := ReadConfigFromPath(ctx, dataPath, &data)
+		if err != nil {
+			return nil, fmt.Errorf("unable to read panel data from path '%s': %w", dataPath, err)
+		}
+		return &data, nil
+	case os.IsNotExist(err):
+		logger.Debugf(ctx, "cannot find file '%s', creating", dataPath)
+		data := NewConfig()
+		err := WriteConfigToPath(ctx, dataPath, data)
+		if err != nil {
+			logger.Errorf(ctx, "unable to write config to path '%s': %w", dataPath, err)
+		}
+		return &data, nil
+	default:
+		return nil, fmt.Errorf("unable to access file '%s': %w", dataPath, err)
+	}
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
+	"github.com/xaionaro-go/streamctl/pkg/streamd"
 )
 
 var ErrSkipBackend = errors.New("backend was skipped")
@@ -203,7 +204,7 @@ func newYouTube(
 func (p *Panel) initOBSBackend(ctx context.Context) error {
 	obs, err := newOBS(
 		ctx,
-		p.data.Backends[obs.ID],
+		p.StreamD.(*streamd.StreamD).Config.Backends[obs.ID],
 		p.inputOBSConnectInfo,
 		func(cfg *streamcontrol.AbstractPlatformConfig) error {
 			return p.savePlatformConfig(ctx, obs.ID, cfg)
@@ -212,14 +213,14 @@ func (p *Panel) initOBSBackend(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	p.streamControllers.OBS = obs
+	p.StreamD.(*streamd.StreamD).StreamControllers.OBS = obs
 	return nil
 }
 
 func (p *Panel) initTwitchBackend(ctx context.Context) error {
 	twitch, err := newTwitch(
 		ctx,
-		p.data.Backends[twitch.ID],
+		p.StreamD.(*streamd.StreamD).Config.Backends[twitch.ID],
 		p.inputTwitchUserInfo,
 		func(cfg *streamcontrol.AbstractPlatformConfig) error {
 			return p.savePlatformConfig(ctx, twitch.ID, cfg)
@@ -228,14 +229,14 @@ func (p *Panel) initTwitchBackend(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	p.streamControllers.Twitch = twitch
+	p.StreamD.(*streamd.StreamD).StreamControllers.Twitch = twitch
 	return nil
 }
 
 func (p *Panel) initYouTubeBackend(ctx context.Context) error {
 	youTube, err := newYouTube(
 		ctx,
-		p.data.Backends[youtube.ID],
+		p.StreamD.(*streamd.StreamD).Config.Backends[youtube.ID],
 		p.inputYouTubeUserInfo,
 		func(cfg *streamcontrol.AbstractPlatformConfig) error {
 			return p.savePlatformConfig(ctx, youtube.ID, cfg)
@@ -245,6 +246,6 @@ func (p *Panel) initYouTubeBackend(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	p.streamControllers.YouTube = youTube
+	p.StreamD.(*streamd.StreamD).StreamControllers.YouTube = youTube
 	return nil
 }
