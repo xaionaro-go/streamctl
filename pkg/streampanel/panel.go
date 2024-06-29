@@ -27,6 +27,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/go-ng/xmath"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
+	"github.com/xaionaro-go/streamctl/pkg/repository"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
@@ -70,7 +71,7 @@ type Panel struct {
 	youtubeCheck *widget.Check
 	twitchCheck  *widget.Check
 
-	gitStorage *gitStorage
+	gitStorage *repository.GIT
 
 	cancelGitSyncer context.CancelFunc
 	gitSyncerMutex  sync.Mutex
@@ -1340,16 +1341,6 @@ func (p *Panel) stopStream(ctx context.Context) {
 	p.startStopMutex.Lock()
 	defer p.startStopMutex.Unlock()
 
-	if p.streamControllers.OBS != nil {
-		p.obsCheck.Enable()
-	}
-	if p.streamControllers.Twitch != nil {
-		p.twitchCheck.Enable()
-	}
-	if p.streamControllers.YouTube != nil {
-		p.youtubeCheck.Enable()
-	}
-
 	p.startStopButton.Disable()
 
 	p.updateTimerHandler.Stop()
@@ -1358,7 +1349,7 @@ func (p *Panel) stopStream(ctx context.Context) {
 	}
 	p.updateTimerHandler = nil
 
-	if p.streamControllers.OBS != nil {
+	if p.obsCheck.Checked && p.streamControllers.OBS != nil {
 		p.startStopButton.SetText("Stopping OBS...")
 		err := p.streamControllers.OBS.EndStream(ctx)
 		if err != nil {
@@ -1366,7 +1357,7 @@ func (p *Panel) stopStream(ctx context.Context) {
 		}
 	}
 
-	if p.streamControllers.Twitch != nil {
+	if p.twitchCheck.Checked && p.streamControllers.Twitch != nil {
 		p.startStopButton.SetText("Stopping Twitch...")
 		err := p.streamControllers.Twitch.EndStream(ctx)
 		if err != nil {
@@ -1374,12 +1365,22 @@ func (p *Panel) stopStream(ctx context.Context) {
 		}
 	}
 
-	if p.streamControllers.YouTube != nil {
+	if p.youtubeCheck.Checked && p.streamControllers.YouTube != nil {
 		p.startStopButton.SetText("Stopping YouTube...")
 		err := p.streamControllers.YouTube.EndStream(ctx)
 		if err != nil {
 			p.displayError(fmt.Errorf("unable to stop the stream on YouTube: %w", err))
 		}
+	}
+
+	if p.streamControllers.OBS != nil {
+		p.obsCheck.Enable()
+	}
+	if p.streamControllers.Twitch != nil {
+		p.twitchCheck.Enable()
+	}
+	if p.streamControllers.YouTube != nil {
+		p.youtubeCheck.Enable()
 	}
 
 	p.startStopButton.SetText("OnStopStream command...")

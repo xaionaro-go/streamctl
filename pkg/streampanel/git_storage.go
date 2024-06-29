@@ -3,12 +3,8 @@ package streampanel
 import (
 	"bytes"
 	"context"
-	"crypto/sha1"
 	"errors"
 	"fmt"
-	"io"
-	"net"
-	"os"
 	"strings"
 	"time"
 
@@ -17,329 +13,13 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/go-git/go-billy/v5/memfs"
-	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/plumbing/object"
-	"github.com/go-git/go-git/v5/plumbing/transport"
-	gitssh "github.com/go-git/go-git/v5/plumbing/transport/ssh"
-	"github.com/go-git/go-git/v5/storage/memory"
-	"golang.org/x/crypto/ssh"
+	"github.com/xaionaro-go/streamctl/pkg/repository"
 )
 
 const gitRepoPanelConfigFileName = "streampanel.yaml"
-
-type gitStorage struct {
-	RemoteURL  string
-	PrivateKey []byte
-	Auth       transport.AuthMethod
-	Repo       *git.Repository
-}
-
-func newGitStorage(
-	ctx context.Context,
-	remoteURL string,
-	privateKey []byte,
-) (*gitStorage, error) {
-	stor := &gitStorage{
-		RemoteURL:  remoteURL,
-		PrivateKey: privateKey,
-	}
-
-	err := stor.init(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return stor, nil
-}
-
-func (s *gitStorage) init(ctx context.Context) error {
-	if len(s.RemoteURL) == 0 {
-		return fmt.Errorf("repo URL is not provided")
-	}
-	if len(s.PrivateKey) == 0 {
-		return fmt.Errorf("key is not provided")
-	}
-	auth, err := gitssh.NewPublicKeys("git", s.PrivateKey, "")
-	if err != nil {
-		return fmt.Errorf("unable to create auth object for git: %w", err)
-	}
-	auth.HostKeyCallbackHelper.HostKeyCallback = func(hostname string, remote net.Addr, key ssh.PublicKey) error {
-		return nil
-	}
-	s.Auth = auth
-
-	repo, err := git.Clone(memory.NewStorage(), memfs.New(), &git.CloneOptions{
-		URL:               s.RemoteURL,
-		Auth:              s.Auth,
-		SingleBranch:      true,
-		Mirror:            true,
-		NoCheckout:        true,
-		Depth:             0,
-		RecurseSubmodules: 0,
-		Progress:          nil,
-		Tags:              0,
-	})
-	switch err {
-	case nil:
-	case plumbing.ErrReferenceNotFound, transport.ErrEmptyRemoteRepository:
-		repo, err = s.initGitRepo(ctx)
-		if err != nil {
-			return fmt.Errorf("unable to initialize the git repo: %w", err)
-		}
-	default:
-		return fmt.Errorf("unable to clone the git repo: %w", err)
-	}
-
-	s.Repo = repo
-	return nil
-}
-
-type ErrNeedsRebase struct {
-	Err error
-}
-
-func (err ErrNeedsRebase) Error() string {
-	return fmt.Sprintf("needs rebase: %v", err.Err)
-}
-
-func (err ErrNeedsRebase) Unwrap() error {
-	return err.Err
-}
-
-func (s *gitStorage) initGitRepo(ctx context.Context) (*git.Repository, error) {
-	repo, err := git.Init(memory.NewStorage(), memfs.New())
-	if err != nil {
-		return nil, fmt.Errorf("unable to initialize the git local repo: %w", err)
-	}
-
-	if err := s.initLocalBranch(ctx, repo); err != nil {
-		return nil, fmt.Errorf("unable to make a local branch: %w", err)
-	}
-	if err := s.push(ctx, repo); err != nil {
-		return nil, fmt.Errorf("unable to push the branch to the remote: %w", err)
-	}
-
-	return repo, nil
-}
-
-func (s *gitStorage) initLocalBranch(
-	_ context.Context,
-	repo *git.Repository,
-) error {
-	worktree, err := repo.Worktree()
-	if err != nil {
-		return fmt.Errorf("unable to get git's worktree: %w", err)
-	}
-
-	now := time.Now()
-	signature := gitCommitter(now)
-
-	_, err = worktree.Commit("init repo", &git.CommitOptions{
-		All:               false,
-		AllowEmptyCommits: true,
-		Author:            signature,
-		Committer:         signature,
-		Amend:             false,
-	})
-	if err != nil {
-		return fmt.Errorf("unable to create the first commit in the git repo: %w", err)
-	}
-	return nil
-}
-
-func (s *gitStorage) push(
-	ctx context.Context,
-	repo interface {
-		PushContext(context.Context, *git.PushOptions) error
-	},
-) error {
-	err := repo.PushContext(ctx, &git.PushOptions{
-		RemoteURL:         s.RemoteURL,
-		Auth:              s.Auth,
-		Progress:          nil,
-		Prune:             false,
-		Force:             false,
-		InsecureSkipTLS:   false,
-		CABundle:          nil,
-		RequireRemoteRefs: nil,
-		FollowTags:        false,
-		ForceWithLease:    nil,
-		Options:           nil,
-		Atomic:            false,
-	})
-	logger.Debugf(ctx, "push result: %v", err)
-	if err == git.NoErrAlreadyUpToDate {
-		return nil
-	}
-	if err != nil && strings.Contains(err.Error(), "is at") && strings.Contains(err.Error(), "but expected") {
-		return ErrNeedsRebase{Err: err}
-	}
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (s *gitStorage) readConfig(ctx context.Context) (*panelData, error) {
-	worktree, err := s.Repo.Worktree()
-	if err != nil {
-		return nil, fmt.Errorf("unable to open the git's worktree: %w", err)
-	}
-
-	f, err := worktree.Filesystem.Open(gitRepoPanelConfigFileName)
-	if err != nil {
-		return nil, fmt.Errorf("unable to open '%s': %w", gitRepoPanelConfigFileName, err)
-	}
-
-	b, err := io.ReadAll(f)
-	f.Close()
-	if err != nil {
-		return nil, fmt.Errorf("unable to read the content of file '%s' from the virtual git repository: %w", gitRepoPanelConfigFileName, err)
-	}
-
-	panelData := newPanelData()
-	err = readPanelData(ctx, b, &panelData)
-
-	if err != nil {
-		return nil, fmt.Errorf("unable to parse the config: %w", err)
-	}
-
-	return &panelData, nil
-}
-
-func (s *gitStorage) Pull(
-	ctx context.Context,
-	lastKnownCommit plumbing.Hash,
-	onUpdate func(
-		ctx context.Context,
-		newData *panelData,
-	),
-) (_err error) {
-	logger.Debugf(ctx, "gitStorage.Pull")
-	defer func() { logger.Debugf(ctx, "/gitStorage.Pull: %v", _err) }()
-
-	err := s.Repo.FetchContext(ctx, &git.FetchOptions{
-		RemoteURL: s.RemoteURL,
-		Auth:      s.Auth,
-		Force:     true,
-		Prune:     false,
-	})
-	if err != nil && err != git.NoErrAlreadyUpToDate {
-		return fmt.Errorf("unable to fetch from the remote git repo: %w", err)
-	}
-	worktree, err := s.Repo.Worktree()
-	if err != nil {
-		return fmt.Errorf("unable to open the git's worktree: %w", err)
-	}
-	if err != git.NoErrAlreadyUpToDate {
-		err = worktree.PullContext(ctx, &git.PullOptions{
-			RemoteURL:         s.RemoteURL,
-			SingleBranch:      true,
-			Depth:             0,
-			Auth:              s.Auth,
-			RecurseSubmodules: 0,
-			Progress:          nil,
-			Force:             true,
-			InsecureSkipTLS:   false,
-			CABundle:          nil,
-			ProxyOptions:      transport.ProxyOptions{},
-		})
-		if err != nil && err != git.NoErrAlreadyUpToDate {
-			return fmt.Errorf("unable to pull the updates in the git repo: %w", err)
-		}
-	}
-
-	ref, err := s.Repo.Head()
-	if err != nil {
-		return fmt.Errorf("unable to get the current git ref: %w", err)
-	}
-	newCommit := ref.Hash()
-
-	err = worktree.Checkout(&git.CheckoutOptions{
-		Hash: newCommit,
-	})
-	if err != nil {
-		return fmt.Errorf("unable to checkout HEAD: %w", err)
-	}
-
-	newData, err := s.readConfig(ctx)
-	if err != nil {
-		return fmt.Errorf("unable to parse config from the git source: %w", err)
-	}
-
-	if lastKnownCommit == newCommit {
-		logger.Debugf(ctx, "git is already in sync: %s == %s", lastKnownCommit, newCommit)
-		return nil
-	}
-
-	logger.Debugf(ctx, "got a new commit from git: %s -> %s", lastKnownCommit, newCommit)
-	newData.GitRepo.LatestSyncCommit = newCommit.String()
-	onUpdate(ctx, newData)
-	return nil
-}
-
-func gitCommitter(now time.Time) *object.Signature {
-	return &object.Signature{
-		Name:  "streampanel",
-		Email: "streampanel@noemail.invalid",
-		When:  now,
-	}
-}
-
-func (s *gitStorage) CommitAndPush(
-	ctx context.Context,
-	worktree *git.Worktree,
-	ref *plumbing.Reference,
-) (plumbing.Hash, error) {
-	logger.Debugf(ctx, "gitStorage.CommitAndPush")
-	defer logger.Debugf(ctx, "/gitStorage.CommitAndPush")
-
-	_, err := worktree.Add(gitRepoPanelConfigFileName)
-	if err != nil {
-		return plumbing.Hash{}, fmt.Errorf("unable to add file '%s' to the git's worktree: %w", gitRepoPanelConfigFileName, err)
-	}
-
-	now := time.Now()
-	signature := gitCommitter(now)
-	ts := now.Format(time.DateTime)
-	host, err := os.Hostname()
-	if err != nil {
-		return plumbing.Hash{}, fmt.Errorf("unable to determine the host name: %w", err)
-	}
-
-	hash, err := worktree.Commit(fmt.Sprintf("Update from '%s' at %s", host, ts), &git.CommitOptions{
-		All:               true,
-		AllowEmptyCommits: false,
-		Author:            signature,
-		Committer:         signature,
-	})
-	if err != nil {
-		return hash, fmt.Errorf("unable to commit the new config to the git repo: %w", err)
-	}
-	logger.Debugf(ctx, "new commit: %s", hash)
-
-	newRef := plumbing.NewHashReference(ref.Name(), hash)
-	err = s.Repo.Storer.SetReference(newRef)
-	if err != nil {
-		return hash, fmt.Errorf("unable to set git reference %#+v: %w", *newRef, err)
-	}
-
-	logger.Debugf(ctx, "had set reference: %#+v", *newRef)
-
-	err = s.push(ctx, s.Repo)
-	if err != nil {
-		return hash, fmt.Errorf("unable to push the new config to the remote git repo: %w", err)
-	}
-
-	return hash, nil
-}
-
-func (s *gitStorage) Close() error {
-	return nil
-}
+const gitCommitterName = "streampanel"
+const gitCommitterEmail = "streampanel@noemail.invalid"
 
 func (p *Panel) initGitIfNeeded(ctx context.Context) {
 	logger.Debugf(ctx, "initGitIfNeeded")
@@ -371,7 +51,14 @@ func (p *Panel) initGitIfNeeded(ctx context.Context) {
 		}
 
 		logger.Debugf(ctx, "newGitStorage")
-		gitStorage, err := newGitStorage(ctx, p.data.GitRepo.URL, []byte(p.data.GitRepo.PrivateKey))
+		gitStorage, err := repository.NewGit(
+			ctx,
+			p.data.GitRepo.URL,
+			[]byte(p.data.GitRepo.PrivateKey),
+			gitRepoPanelConfigFileName,
+			gitCommitterName,
+			gitCommitterEmail,
+		)
 		if err != nil {
 			p.displayError(fmt.Errorf("unable to sync with the remote GIT repository: %w", err))
 			if newUserData {
@@ -541,7 +228,16 @@ func (p *Panel) gitSync(ctx context.Context) {
 	err := p.gitStorage.Pull(
 		ctx,
 		p.getLastKnownGitCommitHash(),
-		p.onConfigUpdateViaGIT,
+		func(ctx context.Context, commitHash plumbing.Hash, b []byte) {
+			panelData := newPanelData()
+			err := readPanelData(ctx, b, &panelData)
+			if err != nil {
+				p.displayError(fmt.Errorf("unable to read panel data: %w", err))
+				return
+			}
+			panelData.GitRepo.LatestSyncCommit = commitHash.String()
+			p.onConfigUpdateViaGIT(ctx, &panelData)
+		},
 	)
 	if err != nil {
 		p.displayError(fmt.Errorf("unable to sync with the remote GIT repository: %w", err))
@@ -595,102 +291,28 @@ func (p *Panel) sendConfigViaGIT(
 
 	logger.Debugf(ctx, "sendConfigViaGIT: Lock() success")
 
-	worktree, err := p.gitStorage.Repo.Worktree()
-	if err != nil {
-		return fmt.Errorf("unable to open the git's worktree: %w", err)
-	}
-
-	refs, err := p.gitStorage.Repo.References()
-	if err != nil {
-		return fmt.Errorf("unable to get git references iterator: %w", err)
-	}
-	var ref *plumbing.Reference
-	for {
-		ref, err = refs.Next()
-		if err != nil {
-			return fmt.Errorf("unable to get the first git reference: %w", err)
-		}
-		if ref.Name() != "HEAD" {
-			break
-		}
-	}
-
-	if ref == nil {
-		return fmt.Errorf("unable to find any branch references")
-	}
-
-	err = worktree.Checkout(&git.CheckoutOptions{
-		Hash:  ref.Hash(),
-		Force: true,
-	})
-	if err != nil {
-		return fmt.Errorf("unable to checkout git HEAD: %w", err)
-	}
-
-	f, err := worktree.Filesystem.Open(
-		gitRepoPanelConfigFileName,
-	)
-	logger.Debugf(ctx, "file open result: %v", err)
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("unable to open file '%s' for reading: %w", gitRepoPanelConfigFileName, err)
-	}
-
-	var sha1SumBefore [sha1.Size]byte
-
-	if f != nil {
-		b, err := io.ReadAll(f)
-		if err != nil {
-			return fmt.Errorf("unable to read file '%s': %w", gitRepoPanelConfigFileName, err)
-		}
-		f.Close()
-		sha1SumBefore = sha1.Sum(b)
-	} else {
-		logger.Debugf(ctx, "the file does not exist in the git repo, yet")
-	}
-
 	var newBytes bytes.Buffer
 	latestSyncCommit := p.data.GitRepo.LatestSyncCommit
 	p.data.GitRepo.LatestSyncCommit = ""
-	err = writePanelData(ctx, &newBytes, p.data)
+	err := writePanelData(ctx, &newBytes, p.data)
 	p.data.GitRepo.LatestSyncCommit = latestSyncCommit
 	if err != nil {
-		return fmt.Errorf("unable to encode the config: %w", err)
+		return fmt.Errorf("unable to serialize the panel data: %w", err)
 	}
 
-	sha1SumAfter := sha1.Sum(newBytes.Bytes())
-	if bytes.Equal(sha1SumBefore[:], sha1SumAfter[:]) {
-		logger.Debugf(ctx, "the config didn't change: %X == %X", sha1SumBefore[:], sha1SumAfter[:])
+	hash, err := p.gitStorage.Write(ctx, newBytes.Bytes())
+	if errors.As(err, &repository.ErrNeedsRebase{}) {
+		p.gitSync(ctx)
 		return nil
 	}
-	logger.Debugf(ctx, "the config did change: %X == %X", sha1SumBefore[:], sha1SumAfter[:])
-
-	f, err = worktree.Filesystem.OpenFile(
-		gitRepoPanelConfigFileName,
-		os.O_WRONLY|os.O_CREATE|os.O_TRUNC,
-		0644,
-	)
 	if err != nil {
-		return fmt.Errorf("unable to open file '%s' for writing: %w", gitRepoPanelConfigFileName, err)
+		return fmt.Errorf("unable to write the config to the git repo: %w", err)
 	}
-	_, err = io.Copy(f, bytes.NewReader(newBytes.Bytes()))
-	f.Close()
-	if err != nil {
-		return fmt.Errorf("unable to write the config into virtual git repo: %w", err)
-	}
-
-	hash, err := p.gitStorage.CommitAndPush(ctx, worktree, ref)
 	if !hash.IsZero() {
 		p.setLastKnownGitCommitHash(hash)
 		if err := p.saveDataToConfigFile(ctx); err != nil {
 			return fmt.Errorf("unable to store the new commit hash in the config file: %w", err)
 		}
-	}
-	if errors.As(err, &ErrNeedsRebase{}) {
-		p.gitSync(ctx)
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("unable to commit&push the config into virtual git repo: %w", err)
 	}
 
 	return nil
