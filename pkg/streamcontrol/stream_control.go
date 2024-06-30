@@ -77,7 +77,7 @@ func ConvertStreamProfiles[T StreamProfile](
 
 type StreamStatus struct {
 	IsActive  bool
-	StartedAt *time.Time
+	StartedAt *time.Time `json:",omitempty"`
 }
 
 type StreamControllerCommons interface {
