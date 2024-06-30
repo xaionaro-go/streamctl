@@ -172,7 +172,7 @@ func (yt *YouTube) Close() error {
 	return nil
 }
 
-func (yt *YouTube) iterateActiveBroadcasts(
+func (yt *YouTube) IterateActiveBroadcasts(
 	ctx context.Context,
 	callback func(broadcast *youtube.LiveBroadcast) error,
 	parts ...string,
@@ -198,7 +198,7 @@ func (yt *YouTube) updateActiveBroadcasts(
 	updateBroadcast func(broadcast *youtube.LiveBroadcast) error,
 	parts ...string,
 ) error {
-	return yt.iterateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
+	return yt.IterateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
 		if err := updateBroadcast(broadcast); err != nil {
 			return fmt.Errorf("unable to update broadcast %v: %w", broadcast.Id, err)
 		}
@@ -255,7 +255,7 @@ func (yt *YouTube) InsertAdsCuePoint(
 	ts time.Time,
 	duration time.Duration,
 ) error {
-	return yt.iterateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
+	return yt.IterateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
 		_, err := yt.YouTubeService.LiveBroadcasts.InsertCuepoint(&youtube.Cuepoint{
 			CueType:      "cueTypeAd",
 			DurationSecs: int64(duration.Seconds()),
@@ -268,7 +268,7 @@ func (yt *YouTube) InsertAdsCuePoint(
 func (yt *YouTube) DeleteActiveBroadcasts(
 	ctx context.Context,
 ) error {
-	return yt.iterateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
+	return yt.IterateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
 		logger.Debugf(ctx, "deleting broadcast %v", broadcast.Id)
 		return yt.YouTubeService.LiveBroadcasts.Delete(broadcast.Id).Context(ctx).Do()
 	})
@@ -564,19 +564,26 @@ const timeLayout = "2006-01-02T15:04:05-0700"
 func (yt *YouTube) GetStreamStatus(
 	ctx context.Context,
 ) (*streamcontrol.StreamStatus, error) {
+	var broadcasts []*youtube.LiveBroadcast
 	var startedAt *time.Time
 	isActive := false
-	err := yt.iterateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
+	err := yt.IterateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
 		ts := broadcast.Snippet.ActualStartTime
 		_startedAt, err := time.Parse(timeLayout, ts)
 		if err != nil {
 			return fmt.Errorf("unable to parse '%s' with layout '%s': %w", ts, timeLayout, err)
 		}
 		startedAt = &_startedAt
+		broadcasts = append(broadcasts, broadcast)
 		return nil
 	}, liveBroadcastParts...)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get active broadcasts info: %w", err)
+	}
+
+	streams, err := yt.ListStreams(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get streams info: %w", err)
 	}
 
 	if !isActive {
@@ -588,6 +595,10 @@ func (yt *YouTube) GetStreamStatus(
 	return &streamcontrol.StreamStatus{
 		IsActive:  true,
 		StartedAt: startedAt,
+		CustomData: map[string]any{
+			"Broadcasts": broadcasts,
+			"Streams":    streams,
+		},
 	}, nil
 }
 

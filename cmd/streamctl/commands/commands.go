@@ -76,6 +76,12 @@ var (
 		Run:  youTubeListBroadcasts,
 	}
 
+	YouTubeListActiveBroadcasts = &cobra.Command{
+		Use:  "list-active-broadcasts",
+		Args: cobra.ExactArgs(0),
+		Run:  youTubeListActiveBroadcasts,
+	}
+
 	YouTubeListStreams = &cobra.Command{
 		Use:  "list-streams",
 		Args: cobra.ExactArgs(0),
@@ -99,6 +105,7 @@ func init() {
 	Root.AddCommand(StreamStart)
 	Root.AddCommand(StreamEnd)
 	YouTube.AddCommand(YouTubeListBroadcasts)
+	YouTube.AddCommand(YouTubeListActiveBroadcasts)
 	YouTube.AddCommand(YouTubeListStreams)
 	Root.AddCommand(YouTube)
 }
@@ -195,17 +202,21 @@ func readConfigFromPath(
 		return fmt.Errorf("unable to unserialize config: %w: <%s>", err, b)
 	}
 
-	err = streamcontrol.ConvertStreamProfiles[twitch.StreamProfile](ctx, (*cfg)[idTwitch].StreamProfiles)
-	if err != nil {
-		return fmt.Errorf("unable to convert stream profiles of twitch: %w: <%s>", err, b)
+	if (*cfg)[idTwitch] != nil {
+		err = streamcontrol.ConvertStreamProfiles[twitch.StreamProfile](ctx, (*cfg)[idTwitch].StreamProfiles)
+		if err != nil {
+			return fmt.Errorf("unable to convert stream profiles of twitch: %w: <%s>", err, b)
+		}
+		logger.Debugf(ctx, "final stream profiles of twitch: %#+v", (*cfg)[idTwitch].StreamProfiles)
 	}
-	logger.Debugf(ctx, "final stream profiles of twitch: %#+v", (*cfg)[idTwitch].StreamProfiles)
 
-	err = streamcontrol.ConvertStreamProfiles[youtube.StreamProfile](ctx, (*cfg)[idYoutube].StreamProfiles)
-	if err != nil {
-		return fmt.Errorf("unable to convert stream profiles of twitch: %w: <%s>", err, b)
+	if (*cfg)[idYoutube] != nil {
+		err = streamcontrol.ConvertStreamProfiles[youtube.StreamProfile](ctx, (*cfg)[idYoutube].StreamProfiles)
+		if err != nil {
+			return fmt.Errorf("unable to convert stream profiles of twitch: %w: <%s>", err, b)
+		}
+		logger.Debugf(ctx, "final stream profiles of youtube: %#+v", (*cfg)[idYoutube].StreamProfiles)
 	}
-	logger.Debugf(ctx, "final stream profiles of youtube: %#+v", (*cfg)[idYoutube].StreamProfiles)
 
 	return nil
 }
@@ -418,15 +429,47 @@ func youTubeListBroadcasts(cmd *cobra.Command, args []string) {
 		logger.Panic(ctx, "no youtube configuration provided")
 	}
 
-	streams, err := youTube.ListBroadcasts(ctx)
+	broadcasts, err := youTube.ListBroadcasts(ctx)
 	if err != nil {
 		logger.Panic(ctx, err)
 	}
-	for _, stream := range streams {
-		b, err := json.Marshal(stream)
+	for _, broadcast := range broadcasts {
+		b, err := json.Marshal(broadcast)
 		if err != nil {
-			logger.Panicf(ctx, "unable to serialize stream info: %v: %#+v", err, *stream)
+			logger.Panicf(ctx, "unable to serialize stream info: %v: %#+v", err, *broadcast)
 		}
 		fmt.Printf("%s\n", b)
+	}
+}
+
+func youTubeListActiveBroadcasts(cmd *cobra.Command, args []string) {
+	ctx, cfg := ctxAndCfg(cmd.Context())
+	youTube, err := getYouTubeStreamController(ctx, cfg)
+	if err != nil {
+		logger.Panic(ctx, err)
+	}
+
+	if youTube == nil {
+		logger.Panic(ctx, "no youtube configuration provided")
+	}
+
+	err = youTube.IterateActiveBroadcasts(
+		ctx,
+		func(broadcast *youtube.LiveBroadcast) error {
+			b, err := json.Marshal(broadcast)
+			if err != nil {
+				logger.Panic(ctx, err.Error())
+			}
+			fmt.Printf("%s\n", b)
+			return nil
+		},
+		"id",
+		"snippet",
+		"contentDetails",
+		"monetizationDetails",
+		"status",
+	)
+	if err != nil {
+		logger.Panic(ctx, err.Error())
 	}
 }
