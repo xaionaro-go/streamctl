@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/goccy/go-yaml"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
@@ -48,13 +49,13 @@ func (grpc *GRPCServer) SetConfig(
 	ctx context.Context,
 	req *streamd_grpc.SetConfigRequest,
 ) (*streamd_grpc.SetConfigReply, error) {
-	var config config.Config
-	err := json.Unmarshal([]byte(req.Config), &config)
+	var result config.Config
+	err := config.ReadConfig(ctx, []byte(req.Config), &result)
 	if err != nil {
 		return nil, fmt.Errorf("unable to unserialize the config: %w", err)
 	}
 
-	err = grpc.StreamD.SetConfig(ctx, &config)
+	err = grpc.StreamD.SetConfig(ctx, &result)
 	if err != nil {
 		return nil, fmt.Errorf("unable to set the config: %w", err)
 	}
@@ -112,7 +113,7 @@ func (grpc *GRPCServer) StartStream(
 	default:
 		return nil, fmt.Errorf("unexpected platform ID: '%s'", platID)
 	}
-	err = json.Unmarshal([]byte(req.GetProfile()), &profile)
+	err = yaml.Unmarshal([]byte(req.GetProfile()), &profile)
 	if err != nil {
 		return nil, fmt.Errorf("unable to unserialize the profile: %w", err)
 	}
@@ -192,7 +193,7 @@ func (grpc *GRPCServer) OBSOLETE_GitInfo(
 	ctx context.Context,
 	req *streamd_grpc.OBSOLETE_GetGitInfoRequest,
 ) (*streamd_grpc.OBSOLETE_GetGitInfoReply, error) {
-	isEnabled, err := grpc.StreamD.IsGITInitialized(ctx)
+	isEnabled, err := grpc.StreamD.OBSOLETE_IsGITInitialized(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get the git info: %w", err)
 	}
@@ -205,7 +206,7 @@ func (grpc *GRPCServer) OBSOLETE_GitRelogin(
 	ctx context.Context,
 	req *streamd_grpc.OBSOLETE_GitReloginRequest,
 ) (*streamd_grpc.OBSOLETE_GitReloginReply, error) {
-	err := grpc.StreamD.GitRelogin(ctx)
+	err := grpc.StreamD.OBSOLETE_GitRelogin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to relogin: %w", err)
 	}

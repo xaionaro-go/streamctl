@@ -223,7 +223,7 @@ func (d *StreamD) startPeriodicGitSyncer(ctx context.Context) {
 	}()
 }
 
-func (d *StreamD) GitRelogin(ctx context.Context) error {
+func (d *StreamD) OBSOLETE_GitRelogin(ctx context.Context) error {
 	alreadyLoggedIn := d.GitStorage != nil
 	oldCfg := d.Config.GitRepo
 	d.Config.GitRepo = config.GitRepoConfig{}

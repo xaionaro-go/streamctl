@@ -12,6 +12,8 @@ service StreamD {
     rpc GetBackendInfo(GetBackendInfoRequest) returns (GetBackendInfoReply) {}
     rpc Restart(RestartRequest) returns (RestartReply) {}
 
+    rpc EXPERIMENTAL_ReinitStreamControllers(EXPERIMENTAL_ReinitStreamControllersRequest) returns (EXPERIMENTAL_ReinitStreamControllersReply) {}
+
     rpc OBSOLETE_FetchConfig(OBSOLETE_FetchConfigRequest) returns (OBSOLETE_FetchConfigReply) {}
     rpc OBSOLETE_GitInfo(OBSOLETE_GetGitInfoRequest) returns (OBSOLETE_GetGitInfoReply) {}
     rpc OBSOLETE_GitRelogin(OBSOLETE_GitReloginRequest) returns (OBSOLETE_GitReloginReply) {}
@@ -51,6 +53,9 @@ message GetBackendInfoReply {
 }
 message RestartRequest {}
 message RestartReply {}
+
+message EXPERIMENTAL_ReinitStreamControllersRequest {}
+message EXPERIMENTAL_ReinitStreamControllersReply {}
 
 message OBSOLETE_FetchConfigRequest {}
 message OBSOLETE_FetchConfigReply {}

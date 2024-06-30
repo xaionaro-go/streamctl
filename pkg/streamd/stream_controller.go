@@ -1,19 +1,45 @@
-package streampanel
+package streamd
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
-	"github.com/xaionaro-go/streamctl/pkg/streamd"
+	streamd "github.com/xaionaro-go/streamctl/pkg/streamd/types"
 )
 
-var ErrSkipBackend = errors.New("backend was skipped")
+func (d *StreamD) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context) error {
+	platNames := make([]streamcontrol.PlatformName, 0, len(d.Config.Backends))
+	for platName := range d.Config.Backends {
+		platNames = append(platNames, platName)
+	}
+	sort.Slice(platNames, func(i, j int) bool {
+		return platNames[i] < platNames[j]
+	})
+	for _, platName := range platNames {
+		var err error
+		switch strings.ToLower(string(platName)) {
+		case strings.ToLower(string(obs.ID)):
+			err = d.initOBSBackend(ctx)
+		case strings.ToLower(string(twitch.ID)):
+			err = d.initTwitchBackend(ctx)
+		case strings.ToLower(string(youtube.ID)):
+			err = d.initYouTubeBackend(ctx)
+		}
+		if err != nil && err != ErrSkipBackend {
+			return fmt.Errorf("unable to initialize '%s': %w", platName, err)
+		}
+	}
+	return nil
+}
+
+var ErrSkipBackend = streamd.ErrSkipBackend
 
 func newOBS(
 	ctx context.Context,
@@ -201,51 +227,51 @@ func newYouTube(
 	return yt, nil
 }
 
-func (p *Panel) initOBSBackend(ctx context.Context) error {
+func (d *StreamD) initOBSBackend(ctx context.Context) error {
 	obs, err := newOBS(
 		ctx,
-		p.StreamD.(*streamd.StreamD).Config.Backends[obs.ID],
-		p.inputOBSConnectInfo,
+		d.Config.Backends[obs.ID],
+		d.UI.InputOBSConnectInfo,
 		func(cfg *streamcontrol.AbstractPlatformConfig) error {
-			return p.savePlatformConfig(ctx, obs.ID, cfg)
+			return d.setPlatformConfig(ctx, obs.ID, cfg)
 		},
 	)
 	if err != nil {
 		return err
 	}
-	p.StreamD.(*streamd.StreamD).StreamControllers.OBS = obs
+	d.StreamControllers.OBS = obs
 	return nil
 }
 
-func (p *Panel) initTwitchBackend(ctx context.Context) error {
+func (d *StreamD) initTwitchBackend(ctx context.Context) error {
 	twitch, err := newTwitch(
 		ctx,
-		p.StreamD.(*streamd.StreamD).Config.Backends[twitch.ID],
-		p.inputTwitchUserInfo,
+		d.Config.Backends[twitch.ID],
+		d.UI.InputTwitchUserInfo,
 		func(cfg *streamcontrol.AbstractPlatformConfig) error {
-			return p.savePlatformConfig(ctx, twitch.ID, cfg)
+			return d.setPlatformConfig(ctx, twitch.ID, cfg)
 		},
-		p.oauthHandlerTwitch)
+		d.UI.OAuthHandlerTwitch)
 	if err != nil {
 		return err
 	}
-	p.StreamD.(*streamd.StreamD).StreamControllers.Twitch = twitch
+	d.StreamControllers.Twitch = twitch
 	return nil
 }
 
-func (p *Panel) initYouTubeBackend(ctx context.Context) error {
+func (d *StreamD) initYouTubeBackend(ctx context.Context) error {
 	youTube, err := newYouTube(
 		ctx,
-		p.StreamD.(*streamd.StreamD).Config.Backends[youtube.ID],
-		p.inputYouTubeUserInfo,
+		d.Config.Backends[youtube.ID],
+		d.UI.InputYouTubeUserInfo,
 		func(cfg *streamcontrol.AbstractPlatformConfig) error {
-			return p.savePlatformConfig(ctx, youtube.ID, cfg)
+			return d.setPlatformConfig(ctx, youtube.ID, cfg)
 		},
-		p.oauthHandlerYouTube,
+		d.UI.OAuthHandlerYouTube,
 	)
 	if err != nil {
 		return err
 	}
-	p.StreamD.(*streamd.StreamD).StreamControllers.YouTube = youTube
+	d.StreamControllers.YouTube = youTube
 	return nil
 }

@@ -70,6 +70,28 @@ func New(configPath string, ui ui.UI, b *belt.Belt) (*StreamD, error) {
 	return d, nil
 }
 
+func (d *StreamD) Run(ctx context.Context) error {
+	d.UI.SetStatus("Initializing remote GIT storage...")
+	err := d.FetchConfig(ctx)
+	if err != nil {
+		d.UI.DisplayError(fmt.Errorf("unable to initialize the GIT storage: %w", err))
+	}
+
+	d.UI.SetStatus("Initializing streaming backends...")
+	if err := d.EXPERIMENTAL_ReinitStreamControllers(ctx); err != nil {
+		return fmt.Errorf("unable to initialize stream controllers: %w", err)
+	}
+
+	d.UI.SetStatus("Pre-downloading user data from streaming backends...")
+
+	if err := d.InitCache(ctx); err != nil {
+		d.UI.DisplayError(fmt.Errorf("unable to initialize cache: %w", err))
+	}
+
+	d.UI.SetStatus("Initializing UI...")
+	return nil
+}
+
 func (d *StreamD) readCache(ctx context.Context) error {
 	logger.Tracef(ctx, "readCache")
 	defer logger.Tracef(ctx, "/readCache")
@@ -170,13 +192,13 @@ func (d *StreamD) InitCache(ctx context.Context) error {
 	return nil
 }
 
-func (d *StreamD) SetPlatformConfig(
+func (d *StreamD) setPlatformConfig(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
 	platCfg *streamcontrol.AbstractPlatformConfig,
 ) error {
-	logger.Debugf(ctx, "SetPlatformConfig('%s', '%#+v')", platID, platCfg)
-	defer logger.Debugf(ctx, "endof SetPlatformConfig('%s', '%#+v')", platID, platCfg)
+	logger.Debugf(ctx, "setPlatformConfig('%s', '%#+v')", platID, platCfg)
+	defer logger.Debugf(ctx, "endof setPlatformConfig('%s', '%#+v')", platID, platCfg)
 	d.ConfigLock.Lock()
 	defer d.ConfigLock.Unlock()
 	d.Config.Backends[platID] = platCfg
@@ -329,7 +351,7 @@ func (d *StreamD) IsBackendEnabled(ctx context.Context, id streamcontrol.Platfor
 	}
 }
 
-func (d *StreamD) IsGITInitialized(ctx context.Context) (bool, error) {
+func (d *StreamD) OBSOLETE_IsGITInitialized(ctx context.Context) (bool, error) {
 	return d.GitStorage != nil, nil
 }
 
@@ -389,7 +411,10 @@ func (d *StreamD) EndStream(ctx context.Context, platID streamcontrol.PlatformNa
 	}
 }
 
-func (d *StreamD) GetBackendData(ctx context.Context, platID streamcontrol.PlatformName) (any, error) {
+func (d *StreamD) GetBackendData(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+) (any, error) {
 	switch platID {
 	case obs.ID:
 		return api.BackendDataOBS{}, nil

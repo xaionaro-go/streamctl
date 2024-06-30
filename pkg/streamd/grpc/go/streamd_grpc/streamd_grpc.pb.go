@@ -31,6 +31,7 @@ type StreamDClient interface {
 	EndStream(ctx context.Context, in *EndStreamRequest, opts ...grpc.CallOption) (*EndStreamReply, error)
 	GetBackendInfo(ctx context.Context, in *GetBackendInfoRequest, opts ...grpc.CallOption) (*GetBackendInfoReply, error)
 	Restart(ctx context.Context, in *RestartRequest, opts ...grpc.CallOption) (*RestartReply, error)
+	EXPERIMENTAL_ReinitStreamControllers(ctx context.Context, in *EXPERIMENTAL_ReinitStreamControllersRequest, opts ...grpc.CallOption) (*EXPERIMENTAL_ReinitStreamControllersReply, error)
 	OBSOLETE_FetchConfig(ctx context.Context, in *OBSOLETE_FetchConfigRequest, opts ...grpc.CallOption) (*OBSOLETE_FetchConfigReply, error)
 	OBSOLETE_GitInfo(ctx context.Context, in *OBSOLETE_GetGitInfoRequest, opts ...grpc.CallOption) (*OBSOLETE_GetGitInfoReply, error)
 	OBSOLETE_GitRelogin(ctx context.Context, in *OBSOLETE_GitReloginRequest, opts ...grpc.CallOption) (*OBSOLETE_GitReloginReply, error)
@@ -125,6 +126,15 @@ func (c *streamDClient) Restart(ctx context.Context, in *RestartRequest, opts ..
 	return out, nil
 }
 
+func (c *streamDClient) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context, in *EXPERIMENTAL_ReinitStreamControllersRequest, opts ...grpc.CallOption) (*EXPERIMENTAL_ReinitStreamControllersReply, error) {
+	out := new(EXPERIMENTAL_ReinitStreamControllersReply)
+	err := c.cc.Invoke(ctx, "/StreamD/EXPERIMENTAL_ReinitStreamControllers", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *streamDClient) OBSOLETE_FetchConfig(ctx context.Context, in *OBSOLETE_FetchConfigRequest, opts ...grpc.CallOption) (*OBSOLETE_FetchConfigReply, error) {
 	out := new(OBSOLETE_FetchConfigReply)
 	err := c.cc.Invoke(ctx, "/StreamD/OBSOLETE_FetchConfig", in, out, opts...)
@@ -165,6 +175,7 @@ type StreamDServer interface {
 	EndStream(context.Context, *EndStreamRequest) (*EndStreamReply, error)
 	GetBackendInfo(context.Context, *GetBackendInfoRequest) (*GetBackendInfoReply, error)
 	Restart(context.Context, *RestartRequest) (*RestartReply, error)
+	EXPERIMENTAL_ReinitStreamControllers(context.Context, *EXPERIMENTAL_ReinitStreamControllersRequest) (*EXPERIMENTAL_ReinitStreamControllersReply, error)
 	OBSOLETE_FetchConfig(context.Context, *OBSOLETE_FetchConfigRequest) (*OBSOLETE_FetchConfigReply, error)
 	OBSOLETE_GitInfo(context.Context, *OBSOLETE_GetGitInfoRequest) (*OBSOLETE_GetGitInfoReply, error)
 	OBSOLETE_GitRelogin(context.Context, *OBSOLETE_GitReloginRequest) (*OBSOLETE_GitReloginReply, error)
@@ -201,6 +212,9 @@ func (UnimplementedStreamDServer) GetBackendInfo(context.Context, *GetBackendInf
 }
 func (UnimplementedStreamDServer) Restart(context.Context, *RestartRequest) (*RestartReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Restart not implemented")
+}
+func (UnimplementedStreamDServer) EXPERIMENTAL_ReinitStreamControllers(context.Context, *EXPERIMENTAL_ReinitStreamControllersRequest) (*EXPERIMENTAL_ReinitStreamControllersReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method EXPERIMENTAL_ReinitStreamControllers not implemented")
 }
 func (UnimplementedStreamDServer) OBSOLETE_FetchConfig(context.Context, *OBSOLETE_FetchConfigRequest) (*OBSOLETE_FetchConfigReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method OBSOLETE_FetchConfig not implemented")
@@ -386,6 +400,24 @@ func _StreamD_Restart_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
+func _StreamD_EXPERIMENTAL_ReinitStreamControllers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EXPERIMENTAL_ReinitStreamControllersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).EXPERIMENTAL_ReinitStreamControllers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/StreamD/EXPERIMENTAL_ReinitStreamControllers",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).EXPERIMENTAL_ReinitStreamControllers(ctx, req.(*EXPERIMENTAL_ReinitStreamControllersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _StreamD_OBSOLETE_FetchConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(OBSOLETE_FetchConfigRequest)
 	if err := dec(in); err != nil {
@@ -482,6 +514,10 @@ var StreamD_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Restart",
 			Handler:    _StreamD_Restart_Handler,
+		},
+		{
+			MethodName: "EXPERIMENTAL_ReinitStreamControllers",
+			Handler:    _StreamD_EXPERIMENTAL_ReinitStreamControllers_Handler,
 		},
 		{
 			MethodName: "OBSOLETE_FetchConfig",

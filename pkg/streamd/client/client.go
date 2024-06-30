@@ -7,6 +7,9 @@ import (
 	"net/url"
 
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	obs "github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs/types"
+	twitch "github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/types"
+	youtube "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
@@ -33,6 +36,10 @@ func (c *Client) grpcClient() (streamd_grpc.StreamDClient, *grpc.ClientConn, err
 	return client, conn, nil
 }
 
+func (c *Client) Run(ctx context.Context) error {
+	return nil
+}
+
 func (c *Client) FetchConfig(ctx context.Context) error {
 	client, conn, err := c.grpcClient()
 	if err != nil {
@@ -53,14 +60,6 @@ func (c *Client) InitCache(ctx context.Context) error {
 
 	_, err = client.InitCache(ctx, &streamd_grpc.InitCacheRequest{})
 	return err
-}
-
-func (c *Client) SetPlatformConfig(
-	ctx context.Context,
-	platID streamcontrol.PlatformName,
-	platCfg *streamcontrol.AbstractPlatformConfig,
-) error {
-	panic("not implemented")
 }
 
 func (c *Client) SaveConfig(ctx context.Context) error {
@@ -96,12 +95,13 @@ func (c *Client) GetConfig(ctx context.Context) (*config.Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to request the config: %w", err)
 	}
-	var config config.Config
-	err = json.Unmarshal([]byte(reply.Config), &config)
+
+	var result config.Config
+	err = config.ReadConfig(ctx, []byte(reply.Config), &result)
 	if err != nil {
 		return nil, fmt.Errorf("unable to unserialize the received config: %w", err)
 	}
-	return &config, nil
+	return &result, nil
 }
 
 func (c *Client) SetConfig(ctx context.Context, cfg *config.Config) error {
@@ -140,7 +140,7 @@ func (c *Client) IsBackendEnabled(ctx context.Context, id streamcontrol.Platform
 	return reply.IsInitialized, nil
 }
 
-func (c *Client) IsGITInitialized(ctx context.Context) (bool, error) {
+func (c *Client) OBSOLETE_IsGITInitialized(ctx context.Context) (bool, error) {
 	client, conn, err := c.grpcClient()
 	if err != nil {
 		return false, err
@@ -199,7 +199,7 @@ func (c *Client) EndStream(ctx context.Context, platID streamcontrol.PlatformNam
 	return nil
 }
 
-func (c *Client) GitRelogin(ctx context.Context) error {
+func (c *Client) OBSOLETE_GitRelogin(ctx context.Context) error {
 	client, conn, err := c.grpcClient()
 	if err != nil {
 		return err
@@ -215,7 +215,36 @@ func (c *Client) GitRelogin(ctx context.Context) error {
 }
 
 func (c *Client) GetBackendData(ctx context.Context, platID streamcontrol.PlatformName) (any, error) {
-	panic("not implemented")
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	reply, err := client.GetBackendInfo(ctx, &streamd_grpc.GetBackendInfoRequest{
+		PlatID: string(platID),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("unable to get backend info: %w", err)
+	}
+
+	var data any
+	switch platID {
+	case obs.ID:
+		data = &api.BackendDataOBS{}
+	case twitch.ID:
+		data = &api.BackendDataTwitch{}
+	case youtube.ID:
+		data = &api.BackendDataYouTube{}
+	default:
+		return nil, fmt.Errorf("unknown platform: '%s'", platID)
+	}
+
+	err = json.Unmarshal([]byte(reply.GetData()), data)
+	if err != nil {
+		return nil, fmt.Errorf("unable to deserialize data: %w", err)
+	}
+	return data, nil
 }
 
 func (c *Client) Restart(ctx context.Context) error {
@@ -231,4 +260,20 @@ func (c *Client) Restart(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (c *Client) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context) error {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = client.EXPERIMENTAL_ReinitStreamControllers(ctx, &streamd_grpc.EXPERIMENTAL_ReinitStreamControllersRequest{})
+	if err != nil {
+		return fmt.Errorf("unable restart the server: %w", err)
+	}
+
+	return nil
+
 }

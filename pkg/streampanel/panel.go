@@ -68,6 +68,8 @@ type Panel struct {
 
 	configPath  string
 	configCache *config.Config
+
+	setStatusFunc func(string)
 }
 
 func New(
@@ -78,6 +80,13 @@ func New(
 		configPath: configPath,
 		config:     Options(opts).Config(),
 	}
+}
+
+func (p *Panel) SetStatus(msg string) {
+	if p.setStatusFunc == nil {
+		return
+	}
+	p.setStatusFunc(msg)
 }
 
 func (p *Panel) Loop(ctx context.Context) error {
@@ -98,27 +107,18 @@ func (p *Panel) Loop(ctx context.Context) error {
 		loadingWindow := p.newLoadingWindow(ctx)
 		resizeWindow(loadingWindow, fyne.NewSize(600, 600))
 
-		loadingWindowText := widget.NewRichTextFromMarkdown("# Initializing remote GIT storage...")
+		loadingWindowText := widget.NewRichTextFromMarkdown("")
 		loadingWindowText.Wrapping = fyne.TextWrapWord
 		loadingWindow.SetContent(loadingWindowText)
-		if os.Getenv("STREAMPANEL_QUICKSTART") != "" {
-			go p.StreamD.FetchConfig(ctx)
-		} else {
-			p.StreamD.FetchConfig(ctx)
+		p.setStatusFunc = func(msg string) {
+			loadingWindowText.ParseMarkdown(fmt.Sprintf("# %s", msg))
 		}
-
-		loadingWindowText.ParseMarkdown("# Initializing streaming backends...")
-		if err := p.initStreamControllers(ctx); err != nil {
-			err = fmt.Errorf("unable to initialize stream controllers: %w", err)
-			p.DisplayError(err)
-			return
+		err := p.StreamD.Run(ctx)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to initialize the streaming controllers: %w", err))
+			os.Exit(1)
 		}
-
-		loadingWindowText.ParseMarkdown("# Pre-downloading user data from streaming backends...")
-
-		p.StreamD.InitCache(ctx)
-
-		loadingWindowText.ParseMarkdown("# Initializing UI...")
+		p.setStatusFunc = nil
 
 		p.initMainWindow(ctx)
 		if err := p.rearrangeProfiles(ctx); err != nil {
@@ -160,16 +160,6 @@ func (p *Panel) initStreamD(ctx context.Context) error {
 	return nil
 }
 
-func (p *Panel) savePlatformConfig(
-	ctx context.Context,
-	platID streamcontrol.PlatformName,
-	platCfg *streamcontrol.AbstractPlatformConfig,
-) error {
-	logger.Debugf(ctx, "savePlatformConfig('%s', '%#+v')", platID, platCfg)
-	defer logger.Debugf(ctx, "endof savePlatformConfig('%s', '%#+v')", platID, platCfg)
-	return p.StreamD.SetPlatformConfig(ctx, platID, platCfg)
-}
-
 func removeNonDigits(input string) string {
 	var result []rune
 	for _, r := range input {
@@ -180,7 +170,7 @@ func removeNonDigits(input string) string {
 	return string(result)
 }
 
-func (p *Panel) inputOBSConnectInfo(
+func (p *Panel) InputOBSConnectInfo(
 	ctx context.Context,
 	cfg *streamcontrol.PlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile],
 ) (bool, error) {
@@ -258,15 +248,15 @@ func (p *Panel) inputOBSConnectInfo(
 	return true, nil
 }
 
-func (p *Panel) oauthHandlerTwitch(ctx context.Context, arg oauthhandler.OAuthHandlerArgument) error {
-	logger.Infof(ctx, "oauthHandlerTwitch: %#+v", arg)
-	defer logger.Infof(ctx, "/oauthHandlerTwitch")
+func (p *Panel) OAuthHandlerTwitch(ctx context.Context, arg oauthhandler.OAuthHandlerArgument) error {
+	logger.Infof(ctx, "OAuthHandlerTwitch: %#+v", arg)
+	defer logger.Infof(ctx, "/OAuthHandlerTwitch")
 	return p.oauthHandler(ctx, arg)
 }
 
-func (p *Panel) oauthHandlerYouTube(ctx context.Context, arg oauthhandler.OAuthHandlerArgument) error {
-	logger.Infof(ctx, "oauthHandlerYouTube: %#+v", arg)
-	defer logger.Infof(ctx, "/oauthHandlerYouTube")
+func (p *Panel) OAuthHandlerYouTube(ctx context.Context, arg oauthhandler.OAuthHandlerArgument) error {
+	logger.Infof(ctx, "OAuthHandlerYouTube: %#+v", arg)
+	defer logger.Infof(ctx, "/OAuthHandlerYouTube")
 	return p.oauthHandler(ctx, arg)
 }
 
@@ -340,7 +330,7 @@ func (p *Panel) openBrowser(authURL string) error {
 
 var twitchAppsCreateLink, _ = url.Parse("https://dev.twitch.tv/console/apps/create")
 
-func (p *Panel) inputTwitchUserInfo(
+func (p *Panel) InputTwitchUserInfo(
 	ctx context.Context,
 	cfg *streamcontrol.PlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile],
 ) (bool, error) {
@@ -401,7 +391,7 @@ func (p *Panel) inputTwitchUserInfo(
 
 var youtubeCredentialsCreateLink, _ = url.Parse("https://console.cloud.google.com/apis/credentials/oauthclient")
 
-func (p *Panel) inputYouTubeUserInfo(
+func (p *Panel) InputYouTubeUserInfo(
 	ctx context.Context,
 	cfg *streamcontrol.PlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile],
 ) (bool, error) {
@@ -454,36 +444,6 @@ func (p *Panel) inputYouTubeUserInfo(
 	cfg.Config.ClientSecret = clientSecretField.Text
 
 	return true, nil
-}
-
-func (p *Panel) initStreamControllers(ctx context.Context) error {
-	cfg, err := p.StreamD.GetConfig(ctx)
-	if err != nil {
-		return fmt.Errorf("unable to get config: %w", err)
-	}
-
-	platNames := make([]streamcontrol.PlatformName, 0, len(cfg.Backends))
-	for platName := range cfg.Backends {
-		platNames = append(platNames, platName)
-	}
-	sort.Slice(platNames, func(i, j int) bool {
-		return platNames[i] < platNames[j]
-	})
-	for _, platName := range platNames {
-		var err error
-		switch strings.ToLower(string(platName)) {
-		case strings.ToLower(string(obs.ID)):
-			err = p.initOBSBackend(ctx)
-		case strings.ToLower(string(twitch.ID)):
-			err = p.initTwitchBackend(ctx)
-		case strings.ToLower(string(youtube.ID)):
-			err = p.initYouTubeBackend(ctx)
-		}
-		if err != nil && err != ErrSkipBackend {
-			return fmt.Errorf("unable to initialize '%s': %w", platName, err)
-		}
-	}
-	return nil
 }
 
 func (p *Panel) profileCreateOrUpdate(ctx context.Context, profile Profile) error {
@@ -756,7 +716,7 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 		backendEnabled[backendID] = isEnabled
 	}
 
-	gitIsEnabled, err := p.StreamD.IsGITInitialized(ctx)
+	gitIsEnabled, err := p.StreamD.OBSOLETE_IsGITInitialized(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to get info if GIT is initialized: %w", err)
 	}
@@ -824,15 +784,17 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 					if cfg.Backends[obs.ID] == nil {
 						obs.InitConfig(cfg.Backends)
 					}
-					oldEnable := cfg.Backends[obs.ID].Enable
-					oldCfg := cfg.Backends[obs.ID].Config
+
 					cfg.Backends[obs.ID].Enable = nil
 					cfg.Backends[obs.ID].Config = obs.PlatformSpecificConfig{}
-					err := p.initOBSBackend(ctx)
-					if err != nil {
+
+					if err := p.StreamD.SetConfig(ctx, cfg); err != nil {
 						p.DisplayError(err)
-						cfg.Backends[obs.ID].Enable = oldEnable
-						cfg.Backends[obs.ID].Config = oldCfg
+						return
+					}
+
+					if err := p.StreamD.EXPERIMENTAL_ReinitStreamControllers(ctx); err != nil {
+						p.DisplayError(err)
 						return
 					}
 				}),
@@ -843,15 +805,17 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 					if cfg.Backends[twitch.ID] == nil {
 						twitch.InitConfig(cfg.Backends)
 					}
-					oldEnable := cfg.Backends[twitch.ID].Enable
-					oldCfg := cfg.Backends[twitch.ID].Config
+
 					cfg.Backends[twitch.ID].Enable = nil
 					cfg.Backends[twitch.ID].Config = twitch.PlatformSpecificConfig{}
-					err := p.initTwitchBackend(ctx)
-					if err != nil {
+
+					if err := p.StreamD.SetConfig(ctx, cfg); err != nil {
 						p.DisplayError(err)
-						cfg.Backends[twitch.ID].Enable = oldEnable
-						cfg.Backends[twitch.ID].Config = oldCfg
+						return
+					}
+
+					if err := p.StreamD.EXPERIMENTAL_ReinitStreamControllers(ctx); err != nil {
+						p.DisplayError(err)
 						return
 					}
 				}),
@@ -862,14 +826,16 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 					if cfg.Backends[youtube.ID] == nil {
 						youtube.InitConfig(cfg.Backends)
 					}
-					oldEnable := cfg.Backends[youtube.ID].Enable
-					oldCfg := cfg.Backends[youtube.ID].Config
+
+					cfg.Backends[youtube.ID].Enable = nil
 					cfg.Backends[youtube.ID].Config = youtube.PlatformSpecificConfig{}
-					err := p.initYouTubeBackend(ctx)
-					if err != nil {
+					if err := p.StreamD.SetConfig(ctx, cfg); err != nil {
 						p.DisplayError(err)
-						cfg.Backends[youtube.ID].Enable = oldEnable
-						cfg.Backends[youtube.ID].Config = oldCfg
+						return
+					}
+
+					if err := p.StreamD.EXPERIMENTAL_ReinitStreamControllers(ctx); err != nil {
+						p.DisplayError(err)
 						return
 					}
 				}),
@@ -890,7 +856,7 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 			widget.NewRichTextFromMarkdown(`# Syncing (via git)`),
 			container.NewHBox(
 				widget.NewButtonWithIcon("(Re-)login in GIT", theme.LoginIcon(), func() {
-					err := p.StreamD.GitRelogin(ctx)
+					err := p.StreamD.OBSOLETE_GitRelogin(ctx)
 					if err != nil {
 						p.DisplayError(err)
 					}
@@ -907,10 +873,6 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 	))
 
 	w.Show()
-
-	if err := p.StreamD.SetConfig(ctx, cfg); err != nil {
-		return fmt.Errorf("unable to set the config: %w", err)
-	}
 
 	return nil
 }
