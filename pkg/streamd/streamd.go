@@ -433,18 +433,93 @@ func (d *StreamD) Restart(ctx context.Context) error {
 	return nil
 }
 
+func (d *StreamD) streamController(
+	platID streamcontrol.PlatformName,
+) (streamcontrol.AbstractStreamController, error) {
+	switch platID {
+	case obs.ID:
+		return streamcontrol.ToAbstract(d.StreamControllers.OBS), nil
+	case twitch.ID:
+		return streamcontrol.ToAbstract(d.StreamControllers.Twitch), nil
+	case youtube.ID:
+		return streamcontrol.ToAbstract(d.StreamControllers.YouTube), nil
+	default:
+		return nil, fmt.Errorf("unexpected platform ID: '%s'", platID)
+	}
+}
 func (d *StreamD) GetStreamStatus(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
 ) (*streamcontrol.StreamStatus, error) {
-	switch platID {
-	case obs.ID:
-		return d.StreamControllers.OBS.GetStreamStatus(ctx)
-	case twitch.ID:
-		return d.StreamControllers.Twitch.GetStreamStatus(ctx)
-	case youtube.ID:
-		return d.StreamControllers.YouTube.GetStreamStatus(ctx)
-	default:
-		return nil, fmt.Errorf("unexpected platform ID: '%s'", platID)
+	c, err := d.streamController(platID)
+	if err != nil {
+		return nil, err
 	}
+
+	return c.GetStreamStatus(ctx)
+}
+
+func (d *StreamD) SetTitle(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	title string,
+) error {
+	c, err := d.streamController(platID)
+	if err != nil {
+		return err
+	}
+
+	return c.SetTitle(ctx, title)
+}
+
+func (d *StreamD) SetDescription(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	description string,
+) error {
+	c, err := d.streamController(platID)
+	if err != nil {
+		return err
+	}
+
+	return c.SetDescription(ctx, description)
+}
+
+func (d *StreamD) ApplyProfile(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	profile streamcontrol.AbstractStreamProfile,
+	customArgs ...any,
+) error {
+	c, err := d.streamController(platID)
+	if err != nil {
+		return err
+	}
+
+	return c.ApplyProfile(ctx, profile, customArgs...)
+}
+
+func (d *StreamD) UpdateStream(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	title string, description string,
+	profile streamcontrol.AbstractStreamProfile,
+	customArgs ...any,
+) error {
+	err := d.SetTitle(ctx, platID, title)
+	if err != nil {
+		return fmt.Errorf("unable to set the title: %w", err)
+	}
+
+	err = d.SetDescription(ctx, platID, description)
+	if err != nil {
+		return fmt.Errorf("unable to set the description: %w", err)
+	}
+
+	err = d.ApplyProfile(ctx, platID, profile, customArgs...)
+	if err != nil {
+		return fmt.Errorf("unable to apply the profile: %w", err)
+	}
+
+	return nil
 }

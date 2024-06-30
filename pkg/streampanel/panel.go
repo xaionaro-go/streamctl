@@ -20,6 +20,7 @@ import (
 	"fyne.io/fyne/v2"
 	fyneapp "fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/facebookincubator/go-belt"
@@ -48,7 +49,7 @@ type Panel struct {
 
 	app                   fyne.App
 	config                configT
-	startStopMutex        sync.Mutex
+	streamMutex           sync.Mutex
 	updateTimerHandler    *updateTimerHandler
 	profilesOrder         []streamcontrol.ProfileName
 	profilesOrderFiltered []streamcontrol.ProfileName
@@ -56,6 +57,7 @@ type Panel struct {
 	defaultContext        context.Context
 
 	mainWindow             fyne.Window
+	setupStreamButton      *widget.Button
 	startStopButton        *widget.Button
 	profilesListWidget     *widget.List
 	streamTitleField       *widget.Entry
@@ -63,7 +65,6 @@ type Panel struct {
 
 	filterValue string
 
-	obsCheck     *widget.Check
 	youtubeCheck *widget.Check
 	twitchCheck  *widget.Check
 
@@ -700,30 +701,21 @@ func ptrCopy[T any](v T) *T {
 func (p *Panel) onProfilesListSelect(
 	id widget.ListItemID,
 ) {
-	p.startStopButton.Enable()
+	p.setupStreamButton.Enable()
 
-	shouldRestart := p.updateTimerHandler != nil
-	if shouldRestart {
-		p.startStopButton.OnTapped()
-	}
 	profileName := p.profilesOrder[id]
 	profile := getProfile(p.configCache, profileName)
 	p.selectedProfileName = ptrCopy(profileName)
 	p.streamTitleField.SetText(profile.DefaultStreamTitle)
 	p.streamDescriptionField.SetText(profile.DefaultStreamDescription)
-	if shouldRestart {
-		p.startStopButton.OnTapped()
-	}
 }
 
 func (p *Panel) onProfilesListUnselect(
 	_ widget.ListItemID,
 ) {
-	if p.updateTimerHandler != nil {
-		p.startStopButton.OnTapped()
-		p.streamTitleField.SetText("")
-	}
-	p.startStopButton.Disable()
+	p.setupStreamButton.Disable()
+	p.streamTitleField.SetText("")
+	p.streamDescriptionField.SetText("")
 }
 
 func (p *Panel) setFilter(ctx context.Context, filter string) {
@@ -1014,6 +1006,11 @@ func (p *Panel) initMainWindow(ctx context.Context) {
 		profileFilter,
 	)
 
+	p.setupStreamButton = widget.NewButtonWithIcon("Setup stream", theme.SettingsIcon(), func() {
+		p.onSetupStreamButton(ctx)
+	})
+	p.setupStreamButton.Disable()
+
 	p.startStopButton = widget.NewButtonWithIcon("Start stream", theme.MediaRecordIcon(), func() {
 		p.onStartStopButton(ctx)
 	})
@@ -1055,12 +1052,6 @@ func (p *Panel) initMainWindow(ctx context.Context) {
 		p.startStopButton.OnTapped()
 	}
 
-	p.obsCheck = widget.NewCheck("OBS", nil)
-	p.obsCheck.SetChecked(true)
-	if !backendEnabled[obs.ID] {
-		p.obsCheck.SetChecked(false)
-		p.obsCheck.Disable()
-	}
 	p.twitchCheck = widget.NewCheck("Twitch", nil)
 	p.twitchCheck.SetChecked(true)
 	if !backendEnabled[twitch.ID] {
@@ -1080,7 +1071,7 @@ func (p *Panel) initMainWindow(ctx context.Context) {
 		container.NewBorder(
 			nil,
 			nil,
-			container.NewHBox(p.obsCheck, p.twitchCheck, p.youtubeCheck),
+			container.NewHBox(p.twitchCheck, p.youtubeCheck, p.setupStreamButton),
 			nil,
 			p.startStopButton,
 		),
@@ -1136,15 +1127,22 @@ func (p *Panel) execCommand(ctx context.Context, cmdString string) {
 	}()
 }
 
-func (p *Panel) startStream(ctx context.Context) {
-	p.startStopMutex.Lock()
-	defer p.startStopMutex.Unlock()
-
-	if p.startStopButton.Disabled() {
-		return
+func (p *Panel) streamIsRunning(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+) bool {
+	streamStatus, err := p.StreamD.GetStreamStatus(ctx, platID)
+	if err != nil {
+		p.DisplayError(err)
+		return false
 	}
-	p.startStopButton.Disable()
-	defer p.startStopButton.Enable()
+
+	return streamStatus.IsActive
+}
+
+func (p *Panel) setupStream(ctx context.Context) {
+	p.streamMutex.Lock()
+	defer p.streamMutex.Unlock()
 
 	if p.streamTitleField.Text == "" {
 		p.DisplayError(fmt.Errorf("title is not set"))
@@ -1153,7 +1151,6 @@ func (p *Panel) startStream(ctx context.Context) {
 
 	backendEnabled := map[streamcontrol.PlatformName]bool{}
 	for _, backendID := range []streamcontrol.PlatformName{
-		obs.ID,
 		twitch.ID,
 		youtube.ID,
 	} {
@@ -1165,17 +1162,6 @@ func (p *Panel) startStream(ctx context.Context) {
 		backendEnabled[backendID] = isEnabled
 	}
 
-	p.obsCheck.Disable()
-	p.twitchCheck.Disable()
-	p.youtubeCheck.Disable()
-
-	p.startStopButton.SetText("Starting stream...")
-	p.startStopButton.Icon = theme.MediaStopIcon()
-	p.startStopButton.Importance = widget.DangerImportance
-	if p.updateTimerHandler != nil {
-		p.updateTimerHandler.Stop()
-	}
-	p.updateTimerHandler = newUpdateTimerHandler(p.startStopButton)
 	profile := p.getSelectedProfile()
 
 	if p.twitchCheck.Checked && backendEnabled[twitch.ID] {
@@ -1192,29 +1178,75 @@ func (p *Panel) startStream(ctx context.Context) {
 	}
 
 	if p.youtubeCheck.Checked && backendEnabled[youtube.ID] {
-		err := p.StreamD.StartStream(
-			ctx,
-			youtube.ID,
-			p.streamTitleField.Text,
-			p.streamDescriptionField.Text,
-			profile.PerPlatform[youtube.ID],
-		)
-		if err != nil {
-			p.DisplayError(fmt.Errorf("unable to start the stream on YouTube: %w", err))
+		if p.streamIsRunning(ctx, youtube.ID) {
+			logger.Infof(ctx, "updating the stream info at YouTube")
+			err := p.StreamD.UpdateStream(
+				ctx,
+				youtube.ID,
+				p.streamTitleField.Text,
+				p.streamDescriptionField.Text,
+				profile.PerPlatform[youtube.ID],
+			)
+			if err != nil {
+				p.DisplayError(fmt.Errorf("unable to start the stream on YouTube: %w", err))
+			}
+		} else {
+			logger.Infof(ctx, "creating the stream at YouTube")
+			err := p.StreamD.StartStream(
+				ctx,
+				youtube.ID,
+				p.streamTitleField.Text,
+				p.streamDescriptionField.Text,
+				profile.PerPlatform[youtube.ID],
+			)
+			if err != nil {
+				p.DisplayError(fmt.Errorf("unable to start the stream on YouTube: %w", err))
+			}
 		}
 	}
 
-	if p.obsCheck.Checked && backendEnabled[obs.ID] {
-		err := p.StreamD.StartStream(
-			ctx,
-			obs.ID,
-			p.streamTitleField.Text,
-			p.streamDescriptionField.Text,
-			profile.PerPlatform[obs.ID],
-		)
-		if err != nil {
-			p.DisplayError(fmt.Errorf("unable to start the stream on OBS: %w", err))
-		}
+	p.startStopButton.Enable()
+}
+
+func (p *Panel) startStream(ctx context.Context) {
+	p.streamMutex.Lock()
+	defer p.streamMutex.Unlock()
+
+	if p.startStopButton.Disabled() {
+		return
+	}
+	p.startStopButton.Disable()
+	defer p.startStopButton.Enable()
+
+	p.startStopButton.SetText("Starting stream...")
+	p.startStopButton.Icon = theme.MediaStopIcon()
+	p.startStopButton.Importance = widget.DangerImportance
+	if p.updateTimerHandler != nil {
+		p.updateTimerHandler.Stop()
+	}
+	p.updateTimerHandler = newUpdateTimerHandler(p.startStopButton)
+
+	isEnabled, err := p.StreamD.IsBackendEnabled(ctx, obs.ID)
+	if err != nil {
+		p.DisplayError(fmt.Errorf("unable to get info if backend '%s' is enabled: %w", obs.ID, err))
+		return
+	}
+
+	if !isEnabled {
+		p.DisplayError(fmt.Errorf("connection to OBS is not configured: %w", err))
+		return
+	}
+
+	profile := p.getSelectedProfile()
+	err = p.StreamD.StartStream(
+		ctx,
+		obs.ID,
+		p.streamTitleField.Text,
+		p.streamDescriptionField.Text,
+		profile.PerPlatform[obs.ID],
+	)
+	if err != nil {
+		p.DisplayError(fmt.Errorf("unable to start the stream on YouTube: %w", err))
 	}
 
 	p.execCommand(ctx, p.configCache.Commands.OnStartStream)
@@ -1223,13 +1255,12 @@ func (p *Panel) startStream(ctx context.Context) {
 }
 
 func (p *Panel) stopStream(ctx context.Context) {
-	p.startStopMutex.Lock()
-	defer p.startStopMutex.Unlock()
+	p.streamMutex.Lock()
+	defer p.streamMutex.Unlock()
 
 	backendEnabled := map[streamcontrol.PlatformName]bool{}
 	for _, backendID := range []streamcontrol.PlatformName{
 		obs.ID,
-		twitch.ID,
 		youtube.ID,
 	} {
 		isEnabled, err := p.StreamD.IsBackendEnabled(ctx, backendID)
@@ -1248,19 +1279,11 @@ func (p *Panel) stopStream(ctx context.Context) {
 	}
 	p.updateTimerHandler = nil
 
-	if p.obsCheck.Checked && backendEnabled[obs.ID] {
+	if backendEnabled[obs.ID] {
 		p.startStopButton.SetText("Stopping OBS...")
 		err := p.StreamD.EndStream(ctx, obs.ID)
 		if err != nil {
 			p.DisplayError(fmt.Errorf("unable to stop the stream on OBS: %w", err))
-		}
-	}
-
-	if p.twitchCheck.Checked && backendEnabled[twitch.ID] {
-		p.startStopButton.SetText("Stopping Twitch...")
-		err := p.StreamD.EndStream(ctx, twitch.ID)
-		if err != nil {
-			p.DisplayError(fmt.Errorf("unable to stop the stream on Twitch: %w", err))
 		}
 	}
 
@@ -1272,9 +1295,6 @@ func (p *Panel) stopStream(ctx context.Context) {
 		}
 	}
 
-	if backendEnabled[obs.ID] {
-		p.obsCheck.Enable()
-	}
 	if backendEnabled[twitch.ID] {
 		p.twitchCheck.Enable()
 	}
@@ -1288,20 +1308,32 @@ func (p *Panel) stopStream(ctx context.Context) {
 	p.startStopButton.Icon = theme.MediaRecordIcon()
 	p.startStopButton.Importance = widget.SuccessImportance
 
-	p.startStopButton.Enable()
-
 	p.startStopButton.Refresh()
 }
 
+func (p *Panel) onSetupStreamButton(ctx context.Context) {
+	p.setupStream(ctx)
+}
+
 func (p *Panel) onStartStopButton(ctx context.Context) {
-	p.startStopMutex.Lock()
+	p.streamMutex.Lock()
 	shouldStop := p.updateTimerHandler != nil
-	p.startStopMutex.Unlock()
+	p.streamMutex.Unlock()
 
 	if shouldStop {
 		p.stopStream(ctx)
 	} else {
-		p.startStream(ctx)
+		w := dialog.NewConfirm(
+			"Stream confirmation",
+			"Are you ready to start the stream?",
+			func(b bool) {
+				if b {
+					p.startStream(ctx)
+				}
+			},
+			p.mainWindow,
+		)
+		w.Show()
 	}
 }
 

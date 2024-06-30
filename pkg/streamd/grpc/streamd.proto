@@ -12,6 +12,10 @@ service StreamD {
     rpc GetStreamStatus(GetStreamStatusRequest) returns (GetStreamStatusReply) {}
     rpc GetBackendInfo(GetBackendInfoRequest) returns (GetBackendInfoReply) {}
     rpc Restart(RestartRequest) returns (RestartReply) {}
+    rpc SetTitle(SetTitleRequest) returns (SetTitleReply) {}
+    rpc SetDescription(SetDescriptionRequest) returns (SetDescriptionReply) {}
+    rpc SetApplyProfile(SetApplyProfileRequest) returns (SetApplyProfileReply) {}
+    rpc UpdateStream(UpdateStreamRequest) returns (UpdateStreamReply) {}
 
     rpc EXPERIMENTAL_ReinitStreamControllers(EXPERIMENTAL_ReinitStreamControllersRequest) returns (EXPERIMENTAL_ReinitStreamControllersReply) {}
 
@@ -61,6 +65,30 @@ message GetBackendInfoReply {
 }
 message RestartRequest {}
 message RestartReply {}
+
+message SetTitleRequest {
+    string platID = 1;
+    string title = 2;
+}
+message SetTitleReply {}
+message SetDescriptionRequest  {
+    string platID = 1;
+    string description = 2;
+}
+message SetDescriptionReply {}
+message SetApplyProfileRequest {
+    string platID = 1;
+    string profile = 2;
+}
+message SetApplyProfileReply {}
+message UpdateStreamRequest {
+    string platID = 1;
+    string title = 2;
+    string description = 3;
+    string profile = 4;
+}
+message UpdateStreamReply {}
+
 
 message EXPERIMENTAL_ReinitStreamControllersRequest {}
 message EXPERIMENTAL_ReinitStreamControllersReply {}

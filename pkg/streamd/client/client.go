@@ -311,7 +311,7 @@ func (c *Client) GetStreamStatus(
 	}
 
 	var startedAt *time.Time
-	if streamStatus != nil {
+	if streamStatus != nil && streamStatus.StartedAt != nil {
 		v := *streamStatus.StartedAt
 		startedAt = ptr(time.Unix(v/1000000000, v%1000000000))
 	}
@@ -320,6 +320,103 @@ func (c *Client) GetStreamStatus(
 		IsActive:  streamStatus.GetIsActive(),
 		StartedAt: startedAt,
 	}, nil
+}
+
+func (c *Client) SetTitle(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	title string,
+) error {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = client.SetTitle(ctx, &streamd_grpc.SetTitleRequest{
+		PlatID: string(platID),
+		Title:  title,
+	})
+	return err
+}
+func (c *Client) SetDescription(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	description string,
+) error {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = client.SetDescription(ctx, &streamd_grpc.SetDescriptionRequest{
+		PlatID:      string(platID),
+		Description: description,
+	})
+	return err
+}
+func (c *Client) ApplyProfile(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	profile streamcontrol.AbstractStreamProfile,
+	customArgs ...any,
+) error {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	b, err := yaml.Marshal(profile)
+	if err != nil {
+		return fmt.Errorf("unable to serialize the profile: %w", err)
+	}
+
+	logger.Debugf(ctx, "serialized profile: '%s'", profile)
+
+	_, err = client.SetApplyProfile(ctx, &streamd_grpc.SetApplyProfileRequest{
+		PlatID:  string(platID),
+		Profile: string(b),
+	})
+	if err != nil {
+		return fmt.Errorf("unable to apply the profile to the stream: %w", err)
+	}
+
+	return nil
+}
+
+func (c *Client) UpdateStream(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	title string, description string,
+	profile streamcontrol.AbstractStreamProfile,
+	customArgs ...any,
+) error {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	b, err := yaml.Marshal(profile)
+	if err != nil {
+		return fmt.Errorf("unable to serialize the profile: %w", err)
+	}
+
+	logger.Debugf(ctx, "serialized profile: '%s'", profile)
+
+	_, err = client.UpdateStream(ctx, &streamd_grpc.UpdateStreamRequest{
+		PlatID:      string(platID),
+		Title:       title,
+		Description: description,
+		Profile:     string(b),
+	})
+	if err != nil {
+		return fmt.Errorf("unable to update the stream: %w", err)
+	}
+
+	return nil
 }
 
 func ptr[T any](in T) *T {

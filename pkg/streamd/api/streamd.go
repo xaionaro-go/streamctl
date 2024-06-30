@@ -26,6 +26,16 @@ type StreamD interface {
 		customArgs ...any,
 	) error
 	EndStream(ctx context.Context, platID streamcontrol.PlatformName) error
+	UpdateStream(
+		ctx context.Context,
+		platID streamcontrol.PlatformName,
+		title string, description string,
+		profile streamcontrol.AbstractStreamProfile,
+		customArgs ...any,
+	) error
+	SetTitle(ctx context.Context, platID streamcontrol.PlatformName, title string) error
+	SetDescription(ctx context.Context, platID streamcontrol.PlatformName, description string) error
+	ApplyProfile(ctx context.Context, platID streamcontrol.PlatformName, profile streamcontrol.AbstractStreamProfile, customArgs ...any) error
 	OBSOLETE_GitRelogin(ctx context.Context) error
 	GetBackendData(ctx context.Context, platID streamcontrol.PlatformName) (any, error)
 	Restart(ctx context.Context) error

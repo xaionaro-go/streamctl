@@ -32,6 +32,10 @@ type StreamDClient interface {
 	GetStreamStatus(ctx context.Context, in *GetStreamStatusRequest, opts ...grpc.CallOption) (*GetStreamStatusReply, error)
 	GetBackendInfo(ctx context.Context, in *GetBackendInfoRequest, opts ...grpc.CallOption) (*GetBackendInfoReply, error)
 	Restart(ctx context.Context, in *RestartRequest, opts ...grpc.CallOption) (*RestartReply, error)
+	SetTitle(ctx context.Context, in *SetTitleRequest, opts ...grpc.CallOption) (*SetTitleReply, error)
+	SetDescription(ctx context.Context, in *SetDescriptionRequest, opts ...grpc.CallOption) (*SetDescriptionReply, error)
+	SetApplyProfile(ctx context.Context, in *SetApplyProfileRequest, opts ...grpc.CallOption) (*SetApplyProfileReply, error)
+	UpdateStream(ctx context.Context, in *UpdateStreamRequest, opts ...grpc.CallOption) (*UpdateStreamReply, error)
 	EXPERIMENTAL_ReinitStreamControllers(ctx context.Context, in *EXPERIMENTAL_ReinitStreamControllersRequest, opts ...grpc.CallOption) (*EXPERIMENTAL_ReinitStreamControllersReply, error)
 	OBSOLETE_FetchConfig(ctx context.Context, in *OBSOLETE_FetchConfigRequest, opts ...grpc.CallOption) (*OBSOLETE_FetchConfigReply, error)
 	OBSOLETE_GitInfo(ctx context.Context, in *OBSOLETE_GetGitInfoRequest, opts ...grpc.CallOption) (*OBSOLETE_GetGitInfoReply, error)
@@ -136,6 +140,42 @@ func (c *streamDClient) Restart(ctx context.Context, in *RestartRequest, opts ..
 	return out, nil
 }
 
+func (c *streamDClient) SetTitle(ctx context.Context, in *SetTitleRequest, opts ...grpc.CallOption) (*SetTitleReply, error) {
+	out := new(SetTitleReply)
+	err := c.cc.Invoke(ctx, "/StreamD/SetTitle", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) SetDescription(ctx context.Context, in *SetDescriptionRequest, opts ...grpc.CallOption) (*SetDescriptionReply, error) {
+	out := new(SetDescriptionReply)
+	err := c.cc.Invoke(ctx, "/StreamD/SetDescription", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) SetApplyProfile(ctx context.Context, in *SetApplyProfileRequest, opts ...grpc.CallOption) (*SetApplyProfileReply, error) {
+	out := new(SetApplyProfileReply)
+	err := c.cc.Invoke(ctx, "/StreamD/SetApplyProfile", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) UpdateStream(ctx context.Context, in *UpdateStreamRequest, opts ...grpc.CallOption) (*UpdateStreamReply, error) {
+	out := new(UpdateStreamReply)
+	err := c.cc.Invoke(ctx, "/StreamD/UpdateStream", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *streamDClient) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context, in *EXPERIMENTAL_ReinitStreamControllersRequest, opts ...grpc.CallOption) (*EXPERIMENTAL_ReinitStreamControllersReply, error) {
 	out := new(EXPERIMENTAL_ReinitStreamControllersReply)
 	err := c.cc.Invoke(ctx, "/StreamD/EXPERIMENTAL_ReinitStreamControllers", in, out, opts...)
@@ -186,6 +226,10 @@ type StreamDServer interface {
 	GetStreamStatus(context.Context, *GetStreamStatusRequest) (*GetStreamStatusReply, error)
 	GetBackendInfo(context.Context, *GetBackendInfoRequest) (*GetBackendInfoReply, error)
 	Restart(context.Context, *RestartRequest) (*RestartReply, error)
+	SetTitle(context.Context, *SetTitleRequest) (*SetTitleReply, error)
+	SetDescription(context.Context, *SetDescriptionRequest) (*SetDescriptionReply, error)
+	SetApplyProfile(context.Context, *SetApplyProfileRequest) (*SetApplyProfileReply, error)
+	UpdateStream(context.Context, *UpdateStreamRequest) (*UpdateStreamReply, error)
 	EXPERIMENTAL_ReinitStreamControllers(context.Context, *EXPERIMENTAL_ReinitStreamControllersRequest) (*EXPERIMENTAL_ReinitStreamControllersReply, error)
 	OBSOLETE_FetchConfig(context.Context, *OBSOLETE_FetchConfigRequest) (*OBSOLETE_FetchConfigReply, error)
 	OBSOLETE_GitInfo(context.Context, *OBSOLETE_GetGitInfoRequest) (*OBSOLETE_GetGitInfoReply, error)
@@ -226,6 +270,18 @@ func (UnimplementedStreamDServer) GetBackendInfo(context.Context, *GetBackendInf
 }
 func (UnimplementedStreamDServer) Restart(context.Context, *RestartRequest) (*RestartReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Restart not implemented")
+}
+func (UnimplementedStreamDServer) SetTitle(context.Context, *SetTitleRequest) (*SetTitleReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetTitle not implemented")
+}
+func (UnimplementedStreamDServer) SetDescription(context.Context, *SetDescriptionRequest) (*SetDescriptionReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetDescription not implemented")
+}
+func (UnimplementedStreamDServer) SetApplyProfile(context.Context, *SetApplyProfileRequest) (*SetApplyProfileReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetApplyProfile not implemented")
+}
+func (UnimplementedStreamDServer) UpdateStream(context.Context, *UpdateStreamRequest) (*UpdateStreamReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateStream not implemented")
 }
 func (UnimplementedStreamDServer) EXPERIMENTAL_ReinitStreamControllers(context.Context, *EXPERIMENTAL_ReinitStreamControllersRequest) (*EXPERIMENTAL_ReinitStreamControllersReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method EXPERIMENTAL_ReinitStreamControllers not implemented")
@@ -432,6 +488,78 @@ func _StreamD_Restart_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
+func _StreamD_SetTitle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetTitleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).SetTitle(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/StreamD/SetTitle",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).SetTitle(ctx, req.(*SetTitleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_SetDescription_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetDescriptionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).SetDescription(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/StreamD/SetDescription",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).SetDescription(ctx, req.(*SetDescriptionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_SetApplyProfile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetApplyProfileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).SetApplyProfile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/StreamD/SetApplyProfile",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).SetApplyProfile(ctx, req.(*SetApplyProfileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_UpdateStream_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateStreamRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).UpdateStream(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/StreamD/UpdateStream",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).UpdateStream(ctx, req.(*UpdateStreamRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _StreamD_EXPERIMENTAL_ReinitStreamControllers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(EXPERIMENTAL_ReinitStreamControllersRequest)
 	if err := dec(in); err != nil {
@@ -550,6 +678,22 @@ var StreamD_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Restart",
 			Handler:    _StreamD_Restart_Handler,
+		},
+		{
+			MethodName: "SetTitle",
+			Handler:    _StreamD_SetTitle_Handler,
+		},
+		{
+			MethodName: "SetDescription",
+			Handler:    _StreamD_SetDescription_Handler,
+		},
+		{
+			MethodName: "SetApplyProfile",
+			Handler:    _StreamD_SetApplyProfile_Handler,
+		},
+		{
+			MethodName: "UpdateStream",
+			Handler:    _StreamD_UpdateStream_Handler,
 		},
 		{
 			MethodName: "EXPERIMENTAL_ReinitStreamControllers",
