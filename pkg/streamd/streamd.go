@@ -14,6 +14,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/cache"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/ui"
@@ -44,6 +45,8 @@ type StreamD struct {
 
 	StreamControllers StreamControllers
 }
+
+var _ api.StreamD = (*StreamD)(nil)
 
 func New(configPath string, ui ui.UI, b *belt.Belt) (*StreamD, error) {
 	ctx := belt.CtxWithBelt(context.Background(), b)
@@ -311,4 +314,90 @@ func (d *StreamD) GetConfig(ctx context.Context) (*config.Config, error) {
 func (d *StreamD) SetConfig(ctx context.Context, cfg *config.Config) error {
 	d.Config = *cfg
 	return nil
+}
+
+func (d *StreamD) IsBackendEnabled(ctx context.Context, id streamcontrol.PlatformName) (bool, error) {
+	switch id {
+	case obs.ID:
+		return d.StreamControllers.OBS != nil, nil
+	case twitch.ID:
+		return d.StreamControllers.Twitch != nil, nil
+	case youtube.ID:
+		return d.StreamControllers.YouTube != nil, nil
+	default:
+		return false, fmt.Errorf("unknown backend ID: '%s'", id)
+	}
+}
+
+func (d *StreamD) IsGITInitialized(ctx context.Context) (bool, error) {
+	return d.GitStorage != nil, nil
+}
+
+func (d *StreamD) StartStream(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	title string, description string,
+	profile streamcontrol.AbstractStreamProfile,
+	customArgs ...any,
+) error {
+	switch platID {
+	case obs.ID:
+		profile, err := streamcontrol.GetStreamProfile[obs.StreamProfile](ctx, profile)
+		if err != nil {
+			return fmt.Errorf("unable to convert the profile into OBS profile: %w", err)
+		}
+		err = d.StreamControllers.OBS.StartStream(ctx, title, description, *profile, customArgs...)
+		if err != nil {
+			return fmt.Errorf("unable to start the stream on OBS: %w", err)
+		}
+		return nil
+	case twitch.ID:
+		profile, err := streamcontrol.GetStreamProfile[twitch.StreamProfile](ctx, profile)
+		if err != nil {
+			return fmt.Errorf("unable to convert the profile into Twitch profile: %w", err)
+		}
+		err = d.StreamControllers.Twitch.StartStream(ctx, title, description, *profile, customArgs...)
+		if err != nil {
+			return fmt.Errorf("unable to start the stream on Twitch: %w", err)
+		}
+		return nil
+	case youtube.ID:
+		profile, err := streamcontrol.GetStreamProfile[youtube.StreamProfile](ctx, profile)
+		if err != nil {
+			return fmt.Errorf("unable to convert the profile into YouTube profile: %w", err)
+		}
+		err = d.StreamControllers.YouTube.StartStream(ctx, title, description, *profile, customArgs...)
+		if err != nil {
+			return fmt.Errorf("unable to start the stream on YouTube: %w", err)
+		}
+		return nil
+	default:
+		return fmt.Errorf("unexpected platform ID '%s'", platID)
+	}
+}
+
+func (d *StreamD) EndStream(ctx context.Context, platID streamcontrol.PlatformName) error {
+	switch platID {
+	case obs.ID:
+		return d.StreamControllers.OBS.EndStream(ctx)
+	case twitch.ID:
+		return d.StreamControllers.Twitch.EndStream(ctx)
+	case youtube.ID:
+		return d.StreamControllers.YouTube.EndStream(ctx)
+	default:
+		return fmt.Errorf("unexpected platform ID '%s'", platID)
+	}
+}
+
+func (d *StreamD) GetBackendData(ctx context.Context, platID streamcontrol.PlatformName) (any, error) {
+	switch platID {
+	case obs.ID:
+		return api.BackendDataOBS{}, nil
+	case twitch.ID:
+		return api.BackendDataTwitch{Cache: d.Cache.Twitch}, nil
+	case youtube.ID:
+		return api.BackendDataYouTube{Cache: d.Cache.Youtube}, nil
+	default:
+		return nil, fmt.Errorf("unexpected platform ID '%s'", platID)
+	}
 }

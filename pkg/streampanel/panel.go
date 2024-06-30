@@ -31,6 +31,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	"github.com/xaionaro-go/streamctl/pkg/streamd"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
 )
@@ -742,6 +743,24 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 		return fmt.Errorf("unable to get config: %w", err)
 	}
 
+	backendEnabled := map[streamcontrol.PlatformName]bool{}
+	for _, backendID := range []streamcontrol.PlatformName{
+		obs.ID,
+		twitch.ID,
+		youtube.ID,
+	} {
+		isEnabled, err := p.StreamD.IsBackendEnabled(ctx, backendID)
+		if err != nil {
+			return fmt.Errorf("unable to get info if backend '%s' is enabled: %w", backendID, err)
+		}
+		backendEnabled[backendID] = isEnabled
+	}
+
+	gitIsEnabled, err := p.StreamD.IsGITInitialized(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to get info if GIT is initialized: %w", err)
+	}
+
 	w := p.app.NewWindow("Settings")
 	resizeWindow(w, fyne.NewSize(400, 900))
 
@@ -768,28 +787,28 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 	templateInstruction.Wrapping = fyne.TextWrapWord
 
 	obsAlreadyLoggedIn := widget.NewLabel("")
-	if p.StreamD.(*streamd.StreamD).StreamControllers.OBS == nil {
+	if !backendEnabled[obs.ID] {
 		obsAlreadyLoggedIn.SetText("(not logged in)")
 	} else {
 		obsAlreadyLoggedIn.SetText("(already logged in)")
 	}
 
 	twitchAlreadyLoggedIn := widget.NewLabel("")
-	if p.StreamD.(*streamd.StreamD).StreamControllers.Twitch == nil {
+	if !backendEnabled[twitch.ID] {
 		twitchAlreadyLoggedIn.SetText("(not logged in)")
 	} else {
 		twitchAlreadyLoggedIn.SetText("(already logged in)")
 	}
 
 	youtubeAlreadyLoggedIn := widget.NewLabel("")
-	if p.StreamD.(*streamd.StreamD).StreamControllers.YouTube == nil {
+	if !backendEnabled[youtube.ID] {
 		youtubeAlreadyLoggedIn.SetText("(not logged in)")
 	} else {
 		youtubeAlreadyLoggedIn.SetText("(already logged in)")
 	}
 
 	gitAlreadyLoggedIn := widget.NewLabel("")
-	if p.StreamD.(*streamd.StreamD).GitStorage == nil {
+	if !gitIsEnabled {
 		gitAlreadyLoggedIn.SetText("(not logged in)")
 	} else {
 		gitAlreadyLoggedIn.SetText("(already logged in)")
@@ -871,7 +890,10 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 			widget.NewRichTextFromMarkdown(`# Syncing (via git)`),
 			container.NewHBox(
 				widget.NewButtonWithIcon("(Re-)login in GIT", theme.LoginIcon(), func() {
-					p.StreamD.(*streamd.StreamD).GitRelogin(ctx)
+					err := p.StreamD.GitRelogin(ctx)
+					if err != nil {
+						p.DisplayError(err)
+					}
 				}),
 				twitchAlreadyLoggedIn,
 			),
@@ -940,6 +962,20 @@ func (p *Panel) initMainWindow(ctx context.Context) {
 	w := p.app.NewWindow("StreamPanel")
 	w.SetMaster()
 	resizeWindow(w, fyne.NewSize(400, 600))
+
+	backendEnabled := map[streamcontrol.PlatformName]bool{}
+	for _, backendID := range []streamcontrol.PlatformName{
+		obs.ID,
+		twitch.ID,
+		youtube.ID,
+	} {
+		isEnabled, err := p.StreamD.IsBackendEnabled(ctx, backendID)
+		if err != nil {
+			w.Close()
+			p.DisplayError(fmt.Errorf("unable to get info if backend '%s' is enabled: %w", backendID, err))
+		}
+		backendEnabled[backendID] = isEnabled
+	}
 
 	profileFilter := widget.NewEntry()
 	profileFilter.SetPlaceHolder("filter")
@@ -1025,19 +1061,19 @@ func (p *Panel) initMainWindow(ctx context.Context) {
 
 	p.obsCheck = widget.NewCheck("OBS", nil)
 	p.obsCheck.SetChecked(true)
-	if p.StreamD.(*streamd.StreamD).StreamControllers.OBS == nil {
+	if !backendEnabled[obs.ID] {
 		p.obsCheck.SetChecked(false)
 		p.obsCheck.Disable()
 	}
 	p.twitchCheck = widget.NewCheck("Twitch", nil)
 	p.twitchCheck.SetChecked(true)
-	if p.StreamD.(*streamd.StreamD).StreamControllers.Twitch == nil {
+	if !backendEnabled[twitch.ID] {
 		p.twitchCheck.SetChecked(false)
 		p.twitchCheck.Disable()
 	}
 	p.youtubeCheck = widget.NewCheck("YouTube", nil)
 	p.youtubeCheck.SetChecked(true)
-	if p.StreamD.(*streamd.StreamD).StreamControllers.YouTube == nil {
+	if !backendEnabled[youtube.ID] {
 		p.youtubeCheck.SetChecked(false)
 		p.youtubeCheck.Disable()
 	}
@@ -1119,6 +1155,20 @@ func (p *Panel) startStream(ctx context.Context) {
 		return
 	}
 
+	backendEnabled := map[streamcontrol.PlatformName]bool{}
+	for _, backendID := range []streamcontrol.PlatformName{
+		obs.ID,
+		twitch.ID,
+		youtube.ID,
+	} {
+		isEnabled, err := p.StreamD.IsBackendEnabled(ctx, backendID)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to get info if backend '%s' is enabled: %w", backendID, err))
+			return
+		}
+		backendEnabled[backendID] = isEnabled
+	}
+
 	p.obsCheck.Disable()
 	p.twitchCheck.Disable()
 	p.youtubeCheck.Disable()
@@ -1132,66 +1182,39 @@ func (p *Panel) startStream(ctx context.Context) {
 	p.updateTimerHandler = newUpdateTimerHandler(p.startStopButton)
 	profile := p.getSelectedProfile()
 
-	var obsProfile *obs.StreamProfile
-	if p.twitchCheck.Checked && p.StreamD.(*streamd.StreamD).StreamControllers.Twitch != nil {
-		var err error
-		obsProfile, err = streamcontrol.GetStreamProfile[obs.StreamProfile](ctx, profile.PerPlatform[obs.ID])
-		if err != nil {
-			p.DisplayError(fmt.Errorf("unable to get the streaming profile for OBS: %w", err))
-			return
-		}
-	}
-
-	var twitchProfile *twitch.StreamProfile
-	if p.twitchCheck.Checked && p.StreamD.(*streamd.StreamD).StreamControllers.Twitch != nil {
-		var err error
-		twitchProfile, err = streamcontrol.GetStreamProfile[twitch.StreamProfile](ctx, profile.PerPlatform[twitch.ID])
-		if err != nil {
-			p.DisplayError(fmt.Errorf("unable to get the streaming profile for Twitch: %w", err))
-			return
-		}
-	}
-
-	var youtubeProfile *youtube.StreamProfile
-	if p.youtubeCheck.Checked && p.StreamD.(*streamd.StreamD).StreamControllers.YouTube != nil {
-		var err error
-		youtubeProfile, err = streamcontrol.GetStreamProfile[youtube.StreamProfile](ctx, profile.PerPlatform[youtube.ID])
-		if err != nil {
-			p.DisplayError(fmt.Errorf("unable to get the streaming profile for YouTube: %w", err))
-			return
-		}
-	}
-
-	if p.twitchCheck.Checked && p.StreamD.(*streamd.StreamD).StreamControllers.Twitch != nil {
-		err := p.StreamD.(*streamd.StreamD).StreamControllers.Twitch.StartStream(
+	if p.twitchCheck.Checked && backendEnabled[twitch.ID] {
+		err := p.StreamD.StartStream(
 			ctx,
+			twitch.ID,
 			p.streamTitleField.Text,
 			p.streamDescriptionField.Text,
-			*twitchProfile,
+			profile.PerPlatform[twitch.ID],
 		)
 		if err != nil {
 			p.DisplayError(fmt.Errorf("unable to setup the stream on Twitch: %w", err))
 		}
 	}
 
-	if p.youtubeCheck.Checked && p.StreamD.(*streamd.StreamD).StreamControllers.YouTube != nil {
-		err := p.StreamD.(*streamd.StreamD).StreamControllers.YouTube.StartStream(
+	if p.youtubeCheck.Checked && backendEnabled[youtube.ID] {
+		err := p.StreamD.StartStream(
 			ctx,
+			youtube.ID,
 			p.streamTitleField.Text,
 			p.streamDescriptionField.Text,
-			*youtubeProfile,
+			profile.PerPlatform[youtube.ID],
 		)
 		if err != nil {
 			p.DisplayError(fmt.Errorf("unable to start the stream on YouTube: %w", err))
 		}
 	}
 
-	if p.obsCheck.Checked && p.StreamD.(*streamd.StreamD).StreamControllers.OBS != nil {
-		err := p.StreamD.(*streamd.StreamD).StreamControllers.OBS.StartStream(
+	if p.obsCheck.Checked && backendEnabled[obs.ID] {
+		err := p.StreamD.StartStream(
 			ctx,
+			obs.ID,
 			p.streamTitleField.Text,
 			p.streamDescriptionField.Text,
-			*obsProfile,
+			profile.PerPlatform[obs.ID],
 		)
 		if err != nil {
 			p.DisplayError(fmt.Errorf("unable to start the stream on OBS: %w", err))
@@ -1207,6 +1230,20 @@ func (p *Panel) stopStream(ctx context.Context) {
 	p.startStopMutex.Lock()
 	defer p.startStopMutex.Unlock()
 
+	backendEnabled := map[streamcontrol.PlatformName]bool{}
+	for _, backendID := range []streamcontrol.PlatformName{
+		obs.ID,
+		twitch.ID,
+		youtube.ID,
+	} {
+		isEnabled, err := p.StreamD.IsBackendEnabled(ctx, backendID)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to get info if backend '%s' is enabled: %w", backendID, err))
+			return
+		}
+		backendEnabled[backendID] = isEnabled
+	}
+
 	p.startStopButton.Disable()
 
 	p.updateTimerHandler.Stop()
@@ -1215,37 +1252,37 @@ func (p *Panel) stopStream(ctx context.Context) {
 	}
 	p.updateTimerHandler = nil
 
-	if p.obsCheck.Checked && p.StreamD.(*streamd.StreamD).StreamControllers.OBS != nil {
+	if p.obsCheck.Checked && backendEnabled[obs.ID] {
 		p.startStopButton.SetText("Stopping OBS...")
-		err := p.StreamD.(*streamd.StreamD).StreamControllers.OBS.EndStream(ctx)
+		err := p.StreamD.EndStream(ctx, obs.ID)
 		if err != nil {
 			p.DisplayError(fmt.Errorf("unable to stop the stream on OBS: %w", err))
 		}
 	}
 
-	if p.twitchCheck.Checked && p.StreamD.(*streamd.StreamD).StreamControllers.Twitch != nil {
+	if p.twitchCheck.Checked && backendEnabled[twitch.ID] {
 		p.startStopButton.SetText("Stopping Twitch...")
-		err := p.StreamD.(*streamd.StreamD).StreamControllers.Twitch.EndStream(ctx)
+		err := p.StreamD.EndStream(ctx, twitch.ID)
 		if err != nil {
 			p.DisplayError(fmt.Errorf("unable to stop the stream on Twitch: %w", err))
 		}
 	}
 
-	if p.youtubeCheck.Checked && p.StreamD.(*streamd.StreamD).StreamControllers.YouTube != nil {
+	if p.youtubeCheck.Checked && backendEnabled[youtube.ID] {
 		p.startStopButton.SetText("Stopping YouTube...")
-		err := p.StreamD.(*streamd.StreamD).StreamControllers.YouTube.EndStream(ctx)
+		err := p.StreamD.EndStream(ctx, youtube.ID)
 		if err != nil {
 			p.DisplayError(fmt.Errorf("unable to stop the stream on YouTube: %w", err))
 		}
 	}
 
-	if p.StreamD.(*streamd.StreamD).StreamControllers.OBS != nil {
+	if backendEnabled[obs.ID] {
 		p.obsCheck.Enable()
 	}
-	if p.StreamD.(*streamd.StreamD).StreamControllers.Twitch != nil {
+	if backendEnabled[twitch.ID] {
 		p.twitchCheck.Enable()
 	}
-	if p.StreamD.(*streamd.StreamD).StreamControllers.YouTube != nil {
+	if backendEnabled[youtube.ID] {
 		p.youtubeCheck.Enable()
 	}
 
@@ -1517,11 +1554,39 @@ func (p *Panel) profileWindow(
 		tagsEntryField.SetText("")
 	}
 
+	backendEnabled := map[streamcontrol.PlatformName]bool{}
+	backendData := map[streamcontrol.PlatformName]any{}
+	for _, backendID := range []streamcontrol.PlatformName{
+		obs.ID,
+		twitch.ID,
+		youtube.ID,
+	} {
+		isEnabled, err := p.StreamD.IsBackendEnabled(ctx, backendID)
+		if err != nil {
+			w.Close()
+			p.DisplayError(fmt.Errorf("unable to get info if backend '%s' is enabled: %w", backendID, err))
+			return nil
+		}
+		backendEnabled[backendID] = isEnabled
+
+		data, err := p.StreamD.GetBackendData(ctx, backendID)
+		if err != nil {
+			w.Close()
+			p.DisplayError(fmt.Errorf("unable to get data of backend '%s': %w", backendID, err))
+			return nil
+		}
+
+		backendData[backendID] = data
+	}
+	_ = backendData[obs.ID].(api.BackendDataOBS)
+	dataTwitch := backendData[twitch.ID].(api.BackendDataTwitch)
+	dataYouTube := backendData[youtube.ID].(api.BackendDataYouTube)
+
 	var bottomContent []fyne.CanvasObject
 
 	bottomContent = append(bottomContent, widget.NewSeparator())
 	bottomContent = append(bottomContent, widget.NewRichTextFromMarkdown("# OBS:"))
-	if p.StreamD.(*streamd.StreamD).StreamControllers.OBS != nil {
+	if backendEnabled[obs.ID] {
 		if platProfile := values.PerPlatform[obs.ID]; platProfile != nil {
 			obsProfile = ptr(streamcontrol.GetPlatformSpecificConfig[obs.StreamProfile](ctx, platProfile))
 		} else {
@@ -1537,7 +1602,7 @@ func (p *Panel) profileWindow(
 
 	bottomContent = append(bottomContent, widget.NewSeparator())
 	bottomContent = append(bottomContent, widget.NewRichTextFromMarkdown("# Twitch:"))
-	if p.StreamD.(*streamd.StreamD).StreamControllers.Twitch != nil {
+	if backendEnabled[twitch.ID] {
 		if platProfile := values.PerPlatform[twitch.ID]; platProfile != nil {
 			twitchProfile = ptr(streamcontrol.GetPlatformSpecificConfig[twitch.StreamProfile](ctx, platProfile))
 			for _, tag := range twitchProfile.Tags {
@@ -1559,7 +1624,7 @@ func (p *Panel) profileWindow(
 			}
 			text = cleanTwitchCategoryName(text)
 			count := 0
-			for _, cat := range p.StreamD.(*streamd.StreamD).Cache.Twitch.Categories {
+			for _, cat := range dataTwitch.Cache.Categories {
 				if strings.Contains(cleanTwitchCategoryName(cat.Name), text) {
 					selectedTwitchCategoryContainer := container.NewHBox()
 					catName := cat.Name
@@ -1596,7 +1661,7 @@ func (p *Panel) profileWindow(
 		}
 		if twitchProfile.CategoryID != nil {
 			catID := *twitchProfile.CategoryID
-			for _, cat := range p.StreamD.(*streamd.StreamD).Cache.Twitch.Categories {
+			for _, cat := range dataTwitch.Cache.Categories {
 				if cat.ID == catID {
 					setSelectedTwitchCategory(cat.Name)
 					break
@@ -1609,7 +1674,7 @@ func (p *Panel) profileWindow(
 				return
 			}
 			text = cleanTwitchCategoryName(text)
-			for _, cat := range p.StreamD.(*streamd.StreamD).Cache.Twitch.Categories {
+			for _, cat := range dataTwitch.Cache.Categories {
 				if cleanTwitchCategoryName(cat.Name) == text {
 					setSelectedTwitchCategory(cat.Name)
 					go func() {
@@ -1627,7 +1692,7 @@ func (p *Panel) profileWindow(
 
 	bottomContent = append(bottomContent, widget.NewSeparator())
 	bottomContent = append(bottomContent, widget.NewRichTextFromMarkdown("# YouTube:"))
-	if p.StreamD.(*streamd.StreamD).StreamControllers.YouTube != nil {
+	if backendEnabled[youtube.ID] {
 		if platProfile := values.PerPlatform[youtube.ID]; platProfile != nil {
 			youtubeProfile = ptr(streamcontrol.GetPlatformSpecificConfig[youtube.StreamProfile](ctx, platProfile))
 			for _, tag := range youtubeProfile.Tags {
@@ -1656,7 +1721,7 @@ func (p *Panel) profileWindow(
 			}
 			text = cleanYoutubeRecordingName(text)
 			count := 0
-			for _, bc := range p.StreamD.(*streamd.StreamD).Cache.Youtube.Broadcasts {
+			for _, bc := range dataYouTube.Cache.Broadcasts {
 				if strings.Contains(cleanYoutubeRecordingName(bc.Snippet.Title), text) {
 					selectedYoutubeRecordingsContainer := container.NewHBox()
 					recName := bc.Snippet.Title
@@ -1690,7 +1755,7 @@ func (p *Panel) profileWindow(
 		}
 
 		for _, bcID := range youtubeProfile.TemplateBroadcastIDs {
-			for _, bc := range p.StreamD.(*streamd.StreamD).Cache.Youtube.Broadcasts {
+			for _, bc := range dataYouTube.Cache.Broadcasts {
 				if bc.Id != bcID {
 					continue
 				}
@@ -1703,7 +1768,7 @@ func (p *Panel) profileWindow(
 				return
 			}
 			text = cleanYoutubeRecordingName(text)
-			for _, bc := range p.StreamD.(*streamd.StreamD).Cache.Youtube.Broadcasts {
+			for _, bc := range dataYouTube.Cache.Broadcasts {
 				if cleanYoutubeRecordingName(bc.Snippet.Title) == text {
 					setSelectedYoutubeBroadcast(bc)
 					go func() {
