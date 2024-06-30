@@ -265,6 +265,15 @@ func (yt *YouTube) InsertAdsCuePoint(
 	})
 }
 
+func (yt *YouTube) DeleteActiveBroadcasts(
+	ctx context.Context,
+) error {
+	return yt.iterateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
+		logger.Debugf(ctx, "deleting broadcast %v", broadcast.Id)
+		return yt.YouTubeService.LiveBroadcasts.Delete(broadcast.Id).Context(ctx).Do()
+	})
+}
+
 type FlagBroadcastTemplateIDs []string
 
 var liveBroadcastParts = []string{
@@ -316,6 +325,11 @@ func (yt *YouTube) StartStream(
 	profile StreamProfile,
 	customArgs ...any,
 ) error {
+	err := yt.DeleteActiveBroadcasts(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to delete old streams: %w", err)
+	}
+
 	var templateBroadcastIDs []string
 	for _, templateBroadcastIDCandidate := range customArgs {
 		_templateBroadcastIDs, ok := templateBroadcastIDCandidate.(FlagBroadcastTemplateIDs)

@@ -33,10 +33,10 @@ var (
 		},
 	}
 
-	StreamStart = &cobra.Command{
-		Use:  "stream-start",
+	StreamSetup = &cobra.Command{
+		Use:  "stream-setup",
 		Args: cobra.ExactArgs(0),
-		Run:  streamStart,
+		Run:  streamSetup,
 	}
 
 	StreamStatus = &cobra.Command{
@@ -49,14 +49,14 @@ var (
 )
 
 func init() {
-	Root.AddCommand(StreamStart)
+	Root.AddCommand(StreamSetup)
 	Root.AddCommand(StreamStatus)
 
 	Root.PersistentFlags().Var(&LoggerLevel, "log-level", "")
 	Root.PersistentFlags().String("remote-addr", "localhost:3594", "the path to the config file")
-	StreamStart.PersistentFlags().String("title", "", "stream title")
-	StreamStart.PersistentFlags().String("description", "", "stream description")
-	StreamStart.PersistentFlags().String("profile", "", "profile")
+	StreamSetup.PersistentFlags().String("title", "", "stream title")
+	StreamSetup.PersistentFlags().String("description", "", "stream description")
+	StreamSetup.PersistentFlags().String("profile", "", "profile")
 }
 func assertNoError(ctx context.Context, err error) {
 	if err != nil {
@@ -64,7 +64,7 @@ func assertNoError(ctx context.Context, err error) {
 	}
 }
 
-func streamStart(cmd *cobra.Command, args []string) {
+func streamSetup(cmd *cobra.Command, args []string) {
 	ctx := cmd.Context()
 
 	remoteAddr, err := cmd.Flags().GetString("remote-addr")
