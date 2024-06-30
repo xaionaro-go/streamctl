@@ -325,6 +325,8 @@ func (yt *YouTube) StartStream(
 		}
 	}
 
+	logger.Debugf(ctx, "profile == %#+v", profile)
+
 	templateBroadcastIDs = append(templateBroadcastIDs, profile.TemplateBroadcastIDs...)
 	logger.Debugf(ctx, "templateBroadcastIDs == %v; customArgs == %v", templateBroadcastIDs, customArgs)
 

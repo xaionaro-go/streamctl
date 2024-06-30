@@ -32,6 +32,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	"github.com/xaionaro-go/streamctl/pkg/streamd"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/client"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
 )
@@ -69,15 +70,27 @@ type Panel struct {
 	configPath  string
 	configCache *config.Config
 
+	remoteAddr string
+
 	setStatusFunc func(string)
 }
 
-func New(
+func NewBuiltin(
 	configPath string,
 	opts ...Option,
 ) *Panel {
 	return &Panel{
 		configPath: configPath,
+		config:     Options(opts).Config(),
+	}
+}
+
+func NewRemote(
+	remoteAddr string,
+	opts ...Option,
+) *Panel {
+	return &Panel{
+		remoteAddr: remoteAddr,
 		config:     Options(opts).Config(),
 	}
 }
@@ -97,22 +110,32 @@ func (p *Panel) Loop(ctx context.Context) error {
 	p.defaultContext = ctx
 	logger.Debug(ctx, "config", p.config)
 
-	if err := p.initStreamD(ctx); err != nil {
-		return fmt.Errorf("unable to load the config '%s': %w", p.configPath, err)
+	switch {
+	case p.configPath != "":
+		if err := p.initBuiltinStreamD(ctx); err != nil {
+			return fmt.Errorf("unable to initialize the builtin stream controller '%s': %w", p.configPath, err)
+		}
+	case p.remoteAddr != "":
+		if err := p.initRemoteStreamD(ctx); err != nil {
+			return fmt.Errorf("unable to initialize the remote stream controller '%s': %w", p.remoteAddr, err)
+		}
 	}
 
 	p.app = fyneapp.New()
 
 	go func() {
-		loadingWindow := p.newLoadingWindow(ctx)
-		resizeWindow(loadingWindow, fyne.NewSize(600, 600))
-
-		loadingWindowText := widget.NewRichTextFromMarkdown("")
-		loadingWindowText.Wrapping = fyne.TextWrapWord
-		loadingWindow.SetContent(loadingWindowText)
-		p.setStatusFunc = func(msg string) {
-			loadingWindowText.ParseMarkdown(fmt.Sprintf("# %s", msg))
+		var loadingWindow fyne.Window
+		if p.remoteAddr == "" {
+			loadingWindow = p.newLoadingWindow(ctx)
+			resizeWindow(loadingWindow, fyne.NewSize(600, 600))
+			loadingWindowText := widget.NewRichTextFromMarkdown("")
+			loadingWindowText.Wrapping = fyne.TextWrapWord
+			loadingWindow.SetContent(loadingWindowText)
+			p.setStatusFunc = func(msg string) {
+				loadingWindowText.ParseMarkdown(fmt.Sprintf("# %s", msg))
+			}
 		}
+
 		err := p.StreamD.Run(ctx)
 		if err != nil {
 			p.DisplayError(fmt.Errorf("unable to initialize the streaming controllers: %w", err))
@@ -125,7 +148,13 @@ func (p *Panel) Loop(ctx context.Context) error {
 			err = fmt.Errorf("unable to arrange the profiles: %w", err)
 			p.DisplayError(err)
 		}
-		loadingWindow.Hide()
+
+		if p.remoteAddr == "" {
+			logger.Tracef(ctx, "hiding the loading window")
+			loadingWindow.Hide()
+		}
+
+		logger.Tracef(ctx, "ended stream controllers initialization")
 	}()
 
 	p.app.Run()
@@ -146,7 +175,7 @@ func (p *Panel) getExpandedDataPath() (string, error) {
 	return xpath.Expand(p.configPath)
 }
 
-func (p *Panel) initStreamD(ctx context.Context) error {
+func (p *Panel) initBuiltinStreamD(ctx context.Context) error {
 	dataPath, err := p.getExpandedDataPath()
 	if err != nil {
 		return fmt.Errorf("unable to get the path to the data file: %w", err)
@@ -157,6 +186,11 @@ func (p *Panel) initStreamD(ctx context.Context) error {
 		return fmt.Errorf("unable to initialize the streamd instance: %w", err)
 	}
 
+	return nil
+}
+
+func (p *Panel) initRemoteStreamD(context.Context) error {
+	p.StreamD = client.New(p.remoteAddr)
 	return nil
 }
 

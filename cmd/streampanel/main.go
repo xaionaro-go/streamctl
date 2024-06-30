@@ -20,6 +20,7 @@ const forceNetPProfOnAndroid = true
 func main() {
 	loggerLevel := logger.LevelWarning
 	pflag.Var(&loggerLevel, "log-level", "Log level")
+	remoteAddr := pflag.String("remote-addr", "", "the address (for example 127.0.0.1:3594) of streamd to connect to, instead of running the stream controllers locally")
 	configPath := pflag.String("config-path", "~/.streampanel.yaml", "the path to the config file")
 	netPprofAddr := pflag.String("go-net-pprof-addr", "", "address to listen to for net/pprof requests")
 	cpuProfile := pflag.String("go-profile-cpu", "", "file to write cpu profile to")
@@ -73,7 +74,14 @@ func main() {
 	}
 	defer belt.Flush(ctx)
 
-	err := streampanel.New(*configPath).Loop(ctx)
+	var panel *streampanel.Panel
+	if *remoteAddr != "" {
+		panel = streampanel.NewRemote(*remoteAddr)
+	} else {
+		panel = streampanel.NewBuiltin(*configPath)
+	}
+
+	err := panel.Loop(ctx)
 	if err != nil {
 		l.Fatal(err)
 	}

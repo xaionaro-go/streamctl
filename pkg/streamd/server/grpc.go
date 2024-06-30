@@ -1,10 +1,12 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 
+	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
@@ -32,16 +34,17 @@ func (grpc *GRPCServer) GetConfig(
 	ctx context.Context,
 	req *streamd_grpc.GetConfigRequest,
 ) (*streamd_grpc.GetConfigReply, error) {
-	config, err := grpc.StreamD.GetConfig(ctx)
+	cfg, err := grpc.StreamD.GetConfig(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get the config: %w", err)
 	}
-	b, err := json.Marshal(config)
+	var buf bytes.Buffer
+	err = config.WriteConfig(ctx, &buf, *cfg)
 	if err != nil {
 		return nil, fmt.Errorf("unable to serialize the config: %w", err)
 	}
 	return &streamd_grpc.GetConfigReply{
-		Config: string(b),
+		Config: buf.String(),
 	}, nil
 }
 
@@ -49,6 +52,8 @@ func (grpc *GRPCServer) SetConfig(
 	ctx context.Context,
 	req *streamd_grpc.SetConfigRequest,
 ) (*streamd_grpc.SetConfigReply, error) {
+	logger.Debugf(ctx, "received SetConfig: %s", req.Config)
+
 	var result config.Config
 	err := config.ReadConfig(ctx, []byte(req.Config), &result)
 	if err != nil {
@@ -100,6 +105,8 @@ func (grpc *GRPCServer) StartStream(
 	ctx context.Context,
 	req *streamd_grpc.StartStreamRequest,
 ) (*streamd_grpc.StartStreamReply, error) {
+	logger.Debugf(ctx, "grpc:StartStream: raw profile: %#+v", req.Profile)
+
 	var profile streamcontrol.AbstractStreamProfile
 	var err error
 	platID := streamcontrol.PlatformName(req.GetPlatID())
@@ -113,10 +120,12 @@ func (grpc *GRPCServer) StartStream(
 	default:
 		return nil, fmt.Errorf("unexpected platform ID: '%s'", platID)
 	}
-	err = yaml.Unmarshal([]byte(req.GetProfile()), &profile)
+	err = yaml.Unmarshal([]byte(req.GetProfile()), profile)
 	if err != nil {
 		return nil, fmt.Errorf("unable to unserialize the profile: %w", err)
 	}
+
+	logger.Debugf(ctx, "grpc:StartStream: parsed: %#+v", profile)
 
 	err = grpc.StreamD.StartStream(
 		ctx,

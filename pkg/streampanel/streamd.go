@@ -1,8 +1,6 @@
 package streampanel
 
 import (
-	"net/url"
-
 	"github.com/facebookincubator/go-belt"
 	"github.com/xaionaro-go/streamctl/pkg/streamd"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
@@ -16,6 +14,6 @@ func NewBuiltinStreamD(configPath string, ui ui.UI, b *belt.Belt) (*streamd.Stre
 	return streamd.New(configPath, ui, b)
 }
 
-func NewRemoteStreamD(url *url.URL, ui ui.UI, _ *belt.Belt) *client.Client {
-	return client.New(url)
+func NewRemoteStreamD(target string, ui ui.UI, _ *belt.Belt) *client.Client {
+	return client.New(target)
 }

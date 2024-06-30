@@ -1,11 +1,13 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 
+	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/goccy/go-yaml"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	obs "github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs/types"
 	twitch "github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/types"
@@ -14,20 +16,24 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type Client struct {
-	URL *url.URL
+	Target string
 }
 
 var _ api.StreamD = (*Client)(nil)
 
-func New(url *url.URL) *Client {
-	return &Client{URL: url}
+func New(target string) *Client {
+	return &Client{Target: target}
 }
 
 func (c *Client) grpcClient() (streamd_grpc.StreamDClient, *grpc.ClientConn, error) {
-	conn, err := grpc.NewClient(c.URL.String())
+	conn, err := grpc.NewClient(
+		c.Target,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to initialize a gRPC client: %w", err)
 	}
@@ -105,13 +111,14 @@ func (c *Client) GetConfig(ctx context.Context) (*config.Config, error) {
 }
 
 func (c *Client) SetConfig(ctx context.Context, cfg *config.Config) error {
-	b, err := json.Marshal(cfg)
+	var buf bytes.Buffer
+	err := config.WriteConfig(ctx, &buf, *cfg)
 	if err != nil {
 		return fmt.Errorf("unable to serialize the config: %w", err)
 	}
 
 	req := &streamd_grpc.SetConfigRequest{
-		Config: string(b),
+		Config: buf.String(),
 	}
 
 	client, conn, err := c.grpcClient()
@@ -167,10 +174,12 @@ func (c *Client) StartStream(
 	}
 	defer conn.Close()
 
-	b, err := json.Marshal(profile)
+	b, err := yaml.Marshal(profile)
 	if err != nil {
 		return fmt.Errorf("unable to serialize the profile: %w", err)
 	}
+
+	logger.Debugf(ctx, "serialized profile: '%s'", profile)
 
 	_, err = client.StartStream(ctx, &streamd_grpc.StartStreamRequest{
 		PlatID:      string(platID),
@@ -231,16 +240,21 @@ func (c *Client) GetBackendData(ctx context.Context, platID streamcontrol.Platfo
 	var data any
 	switch platID {
 	case obs.ID:
-		data = &api.BackendDataOBS{}
+		_data := api.BackendDataOBS{}
+		err = json.Unmarshal([]byte(reply.GetData()), &_data)
+		data = _data
 	case twitch.ID:
-		data = &api.BackendDataTwitch{}
+		_data := api.BackendDataTwitch{}
+		err = json.Unmarshal([]byte(reply.GetData()), &_data)
+		data = _data
 	case youtube.ID:
-		data = &api.BackendDataYouTube{}
+		_data := api.BackendDataYouTube{}
+		err = json.Unmarshal([]byte(reply.GetData()), &_data)
+		data = _data
 	default:
 		return nil, fmt.Errorf("unknown platform: '%s'", platID)
 	}
 
-	err = json.Unmarshal([]byte(reply.GetData()), data)
 	if err != nil {
 		return nil, fmt.Errorf("unable to deserialize data: %w", err)
 	}

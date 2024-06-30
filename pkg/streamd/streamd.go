@@ -334,6 +334,7 @@ func (d *StreamD) GetConfig(ctx context.Context) (*config.Config, error) {
 }
 
 func (d *StreamD) SetConfig(ctx context.Context, cfg *config.Config) error {
+	logger.Debugf(ctx, "SetConfig: %#+v", *cfg)
 	d.Config = *cfg
 	return nil
 }
