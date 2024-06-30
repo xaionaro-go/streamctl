@@ -32,6 +32,7 @@ type StreamD interface {
 	EndStream(ctx context.Context, platID streamcontrol.PlatformName) error
 	GitRelogin(ctx context.Context) error
 	GetBackendData(ctx context.Context, platID streamcontrol.PlatformName) (any, error)
+	Restart(ctx context.Context) error
 }
 
 type BackendDataOBS struct{}

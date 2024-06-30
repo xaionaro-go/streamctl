@@ -401,3 +401,8 @@ func (d *StreamD) GetBackendData(ctx context.Context, platID streamcontrol.Platf
 		return nil, fmt.Errorf("unexpected platform ID '%s'", platID)
 	}
 }
+
+func (d *StreamD) Restart(ctx context.Context) error {
+	d.UI.Restart(ctx, "A restart was requested")
+	return nil
+}

@@ -1,0 +1,63 @@
+syntax = "proto3";
+option go_package = "go/streamd_grpc";
+
+service StreamD {
+    rpc GetConfig(GetConfigRequest) returns (GetConfigReply) {}
+    rpc SetConfig(SetConfigRequest) returns (SetConfigReply) {}
+    rpc SaveConfig(SaveConfigRequest) returns (SaveConfigReply) {}
+    rpc ResetCache(ResetCacheRequest) returns (ResetCacheReply) {}
+    rpc InitCache(InitCacheRequest) returns (InitCacheReply) {}
+    rpc StartStream(StartStreamRequest) returns (StartStreamReply) {}
+    rpc EndStream(EndStreamRequest) returns (EndStreamReply) {}
+    rpc GetBackendInfo(GetBackendInfoRequest) returns (GetBackendInfoReply) {}
+    rpc Restart(RestartRequest) returns (RestartReply) {}
+
+    rpc OBSOLETE_FetchConfig(OBSOLETE_FetchConfigRequest) returns (OBSOLETE_FetchConfigReply) {}
+    rpc OBSOLETE_GitInfo(OBSOLETE_GetGitInfoRequest) returns (OBSOLETE_GetGitInfoReply) {}
+    rpc OBSOLETE_GitRelogin(OBSOLETE_GitReloginRequest) returns (OBSOLETE_GitReloginReply) {}
+}
+
+message GetConfigRequest {}
+message GetConfigReply {
+    string config = 1;
+}
+message SetConfigRequest {
+    string config = 1;
+}
+message SetConfigReply {}
+message SaveConfigRequest {}
+message SaveConfigReply {}
+message ResetCacheRequest {}
+message ResetCacheReply {}
+message InitCacheRequest {}
+message InitCacheReply {}
+message StartStreamRequest {
+    string platID = 1;
+    string title = 2;
+    string description = 3;
+    string profile = 4;
+}
+message StartStreamReply {}
+message EndStreamRequest {
+    string platID = 1;
+}
+message EndStreamReply {}
+message GetBackendInfoRequest {
+    string platID = 1;
+}
+message GetBackendInfoReply {
+    bool isInitialized = 1;
+    string data = 2;
+}
+message RestartRequest {}
+message RestartReply {}
+
+message OBSOLETE_FetchConfigRequest {}
+message OBSOLETE_FetchConfigReply {}
+message OBSOLETE_GetGitInfoRequest {}
+message OBSOLETE_GetGitInfoReply {
+    bool isInitialized = 1;
+}
+message OBSOLETE_GitReloginRequest {}
+message OBSOLETE_GitReloginReply {}
+
