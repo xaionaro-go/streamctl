@@ -253,6 +253,34 @@ func (t *Twitch) EndStream(
 	return nil
 }
 
+func (t *Twitch) GetStreamStatus(
+	ctx context.Context,
+) (*streamcontrol.StreamStatus, error) {
+	// Twitch ends a stream automatically, nothing to do:
+	reply, err := t.client.GetStreams(&helix.StreamsParams{
+		UserIDs: []string{t.broadcasterID},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("unable to request streams: %w", err)
+	}
+
+	if len(reply.Data.Streams) == 0 {
+		return &streamcontrol.StreamStatus{
+			IsActive: false,
+		}, nil
+	}
+
+	if len(reply.Data.Streams) > 1 {
+		return nil, fmt.Errorf("received %d streams instead of 1", len(reply.Data.Streams))
+	}
+	stream := reply.Data.Streams[0]
+
+	return &streamcontrol.StreamStatus{
+		IsActive:  true,
+		StartedAt: &stream.StartedAt,
+	}, nil
+}
+
 func getClient(
 	ctx context.Context,
 	cfg Config,

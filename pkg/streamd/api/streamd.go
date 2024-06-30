@@ -30,6 +30,10 @@ type StreamD interface {
 	GetBackendData(ctx context.Context, platID streamcontrol.PlatformName) (any, error)
 	Restart(ctx context.Context) error
 	EXPERIMENTAL_ReinitStreamControllers(ctx context.Context) error
+	GetStreamStatus(
+		ctx context.Context,
+		platID streamcontrol.PlatformName,
+	) (*streamcontrol.StreamStatus, error)
 }
 
 type BackendDataOBS struct{}

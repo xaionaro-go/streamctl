@@ -221,3 +221,24 @@ func (grpc *GRPCServer) OBSOLETE_GitRelogin(
 	}
 	return &streamd_grpc.OBSOLETE_GitReloginReply{}, nil
 }
+
+func (grpc *GRPCServer) GetStreamStatus(
+	ctx context.Context,
+	req *streamd_grpc.GetStreamStatusRequest,
+) (*streamd_grpc.GetStreamStatusReply, error) {
+	platID := streamcontrol.PlatformName(req.GetPlatID())
+	streamStatus, err := grpc.StreamD.GetStreamStatus(ctx, platID)
+	if err != nil {
+		return nil, fmt.Errorf("unable to relogin: %w", err)
+	}
+
+	var startedAt *int64
+	if streamStatus.StartedAt != nil {
+		startedAt = ptr(streamStatus.StartedAt.UnixNano())
+	}
+
+	return &streamd_grpc.GetStreamStatusReply{
+		IsActive:  streamStatus.IsActive,
+		StartedAt: startedAt,
+	}, nil
+}

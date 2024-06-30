@@ -185,3 +185,28 @@ func (obs *OBS) EndStream(
 
 	return err
 }
+
+func (obs *OBS) GetStreamStatus(
+	ctx context.Context,
+) (*streamcontrol.StreamStatus, error) {
+	client, err := obs.getClient()
+	if err != nil {
+		return nil, fmt.Errorf("unable to initialize client to OBS: %w", err)
+	}
+	defer client.Disconnect()
+
+	streamStatus, err := client.Stream.GetStreamStatus()
+	if err != nil {
+		return nil, fmt.Errorf("unable to get current stream status: %w", err)
+	}
+
+	var startedAt *time.Time
+	if streamStatus.OutputActive {
+		startedAt = ptr(time.Now().Add(time.Duration(streamStatus.OutputDuration * float64(time.Second))))
+	}
+
+	return &streamcontrol.StreamStatus{
+		IsActive:  streamStatus.OutputActive,
+		StartedAt: startedAt,
+	}, nil
+}

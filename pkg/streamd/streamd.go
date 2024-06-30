@@ -432,3 +432,19 @@ func (d *StreamD) Restart(ctx context.Context) error {
 	d.UI.Restart(ctx, "A restart was requested")
 	return nil
 }
+
+func (d *StreamD) GetStreamStatus(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+) (*streamcontrol.StreamStatus, error) {
+	switch platID {
+	case obs.ID:
+		return d.StreamControllers.OBS.GetStreamStatus(ctx)
+	case twitch.ID:
+		return d.StreamControllers.Twitch.GetStreamStatus(ctx)
+	case youtube.ID:
+		return d.StreamControllers.YouTube.GetStreamStatus(ctx)
+	default:
+		return nil, fmt.Errorf("unexpected platform ID: '%s'", platID)
+	}
+}

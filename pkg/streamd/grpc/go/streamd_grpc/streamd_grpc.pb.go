@@ -29,6 +29,7 @@ type StreamDClient interface {
 	InitCache(ctx context.Context, in *InitCacheRequest, opts ...grpc.CallOption) (*InitCacheReply, error)
 	StartStream(ctx context.Context, in *StartStreamRequest, opts ...grpc.CallOption) (*StartStreamReply, error)
 	EndStream(ctx context.Context, in *EndStreamRequest, opts ...grpc.CallOption) (*EndStreamReply, error)
+	GetStreamStatus(ctx context.Context, in *GetStreamStatusRequest, opts ...grpc.CallOption) (*GetStreamStatusReply, error)
 	GetBackendInfo(ctx context.Context, in *GetBackendInfoRequest, opts ...grpc.CallOption) (*GetBackendInfoReply, error)
 	Restart(ctx context.Context, in *RestartRequest, opts ...grpc.CallOption) (*RestartReply, error)
 	EXPERIMENTAL_ReinitStreamControllers(ctx context.Context, in *EXPERIMENTAL_ReinitStreamControllersRequest, opts ...grpc.CallOption) (*EXPERIMENTAL_ReinitStreamControllersReply, error)
@@ -108,6 +109,15 @@ func (c *streamDClient) EndStream(ctx context.Context, in *EndStreamRequest, opt
 	return out, nil
 }
 
+func (c *streamDClient) GetStreamStatus(ctx context.Context, in *GetStreamStatusRequest, opts ...grpc.CallOption) (*GetStreamStatusReply, error) {
+	out := new(GetStreamStatusReply)
+	err := c.cc.Invoke(ctx, "/StreamD/GetStreamStatus", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *streamDClient) GetBackendInfo(ctx context.Context, in *GetBackendInfoRequest, opts ...grpc.CallOption) (*GetBackendInfoReply, error) {
 	out := new(GetBackendInfoReply)
 	err := c.cc.Invoke(ctx, "/StreamD/GetBackendInfo", in, out, opts...)
@@ -173,6 +183,7 @@ type StreamDServer interface {
 	InitCache(context.Context, *InitCacheRequest) (*InitCacheReply, error)
 	StartStream(context.Context, *StartStreamRequest) (*StartStreamReply, error)
 	EndStream(context.Context, *EndStreamRequest) (*EndStreamReply, error)
+	GetStreamStatus(context.Context, *GetStreamStatusRequest) (*GetStreamStatusReply, error)
 	GetBackendInfo(context.Context, *GetBackendInfoRequest) (*GetBackendInfoReply, error)
 	Restart(context.Context, *RestartRequest) (*RestartReply, error)
 	EXPERIMENTAL_ReinitStreamControllers(context.Context, *EXPERIMENTAL_ReinitStreamControllersRequest) (*EXPERIMENTAL_ReinitStreamControllersReply, error)
@@ -206,6 +217,9 @@ func (UnimplementedStreamDServer) StartStream(context.Context, *StartStreamReque
 }
 func (UnimplementedStreamDServer) EndStream(context.Context, *EndStreamRequest) (*EndStreamReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method EndStream not implemented")
+}
+func (UnimplementedStreamDServer) GetStreamStatus(context.Context, *GetStreamStatusRequest) (*GetStreamStatusReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetStreamStatus not implemented")
 }
 func (UnimplementedStreamDServer) GetBackendInfo(context.Context, *GetBackendInfoRequest) (*GetBackendInfoReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetBackendInfo not implemented")
@@ -364,6 +378,24 @@ func _StreamD_EndStream_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _StreamD_GetStreamStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetStreamStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).GetStreamStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/StreamD/GetStreamStatus",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).GetStreamStatus(ctx, req.(*GetStreamStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _StreamD_GetBackendInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetBackendInfoRequest)
 	if err := dec(in); err != nil {
@@ -506,6 +538,10 @@ var StreamD_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "EndStream",
 			Handler:    _StreamD_EndStream_Handler,
+		},
+		{
+			MethodName: "GetStreamStatus",
+			Handler:    _StreamD_GetStreamStatus_Handler,
 		},
 		{
 			MethodName: "GetBackendInfo",

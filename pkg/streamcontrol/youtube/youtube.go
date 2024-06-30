@@ -545,6 +545,38 @@ func (yt *YouTube) EndStream(
 	}, "contentDetails")
 }
 
+const timeLayout = "2006-01-02T15:04:05-0700"
+
+func (yt *YouTube) GetStreamStatus(
+	ctx context.Context,
+) (*streamcontrol.StreamStatus, error) {
+	var startedAt *time.Time
+	isActive := false
+	err := yt.iterateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
+		ts := broadcast.Snippet.ActualStartTime
+		_startedAt, err := time.Parse(timeLayout, ts)
+		if err != nil {
+			return fmt.Errorf("unable to parse '%s' with layout '%s': %w", ts, timeLayout, err)
+		}
+		startedAt = &_startedAt
+		return nil
+	}, liveBroadcastParts...)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get active broadcasts info: %w", err)
+	}
+
+	if !isActive {
+		return &streamcontrol.StreamStatus{
+			IsActive: false,
+		}, nil
+	}
+
+	return &streamcontrol.StreamStatus{
+		IsActive:  true,
+		StartedAt: startedAt,
+	}, nil
+}
+
 func (yt *YouTube) Flush(
 	ctx context.Context,
 ) error {

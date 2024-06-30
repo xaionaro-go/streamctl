@@ -75,6 +75,11 @@ func ConvertStreamProfiles[T StreamProfile](
 	return nil
 }
 
+type StreamStatus struct {
+	IsActive  bool
+	StartedAt *time.Time
+}
+
 type StreamControllerCommons interface {
 	io.Closer
 
@@ -83,6 +88,7 @@ type StreamControllerCommons interface {
 	InsertAdsCuePoint(ctx context.Context, ts time.Time, duration time.Duration) error
 	Flush(ctx context.Context) error
 	EndStream(ctx context.Context) error
+	GetStreamStatus(ctx context.Context) (*StreamStatus, error)
 }
 
 type StreamController[ProfileType StreamProfile] interface {
@@ -163,6 +169,12 @@ func (c *abstractStreamController) EndStream(
 	ctx context.Context,
 ) error {
 	return c.GetImplementation().EndStream(ctx)
+}
+
+func (c *abstractStreamController) GetStreamStatus(
+	ctx context.Context,
+) (*StreamStatus, error) {
+	return c.GetImplementation().GetStreamStatus(ctx)
 }
 
 func (c *abstractStreamController) StreamProfileType() reflect.Type {

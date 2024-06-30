@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
@@ -290,4 +291,37 @@ func (c *Client) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context) error
 
 	return nil
 
+}
+
+func (c *Client) GetStreamStatus(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+) (*streamcontrol.StreamStatus, error) {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	streamStatus, err := client.GetStreamStatus(ctx, &streamd_grpc.GetStreamStatusRequest{
+		PlatID: string(platID),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("unable to get the stream status of '%s': %w", platID, err)
+	}
+
+	var startedAt *time.Time
+	if streamStatus != nil {
+		v := *streamStatus.StartedAt
+		startedAt = ptr(time.Unix(v/1000000000, v%1000000000))
+	}
+
+	return &streamcontrol.StreamStatus{
+		IsActive:  streamStatus.GetIsActive(),
+		StartedAt: startedAt,
+	}, nil
+}
+
+func ptr[T any](in T) *T {
+	return &in
 }

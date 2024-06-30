@@ -9,6 +9,7 @@ service StreamD {
     rpc InitCache(InitCacheRequest) returns (InitCacheReply) {}
     rpc StartStream(StartStreamRequest) returns (StartStreamReply) {}
     rpc EndStream(EndStreamRequest) returns (EndStreamReply) {}
+    rpc GetStreamStatus(GetStreamStatusRequest) returns (GetStreamStatusReply) {}
     rpc GetBackendInfo(GetBackendInfoRequest) returns (GetBackendInfoReply) {}
     rpc Restart(RestartRequest) returns (RestartReply) {}
 
@@ -44,6 +45,13 @@ message EndStreamRequest {
     string platID = 1;
 }
 message EndStreamReply {}
+message GetStreamStatusRequest {
+    string platID = 1;
+}
+message GetStreamStatusReply {
+    bool isActive = 1;
+    optional int64 started_at = 2;
+}
 message GetBackendInfoRequest {
     string platID = 1;
 }
