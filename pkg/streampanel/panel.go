@@ -946,6 +946,66 @@ func resizeWindow(w fyne.Window, newSize fyne.Size) {
 	}
 }
 
+func (p *Panel) getUpdatedStatus(ctx context.Context) {
+	logger.Tracef(ctx, "getUpdatedStatus")
+	defer logger.Tracef(ctx, "/getUpdatedStatus")
+	p.getUpdatedStatus_startStopStreamButton(ctx)
+}
+func (p *Panel) getUpdatedStatus_startStopStreamButton(ctx context.Context) {
+	p.streamMutex.Lock()
+	defer p.streamMutex.Unlock()
+
+	obsIsEnabled, err := p.StreamD.IsBackendEnabled(ctx, obs.ID)
+	if err != nil {
+		logger.Errorf(ctx, "unable to check if OBS is enabled: %w", err)
+		return
+	}
+	if !obsIsEnabled {
+		p.startStopButton.Importance = widget.SuccessImportance
+		p.startStopButton.Disable()
+		return
+	}
+
+	obsStreamStatus, err := p.StreamD.GetStreamStatus(ctx, obs.ID)
+	if err != nil {
+		logger.Errorf(ctx, "unable to get stream status from OBS: %w", err)
+		return
+	}
+	logger.Tracef(ctx, "obsStreamStatus == %#+v", obsStreamStatus)
+
+	if obsStreamStatus.IsActive {
+		p.startStopButton.Importance = widget.DangerImportance
+		p.startStopButton.Enable()
+		return
+	}
+	p.startStopButton.Importance = widget.SuccessImportance
+
+	ytIsEnabled, err := p.StreamD.IsBackendEnabled(ctx, youtube.ID)
+	if err != nil {
+		logger.Errorf(ctx, "unable to check if YouTube is enabled: %w", err)
+		return
+	}
+
+	if !ytIsEnabled {
+		p.startStopButton.Enable()
+		return
+	}
+
+	ytStreamStatus, err := p.StreamD.GetStreamStatus(ctx, youtube.ID)
+	if err != nil {
+		logger.Errorf(ctx, "unable to get stream status from OBS: %w", err)
+		return
+	}
+	logger.Tracef(ctx, "ytStreamStatus == %#+v", ytStreamStatus)
+
+	if d, ok := ytStreamStatus.CustomData.(youtube.StreamStatusCustomData); ok {
+		logger.Tracef(ctx, "len(d.UpcomingBroadcasts) == %d; len(d.Streams) == %d", len(d.UpcomingBroadcasts), len(d.Streams))
+		if len(d.UpcomingBroadcasts) != 0 || len(d.Streams) != 0 {
+			p.startStopButton.Enable()
+		}
+	}
+}
+
 func (p *Panel) initMainWindow(ctx context.Context) {
 	w := p.app.NewWindow("StreamPanel")
 	w.SetMaster()
@@ -1095,6 +1155,22 @@ func (p *Panel) initMainWindow(ctx context.Context) {
 	w.Show()
 	p.mainWindow = w
 	p.profilesListWidget = profilesList
+
+	go func() {
+		p.getUpdatedStatus(ctx)
+
+		t := time.NewTicker(5 * time.Second)
+		for {
+			select {
+			case <-ctx.Done():
+				t.Stop()
+				return
+			case <-t.C:
+			}
+
+			p.getUpdatedStatus(ctx)
+		}
+	}()
 }
 
 func (p *Panel) getSelectedProfile() Profile {
@@ -1151,6 +1227,7 @@ func (p *Panel) setupStream(ctx context.Context) {
 
 	backendEnabled := map[streamcontrol.PlatformName]bool{}
 	for _, backendID := range []streamcontrol.PlatformName{
+		obs.ID,
 		twitch.ID,
 		youtube.ID,
 	} {
@@ -1160,6 +1237,14 @@ func (p *Panel) setupStream(ctx context.Context) {
 			return
 		}
 		backendEnabled[backendID] = isEnabled
+	}
+
+	if backendEnabled[obs.ID] {
+		obsIsActive := p.streamIsRunning(ctx, obs.ID)
+		if !obsIsActive {
+			p.startStopButton.Disable()
+			defer p.startStopButton.Enable()
+		}
 	}
 
 	profile := p.getSelectedProfile()
@@ -1205,7 +1290,6 @@ func (p *Panel) setupStream(ctx context.Context) {
 		}
 	}
 
-	p.startStopButton.Enable()
 }
 
 func (p *Panel) startStream(ctx context.Context) {

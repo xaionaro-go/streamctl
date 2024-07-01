@@ -237,8 +237,18 @@ func (grpc *GRPCServer) GetStreamStatus(
 		startedAt = ptr(streamStatus.StartedAt.UnixNano())
 	}
 
+	var customData string
+	if streamStatus.CustomData != nil {
+		customDataSerialized, err := json.Marshal(streamStatus.CustomData)
+		if err != nil {
+			return nil, fmt.Errorf("unable to serialize the custom data: %w", err)
+		}
+		customData = string(customDataSerialized)
+	}
+
 	return &streamd_grpc.GetStreamStatusReply{
-		IsActive:  streamStatus.IsActive,
-		StartedAt: startedAt,
+		IsActive:   streamStatus.IsActive,
+		StartedAt:  startedAt,
+		CustomData: customData,
 	}, nil
 }

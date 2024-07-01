@@ -3,6 +3,7 @@ package youtube
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -172,6 +173,27 @@ func (yt *YouTube) Close() error {
 	return nil
 }
 
+func (yt *YouTube) IterateUpcomingBroadcasts(
+	ctx context.Context,
+	callback func(broadcast *youtube.LiveBroadcast) error,
+	parts ...string,
+) error {
+	broadcasts, err := yt.YouTubeService.LiveBroadcasts.
+		List(append([]string{"id"}, parts...)).
+		BroadcastStatus("upcoming").
+		Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("unable to get the list of active broadcasts: %w", err)
+	}
+
+	for _, broadcast := range broadcasts.Items {
+		if err := callback(broadcast); err != nil {
+			return fmt.Errorf("got an error with broadcast %v: %w", broadcast.Id, err)
+		}
+	}
+	return nil
+}
+
 func (yt *YouTube) IterateActiveBroadcasts(
 	ctx context.Context,
 	callback func(broadcast *youtube.LiveBroadcast) error,
@@ -325,11 +347,6 @@ func (yt *YouTube) StartStream(
 	profile StreamProfile,
 	customArgs ...any,
 ) error {
-	err := yt.DeleteActiveBroadcasts(ctx)
-	if err != nil {
-		return fmt.Errorf("unable to delete old streams: %w", err)
-	}
-
 	var templateBroadcastIDs []string
 	for _, templateBroadcastIDCandidate := range customArgs {
 		_templateBroadcastIDs, ok := templateBroadcastIDCandidate.(FlagBroadcastTemplateIDs)
@@ -343,6 +360,22 @@ func (yt *YouTube) StartStream(
 
 	templateBroadcastIDs = append(templateBroadcastIDs, profile.TemplateBroadcastIDs...)
 	logger.Debugf(ctx, "templateBroadcastIDs == %v; customArgs == %v", templateBroadcastIDs, customArgs)
+
+	templateBroadcastIDMap := map[string]struct{}{}
+	for _, broadcastID := range templateBroadcastIDs {
+		templateBroadcastIDMap[broadcastID] = struct{}{}
+	}
+
+	err := yt.IterateUpcomingBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
+		if _, ok := templateBroadcastIDMap[broadcast.Id]; ok {
+			return nil
+		}
+		logger.Debugf(ctx, "deleting broadcast %v", broadcast.Id)
+		return yt.YouTubeService.LiveBroadcasts.Delete(broadcast.Id).Context(ctx).Do()
+	})
+	if err != nil {
+		logger.Error(ctx, "unable to delete other upcoming streams: %w", err)
+	}
 
 	var broadcasts []*youtube.LiveBroadcast
 	var videos []*youtube.Video
@@ -563,8 +596,11 @@ const timeLayout = "2006-01-02T15:04:05-0700"
 
 func (yt *YouTube) GetStreamStatus(
 	ctx context.Context,
-) (*streamcontrol.StreamStatus, error) {
-	var broadcasts []*youtube.LiveBroadcast
+) (_ret *streamcontrol.StreamStatus, _err error) {
+	defer func() {
+		logger.Tracef(ctx, "GetStreamStatus: err:%v; ret:%#+v", _err, _ret)
+	}()
+	var activeBroadcasts []*youtube.LiveBroadcast
 	var startedAt *time.Time
 	isActive := false
 	err := yt.IterateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
@@ -574,11 +610,20 @@ func (yt *YouTube) GetStreamStatus(
 			return fmt.Errorf("unable to parse '%s' with layout '%s': %w", ts, timeLayout, err)
 		}
 		startedAt = &_startedAt
-		broadcasts = append(broadcasts, broadcast)
+		activeBroadcasts = append(activeBroadcasts, broadcast)
 		return nil
 	}, liveBroadcastParts...)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get active broadcasts info: %w", err)
+	}
+
+	var upcomingBroadcasts []*youtube.LiveBroadcast
+	err = yt.IterateUpcomingBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
+		upcomingBroadcasts = append(upcomingBroadcasts, broadcast)
+		return nil
+	}, liveBroadcastParts...)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get upcoming broadcasts info: %w", err)
 	}
 
 	streams, err := yt.ListStreams(ctx)
@@ -586,19 +631,42 @@ func (yt *YouTube) GetStreamStatus(
 		return nil, fmt.Errorf("unable to get streams info: %w", err)
 	}
 
+	customData := StreamStatusCustomData{
+		ActiveBroadcasts:   activeBroadcasts,
+		UpcomingBroadcasts: upcomingBroadcasts,
+		Streams:            streams,
+	}
+	if logger.GetLevel(ctx) >= logger.LevelTrace {
+		logger.Tracef(ctx, "len(customData.UpcomingBroadcasts) == %d; len(customData.Streams) == %d", len(customData.UpcomingBroadcasts), len(customData.Streams))
+		for idx, broadcast := range customData.UpcomingBroadcasts {
+			b, err := json.Marshal(broadcast)
+			if err != nil {
+				logger.Tracef(ctx, "UpcomingBroadcasts[%3d] == %#+v", idx, *broadcast)
+			} else {
+				logger.Tracef(ctx, "UpcomingBroadcasts[%3d] == %s", idx, b)
+			}
+		}
+		for idx, stream := range customData.Streams {
+			b, err := json.Marshal(stream)
+			if err != nil {
+				logger.Tracef(ctx, "Streams[%3d] == %#+v", idx, *stream)
+			} else {
+				logger.Tracef(ctx, "Streams[%3d] == %s", idx, b)
+			}
+		}
+	}
+
 	if !isActive {
 		return &streamcontrol.StreamStatus{
-			IsActive: false,
+			IsActive:   false,
+			CustomData: customData,
 		}, nil
 	}
 
 	return &streamcontrol.StreamStatus{
-		IsActive:  true,
-		StartedAt: startedAt,
-		CustomData: map[string]any{
-			"Broadcasts": broadcasts,
-			"Streams":    streams,
-		},
+		IsActive:   true,
+		StartedAt:  startedAt,
+		CustomData: customData,
 	}, nil
 }
 

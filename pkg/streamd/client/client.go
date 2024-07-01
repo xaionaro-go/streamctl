@@ -316,9 +316,21 @@ func (c *Client) GetStreamStatus(
 		startedAt = ptr(time.Unix(v/1000000000, v%1000000000))
 	}
 
+	var customData any
+	switch platID {
+	case youtube.ID:
+		d := youtube.StreamStatusCustomData{}
+		err := json.Unmarshal([]byte(streamStatus.GetCustomData()), &d)
+		if err != nil {
+			return nil, fmt.Errorf("unable to unserialize the custom data: %w", err)
+		}
+		customData = d
+	}
+
 	return &streamcontrol.StreamStatus{
-		IsActive:  streamStatus.GetIsActive(),
-		StartedAt: startedAt,
+		IsActive:   streamStatus.GetIsActive(),
+		StartedAt:  startedAt,
+		CustomData: customData,
 	}, nil
 }
 
