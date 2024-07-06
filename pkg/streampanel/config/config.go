@@ -10,6 +10,7 @@ import (
 )
 
 type Config struct {
+	SentryDSN         string         `yaml:"sentry_dsn"`
 	RemoteStreamDAddr string         `yaml:"streamd_remote"`
 	BuiltinStreamD    streamd.Config `yaml:"streamd_builtin"`
 }

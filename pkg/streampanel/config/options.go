@@ -18,3 +18,9 @@ type OptionRemoteStreamDAddr string
 func (o OptionRemoteStreamDAddr) Apply(cfg *Config) {
 	cfg.RemoteStreamDAddr = string(o)
 }
+
+type OptionSentryDSN string
+
+func (o OptionSentryDSN) Apply(cfg *Config) {
+	cfg.SentryDSN = string(o)
+}

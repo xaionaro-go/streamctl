@@ -219,6 +219,15 @@ func getToken(ctx context.Context, cfg Config) (*oauth2.Token, error) {
 func (yt *YouTube) Ping(ctx context.Context) error {
 	counter := 0
 	for {
+		if yt == nil {
+			return fmt.Errorf("yt is nil")
+		}
+		if yt.YouTubeService == nil {
+			return fmt.Errorf("yt.YouTubeService == nil")
+		}
+		if yt.YouTubeService.I18nLanguages == nil {
+			return fmt.Errorf("yt.YouTubeService.I18nLanguages == nil")
+		}
 		_, err := yt.YouTubeService.I18nLanguages.List(nil).Context(ctx).Do()
 		logger.Debugf(ctx, "YouTube.I18nLanguages result: %v", err)
 		if err != nil {

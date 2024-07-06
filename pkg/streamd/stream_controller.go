@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
@@ -22,6 +23,7 @@ func (d *StreamD) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context) erro
 	sort.Slice(platNames, func(i, j int) bool {
 		return platNames[i] < platNames[j]
 	})
+	var result *multierror.Error
 	for _, platName := range platNames {
 		var err error
 		switch strings.ToLower(string(platName)) {
@@ -32,11 +34,14 @@ func (d *StreamD) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context) erro
 		case strings.ToLower(string(youtube.ID)):
 			err = d.initYouTubeBackend(ctx)
 		}
-		if err != nil && err != ErrSkipBackend {
-			return fmt.Errorf("unable to initialize '%s': %w", platName, err)
+		if err == ErrSkipBackend {
+			continue
+		}
+		if err != nil {
+			result = multierror.Append(result, fmt.Errorf("unable to initialize '%s': %w", platName, err))
 		}
 	}
-	return nil
+	return result.ErrorOrNil()
 }
 
 var ErrSkipBackend = streamd.ErrSkipBackend

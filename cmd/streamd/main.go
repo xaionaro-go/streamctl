@@ -12,10 +12,14 @@ import (
 	"sync"
 
 	"github.com/facebookincubator/go-belt"
+	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
+	errmonsentry "github.com/facebookincubator/go-belt/tool/experimental/errmon/implementation/sentry"
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/facebookincubator/go-belt/tool/logger/implementation/zap"
+	"github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
+	"github.com/getsentry/sentry-go"
 	"github.com/spf13/pflag"
 	"github.com/xaionaro-go/streamctl/cmd/streamd/ui"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamd"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
@@ -36,7 +40,7 @@ func main() {
 	cpuProfile := pflag.String("go-profile-cpu", "", "file to write cpu profile to")
 	heapProfile := pflag.String("go-profile-heap", "", "file to write memory profile to")
 	pflag.Parse()
-	l := zap.Default().WithLevel(loggerLevel)
+	l := logrus.Default().WithLevel(loggerLevel)
 
 	if *cpuProfile != "" {
 		f, err := os.Create(*cpuProfile)
@@ -129,8 +133,29 @@ func main() {
 			l.Fatalf("unable to initialize the streamd instance: %v", err)
 		}
 
+		l := l
+		if streamD.Config.SentryDSN != "" {
+			l.Infof("setting up Sentry at DSN '%s'", streamD.Config.SentryDSN)
+			sentryClient, err := sentry.NewClient(sentry.ClientOptions{
+				Dsn: streamD.Config.SentryDSN,
+			})
+			if err != nil {
+				l.Fatal(err)
+			}
+			sentryErrorMonitor := errmonsentry.New(sentryClient)
+			ctx = errmon.CtxWithErrorMonitor(ctx, sentryErrorMonitor)
+
+			l = l.WithPreHooks(observability.NewErrorMonitorLoggerHook(
+				sentryErrorMonitor,
+			))
+			ctx = logger.CtxWithLogger(ctx, l)
+			logger.Default = func() logger.Logger {
+				return l
+			}
+		}
+
 		if err = streamD.Run(ctx); err != nil {
-			l.Fatalf("streamd exited with error: %v", err)
+			l.Errorf("streamd returned an error: %v", err)
 		}
 
 		listener, err := net.Listen("tcp", *listenAddr)

@@ -51,7 +51,7 @@ type Panel struct {
 	StreamD api.StreamD
 
 	app                   fyne.App
-	config                Config
+	Config                Config
 	streamMutex           sync.Mutex
 	updateTimerHandler    *updateTimerHandler
 	profilesOrder         []streamcontrol.ProfileName
@@ -100,7 +100,7 @@ func New(
 
 	return &Panel{
 		configPath: configPath,
-		config:     Options(opts).ApplyOverrides(cfg),
+		Config:     Options(opts).ApplyOverrides(cfg),
 	}, nil
 }
 
@@ -117,11 +117,11 @@ func (p *Panel) Loop(ctx context.Context) error {
 	}
 
 	p.defaultContext = ctx
-	logger.Debug(ctx, "config", p.config)
+	logger.Debug(ctx, "config", p.Config)
 
-	if p.config.RemoteStreamDAddr != "" {
+	if p.Config.RemoteStreamDAddr != "" {
 		if err := p.initRemoteStreamD(ctx); err != nil {
-			return fmt.Errorf("unable to initialize the remote stream controller '%s': %w", p.config.RemoteStreamDAddr, err)
+			return fmt.Errorf("unable to initialize the remote stream controller '%s': %w", p.Config.RemoteStreamDAddr, err)
 		}
 	} else {
 		if err := p.initBuiltinStreamD(ctx); err != nil {
@@ -133,7 +133,7 @@ func (p *Panel) Loop(ctx context.Context) error {
 
 	go func() {
 		var loadingWindow fyne.Window
-		if p.config.RemoteStreamDAddr == "" {
+		if p.Config.RemoteStreamDAddr == "" {
 			loadingWindow = p.newLoadingWindow(ctx)
 			resizeWindow(loadingWindow, fyne.NewSize(600, 600))
 			loadingWindowText := widget.NewRichTextFromMarkdown("")
@@ -183,7 +183,7 @@ func (p *Panel) Loop(ctx context.Context) error {
 			p.DisplayError(err)
 		}
 
-		if p.config.RemoteStreamDAddr == "" {
+		if p.Config.RemoteStreamDAddr == "" {
 			logger.Tracef(ctx, "hiding the loading window")
 			loadingWindow.Hide()
 		}
@@ -212,12 +212,12 @@ func getExpandedConfigPath(configPath string) (string, error) {
 func (p *Panel) initBuiltinStreamD(ctx context.Context) error {
 	var err error
 	p.StreamD, err = streamd.New(
-		p.config.BuiltinStreamD,
+		p.Config.BuiltinStreamD,
 		p,
 		func(ctx context.Context, cfg streamdconfig.Config) error {
-			p.config.BuiltinStreamD = cfg
+			p.Config.BuiltinStreamD = cfg
 
-			err = config.WriteConfigToPath(ctx, p.configPath, p.config)
+			err = config.WriteConfigToPath(ctx, p.configPath, p.Config)
 			if err != nil {
 				return fmt.Errorf("unable to save the config: %w", err)
 			}
@@ -234,7 +234,7 @@ func (p *Panel) initBuiltinStreamD(ctx context.Context) error {
 }
 
 func (p *Panel) initRemoteStreamD(context.Context) error {
-	p.StreamD = client.New(p.config.RemoteStreamDAddr)
+	p.StreamD = client.New(p.Config.RemoteStreamDAddr)
 	return nil
 }
 

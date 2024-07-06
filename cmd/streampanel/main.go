@@ -13,9 +13,10 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	errmonsentry "github.com/facebookincubator/go-belt/tool/experimental/errmon/implementation/sentry"
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/facebookincubator/go-belt/tool/logger/implementation/zap"
+	"github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
 	"github.com/getsentry/sentry-go"
 	"github.com/spf13/pflag"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/server"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel"
@@ -35,7 +36,7 @@ func main() {
 	heapProfile := pflag.String("go-profile-heap", "", "file to write memory profile to")
 	sentryDSN := pflag.String("sentry-dsn", "", "DSN of a Sentry instance to send error reports")
 	pflag.Parse()
-	l := zap.Default().WithLevel(loggerLevel)
+	l := logrus.Default().WithLevel(loggerLevel)
 
 	if *cpuProfile != "" {
 		f, err := os.Create(*cpuProfile)
@@ -87,17 +88,29 @@ func main() {
 		listener.Close()
 	}()
 
-	sentryClient, err := sentry.NewClient(sentry.ClientOptions{
-		Dsn: *sentryDSN,
-	})
-	if err != nil {
-		l.Fatal(err)
+	var opts []streampanel.Option
+	if *remoteAddr != "" {
+		opts = append(opts, streampanel.OptionRemoteStreamDAddr(*remoteAddr))
 	}
-	sentryErrorMonitor := errmonsentry.New(sentryClient)
-	errmon.CtxWithErrorMonitor(ctx, sentryErrorMonitor)
-	l.WithHooks(&ErrorMonitorLoggerHook{
-		ErrorMonitor: sentryErrorMonitor,
-	})
+	if *sentryDSN != "" {
+		opts = append(opts, streampanel.OptionSentryDSN(*sentryDSN))
+	}
+	panel, panelErr := streampanel.New(*configPath, opts...)
+
+	if panel.Config.SentryDSN != "" {
+		l.Infof("setting up Sentry at DSN '%s'", panel.Config.SentryDSN)
+		sentryClient, err := sentry.NewClient(sentry.ClientOptions{
+			Dsn: panel.Config.SentryDSN,
+		})
+		if err != nil {
+			l.Fatal(err)
+		}
+		sentryErrorMonitor := errmonsentry.New(sentryClient)
+		ctx = errmon.CtxWithErrorMonitor(ctx, sentryErrorMonitor)
+		l = l.WithPreHooks(observability.NewErrorMonitorLoggerHook(
+			sentryErrorMonitor,
+		))
+	}
 
 	ctx = logger.CtxWithLogger(ctx, l)
 	logger.Default = func() logger.Logger {
@@ -105,13 +118,8 @@ func main() {
 	}
 	defer belt.Flush(ctx)
 
-	var opts []streampanel.Option
-	if *remoteAddr != "" {
-		opts = append(opts, streampanel.OptionRemoteStreamDAddr(*remoteAddr))
-	}
-	panel, err := streampanel.New(*configPath, opts...)
-	if err != nil {
-		l.Fatal(err)
+	if panelErr != nil {
+		l.Fatal(panelErr)
 	}
 
 	if *listenAddr != "" {

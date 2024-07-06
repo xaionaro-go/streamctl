@@ -183,6 +183,9 @@ func (c *abstractStreamController) StreamProfileType() reflect.Type {
 }
 
 func ToAbstract[T StreamProfile](c StreamController[T]) AbstractStreamController {
+	if c == nil {
+		return nil
+	}
 	var zeroProfile T
 	profileType := reflect.TypeOf(zeroProfile)
 	return &abstractStreamController{

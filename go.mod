@@ -8,7 +8,7 @@ toolchain go1.22.3
 replace github.com/goccy/go-yaml v1.11.3 => github.com/yoelsusanto/go-yaml v0.0.0-20240324162521-2018c1ab915b
 
 require (
-	github.com/facebookincubator/go-belt v0.0.0-20230703220935-39cd348f1a38
+	github.com/facebookincubator/go-belt v0.0.0-20240706172357-c5875adb39ef
 	github.com/go-git/go-billy/v5 v5.5.0
 	github.com/goccy/go-yaml v1.11.3
 	github.com/hashicorp/go-multierror v1.1.1
@@ -57,6 +57,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ng/slices v0.0.0-20230703171042-6195d35636a2 // indirect
 	github.com/go-ng/sort v0.0.0-20220617173827-2cc7cd04f7c7 // indirect
+	github.com/go-ng/xatomic v0.0.0-20230519181013-85c0ec87e55f // indirect
 	github.com/go-ng/xsort v0.0.0-20220617174223-1d146907bccc // indirect
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
 	github.com/go-text/render v0.1.0 // indirect
@@ -149,6 +150,7 @@ require (
 	github.com/rymdport/portal v0.2.2 // indirect
 	github.com/samber/lo v1.36.0 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
+	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/skeema/knownhosts v1.2.2 // indirect
 	github.com/songgao/water v0.0.0-20200317203138-2b4b6d7c09d8 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect

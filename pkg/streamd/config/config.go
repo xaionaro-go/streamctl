@@ -30,6 +30,7 @@ type config struct {
 	GitRepo         GitRepoConfig
 	Backends        streamcontrol.Config
 	ProfileMetadata map[streamcontrol.ProfileName]ProfileMetadata
+	SentryDSN       string `yaml:"sentry_dsn"`
 }
 
 type Config config

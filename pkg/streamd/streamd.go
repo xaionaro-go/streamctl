@@ -50,7 +50,12 @@ type StreamD struct {
 
 var _ api.StreamD = (*StreamD)(nil)
 
-func New(config config.Config, ui ui.UI, saveCfgFunc SaveConfigFunc, b *belt.Belt) (*StreamD, error) {
+func New(
+	config config.Config,
+	ui ui.UI,
+	saveCfgFunc SaveConfigFunc,
+	b *belt.Belt,
+) (*StreamD, error) {
 	ctx := belt.CtxWithBelt(context.Background(), b)
 
 	d := &StreamD{
@@ -417,16 +422,27 @@ func (d *StreamD) Restart(ctx context.Context) error {
 func (d *StreamD) streamController(
 	platID streamcontrol.PlatformName,
 ) (streamcontrol.AbstractStreamController, error) {
+	var result streamcontrol.AbstractStreamController
 	switch platID {
 	case obs.ID:
-		return streamcontrol.ToAbstract(d.StreamControllers.OBS), nil
+		if d.StreamControllers.OBS != nil {
+			result = streamcontrol.ToAbstract(d.StreamControllers.OBS)
+		}
 	case twitch.ID:
-		return streamcontrol.ToAbstract(d.StreamControllers.Twitch), nil
+		if d.StreamControllers.Twitch != nil {
+			result = streamcontrol.ToAbstract(d.StreamControllers.Twitch)
+		}
 	case youtube.ID:
-		return streamcontrol.ToAbstract(d.StreamControllers.YouTube), nil
+		if d.StreamControllers.YouTube != nil {
+			result = streamcontrol.ToAbstract(d.StreamControllers.YouTube)
+		}
 	default:
 		return nil, fmt.Errorf("unexpected platform ID: '%s'", platID)
 	}
+	if result == nil {
+		return nil, fmt.Errorf("controller '%s' is not initialized", platID)
+	}
+	return result, nil
 }
 func (d *StreamD) GetStreamStatus(
 	ctx context.Context,
@@ -435,6 +451,10 @@ func (d *StreamD) GetStreamStatus(
 	c, err := d.streamController(platID)
 	if err != nil {
 		return nil, err
+	}
+
+	if c == nil {
+		return nil, fmt.Errorf("controller '%s' is not initialized", platID)
 	}
 
 	return c.GetStreamStatus(ctx)
