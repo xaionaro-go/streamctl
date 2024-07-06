@@ -14,15 +14,15 @@ type updateTimerHandler struct {
 	startTS         time.Time
 }
 
-func newUpdateTimerHandler(startStopButton *widget.Button) *updateTimerHandler {
+func newUpdateTimerHandler(startStopButton *widget.Button, startedAt time.Time) *updateTimerHandler {
 	ctx, cancelFn := context.WithCancel(context.Background())
 	h := &updateTimerHandler{
 		ctx:             ctx,
 		cancelFn:        cancelFn,
 		startStopButton: startStopButton,
-		startTS:         time.Now(),
+		startTS:         startedAt,
 	}
-	h.startStopButton.Text = "0s"
+	h.startStopButton.Text = "..."
 	go h.loop()
 	return h
 }

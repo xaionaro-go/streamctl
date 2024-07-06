@@ -34,21 +34,24 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/client"
-	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
+	streamdconfig "github.com/xaionaro-go/streamctl/pkg/streamd/config"
+	"github.com/xaionaro-go/streamctl/pkg/streampanel/config"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
 )
 
+const appName = "StreamPanel"
+
 type Profile struct {
-	config.ProfileMetadata
+	streamdconfig.ProfileMetadata
 	Name        streamcontrol.ProfileName
 	PerPlatform map[streamcontrol.PlatformName]streamcontrol.AbstractStreamProfile
 }
 
 type Panel struct {
-	StreamD StreamD
+	StreamD api.StreamD
 
 	app                   fyne.App
-	config                configT
+	config                Config
 	streamMutex           sync.Mutex
 	updateTimerHandler    *updateTimerHandler
 	profilesOrder         []streamcontrol.ProfileName
@@ -69,31 +72,36 @@ type Panel struct {
 	twitchCheck  *widget.Check
 
 	configPath  string
-	configCache *config.Config
-
-	remoteAddr string
+	configCache *streamdconfig.Config
 
 	setStatusFunc func(string)
+
+	displayErrorLocker sync.Mutex
+	displayErrorWindow fyne.Window
+
+	waitWindowLocker sync.Mutex
+	waitWindow       fyne.Window
 }
 
-func NewBuiltin(
+func New(
 	configPath string,
 	opts ...Option,
-) *Panel {
+) (*Panel, error) {
+	configPath, err := getExpandedConfigPath(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get the path to the config file: %w", err)
+	}
+
+	var cfg Config
+	err = config.ReadConfigFromPath(configPath, &cfg)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read the config from path '%s': %w", configPath, err)
+	}
+
 	return &Panel{
 		configPath: configPath,
-		config:     Options(opts).Config(),
-	}
-}
-
-func NewRemote(
-	remoteAddr string,
-	opts ...Option,
-) *Panel {
-	return &Panel{
-		remoteAddr: remoteAddr,
-		config:     Options(opts).Config(),
-	}
+		config:     Options(opts).ApplyOverrides(cfg),
+	}, nil
 }
 
 func (p *Panel) SetStatus(msg string) {
@@ -111,14 +119,13 @@ func (p *Panel) Loop(ctx context.Context) error {
 	p.defaultContext = ctx
 	logger.Debug(ctx, "config", p.config)
 
-	switch {
-	case p.configPath != "":
+	if p.config.RemoteStreamDAddr != "" {
+		if err := p.initRemoteStreamD(ctx); err != nil {
+			return fmt.Errorf("unable to initialize the remote stream controller '%s': %w", p.config.RemoteStreamDAddr, err)
+		}
+	} else {
 		if err := p.initBuiltinStreamD(ctx); err != nil {
 			return fmt.Errorf("unable to initialize the builtin stream controller '%s': %w", p.configPath, err)
-		}
-	case p.remoteAddr != "":
-		if err := p.initRemoteStreamD(ctx); err != nil {
-			return fmt.Errorf("unable to initialize the remote stream controller '%s': %w", p.remoteAddr, err)
 		}
 	}
 
@@ -126,7 +133,7 @@ func (p *Panel) Loop(ctx context.Context) error {
 
 	go func() {
 		var loadingWindow fyne.Window
-		if p.remoteAddr == "" {
+		if p.config.RemoteStreamDAddr == "" {
 			loadingWindow = p.newLoadingWindow(ctx)
 			resizeWindow(loadingWindow, fyne.NewSize(600, 600))
 			loadingWindowText := widget.NewRichTextFromMarkdown("")
@@ -136,11 +143,37 @@ func (p *Panel) Loop(ctx context.Context) error {
 				loadingWindowText.ParseMarkdown(fmt.Sprintf("# %s", msg))
 			}
 		}
+		if streamD, ok := p.StreamD.(*client.Client); ok && false {
+			oauthURLChan, err := streamD.SubscriberToOAuthURLs(ctx)
+			if err != nil {
+				p.DisplayError(fmt.Errorf("unable to subscribe to OAuth requests of streamd: %w", err))
+			}
+			go func() {
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case authURL, ok := <-oauthURLChan:
+						if !ok {
+							return
+						}
+
+						if authURL == "" {
+							logger.Errorf(ctx, "received an empty authURL")
+							time.Sleep(1 * time.Second)
+							continue
+						}
+
+						oauthhandler.LaunchBrowser(authURL)
+						time.Sleep(1 * time.Second) // throttling the execution to avoid hanging the OS
+					}
+				}
+			}()
+		}
 
 		err := p.StreamD.Run(ctx)
 		if err != nil {
 			p.DisplayError(fmt.Errorf("unable to initialize the streaming controllers: %w", err))
-			os.Exit(1)
 		}
 		p.setStatusFunc = nil
 
@@ -150,7 +183,7 @@ func (p *Panel) Loop(ctx context.Context) error {
 			p.DisplayError(err)
 		}
 
-		if p.remoteAddr == "" {
+		if p.config.RemoteStreamDAddr == "" {
 			logger.Tracef(ctx, "hiding the loading window")
 			loadingWindow.Hide()
 		}
@@ -166,23 +199,33 @@ func (p *Panel) newLoadingWindow(ctx context.Context) fyne.Window {
 	logger.FromCtx(ctx).Debugf("newLoadingWindow")
 	defer logger.FromCtx(ctx).Debugf("endof newLoadingWindow")
 
-	w := p.app.NewWindow("Loading...")
+	w := p.app.NewWindow(appName + ": Loading...")
 	w.Show()
 
 	return w
 }
 
-func (p *Panel) getExpandedDataPath() (string, error) {
-	return xpath.Expand(p.configPath)
+func getExpandedConfigPath(configPath string) (string, error) {
+	return xpath.Expand(configPath)
 }
 
 func (p *Panel) initBuiltinStreamD(ctx context.Context) error {
-	dataPath, err := p.getExpandedDataPath()
-	if err != nil {
-		return fmt.Errorf("unable to get the path to the data file: %w", err)
-	}
+	var err error
+	p.StreamD, err = streamd.New(
+		p.config.BuiltinStreamD,
+		p,
+		func(ctx context.Context, cfg streamdconfig.Config) error {
+			p.config.BuiltinStreamD = cfg
 
-	p.StreamD, err = streamd.New(dataPath, p, belt.CtxBelt(ctx))
+			err = config.WriteConfigToPath(ctx, p.configPath, p.config)
+			if err != nil {
+				return fmt.Errorf("unable to save the config: %w", err)
+			}
+
+			return nil
+		},
+		belt.CtxBelt(ctx),
+	)
 	if err != nil {
 		return fmt.Errorf("unable to initialize the streamd instance: %w", err)
 	}
@@ -191,7 +234,7 @@ func (p *Panel) initBuiltinStreamD(ctx context.Context) error {
 }
 
 func (p *Panel) initRemoteStreamD(context.Context) error {
-	p.StreamD = client.New(p.remoteAddr)
+	p.StreamD = client.New(p.config.RemoteStreamDAddr)
 	return nil
 }
 
@@ -209,7 +252,7 @@ func (p *Panel) InputOBSConnectInfo(
 	ctx context.Context,
 	cfg *streamcontrol.PlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile],
 ) (bool, error) {
-	w := p.app.NewWindow("Input Twitch user info")
+	w := p.app.NewWindow(appName + ": Input Twitch user info")
 	resizeWindow(w, fyne.NewSize(600, 200))
 
 	hostField := widget.NewEntry()
@@ -330,7 +373,7 @@ func (p *Panel) openBrowser(authURL string) error {
 
 	waitCh := make(chan struct{})
 
-	w := p.app.NewWindow("Browser selection window")
+	w := p.app.NewWindow(appName + ": Browser selection window")
 	promptText := widget.NewRichTextWithText("It is required to confirm access in Twitch/YouTube using browser. Select a browser for that (or leave the field empty for auto-selection):")
 	promptText.Wrapping = fyne.TextWrapWord
 	browserField := widget.NewEntry()
@@ -369,7 +412,7 @@ func (p *Panel) InputTwitchUserInfo(
 	ctx context.Context,
 	cfg *streamcontrol.PlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile],
 ) (bool, error) {
-	w := p.app.NewWindow("Input Twitch user info")
+	w := p.app.NewWindow(appName + ": Input Twitch user info")
 	resizeWindow(w, fyne.NewSize(600, 200))
 
 	channelField := widget.NewEntry()
@@ -430,7 +473,7 @@ func (p *Panel) InputYouTubeUserInfo(
 	ctx context.Context,
 	cfg *streamcontrol.PlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile],
 ) (bool, error) {
-	w := p.app.NewWindow("Input YouTube user info")
+	w := p.app.NewWindow(appName + ": Input YouTube user info")
 	resizeWindow(w, fyne.NewSize(600, 200))
 
 	clientIDField := widget.NewEntry()
@@ -538,7 +581,7 @@ func (p *Panel) profileDelete(ctx context.Context, profileName streamcontrol.Pro
 	return nil
 }
 
-func getProfile(cfg *config.Config, profileName streamcontrol.ProfileName) Profile {
+func getProfile(cfg *streamdconfig.Config, profileName streamcontrol.ProfileName) Profile {
 	prof := Profile{
 		ProfileMetadata: cfg.ProfileMetadata[profileName],
 		Name:            profileName,
@@ -747,20 +790,23 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 		return fmt.Errorf("unable to get info if GIT is initialized: %w", err)
 	}
 
-	w := p.app.NewWindow("Settings")
+	w := p.app.NewWindow(appName + ": Settings")
 	resizeWindow(w, fyne.NewSize(400, 900))
 
+	cmdStartStream, _ := cfg.Backends[obs.ID].GetCustomString(config.CustomConfigKeyOnStreamStart)
+	cmdStopStream, _ := cfg.Backends[obs.ID].GetCustomString(config.CustomConfigKeyOnStreamStop)
+
 	startStreamCommandEntry := widget.NewEntry()
-	startStreamCommandEntry.SetText(cfg.Commands.OnStartStream)
+	startStreamCommandEntry.SetText(cmdStartStream)
 	stopStreamCommandEntry := widget.NewEntry()
-	stopStreamCommandEntry.SetText(cfg.Commands.OnStopStream)
+	stopStreamCommandEntry.SetText(cmdStopStream)
 
 	cancelButton := widget.NewButtonWithIcon("Cancel", theme.CancelIcon(), func() {
 		w.Close()
 	})
 	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
-		cfg.Commands.OnStartStream = startStreamCommandEntry.Text
-		cfg.Commands.OnStopStream = stopStreamCommandEntry.Text
+		cfg.Backends[obs.ID].SetCustomString(config.CustomConfigKeyOnStreamStart, startStreamCommandEntry.Text)
+		cfg.Backends[obs.ID].SetCustomString(config.CustomConfigKeyOnStreamStop, stopStreamCommandEntry.Text)
 
 		if err := p.StreamD.SaveConfig(ctx); err != nil {
 			p.DisplayError(err)
@@ -931,18 +977,24 @@ func (p *Panel) openMenuWindow(ctx context.Context) {
 }
 
 func resizeWindow(w fyne.Window, newSize fyne.Size) {
+	w.Resize(newSize)
+}
+
+func setupStreamString() string {
 	switch runtime.GOOS {
 	case "android":
-		w.SetFullScreen(true)
-		w.SetPadded(false)
-		w.Canvas().SetOnTypedRune(func(r rune) {
-			go func() {
-				time.Sleep(200 * time.Millisecond)
-				w.Resize(w.Canvas().Size())
-			}()
-		})
+		return "Set!"
 	default:
-		w.Resize(newSize)
+		return "Setup stream"
+	}
+}
+
+func startStreamString() string {
+	switch runtime.GOOS {
+	case "android":
+		return "Go!"
+	default:
+		return "Start stream"
 	}
 }
 
@@ -961,6 +1013,12 @@ func (p *Panel) getUpdatedStatus_startStopStreamButton(ctx context.Context) {
 		return
 	}
 	if !obsIsEnabled {
+		if p.updateTimerHandler != nil {
+			p.updateTimerHandler.Close()
+			p.updateTimerHandler = nil
+		}
+		p.startStopButton.SetText(startStreamString())
+		p.startStopButton.Icon = theme.MediaRecordIcon()
 		p.startStopButton.Importance = widget.SuccessImportance
 		p.startStopButton.Disable()
 		return
@@ -974,10 +1032,27 @@ func (p *Panel) getUpdatedStatus_startStopStreamButton(ctx context.Context) {
 	logger.Tracef(ctx, "obsStreamStatus == %#+v", obsStreamStatus)
 
 	if obsStreamStatus.IsActive {
+		p.startStopButton.Icon = theme.MediaStopIcon()
 		p.startStopButton.Importance = widget.DangerImportance
 		p.startStopButton.Enable()
+		if p.updateTimerHandler == nil {
+			if obsStreamStatus.StartedAt == nil {
+				p.startStopButton.SetText("Stop stream")
+			} else {
+				p.startStopButton.SetText("...")
+				logger.Debugf(ctx, "stream was already started at %s", obsStreamStatus.StartedAt.Format(time.RFC3339))
+				p.updateTimerHandler = newUpdateTimerHandler(p.startStopButton, *obsStreamStatus.StartedAt)
+			}
+		}
 		return
 	}
+
+	if p.updateTimerHandler != nil {
+		p.updateTimerHandler.Close()
+		p.updateTimerHandler = nil
+	}
+	p.startStopButton.SetText(startStreamString())
+	p.startStopButton.Icon = theme.MediaRecordIcon()
 	p.startStopButton.Importance = widget.SuccessImportance
 
 	ytIsEnabled, err := p.StreamD.IsBackendEnabled(ctx, youtube.ID)
@@ -986,28 +1061,28 @@ func (p *Panel) getUpdatedStatus_startStopStreamButton(ctx context.Context) {
 		return
 	}
 
-	if !ytIsEnabled {
+	if !ytIsEnabled || !p.youtubeCheck.Checked {
 		p.startStopButton.Enable()
 		return
 	}
 
 	ytStreamStatus, err := p.StreamD.GetStreamStatus(ctx, youtube.ID)
 	if err != nil {
-		logger.Errorf(ctx, "unable to get stream status from OBS: %w", err)
+		logger.Errorf(ctx, "unable to get stream status from YouTube: %w", err)
 		return
 	}
 	logger.Tracef(ctx, "ytStreamStatus == %#+v", ytStreamStatus)
 
 	if d, ok := ytStreamStatus.CustomData.(youtube.StreamStatusCustomData); ok {
 		logger.Tracef(ctx, "len(d.UpcomingBroadcasts) == %d; len(d.Streams) == %d", len(d.UpcomingBroadcasts), len(d.Streams))
-		if len(d.UpcomingBroadcasts) != 0 || len(d.Streams) != 0 {
+		if len(d.UpcomingBroadcasts) != 0 {
 			p.startStopButton.Enable()
 		}
 	}
 }
 
 func (p *Panel) initMainWindow(ctx context.Context) {
-	w := p.app.NewWindow("StreamPanel")
+	w := p.app.NewWindow(appName)
 	w.SetMaster()
 	resizeWindow(w, fyne.NewSize(400, 600))
 
@@ -1066,12 +1141,12 @@ func (p *Panel) initMainWindow(ctx context.Context) {
 		profileFilter,
 	)
 
-	p.setupStreamButton = widget.NewButtonWithIcon("Setup stream", theme.SettingsIcon(), func() {
+	p.setupStreamButton = widget.NewButtonWithIcon(setupStreamString(), theme.SettingsIcon(), func() {
 		p.onSetupStreamButton(ctx)
 	})
 	p.setupStreamButton.Disable()
 
-	p.startStopButton = widget.NewButtonWithIcon("Start stream", theme.MediaRecordIcon(), func() {
+	p.startStopButton = widget.NewButtonWithIcon(startStreamString(), theme.MediaRecordIcon(), func() {
 		p.onStartStopButton(ctx)
 	})
 	p.startStopButton.Importance = widget.SuccessImportance
@@ -1137,13 +1212,6 @@ func (p *Panel) initMainWindow(ctx context.Context) {
 		),
 	)
 
-	switch runtime.GOOS {
-	case "android":
-		l := widget.NewMultiLineEntry()
-		l.SetMinRowsVisible(10)
-		bottomPanel.Add(l)
-	}
-
 	w.SetContent(container.NewBorder(
 		topPanel,
 		bottomPanel,
@@ -1156,21 +1224,23 @@ func (p *Panel) initMainWindow(ctx context.Context) {
 	p.mainWindow = w
 	p.profilesListWidget = profilesList
 
-	go func() {
-		p.getUpdatedStatus(ctx)
-
-		t := time.NewTicker(5 * time.Second)
-		for {
-			select {
-			case <-ctx.Done():
-				t.Stop()
-				return
-			case <-t.C:
-			}
-
+	if _, ok := p.StreamD.(*client.Client); ok {
+		go func() {
 			p.getUpdatedStatus(ctx)
-		}
-	}()
+
+			t := time.NewTicker(1 * time.Second)
+			for {
+				select {
+				case <-ctx.Done():
+					t.Stop()
+					return
+				case <-t.C:
+				}
+
+				p.getUpdatedStatus(ctx)
+			}
+		}()
+	}
 }
 
 func (p *Panel) getSelectedProfile() Profile {
@@ -1308,7 +1378,7 @@ func (p *Panel) startStream(ctx context.Context) {
 	if p.updateTimerHandler != nil {
 		p.updateTimerHandler.Stop()
 	}
-	p.updateTimerHandler = newUpdateTimerHandler(p.startStopButton)
+	p.updateTimerHandler = newUpdateTimerHandler(p.startStopButton, time.Now())
 
 	isEnabled, err := p.StreamD.IsBackendEnabled(ctx, obs.ID)
 	if err != nil {
@@ -1333,7 +1403,9 @@ func (p *Panel) startStream(ctx context.Context) {
 		p.DisplayError(fmt.Errorf("unable to start the stream on YouTube: %w", err))
 	}
 
-	p.execCommand(ctx, p.configCache.Commands.OnStartStream)
+	if onStreamStart, ok := p.configCache.Backends[obs.ID].GetCustomString(config.CustomConfigKeyOnStreamStart); ok {
+		p.execCommand(ctx, onStreamStart)
+	}
 
 	p.startStopButton.Refresh()
 }
@@ -1387,8 +1459,12 @@ func (p *Panel) stopStream(ctx context.Context) {
 	}
 
 	p.startStopButton.SetText("OnStopStream command...")
-	p.execCommand(ctx, p.configCache.Commands.OnStopStream)
-	p.startStopButton.SetText("Start stream")
+
+	if onStreamStop, ok := p.configCache.Backends[obs.ID].GetCustomString(config.CustomConfigKeyOnStreamStop); ok {
+		p.execCommand(ctx, onStreamStop)
+	}
+
+	p.startStopButton.SetText(startStreamString())
 	p.startStopButton.Icon = theme.MediaRecordIcon()
 	p.startStopButton.Importance = widget.SuccessImportance
 
@@ -1396,7 +1472,7 @@ func (p *Panel) stopStream(ctx context.Context) {
 }
 
 func (p *Panel) onSetupStreamButton(ctx context.Context) {
-	p.setupStream(ctx)
+	p.waitForResponse(func() { p.setupStream(ctx) })
 }
 
 func (p *Panel) onStartStopButton(ctx context.Context) {
@@ -1412,7 +1488,7 @@ func (p *Panel) onStartStopButton(ctx context.Context) {
 			"Are you ready to start the stream?",
 			func(b bool) {
 				if b {
-					p.startStream(ctx)
+					p.waitForResponse(func() { p.startStream(ctx) })
 				}
 			},
 			p.mainWindow,
@@ -1431,46 +1507,54 @@ func cleanYoutubeRecordingName(in string) string {
 
 func (p *Panel) editProfileWindow(ctx context.Context) fyne.Window {
 	oldProfile := getProfile(p.configCache, *p.selectedProfileName)
-	return p.profileWindow(
-		ctx,
-		fmt.Sprintf("Edit the profile '%s'", oldProfile.Name),
-		oldProfile,
-		func(ctx context.Context, profile Profile) error {
-			if err := p.profileCreateOrUpdate(ctx, profile); err != nil {
-				return fmt.Errorf("unable to create profile '%s': %w", profile.Name, err)
-			}
-			if profile.Name != oldProfile.Name {
-				if err := p.profileDelete(ctx, oldProfile.Name); err != nil {
-					return fmt.Errorf("unable to delete profile '%s': %w", oldProfile.Name, err)
+	var w fyne.Window
+	p.waitForResponse(func() {
+		w = p.profileWindow(
+			ctx,
+			fmt.Sprintf("Edit the profile '%s'", oldProfile.Name),
+			oldProfile,
+			func(ctx context.Context, profile Profile) error {
+				if err := p.profileCreateOrUpdate(ctx, profile); err != nil {
+					return fmt.Errorf("unable to create profile '%s': %w", profile.Name, err)
 				}
-			}
-			p.profilesListWidget.UnselectAll()
-			return nil
-		},
-	)
+				if profile.Name != oldProfile.Name {
+					if err := p.profileDelete(ctx, oldProfile.Name); err != nil {
+						return fmt.Errorf("unable to delete profile '%s': %w", oldProfile.Name, err)
+					}
+				}
+				p.profilesListWidget.UnselectAll()
+				return nil
+			},
+		)
+	})
+	return w
 }
 
 func (p *Panel) cloneProfileWindow(ctx context.Context) fyne.Window {
 	oldProfile := getProfile(p.configCache, *p.selectedProfileName)
-	return p.profileWindow(
-		ctx,
-		"Create a profile",
-		oldProfile,
-		func(ctx context.Context, profile Profile) error {
-			if oldProfile.Name == profile.Name {
-				return fmt.Errorf("profile with name '%s' already exists", profile.Name)
-			}
-			if err := p.profileCreateOrUpdate(ctx, profile); err != nil {
-				return err
-			}
-			p.profilesListWidget.UnselectAll()
-			return nil
-		},
-	)
+	var w fyne.Window
+	p.waitForResponse(func() {
+		w = p.profileWindow(
+			ctx,
+			"Create a profile",
+			oldProfile,
+			func(ctx context.Context, profile Profile) error {
+				if oldProfile.Name == profile.Name {
+					return fmt.Errorf("profile with name '%s' already exists", profile.Name)
+				}
+				if err := p.profileCreateOrUpdate(ctx, profile); err != nil {
+					return err
+				}
+				p.profilesListWidget.UnselectAll()
+				return nil
+			},
+		)
+	})
+	return w
 }
 
 func (p *Panel) deleteProfileWindow(ctx context.Context) fyne.Window {
-	w := p.app.NewWindow("Delete the profile?")
+	w := p.app.NewWindow(appName + ": Delete the profile?")
 
 	yesButton := widget.NewButton("YES", func() {
 		err := p.profileDelete(ctx, *p.selectedProfileName)
@@ -1499,29 +1583,33 @@ func (p *Panel) deleteProfileWindow(ctx context.Context) fyne.Window {
 }
 
 func (p *Panel) newProfileWindow(ctx context.Context) fyne.Window {
-	return p.profileWindow(
-		ctx,
-		"Create a profile",
-		Profile{},
-		func(ctx context.Context, profile Profile) error {
-			found := false
-			for _, platCfg := range p.configCache.Backends {
-				_, ok := platCfg.GetStreamProfile(profile.Name)
-				if ok {
-					found = true
-					break
+	var w fyne.Window
+	p.waitForResponse(func() {
+		w = p.profileWindow(
+			ctx,
+			"Create a profile",
+			Profile{},
+			func(ctx context.Context, profile Profile) error {
+				found := false
+				for _, platCfg := range p.configCache.Backends {
+					_, ok := platCfg.GetStreamProfile(profile.Name)
+					if ok {
+						found = true
+						break
+					}
 				}
-			}
-			if found {
-				return fmt.Errorf("profile with name '%s' already exists", profile.Name)
-			}
-			if err := p.profileCreateOrUpdate(ctx, profile); err != nil {
-				return err
-			}
-			p.profilesListWidget.UnselectAll()
-			return nil
-		},
-	)
+				if found {
+					return fmt.Errorf("profile with name '%s' already exists", profile.Name)
+				}
+				if err := p.profileCreateOrUpdate(ctx, profile); err != nil {
+					return err
+				}
+				p.profilesListWidget.UnselectAll()
+				return nil
+			},
+		)
+	})
+	return w
 }
 
 func ptr[T any](in T) *T {
@@ -1917,7 +2005,7 @@ func (p *Panel) profileWindow(
 			profile := Profile{
 				Name:        streamcontrol.ProfileName(profileName.Text),
 				PerPlatform: map[streamcontrol.PlatformName]streamcontrol.AbstractStreamProfile{},
-				ProfileMetadata: config.ProfileMetadata{
+				ProfileMetadata: streamdconfig.ProfileMetadata{
 					DefaultStreamTitle:       defaultStreamTitle.Text,
 					DefaultStreamDescription: defaultStreamDescription.Text,
 					MaxOrder:                 0,
@@ -1942,7 +2030,10 @@ func (p *Panel) profileWindow(
 				youtubeProfile.Tags = _tags
 				profile.PerPlatform[youtube.ID] = youtubeProfile
 			}
-			err := commitFn(ctx, profile)
+			var err error
+			p.waitForResponse(func() {
+				err = commitFn(ctx, profile)
+			})
 			if err != nil {
 				p.DisplayError(err)
 				return
@@ -1969,9 +2060,9 @@ func (p *Panel) profileWindow(
 
 func (p *Panel) DisplayError(err error) {
 	logger.Debugf(p.defaultContext, "DisplayError('%v')", err)
-	w := p.app.NewWindow("Got an error: " + err.Error())
+	defer logger.Debugf(p.defaultContext, "/DisplayError('%v')", err)
+
 	errorMessage := fmt.Sprintf("Error: %v\n\nstack trace:\n%s", err, debug.Stack())
-	resizeWindow(w, fyne.NewSize(400, 300))
 	textWidget := widget.NewMultiLineEntry()
 	textWidget.SetText(errorMessage)
 	textWidget.Wrapping = fyne.TextWrapWord
@@ -1979,6 +2070,51 @@ func (p *Panel) DisplayError(err error) {
 		Bold:      true,
 		Monospace: true,
 	}
+
+	p.displayErrorLocker.Lock()
+	defer p.displayErrorLocker.Unlock()
+	if p.displayErrorWindow != nil {
+		p.displayErrorWindow.SetContent(container.NewVSplit(p.displayErrorWindow.Content(), textWidget))
+		return
+	}
+	w := p.app.NewWindow(appName + ": Got an error: " + err.Error())
+	resizeWindow(w, fyne.NewSize(400, 300))
 	w.SetContent(textWidget)
+
+	w.SetOnClosed(func() {
+		p.displayErrorLocker.Lock()
+		defer p.displayErrorLocker.Unlock()
+
+		p.displayErrorWindow = nil
+	})
 	w.Show()
+}
+
+func (p *Panel) waitForResponse(callback func()) {
+	p.showWaitWindow()
+	defer p.hideWaitWindow()
+	callback()
+}
+
+func (p *Panel) showWaitWindow() {
+	p.waitWindowLocker.Lock()
+	defer p.waitWindowLocker.Unlock()
+	if p.waitWindow != nil {
+		return
+	}
+
+	waitWindow := p.app.NewWindow(appName + ": Please wait...")
+
+	textWidget := widget.NewRichTextFromMarkdown("A long operation is in process, please wait...")
+	waitWindow.SetContent(textWidget)
+	waitWindow.Show()
+
+	p.waitWindow = waitWindow
+}
+
+func (p *Panel) hideWaitWindow() {
+	p.waitWindowLocker.Lock()
+	defer p.waitWindowLocker.Unlock()
+	p.waitWindow.Close()
+	p.waitWindow = nil
 }

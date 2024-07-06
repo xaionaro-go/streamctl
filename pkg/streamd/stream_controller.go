@@ -126,6 +126,7 @@ func newTwitch(
 				Enable:         platCfg.Enable,
 				Config:         platCfg.Config,
 				StreamProfiles: streamcontrol.ToAbstractStreamProfiles(platCfg.StreamProfiles),
+				Custom:         platCfg.Custom,
 			})
 			if err != nil {
 				logger.Error(ctx, err)
@@ -147,6 +148,7 @@ func newTwitch(
 				Enable:         c.Enable,
 				Config:         c.Config,
 				StreamProfiles: streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
+				Custom:         c.Custom,
 			})
 		},
 	)
@@ -191,6 +193,7 @@ func newYouTube(
 				Enable:         platCfg.Enable,
 				Config:         platCfg.Config,
 				StreamProfiles: streamcontrol.ToAbstractStreamProfiles(platCfg.StreamProfiles),
+				Custom:         platCfg.Custom,
 			})
 			if err != nil {
 				logger.Error(ctx, err)
@@ -212,6 +215,7 @@ func newYouTube(
 				Enable:         c.Enable,
 				Config:         c.Config,
 				StreamProfiles: streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
+				Custom:         platCfg.Custom,
 			})
 		},
 	)
@@ -270,7 +274,7 @@ func (d *StreamD) initYouTubeBackend(ctx context.Context) error {
 		d.UI.OAuthHandlerYouTube,
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to initialize the backend 'YouTube': %w", err)
 	}
 	d.StreamControllers.YouTube = youTube
 	return nil

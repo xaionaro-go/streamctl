@@ -22,5 +22,8 @@ streampanel-ios: builddir
 streampanel-windows: builddir
 	CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc GOOS=windows go build -ldflags "-H windowsgui" -o build/streampanel.exe ./cmd/streampanel/
 
+streamd-linux-amd64: builddir
+	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o build/streamd-linux-amd64 ./cmd/streamd
+
 builddir:
 	mkdir -p build

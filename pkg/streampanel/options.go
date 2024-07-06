@@ -1,22 +1,8 @@
 package streampanel
 
-type configT struct {
-}
+import "github.com/xaionaro-go/streamctl/pkg/streampanel/config"
 
-func defaultConfig() configT {
-	return configT{}
-}
-
-type Option interface {
-	apply(cfg *configT)
-}
-
-type Options []Option
-
-func (options Options) Config() configT {
-	cfg := defaultConfig()
-	for _, option := range options {
-		option.apply(&cfg)
-	}
-	return cfg
-}
+type Config = config.Config
+type Option = config.Option
+type Options = config.Options
+type OptionRemoteStreamDAddr = config.OptionRemoteStreamDAddr

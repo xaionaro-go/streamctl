@@ -5,9 +5,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
+	"time"
 
+	"github.com/dustin/go-broadcast"
+	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
+	"github.com/hashicorp/go-multierror"
+	"github.com/immune-gmbh/attestation-sdk/pkg/lockmap"
+	"github.com/immune-gmbh/attestation-sdk/pkg/objhash"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
@@ -19,18 +26,144 @@ import (
 
 type GRPCServer struct {
 	streamd_grpc.StreamDServer
-	StreamD api.StreamD
+	StreamD                api.StreamD
+	Cache                  map[objhash.ObjHash]any
+	CacheMetaLock          sync.Mutex
+	CacheLockMap           *lockmap.LockMap
+	OAuthURLBroadcaster    broadcast.Broadcaster
+	YouTubeStreamStartedAt time.Time
 }
 
 var _ streamd_grpc.StreamDServer = (*GRPCServer)(nil)
 
 func NewGRPCServer(streamd api.StreamD) *GRPCServer {
 	return &GRPCServer{
-		StreamD: streamd,
+		StreamD:      streamd,
+		Cache:        map[objhash.ObjHash]any{},
+		CacheLockMap: lockmap.NewLockMap(),
+
+		OAuthURLBroadcaster: broadcast.NewBroadcaster(10),
 	}
 }
 
+const timeFormat = time.RFC3339
+
+func memoize[REQ any, REPLY any, T func(context.Context, *REQ) (*REPLY, error)](
+	grpc *GRPCServer,
+	fn T,
+	ctx context.Context,
+	req *REQ,
+	cacheDuration time.Duration,
+) (_ret *REPLY, _err error) {
+	logger.Debugf(ctx, "memoize %T", (*REQ)(nil))
+	defer logger.Debugf(ctx, "/memoize %T", (*REQ)(nil))
+
+	key, err := objhash.Build(fmt.Sprintf("%T", req), req)
+	errmon.ObserveErrorCtx(ctx, err)
+	if err != nil {
+		return fn(ctx, req)
+	}
+	logger.Debugf(ctx, "cache key %X", key[:])
+
+	grpc.CacheMetaLock.Lock()
+	logger.Tracef(ctx, "grpc.CacheMetaLock.Lock()-ed")
+	cache := grpc.Cache
+
+	h := grpc.CacheLockMap.Lock(key)
+	logger.Tracef(ctx, "grpc.CacheLockMap.Lock(%X)-ed", key[:])
+
+	type cacheItem struct {
+		Reply   *REPLY
+		Error   error
+		SavedAt time.Time
+	}
+
+	if h.UserData != nil {
+		if v, ok := h.UserData.(cacheItem); ok {
+			grpc.CacheMetaLock.Unlock()
+			logger.Tracef(ctx, "grpc.CacheMetaLock.Unlock()-ed")
+			h.Unlock()
+			logger.Tracef(ctx, "grpc.CacheLockMap.Unlock(%X)-ed", key[:])
+			logger.Debugf(ctx, "re-using the value")
+			return v.Reply, v.Error
+		} else {
+			logger.Errorf(ctx, "cache-failure: expected type %T, but got %T", (*cacheItem)(nil), h.UserData)
+		}
+	}
+
+	//Jul 01 16:47:27 dx-landing start.sh[15530]: {"level":"error","ts":1719852447.1707313,"caller":"server/grpc.go:91","msg":"cache-failure: expected type
+	//server.cacheItem[github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc.GetStreamStatusRequest,github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc.GetStreamStatusReply,func(context.Context, *github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc.GetStreamStatusRequest) (*github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc.GetStreamStatusReply, error)], but got
+	//server.cacheItem[github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc.GetBackendInfoRequest,github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc.GetBackendInfoReply,func(context.Context, *github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc.GetBackendInfoRequest) (*github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc.GetBackendInfoReply, error)]"}
+
+	cachedResult, ok := cache[key]
+
+	grpc.CacheMetaLock.Unlock()
+	logger.Tracef(ctx, "grpc.CacheMetaLock.Unlock()-ed")
+	if ok {
+		if v, ok := cachedResult.(cacheItem); ok {
+			cutoffTS := time.Now().Add(-cacheDuration)
+			if cacheDuration > 0 && !v.SavedAt.Before(cutoffTS) {
+				h.UserData = v
+				h.Unlock()
+				logger.Tracef(ctx, "grpc.CacheLockMap.Unlock(%X)-ed", key[:])
+				logger.Debugf(ctx, "using the cached value")
+				return v.Reply, v.Error
+			}
+			logger.Debugf(ctx, "the cached value expired: %s < %s", v.SavedAt.Format(timeFormat), cutoffTS.Format(timeFormat))
+			delete(cache, key)
+		} else {
+			logger.Errorf(ctx, "cache-failure: expected type %T, but got %T", (*cacheItem)(nil), cachedResult)
+		}
+	}
+
+	var ts time.Time
+	defer func() {
+		cacheItem := cacheItem{
+			Reply:   _ret,
+			Error:   _err,
+			SavedAt: ts,
+		}
+		h.UserData = cacheItem
+		h.Unlock()
+		logger.Tracef(ctx, "grpc.CacheLockMap.Unlock(%X)-ed", key[:])
+
+		grpc.CacheMetaLock.Lock()
+		logger.Tracef(ctx, "grpc.CacheMetaLock.Lock()-ed")
+		defer logger.Tracef(ctx, "grpc.CacheMetaLock.Unlock()-ed")
+		defer grpc.CacheMetaLock.Unlock()
+		cache[key] = cacheItem
+	}()
+
+	logger.Tracef(ctx, "no cache")
+	ts = time.Now()
+	return fn(ctx, req)
+}
+
+func (grpc *GRPCServer) Close() error {
+	err := &multierror.Error{}
+	err = multierror.Append(err, grpc.OAuthURLBroadcaster.Close())
+	return err.ErrorOrNil()
+}
+
+func (grpc *GRPCServer) invalidateCache(ctx context.Context) {
+	logger.Debugf(ctx, "invalidateCache()")
+	defer logger.Debugf(ctx, "/invalidateCache()")
+
+	grpc.CacheMetaLock.Lock()
+	defer grpc.CacheMetaLock.Unlock()
+
+	grpc.CacheLockMap = lockmap.NewLockMap()
+	grpc.Cache = map[objhash.ObjHash]any{}
+}
+
 func (grpc *GRPCServer) GetConfig(
+	ctx context.Context,
+	req *streamd_grpc.GetConfigRequest,
+) (*streamd_grpc.GetConfigReply, error) {
+	return memoize(grpc, grpc.getConfig, ctx, req, time.Second)
+}
+
+func (grpc *GRPCServer) getConfig(
 	ctx context.Context,
 	req *streamd_grpc.GetConfigRequest,
 ) (*streamd_grpc.GetConfigReply, error) {
@@ -39,7 +172,7 @@ func (grpc *GRPCServer) GetConfig(
 		return nil, fmt.Errorf("unable to get the config: %w", err)
 	}
 	var buf bytes.Buffer
-	err = config.WriteConfig(ctx, &buf, *cfg)
+	_, err = cfg.WriteTo(&buf)
 	if err != nil {
 		return nil, fmt.Errorf("unable to serialize the config: %w", err)
 	}
@@ -52,10 +185,11 @@ func (grpc *GRPCServer) SetConfig(
 	ctx context.Context,
 	req *streamd_grpc.SetConfigRequest,
 ) (*streamd_grpc.SetConfigReply, error) {
+
 	logger.Debugf(ctx, "received SetConfig: %s", req.Config)
 
 	var result config.Config
-	err := config.ReadConfig(ctx, []byte(req.Config), &result)
+	_, err := result.Read([]byte(req.Config))
 	if err != nil {
 		return nil, fmt.Errorf("unable to unserialize the config: %w", err)
 	}
@@ -65,6 +199,7 @@ func (grpc *GRPCServer) SetConfig(
 		return nil, fmt.Errorf("unable to set the config: %w", err)
 	}
 
+	grpc.invalidateCache(ctx)
 	return &streamd_grpc.SetConfigReply{}, nil
 }
 
@@ -76,6 +211,7 @@ func (grpc *GRPCServer) SaveConfig(
 	if err != nil {
 		return nil, fmt.Errorf("unable to save the config: %w", err)
 	}
+	grpc.invalidateCache(ctx)
 	return &streamd_grpc.SaveConfigReply{}, nil
 }
 
@@ -87,6 +223,7 @@ func (grpc *GRPCServer) ResetCache(
 	if err != nil {
 		return nil, fmt.Errorf("unable to reset the cache: %w", err)
 	}
+	grpc.invalidateCache(ctx)
 	return &streamd_grpc.ResetCacheReply{}, nil
 }
 
@@ -98,6 +235,7 @@ func (grpc *GRPCServer) InitCache(
 	if err != nil {
 		return nil, fmt.Errorf("unable to init the cache: %w", err)
 	}
+	grpc.invalidateCache(ctx)
 	return &streamd_grpc.InitCacheReply{}, nil
 }
 
@@ -138,6 +276,10 @@ func (grpc *GRPCServer) StartStream(
 		return nil, fmt.Errorf("unable to start the stream: %w", err)
 	}
 
+	grpc.CacheMetaLock.Lock()
+	grpc.YouTubeStreamStartedAt = time.Now()
+	grpc.CacheMetaLock.Unlock()
+	grpc.invalidateCache(ctx)
 	return &streamd_grpc.StartStreamReply{}, nil
 }
 
@@ -149,10 +291,18 @@ func (grpc *GRPCServer) EndStream(
 	if err != nil {
 		return nil, fmt.Errorf("unable to end the stream: %w", err)
 	}
+	grpc.invalidateCache(ctx)
 	return &streamd_grpc.EndStreamReply{}, nil
 }
 
 func (grpc *GRPCServer) GetBackendInfo(
+	ctx context.Context,
+	req *streamd_grpc.GetBackendInfoRequest,
+) (*streamd_grpc.GetBackendInfoReply, error) {
+	return memoize(grpc, grpc.getBackendInfo, ctx, req, time.Second)
+}
+
+func (grpc *GRPCServer) getBackendInfo(
 	ctx context.Context,
 	req *streamd_grpc.GetBackendInfoRequest,
 ) (*streamd_grpc.GetBackendInfoReply, error) {
@@ -184,6 +334,7 @@ func (grpc *GRPCServer) Restart(
 	if err != nil {
 		return nil, fmt.Errorf("unable to restart: %w", err)
 	}
+	grpc.invalidateCache(ctx)
 	return &streamd_grpc.RestartReply{}, nil
 }
 
@@ -195,10 +346,18 @@ func (grpc *GRPCServer) OBSOLETE_FetchConfig(
 	if err != nil {
 		return nil, fmt.Errorf("unable to fetch the config: %w", err)
 	}
+	grpc.invalidateCache(ctx)
 	return &streamd_grpc.OBSOLETE_FetchConfigReply{}, nil
 }
 
 func (grpc *GRPCServer) OBSOLETE_GitInfo(
+	ctx context.Context,
+	req *streamd_grpc.OBSOLETE_GetGitInfoRequest,
+) (*streamd_grpc.OBSOLETE_GetGitInfoReply, error) {
+	return memoize(grpc, grpc._OBSOLETE_GitInfo, ctx, req, time.Minute)
+}
+
+func (grpc *GRPCServer) _OBSOLETE_GitInfo(
 	ctx context.Context,
 	req *streamd_grpc.OBSOLETE_GetGitInfoRequest,
 ) (*streamd_grpc.OBSOLETE_GetGitInfoReply, error) {
@@ -219,6 +378,7 @@ func (grpc *GRPCServer) OBSOLETE_GitRelogin(
 	if err != nil {
 		return nil, fmt.Errorf("unable to relogin: %w", err)
 	}
+	grpc.invalidateCache(ctx)
 	return &streamd_grpc.OBSOLETE_GitReloginReply{}, nil
 }
 
@@ -226,6 +386,37 @@ func (grpc *GRPCServer) GetStreamStatus(
 	ctx context.Context,
 	req *streamd_grpc.GetStreamStatusRequest,
 ) (*streamd_grpc.GetStreamStatusReply, error) {
+	logger.Tracef(ctx, "GetStreamStatus()")
+	defer logger.Tracef(ctx, "/GetStreamStatus()")
+
+	cacheDuration := time.Minute
+	switch streamcontrol.PlatformName(req.PlatID) {
+	case obs.ID:
+		cacheDuration = 10 * time.Second
+	case youtube.ID:
+		if grpc.YouTubeStreamStartedAt.After(time.Now().Add(-time.Minute)) {
+			cacheDuration = 15 * time.Second
+		} else {
+			cacheDuration = 10 * time.Minute
+		}
+	case twitch.ID:
+		cacheDuration = time.Minute
+	}
+
+	if req.NoCache {
+		cacheDuration = 0
+	}
+
+	return memoize(grpc, grpc.getStreamStatus, ctx, req, cacheDuration)
+}
+
+func (grpc *GRPCServer) getStreamStatus(
+	ctx context.Context,
+	req *streamd_grpc.GetStreamStatusRequest,
+) (*streamd_grpc.GetStreamStatusReply, error) {
+	logger.Tracef(ctx, "getStreamStatus()")
+	defer logger.Tracef(ctx, "/getStreamStatus()")
+
 	platID := streamcontrol.PlatformName(req.GetPlatID())
 	streamStatus, err := grpc.StreamD.GetStreamStatus(ctx, platID)
 	if err != nil {
@@ -251,4 +442,35 @@ func (grpc *GRPCServer) GetStreamStatus(
 		StartedAt:  startedAt,
 		CustomData: customData,
 	}, nil
+}
+
+func (grpc *GRPCServer) SubscribeToOAuthRequests(
+	req *streamd_grpc.SubscribeToOAuthRequestsRequest,
+	sender streamd_grpc.StreamD_SubscribeToOAuthRequestsServer,
+) error {
+	logger.Tracef(sender.Context(), "SubscribeToOAuthRequests()")
+	defer logger.Tracef(sender.Context(), "/SubscribeToOAuthRequests()")
+
+	oauthURLChan := make(chan any)
+	grpc.OAuthURLBroadcaster.Register(oauthURLChan)
+	defer grpc.OAuthURLBroadcaster.Unregister(oauthURLChan)
+
+	for {
+		select {
+		case _oauthURL := <-oauthURLChan:
+			oauthURL := _oauthURL.(string)
+			err := sender.Send(&streamd_grpc.OAuthRequest{
+				AuthURL: oauthURL,
+			})
+			if err != nil {
+				return fmt.Errorf("unable to send the OAuth URL: %w", err)
+			}
+		case <-sender.Context().Done():
+			return sender.Context().Err()
+		}
+	}
+}
+
+func (grpc *GRPCServer) OpenOAuthURL(authURL string) {
+	grpc.OAuthURLBroadcaster.Submit(authURL)
 }

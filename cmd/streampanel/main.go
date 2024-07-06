@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -9,10 +10,16 @@ import (
 	"runtime/pprof"
 
 	"github.com/facebookincubator/go-belt"
+	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
+	errmonsentry "github.com/facebookincubator/go-belt/tool/experimental/errmon/implementation/sentry"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/facebookincubator/go-belt/tool/logger/implementation/zap"
+	"github.com/getsentry/sentry-go"
 	"github.com/spf13/pflag"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/server"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel"
+	"google.golang.org/grpc"
 )
 
 const forceNetPProfOnAndroid = true
@@ -20,11 +27,13 @@ const forceNetPProfOnAndroid = true
 func main() {
 	loggerLevel := logger.LevelWarning
 	pflag.Var(&loggerLevel, "log-level", "Log level")
+	listenAddr := pflag.String("listen-addr", "", "the address to listen for incoming connections to")
 	remoteAddr := pflag.String("remote-addr", "", "the address (for example 127.0.0.1:3594) of streamd to connect to, instead of running the stream controllers locally")
 	configPath := pflag.String("config-path", "~/.streampanel.yaml", "the path to the config file")
 	netPprofAddr := pflag.String("go-net-pprof-addr", "", "address to listen to for net/pprof requests")
 	cpuProfile := pflag.String("go-profile-cpu", "", "file to write cpu profile to")
 	heapProfile := pflag.String("go-profile-heap", "", "file to write memory profile to")
+	sentryDSN := pflag.String("sentry-dsn", "", "DSN of a Sentry instance to send error reports")
 	pflag.Parse()
 	l := zap.Default().WithLevel(loggerLevel)
 
@@ -67,21 +76,58 @@ func main() {
 		runtime.GOMAXPROCS(16)
 	}
 
+	listener, err := net.Listen("tcp", *listenAddr)
+	if err != nil {
+		l.Fatalf("failed to listen: %v", err)
+	}
+
 	ctx := context.Background()
+	go func() {
+		<-ctx.Done()
+		listener.Close()
+	}()
+
+	sentryClient, err := sentry.NewClient(sentry.ClientOptions{
+		Dsn: *sentryDSN,
+	})
+	if err != nil {
+		l.Fatal(err)
+	}
+	sentryErrorMonitor := errmonsentry.New(sentryClient)
+	errmon.CtxWithErrorMonitor(ctx, sentryErrorMonitor)
+	l.WithHooks(&ErrorMonitorLoggerHook{
+		ErrorMonitor: sentryErrorMonitor,
+	})
+
 	ctx = logger.CtxWithLogger(ctx, l)
 	logger.Default = func() logger.Logger {
 		return l
 	}
 	defer belt.Flush(ctx)
 
-	var panel *streampanel.Panel
+	var opts []streampanel.Option
 	if *remoteAddr != "" {
-		panel = streampanel.NewRemote(*remoteAddr)
-	} else {
-		panel = streampanel.NewBuiltin(*configPath)
+		opts = append(opts, streampanel.OptionRemoteStreamDAddr(*remoteAddr))
+	}
+	panel, err := streampanel.New(*configPath, opts...)
+	if err != nil {
+		l.Fatal(err)
 	}
 
-	err := panel.Loop(ctx)
+	if *listenAddr != "" {
+		go func() {
+			grpcServer := grpc.NewServer()
+			streamdGRPC := server.NewGRPCServer(panel.StreamD)
+			streamd_grpc.RegisterStreamDServer(grpcServer, streamdGRPC)
+			l.Infof("started server at %s", *listenAddr)
+			err = grpcServer.Serve(listener)
+			if err != nil {
+				l.Fatal(err)
+			}
+		}()
+	}
+
+	err = panel.Loop(ctx)
 	if err != nil {
 		l.Fatal(err)
 	}

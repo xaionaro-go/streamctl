@@ -1,2 +1,7 @@
 *.apk
 build
+qtbox
+qamel-*
+rcc*.go
+rcc*.cpp
+*.qrc

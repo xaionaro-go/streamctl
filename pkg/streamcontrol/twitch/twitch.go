@@ -289,7 +289,7 @@ func getClient(
 	options := &helix.Options{
 		ClientID:     cfg.Config.ClientID,
 		ClientSecret: cfg.Config.ClientSecret,
-		RedirectURI:  "http://localhost:8091/",
+		RedirectURI:  "http://0.0.0.0:8091/", // TODO: make this secure and also random
 	}
 	client, err := helix.NewClient(options)
 	if err != nil {

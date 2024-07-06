@@ -22,6 +22,8 @@ service StreamD {
     rpc OBSOLETE_FetchConfig(OBSOLETE_FetchConfigRequest) returns (OBSOLETE_FetchConfigReply) {}
     rpc OBSOLETE_GitInfo(OBSOLETE_GetGitInfoRequest) returns (OBSOLETE_GetGitInfoReply) {}
     rpc OBSOLETE_GitRelogin(OBSOLETE_GitReloginRequest) returns (OBSOLETE_GitReloginReply) {}
+
+    rpc SubscribeToOAuthRequests(SubscribeToOAuthRequestsRequest) returns (stream OAuthRequest) {};
 }
 
 message GetConfigRequest {}
@@ -51,6 +53,7 @@ message EndStreamRequest {
 message EndStreamReply {}
 message GetStreamStatusRequest {
     string platID = 1;
+    bool noCache = 2;
 }
 message GetStreamStatusReply {
     bool isActive = 1;
@@ -103,3 +106,8 @@ message OBSOLETE_GetGitInfoReply {
 message OBSOLETE_GitReloginRequest {}
 message OBSOLETE_GitReloginReply {}
 
+
+message SubscribeToOAuthRequestsRequest{}
+message OAuthRequest{
+    string authURL = 1;
+}

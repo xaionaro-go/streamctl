@@ -83,12 +83,42 @@ type PlatformConfig[T any, S StreamProfile] struct {
 	Enable         *bool
 	Config         T
 	StreamProfiles StreamProfiles[S]
+	Custom         map[string]any
 }
 
 type ProfileName string
 
 func (cfg PlatformConfig[T, S]) GetStreamProfile(name ProfileName) (S, bool) {
 	return cfg.StreamProfiles.Get(name)
+}
+
+func (cfg *PlatformConfig[T, S]) SetCustomString(key string, value any) bool {
+	if cfg == nil {
+		return false
+	}
+	if cfg.Custom == nil {
+		cfg.Custom = map[string]any{}
+	}
+	cfg.Custom[key] = value
+	return true
+}
+
+func (cfg *PlatformConfig[T, S]) GetCustomString(key string) (string, bool) {
+	if cfg == nil {
+		return "", false
+	}
+	if cfg.Custom == nil {
+		return "", false
+	}
+	v, ok := cfg.Custom[key]
+	if !ok {
+		return "", false
+	}
+	s, ok := v.(string)
+	if !ok {
+		return "", false
+	}
+	return s, true
 }
 
 type AbstractPlatformConfig = PlatformConfig[any, AbstractStreamProfile]
@@ -162,6 +192,7 @@ func (cfg *Config) UnmarshalYAML(b []byte) error {
 			(*cfg)[k] = &PlatformConfig[any, AbstractStreamProfile]{
 				Config:         &RawMessage{},
 				StreamProfiles: make(StreamProfiles[AbstractStreamProfile]),
+				Custom:         map[string]any{},
 			}
 			vOrig = (*cfg)[k]
 		} else {
@@ -223,6 +254,7 @@ func ToAbstractPlatformConfig[T any, S StreamProfile](
 		Enable:         platCfg.Enable,
 		Config:         platCfg.Config,
 		StreamProfiles: ToAbstractStreamProfiles[S](platCfg.StreamProfiles),
+		Custom:         platCfg.Custom,
 	}
 }
 
@@ -234,6 +266,7 @@ func ConvertPlatformConfig[T any, S StreamProfile](
 		Enable:         platCfg.Enable,
 		Config:         GetPlatformSpecificConfig[T](ctx, platCfg.Config),
 		StreamProfiles: GetStreamProfiles[S](platCfg.StreamProfiles),
+		Custom:         platCfg.Custom,
 	}
 }
 
@@ -291,6 +324,7 @@ func InitConfig[T any, S StreamProfile](cfg Config, id PlatformName, platCfg Pla
 	}
 	cfg[id] = &PlatformConfig[any, AbstractStreamProfile]{
 		Config: &platCfg.Config,
+		Custom: map[string]any{},
 	}
 }
 

@@ -40,6 +40,7 @@ type StreamDClient interface {
 	OBSOLETE_FetchConfig(ctx context.Context, in *OBSOLETE_FetchConfigRequest, opts ...grpc.CallOption) (*OBSOLETE_FetchConfigReply, error)
 	OBSOLETE_GitInfo(ctx context.Context, in *OBSOLETE_GetGitInfoRequest, opts ...grpc.CallOption) (*OBSOLETE_GetGitInfoReply, error)
 	OBSOLETE_GitRelogin(ctx context.Context, in *OBSOLETE_GitReloginRequest, opts ...grpc.CallOption) (*OBSOLETE_GitReloginReply, error)
+	SubscribeToOAuthRequests(ctx context.Context, in *SubscribeToOAuthRequestsRequest, opts ...grpc.CallOption) (StreamD_SubscribeToOAuthRequestsClient, error)
 }
 
 type streamDClient struct {
@@ -212,6 +213,38 @@ func (c *streamDClient) OBSOLETE_GitRelogin(ctx context.Context, in *OBSOLETE_Gi
 	return out, nil
 }
 
+func (c *streamDClient) SubscribeToOAuthRequests(ctx context.Context, in *SubscribeToOAuthRequestsRequest, opts ...grpc.CallOption) (StreamD_SubscribeToOAuthRequestsClient, error) {
+	stream, err := c.cc.NewStream(ctx, &StreamD_ServiceDesc.Streams[0], "/StreamD/SubscribeToOAuthRequests", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &streamDSubscribeToOAuthRequestsClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type StreamD_SubscribeToOAuthRequestsClient interface {
+	Recv() (*OAuthRequest, error)
+	grpc.ClientStream
+}
+
+type streamDSubscribeToOAuthRequestsClient struct {
+	grpc.ClientStream
+}
+
+func (x *streamDSubscribeToOAuthRequestsClient) Recv() (*OAuthRequest, error) {
+	m := new(OAuthRequest)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // StreamDServer is the server API for StreamD service.
 // All implementations must embed UnimplementedStreamDServer
 // for forward compatibility
@@ -234,6 +267,7 @@ type StreamDServer interface {
 	OBSOLETE_FetchConfig(context.Context, *OBSOLETE_FetchConfigRequest) (*OBSOLETE_FetchConfigReply, error)
 	OBSOLETE_GitInfo(context.Context, *OBSOLETE_GetGitInfoRequest) (*OBSOLETE_GetGitInfoReply, error)
 	OBSOLETE_GitRelogin(context.Context, *OBSOLETE_GitReloginRequest) (*OBSOLETE_GitReloginReply, error)
+	SubscribeToOAuthRequests(*SubscribeToOAuthRequestsRequest, StreamD_SubscribeToOAuthRequestsServer) error
 	mustEmbedUnimplementedStreamDServer()
 }
 
@@ -294,6 +328,9 @@ func (UnimplementedStreamDServer) OBSOLETE_GitInfo(context.Context, *OBSOLETE_Ge
 }
 func (UnimplementedStreamDServer) OBSOLETE_GitRelogin(context.Context, *OBSOLETE_GitReloginRequest) (*OBSOLETE_GitReloginReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method OBSOLETE_GitRelogin not implemented")
+}
+func (UnimplementedStreamDServer) SubscribeToOAuthRequests(*SubscribeToOAuthRequestsRequest, StreamD_SubscribeToOAuthRequestsServer) error {
+	return status.Errorf(codes.Unimplemented, "method SubscribeToOAuthRequests not implemented")
 }
 func (UnimplementedStreamDServer) mustEmbedUnimplementedStreamDServer() {}
 
@@ -632,6 +669,27 @@ func _StreamD_OBSOLETE_GitRelogin_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _StreamD_SubscribeToOAuthRequests_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(SubscribeToOAuthRequestsRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(StreamDServer).SubscribeToOAuthRequests(m, &streamDSubscribeToOAuthRequestsServer{stream})
+}
+
+type StreamD_SubscribeToOAuthRequestsServer interface {
+	Send(*OAuthRequest) error
+	grpc.ServerStream
+}
+
+type streamDSubscribeToOAuthRequestsServer struct {
+	grpc.ServerStream
+}
+
+func (x *streamDSubscribeToOAuthRequestsServer) Send(m *OAuthRequest) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // StreamD_ServiceDesc is the grpc.ServiceDesc for StreamD service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -712,6 +770,12 @@ var StreamD_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _StreamD_OBSOLETE_GitRelogin_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "SubscribeToOAuthRequests",
+			Handler:       _StreamD_SubscribeToOAuthRequests_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "streamd.proto",
 }

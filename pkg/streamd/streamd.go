@@ -27,12 +27,14 @@ type StreamControllers struct {
 	YouTube *youtube.YouTube
 }
 
+type SaveConfigFunc func(context.Context, config.Config) error
+
 type StreamD struct {
 	UI ui.UI
 
-	ConfigPath string
-	ConfigLock sync.Mutex
-	Config     config.Config
+	SaveConfigFunc SaveConfigFunc
+	ConfigLock     sync.Mutex
+	Config         config.Config
 
 	CacheLock sync.Mutex
 	Cache     *cache.Cache
@@ -48,23 +50,19 @@ type StreamD struct {
 
 var _ api.StreamD = (*StreamD)(nil)
 
-func New(configPath string, ui ui.UI, b *belt.Belt) (*StreamD, error) {
+func New(config config.Config, ui ui.UI, saveCfgFunc SaveConfigFunc, b *belt.Belt) (*StreamD, error) {
 	ctx := belt.CtxWithBelt(context.Background(), b)
-	cfg, err := config.ReadOrCreateConfigFile(ctx, configPath)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read or create config '%s': %w", configPath, err)
-	}
 
 	d := &StreamD{
-		UI:         ui,
-		ConfigPath: configPath,
-		Config:     *cfg,
-		Cache:      &cache.Cache{},
+		UI:             ui,
+		SaveConfigFunc: saveCfgFunc,
+		Config:         config,
+		Cache:          &cache.Cache{},
 	}
 
-	err = d.readCache(ctx)
+	err := d.readCache(ctx)
 	if err != nil {
-		logger.FromBelt(b).Errorf("unable to read cache from '%s': %v", d.ConfigPath, err)
+		logger.FromBelt(b).Errorf("unable to read cache: %v", err)
 	}
 
 	return d, nil
@@ -98,7 +96,7 @@ func (d *StreamD) readCache(ctx context.Context) error {
 
 	if d.Config.CachePath == nil {
 		d.Config.CachePath = config.NewConfig().CachePath
-		logger.Tracef(ctx, "setting the CachePath to default value '%s'", d.ConfigPath)
+		logger.Tracef(ctx, "setting the CachePath to default value '%s'", *d.Config.CachePath)
 	}
 
 	if *d.Config.CachePath == "" {
@@ -125,7 +123,7 @@ func (d *StreamD) writeCache(ctx context.Context) error {
 
 	if d.Config.CachePath == nil {
 		d.Config.CachePath = config.NewConfig().CachePath
-		logger.Tracef(ctx, "setting the CachePath to default value '%s'", d.ConfigPath)
+		logger.Tracef(ctx, "setting the CachePath to default value '%s'", *d.Config.CachePath)
 	}
 
 	if *d.Config.CachePath == "" {
@@ -186,7 +184,7 @@ func (d *StreamD) InitCache(ctx context.Context) error {
 	if changedCache {
 		err := d.writeCache(ctx)
 		if err != nil {
-			logger.Errorf(ctx, "unable to write cache into '%s': %w", d.ConfigPath, err)
+			logger.Errorf(ctx, "unable to write cache into '%s': %w", *d.Config.CachePath, err)
 		}
 	}
 	return nil
@@ -288,7 +286,7 @@ func (d *StreamD) normalizeYoutubeData() {
 }
 
 func (d *StreamD) SaveConfig(ctx context.Context) error {
-	err := d.saveDataToConfigFile(ctx)
+	err := d.SaveConfigFunc(ctx, d.Config)
 	if err != nil {
 		return err
 	}
@@ -301,24 +299,6 @@ func (d *StreamD) SaveConfig(ctx context.Context) error {
 			}
 		}
 	}()
-
-	return nil
-}
-
-func (d *StreamD) getExpandedDataPath() (string, error) {
-	return xpath.Expand(d.ConfigPath)
-}
-
-func (d *StreamD) saveDataToConfigFile(ctx context.Context) error {
-	dataPath, err := d.getExpandedDataPath()
-	if err != nil {
-		return fmt.Errorf("unable to get the path to the config file: %w", err)
-	}
-
-	err = config.WriteConfigToPath(ctx, dataPath, d.Config)
-	if err != nil {
-		return fmt.Errorf("unable to save the config: %w", err)
-	}
 
 	return nil
 }
@@ -362,7 +342,8 @@ func (d *StreamD) StartStream(
 	title string, description string,
 	profile streamcontrol.AbstractStreamProfile,
 	customArgs ...any,
-) error {
+) (_err error) {
+	defer func() { logger.Debugf(ctx, "/StartStream(%s): %v", platID, _err) }()
 	switch platID {
 	case obs.ID:
 		profile, err := streamcontrol.GetStreamProfile[obs.StreamProfile](ctx, profile)

@@ -31,7 +31,7 @@ func (d *StreamD) sendConfigViaGIT(
 	var newBytes bytes.Buffer
 	latestSyncCommit := d.Config.GitRepo.LatestSyncCommit
 	d.Config.GitRepo.LatestSyncCommit = ""
-	err := config.WriteConfig(ctx, &newBytes, d.Config)
+	_, err := d.Config.WriteTo(&newBytes)
 	d.Config.GitRepo.LatestSyncCommit = latestSyncCommit
 	if err != nil {
 		return fmt.Errorf("unable to serialize the panel data: %w", err)
@@ -47,7 +47,7 @@ func (d *StreamD) sendConfigViaGIT(
 	}
 	if !hash.IsZero() {
 		d.setLastKnownGitCommitHash(hash)
-		if err := d.saveDataToConfigFile(ctx); err != nil {
+		if err := d.SaveConfigFunc(ctx, d.Config); err != nil {
 			return fmt.Errorf("unable to store the new commit hash in the config file: %w", err)
 		}
 	}
@@ -68,7 +68,7 @@ func (d *StreamD) gitSync(ctx context.Context) {
 		d.getLastKnownGitCommitHash(),
 		func(ctx context.Context, commitHash plumbing.Hash, b []byte) {
 			panelData := config.NewConfig()
-			err := config.ReadConfig(ctx, b, &panelData)
+			_, err := panelData.Read(b)
 			if err != nil {
 				d.UI.DisplayError(fmt.Errorf("unable to read panel data: %w", err))
 				return

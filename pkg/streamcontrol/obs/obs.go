@@ -202,7 +202,7 @@ func (obs *OBS) GetStreamStatus(
 
 	var startedAt *time.Time
 	if streamStatus.OutputActive {
-		startedAt = ptr(time.Now().Add(time.Duration(streamStatus.OutputDuration * float64(time.Second))))
+		startedAt = ptr(time.Now().Add(-time.Duration(streamStatus.OutputDuration * float64(time.Millisecond))))
 	}
 
 	return &streamcontrol.StreamStatus{

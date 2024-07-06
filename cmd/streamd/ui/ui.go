@@ -15,19 +15,22 @@ import (
 )
 
 type UI struct {
-	Belt      *belt.Belt
-	RestartFn func(context.Context, string)
+	OAuthURLOpenFn func(authURL string)
+	Belt           *belt.Belt
+	RestartFn      func(context.Context, string)
 }
 
 var _ ui.UI = (*UI)(nil)
 
 func NewUI(
 	ctx context.Context,
+	oauthURLOpener func(authURL string),
 	restartFn func(context.Context, string),
 ) *UI {
 	return &UI{
-		Belt:      belt.CtxBelt(ctx),
-		RestartFn: restartFn,
+		OAuthURLOpenFn: oauthURLOpener,
+		Belt:           belt.CtxBelt(ctx),
+		RestartFn:      restartFn,
 	}
 }
 
@@ -49,18 +52,33 @@ func (*UI) InputGitUserData(
 	return false, "", nil, nil
 }
 
-func (*UI) OAuthHandlerTwitch(
-	ctx context.Context,
+func (ui *UI) oauth2Handler(
+	_ context.Context,
 	arg oauthhandler.OAuthHandlerArgument,
 ) error {
-	return oauthhandler.OAuth2HandlerViaCLI(ctx, arg)
+	codeCh, err := oauthhandler.NewCodeReceiver(arg.RedirectURL)
+	if err != nil {
+		return err
+	}
+
+	ui.OAuthURLOpenFn(arg.AuthURL)
+
+	code := <-codeCh
+	return arg.ExchangeFn(code)
 }
 
-func (*UI) OAuthHandlerYouTube(
+func (ui *UI) OAuthHandlerTwitch(
 	ctx context.Context,
 	arg oauthhandler.OAuthHandlerArgument,
 ) error {
-	return oauthhandler.OAuth2HandlerViaCLI(ctx, arg)
+	return ui.oauth2Handler(ctx, arg)
+}
+
+func (ui *UI) OAuthHandlerYouTube(
+	ctx context.Context,
+	arg oauthhandler.OAuthHandlerArgument,
+) error {
+	return ui.oauth2Handler(ctx, arg)
 }
 
 func (*UI) InputTwitchUserInfo(

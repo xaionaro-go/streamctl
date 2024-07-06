@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
@@ -104,7 +105,7 @@ func (c *Client) GetConfig(ctx context.Context) (*config.Config, error) {
 	}
 
 	var result config.Config
-	err = config.ReadConfig(ctx, []byte(reply.Config), &result)
+	_, err = result.Read([]byte(reply.Config))
 	if err != nil {
 		return nil, fmt.Errorf("unable to unserialize the received config: %w", err)
 	}
@@ -113,7 +114,7 @@ func (c *Client) GetConfig(ctx context.Context) (*config.Config, error) {
 
 func (c *Client) SetConfig(ctx context.Context, cfg *config.Config) error {
 	var buf bytes.Buffer
-	err := config.WriteConfig(ctx, &buf, *cfg)
+	_, err := cfg.WriteTo(&buf)
 	if err != nil {
 		return fmt.Errorf("unable to serialize the config: %w", err)
 	}
@@ -429,6 +430,40 @@ func (c *Client) UpdateStream(
 	}
 
 	return nil
+}
+
+func (c *Client) SubscriberToOAuthURLs(
+	ctx context.Context,
+) (chan string, error) {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(chan string)
+
+	subClient, err := client.SubscribeToOAuthRequests(ctx, &streamd_grpc.SubscribeToOAuthRequestsRequest{})
+	if err != nil {
+		return nil, fmt.Errorf("unable to subscribe to oauth URLs: %w", err)
+	}
+	subClient.CloseSend()
+	go func() {
+		defer conn.Close()
+		defer func() {
+			close(result)
+		}()
+
+		for {
+			res, err := subClient.Recv()
+			if err == io.EOF {
+				return
+			}
+
+			result <- res.GetAuthURL()
+		}
+	}()
+
+	return result, nil
 }
 
 func ptr[T any](in T) *T {
