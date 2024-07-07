@@ -18,9 +18,16 @@ func Screenshot(cfg Config) (*image.RGBA, error) {
 		return nil, fmt.Errorf("unable to screenshot screen %d: %w", cfg.DisplayID, err)
 	}
 
-	rgbaCropped, ok := rgbaFull.SubImage(cfg.Bounds).(*image.RGBA)
-	if !ok {
-		return nil, fmt.Errorf("got type %T, but expected %T", rgbaCropped, (*image.RGBA)(nil))
+	var rgbaCropped *image.RGBA
+	resizeTo := cfg.Bounds
+	if resizeTo.Max.X > 0 && resizeTo.Max.Y > 0 {
+		var ok bool
+		rgbaCropped, ok = rgbaFull.SubImage(resizeTo).(*image.RGBA)
+		if !ok {
+			return nil, fmt.Errorf("got type %T, but expected %T", rgbaCropped, (*image.RGBA)(nil))
+		}
+	} else {
+		rgbaCropped = rgbaFull
 	}
 
 	return rgbaCropped, nil

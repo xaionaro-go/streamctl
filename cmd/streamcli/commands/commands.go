@@ -1,9 +1,11 @@
 package commands
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
@@ -13,6 +15,7 @@ import (
 	twitch "github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/types"
 	youtube "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/client"
+	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 )
 
 var (
@@ -33,24 +36,49 @@ var (
 		},
 	}
 
+	Stream = &cobra.Command{
+		Use: "stream",
+	}
+
 	StreamSetup = &cobra.Command{
-		Use:  "stream-setup",
+		Use:  "setup",
 		Args: cobra.ExactArgs(0),
 		Run:  streamSetup,
 	}
 
 	StreamStatus = &cobra.Command{
-		Use:  "stream-status",
+		Use:  "status",
 		Args: cobra.ExactArgs(0),
 		Run:  streamStatus,
+	}
+
+	Variables = &cobra.Command{
+		Use: "variables",
+	}
+
+	VariablesGet = &cobra.Command{
+		Use:  "get",
+		Args: cobra.ExactArgs(1),
+		Run:  variablesGet,
+	}
+
+	VariablesSet = &cobra.Command{
+		Use:  "set",
+		Args: cobra.ExactArgs(1),
+		Run:  variablesSet,
 	}
 
 	LoggerLevel = logger.LevelWarning
 )
 
 func init() {
-	Root.AddCommand(StreamSetup)
-	Root.AddCommand(StreamStatus)
+	Root.AddCommand(Stream)
+	Stream.AddCommand(StreamSetup)
+	Stream.AddCommand(StreamStatus)
+
+	Root.AddCommand(Variables)
+	Variables.AddCommand(VariablesGet)
+	Variables.AddCommand(VariablesSet)
 
 	Root.PersistentFlags().Var(&LoggerLevel, "log-level", "")
 	Root.PersistentFlags().String("remote-addr", "localhost:3594", "the path to the config file")
@@ -131,4 +159,34 @@ func streamStatus(cmd *cobra.Command, args []string) {
 
 		fmt.Printf("%10s: %s\n", platID, statusJSON)
 	}
+}
+
+func variablesGet(cmd *cobra.Command, args []string) {
+	variableKey := args[0]
+	ctx := cmd.Context()
+
+	remoteAddr, err := cmd.Flags().GetString("remote-addr")
+	assertNoError(ctx, err)
+	streamD := client.New(remoteAddr)
+
+	b, err := streamD.GetVariable(ctx, consts.VarKey(variableKey))
+	assertNoError(ctx, err)
+
+	_, err = io.Copy(os.Stdout, bytes.NewReader(b))
+	assertNoError(ctx, err)
+}
+
+func variablesSet(cmd *cobra.Command, args []string) {
+	variableKey := args[0]
+	ctx := cmd.Context()
+
+	remoteAddr, err := cmd.Flags().GetString("remote-addr")
+	assertNoError(ctx, err)
+	streamD := client.New(remoteAddr)
+
+	value, err := io.ReadAll(os.Stdin)
+	assertNoError(ctx, err)
+
+	err = streamD.SetVariable(ctx, consts.VarKey(variableKey), value)
+	assertNoError(ctx, err)
 }

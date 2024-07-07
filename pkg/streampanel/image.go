@@ -5,10 +5,13 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"image/png"
 	"math"
+	"net/http"
 	"time"
 
 	"github.com/chai2010/webp"
+	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/nfnt/resize"
 	"github.com/xaionaro-go/streamctl/pkg/screenshot"
 	"github.com/xaionaro-go/streamctl/pkg/screenshoter"
@@ -57,7 +60,18 @@ func (p *Panel) getImage(
 		return nil, fmt.Errorf("unable to get a screenshot: %w", err)
 	}
 
-	img, err := webp.Decode(bytes.NewReader(b))
+	mimeType := http.DetectContentType(b)
+
+	var img image.Image
+	err = nil
+	switch mimeType {
+	case "image/png":
+		img, err = png.Decode(bytes.NewReader(b))
+	case "image/webp":
+		img, err = webp.Decode(bytes.NewReader(b))
+	default:
+		return nil, fmt.Errorf("unexpected image type %s", mimeType)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("unable to decode the screenshot: %w", err)
 	}
@@ -75,6 +89,17 @@ func (p *Panel) setScreenshot(
 	screenshot image.Image,
 ) {
 	bounds := screenshot.Bounds()
+	logger.Tracef(ctx, "screenshot bounds: %#+v", bounds)
+	if bounds.Max.X == 0 || bounds.Max.Y == 0 {
+		p.DisplayError(fmt.Errorf("received an empty screenshot"))
+		p.screenshoterLocker.Lock()
+		if p.screenshoterClose != nil {
+			p.screenshoterClose()
+		}
+		p.screenshoterLocker.Unlock()
+		return
+	}
+
 	if bounds.Max.X > ScreenshotMaxWidth || bounds.Max.Y > ScreenshotMaxHeight {
 		factor := 1.0
 		factor = math.Min(factor, float64(ScreenshotMaxWidth)/float64(bounds.Max.X))
@@ -82,12 +107,16 @@ func (p *Panel) setScreenshot(
 		newWidth := uint(float64(bounds.Max.X) * factor)
 		newHeight := uint(float64(bounds.Max.Y) * factor)
 		screenshot = resize.Resize(newWidth, newHeight, screenshot, resize.Lanczos3)
+		logger.Tracef(ctx, "rescaled the screenshot from %#+v to %#+v", bounds, screenshot.Bounds())
 	}
 
 	p.setImage(ctx, consts.VarKeyImage(consts.ImageScreenshot), screenshot)
 }
 
 func (p *Panel) reinitScreenshoter(ctx context.Context) {
+	logger.Debugf(ctx, "reinitScreenshoter")
+	defer logger.Debugf(ctx, "/reinitScreenshoter")
+
 	p.screenshoterLocker.Lock()
 	defer p.screenshoterLocker.Unlock()
 	if p.screenshoterClose != nil {

@@ -22,6 +22,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
+	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 )
 
 type GRPCServer struct {
@@ -473,4 +474,32 @@ func (grpc *GRPCServer) SubscribeToOAuthRequests(
 
 func (grpc *GRPCServer) OpenOAuthURL(authURL string) {
 	grpc.OAuthURLBroadcaster.Submit(authURL)
+}
+
+func (grpc *GRPCServer) GetVariable(
+	ctx context.Context,
+	req *streamd_grpc.GetVariableRequest,
+) (*streamd_grpc.GetVariableReply, error) {
+	key := consts.VarKey(req.GetKey())
+	b, err := grpc.StreamD.GetVariable(ctx, key)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get variable '%s': %w", key, err)
+	}
+
+	return &streamd_grpc.GetVariableReply{
+		Key:   string(key),
+		Value: b,
+	}, nil
+}
+func (grpc *GRPCServer) SetVariable(
+	ctx context.Context,
+	req *streamd_grpc.SetVariableRequest,
+) (*streamd_grpc.SetVariableReply, error) {
+	key := consts.VarKey(req.GetKey())
+	err := grpc.StreamD.SetVariable(ctx, key, req.GetValue())
+	if err != nil {
+		return nil, fmt.Errorf("unable to set variable '%s': %w", key, err)
+	}
+
+	return &streamd_grpc.SetVariableReply{}, nil
 }

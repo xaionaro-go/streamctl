@@ -25,5 +25,8 @@ streampanel-windows: builddir
 streamd-linux-amd64: builddir
 	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o build/streamd-linux-amd64 ./cmd/streamd
 
+streamcli-linux-amd64: builddir
+	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o build/streamcli-linux-amd64 ./cmd/streamcli
+
 builddir:
 	mkdir -p build

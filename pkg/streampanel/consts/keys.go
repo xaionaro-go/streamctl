@@ -10,6 +10,7 @@ type ImageID string
 
 const (
 	ImageScreenshot = ImageID("screenshot")
+	ImageChat       = ImageID("chat")
 )
 
 type VarKey string

@@ -5,6 +5,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"image"
 	"net/url"
 	"os"
 	"os/exec"
@@ -19,8 +20,10 @@ import (
 
 	"fyne.io/fyne/v2"
 	fyneapp "fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/facebookincubator/go-belt"
@@ -72,6 +75,11 @@ type Panel struct {
 	streamTitleField       *widget.Entry
 	streamDescriptionField *widget.Entry
 
+	monitorPageUpdaterLocker sync.Mutex
+	monitorPageUpdaterCancel context.CancelFunc
+	screenshotContainer      *fyne.Container
+	chatContainer            *fyne.Container
+
 	filterValue string
 
 	youtubeCheck *widget.Check
@@ -88,6 +96,13 @@ type Panel struct {
 	waitWindowLocker sync.Mutex
 	waitWindow       fyne.Window
 }
+
+type Page string
+
+const (
+	PageControl = Page("Control")
+	PageMonitor = Page("Monitor")
+)
 
 func New(
 	configPath string,
@@ -835,12 +850,19 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 	afterStopStreamCommandEntry := widget.NewEntry()
 	afterStopStreamCommandEntry.SetText(cmdAfterStopStream)
 
+	oldScreenshoterEnabled := p.Config.Screenshot.Enabled != nil && *p.Config.Screenshot.Enabled
+
 	cancelButton := widget.NewButtonWithIcon("Cancel", theme.CancelIcon(), func() {
 		w.Close()
 	})
 	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
 		if err := p.SaveConfig(ctx); err != nil {
 			p.DisplayError(fmt.Errorf("unable to save the local config: %w", err))
+		} else {
+			newScreenshotEnabled := p.Config.Screenshot.Enabled != nil && *p.Config.Screenshot.Enabled
+			if oldScreenshoterEnabled != newScreenshotEnabled {
+				p.reinitScreenshoter(ctx)
+			}
 		}
 
 		obsCfg := cfg.Backends[obs.ID]
@@ -1125,7 +1147,7 @@ func (p *Panel) getUpdatedStatus_startStopStreamButton(ctx context.Context) {
 
 	obsIsEnabled, err := p.StreamD.IsBackendEnabled(ctx, obs.ID)
 	if err != nil {
-		logger.Errorf(ctx, "unable to check if OBS is enabled: %w", err)
+		logger.Error(ctx, fmt.Errorf("unable to check if OBS is enabled: %w", err))
 		return
 	}
 	if !obsIsEnabled {
@@ -1142,7 +1164,7 @@ func (p *Panel) getUpdatedStatus_startStopStreamButton(ctx context.Context) {
 
 	obsStreamStatus, err := p.StreamD.GetStreamStatus(ctx, obs.ID)
 	if err != nil {
-		logger.Errorf(ctx, "unable to get stream status from OBS: %w", err)
+		logger.Error(ctx, fmt.Errorf("unable to get stream status from OBS: %w", err))
 		return
 	}
 	logger.Tracef(ctx, "obsStreamStatus == %#+v", obsStreamStatus)
@@ -1173,7 +1195,7 @@ func (p *Panel) getUpdatedStatus_startStopStreamButton(ctx context.Context) {
 
 	ytIsEnabled, err := p.StreamD.IsBackendEnabled(ctx, youtube.ID)
 	if err != nil {
-		logger.Errorf(ctx, "unable to check if YouTube is enabled: %w", err)
+		logger.Error(ctx, fmt.Errorf("unable to check if YouTube is enabled: %w", err))
 		return
 	}
 
@@ -1184,7 +1206,7 @@ func (p *Panel) getUpdatedStatus_startStopStreamButton(ctx context.Context) {
 
 	ytStreamStatus, err := p.StreamD.GetStreamStatus(ctx, youtube.ID)
 	if err != nil {
-		logger.Errorf(ctx, "unable to get stream status from YouTube: %w", err)
+		logger.Error(ctx, fmt.Errorf("unable to get stream status from YouTube: %w", err))
 		return
 	}
 	logger.Tracef(ctx, "ytStreamStatus == %#+v", ytStreamStatus)
@@ -1238,8 +1260,7 @@ func (p *Panel) initMainWindow(ctx context.Context) {
 		p.openMenuWindow(ctx)
 	})
 
-	buttonPanel := container.NewHBox(
-		menuButton,
+	profileControl := container.NewHBox(
 		widget.NewSeparator(),
 		widget.NewRichTextWithText("Profile:"),
 		widget.NewButtonWithIcon("", theme.ContentAddIcon(), func() {
@@ -1247,15 +1268,15 @@ func (p *Panel) initMainWindow(ctx context.Context) {
 		}),
 	)
 
+	topPanel := container.NewHBox(
+		menuButton,
+		profileControl,
+	)
+
 	for _, button := range selectedProfileButtons {
 		button.Disable()
-		buttonPanel.Add(button)
+		profileControl.Add(button)
 	}
-
-	topPanel := container.NewVBox(
-		buttonPanel,
-		profileFilter,
-	)
 
 	p.setupStreamButton = widget.NewButtonWithIcon(setupStreamString(), theme.SettingsIcon(), func() {
 		p.onSetupStreamButton(ctx)
@@ -1328,12 +1349,63 @@ func (p *Panel) initMainWindow(ctx context.Context) {
 		),
 	)
 
-	w.SetContent(container.NewBorder(
-		topPanel,
+	controlPage := container.NewBorder(
+		profileFilter,
 		bottomPanel,
 		nil,
 		nil,
 		profilesList,
+	)
+
+	monitorBackground := image.NewGray(image.Rect(0, 0, 1, 1))
+	monitorBackgroundFyne := canvas.NewImageFromImage(monitorBackground)
+	monitorBackgroundFyne.FillMode = canvas.ImageFillStretch
+
+	p.screenshotContainer = container.NewBorder(nil, nil, nil, nil)
+	p.chatContainer = container.NewBorder(nil, nil, nil, nil)
+	monitorPage := container.NewStack(
+		monitorBackgroundFyne,
+		p.screenshotContainer,
+		p.chatContainer,
+	)
+
+	setPage := func(page Page) {
+		logger.Debugf(ctx, "setPage(%s)", page)
+		defer logger.Debugf(ctx, "/setPage(%s)", page)
+
+		if page != PageMonitor {
+			p.stopMonitorPage(ctx)
+		}
+
+		switch page {
+		case PageControl:
+			monitorPage.Hide()
+			profileControl.Show()
+			controlPage.Show()
+		case PageMonitor:
+			controlPage.Hide()
+			profileControl.Hide()
+			monitorPage.Show()
+			p.startMonitorPage(ctx)
+		}
+	}
+
+	pageSelector := widget.NewSelect(
+		[]string{"Control", "Monitor"},
+		func(page string) {
+			setPage(Page(page))
+		},
+	)
+	pageSelector.SetSelected(string(PageControl))
+	topPanel.Add(layout.NewSpacer())
+	topPanel.Add(pageSelector)
+
+	w.SetContent(container.NewBorder(
+		topPanel,
+		nil,
+		nil,
+		nil,
+		container.NewStack(controlPage, monitorPage),
 	))
 
 	w.Show()
