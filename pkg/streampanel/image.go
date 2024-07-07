@@ -79,6 +79,16 @@ func (p *Panel) getImage(
 	return img, nil
 }
 
+func imgFitTo(src image.Image, size image.Point) image.Image {
+	sizeCur := src.Bounds().Max
+	factor := math.MaxFloat64
+	factor = math.Min(factor, float64(size.X)/float64(sizeCur.X))
+	factor = math.Min(factor, float64(size.Y)/float64(sizeCur.Y))
+	newWidth := uint(float64(sizeCur.X) * factor)
+	newHeight := uint(float64(sizeCur.Y) * factor)
+	return resize.Resize(newWidth, newHeight, src, resize.Lanczos3)
+}
+
 const (
 	ScreenshotMaxWidth  = 384
 	ScreenshotMaxHeight = 216
@@ -101,12 +111,7 @@ func (p *Panel) setScreenshot(
 	}
 
 	if bounds.Max.X > ScreenshotMaxWidth || bounds.Max.Y > ScreenshotMaxHeight {
-		factor := 1.0
-		factor = math.Min(factor, float64(ScreenshotMaxWidth)/float64(bounds.Max.X))
-		factor = math.Min(factor, float64(ScreenshotMaxHeight)/float64(bounds.Max.Y))
-		newWidth := uint(float64(bounds.Max.X) * factor)
-		newHeight := uint(float64(bounds.Max.Y) * factor)
-		screenshot = resize.Resize(newWidth, newHeight, screenshot, resize.Lanczos3)
+		screenshot = imgFitTo(screenshot, bounds.Max)
 		logger.Tracef(ctx, "rescaled the screenshot from %#+v to %#+v", bounds, screenshot.Bounds())
 	}
 

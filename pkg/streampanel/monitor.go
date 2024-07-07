@@ -2,10 +2,13 @@ package streampanel
 
 import (
 	"context"
+	"image"
 	"time"
 
 	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
+	"github.com/anthonynsimon/bild/adjust"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 )
@@ -64,6 +67,9 @@ func (p *Panel) updateMonitorPage(
 		if err != nil {
 			logger.Error(ctx, err)
 		} else {
+			s := p.screenshotContainer.Size()
+			img = imgFitTo(img, image.Point{X: int(s.Width), Y: int(s.Height)})
+			img = adjust.Brightness(img, -0.5)
 			imgFyne := canvas.NewImageFromImage(img)
 			imgFyne.FillMode = canvas.ImageFillOriginal
 
@@ -79,11 +85,14 @@ func (p *Panel) updateMonitorPage(
 		if err != nil {
 			logger.Error(ctx, err)
 		} else {
+			s := p.chatContainer.Size()
+			img = imgFitTo(img, image.Point{X: int(s.Width), Y: int(s.Height)})
 			imgFyne := canvas.NewImageFromImage(img)
-			imgFyne.FillMode = canvas.ImageFillContain
+			imgFyne.FillMode = canvas.ImageFillOriginal
 
-			p.chatContainer.RemoveAll()
-			p.chatContainer.Add(imgFyne)
+			p.chatContainer.Layout = layout.NewVBoxLayout()
+			p.chatContainer.Objects = p.chatContainer.Objects[:0]
+			p.chatContainer.Objects = append(p.chatContainer.Objects, layout.NewSpacer(), container.NewHBox(imgFyne, layout.NewSpacer()))
 			p.chatContainer.Refresh()
 		}
 	}

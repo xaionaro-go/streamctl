@@ -18,3 +18,10 @@ type VarKey string
 func VarKeyImage(imageID ImageID) VarKey {
 	return VarKey(PrefixVarKeyImage) + VarKey(imageID)
 }
+
+type Page string
+
+const (
+	PageControl = Page("Control")
+	PageMonitor = Page("Monitor")
+)

@@ -20,6 +20,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/server"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel"
+	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	"google.golang.org/grpc"
 )
 
@@ -35,6 +36,7 @@ func main() {
 	cpuProfile := pflag.String("go-profile-cpu", "", "file to write cpu profile to")
 	heapProfile := pflag.String("go-profile-heap", "", "file to write memory profile to")
 	sentryDSN := pflag.String("sentry-dsn", "", "DSN of a Sentry instance to send error reports")
+	page := pflag.String("page", string(consts.PageControl), "DSN of a Sentry instance to send error reports")
 	pflag.Parse()
 	l := logrus.Default().WithLevel(loggerLevel)
 
@@ -135,7 +137,9 @@ func main() {
 		}()
 	}
 
-	err = panel.Loop(ctx)
+	var loopOpts []streampanel.LoopOption
+	loopOpts = append(loopOpts, streampanel.LoopOptionStartingPage(*page))
+	err = panel.Loop(ctx, loopOpts...)
 	if err != nil {
 		l.Fatal(err)
 	}

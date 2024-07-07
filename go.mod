@@ -202,6 +202,7 @@ require (
 	fyne.io/fyne/v2 v2.4.6-0.20240630191754-79694263c06a
 	github.com/DataDog/gostackparse v0.6.0
 	github.com/andreykaipov/goobs v1.4.1
+	github.com/anthonynsimon/bild v0.14.0
 	github.com/chai2010/webp v1.1.1
 	github.com/dustin/go-broadcast v0.0.0-20211018055107-71439988bd91
 	github.com/getsentry/sentry-go v0.28.1

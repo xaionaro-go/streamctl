@@ -41,6 +41,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/client"
 	streamdconfig "github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/config"
+	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
 )
 
@@ -97,13 +98,6 @@ type Panel struct {
 	waitWindow       fyne.Window
 }
 
-type Page string
-
-const (
-	PageControl = Page("Control")
-	PageMonitor = Page("Monitor")
-)
-
 func New(
 	configPath string,
 	opts ...Option,
@@ -133,10 +127,38 @@ func (p *Panel) SetStatus(msg string) {
 	p.setStatusFunc(msg)
 }
 
-func (p *Panel) Loop(ctx context.Context) error {
+type loopConfig struct {
+	StartingPage consts.Page
+}
+
+type LoopOption interface {
+	apply(*loopConfig)
+}
+
+type loopOptions []LoopOption
+
+func (s loopOptions) Config() loopConfig {
+	cfg := loopConfig{
+		StartingPage: consts.PageControl,
+	}
+	for _, opt := range s {
+		opt.apply(&cfg)
+	}
+	return cfg
+}
+
+type LoopOptionStartingPage string
+
+func (opt LoopOptionStartingPage) apply(cfg *loopConfig) {
+	cfg.StartingPage = consts.Page(opt)
+}
+
+func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
 	if p.defaultContext != nil {
 		return fmt.Errorf("Loop was already used, and cannot be used the second time")
 	}
+
+	initCfg := loopOptions(opts).Config()
 
 	p.defaultContext = ctx
 	logger.Debug(ctx, "config", p.Config)
@@ -152,6 +174,7 @@ func (p *Panel) Loop(ctx context.Context) error {
 	}
 
 	p.app = fyneapp.New()
+	p.app.Driver().SetDisableScreenBlanking(true)
 
 	go func() {
 		var loadingWindow fyne.Window
@@ -201,7 +224,7 @@ func (p *Panel) Loop(ctx context.Context) error {
 
 		p.reinitScreenshoter(ctx)
 
-		p.initMainWindow(ctx)
+		p.initMainWindow(ctx, initCfg.StartingPage)
 		if err := p.rearrangeProfiles(ctx); err != nil {
 			err = fmt.Errorf("unable to arrange the profiles: %w", err)
 			p.DisplayError(err)
@@ -1219,7 +1242,10 @@ func (p *Panel) getUpdatedStatus_startStopStreamButton(ctx context.Context) {
 	}
 }
 
-func (p *Panel) initMainWindow(ctx context.Context) {
+func (p *Panel) initMainWindow(
+	ctx context.Context,
+	startingPage consts.Page,
+) {
 	w := p.app.NewWindow(appName)
 	w.SetMaster()
 	resizeWindow(w, fyne.NewSize(400, 600))
@@ -1369,20 +1395,20 @@ func (p *Panel) initMainWindow(ctx context.Context) {
 		p.chatContainer,
 	)
 
-	setPage := func(page Page) {
+	setPage := func(page consts.Page) {
 		logger.Debugf(ctx, "setPage(%s)", page)
 		defer logger.Debugf(ctx, "/setPage(%s)", page)
 
-		if page != PageMonitor {
+		if page != consts.PageMonitor {
 			p.stopMonitorPage(ctx)
 		}
 
 		switch page {
-		case PageControl:
+		case consts.PageControl:
 			monitorPage.Hide()
 			profileControl.Show()
 			controlPage.Show()
-		case PageMonitor:
+		case consts.PageMonitor:
 			controlPage.Hide()
 			profileControl.Hide()
 			monitorPage.Show()
@@ -1393,10 +1419,10 @@ func (p *Panel) initMainWindow(ctx context.Context) {
 	pageSelector := widget.NewSelect(
 		[]string{"Control", "Monitor"},
 		func(page string) {
-			setPage(Page(page))
+			setPage(consts.Page(page))
 		},
 	)
-	pageSelector.SetSelected(string(PageControl))
+	pageSelector.SetSelected(string(startingPage))
 	topPanel.Add(layout.NewSpacer())
 	topPanel.Add(pageSelector)
 
