@@ -36,6 +36,8 @@ type StreamDClient interface {
 	SetDescription(ctx context.Context, in *SetDescriptionRequest, opts ...grpc.CallOption) (*SetDescriptionReply, error)
 	SetApplyProfile(ctx context.Context, in *SetApplyProfileRequest, opts ...grpc.CallOption) (*SetApplyProfileReply, error)
 	UpdateStream(ctx context.Context, in *UpdateStreamRequest, opts ...grpc.CallOption) (*UpdateStreamReply, error)
+	GetVariable(ctx context.Context, in *GetVariableRequest, opts ...grpc.CallOption) (*GetVariableReply, error)
+	SetVariable(ctx context.Context, in *SetVariableRequest, opts ...grpc.CallOption) (*SetVariableReply, error)
 	EXPERIMENTAL_ReinitStreamControllers(ctx context.Context, in *EXPERIMENTAL_ReinitStreamControllersRequest, opts ...grpc.CallOption) (*EXPERIMENTAL_ReinitStreamControllersReply, error)
 	OBSOLETE_FetchConfig(ctx context.Context, in *OBSOLETE_FetchConfigRequest, opts ...grpc.CallOption) (*OBSOLETE_FetchConfigReply, error)
 	OBSOLETE_GitInfo(ctx context.Context, in *OBSOLETE_GetGitInfoRequest, opts ...grpc.CallOption) (*OBSOLETE_GetGitInfoReply, error)
@@ -177,6 +179,24 @@ func (c *streamDClient) UpdateStream(ctx context.Context, in *UpdateStreamReques
 	return out, nil
 }
 
+func (c *streamDClient) GetVariable(ctx context.Context, in *GetVariableRequest, opts ...grpc.CallOption) (*GetVariableReply, error) {
+	out := new(GetVariableReply)
+	err := c.cc.Invoke(ctx, "/StreamD/GetVariable", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) SetVariable(ctx context.Context, in *SetVariableRequest, opts ...grpc.CallOption) (*SetVariableReply, error) {
+	out := new(SetVariableReply)
+	err := c.cc.Invoke(ctx, "/StreamD/SetVariable", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *streamDClient) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context, in *EXPERIMENTAL_ReinitStreamControllersRequest, opts ...grpc.CallOption) (*EXPERIMENTAL_ReinitStreamControllersReply, error) {
 	out := new(EXPERIMENTAL_ReinitStreamControllersReply)
 	err := c.cc.Invoke(ctx, "/StreamD/EXPERIMENTAL_ReinitStreamControllers", in, out, opts...)
@@ -263,6 +283,8 @@ type StreamDServer interface {
 	SetDescription(context.Context, *SetDescriptionRequest) (*SetDescriptionReply, error)
 	SetApplyProfile(context.Context, *SetApplyProfileRequest) (*SetApplyProfileReply, error)
 	UpdateStream(context.Context, *UpdateStreamRequest) (*UpdateStreamReply, error)
+	GetVariable(context.Context, *GetVariableRequest) (*GetVariableReply, error)
+	SetVariable(context.Context, *SetVariableRequest) (*SetVariableReply, error)
 	EXPERIMENTAL_ReinitStreamControllers(context.Context, *EXPERIMENTAL_ReinitStreamControllersRequest) (*EXPERIMENTAL_ReinitStreamControllersReply, error)
 	OBSOLETE_FetchConfig(context.Context, *OBSOLETE_FetchConfigRequest) (*OBSOLETE_FetchConfigReply, error)
 	OBSOLETE_GitInfo(context.Context, *OBSOLETE_GetGitInfoRequest) (*OBSOLETE_GetGitInfoReply, error)
@@ -316,6 +338,12 @@ func (UnimplementedStreamDServer) SetApplyProfile(context.Context, *SetApplyProf
 }
 func (UnimplementedStreamDServer) UpdateStream(context.Context, *UpdateStreamRequest) (*UpdateStreamReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateStream not implemented")
+}
+func (UnimplementedStreamDServer) GetVariable(context.Context, *GetVariableRequest) (*GetVariableReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetVariable not implemented")
+}
+func (UnimplementedStreamDServer) SetVariable(context.Context, *SetVariableRequest) (*SetVariableReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetVariable not implemented")
 }
 func (UnimplementedStreamDServer) EXPERIMENTAL_ReinitStreamControllers(context.Context, *EXPERIMENTAL_ReinitStreamControllersRequest) (*EXPERIMENTAL_ReinitStreamControllersReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method EXPERIMENTAL_ReinitStreamControllers not implemented")
@@ -597,6 +625,42 @@ func _StreamD_UpdateStream_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _StreamD_GetVariable_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetVariableRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).GetVariable(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/StreamD/GetVariable",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).GetVariable(ctx, req.(*GetVariableRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_SetVariable_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetVariableRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).SetVariable(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/StreamD/SetVariable",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).SetVariable(ctx, req.(*SetVariableRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _StreamD_EXPERIMENTAL_ReinitStreamControllers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(EXPERIMENTAL_ReinitStreamControllersRequest)
 	if err := dec(in); err != nil {
@@ -752,6 +816,14 @@ var StreamD_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateStream",
 			Handler:    _StreamD_UpdateStream_Handler,
+		},
+		{
+			MethodName: "GetVariable",
+			Handler:    _StreamD_GetVariable_Handler,
+		},
+		{
+			MethodName: "SetVariable",
+			Handler:    _StreamD_SetVariable_Handler,
 		},
 		{
 			MethodName: "EXPERIMENTAL_ReinitStreamControllers",

@@ -16,6 +16,8 @@ service StreamD {
     rpc SetDescription(SetDescriptionRequest) returns (SetDescriptionReply) {}
     rpc SetApplyProfile(SetApplyProfileRequest) returns (SetApplyProfileReply) {}
     rpc UpdateStream(UpdateStreamRequest) returns (UpdateStreamReply) {}
+    rpc GetVariable(GetVariableRequest) returns(GetVariableReply) {}
+    rpc SetVariable(SetVariableRequest) returns(SetVariableReply) {}
 
     rpc EXPERIMENTAL_ReinitStreamControllers(EXPERIMENTAL_ReinitStreamControllersRequest) returns (EXPERIMENTAL_ReinitStreamControllersReply) {}
 
@@ -111,3 +113,16 @@ message SubscribeToOAuthRequestsRequest{}
 message OAuthRequest{
     string authURL = 1;
 }
+
+message GetVariableRequest {
+    string key =  1;
+}
+message GetVariableReply {
+    string key = 1;
+    bytes value = 2;
+}
+message SetVariableRequest {
+    string key = 1;
+    bytes value = 2;
+}
+message SetVariableReply {}

@@ -18,6 +18,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/cache"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/ui"
+	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
 )
 
@@ -46,6 +47,8 @@ type StreamD struct {
 	GitInitialized  bool
 
 	StreamControllers StreamControllers
+
+	Variables sync.Map
 }
 
 var _ api.StreamD = (*StreamD)(nil)
@@ -559,5 +562,31 @@ func (d *StreamD) UpdateStream(
 		return fmt.Errorf("unable to apply the profile: %w", err)
 	}
 
+	return nil
+}
+
+func (d *StreamD) GetVariable(
+	ctx context.Context,
+	key consts.VarKey,
+) ([]byte, error) {
+	v, ok := d.Variables.Load(key)
+	if !ok {
+		return nil, ErrNoVariable{}
+	}
+
+	b, ok := v.([]byte)
+	if !ok {
+		return nil, ErrVariableWrongType{}
+	}
+
+	return b, nil
+}
+
+func (d *StreamD) SetVariable(
+	ctx context.Context,
+	key consts.VarKey,
+	value []byte,
+) error {
+	d.Variables.Store(key, value)
 	return nil
 }

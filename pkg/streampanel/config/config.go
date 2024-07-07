@@ -6,13 +6,20 @@ import (
 	"os"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/screenshot"
 	streamd "github.com/xaionaro-go/streamctl/pkg/streamd/config"
 )
 
+type ScreenshotConfig struct {
+	Enabled           *bool `yaml:"enabled"`
+	screenshot.Config `yaml:"screenshot,inline"`
+}
+
 type Config struct {
-	SentryDSN         string         `yaml:"sentry_dsn"`
-	RemoteStreamDAddr string         `yaml:"streamd_remote"`
-	BuiltinStreamD    streamd.Config `yaml:"streamd_builtin"`
+	SentryDSN         string           `yaml:"sentry_dsn"`
+	RemoteStreamDAddr string           `yaml:"streamd_remote"`
+	BuiltinStreamD    streamd.Config   `yaml:"streamd_builtin"`
+	Screenshot        ScreenshotConfig `yaml:"screenshot"`
 }
 
 func DefaultConfig() Config {

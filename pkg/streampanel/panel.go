@@ -27,6 +27,8 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/go-ng/xmath"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
+	"github.com/xaionaro-go/streamctl/pkg/screenshot"
+	"github.com/xaionaro-go/streamctl/pkg/screenshoter"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
@@ -48,7 +50,11 @@ type Profile struct {
 }
 
 type Panel struct {
-	StreamD api.StreamD
+	StreamD      api.StreamD
+	Screenshoter Screenshoter
+
+	screenshoterClose  context.CancelFunc
+	screenshoterLocker sync.Mutex
 
 	app                   fyne.App
 	Config                Config
@@ -99,8 +105,9 @@ func New(
 	}
 
 	return &Panel{
-		configPath: configPath,
-		Config:     Options(opts).ApplyOverrides(cfg),
+		configPath:   configPath,
+		Config:       Options(opts).ApplyOverrides(cfg),
+		Screenshoter: screenshoter.New(screenshot.Implementation{}),
 	}, nil
 }
 
@@ -177,6 +184,8 @@ func (p *Panel) Loop(ctx context.Context) error {
 		}
 		p.setStatusFunc = nil
 
+		p.reinitScreenshoter(ctx)
+
 		p.initMainWindow(ctx)
 		if err := p.rearrangeProfiles(ctx); err != nil {
 			err = fmt.Errorf("unable to arrange the profiles: %w", err)
@@ -209,6 +218,17 @@ func getExpandedConfigPath(configPath string) (string, error) {
 	return xpath.Expand(configPath)
 }
 
+func (p *Panel) SaveConfig(
+	ctx context.Context,
+) error {
+	err := config.WriteConfigToPath(ctx, p.configPath, p.Config)
+	if err != nil {
+		return fmt.Errorf("unable to save the config: %w", err)
+	}
+
+	return nil
+}
+
 func (p *Panel) initBuiltinStreamD(ctx context.Context) error {
 	var err error
 	p.StreamD, err = streamd.New(
@@ -216,13 +236,7 @@ func (p *Panel) initBuiltinStreamD(ctx context.Context) error {
 		p,
 		func(ctx context.Context, cfg streamdconfig.Config) error {
 			p.Config.BuiltinStreamD = cfg
-
-			err = config.WriteConfigToPath(ctx, p.configPath, p.Config)
-			if err != nil {
-				return fmt.Errorf("unable to save the config: %w", err)
-			}
-
-			return nil
+			return p.SaveConfig(ctx)
 		},
 		belt.CtxBelt(ctx),
 	)
@@ -825,6 +839,10 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 		w.Close()
 	})
 	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
+		if err := p.SaveConfig(ctx); err != nil {
+			p.DisplayError(fmt.Errorf("unable to save the local config: %w", err))
+		}
+
 		obsCfg := cfg.Backends[obs.ID]
 		obsCfg.SetCustomString(
 			config.CustomConfigKeyBeforeStreamStart, beforeStartStreamCommandEntry.Text)
@@ -837,10 +855,10 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 		cfg.Backends[obs.ID] = obsCfg
 
 		if err := p.StreamD.SetConfig(ctx, cfg); err != nil {
-			p.DisplayError(err)
+			p.DisplayError(fmt.Errorf("unable to update the remote config: %w", err))
 		} else {
 			if err := p.StreamD.SaveConfig(ctx); err != nil {
-				p.DisplayError(err)
+				p.DisplayError(fmt.Errorf("unable to save the remote config: %w", err))
 			}
 		}
 
@@ -877,6 +895,58 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 	} else {
 		gitAlreadyLoggedIn.SetText("(already logged in)")
 	}
+
+	numDisplays := p.Screenshoter.Engine().NumActiveDisplays()
+	var displays []string
+	caption2id := map[string]int{}
+	for i := 0; i < int(numDisplays); i++ {
+		caption := fmt.Sprintf("display #%d", i+1)
+		displays = append(displays, caption)
+		caption2id[caption] = i
+	}
+	displayIDSelector := widget.NewSelect(displays, func(s string) {
+		id := caption2id[s]
+		p.Config.Screenshot.DisplayID = uint(id)
+	})
+	displayIDSelector.SetSelected(fmt.Sprintf("display #%d", p.Config.Screenshot.DisplayID+1))
+
+	screenshotCropXEntry := widget.NewEntry()
+	screenshotCropXEntry.SetPlaceHolder("x")
+	screenshotCropYEntry := widget.NewEntry()
+	screenshotCropYEntry.SetPlaceHolder("y")
+	screenshotCropWEntry := widget.NewEntry()
+	screenshotCropWEntry.SetPlaceHolder("w")
+	screenshotCropHEntry := widget.NewEntry()
+	screenshotCropHEntry.SetPlaceHolder("h")
+
+	enableDisableScreenshoter := func(b bool) {
+		if b {
+			screenshotCropXEntry.Enable()
+			screenshotCropYEntry.Enable()
+			screenshotCropWEntry.Enable()
+			screenshotCropHEntry.Enable()
+			displayIDSelector.Enable()
+		} else {
+			screenshotCropXEntry.Disable()
+			screenshotCropYEntry.Disable()
+			screenshotCropWEntry.Disable()
+			screenshotCropHEntry.Disable()
+			displayIDSelector.Disable()
+		}
+	}
+
+	enableScreenshotSendingCheckbox := widget.NewCheck(
+		"Send screenshots from this computer",
+		func(b bool) {
+			p.Config.Screenshot.Enabled = ptr(b)
+			enableDisableScreenshoter(b)
+		},
+	)
+	if p.Config.Screenshot.Enabled == nil {
+		p.Config.Screenshot.Enabled = ptr(false)
+	}
+	enableScreenshotSendingCheckbox.SetChecked(*p.Config.Screenshot.Enabled)
+	enableDisableScreenshoter(*p.Config.Screenshot.Enabled)
 
 	w.SetContent(container.NewBorder(
 		container.NewVBox(
@@ -944,6 +1014,16 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 					}
 				}),
 				youtubeAlreadyLoggedIn,
+			),
+			widget.NewSeparator(),
+			widget.NewSeparator(),
+			widget.NewRichTextFromMarkdown(`# Monitor`),
+			enableScreenshotSendingCheckbox,
+			widget.NewLabel("The screen/display to screenshot:"),
+			displayIDSelector,
+			widget.NewLabel("Crop to:"),
+			container.NewHBox(
+				screenshotCropXEntry, screenshotCropYEntry, screenshotCropWEntry, screenshotCropHEntry,
 			),
 			widget.NewSeparator(),
 			widget.NewSeparator(),

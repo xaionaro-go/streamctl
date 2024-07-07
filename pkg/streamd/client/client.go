@@ -17,6 +17,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
+	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -464,6 +465,46 @@ func (c *Client) SubscriberToOAuthURLs(
 	}()
 
 	return result, nil
+}
+
+func (c *Client) GetVariable(
+	ctx context.Context,
+	key consts.VarKey,
+) ([]byte, error) {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	reply, err := client.GetVariable(ctx, &streamd_grpc.GetVariableRequest{Key: string(key)})
+	if err != nil {
+		return nil, fmt.Errorf("unable to get the variable '%s' value: %w", key, err)
+	}
+
+	return reply.Value, nil
+}
+
+func (c *Client) SetVariable(
+	ctx context.Context,
+	key consts.VarKey,
+	value []byte,
+) error {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = client.SetVariable(ctx, &streamd_grpc.SetVariableRequest{
+		Key:   string(key),
+		Value: value,
+	})
+	if err != nil {
+		return fmt.Errorf("unable to get the variable '%s' value: %w", key, err)
+	}
+
+	return nil
 }
 
 func ptr[T any](in T) *T {

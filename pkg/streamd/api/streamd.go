@@ -6,6 +6,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/cache"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
+	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 )
 
 type StreamD interface {
@@ -44,6 +45,8 @@ type StreamD interface {
 		ctx context.Context,
 		platID streamcontrol.PlatformName,
 	) (*streamcontrol.StreamStatus, error)
+	GetVariable(ctx context.Context, key consts.VarKey) ([]byte, error)
+	SetVariable(ctx context.Context, key consts.VarKey, value []byte) error
 }
 
 type BackendDataOBS struct{}
