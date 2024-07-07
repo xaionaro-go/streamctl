@@ -1,4 +1,6 @@
 package config
 
-const CustomConfigKeyOnStreamStart = "on_start_stream"
-const CustomConfigKeyOnStreamStop = "on_stop_stream"
+const CustomConfigKeyBeforeStreamStart = "before_start_stream"
+const CustomConfigKeyBeforeStreamStop = "before_stop_stream"
+const CustomConfigKeyAfterStreamStart = "after_start_stream"
+const CustomConfigKeyAfterStreamStop = "after_stop_stream"

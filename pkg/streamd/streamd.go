@@ -419,7 +419,38 @@ func (d *StreamD) Restart(ctx context.Context) error {
 	return nil
 }
 
+func (d *StreamD) tryConnectTwitch(
+	ctx context.Context,
+) {
+	if d.StreamControllers.Twitch != nil {
+		return
+	}
+
+	if _, ok := d.Config.Backends[twitch.ID]; !ok {
+		return
+	}
+
+	err := d.initTwitchBackend(ctx)
+	errmon.ObserveErrorCtx(ctx, err)
+}
+
+func (d *StreamD) tryConnectYouTube(
+	ctx context.Context,
+) {
+	if d.StreamControllers.YouTube != nil {
+		return
+	}
+
+	if _, ok := d.Config.Backends[youtube.ID]; !ok {
+		return
+	}
+
+	err := d.initYouTubeBackend(ctx)
+	errmon.ObserveErrorCtx(ctx, err)
+}
+
 func (d *StreamD) streamController(
+	ctx context.Context,
 	platID streamcontrol.PlatformName,
 ) (streamcontrol.AbstractStreamController, error) {
 	var result streamcontrol.AbstractStreamController
@@ -429,10 +460,16 @@ func (d *StreamD) streamController(
 			result = streamcontrol.ToAbstract(d.StreamControllers.OBS)
 		}
 	case twitch.ID:
+		if d.StreamControllers.Twitch == nil {
+			d.tryConnectTwitch(ctx)
+		}
 		if d.StreamControllers.Twitch != nil {
 			result = streamcontrol.ToAbstract(d.StreamControllers.Twitch)
 		}
 	case youtube.ID:
+		if d.StreamControllers.YouTube == nil {
+			d.tryConnectYouTube(ctx)
+		}
 		if d.StreamControllers.YouTube != nil {
 			result = streamcontrol.ToAbstract(d.StreamControllers.YouTube)
 		}
@@ -448,7 +485,7 @@ func (d *StreamD) GetStreamStatus(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
 ) (*streamcontrol.StreamStatus, error) {
-	c, err := d.streamController(platID)
+	c, err := d.streamController(ctx, platID)
 	if err != nil {
 		return nil, err
 	}
@@ -465,7 +502,7 @@ func (d *StreamD) SetTitle(
 	platID streamcontrol.PlatformName,
 	title string,
 ) error {
-	c, err := d.streamController(platID)
+	c, err := d.streamController(ctx, platID)
 	if err != nil {
 		return err
 	}
@@ -478,7 +515,7 @@ func (d *StreamD) SetDescription(
 	platID streamcontrol.PlatformName,
 	description string,
 ) error {
-	c, err := d.streamController(platID)
+	c, err := d.streamController(ctx, platID)
 	if err != nil {
 		return err
 	}
@@ -492,7 +529,7 @@ func (d *StreamD) ApplyProfile(
 	profile streamcontrol.AbstractStreamProfile,
 	customArgs ...any,
 ) error {
-	c, err := d.streamController(platID)
+	c, err := d.streamController(ctx, platID)
 	if err != nil {
 		return err
 	}

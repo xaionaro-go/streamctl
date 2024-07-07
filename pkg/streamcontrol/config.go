@@ -202,6 +202,7 @@ func (cfg *Config) UnmarshalYAML(b []byte) error {
 		}
 
 		(*cfg)[k].Enable = v.Enable
+		(*cfg)[k].Custom = v.Custom
 		if (*cfg)[k].Enable == nil {
 			(*cfg)[k].Enable = ptr(true)
 		}

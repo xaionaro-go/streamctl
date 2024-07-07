@@ -420,7 +420,7 @@ func (grpc *GRPCServer) getStreamStatus(
 	platID := streamcontrol.PlatformName(req.GetPlatID())
 	streamStatus, err := grpc.StreamD.GetStreamStatus(ctx, platID)
 	if err != nil {
-		return nil, fmt.Errorf("unable to relogin: %w", err)
+		return nil, fmt.Errorf("unable to get the stream status of '%s': %w", platID, err)
 	}
 
 	var startedAt *int64

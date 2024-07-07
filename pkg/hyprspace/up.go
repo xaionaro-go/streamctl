@@ -1,7 +1,7 @@
-// copied from https://github.com/hyprspace/hyprspace/blob/master/cli/up.go
+// copied from https://github.com/hyprspace/hyprspace/blob/6da857d6df915d5b74a7a42d7c621bad2ce4f8a9/cli/up.go
 // LICENSE: Apache-2.0
 //
-// Modified by Dmitrii Okunev, LICENSE of the changes: CC-0, or WTFPL-2.0 or Apache-2.0 (chose what you like)
+// Modified by Dmitrii Okunev, LICENSE of the changes: Apache-2.0, CC-0, or WTFPL-2.0 or Apache-2.0 (chose what you like)
 
 package hyprspace
 

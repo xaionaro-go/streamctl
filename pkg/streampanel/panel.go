@@ -772,6 +772,16 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 		return fmt.Errorf("unable to get config: %w", err)
 	}
 
+	{
+		var buf bytes.Buffer
+		_, err := cfg.WriteTo(&buf)
+		if err != nil {
+			logger.Warnf(ctx, "unable to serialize the config: %v", err)
+		} else {
+			logger.Debugf(ctx, "current config: %s", buf.String())
+		}
+	}
+
 	backendEnabled := map[streamcontrol.PlatformName]bool{}
 	for _, backendID := range []streamcontrol.PlatformName{
 		obs.ID,
@@ -793,23 +803,45 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 	w := p.app.NewWindow(appName + ": Settings")
 	resizeWindow(w, fyne.NewSize(400, 900))
 
-	cmdStartStream, _ := cfg.Backends[obs.ID].GetCustomString(config.CustomConfigKeyOnStreamStart)
-	cmdStopStream, _ := cfg.Backends[obs.ID].GetCustomString(config.CustomConfigKeyOnStreamStop)
+	if obsCfg, ok := cfg.Backends[obs.ID]; ok {
+		logger.Debugf(ctx, "current OBS config: %#+v", obsCfg)
+	}
 
-	startStreamCommandEntry := widget.NewEntry()
-	startStreamCommandEntry.SetText(cmdStartStream)
-	stopStreamCommandEntry := widget.NewEntry()
-	stopStreamCommandEntry.SetText(cmdStopStream)
+	cmdBeforeStartStream, _ := cfg.Backends[obs.ID].GetCustomString(config.CustomConfigKeyBeforeStreamStart)
+	cmdBeforeStopStream, _ := cfg.Backends[obs.ID].GetCustomString(config.CustomConfigKeyBeforeStreamStop)
+	cmdAfterStartStream, _ := cfg.Backends[obs.ID].GetCustomString(config.CustomConfigKeyAfterStreamStart)
+	cmdAfterStopStream, _ := cfg.Backends[obs.ID].GetCustomString(config.CustomConfigKeyAfterStreamStop)
+
+	beforeStartStreamCommandEntry := widget.NewEntry()
+	beforeStartStreamCommandEntry.SetText(cmdBeforeStartStream)
+	beforeStopStreamCommandEntry := widget.NewEntry()
+	beforeStopStreamCommandEntry.SetText(cmdBeforeStopStream)
+	afterStartStreamCommandEntry := widget.NewEntry()
+	afterStartStreamCommandEntry.SetText(cmdAfterStartStream)
+	afterStopStreamCommandEntry := widget.NewEntry()
+	afterStopStreamCommandEntry.SetText(cmdAfterStopStream)
 
 	cancelButton := widget.NewButtonWithIcon("Cancel", theme.CancelIcon(), func() {
 		w.Close()
 	})
 	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
-		cfg.Backends[obs.ID].SetCustomString(config.CustomConfigKeyOnStreamStart, startStreamCommandEntry.Text)
-		cfg.Backends[obs.ID].SetCustomString(config.CustomConfigKeyOnStreamStop, stopStreamCommandEntry.Text)
+		obsCfg := cfg.Backends[obs.ID]
+		obsCfg.SetCustomString(
+			config.CustomConfigKeyBeforeStreamStart, beforeStartStreamCommandEntry.Text)
+		obsCfg.SetCustomString(
+			config.CustomConfigKeyBeforeStreamStop, beforeStopStreamCommandEntry.Text)
+		obsCfg.SetCustomString(
+			config.CustomConfigKeyAfterStreamStart, afterStartStreamCommandEntry.Text)
+		obsCfg.SetCustomString(
+			config.CustomConfigKeyAfterStreamStop, afterStopStreamCommandEntry.Text)
+		cfg.Backends[obs.ID] = obsCfg
 
-		if err := p.StreamD.SaveConfig(ctx); err != nil {
+		if err := p.StreamD.SetConfig(ctx, cfg); err != nil {
 			p.DisplayError(err)
+		} else {
+			if err := p.StreamD.SaveConfig(ctx); err != nil {
+				p.DisplayError(err)
+			}
 		}
 
 		w.Close()
@@ -918,11 +950,15 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 			widget.NewRichTextFromMarkdown(`# Commands`),
 			templateInstruction,
 			widget.NewSeparator(),
-			widget.NewLabel("Run command on stream start:"),
-			startStreamCommandEntry,
+			widget.NewLabel("Run command on stream start (before):"),
+			beforeStartStreamCommandEntry,
+			widget.NewLabel("Run command on stream start (after):"),
+			afterStartStreamCommandEntry,
 			widget.NewSeparator(),
-			widget.NewLabel("Run command on stream stop:"),
-			stopStreamCommandEntry,
+			widget.NewLabel("Run command on stream stop (before):"),
+			beforeStopStreamCommandEntry,
+			widget.NewLabel("Run command on stream stop (after):"),
+			afterStopStreamCommandEntry,
 			widget.NewSeparator(),
 			widget.NewSeparator(),
 			widget.NewRichTextFromMarkdown(`# Syncing (via git)`),
@@ -1403,7 +1439,7 @@ func (p *Panel) startStream(ctx context.Context) {
 		p.DisplayError(fmt.Errorf("unable to start the stream on YouTube: %w", err))
 	}
 
-	if onStreamStart, ok := p.configCache.Backends[obs.ID].GetCustomString(config.CustomConfigKeyOnStreamStart); ok {
+	if onStreamStart, ok := p.configCache.Backends[obs.ID].GetCustomString(config.CustomConfigKeyAfterStreamStart); ok {
 		p.execCommand(ctx, onStreamStart)
 	}
 
@@ -1460,7 +1496,7 @@ func (p *Panel) stopStream(ctx context.Context) {
 
 	p.startStopButton.SetText("OnStopStream command...")
 
-	if onStreamStop, ok := p.configCache.Backends[obs.ID].GetCustomString(config.CustomConfigKeyOnStreamStop); ok {
+	if onStreamStop, ok := p.configCache.Backends[obs.ID].GetCustomString(config.CustomConfigKeyAfterStreamStop); ok {
 		p.execCommand(ctx, onStreamStop)
 	}
 
