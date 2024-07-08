@@ -17,6 +17,7 @@ service StreamD {
     rpc SetApplyProfile(SetApplyProfileRequest) returns (SetApplyProfileReply) {}
     rpc UpdateStream(UpdateStreamRequest) returns (UpdateStreamReply) {}
     rpc GetVariable(GetVariableRequest) returns(GetVariableReply) {}
+    rpc GetVariableHash(GetVariableHashRequest) returns(GetVariableHashReply) {}
     rpc SetVariable(SetVariableRequest) returns(SetVariableReply) {}
 
     rpc EXPERIMENTAL_ReinitStreamControllers(EXPERIMENTAL_ReinitStreamControllersRequest) returns (EXPERIMENTAL_ReinitStreamControllersReply) {}
@@ -25,7 +26,10 @@ service StreamD {
     rpc OBSOLETE_GitInfo(OBSOLETE_GetGitInfoRequest) returns (OBSOLETE_GetGitInfoReply) {}
     rpc OBSOLETE_GitRelogin(OBSOLETE_GitReloginRequest) returns (OBSOLETE_GitReloginReply) {}
 
-    rpc SubscribeToOAuthRequests(SubscribeToOAuthRequestsRequest) returns (stream OAuthRequest) {};
+    rpc SubscribeToOAuthRequests(SubscribeToOAuthRequestsRequest) returns (stream OAuthRequest) {}
+
+    rpc OBSGetSceneList(OBSGetSceneListRequest) returns (OBSGetSceneListReply) {}
+    rpc OBSSetCurrentProgramScene(OBSSetCurrentProgramSceneRequest) returns (OBSSetCurrentProgramSceneReply) {}
 }
 
 message GetConfigRequest {}
@@ -121,8 +125,42 @@ message GetVariableReply {
     string key = 1;
     bytes value = 2;
 }
+message GetVariableHashRequest {
+    string key = 1;
+    HashType hashType = 2; 
+}
+message GetVariableHashReply {
+    string key = 1;
+    HashType hashType = 2; 
+    bytes hash = 3;
+}
 message SetVariableRequest {
     string key = 1;
     bytes value = 2;
 }
 message SetVariableReply {}
+
+enum HashType {
+    HASH_SHA1 = 0;
+}
+
+message OBSGetSceneListRequest {}
+message OBSScene {
+    string uuid = 1;
+    int32 index = 2;
+    string name = 3;
+}
+message OBSGetSceneListReply {
+    string currentPreviewSceneName = 1;
+    string currentPreviewSceneUUID = 2;
+    string currentProgramSceneName = 3;
+    string currentProgramSceneUUID = 4;
+    repeated OBSScene scenes = 5;
+}
+message OBSSetCurrentProgramSceneRequest {
+    oneof OBSSceneID {
+        string sceneName = 1;
+        string sceneUUID = 2;
+    }
+}
+message OBSSetCurrentProgramSceneReply {}

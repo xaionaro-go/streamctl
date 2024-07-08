@@ -37,12 +37,15 @@ type StreamDClient interface {
 	SetApplyProfile(ctx context.Context, in *SetApplyProfileRequest, opts ...grpc.CallOption) (*SetApplyProfileReply, error)
 	UpdateStream(ctx context.Context, in *UpdateStreamRequest, opts ...grpc.CallOption) (*UpdateStreamReply, error)
 	GetVariable(ctx context.Context, in *GetVariableRequest, opts ...grpc.CallOption) (*GetVariableReply, error)
+	GetVariableHash(ctx context.Context, in *GetVariableHashRequest, opts ...grpc.CallOption) (*GetVariableHashReply, error)
 	SetVariable(ctx context.Context, in *SetVariableRequest, opts ...grpc.CallOption) (*SetVariableReply, error)
 	EXPERIMENTAL_ReinitStreamControllers(ctx context.Context, in *EXPERIMENTAL_ReinitStreamControllersRequest, opts ...grpc.CallOption) (*EXPERIMENTAL_ReinitStreamControllersReply, error)
 	OBSOLETE_FetchConfig(ctx context.Context, in *OBSOLETE_FetchConfigRequest, opts ...grpc.CallOption) (*OBSOLETE_FetchConfigReply, error)
 	OBSOLETE_GitInfo(ctx context.Context, in *OBSOLETE_GetGitInfoRequest, opts ...grpc.CallOption) (*OBSOLETE_GetGitInfoReply, error)
 	OBSOLETE_GitRelogin(ctx context.Context, in *OBSOLETE_GitReloginRequest, opts ...grpc.CallOption) (*OBSOLETE_GitReloginReply, error)
 	SubscribeToOAuthRequests(ctx context.Context, in *SubscribeToOAuthRequestsRequest, opts ...grpc.CallOption) (StreamD_SubscribeToOAuthRequestsClient, error)
+	OBSGetSceneList(ctx context.Context, in *OBSGetSceneListRequest, opts ...grpc.CallOption) (*OBSGetSceneListReply, error)
+	OBSSetCurrentProgramScene(ctx context.Context, in *OBSSetCurrentProgramSceneRequest, opts ...grpc.CallOption) (*OBSSetCurrentProgramSceneReply, error)
 }
 
 type streamDClient struct {
@@ -188,6 +191,15 @@ func (c *streamDClient) GetVariable(ctx context.Context, in *GetVariableRequest,
 	return out, nil
 }
 
+func (c *streamDClient) GetVariableHash(ctx context.Context, in *GetVariableHashRequest, opts ...grpc.CallOption) (*GetVariableHashReply, error) {
+	out := new(GetVariableHashReply)
+	err := c.cc.Invoke(ctx, "/StreamD/GetVariableHash", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *streamDClient) SetVariable(ctx context.Context, in *SetVariableRequest, opts ...grpc.CallOption) (*SetVariableReply, error) {
 	out := new(SetVariableReply)
 	err := c.cc.Invoke(ctx, "/StreamD/SetVariable", in, out, opts...)
@@ -265,6 +277,24 @@ func (x *streamDSubscribeToOAuthRequestsClient) Recv() (*OAuthRequest, error) {
 	return m, nil
 }
 
+func (c *streamDClient) OBSGetSceneList(ctx context.Context, in *OBSGetSceneListRequest, opts ...grpc.CallOption) (*OBSGetSceneListReply, error) {
+	out := new(OBSGetSceneListReply)
+	err := c.cc.Invoke(ctx, "/StreamD/OBSGetSceneList", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) OBSSetCurrentProgramScene(ctx context.Context, in *OBSSetCurrentProgramSceneRequest, opts ...grpc.CallOption) (*OBSSetCurrentProgramSceneReply, error) {
+	out := new(OBSSetCurrentProgramSceneReply)
+	err := c.cc.Invoke(ctx, "/StreamD/OBSSetCurrentProgramScene", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // StreamDServer is the server API for StreamD service.
 // All implementations must embed UnimplementedStreamDServer
 // for forward compatibility
@@ -284,12 +314,15 @@ type StreamDServer interface {
 	SetApplyProfile(context.Context, *SetApplyProfileRequest) (*SetApplyProfileReply, error)
 	UpdateStream(context.Context, *UpdateStreamRequest) (*UpdateStreamReply, error)
 	GetVariable(context.Context, *GetVariableRequest) (*GetVariableReply, error)
+	GetVariableHash(context.Context, *GetVariableHashRequest) (*GetVariableHashReply, error)
 	SetVariable(context.Context, *SetVariableRequest) (*SetVariableReply, error)
 	EXPERIMENTAL_ReinitStreamControllers(context.Context, *EXPERIMENTAL_ReinitStreamControllersRequest) (*EXPERIMENTAL_ReinitStreamControllersReply, error)
 	OBSOLETE_FetchConfig(context.Context, *OBSOLETE_FetchConfigRequest) (*OBSOLETE_FetchConfigReply, error)
 	OBSOLETE_GitInfo(context.Context, *OBSOLETE_GetGitInfoRequest) (*OBSOLETE_GetGitInfoReply, error)
 	OBSOLETE_GitRelogin(context.Context, *OBSOLETE_GitReloginRequest) (*OBSOLETE_GitReloginReply, error)
 	SubscribeToOAuthRequests(*SubscribeToOAuthRequestsRequest, StreamD_SubscribeToOAuthRequestsServer) error
+	OBSGetSceneList(context.Context, *OBSGetSceneListRequest) (*OBSGetSceneListReply, error)
+	OBSSetCurrentProgramScene(context.Context, *OBSSetCurrentProgramSceneRequest) (*OBSSetCurrentProgramSceneReply, error)
 	mustEmbedUnimplementedStreamDServer()
 }
 
@@ -342,6 +375,9 @@ func (UnimplementedStreamDServer) UpdateStream(context.Context, *UpdateStreamReq
 func (UnimplementedStreamDServer) GetVariable(context.Context, *GetVariableRequest) (*GetVariableReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetVariable not implemented")
 }
+func (UnimplementedStreamDServer) GetVariableHash(context.Context, *GetVariableHashRequest) (*GetVariableHashReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetVariableHash not implemented")
+}
 func (UnimplementedStreamDServer) SetVariable(context.Context, *SetVariableRequest) (*SetVariableReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetVariable not implemented")
 }
@@ -359,6 +395,12 @@ func (UnimplementedStreamDServer) OBSOLETE_GitRelogin(context.Context, *OBSOLETE
 }
 func (UnimplementedStreamDServer) SubscribeToOAuthRequests(*SubscribeToOAuthRequestsRequest, StreamD_SubscribeToOAuthRequestsServer) error {
 	return status.Errorf(codes.Unimplemented, "method SubscribeToOAuthRequests not implemented")
+}
+func (UnimplementedStreamDServer) OBSGetSceneList(context.Context, *OBSGetSceneListRequest) (*OBSGetSceneListReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method OBSGetSceneList not implemented")
+}
+func (UnimplementedStreamDServer) OBSSetCurrentProgramScene(context.Context, *OBSSetCurrentProgramSceneRequest) (*OBSSetCurrentProgramSceneReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method OBSSetCurrentProgramScene not implemented")
 }
 func (UnimplementedStreamDServer) mustEmbedUnimplementedStreamDServer() {}
 
@@ -643,6 +685,24 @@ func _StreamD_GetVariable_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _StreamD_GetVariableHash_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetVariableHashRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).GetVariableHash(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/StreamD/GetVariableHash",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).GetVariableHash(ctx, req.(*GetVariableHashRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _StreamD_SetVariable_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SetVariableRequest)
 	if err := dec(in); err != nil {
@@ -754,6 +814,42 @@ func (x *streamDSubscribeToOAuthRequestsServer) Send(m *OAuthRequest) error {
 	return x.ServerStream.SendMsg(m)
 }
 
+func _StreamD_OBSGetSceneList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OBSGetSceneListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).OBSGetSceneList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/StreamD/OBSGetSceneList",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).OBSGetSceneList(ctx, req.(*OBSGetSceneListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_OBSSetCurrentProgramScene_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OBSSetCurrentProgramSceneRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).OBSSetCurrentProgramScene(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/StreamD/OBSSetCurrentProgramScene",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).OBSSetCurrentProgramScene(ctx, req.(*OBSSetCurrentProgramSceneRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // StreamD_ServiceDesc is the grpc.ServiceDesc for StreamD service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -822,6 +918,10 @@ var StreamD_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _StreamD_GetVariable_Handler,
 		},
 		{
+			MethodName: "GetVariableHash",
+			Handler:    _StreamD_GetVariableHash_Handler,
+		},
+		{
 			MethodName: "SetVariable",
 			Handler:    _StreamD_SetVariable_Handler,
 		},
@@ -840,6 +940,14 @@ var StreamD_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "OBSOLETE_GitRelogin",
 			Handler:    _StreamD_OBSOLETE_GitRelogin_Handler,
+		},
+		{
+			MethodName: "OBSGetSceneList",
+			Handler:    _StreamD_OBSGetSceneList_Handler,
+		},
+		{
+			MethodName: "OBSSetCurrentProgramScene",
+			Handler:    _StreamD_OBSSetCurrentProgramScene_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

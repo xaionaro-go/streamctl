@@ -26,7 +26,7 @@ func (p *Panel) startMonitorPage(
 	go func(ctx context.Context) {
 		p.updateMonitorPage(ctx)
 
-		t := time.NewTicker(time.Second)
+		t := time.NewTicker(200 * time.Millisecond)
 		for {
 			select {
 			case <-ctx.Done():
@@ -63,7 +63,8 @@ func (p *Panel) updateMonitorPage(
 	defer logger.Tracef(ctx, "/updateMonitorPage")
 
 	{
-		img, err := p.getImage(ctx, consts.VarKeyImage(consts.ImageScreenshot))
+		img, err := p.getImage(ctx, consts.ImageScreenshot)
+
 		if err != nil {
 			logger.Error(ctx, err)
 		} else {
@@ -81,7 +82,7 @@ func (p *Panel) updateMonitorPage(
 	}
 
 	{
-		img, err := p.getImage(ctx, consts.VarKeyImage(consts.ImageChat))
+		img, err := p.getImage(ctx, consts.ImageChat)
 		if err != nil {
 			logger.Error(ctx, err)
 		} else {

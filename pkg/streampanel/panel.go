@@ -26,6 +26,7 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/andreykaipov/goobs/api/requests/scenes"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/go-ng/xmath"
@@ -96,6 +97,9 @@ type Panel struct {
 
 	waitWindowLocker sync.Mutex
 	waitWindow       fyne.Window
+
+	imageLocker         sync.Mutex
+	imageLastDownloaded map[consts.ImageID][]byte
 }
 
 func New(
@@ -114,9 +118,10 @@ func New(
 	}
 
 	return &Panel{
-		configPath:   configPath,
-		Config:       Options(opts).ApplyOverrides(cfg),
-		Screenshoter: screenshoter.New(screenshot.Implementation{}),
+		configPath:          configPath,
+		Config:              Options(opts).ApplyOverrides(cfg),
+		Screenshoter:        screenshoter.New(screenshot.Implementation{}),
+		imageLastDownloaded: map[consts.ImageID][]byte{},
 	}, nil
 }
 
@@ -1395,6 +1400,36 @@ func (p *Panel) initMainWindow(
 		p.chatContainer,
 	)
 
+	selectScene := widget.NewSelect(nil, func(s string) {
+		p.StreamD.OBSSetCurrentProgramScene(
+			ctx,
+			&scenes.SetCurrentProgramSceneParams{
+				SceneName: &s,
+			},
+		)
+	})
+	obsPage := container.NewBorder(
+		nil,
+		nil,
+		nil,
+		nil,
+		container.NewVBox(
+			widget.NewLabel("Scene:"),
+			selectScene,
+		),
+	)
+	if backendEnabled[obs.ID] {
+		sceneList, err := p.StreamD.OBSGetSceneList(ctx)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to get the list of scene from OBS: %w", err))
+		} else {
+			for _, scene := range sceneList.Scenes {
+				selectScene.Options = append(selectScene.Options, scene.SceneName)
+			}
+			selectScene.SetSelected(sceneList.CurrentProgramSceneName)
+		}
+	}
+
 	setPage := func(page consts.Page) {
 		logger.Debugf(ctx, "setPage(%s)", page)
 		defer logger.Debugf(ctx, "/setPage(%s)", page)
@@ -1406,18 +1441,29 @@ func (p *Panel) initMainWindow(
 		switch page {
 		case consts.PageControl:
 			monitorPage.Hide()
+			obsPage.Hide()
 			profileControl.Show()
 			controlPage.Show()
 		case consts.PageMonitor:
 			controlPage.Hide()
 			profileControl.Hide()
+			obsPage.Hide()
 			monitorPage.Show()
 			p.startMonitorPage(ctx)
+		case consts.PageOBS:
+			controlPage.Hide()
+			profileControl.Hide()
+			monitorPage.Hide()
+			obsPage.Show()
 		}
 	}
 
 	pageSelector := widget.NewSelect(
-		[]string{"Control", "Monitor"},
+		[]string{
+			string(consts.PageControl),
+			string(consts.PageMonitor),
+			string(consts.PageOBS),
+		},
 		func(page string) {
 			setPage(consts.Page(page))
 		},
@@ -1431,7 +1477,7 @@ func (p *Panel) initMainWindow(
 		nil,
 		nil,
 		nil,
-		container.NewStack(controlPage, monitorPage),
+		container.NewStack(controlPage, monitorPage, obsPage),
 	))
 
 	w.Show()

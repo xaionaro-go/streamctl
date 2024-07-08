@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/andreykaipov/goobs"
+	"github.com/andreykaipov/goobs/api/requests/scenes"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -36,7 +37,7 @@ func New(
 	}, nil
 }
 
-func (obs *OBS) getClient() (*goobs.Client, error) {
+func (obs *OBS) GetClient() (*goobs.Client, error) {
 	var opts []goobs.Option
 	if obs.Config.Config.Password != "" {
 		opts = append(opts, goobs.WithPassword(obs.Config.Config.Password))
@@ -98,7 +99,7 @@ func (obs *OBS) StartStream(
 	profile StreamProfile,
 	customArgs ...any,
 ) error {
-	client, err := obs.getClient()
+	client, err := obs.GetClient()
 	if err != nil {
 		return fmt.Errorf("unable to initialize client to OBS: %w", err)
 	}
@@ -151,7 +152,7 @@ func (obs *OBS) StartStream(
 func (obs *OBS) EndStream(
 	ctx context.Context,
 ) error {
-	client, err := obs.getClient()
+	client, err := obs.GetClient()
 	if err != nil {
 		return fmt.Errorf("unable to initialize client to OBS: %w", err)
 	}
@@ -189,7 +190,7 @@ func (obs *OBS) EndStream(
 func (obs *OBS) GetStreamStatus(
 	ctx context.Context,
 ) (*streamcontrol.StreamStatus, error) {
-	client, err := obs.getClient()
+	client, err := obs.GetClient()
 	if err != nil {
 		return nil, fmt.Errorf("unable to initialize client to OBS: %w", err)
 	}
@@ -209,4 +210,38 @@ func (obs *OBS) GetStreamStatus(
 		IsActive:  streamStatus.OutputActive,
 		StartedAt: startedAt,
 	}, nil
+}
+
+func (obs *OBS) GetSceneList(
+	ctx context.Context,
+) (*scenes.GetSceneListResponse, error) {
+	client, err := obs.GetClient()
+	if err != nil {
+		return nil, fmt.Errorf("unable to initialize client to OBS: %w", err)
+	}
+	defer client.Disconnect()
+
+	resp, err := client.Scenes.GetSceneList(&scenes.GetSceneListParams{})
+	if err != nil {
+		return nil, fmt.Errorf("unable to get the list of scenes: %w", err)
+	}
+
+	return resp, nil
+}
+
+func (obs *OBS) SetCurrentProgramScene(
+	ctx context.Context,
+	req *scenes.SetCurrentProgramSceneParams,
+) error {
+	client, err := obs.GetClient()
+	if err != nil {
+		return fmt.Errorf("unable to initialize client to OBS: %w", err)
+	}
+	defer client.Disconnect()
+
+	_, err = client.Scenes.SetCurrentProgramScene(req)
+	if err != nil {
+		return fmt.Errorf("unable to set the scene: %w", err)
+	}
+	return nil
 }

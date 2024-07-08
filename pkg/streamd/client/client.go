@@ -3,11 +3,14 @@ package client
 import (
 	"bytes"
 	"context"
+	"crypto"
 	"encoding/json"
 	"fmt"
 	"io"
 	"time"
 
+	"github.com/andreykaipov/goobs/api/requests/scenes"
+	"github.com/andreykaipov/goobs/api/typedefs"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -482,7 +485,41 @@ func (c *Client) GetVariable(
 		return nil, fmt.Errorf("unable to get the variable '%s' value: %w", key, err)
 	}
 
-	return reply.Value, nil
+	b := reply.GetValue()
+	logger.Tracef(ctx, "downloaded variable value of size %d", len(b))
+	return b, nil
+}
+
+func (c *Client) GetVariableHash(
+	ctx context.Context,
+	key consts.VarKey,
+	hashType crypto.Hash,
+) ([]byte, error) {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	var hashTypeArg streamd_grpc.HashType
+	switch hashType {
+	case crypto.SHA1:
+		hashTypeArg = streamd_grpc.HashType_HASH_SHA1
+	default:
+		return nil, fmt.Errorf("unsupported hash type: %s", hashType)
+	}
+
+	reply, err := client.GetVariableHash(ctx, &streamd_grpc.GetVariableHashRequest{
+		Key:      string(key),
+		HashType: hashTypeArg,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("unable to get the variable '%s' hash: %w", key, err)
+	}
+
+	b := reply.GetHash()
+	logger.Tracef(ctx, "the downloaded hash of the variable '%s' is %X", key, b)
+	return b, nil
 }
 
 func (c *Client) SetVariable(
@@ -504,6 +541,64 @@ func (c *Client) SetVariable(
 		return fmt.Errorf("unable to get the variable '%s' value: %w", key, err)
 	}
 
+	return nil
+}
+
+func (c *Client) OBSGetSceneList(
+	ctx context.Context,
+) (*scenes.GetSceneListResponse, error) {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	resp, err := client.OBSGetSceneList(ctx, &streamd_grpc.OBSGetSceneListRequest{})
+	if err != nil {
+		return nil, fmt.Errorf("unable to get the list of OBS scenes: %w", err)
+	}
+
+	result := &scenes.GetSceneListResponse{
+		CurrentPreviewSceneName: resp.CurrentPreviewSceneName,
+		CurrentPreviewSceneUuid: resp.CurrentPreviewSceneUUID,
+		CurrentProgramSceneName: resp.CurrentProgramSceneName,
+		CurrentProgramSceneUuid: resp.CurrentProgramSceneUUID,
+	}
+	for _, scene := range resp.Scenes {
+		result.Scenes = append(result.Scenes, &typedefs.Scene{
+			SceneUuid:  scene.Uuid,
+			SceneIndex: int(scene.Index),
+			SceneName:  scene.Name,
+		})
+	}
+
+	return result, nil
+}
+func (c *Client) OBSSetCurrentProgramScene(
+	ctx context.Context,
+	in *scenes.SetCurrentProgramSceneParams,
+) error {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	req := &streamd_grpc.OBSSetCurrentProgramSceneRequest{}
+	switch {
+	case in.SceneUuid != nil:
+		req.OBSSceneID = &streamd_grpc.OBSSetCurrentProgramSceneRequest_SceneUUID{
+			SceneUUID: *in.SceneUuid,
+		}
+	case in.SceneName != nil:
+		req.OBSSceneID = &streamd_grpc.OBSSetCurrentProgramSceneRequest_SceneName{
+			SceneName: *in.SceneName,
+		}
+	}
+	_, err = client.OBSSetCurrentProgramScene(ctx, req)
+	if err != nil {
+		return fmt.Errorf("unable to set the program scene in OBS: %w", err)
+	}
 	return nil
 }
 

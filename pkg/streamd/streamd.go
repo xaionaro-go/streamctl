@@ -2,10 +2,12 @@ package streamd
 
 import (
 	"context"
+	"crypto"
 	"fmt"
 	"sort"
 	"sync"
 
+	"github.com/andreykaipov/goobs/api/requests/scenes"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
@@ -582,6 +584,22 @@ func (d *StreamD) GetVariable(
 	return b, nil
 }
 
+func (d *StreamD) GetVariableHash(
+	ctx context.Context,
+	key consts.VarKey,
+	hashType crypto.Hash,
+) ([]byte, error) {
+	b, err := d.GetVariable(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+
+	hasher := hashType.New()
+	hasher.Write(b)
+	hash := hasher.Sum(nil)
+	return hash, nil
+}
+
 func (d *StreamD) SetVariable(
 	ctx context.Context,
 	key consts.VarKey,
@@ -589,4 +607,27 @@ func (d *StreamD) SetVariable(
 ) error {
 	d.Variables.Store(key, value)
 	return nil
+}
+
+func (d *StreamD) OBSGetSceneList(
+	ctx context.Context,
+) (*scenes.GetSceneListResponse, error) {
+	obs := d.StreamControllers.OBS
+	if obs == nil {
+		return nil, fmt.Errorf("OBS is not initialized")
+	}
+
+	return obs.GetSceneList(ctx)
+}
+
+func (d *StreamD) OBSSetCurrentProgramScene(
+	ctx context.Context,
+	req *scenes.SetCurrentProgramSceneParams,
+) error {
+	obs := d.StreamControllers.OBS
+	if obs == nil {
+		return fmt.Errorf("OBS is not initialized")
+	}
+
+	return obs.SetCurrentProgramScene(ctx, req)
 }

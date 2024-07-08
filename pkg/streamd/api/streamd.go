@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
+	"crypto"
 
+	"github.com/andreykaipov/goobs/api/requests/scenes"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/cache"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
@@ -46,7 +48,16 @@ type StreamD interface {
 		platID streamcontrol.PlatformName,
 	) (*streamcontrol.StreamStatus, error)
 	GetVariable(ctx context.Context, key consts.VarKey) ([]byte, error)
+	GetVariableHash(ctx context.Context, key consts.VarKey, hashType crypto.Hash) ([]byte, error)
 	SetVariable(ctx context.Context, key consts.VarKey, value []byte) error
+
+	OBSGetSceneList(
+		ctx context.Context,
+	) (*scenes.GetSceneListResponse, error)
+	OBSSetCurrentProgramScene(
+		ctx context.Context,
+		req *scenes.SetCurrentProgramSceneParams,
+	) error
 }
 
 type BackendDataOBS struct{}

@@ -24,4 +24,5 @@ type Page string
 const (
 	PageControl = Page("Control")
 	PageMonitor = Page("Monitor")
+	PageOBS     = Page("OBS")
 )

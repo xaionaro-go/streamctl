@@ -3,6 +3,7 @@ package streampanel
 import (
 	"bytes"
 	"context"
+	"crypto"
 	"fmt"
 	"image"
 	"image/png"
@@ -51,13 +52,52 @@ func (p *Panel) setImage(
 	}
 }
 
-func (p *Panel) getImage(
+func (p *Panel) downloadImage(
+
 	ctx context.Context,
-	key consts.VarKey,
-) (image.Image, error) {
-	b, err := p.StreamD.GetVariable(ctx, key)
+	imageID consts.ImageID,
+) ([]byte, error) {
+	p.imageLocker.Lock()
+	defer p.imageLocker.Unlock()
+	varKey := consts.VarKeyImage(imageID)
+
+	if oldImage, ok := p.imageLastDownloaded[imageID]; ok {
+		hashType := crypto.SHA1
+		hasher := hashType.New()
+		hasher.Write(oldImage)
+		oldHash := hasher.Sum(nil)
+
+		hash, err := p.StreamD.GetVariableHash(ctx, varKey, hashType)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get a screenshot: %w", err)
+		}
+
+		logger.Tracef(ctx, "oldHash == %X; newHash == %X", oldHash, hash)
+		if bytes.Equal(hash, oldHash) {
+			return oldImage, nil
+		}
+	}
+	logger.Tracef(ctx, "no image cache, downloading '%s'", varKey)
+
+	b, err := p.StreamD.GetVariable(ctx, varKey)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get a screenshot: %w", err)
+	}
+
+	bDup := make([]byte, len(b))
+	copy(bDup, b)
+	p.imageLastDownloaded[imageID] = bDup
+
+	return b, nil
+}
+
+func (p *Panel) getImage(
+	ctx context.Context,
+	imageID consts.ImageID,
+) (image.Image, error) {
+	b, err := p.downloadImage(ctx, imageID)
+	if err != nil {
+		return nil, fmt.Errorf("unable to download image '%s': %w", imageID, err)
 	}
 
 	mimeType := http.DetectContentType(b)
@@ -137,7 +177,7 @@ func (p *Panel) reinitScreenshoter(ctx context.Context) {
 	p.screenshoterClose = cancelFunc
 	go p.Screenshoter.Loop(
 		ctx,
-		time.Second,
+		200*time.Millisecond,
 		p.Config.Screenshot.Config,
 		func(ctx context.Context, img *image.RGBA) { p.setScreenshot(ctx, img) },
 	)

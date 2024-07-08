@@ -3,11 +3,13 @@ package server
 import (
 	"bytes"
 	"context"
+	"crypto/sha1"
 	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
+	"github.com/andreykaipov/goobs/api/requests/scenes"
 	"github.com/dustin/go-broadcast"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
@@ -491,6 +493,34 @@ func (grpc *GRPCServer) GetVariable(
 		Value: b,
 	}, nil
 }
+
+func (grpc *GRPCServer) GetVariableHash(
+	ctx context.Context,
+	req *streamd_grpc.GetVariableHashRequest,
+) (*streamd_grpc.GetVariableHashReply, error) {
+	key := consts.VarKey(req.GetKey())
+	b, err := grpc.StreamD.GetVariable(ctx, key)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get variable '%s': %w", key, err)
+	}
+
+	var hash []byte
+	hashType := req.GetHashType()
+	switch hashType {
+	case streamd_grpc.HashType_HASH_SHA1:
+		_hash := sha1.Sum(b)
+		hash = _hash[:]
+	default:
+		return nil, fmt.Errorf("unexpected hash type: %v", hashType)
+	}
+
+	return &streamd_grpc.GetVariableHashReply{
+		Key:      string(key),
+		HashType: hashType,
+		Hash:     hash,
+	}, nil
+}
+
 func (grpc *GRPCServer) SetVariable(
 	ctx context.Context,
 	req *streamd_grpc.SetVariableRequest,
@@ -502,4 +532,50 @@ func (grpc *GRPCServer) SetVariable(
 	}
 
 	return &streamd_grpc.SetVariableReply{}, nil
+}
+
+func (grpc *GRPCServer) OBSGetSceneList(
+	ctx context.Context,
+	req *streamd_grpc.OBSGetSceneListRequest,
+) (*streamd_grpc.OBSGetSceneListReply, error) {
+	resp, err := grpc.StreamD.OBSGetSceneList(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get the list of scenes: %w", err)
+	}
+
+	result := &streamd_grpc.OBSGetSceneListReply{
+		CurrentPreviewSceneName: resp.CurrentPreviewSceneName,
+		CurrentPreviewSceneUUID: resp.CurrentPreviewSceneUuid,
+		CurrentProgramSceneName: resp.CurrentProgramSceneName,
+		CurrentProgramSceneUUID: resp.CurrentProgramSceneUuid,
+	}
+	for _, scene := range resp.Scenes {
+		result.Scenes = append(result.Scenes, &streamd_grpc.OBSScene{
+			Uuid:  scene.SceneUuid,
+			Index: int32(scene.SceneIndex),
+			Name:  scene.SceneName,
+		})
+	}
+	return result, nil
+}
+
+func (grpc *GRPCServer) OBSSetCurrentProgramScene(
+	ctx context.Context,
+	req *streamd_grpc.OBSSetCurrentProgramSceneRequest,
+) (*streamd_grpc.OBSSetCurrentProgramSceneReply, error) {
+	params := &scenes.SetCurrentProgramSceneParams{}
+	switch sceneID := req.GetOBSSceneID().(type) {
+	case *streamd_grpc.OBSSetCurrentProgramSceneRequest_SceneName:
+		params.SceneName = &sceneID.SceneName
+	case *streamd_grpc.OBSSetCurrentProgramSceneRequest_SceneUUID:
+		params.SceneUuid = &sceneID.SceneUUID
+	default:
+		return nil, fmt.Errorf("unexpected type: %T", sceneID)
+	}
+
+	err := grpc.StreamD.OBSSetCurrentProgramScene(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("unable to set the scene: %w", err)
+	}
+	return &streamd_grpc.OBSSetCurrentProgramSceneReply{}, nil
 }
