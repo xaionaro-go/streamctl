@@ -17,10 +17,12 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/spf13/pflag"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/server"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
+	_ "github.com/xaionaro-go/streamctl/pkg/streamserver"
 	"google.golang.org/grpc"
 )
 
@@ -125,10 +127,25 @@ func main() {
 	}
 
 	if *listenAddr != "" {
+		grpcServer := grpc.NewServer()
+		streamdGRPC := server.NewGRPCServer(panel.StreamD)
+		streamd_grpc.RegisterStreamDServer(grpcServer, streamdGRPC)
+
+		// to erase an oauth request answered locally from "UnansweredOAuthRequests" in the GRPC server:
+		panel.OnInternallySubmittedOAuthCode = func(
+			ctx context.Context,
+			platID streamcontrol.PlatformName,
+			code string,
+		) error {
+			_, err := streamdGRPC.SubmitOAuthCode(ctx, &streamd_grpc.SubmitOAuthCodeRequest{
+				PlatID: string(platID),
+				Code:   code,
+			})
+			return err
+		}
+
+		// start the server:
 		go func() {
-			grpcServer := grpc.NewServer()
-			streamdGRPC := server.NewGRPCServer(panel.StreamD)
-			streamd_grpc.RegisterStreamDServer(grpcServer, streamdGRPC)
 			l.Infof("started server at %s", *listenAddr)
 			err = grpcServer.Serve(listener)
 			if err != nil {

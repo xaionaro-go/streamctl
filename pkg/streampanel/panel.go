@@ -41,6 +41,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/client"
 	streamdconfig "github.com/xaionaro-go/streamctl/pkg/streamd/config"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/config"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
@@ -57,6 +58,12 @@ type Profile struct {
 type Panel struct {
 	StreamD      api.StreamD
 	Screenshoter Screenshoter
+
+	OnInternallySubmittedOAuthCode func(
+		ctx context.Context,
+		platID streamcontrol.PlatformName,
+		code string,
+	) error
 
 	screenshoterClose  context.CancelFunc
 	screenshoterLocker sync.Mutex
@@ -82,6 +89,8 @@ type Panel struct {
 	screenshotContainer      *fyne.Container
 	chatContainer            *fyne.Container
 
+	streamStatus map[streamcontrol.PlatformName]*widget.Label
+
 	filterValue string
 
 	youtubeCheck *widget.Check
@@ -100,6 +109,8 @@ type Panel struct {
 
 	imageLocker         sync.Mutex
 	imageLastDownloaded map[consts.ImageID][]byte
+
+	lastDisplayedError error
 }
 
 func New(
@@ -122,6 +133,7 @@ func New(
 		Config:              Options(opts).ApplyOverrides(cfg),
 		Screenshoter:        screenshoter.New(screenshot.Implementation{}),
 		imageLastDownloaded: map[consts.ImageID][]byte{},
+		streamStatus:        map[streamcontrol.PlatformName]*widget.Label{},
 	}, nil
 }
 
@@ -193,31 +205,15 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
 				loadingWindowText.ParseMarkdown(fmt.Sprintf("# %s", msg))
 			}
 		}
-		if streamD, ok := p.StreamD.(*client.Client); ok && false {
-			oauthURLChan, err := streamD.SubscriberToOAuthURLs(ctx)
-			if err != nil {
-				p.DisplayError(fmt.Errorf("unable to subscribe to OAuth requests of streamd: %w", err))
-			}
+		if streamD, ok := p.StreamD.(*client.Client); ok {
+			p.startOAuthListenerForRemoteStreamD(ctx, streamD)
+		} else {
+			// TODO: delete this hardcoding of the port
+			streamD := p.StreamD.(*streamd.StreamD)
+			streamD.AddOAuthListenPort(8091)
 			go func() {
-				for {
-					select {
-					case <-ctx.Done():
-						return
-					case authURL, ok := <-oauthURLChan:
-						if !ok {
-							return
-						}
-
-						if authURL == "" {
-							logger.Errorf(ctx, "received an empty authURL")
-							time.Sleep(1 * time.Second)
-							continue
-						}
-
-						oauthhandler.LaunchBrowser(authURL)
-						time.Sleep(1 * time.Second) // throttling the execution to avoid hanging the OS
-					}
-				}
+				<-ctx.Done()
+				streamD.RemoveOAuthListenPort(8091)
 			}()
 		}
 
@@ -245,6 +241,64 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
 
 	p.app.Run()
 	return nil
+}
+
+func (p *Panel) startOAuthListenerForRemoteStreamD(
+	ctx context.Context,
+	streamD *client.Client,
+) {
+	ctx, cancelFn := context.WithCancel(ctx)
+	receiver, listenPort, err := oauthhandler.NewCodeReceiver(ctx, 0)
+	if err != nil {
+		cancelFn()
+		p.DisplayError(fmt.Errorf("unable to start listener for OAuth responses: %w", err))
+		return
+	}
+
+	oauthURLChan, err := streamD.SubscriberToOAuthURLs(ctx, listenPort)
+	if err != nil {
+		cancelFn()
+		p.DisplayError(fmt.Errorf("unable to subscribe to OAuth requests of streamd: %w", err))
+		return
+	}
+	go func() {
+		defer cancelFn()
+		defer p.DisplayError(fmt.Errorf("oauth handler was closed"))
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case req, ok := <-oauthURLChan:
+				if !ok {
+					logger.Errorf(ctx, "oauth request receiver is closed")
+					return
+				}
+
+				if req == nil || req.AuthURL == "" {
+					logger.Errorf(ctx, "received an empty oauth request")
+					time.Sleep(1 * time.Second)
+					continue
+				}
+
+				if err := p.openBrowser(req.GetAuthURL()); err != nil {
+					p.DisplayError(fmt.Errorf("unable to open browser with URL '%s': %w", req.GetAuthURL(), err))
+					continue
+				}
+
+				code := <-receiver
+				logger.Debugf(ctx, "received oauth code: %s", code)
+				_, err := p.StreamD.SubmitOAuthCode(ctx, &streamd_grpc.SubmitOAuthCodeRequest{
+					PlatID: req.GetPlatID(),
+					Code:   code,
+				})
+				if err != nil {
+					p.DisplayError(fmt.Errorf("unable to submit the oauth code of '%s': %w", req.GetPlatID(), err))
+					continue
+				}
+			}
+		}
+	}()
+
 }
 
 func (p *Panel) newLoadingWindow(ctx context.Context) fyne.Window {
@@ -383,20 +437,35 @@ func (p *Panel) InputOBSConnectInfo(
 	return true, nil
 }
 
+func (p *Panel) OnSubmittedOAuthCode(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	code string,
+) error {
+	logger.Debugf(ctx, "OnSubmittedOAuthCode(ctx, '%s', '%s')", platID, code)
+	return nil
+}
+
 func (p *Panel) OAuthHandlerTwitch(ctx context.Context, arg oauthhandler.OAuthHandlerArgument) error {
 	logger.Infof(ctx, "OAuthHandlerTwitch: %#+v", arg)
 	defer logger.Infof(ctx, "/OAuthHandlerTwitch")
-	return p.oauthHandler(ctx, arg)
+	return p.oauthHandler(ctx, twitch.ID, arg)
 }
 
 func (p *Panel) OAuthHandlerYouTube(ctx context.Context, arg oauthhandler.OAuthHandlerArgument) error {
 	logger.Infof(ctx, "OAuthHandlerYouTube: %#+v", arg)
 	defer logger.Infof(ctx, "/OAuthHandlerYouTube")
-	return p.oauthHandler(ctx, arg)
+	return p.oauthHandler(ctx, youtube.ID, arg)
 }
 
-func (p *Panel) oauthHandler(ctx context.Context, arg oauthhandler.OAuthHandlerArgument) error {
-	codeCh, err := oauthhandler.NewCodeReceiver(arg.RedirectURL)
+func (p *Panel) oauthHandler(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	arg oauthhandler.OAuthHandlerArgument,
+) error {
+	ctx, cancelFn := context.WithCancel(ctx)
+	defer cancelFn()
+	codeCh, _, err := oauthhandler.NewCodeReceiver(ctx, arg.ListenPort)
 	if err != nil {
 		return err
 	}
@@ -410,7 +479,17 @@ func (p *Panel) oauthHandler(ctx context.Context, arg oauthhandler.OAuthHandlerA
 	// Wait for the web server to get the code.
 	code := <-codeCh
 	logger.Debugf(ctx, "received the auth code")
-	return arg.ExchangeFn(code)
+	err = arg.ExchangeFn(code)
+	if err != nil {
+		return fmt.Errorf("unable to exchange the code: %w", err)
+	}
+	if p.OnInternallySubmittedOAuthCode != nil {
+		err := p.OnInternallySubmittedOAuthCode(ctx, platID, code)
+		if err != nil {
+			return fmt.Errorf("OnInternallySubmittedOAuthCode return an error: %w", err)
+		}
+	}
+	return nil
 }
 
 func (p *Panel) openBrowser(authURL string) error {
@@ -1393,10 +1472,30 @@ func (p *Panel) initMainWindow(
 	monitorBackgroundFyne.FillMode = canvas.ImageFillStretch
 
 	p.screenshotContainer = container.NewBorder(nil, nil, nil, nil)
+	obsLabel := widget.NewLabel("OBS:")
+	obsLabel.Importance = widget.LowImportance
+	p.streamStatus[obs.ID] = widget.NewLabel("")
+	twLabel := widget.NewLabel("TW:")
+	twLabel.Importance = widget.LowImportance
+	p.streamStatus[twitch.ID] = widget.NewLabel("")
+	ytLabel := widget.NewLabel("YT:")
+	ytLabel.Importance = widget.LowImportance
+	p.streamStatus[youtube.ID] = widget.NewLabel("")
+	streamInfoContainer := container.NewBorder(
+		nil,
+		nil,
+		nil,
+		container.NewVBox(
+			container.NewHBox(obsLabel, p.streamStatus[obs.ID]),
+			container.NewHBox(twLabel, p.streamStatus[twitch.ID]),
+			container.NewHBox(ytLabel, p.streamStatus[youtube.ID]),
+		),
+	)
 	p.chatContainer = container.NewBorder(nil, nil, nil, nil)
 	monitorPage := container.NewStack(
 		monitorBackgroundFyne,
 		p.screenshotContainer,
+		streamInfoContainer,
 		p.chatContainer,
 	)
 
@@ -2322,6 +2421,10 @@ func (p *Panel) DisplayError(err error) {
 	logger.Debugf(p.defaultContext, "DisplayError('%v')", err)
 	defer logger.Debugf(p.defaultContext, "/DisplayError('%v')", err)
 
+	if err == nil {
+		return
+	}
+
 	errorMessage := fmt.Sprintf("Error: %v\n\nstack trace:\n%s", err, debug.Stack())
 	textWidget := widget.NewMultiLineEntry()
 	textWidget.SetText(errorMessage)
@@ -2333,6 +2436,15 @@ func (p *Panel) DisplayError(err error) {
 
 	p.displayErrorLocker.Lock()
 	defer p.displayErrorLocker.Unlock()
+
+	if p.lastDisplayedError != nil {
+		// protection against flood:
+		if err.Error() == p.lastDisplayedError.Error() {
+			return
+		}
+	}
+	p.lastDisplayedError = err
+
 	if p.displayErrorWindow != nil {
 		p.displayErrorWindow.SetContent(container.NewVSplit(p.displayErrorWindow.Content(), textWidget))
 		return

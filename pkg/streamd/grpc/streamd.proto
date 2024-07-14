@@ -27,9 +27,21 @@ service StreamD {
     rpc OBSOLETE_GitRelogin(OBSOLETE_GitReloginRequest) returns (OBSOLETE_GitReloginReply) {}
 
     rpc SubscribeToOAuthRequests(SubscribeToOAuthRequestsRequest) returns (stream OAuthRequest) {}
+    rpc SubmitOAuthCode(SubmitOAuthCodeRequest) returns (SubmitOAuthCodeReply) {}
 
     rpc OBSGetSceneList(OBSGetSceneListRequest) returns (OBSGetSceneListReply) {}
     rpc OBSSetCurrentProgramScene(OBSSetCurrentProgramSceneRequest) returns (OBSSetCurrentProgramSceneReply) {}
+
+    rpc ListStreamServers(ListStreamServersRequest) returns (ListStreamServersReply) {}
+	rpc StartStreamServer(StartStreamServerRequest) returns (StartStreamServerReply) {}
+	rpc StopStreamServer(StopStreamServerRequest) returns (StopStreamServerReply) {}
+	rpc ListStreamDestinations(ListStreamDestinationsRequest) returns (ListStreamDestinationsReply) {}
+	rpc AddStreamDestination(AddStreamDestinationRequest) returns (AddStreamDestinationReply) {}
+	rpc RemoveStreamDestination(RemoveStreamDestinationRequest) returns (RemoveStreamDestinationReply) {}
+    rpc ListIncomingStreams(ListIncomingStreamsRequest) returns (ListIncomingStreamsReply) {}
+	rpc ListStreamForwards(ListStreamForwardsRequest) returns (ListStreamForwardsReply) {}
+	rpc AddStreamForward(AddStreamForwardRequest) returns (AddStreamForwardReply) {}
+	rpc RemoveStreamForward(RemoveStreamForwardRequest) returns (RemoveStreamForwardReply) {}
 }
 
 message GetConfigRequest {}
@@ -113,9 +125,12 @@ message OBSOLETE_GitReloginRequest {}
 message OBSOLETE_GitReloginReply {}
 
 
-message SubscribeToOAuthRequestsRequest{}
+message SubscribeToOAuthRequestsRequest{
+    int32 listenPort = 1;
+}
 message OAuthRequest{
-    string authURL = 1;
+    string platID = 1;
+    string authURL = 2;
 }
 
 message GetVariableRequest {
@@ -164,3 +179,85 @@ message OBSSetCurrentProgramSceneRequest {
     }
 }
 message OBSSetCurrentProgramSceneReply {}
+
+message SubmitOAuthCodeRequest {
+    string platID = 1;
+    string code = 2;
+}
+message SubmitOAuthCodeReply {}
+
+enum StreamServerType {
+    Undefined = 0;
+    RTSP = 1;
+    RTMP = 2;
+}
+
+message StreamServer {
+    StreamServerType serverType = 1;
+    string listenAddr = 2;
+}
+
+message ListStreamServersRequest {}
+message ListStreamServersReply {
+    repeated StreamServer streamServers = 1;
+}
+
+message StartStreamServerRequest {
+    StreamServer config = 1;
+}
+message StartStreamServerReply {
+}
+
+message StopStreamServerRequest {
+    string listenAddr = 1;
+}
+message StopStreamServerReply {}
+
+message StreamDestination {
+    string streamID = 1;
+    string url = 2;
+}
+
+message ListStreamDestinationsRequest {}
+message ListStreamDestinationsReply {
+    repeated StreamDestination streamDestinations = 1;
+}
+
+message AddStreamDestinationRequest {
+    StreamDestination config = 1;
+}
+message AddStreamDestinationReply {}
+
+message RemoveStreamDestinationRequest {
+    string streamID = 1;
+}
+message RemoveStreamDestinationReply {}
+
+message IncomingStream {
+    string streamID = 1;
+}
+
+message ListIncomingStreamsRequest {}
+message ListIncomingStreamsReply {
+    repeated IncomingStream incomingStreams = 1;
+}
+
+message StreamForward {
+    string streamIDSrc = 1;
+    string streamIDDst = 2;
+}
+
+message ListStreamForwardsRequest {}
+message ListStreamForwardsReply {
+    repeated StreamForward streamForwards = 1;
+}
+
+message AddStreamForwardRequest {
+    StreamForward config = 1;
+}
+message AddStreamForwardReply {}
+
+message RemoveStreamForwardRequest {
+    StreamForward config = 1;
+}
+message RemoveStreamForwardReply {}

@@ -20,6 +20,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/xaionaro-go/streamctl/cmd/streamd/ui"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
@@ -154,9 +155,11 @@ func main() {
 			}
 		}
 
-		if err = streamD.Run(ctx); err != nil {
-			l.Errorf("streamd returned an error: %v", err)
-		}
+		go func() {
+			if err = streamD.Run(ctx); err != nil {
+				l.Errorf("streamd returned an error: %v", err)
+			}
+		}()
 
 		listener, err := net.Listen("tcp", *listenAddr)
 		if err != nil {
@@ -172,7 +175,10 @@ func main() {
 		streamdGRPC = server.NewGRPCServer(streamD)
 		streamd_grpc.RegisterStreamDServer(grpcServer, streamdGRPC)
 		l.Infof("started server at %s", *listenAddr)
+
+		streamdGRPCLocker.Unlock()
 		err = grpcServer.Serve(listener)
+		streamdGRPCLocker.Lock()
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -180,10 +186,18 @@ func main() {
 
 	_ui = ui.NewUI(
 		ctx,
-		func(authURL string) {
+		func(listenPort uint16, platID streamcontrol.PlatformName, authURL string) bool {
+			logger.Tracef(ctx, "streamd.UI.OpenOAuthURL(%d, %s, '%s')", listenPort, platID, authURL)
+			defer logger.Tracef(ctx, "/streamd.UI.OpenOAuthURL(%d, %s, '%s')", listenPort, platID, authURL)
+
 			streamdGRPCLocker.Lock()
+			logger.Tracef(ctx, "streamdGRPCLocker.Lock()-ed")
+			defer logger.Tracef(ctx, "streamdGRPCLocker.Lock()-ed")
 			defer streamdGRPCLocker.Unlock()
-			streamdGRPC.OpenOAuthURL(authURL)
+
+			err := streamdGRPC.OpenOAuthURL(ctx, listenPort, platID, authURL)
+			errmon.ObserveErrorCtx(ctx, err)
+			return err == nil
 		},
 		func(ctx context.Context, s string) {
 			restart()

@@ -6,29 +6,14 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"net/url"
 	"os/exec"
 	"runtime"
-
-	"github.com/facebookincubator/go-belt/tool/logger"
 )
 
 type OAuthHandlerArgument struct {
-	AuthURL     string
-	RedirectURL string
-	ExchangeFn  func(code string) error
-}
-
-// it is guaranteed exchangeFn was called if error is nil.
-func OAuth2Handler(ctx context.Context, arg OAuthHandlerArgument) error {
-	if arg.RedirectURL != "" {
-		err := OAuth2HandlerViaBrowser(ctx, arg)
-		if err == nil {
-			return nil
-		}
-		logger.Errorf(ctx, "unable to authenticate automatically: %v", err)
-	}
-	return OAuth2HandlerViaCLI(ctx, arg)
+	AuthURL    string
+	ListenPort uint16
+	ExchangeFn func(code string) error
 }
 
 func OAuth2HandlerViaCLI(ctx context.Context, arg OAuthHandlerArgument) error {
@@ -47,7 +32,9 @@ func OAuth2HandlerViaCLI(ctx context.Context, arg OAuthHandlerArgument) error {
 }
 
 func OAuth2HandlerViaBrowser(ctx context.Context, arg OAuthHandlerArgument) error {
-	codeCh, err := NewCodeReceiver(arg.RedirectURL)
+	ctx, cancelFn := context.WithCancel(ctx)
+	defer cancelFn()
+	codeCh, _, err := NewCodeReceiver(ctx, arg.ListenPort)
 	if err != nil {
 		return err
 	}
@@ -64,32 +51,39 @@ func OAuth2HandlerViaBrowser(ctx context.Context, arg OAuthHandlerArgument) erro
 	return arg.ExchangeFn(code)
 }
 
-func NewCodeReceiver(redirectURL string) (codeCh chan string, err error) {
-	urlParsed, err := url.Parse(redirectURL)
+func NewCodeReceiver(
+	ctx context.Context,
+	listenPort uint16,
+) (chan string, uint16, error) {
+	listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", listenPort))
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse URL '%s': %w", redirectURL, err)
+		return nil, 0, err
+	}
+	codeCh := make(chan string)
+
+	srv := &http.Server{
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			code := r.FormValue("code")
+			codeCh <- code
+			w.Header().Set("Content-Type", "text/plain")
+			if code == "" {
+				fmt.Fprintf(w, "No code received :(\r\n\r\nYou can close this browser window.")
+				return
+			}
+			fmt.Fprintf(w, "Received code: %v\r\n\r\nYou can now safely close this browser window.", code)
+		}),
 	}
 
-	// this function was mostly borrowed from https://developers.google.com/youtube/v3/code_samples/go#authorize_a_request
-	listener, err := net.Listen("tcp", urlParsed.Host)
-	if err != nil {
-		return nil, err
-	}
-	codeCh = make(chan string)
-
-	go http.Serve(listener, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		code := r.FormValue("code")
-		codeCh <- code
+	go func() {
+		<-ctx.Done()
 		listener.Close()
-		w.Header().Set("Content-Type", "text/plain")
-		if code == "" {
-			fmt.Fprintf(w, "No code received :(\r\n\r\nYou can close this browser window.")
-			return
-		}
-		fmt.Fprintf(w, "Received code: %v\r\n\r\nYou can now safely close this browser window.", code)
-	}))
+		srv.Close()
+		close(codeCh)
+	}()
 
-	return codeCh, nil
+	go srv.Serve(listener)
+
+	return codeCh, uint16(listener.Addr().(*net.TCPAddr).Port), nil
 }
 
 func LaunchBrowser(url string) error {

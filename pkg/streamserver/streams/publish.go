@@ -1,0 +1,69 @@
+package streams
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/facebookincubator/go-belt/tool/logger"
+)
+
+func (s *Stream) Publish(
+	ctx context.Context,
+	url string,
+) (*StreamForwarding, error) {
+	streamFwd := NewStreamForwarding(s.streamHandler)
+	err := streamFwd.Start(ctx, s, url)
+	if err != nil {
+		return nil, fmt.Errorf("unable to start stream forwarding to '%s': %w", url, err)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.cleanup()
+	s.forwardings = append(s.forwardings, streamFwd)
+	return streamFwd, nil
+}
+
+func (s *Stream) Cleanup() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cleanup()
+}
+
+func (s *Stream) cleanup() {
+	c := make([]*StreamForwarding, 0, len(s.forwardings))
+	for _, fwd := range s.forwardings {
+		if fwd.IsClosed() {
+			continue
+		}
+		c = append(c, fwd)
+	}
+	s.forwardings = c
+}
+
+func (s *Stream) Forwardings() []*StreamForwarding {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cleanup()
+	c := make([]*StreamForwarding, 0, len(s.forwardings))
+	c = append(c, s.forwardings...)
+	return c
+}
+
+func (s *StreamHandler) Publish(
+	ctx context.Context,
+	stream *Stream,
+	destination any,
+) {
+	switch v := destination.(type) {
+	case string:
+		if _, err := stream.Publish(ctx, v); err != nil {
+			logger.Default().Error(err)
+		}
+	case []any:
+		for _, v := range v {
+			s.Publish(ctx, stream, v)
+		}
+	}
+}

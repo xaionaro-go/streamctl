@@ -3,6 +3,7 @@ package commands
 import (
 	"bytes"
 	"context"
+	"crypto"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -62,6 +63,12 @@ var (
 		Run:  variablesGet,
 	}
 
+	VariablesGetHash = &cobra.Command{
+		Use:  "get_hash",
+		Args: cobra.ExactArgs(1),
+		Run:  variablesGetHash,
+	}
+
 	VariablesSet = &cobra.Command{
 		Use:  "set",
 		Args: cobra.ExactArgs(1),
@@ -78,6 +85,7 @@ func init() {
 
 	Root.AddCommand(Variables)
 	Variables.AddCommand(VariablesGet)
+	Variables.AddCommand(VariablesGetHash)
 	Variables.AddCommand(VariablesSet)
 
 	Root.PersistentFlags().Var(&LoggerLevel, "log-level", "")
@@ -174,6 +182,20 @@ func variablesGet(cmd *cobra.Command, args []string) {
 
 	_, err = io.Copy(os.Stdout, bytes.NewReader(b))
 	assertNoError(ctx, err)
+}
+
+func variablesGetHash(cmd *cobra.Command, args []string) {
+	variableKey := args[0]
+	ctx := cmd.Context()
+
+	remoteAddr, err := cmd.Flags().GetString("remote-addr")
+	assertNoError(ctx, err)
+	streamD := client.New(remoteAddr)
+
+	b, err := streamD.GetVariableHash(ctx, consts.VarKey(variableKey), crypto.SHA1)
+	assertNoError(ctx, err)
+
+	fmt.Printf("%X\n", b)
 }
 
 func variablesSet(cmd *cobra.Command, args []string) {

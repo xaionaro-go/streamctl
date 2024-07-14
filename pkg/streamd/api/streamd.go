@@ -8,6 +8,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/cache"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 )
 
@@ -58,6 +59,52 @@ type StreamD interface {
 		ctx context.Context,
 		req *scenes.SetCurrentProgramSceneParams,
 	) error
+
+	SubmitOAuthCode(
+		context.Context,
+		*streamd_grpc.SubmitOAuthCodeRequest,
+	) (*streamd_grpc.SubmitOAuthCodeReply, error)
+
+	ListStreamServers(
+		ctx context.Context,
+	) ([]StreamServer, error)
+	StartStreamServer(
+		ctx context.Context,
+		serverType StreamServerType,
+		listenAddr string,
+	) error
+	StopStreamServer(
+		ctx context.Context,
+		listenAddr string,
+	) error
+	ListIncomingStreams(
+		ctx context.Context,
+	) ([]IncomingStream, error)
+	ListStreamDestinations(
+		ctx context.Context,
+	) ([]StreamDestination, error)
+	AddStreamDestination(
+		ctx context.Context,
+		streamID StreamID,
+		url string,
+	) error
+	RemoveStreamDestination(
+		ctx context.Context,
+		streamID StreamID,
+	) error
+	ListStreamForwards(
+		ctx context.Context,
+	) ([]StreamForward, error)
+	AddStreamForward(
+		ctx context.Context,
+		streamIDSrc StreamID,
+		streamIDDst StreamID,
+	) error
+	RemoveStreamForward(
+		ctx context.Context,
+		streamIDSrc StreamID,
+		streamIDDst StreamID,
+	) error
 }
 
 type BackendDataOBS struct{}
@@ -69,3 +116,32 @@ type BackendDataTwitch struct {
 type BackendDataYouTube struct {
 	Cache cache.YouTube
 }
+
+type StreamServerType int
+
+const (
+	StreamServerTypeUndefined = StreamServerType(iota)
+	StreamServerTypeRTSP
+	StreamServerTypeRTMP
+)
+
+type StreamServer struct {
+	Type       StreamServerType
+	ListenAddr string
+}
+
+type StreamDestination struct {
+	StreamID StreamID
+	URL      string
+}
+
+type StreamForward struct {
+	StreamIDSrc StreamID
+	StreamIDDst StreamID
+}
+
+type IncomingStream struct {
+	StreamID StreamID
+}
+
+type StreamID string

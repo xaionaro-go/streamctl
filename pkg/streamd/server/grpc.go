@@ -3,17 +3,17 @@ package server
 import (
 	"bytes"
 	"context"
-	"crypto/sha1"
+	"crypto"
 	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/andreykaipov/goobs/api/requests/scenes"
-	"github.com/dustin/go-broadcast"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
+	"github.com/google/uuid"
 	"github.com/hashicorp/go-multierror"
 	"github.com/immune-gmbh/attestation-sdk/pkg/lockmap"
 	"github.com/immune-gmbh/attestation-sdk/pkg/objhash"
@@ -21,20 +21,31 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
+	"github.com/xaionaro-go/streamctl/pkg/streamd"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/api/grpcconv"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 )
 
 type GRPCServer struct {
-	streamd_grpc.StreamDServer
+	streamd_grpc.UnimplementedStreamDServer
 	StreamD                api.StreamD
 	Cache                  map[objhash.ObjHash]any
 	CacheMetaLock          sync.Mutex
 	CacheLockMap           *lockmap.LockMap
-	OAuthURLBroadcaster    broadcast.Broadcaster
+	OAuthURLHandlerLocker  sync.Mutex
+	OAuthURLHandlers       map[uint16]map[uuid.UUID]*OAuthURLHandler
 	YouTubeStreamStartedAt time.Time
+
+	UnansweredOAuthRequestsLocker sync.Mutex
+	UnansweredOAuthRequests       map[streamcontrol.PlatformName]map[uint16]*streamd_grpc.OAuthRequest
+}
+
+type OAuthURLHandler struct {
+	Sender   streamd_grpc.StreamD_SubscribeToOAuthRequestsServer
+	CancelFn context.CancelFunc
 }
 
 var _ streamd_grpc.StreamDServer = (*GRPCServer)(nil)
@@ -45,7 +56,8 @@ func NewGRPCServer(streamd api.StreamD) *GRPCServer {
 		Cache:        map[objhash.ObjHash]any{},
 		CacheLockMap: lockmap.NewLockMap(),
 
-		OAuthURLBroadcaster: broadcast.NewBroadcaster(10),
+		OAuthURLHandlers:        map[uint16]map[uuid.UUID]*OAuthURLHandler{},
+		UnansweredOAuthRequests: map[streamcontrol.PlatformName]map[uint16]*streamd_grpc.OAuthRequest{},
 	}
 }
 
@@ -100,13 +112,13 @@ func memoize[REQ any, REPLY any, T func(context.Context, *REQ) (*REPLY, error)](
 
 	cachedResult, ok := cache[key]
 
-	grpc.CacheMetaLock.Unlock()
-	logger.Tracef(ctx, "grpc.CacheMetaLock.Unlock()-ed")
 	if ok {
 		if v, ok := cachedResult.(cacheItem); ok {
 			cutoffTS := time.Now().Add(-cacheDuration)
 			if cacheDuration > 0 && !v.SavedAt.Before(cutoffTS) {
-				h.UserData = v
+				grpc.CacheMetaLock.Unlock()
+				logger.Tracef(ctx, "grpc.CacheMetaLock.Unlock()-ed")
+				h.UserData = nil
 				h.Unlock()
 				logger.Tracef(ctx, "grpc.CacheLockMap.Unlock(%X)-ed", key[:])
 				logger.Debugf(ctx, "using the cached value")
@@ -118,6 +130,8 @@ func memoize[REQ any, REPLY any, T func(context.Context, *REQ) (*REPLY, error)](
 			logger.Errorf(ctx, "cache-failure: expected type %T, but got %T", (*cacheItem)(nil), cachedResult)
 		}
 	}
+	grpc.CacheMetaLock.Unlock()
+	logger.Tracef(ctx, "grpc.CacheMetaLock.Unlock()-ed")
 
 	var ts time.Time
 	defer func() {
@@ -144,7 +158,12 @@ func memoize[REQ any, REPLY any, T func(context.Context, *REQ) (*REPLY, error)](
 
 func (grpc *GRPCServer) Close() error {
 	err := &multierror.Error{}
-	err = multierror.Append(err, grpc.OAuthURLBroadcaster.Close())
+	grpc.OAuthURLHandlerLocker.Lock()
+	grpc.OAuthURLHandlerLocker.Unlock()
+	for listenPort, sender := range grpc.OAuthURLHandlers {
+		_ = sender // TODO: invent sender.Close()
+		delete(grpc.OAuthURLHandlers, listenPort)
+	}
 	return err.ErrorOrNil()
 }
 
@@ -450,32 +469,116 @@ func (grpc *GRPCServer) getStreamStatus(
 func (grpc *GRPCServer) SubscribeToOAuthRequests(
 	req *streamd_grpc.SubscribeToOAuthRequestsRequest,
 	sender streamd_grpc.StreamD_SubscribeToOAuthRequestsServer,
-) error {
-	logger.Tracef(sender.Context(), "SubscribeToOAuthRequests()")
-	defer logger.Tracef(sender.Context(), "/SubscribeToOAuthRequests()")
+) (_ret error) {
+	ctx, cancelFn := context.WithCancel(sender.Context())
+	_uuid, err := uuid.NewRandom()
+	if err != nil {
+		logger.Errorf(ctx, "unable to generate an UUID: %v", err)
+	}
 
-	oauthURLChan := make(chan any)
-	grpc.OAuthURLBroadcaster.Register(oauthURLChan)
-	defer grpc.OAuthURLBroadcaster.Unregister(oauthURLChan)
+	logger.Tracef(sender.Context(), "SubscribeToOAuthRequests(): UUID:%s", _uuid)
+	defer func() { logger.Tracef(sender.Context(), "/SubscribeToOAuthRequests(): UUID:%s: %v", _uuid, _ret) }()
 
-	for {
-		select {
-		case _oauthURL := <-oauthURLChan:
-			oauthURL := _oauthURL.(string)
-			err := sender.Send(&streamd_grpc.OAuthRequest{
-				AuthURL: oauthURL,
-			})
-			if err != nil {
-				return fmt.Errorf("unable to send the OAuth URL: %w", err)
-			}
-		case <-sender.Context().Done():
-			return sender.Context().Err()
+	listenPort := uint16(req.ListenPort)
+	streamD, _ := grpc.StreamD.(*streamd.StreamD)
+
+	grpc.OAuthURLHandlerLocker.Lock()
+	logger.Tracef(sender.Context(), "grpc.OAuthURLHandlerLocker.Lock()-ed")
+	m := grpc.OAuthURLHandlers[listenPort]
+	if m == nil {
+		m = map[uuid.UUID]*OAuthURLHandler{}
+	}
+	m[_uuid] = &OAuthURLHandler{
+		Sender:   sender,
+		CancelFn: cancelFn,
+	}
+	grpc.OAuthURLHandlers[listenPort] = m // unnecessary, but feels safer
+	grpc.OAuthURLHandlerLocker.Unlock()
+	logger.Tracef(sender.Context(), "grpc.OAuthURLHandlerLocker.Unlock()-ed")
+
+	var unansweredRequests []*streamd_grpc.OAuthRequest
+	grpc.UnansweredOAuthRequestsLocker.Lock()
+	for _, m := range grpc.UnansweredOAuthRequests {
+		req := m[listenPort]
+		if req == nil {
+			continue
+		}
+		unansweredRequests = append(unansweredRequests, req)
+	}
+	grpc.UnansweredOAuthRequestsLocker.Unlock()
+
+	for _, req := range unansweredRequests {
+		logger.Tracef(ctx, "re-sending an unanswered request to a new client: %#+v", *req)
+		err := sender.Send(req)
+		errmon.ObserveErrorCtx(ctx, err)
+	}
+
+	if streamD != nil {
+		streamD.AddOAuthListenPort(listenPort)
+	}
+
+	logger.Tracef(ctx, "waiting for the subscription to be cancelled")
+	<-ctx.Done()
+	grpc.OAuthURLHandlerLocker.Lock()
+	defer grpc.OAuthURLHandlerLocker.Unlock()
+	delete(grpc.OAuthURLHandlers[listenPort], _uuid)
+	if len(grpc.OAuthURLHandlers[listenPort]) == 0 {
+		delete(grpc.OAuthURLHandlers, listenPort)
+		if streamD != nil {
+			streamD.RemoveOAuthListenPort(listenPort)
 		}
 	}
+
+	return nil
 }
 
-func (grpc *GRPCServer) OpenOAuthURL(authURL string) {
-	grpc.OAuthURLBroadcaster.Submit(authURL)
+type ErrNoOAuthHandlerForPort struct {
+	Port uint16
+}
+
+func (err ErrNoOAuthHandlerForPort) Error() string {
+	return fmt.Sprintf("no handler for port %d", err.Port)
+}
+
+func (grpc *GRPCServer) OpenOAuthURL(
+	ctx context.Context,
+	listenPort uint16,
+	platID streamcontrol.PlatformName,
+	authURL string,
+) (_ret error) {
+	logger.Tracef(ctx, "OpenOAuthURL()")
+	defer func() { logger.Tracef(ctx, "/OpenOAuthURL(): %v", _ret) }()
+
+	grpc.OAuthURLHandlerLocker.Lock()
+	logger.Tracef(ctx, "grpc.OAuthURLHandlerLocker.Lock()-ed")
+	defer logger.Tracef(ctx, "grpc.OAuthURLHandlerLocker.Unlock()-ed")
+	defer grpc.OAuthURLHandlerLocker.Unlock()
+
+	handlers := grpc.OAuthURLHandlers[listenPort]
+	if handlers == nil {
+		return ErrNoOAuthHandlerForPort{
+			Port: listenPort,
+		}
+	}
+	req := streamd_grpc.OAuthRequest{
+		PlatID:  string(platID),
+		AuthURL: authURL,
+	}
+	grpc.UnansweredOAuthRequestsLocker.Lock()
+	if grpc.UnansweredOAuthRequests[platID] == nil {
+		grpc.UnansweredOAuthRequests[platID] = map[uint16]*streamd_grpc.OAuthRequest{}
+	}
+	grpc.UnansweredOAuthRequests[platID][listenPort] = &req
+	grpc.UnansweredOAuthRequestsLocker.Unlock()
+	logger.Tracef(ctx, "OpenOAuthURL() sending %#+v", req)
+	var resultErr *multierror.Error
+	for _, handler := range handlers {
+		err := handler.Sender.Send(&req)
+		if err != nil {
+			err = multierror.Append(resultErr, fmt.Errorf("unable to send oauth request: %w", err))
+		}
+	}
+	return resultErr.ErrorOrNil()
 }
 
 func (grpc *GRPCServer) GetVariable(
@@ -498,26 +601,25 @@ func (grpc *GRPCServer) GetVariableHash(
 	ctx context.Context,
 	req *streamd_grpc.GetVariableHashRequest,
 ) (*streamd_grpc.GetVariableHashReply, error) {
+	var hashType crypto.Hash
+	hashTypeIn := req.GetHashType()
+	switch hashTypeIn {
+	case streamd_grpc.HashType_HASH_SHA1:
+		hashType = crypto.SHA1
+	default:
+		return nil, fmt.Errorf("unexpected hash type: %v", hashTypeIn)
+	}
+
 	key := consts.VarKey(req.GetKey())
-	b, err := grpc.StreamD.GetVariable(ctx, key)
+	b, err := grpc.StreamD.GetVariableHash(ctx, key, hashType)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get variable '%s': %w", key, err)
 	}
 
-	var hash []byte
-	hashType := req.GetHashType()
-	switch hashType {
-	case streamd_grpc.HashType_HASH_SHA1:
-		_hash := sha1.Sum(b)
-		hash = _hash[:]
-	default:
-		return nil, fmt.Errorf("unexpected hash type: %v", hashType)
-	}
-
 	return &streamd_grpc.GetVariableHashReply{
 		Key:      string(key),
-		HashType: hashType,
-		Hash:     hash,
+		HashType: hashTypeIn,
+		Hash:     b,
 	}, nil
 }
 
@@ -578,4 +680,204 @@ func (grpc *GRPCServer) OBSSetCurrentProgramScene(
 		return nil, fmt.Errorf("unable to set the scene: %w", err)
 	}
 	return &streamd_grpc.OBSSetCurrentProgramSceneReply{}, nil
+}
+
+func (grpc *GRPCServer) SubmitOAuthCode(
+	ctx context.Context,
+	req *streamd_grpc.SubmitOAuthCodeRequest,
+) (*streamd_grpc.SubmitOAuthCodeReply, error) {
+	grpc.UnansweredOAuthRequestsLocker.Lock()
+	delete(grpc.UnansweredOAuthRequests, streamcontrol.PlatformName(req.PlatID))
+	grpc.UnansweredOAuthRequestsLocker.Unlock()
+
+	_, err := grpc.StreamD.SubmitOAuthCode(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.SubmitOAuthCodeReply{}, nil
+}
+
+func (grpc *GRPCServer) ListStreamServers(
+	ctx context.Context,
+	_ *streamd_grpc.ListStreamServersRequest,
+) (*streamd_grpc.ListStreamServersReply, error) {
+	servers, err := grpc.StreamD.ListStreamServers(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []*streamd_grpc.StreamServer
+	for _, srv := range servers {
+		t, err := grpcconv.StreamServerTypeGo2GRPC(srv.Type)
+		if err != nil {
+			return nil, fmt.Errorf("unable to convert the server type value: %w", err)
+		}
+
+		result = append(result, &streamd_grpc.StreamServer{
+			ServerType: t,
+			ListenAddr: srv.ListenAddr,
+		})
+	}
+	return &streamd_grpc.ListStreamServersReply{
+		StreamServers: result,
+	}, nil
+}
+
+func (grpc *GRPCServer) StartStreamServer(
+	ctx context.Context,
+	req *streamd_grpc.StartStreamServerRequest,
+) (*streamd_grpc.StartStreamServerReply, error) {
+	t, err := grpcconv.StreamServerTypeGRPC2Go(req.GetConfig().GetServerType())
+	if err != nil {
+		return nil, fmt.Errorf("unable to convert the server type value: %w", err)
+	}
+
+	err = grpc.StreamD.StartStreamServer(
+		ctx,
+		t,
+		req.GetConfig().GetListenAddr(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.StartStreamServerReply{}, nil
+}
+
+func (grpc *GRPCServer) StopStreamServer(
+	ctx context.Context,
+	req *streamd_grpc.StopStreamServerRequest,
+) (*streamd_grpc.StopStreamServerReply, error) {
+	err := grpc.StreamD.StopStreamServer(
+		ctx,
+		req.GetListenAddr(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.StopStreamServerReply{}, nil
+}
+
+func (grpc *GRPCServer) ListStreamDestinations(
+	ctx context.Context,
+	req *streamd_grpc.ListStreamDestinationsRequest,
+) (*streamd_grpc.ListStreamDestinationsReply, error) {
+	dsts, err := grpc.StreamD.ListStreamDestinations(
+		ctx,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []*streamd_grpc.StreamDestination
+	for _, dst := range dsts {
+		result = append(result, &streamd_grpc.StreamDestination{
+			StreamID: string(dst.StreamID),
+			Url:      dst.URL,
+		})
+	}
+	return &streamd_grpc.ListStreamDestinationsReply{
+		StreamDestinations: result,
+	}, nil
+}
+
+func (grpc *GRPCServer) AddStreamDestination(
+	ctx context.Context,
+	req *streamd_grpc.AddStreamDestinationRequest,
+) (*streamd_grpc.AddStreamDestinationReply, error) {
+	err := grpc.StreamD.AddStreamDestination(
+		ctx,
+		api.StreamID(req.GetConfig().GetStreamID()),
+		req.GetConfig().GetUrl(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.AddStreamDestinationReply{}, nil
+}
+
+func (grpc *GRPCServer) RemoveStreamDestination(
+	ctx context.Context,
+	req *streamd_grpc.RemoveStreamDestinationRequest,
+) (*streamd_grpc.RemoveStreamDestinationReply, error) {
+	err := grpc.StreamD.RemoveStreamDestination(
+		ctx,
+		api.StreamID(req.GetStreamID()),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.RemoveStreamDestinationReply{}, nil
+}
+
+func (grpc *GRPCServer) ListIncomingStreams(
+	ctx context.Context,
+	req *streamd_grpc.ListIncomingStreamsRequest,
+) (*streamd_grpc.ListIncomingStreamsReply, error) {
+	inStreams, err := grpc.StreamD.ListIncomingStreams(
+		ctx,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []*streamd_grpc.IncomingStream
+	for _, s := range inStreams {
+		result = append(result, &streamd_grpc.IncomingStream{
+			StreamID: string(s.StreamID),
+		})
+	}
+	return &streamd_grpc.ListIncomingStreamsReply{
+		IncomingStreams: result,
+	}, nil
+}
+
+func (grpc *GRPCServer) ListStreamForwards(
+	ctx context.Context,
+	req *streamd_grpc.ListStreamForwardsRequest,
+) (*streamd_grpc.ListStreamForwardsReply, error) {
+	streamFwds, err := grpc.StreamD.ListStreamForwards(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []*streamd_grpc.StreamForward
+	for _, s := range streamFwds {
+		result = append(result, &streamd_grpc.StreamForward{
+			StreamIDSrc: string(s.StreamIDSrc),
+			StreamIDDst: string(s.StreamIDDst),
+		})
+	}
+	return &streamd_grpc.ListStreamForwardsReply{
+		StreamForwards: result,
+	}, nil
+}
+
+func (grpc *GRPCServer) AddStreamForward(
+	ctx context.Context,
+	req *streamd_grpc.AddStreamForwardRequest,
+) (*streamd_grpc.AddStreamForwardReply, error) {
+	err := grpc.StreamD.AddStreamForward(
+		ctx,
+		api.StreamID(req.GetConfig().GetStreamIDSrc()),
+		api.StreamID(req.GetConfig().GetStreamIDDst()),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.AddStreamForwardReply{}, nil
+}
+
+func (grpc *GRPCServer) RemoveStreamForward(
+	ctx context.Context,
+	req *streamd_grpc.RemoveStreamForwardRequest,
+) (*streamd_grpc.RemoveStreamForwardReply, error) {
+	err := grpc.StreamD.RemoveStreamForward(
+		ctx,
+		api.StreamID(req.GetConfig().GetStreamIDSrc()),
+		api.StreamID(req.GetConfig().GetStreamIDDst()),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.RemoveStreamForwardReply{}, nil
 }

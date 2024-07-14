@@ -2,6 +2,9 @@ package ui
 
 import (
 	"context"
+	"fmt"
+	"sync"
+	"time"
 
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
@@ -15,22 +18,25 @@ import (
 )
 
 type UI struct {
-	OAuthURLOpenFn func(authURL string)
-	Belt           *belt.Belt
-	RestartFn      func(context.Context, string)
+	OAuthURLOpenFn  func(listenPort uint16, platID streamcontrol.PlatformName, authURL string) bool
+	Belt            *belt.Belt
+	RestartFn       func(context.Context, string)
+	CodeChMap       map[streamcontrol.PlatformName]chan string
+	CodeChMapLocker sync.Mutex
 }
 
 var _ ui.UI = (*UI)(nil)
 
 func NewUI(
 	ctx context.Context,
-	oauthURLOpener func(authURL string),
+	oauthURLOpener func(listenPort uint16, platID streamcontrol.PlatformName, authURL string) bool,
 	restartFn func(context.Context, string),
 ) *UI {
 	return &UI{
 		OAuthURLOpenFn: oauthURLOpener,
 		Belt:           belt.CtxBelt(ctx),
 		RestartFn:      restartFn,
+		CodeChMap:      map[streamcontrol.PlatformName]chan string{},
 	}
 }
 
@@ -52,33 +58,99 @@ func (*UI) InputGitUserData(
 	return false, "", nil, nil
 }
 
-func (ui *UI) oauth2Handler(
+func (ui *UI) newOAuthCodeReceiver(
 	_ context.Context,
-	arg oauthhandler.OAuthHandlerArgument,
-) error {
-	codeCh, err := oauthhandler.NewCodeReceiver(arg.RedirectURL)
-	if err != nil {
-		return err
+	platID streamcontrol.PlatformName,
+) (<-chan string, context.CancelFunc) {
+	ui.CodeChMapLocker.Lock()
+	defer ui.CodeChMapLocker.Unlock()
+
+	if oldCh, ok := ui.CodeChMap[platID]; ok {
+		return oldCh, nil
 	}
 
-	ui.OAuthURLOpenFn(arg.AuthURL)
+	ch := make(chan string)
+	ui.CodeChMap[platID] = ch
 
-	code := <-codeCh
-	return arg.ExchangeFn(code)
+	return ch, func() {
+		ui.CodeChMapLocker.Lock()
+		defer ui.CodeChMapLocker.Unlock()
+		delete(ui.CodeChMap, platID)
+	}
+}
+
+func (ui *UI) getOAuthCodeReceiver(
+	_ context.Context,
+	platID streamcontrol.PlatformName,
+) chan<- string {
+	ui.CodeChMapLocker.Lock()
+	defer ui.CodeChMapLocker.Unlock()
+
+	return ui.CodeChMap[platID]
+}
+
+func (ui *UI) oauth2Handler(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	arg oauthhandler.OAuthHandlerArgument,
+) error {
+	ctx, cancelFn := context.WithCancel(ctx)
+	defer cancelFn()
+
+	codeCh, removeReceiver := ui.newOAuthCodeReceiver(ctx, platID)
+	if codeCh == nil {
+		return fmt.Errorf("there is already another oauth handler for this platform running")
+	}
+	if removeReceiver != nil {
+		defer removeReceiver()
+	}
+
+	logger.Debugf(ctx, "asking to open the URL: %s", arg.AuthURL)
+	ui.OAuthURLOpenFn(arg.ListenPort, platID, arg.AuthURL)
+
+	t := time.NewTicker(time.Hour)
+	defer t.Stop()
+	for {
+		logger.Debugf(ctx, "waiting for an auth code")
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case code := <-codeCh:
+			return arg.ExchangeFn(code)
+		case <-t.C:
+			logger.Debugf(ctx, "re-asking to open the URL: %s", arg.AuthURL)
+			ui.OAuthURLOpenFn(arg.ListenPort, platID, arg.AuthURL)
+		}
+	}
+}
+
+func (ui *UI) OnSubmittedOAuthCode(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	code string,
+) error {
+	codeCh := ui.getOAuthCodeReceiver(ctx, platID)
+	if codeCh == nil {
+		logger.Debugf(ctx, "no code receiver for '%s'", platID)
+		return nil
+	}
+
+	codeCh <- code
+	return nil
 }
 
 func (ui *UI) OAuthHandlerTwitch(
 	ctx context.Context,
 	arg oauthhandler.OAuthHandlerArgument,
 ) error {
-	return ui.oauth2Handler(ctx, arg)
+	return ui.oauth2Handler(ctx, twitch.ID, arg)
 }
 
 func (ui *UI) OAuthHandlerYouTube(
 	ctx context.Context,
 	arg oauthhandler.OAuthHandlerArgument,
 ) error {
-	return ui.oauth2Handler(ctx, arg)
+	return ui.oauth2Handler(ctx, youtube.ID, arg)
 }
 
 func (*UI) InputTwitchUserInfo(

@@ -31,4 +31,9 @@ type UI interface {
 		ctx context.Context,
 		cfg *streamcontrol.PlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile],
 	) (bool, error)
+	OnSubmittedOAuthCode(
+		ctx context.Context,
+		platID streamcontrol.PlatformName,
+		code string,
+	) error
 }

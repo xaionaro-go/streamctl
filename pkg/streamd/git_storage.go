@@ -102,7 +102,7 @@ func (d *StreamD) onConfigUpdateViaGIT(ctx context.Context, cfg *config.Config) 
 }
 
 func (d *StreamD) initGitIfNeeded(ctx context.Context) {
-	logger.Debugf(ctx, "initGitIfNeeded")
+	logger.Debugf(ctx, "initGitIfNeeded: %#+v", d.Config.GitRepo)
 	if d.Config.GitRepo.Enable != nil && !*d.Config.GitRepo.Enable {
 		logger.Debugf(ctx, "git is disabled in the configuration")
 		return

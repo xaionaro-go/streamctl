@@ -108,6 +108,7 @@ func newTwitch(
 	setUserData func(context.Context, *streamcontrol.PlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile]) (bool, error),
 	saveCfgFunc func(*streamcontrol.AbstractPlatformConfig) error,
 	customOAuthHandler twitch.OAuthHandler,
+	getOAuthListenPorts func() []uint16,
 ) (
 	*twitch.Twitch,
 	error,
@@ -146,6 +147,7 @@ func newTwitch(
 
 	logger.Debugf(ctx, "twitch config: %#+v", platCfg)
 	platCfg.Config.CustomOAuthHandler = customOAuthHandler
+	platCfg.Config.GetOAuthListenPorts = getOAuthListenPorts
 	cfg = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
 	twitch, err := twitch.New(ctx, *platCfg,
 		func(c twitch.Config) error {
@@ -175,6 +177,7 @@ func newYouTube(
 	setUserData func(context.Context, *streamcontrol.PlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile]) (bool, error),
 	saveCfgFunc func(*streamcontrol.AbstractPlatformConfig) error,
 	customOAuthHandler youtube.OAuthHandler,
+	getOAuthListenPorts func() []uint16,
 ) (
 	*youtube.YouTube,
 	error,
@@ -213,6 +216,7 @@ func newYouTube(
 
 	logger.Debugf(ctx, "youtube config: %#+v", platCfg)
 	platCfg.Config.CustomOAuthHandler = customOAuthHandler
+	platCfg.Config.GetOAuthListenPorts = getOAuthListenPorts
 	cfg = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
 	yt, err := youtube.New(ctx, *platCfg,
 		func(c youtube.Config) error {
@@ -260,7 +264,9 @@ func (d *StreamD) initTwitchBackend(ctx context.Context) error {
 		func(cfg *streamcontrol.AbstractPlatformConfig) error {
 			return d.setPlatformConfig(ctx, twitch.ID, cfg)
 		},
-		d.UI.OAuthHandlerTwitch)
+		d.UI.OAuthHandlerTwitch,
+		d.GetOAuthListenPorts,
+	)
 	if err != nil {
 		return err
 	}
@@ -277,6 +283,7 @@ func (d *StreamD) initYouTubeBackend(ctx context.Context) error {
 			return d.setPlatformConfig(ctx, youtube.ID, cfg)
 		},
 		d.UI.OAuthHandlerYouTube,
+		d.GetOAuthListenPorts,
 	)
 	if err != nil {
 		return fmt.Errorf("unable to initialize the backend 'YouTube': %w", err)

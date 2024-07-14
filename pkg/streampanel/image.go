@@ -48,7 +48,7 @@ func (p *Panel) setImage(
 
 	err = p.StreamD.SetVariable(ctx, key, b)
 	if err != nil {
-		p.DisplayError(fmt.Errorf("unable to set the screenshot: %w", err))
+		logger.Error(ctx, fmt.Errorf("unable to set the screenshot: %w", err))
 	}
 }
 
@@ -151,7 +151,10 @@ func (p *Panel) setScreenshot(
 	}
 
 	if bounds.Max.X > ScreenshotMaxWidth || bounds.Max.Y > ScreenshotMaxHeight {
-		screenshot = imgFitTo(screenshot, bounds.Max)
+		screenshot = imgFitTo(screenshot, image.Point{
+			X: ScreenshotMaxWidth,
+			Y: ScreenshotMaxHeight,
+		})
 		logger.Tracef(ctx, "rescaled the screenshot from %#+v to %#+v", bounds, screenshot.Bounds())
 	}
 

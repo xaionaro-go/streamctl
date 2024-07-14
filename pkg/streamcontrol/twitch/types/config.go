@@ -12,15 +12,16 @@ const ID = streamctl.PlatformName("twitch")
 type OAuthHandler func(context.Context, oauthhandler.OAuthHandlerArgument) error
 
 type PlatformSpecificConfig struct {
-	Channel            string
-	ClientID           string
-	ClientSecret       string
-	ClientCode         string
-	AuthType           string
-	AppAccessToken     string
-	UserAccessToken    string
-	RefreshToken       string
-	CustomOAuthHandler OAuthHandler `yaml:"-"`
+	Channel             string
+	ClientID            string
+	ClientSecret        string
+	ClientCode          string
+	AuthType            string
+	AppAccessToken      string
+	UserAccessToken     string
+	RefreshToken        string
+	CustomOAuthHandler  OAuthHandler    `yaml:"-"`
+	GetOAuthListenPorts func() []uint16 `yaml:"-"`
 }
 
 type Config = streamctl.PlatformConfig[PlatformSpecificConfig, StreamProfile]

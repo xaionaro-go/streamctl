@@ -19,8 +19,11 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/cache"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/ui"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
 )
 
@@ -51,6 +54,12 @@ type StreamD struct {
 	StreamControllers StreamControllers
 
 	Variables sync.Map
+
+	OAuthListenPortsLocker sync.Mutex
+	OAuthListenPorts       map[uint16]struct{}
+
+	StreamServerLocker sync.Mutex
+	StreamServer       *streamserver.StreamServer
 }
 
 var _ api.StreamD = (*StreamD)(nil)
@@ -64,10 +73,12 @@ func New(
 	ctx := belt.CtxWithBelt(context.Background(), b)
 
 	d := &StreamD{
-		UI:             ui,
-		SaveConfigFunc: saveCfgFunc,
-		Config:         config,
-		Cache:          &cache.Cache{},
+		UI:               ui,
+		SaveConfigFunc:   saveCfgFunc,
+		Config:           config,
+		Cache:            &cache.Cache{},
+		OAuthListenPorts: map[uint16]struct{}{},
+		StreamServer:     streamserver.New(),
 	}
 
 	err := d.readCache(ctx)
@@ -228,7 +239,7 @@ func (d *StreamD) initTwitchData(ctx context.Context) bool {
 		return false
 	}
 
-	allCategories, err := twitch.GetAllCategories(ctx)
+	allCategories, err := twitch.GetAllCategories(d.ctxForController(ctx))
 	if err != nil {
 		d.UI.DisplayError(err)
 		return false
@@ -269,7 +280,7 @@ func (d *StreamD) initYoutubeData(ctx context.Context) bool {
 		return false
 	}
 
-	broadcasts, err := youtube.ListBroadcasts(ctx)
+	broadcasts, err := youtube.ListBroadcasts(d.ctxForController(ctx))
 	if err != nil {
 		d.UI.DisplayError(err)
 		return false
@@ -360,7 +371,7 @@ func (d *StreamD) StartStream(
 		if err != nil {
 			return fmt.Errorf("unable to convert the profile into OBS profile: %w", err)
 		}
-		err = d.StreamControllers.OBS.StartStream(ctx, title, description, *profile, customArgs...)
+		err = d.StreamControllers.OBS.StartStream(d.ctxForController(ctx), title, description, *profile, customArgs...)
 		if err != nil {
 			return fmt.Errorf("unable to start the stream on OBS: %w", err)
 		}
@@ -370,7 +381,7 @@ func (d *StreamD) StartStream(
 		if err != nil {
 			return fmt.Errorf("unable to convert the profile into Twitch profile: %w", err)
 		}
-		err = d.StreamControllers.Twitch.StartStream(ctx, title, description, *profile, customArgs...)
+		err = d.StreamControllers.Twitch.StartStream(d.ctxForController(ctx), title, description, *profile, customArgs...)
 		if err != nil {
 			return fmt.Errorf("unable to start the stream on Twitch: %w", err)
 		}
@@ -380,7 +391,7 @@ func (d *StreamD) StartStream(
 		if err != nil {
 			return fmt.Errorf("unable to convert the profile into YouTube profile: %w", err)
 		}
-		err = d.StreamControllers.YouTube.StartStream(ctx, title, description, *profile, customArgs...)
+		err = d.StreamControllers.YouTube.StartStream(d.ctxForController(ctx), title, description, *profile, customArgs...)
 		if err != nil {
 			return fmt.Errorf("unable to start the stream on YouTube: %w", err)
 		}
@@ -393,11 +404,11 @@ func (d *StreamD) StartStream(
 func (d *StreamD) EndStream(ctx context.Context, platID streamcontrol.PlatformName) error {
 	switch platID {
 	case obs.ID:
-		return d.StreamControllers.OBS.EndStream(ctx)
+		return d.StreamControllers.OBS.EndStream(d.ctxForController(ctx))
 	case twitch.ID:
-		return d.StreamControllers.Twitch.EndStream(ctx)
+		return d.StreamControllers.Twitch.EndStream(d.ctxForController(ctx))
 	case youtube.ID:
-		return d.StreamControllers.YouTube.EndStream(ctx)
+		return d.StreamControllers.YouTube.EndStream(d.ctxForController(ctx))
 	default:
 		return fmt.Errorf("unexpected platform ID '%s'", platID)
 	}
@@ -499,7 +510,7 @@ func (d *StreamD) GetStreamStatus(
 		return nil, fmt.Errorf("controller '%s' is not initialized", platID)
 	}
 
-	return c.GetStreamStatus(ctx)
+	return c.GetStreamStatus(d.ctxForController(ctx))
 }
 
 func (d *StreamD) SetTitle(
@@ -512,7 +523,7 @@ func (d *StreamD) SetTitle(
 		return err
 	}
 
-	return c.SetTitle(ctx, title)
+	return c.SetTitle(d.ctxForController(ctx), title)
 }
 
 func (d *StreamD) SetDescription(
@@ -525,7 +536,12 @@ func (d *StreamD) SetDescription(
 		return err
 	}
 
-	return c.SetDescription(ctx, description)
+	return c.SetDescription(d.ctxForController(ctx), description)
+}
+
+// TODO: delete this function (yes, it is not needed at all)
+func (d *StreamD) ctxForController(ctx context.Context) context.Context {
+	return ctx
 }
 
 func (d *StreamD) ApplyProfile(
@@ -534,12 +550,12 @@ func (d *StreamD) ApplyProfile(
 	profile streamcontrol.AbstractStreamProfile,
 	customArgs ...any,
 ) error {
-	c, err := d.streamController(ctx, platID)
+	c, err := d.streamController(d.ctxForController(ctx), platID)
 	if err != nil {
 		return err
 	}
 
-	return c.ApplyProfile(ctx, profile, customArgs...)
+	return c.ApplyProfile(d.ctxForController(ctx), profile, customArgs...)
 }
 
 func (d *StreamD) UpdateStream(
@@ -549,17 +565,17 @@ func (d *StreamD) UpdateStream(
 	profile streamcontrol.AbstractStreamProfile,
 	customArgs ...any,
 ) error {
-	err := d.SetTitle(ctx, platID, title)
+	err := d.SetTitle(d.ctxForController(ctx), platID, title)
 	if err != nil {
 		return fmt.Errorf("unable to set the title: %w", err)
 	}
 
-	err = d.SetDescription(ctx, platID, description)
+	err = d.SetDescription(d.ctxForController(ctx), platID, description)
 	if err != nil {
 		return fmt.Errorf("unable to set the description: %w", err)
 	}
 
-	err = d.ApplyProfile(ctx, platID, profile, customArgs...)
+	err = d.ApplyProfile(d.ctxForController(ctx), platID, profile, customArgs...)
 	if err != nil {
 		return fmt.Errorf("unable to apply the profile: %w", err)
 	}
@@ -617,7 +633,7 @@ func (d *StreamD) OBSGetSceneList(
 		return nil, fmt.Errorf("OBS is not initialized")
 	}
 
-	return obs.GetSceneList(ctx)
+	return obs.GetSceneList(d.ctxForController(ctx))
 }
 
 func (d *StreamD) OBSSetCurrentProgramScene(
@@ -629,5 +645,224 @@ func (d *StreamD) OBSSetCurrentProgramScene(
 		return fmt.Errorf("OBS is not initialized")
 	}
 
-	return obs.SetCurrentProgramScene(ctx, req)
+	return obs.SetCurrentProgramScene(d.ctxForController(ctx), req)
+}
+
+func (d *StreamD) SubmitOAuthCode(
+	ctx context.Context,
+	req *streamd_grpc.SubmitOAuthCodeRequest,
+) (*streamd_grpc.SubmitOAuthCodeReply, error) {
+	err := d.UI.OnSubmittedOAuthCode(
+		ctx,
+		streamcontrol.PlatformName(req.GetPlatID()),
+		req.GetCode(),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &streamd_grpc.SubmitOAuthCodeReply{}, nil
+}
+
+func (d *StreamD) AddOAuthListenPort(port uint16) {
+	logger.Default().Debugf("AddOAuthListenPort(%d)", port)
+	defer logger.Default().Debugf("/AddOAuthListenPort(%d)", port)
+	d.OAuthListenPortsLocker.Lock()
+	defer d.OAuthListenPortsLocker.Unlock()
+	d.OAuthListenPorts[port] = struct{}{}
+}
+
+func (d *StreamD) RemoveOAuthListenPort(port uint16) {
+	logger.Default().Debugf("RemoveOAuthListenPort(%d)", port)
+	defer logger.Default().Debugf("/RemoveOAuthListenPort(%d)", port)
+	d.OAuthListenPortsLocker.Lock()
+	defer d.OAuthListenPortsLocker.Unlock()
+	delete(d.OAuthListenPorts, port)
+}
+
+func (d *StreamD) GetOAuthListenPorts() []uint16 {
+	d.OAuthListenPortsLocker.Lock()
+	defer d.OAuthListenPortsLocker.Unlock()
+
+	var ports []uint16
+	for k := range d.OAuthListenPorts {
+		ports = append(ports, k)
+	}
+
+	sort.Slice(ports, func(i, j int) bool {
+		return ports[i] < ports[j]
+	})
+
+	logger.Default().Debugf("oauth ports: %#+v", ports)
+	return ports
+}
+
+func serverTypeServer2API(t types.ServerType) api.StreamServerType {
+	switch t {
+	case types.ServerTypeUndefined:
+		return api.StreamServerTypeUndefined
+	case types.ServerTypeRTSP:
+		return api.StreamServerTypeRTSP
+	case types.ServerTypeRTMP:
+		return api.StreamServerTypeRTMP
+	default:
+		panic(fmt.Errorf("unexpected server type: %v", t))
+	}
+}
+
+func serverTypeAPI2Server(t api.StreamServerType) types.ServerType {
+	switch t {
+	case api.StreamServerTypeUndefined:
+		return types.ServerTypeUndefined
+	case api.StreamServerTypeRTSP:
+		return types.ServerTypeRTSP
+	case api.StreamServerTypeRTMP:
+		return types.ServerTypeRTMP
+	default:
+		panic(fmt.Errorf("unexpected server type: %v", t))
+	}
+}
+
+func (d *StreamD) ListStreamServers(
+	ctx context.Context,
+) ([]api.StreamServer, error) {
+	d.StreamServerLocker.Lock()
+	defer d.StreamServerLocker.Unlock()
+	servers := d.StreamServer.ListServers(ctx)
+
+	var result []api.StreamServer
+	for _, src := range servers {
+		result = append(result, api.StreamServer{
+			Type:       serverTypeServer2API(src.Type()),
+			ListenAddr: src.ListenAddr(),
+		})
+	}
+
+	return result, nil
+}
+
+func (d *StreamD) StartStreamServer(
+	ctx context.Context,
+	serverType api.StreamServerType,
+	listenAddr string,
+) error {
+	d.StreamServerLocker.Lock()
+	defer d.StreamServerLocker.Unlock()
+	return d.StreamServer.StartServer(
+		ctx,
+		serverTypeAPI2Server(serverType),
+		listenAddr,
+	)
+}
+
+func (d *StreamD) StopStreamServer(
+	ctx context.Context,
+	listenAddr string,
+) error {
+	d.StreamServerLocker.Lock()
+	defer d.StreamServerLocker.Unlock()
+	for _, server := range d.StreamServer.ListServers(ctx) {
+		if server.ListenAddr() == listenAddr {
+			return d.StreamServer.StopServer(ctx, server)
+		}
+	}
+
+	return fmt.Errorf("have not found any stream listeners at %s", listenAddr)
+}
+
+func (d *StreamD) ListIncomingStreams(
+	ctx context.Context,
+) ([]api.IncomingStream, error) {
+	d.StreamServerLocker.Lock()
+	defer d.StreamServerLocker.Unlock()
+	var result []api.IncomingStream
+	for _, src := range d.StreamServer.ListIncomingStreams(ctx) {
+		result = append(result, api.IncomingStream{
+			StreamID: api.StreamID(src.StreamID),
+		})
+	}
+	return result, nil
+}
+
+func (d *StreamD) ListStreamDestinations(
+	ctx context.Context,
+) ([]api.StreamDestination, error) {
+	d.StreamServerLocker.Lock()
+	defer d.StreamServerLocker.Unlock()
+	streamDestinations, err := d.StreamServer.ListStreamDestinations(ctx)
+	if err != nil {
+		return nil, err
+	}
+	c := make([]api.StreamDestination, 0, len(streamDestinations))
+	for _, dst := range streamDestinations {
+		c = append(c, api.StreamDestination{
+			StreamID: api.StreamID(dst.StreamID),
+			URL:      dst.URL,
+		})
+	}
+	return c, nil
+}
+
+func (d *StreamD) AddStreamDestination(
+	ctx context.Context,
+	streamID api.StreamID,
+	url string,
+) error {
+	d.StreamServerLocker.Lock()
+	defer d.StreamServerLocker.Unlock()
+	return d.StreamServer.AddStreamDestination(ctx, types.StreamID(streamID), url)
+}
+
+func (d *StreamD) RemoveStreamDestination(
+	ctx context.Context,
+	streamID api.StreamID,
+) error {
+	d.StreamServerLocker.Lock()
+	defer d.StreamServerLocker.Unlock()
+	return d.StreamServer.RemoveStreamDestination(ctx, types.StreamID(streamID))
+}
+
+func (d *StreamD) listStreamForwards(
+	ctx context.Context,
+) ([]api.StreamForward, error) {
+	var result []api.StreamForward
+	streamForwards, err := d.StreamServer.ListStreamForwards(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, streamFwd := range streamForwards {
+		result = append(result, api.StreamForward{
+			StreamIDSrc: api.StreamID(streamFwd.StreamIDSrc),
+			StreamIDDst: api.StreamID(streamFwd.StreamIDDst),
+		})
+	}
+	return result, nil
+}
+
+func (d *StreamD) ListStreamForwards(
+	ctx context.Context,
+) ([]api.StreamForward, error) {
+	d.StreamServerLocker.Lock()
+	defer d.StreamServerLocker.Unlock()
+	return d.listStreamForwards(ctx)
+}
+
+func (d *StreamD) AddStreamForward(
+	ctx context.Context,
+	streamIDSrc api.StreamID,
+	streamIDDst api.StreamID,
+) error {
+	d.StreamServerLocker.Lock()
+	defer d.StreamServerLocker.Unlock()
+	return d.StreamServer.AddStreamForward(ctx, types.StreamID(streamIDSrc), types.StreamID(streamIDDst))
+}
+
+func (d *StreamD) RemoveStreamForward(
+	ctx context.Context,
+	streamIDSrc api.StreamID,
+	streamIDDst api.StreamID,
+) error {
+	d.StreamServerLocker.Lock()
+	defer d.StreamServerLocker.Unlock()
+	return d.StreamServer.RemoveStreamForward(ctx, types.StreamID(streamIDSrc), types.StreamID(streamIDDst))
 }

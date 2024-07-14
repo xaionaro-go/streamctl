@@ -18,6 +18,7 @@ import (
 	twitch "github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/types"
 	youtube "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/api/grpcconv"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
@@ -438,15 +439,18 @@ func (c *Client) UpdateStream(
 
 func (c *Client) SubscriberToOAuthURLs(
 	ctx context.Context,
-) (chan string, error) {
+	listenPort uint16,
+) (chan *streamd_grpc.OAuthRequest, error) {
 	client, conn, err := c.grpcClient()
 	if err != nil {
 		return nil, err
 	}
 
-	result := make(chan string)
+	result := make(chan *streamd_grpc.OAuthRequest)
 
-	subClient, err := client.SubscribeToOAuthRequests(ctx, &streamd_grpc.SubscribeToOAuthRequestsRequest{})
+	subClient, err := client.SubscribeToOAuthRequests(ctx, &streamd_grpc.SubscribeToOAuthRequestsRequest{
+		ListenPort: int32(listenPort),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("unable to subscribe to oauth URLs: %w", err)
 	}
@@ -460,10 +464,15 @@ func (c *Client) SubscriberToOAuthURLs(
 		for {
 			res, err := subClient.Recv()
 			if err == io.EOF {
+				logger.Debugf(ctx, "the receiver is closed: %v", err)
+				return
+			}
+			if err != nil {
+				logger.Errorf(ctx, "unable to read data: %v", err)
 				return
 			}
 
-			result <- res.GetAuthURL()
+			result <- res
 		}
 	}()
 
@@ -604,4 +613,251 @@ func (c *Client) OBSSetCurrentProgramScene(
 
 func ptr[T any](in T) *T {
 	return &in
+}
+
+func (c *Client) SubmitOAuthCode(
+	ctx context.Context,
+	req *streamd_grpc.SubmitOAuthCodeRequest,
+) (*streamd_grpc.SubmitOAuthCodeReply, error) {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	return client.SubmitOAuthCode(ctx, req)
+}
+
+func (c *Client) ListStreamServers(
+	ctx context.Context,
+) ([]api.StreamServer, error) {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	reply, err := client.ListStreamServers(
+		ctx,
+		&streamd_grpc.ListStreamServersRequest{},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("unable to request to list of the stream servers: %w", err)
+	}
+	var result []api.StreamServer
+	for _, server := range reply.GetStreamServers() {
+		t, err := grpcconv.StreamServerTypeGRPC2Go(server.GetServerType())
+		if err != nil {
+			return nil, fmt.Errorf("unable to convert the server type value: %w", err)
+		}
+		result = append(result, api.StreamServer{
+			Type:       t,
+			ListenAddr: server.GetListenAddr(),
+		})
+	}
+	return result, nil
+}
+
+func (c *Client) StartStreamServer(
+	ctx context.Context,
+	serverType api.StreamServerType,
+	listenAddr string,
+) error {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	t, err := grpcconv.StreamServerTypeGo2GRPC(serverType)
+	if err != nil {
+		return fmt.Errorf("unable to convert the server type: %w", err)
+	}
+	_, err = client.StartStreamServer(ctx, &streamd_grpc.StartStreamServerRequest{
+		Config: &streamd_grpc.StreamServer{
+			ServerType: t,
+			ListenAddr: listenAddr,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("unable to request to start the stream server: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) StopStreamServer(
+	ctx context.Context,
+	listenAddr string,
+) error {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = client.StopStreamServer(ctx, &streamd_grpc.StopStreamServerRequest{
+		ListenAddr: listenAddr,
+	})
+	if err != nil {
+		return fmt.Errorf("unable to request to stop the stream server: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) ListIncomingStreams(
+	ctx context.Context,
+) ([]api.IncomingStream, error) {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	reply, err := client.ListIncomingStreams(ctx, &streamd_grpc.ListIncomingStreamsRequest{})
+	if err != nil {
+		return nil, fmt.Errorf("unable to request to list the incoming streams: %w", err)
+	}
+
+	var result []api.IncomingStream
+	for _, stream := range reply.GetIncomingStreams() {
+		result = append(result, api.IncomingStream{
+			StreamID: api.StreamID(stream.GetStreamID()),
+		})
+	}
+	return result, nil
+}
+
+func (c *Client) ListStreamDestinations(
+	ctx context.Context,
+) ([]api.StreamDestination, error) {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	reply, err := client.ListStreamDestinations(ctx, &streamd_grpc.ListStreamDestinationsRequest{})
+	if err != nil {
+		return nil, fmt.Errorf("unable to request to list the stream destinations: %w", err)
+	}
+
+	var result []api.StreamDestination
+	for _, dst := range reply.GetStreamDestinations() {
+		result = append(result, api.StreamDestination{
+			StreamID: api.StreamID(dst.GetStreamID()),
+			URL:      dst.GetUrl(),
+		})
+	}
+	return result, nil
+}
+
+func (c *Client) AddStreamDestination(
+	ctx context.Context,
+	streamID api.StreamID,
+	url string,
+) error {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = client.AddStreamDestination(ctx, &streamd_grpc.AddStreamDestinationRequest{
+		Config: &streamd_grpc.StreamDestination{
+			StreamID: string(streamID),
+			Url:      url,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("unable to request to add the stream destination: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) RemoveStreamDestination(
+	ctx context.Context,
+	streamID api.StreamID,
+) error {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = client.RemoveStreamDestination(ctx, &streamd_grpc.RemoveStreamDestinationRequest{
+		StreamID: string(streamID),
+	})
+	if err != nil {
+		return fmt.Errorf("unable to request to remove the stream destination: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) ListStreamForwards(
+	ctx context.Context,
+) ([]api.StreamForward, error) {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	reply, err := client.ListStreamForwards(ctx, &streamd_grpc.ListStreamForwardsRequest{})
+	if err != nil {
+		return nil, fmt.Errorf("unable to request to list the stream forwards: %w", err)
+	}
+
+	var result []api.StreamForward
+	for _, forward := range reply.GetStreamForwards() {
+		result = append(result, api.StreamForward{
+			StreamIDSrc: api.StreamID(forward.GetStreamIDSrc()),
+			StreamIDDst: api.StreamID(forward.GetStreamIDDst()),
+		})
+	}
+	return result, nil
+}
+
+func (c *Client) AddStreamForward(
+	ctx context.Context,
+	streamIDSrc api.StreamID,
+	streamIDDst api.StreamID,
+) error {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = client.AddStreamForward(ctx, &streamd_grpc.AddStreamForwardRequest{
+		Config: &streamd_grpc.StreamForward{
+			StreamIDSrc: string(streamIDSrc),
+			StreamIDDst: string(streamIDDst),
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("unable to request to add the stream forward: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) RemoveStreamForward(
+	ctx context.Context,
+	streamIDSrc api.StreamID,
+	streamIDDst api.StreamID,
+) error {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = client.RemoveStreamForward(ctx, &streamd_grpc.RemoveStreamForwardRequest{
+		Config: &streamd_grpc.StreamForward{
+			StreamIDSrc: string(streamIDSrc),
+			StreamIDDst: string(streamIDDst),
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("unable to request to remove the stream forward: %w", err)
+	}
+	return nil
 }

@@ -11,12 +11,14 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/go-yaml/yaml"
+	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"golang.org/x/oauth2"
@@ -74,6 +76,10 @@ func New(
 			case <-ticker.C:
 				err := yt.checkToken(ctx)
 				errmon.ObserveErrorCtx(ctx, err)
+				if err != nil && strings.Contains(err.Error(), "expired or revoked") {
+					_, err := yt.getNewToken(ctx)
+					errmon.ObserveErrorCtx(ctx, err)
+				}
 			}
 		}
 	}()
@@ -82,8 +88,8 @@ func New(
 }
 
 func (yt *YouTube) checkToken(ctx context.Context) (_err error) {
-	logger.Debugf(ctx, "YouTube.checkToken")
-	defer func() { logger.Debugf(ctx, "/YouTube.checkToken: %v", _err) }()
+	logger.Tracef(ctx, "YouTube.checkToken")
+	defer func() { logger.Tracef(ctx, "/YouTube.checkToken: %v", _err) }()
 
 	yt.locker.Lock()
 	defer yt.locker.Unlock()
@@ -91,23 +97,28 @@ func (yt *YouTube) checkToken(ctx context.Context) (_err error) {
 }
 
 func (yt *YouTube) checkTokenNoLock(ctx context.Context) (_err error) {
-	logger.Debugf(ctx, "YouTube.checkTokenNoLock")
-	defer func() { logger.Debugf(ctx, "/YouTube.checkTokenNoLock: %v", _err) }()
+	logger.Tracef(ctx, "YouTube.checkTokenNoLock")
+	defer func() { logger.Tracef(ctx, "/YouTube.checkTokenNoLock: %v", _err) }()
 
-	tokenSource := getAuthCfg(yt.Config).TokenSource(ctx, yt.Config.Config.Token)
-	logger.Debugf(ctx, "checking if the token changed")
-	token, err := tokenSource.Token()
-	if err != nil {
-		logger.Errorf(ctx, "unable to get a token: %v", err)
-		return err
+	tokenSource := getAuthCfgBase(yt.Config).TokenSource(ctx, yt.Config.Config.Token)
+	counter := 0
+	for {
+		logger.Tracef(ctx, "checking if the token changed")
+		token, err := tokenSource.Token()
+		if err != nil {
+			if yt.fixError(ctx, err, &counter) {
+				continue
+			}
+			return fmt.Errorf("unable to get a token: %v", err)
+		}
+		if token.AccessToken == yt.Config.Config.Token.AccessToken {
+			logger.Tracef(ctx, "the token have not changed")
+			return nil
+		}
+		logger.Tracef(ctx, "the token have changed")
+		yt.Config.Config.Token = token
+		return yt.SaveConfigFunc(yt.Config)
 	}
-	if token.AccessToken == yt.Config.Config.Token.AccessToken {
-		logger.Debugf(ctx, "the token have not change")
-		return err
-	}
-	logger.Debugf(ctx, "the token have changed")
-	yt.Config.Config.Token = token
-	return yt.SaveConfigFunc(yt.Config)
 }
 
 func (yt *YouTube) getNewToken(ctx context.Context) (_ret *oauth2.Token, _err error) {
@@ -144,7 +155,9 @@ func (yt *YouTube) init(ctx context.Context) (_err error) {
 		isNewToken = true
 	}
 
-	tokenSource := getAuthCfg(yt.Config).TokenSource(ctx, yt.Config.Config.Token)
+	authCfg := getAuthCfgBase(yt.Config)
+
+	tokenSource := authCfg.TokenSource(ctx, yt.Config.Config.Token)
 
 	if !isNewToken {
 		if err := yt.checkTokenNoLock(ctx); err != nil {
@@ -155,7 +168,7 @@ func (yt *YouTube) init(ctx context.Context) (_err error) {
 				return err
 			}
 			isNewToken = true
-			tokenSource = getAuthCfg(yt.Config).TokenSource(ctx, yt.Config.Config.Token)
+			tokenSource = authCfg.TokenSource(ctx, yt.Config.Config.Token)
 		}
 	}
 
@@ -175,12 +188,11 @@ func (yt *YouTube) init(ctx context.Context) (_err error) {
 	return nil
 }
 
-func getAuthCfg(cfg Config) *oauth2.Config {
+func getAuthCfgBase(cfg Config) *oauth2.Config {
 	return &oauth2.Config{
 		ClientID:     cfg.Config.ClientID,
 		ClientSecret: cfg.Config.ClientSecret,
 		Endpoint:     google.Endpoint,
-		RedirectURL:  "http://0.0.0.0:8090", // TODO: make this secure and also random
 		Scopes: []string{
 			"https://www.googleapis.com/auth/youtube",
 		},
@@ -188,29 +200,104 @@ func getAuthCfg(cfg Config) *oauth2.Config {
 }
 
 func getToken(ctx context.Context, cfg Config) (*oauth2.Token, error) {
-	googleAuthCfg := getAuthCfg(cfg)
+	if cfg.Config.GetOAuthListenPorts == nil {
+		return nil, fmt.Errorf("function GetOAuthListenPorts is not set")
+	}
 
+	ctx, cancelFn := context.WithCancel(ctx)
+	defer cancelFn()
+
+	var errWg sync.WaitGroup
+	var resultErr error
+	errCh := make(chan error)
+	errWg.Add(1)
+	go func() {
+		errWg.Done()
+		for err := range errCh {
+			errmon.ObserveErrorCtx(ctx, err)
+			resultErr = multierror.Append(resultErr, err)
+		}
+	}()
+
+	alreadyListening := map[uint16]struct{}{}
+
+	var wg sync.WaitGroup
 	var tok *oauth2.Token
-	oauthHandlerArg := oauthhandler.OAuthHandlerArgument{
-		AuthURL:     googleAuthCfg.AuthCodeURL("state-token", oauth2.AccessTypeOffline),
-		RedirectURL: googleAuthCfg.RedirectURL,
-		ExchangeFn: func(code string) error {
-			_tok, err := googleAuthCfg.Exchange(ctx, code)
-			if err != nil {
-				return fmt.Errorf("unable to get a token: %w", err)
+
+	startHandlerForPort := func(listenPort uint16) {
+		if _, ok := alreadyListening[listenPort]; ok {
+			return
+		}
+		logger.Tracef(ctx, "starting the oauth handler at port %d", listenPort)
+		alreadyListening[listenPort] = struct{}{}
+		oauthCfg := getAuthCfgBase(cfg)
+		oauthCfg.RedirectURL = fmt.Sprintf("http://127.0.0.1:%d", listenPort)
+		wg.Add(1)
+		go func(oauthCfg *oauth2.Config) {
+			defer wg.Done()
+			oauthHandlerArg := oauthhandler.OAuthHandlerArgument{
+				AuthURL:    oauthCfg.AuthCodeURL("state-token", oauth2.AccessTypeOffline),
+				ListenPort: listenPort,
+				ExchangeFn: func(code string) error {
+					_tok, err := oauthCfg.Exchange(ctx, code)
+					if err != nil {
+						return fmt.Errorf("unable to get a token: %w", err)
+					}
+					tok = _tok
+					cancelFn()
+					return nil
+				},
 			}
-			tok = _tok
-			return nil
-		},
+
+			oauthHandler := cfg.Config.CustomOAuthHandler
+			if oauthHandler == nil {
+				oauthHandler = oauthhandler.OAuth2HandlerViaCLI
+			}
+			logger.Tracef(ctx, "calling oauthHandler for %d", listenPort)
+			err := oauthHandler(ctx, oauthHandlerArg)
+			logger.Tracef(ctx, "called oauthHandler for %d: %v", listenPort, err)
+			if err != nil {
+				errCh <- err
+				return
+			}
+		}(oauthCfg)
 	}
 
-	oauthHandler := cfg.Config.CustomOAuthHandler
-	if oauthHandler == nil {
-		oauthHandler = oauthhandler.OAuth2HandlerViaCLI
+	for _, listenPort := range cfg.Config.GetOAuthListenPorts() {
+		startHandlerForPort(listenPort)
 	}
-	err := oauthHandler(ctx, oauthHandlerArg)
-	if err != nil {
-		return nil, err
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		t := time.NewTicker(time.Second)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+			ports := cfg.Config.GetOAuthListenPorts()
+			logger.Tracef(ctx, "oauth listener ports: %#+v", ports)
+
+			alreadyListeningNext := map[uint16]struct{}{}
+			for _, listenPort := range ports {
+				startHandlerForPort(listenPort)
+				alreadyListeningNext[listenPort] = struct{}{}
+			}
+			alreadyListening = alreadyListeningNext
+		}
+	}()
+
+	go func() {
+		wg.Wait()
+		close(errCh)
+	}()
+	<-ctx.Done()
+
+	if tok == nil {
+		errWg.Wait()
+		return nil, resultErr
 	}
 
 	return tok, nil
@@ -575,9 +662,11 @@ func (yt *YouTube) StartStream(
 		now := time.Now().UTC()
 		broadcast.Id = ""
 		broadcast.Etag = ""
+		broadcast.ContentDetails.EnableAutoStop = false
 		broadcast.ContentDetails.BoundStreamLastUpdateTimeMs = ""
 		broadcast.ContentDetails.BoundStreamId = ""
 		broadcast.ContentDetails.MonitorStream = nil
+		broadcast.ContentDetails.ForceSendFields = []string{"EnableAutoStop"}
 		broadcast.Snippet.ScheduledStartTime = now.Format("2006-01-02T15:04:05") + ".00Z"
 		broadcast.Snippet.ScheduledEndTime = now.Add(time.Hour*12).Format("2006-01-02T15:04:05") + ".00Z"
 		broadcast.Snippet.LiveChatId = ""
@@ -696,6 +785,7 @@ func (yt *YouTube) EndStream(
 ) error {
 	return yt.updateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
 		broadcast.ContentDetails.EnableAutoStop = true
+		broadcast.ContentDetails.MonitorStream.ForceSendFields = []string{"BroadcastStreamDelayMs"}
 		return nil
 	}, "contentDetails")
 }
@@ -842,17 +932,16 @@ func (yt *YouTube) ListBroadcasts(
 }
 
 func (yt *YouTube) fixError(ctx context.Context, err error, counterPtr *int) bool {
+	if err == nil {
+		return false
+	}
 	if *counterPtr > 2 {
 		return false
 	}
 	*counterPtr++
 
-	gErr := &googleapi.Error{}
-	if !errors.As(err, &gErr) {
-		return false
-	}
-
-	if gErr.Code == 401 {
+	tryGetNewToken := func() bool {
+		logger.Debugf(ctx, "trying to get a new token")
 		_, tErr := yt.getNewToken(ctx)
 		if tErr != nil {
 			logger.Errorf(ctx, "unable to get a new token: %w", err)
@@ -864,6 +953,21 @@ func (yt *YouTube) fixError(ctx context.Context, err error, counterPtr *int) boo
 			return false
 		}
 		return true
+	}
+
+	if strings.Contains(err.Error(), "token expired") {
+		logger.Tracef(ctx, "token expired")
+		return tryGetNewToken()
+	}
+
+	gErr := &googleapi.Error{}
+	if !errors.As(err, &gErr) {
+		return false
+	}
+
+	if gErr.Code == 401 {
+		logger.Tracef(ctx, "error 401")
+		return tryGetNewToken()
 	}
 
 	return false

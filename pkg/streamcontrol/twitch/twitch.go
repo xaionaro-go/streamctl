@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -18,7 +19,11 @@ import (
 
 type Twitch struct {
 	client        *helix.Client
+	config        Config
 	broadcasterID string
+	lazyInitOnce  sync.Once
+	saveCfgFn     func(Config) error
+	tokenLocker   sync.Mutex
 }
 
 var _ streamcontrol.StreamController[StreamProfile] = (*Twitch)(nil)
@@ -26,7 +31,7 @@ var _ streamcontrol.StreamController[StreamProfile] = (*Twitch)(nil)
 func New(
 	ctx context.Context,
 	cfg Config,
-	safeCfgFn func(Config) error,
+	saveCfgFn func(Config) error,
 ) (*Twitch, error) {
 	if cfg.Config.Channel == "" {
 		return nil, fmt.Errorf("'channel' is not set")
@@ -34,20 +39,17 @@ func New(
 	if cfg.Config.ClientID == "" || cfg.Config.ClientSecret == "" {
 		return nil, fmt.Errorf("'clientid' or/and 'clientsecret' is/are not set; go to https://dev.twitch.tv/console/apps/create and create an app if it not created, yet")
 	}
-	client, err := getClient(ctx, cfg, safeCfgFn)
+	client, err := getClient(ctx, cfg, saveCfgFn)
 	if err != nil {
 		return nil, err
 	}
-	logger.Debugf(ctx, "initialized a client")
-	broadcasterID, err := getUserID(ctx, client, cfg.Config.Channel)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get the user ID: %w", err)
+	t := &Twitch{
+		client:    client,
+		config:    cfg,
+		saveCfgFn: saveCfgFn,
 	}
-	logger.Debugf(ctx, "broadcaster_id: %s (login: %s)", broadcasterID, cfg.Config.Channel)
-	return &Twitch{
-		client:        client,
-		broadcasterID: broadcasterID,
-	}, nil
+	logger.Debugf(ctx, "initialized a client")
+	return t, nil
 }
 
 func getUserID(
@@ -65,6 +67,25 @@ func getUserID(
 		return "", fmt.Errorf("expected 1 user with login, but received %d users", len(resp.Data.Users))
 	}
 	return resp.Data.Users[0].ID, nil
+}
+
+func (t *Twitch) prepare(ctx context.Context) error {
+	err := t.getTokenIfNeeded(ctx)
+	if err != nil {
+		return err
+	}
+
+	t.lazyInitOnce.Do(func() {
+		if t.broadcasterID != "" {
+			return
+		}
+		t.broadcasterID, err = getUserID(ctx, t.client, t.config.Config.Channel)
+		if err != nil {
+			return
+		}
+		logger.Debugf(ctx, "broadcaster_id: %s (login: %s)", t.broadcasterID, t.config.Config.Channel)
+	})
+	return err
 }
 
 func (t *Twitch) Close() error {
@@ -125,6 +146,8 @@ func (t *Twitch) ApplyProfile(
 	profile StreamProfile,
 	customArgs ...any,
 ) error {
+	t.prepare(ctx)
+
 	if profile.CategoryName != nil {
 		if profile.CategoryID != nil {
 			logger.Warnf(ctx, "both category name and ID are set; these are contradicting stream profile settings; prioritizing the name")
@@ -195,6 +218,7 @@ func (t *Twitch) SetTitle(
 	ctx context.Context,
 	title string,
 ) error {
+	t.prepare(ctx)
 	return t.editChannelInfo(ctx, &helix.EditChannelInformationParams{
 		Title: title,
 	})
@@ -233,6 +257,7 @@ func (t *Twitch) StartStream(
 	profile StreamProfile,
 	customArgs ...any,
 ) error {
+	t.prepare(ctx)
 	var result error
 	if err := t.SetTitle(ctx, title); err != nil {
 		result = multierror.Append(result, fmt.Errorf("unable to set title: %w", err))
@@ -256,6 +281,7 @@ func (t *Twitch) EndStream(
 func (t *Twitch) GetStreamStatus(
 	ctx context.Context,
 ) (*streamcontrol.StreamStatus, error) {
+	t.prepare(ctx)
 	// Twitch ends a stream automatically, nothing to do:
 	reply, err := t.client.GetStreams(&helix.StreamsParams{
 		UserIDs: []string{t.broadcasterID},
@@ -281,15 +307,185 @@ func (t *Twitch) GetStreamStatus(
 	}, nil
 }
 
+func (t *Twitch) getTokenIfNeeded(
+	ctx context.Context,
+) error {
+	switch t.config.Config.AuthType {
+	case "user":
+		t.tokenLocker.Lock()
+		t.client.SetUserAccessToken(t.config.Config.UserAccessToken)
+		t.client.SetRefreshToken(t.config.Config.RefreshToken)
+		t.tokenLocker.Unlock()
+		if t.config.Config.UserAccessToken != "" {
+			return nil
+		}
+	case "app":
+		t.tokenLocker.Lock()
+		t.client.SetUserAccessToken(t.config.Config.AppAccessToken) // shouldn't it be "SetAppAccessToken"?
+		t.tokenLocker.Unlock()
+		if t.config.Config.AppAccessToken != "" {
+			logger.Debugf(ctx, "already have an app access token")
+			return nil
+		}
+		logger.Debugf(ctx, "do not have an app access token")
+	}
+
+	return t.getNewToken(ctx)
+}
+
+func (t *Twitch) getNewToken(
+	ctx context.Context,
+) error {
+	t.tokenLocker.Lock()
+	defer t.tokenLocker.Unlock()
+
+	switch t.config.Config.AuthType {
+	case "user":
+		if t.config.Config.ClientCode == "" {
+			getPortsFn := t.config.Config.GetOAuthListenPorts
+			if getPortsFn == nil {
+				return fmt.Errorf("the function GetOAuthListenPorts is not set")
+			}
+
+			oauthHandler := t.config.Config.CustomOAuthHandler
+			if oauthHandler == nil {
+				oauthHandler = oauthhandler.OAuth2HandlerViaCLI
+			}
+
+			ctx, cancelFunc := context.WithCancel(ctx)
+
+			var errWg sync.WaitGroup
+			var resultErr error
+			errCh := make(chan error)
+			errWg.Add(1)
+			go func() {
+				errWg.Done()
+				for err := range errCh {
+					errmon.ObserveErrorCtx(ctx, err)
+					resultErr = multierror.Append(resultErr, err)
+				}
+			}()
+
+			alreadyListening := map[uint16]struct{}{}
+			var wg sync.WaitGroup
+			success := false
+
+			startHandlerForPort := func(listenPort uint16) {
+				if _, ok := alreadyListening[listenPort]; ok {
+					return
+				}
+				logger.Tracef(ctx, "starting the oauth handler at port %d", listenPort)
+				wg.Add(1)
+				go func(listenPort uint16) {
+					defer wg.Done()
+					authURL := GetAuthorizationURL(
+						&helix.AuthorizationURLParams{
+							ResponseType: "code", // or "token"
+							Scopes:       []string{"channel:manage:broadcast"},
+						},
+						t.config.Config.ClientID,
+						fmt.Sprintf("127.0.0.1:%d", listenPort),
+					)
+
+					arg := oauthhandler.OAuthHandlerArgument{
+						AuthURL: authURL,
+						ExchangeFn: func(code string) error {
+							t.config.Config.ClientCode = code
+							err := t.saveCfgFn(t.config)
+							errmon.ObserveErrorCtx(ctx, err)
+							return nil
+						},
+					}
+
+					err := oauthHandler(ctx, arg)
+					if err != nil {
+						errCh <- fmt.Errorf("unable to get or exchange the oauth code to a token: %w", err)
+						return
+					}
+					cancelFunc()
+					success = true
+				}(listenPort)
+			}
+
+			for _, listenPort := range getPortsFn() {
+				startHandlerForPort(listenPort)
+			}
+
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				t := time.NewTicker(time.Second)
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case <-t.C:
+					}
+					ports := getPortsFn()
+					logger.Tracef(ctx, "oauth listener ports: %#+v", ports)
+
+					alreadyListeningNext := map[uint16]struct{}{}
+					for _, listenPort := range ports {
+						startHandlerForPort(listenPort)
+						alreadyListeningNext[listenPort] = struct{}{}
+					}
+					alreadyListening = alreadyListeningNext
+				}
+			}()
+
+			go func() {
+				wg.Wait()
+				close(errCh)
+			}()
+			<-ctx.Done()
+			if !success {
+				errWg.Wait()
+				return resultErr
+			}
+		}
+
+		resp, err := t.client.RequestUserAccessToken(t.config.Config.ClientCode)
+		if err != nil {
+			return fmt.Errorf("unable to get user access token: %w", err)
+		}
+		if resp.ErrorStatus != 0 {
+			return fmt.Errorf("unable to query: %d %v: %v", resp.ErrorStatus, resp.Error, resp.ErrorMessage)
+		}
+		t.client.SetUserAccessToken(resp.Data.AccessToken)
+		t.client.SetRefreshToken(resp.Data.RefreshToken)
+		t.config.Config.ClientCode = ""
+		t.config.Config.UserAccessToken = resp.Data.AccessToken
+		t.config.Config.RefreshToken = resp.Data.RefreshToken
+		err = t.saveCfgFn(t.config)
+		errmon.ObserveErrorCtx(ctx, err)
+	case "app":
+		resp, err := t.client.RequestAppAccessToken(nil)
+		if err != nil {
+			return fmt.Errorf("unable to get app access token: %w", err)
+		}
+		if resp.ErrorStatus != 0 {
+			return fmt.Errorf("unable to get app access token (the response contains an error): %d %v: %v", resp.ErrorStatus, resp.Error, resp.ErrorMessage)
+		}
+		logger.Debugf(ctx, "setting the app access token")
+		t.client.SetAppAccessToken(resp.Data.AccessToken)
+		t.config.Config.AppAccessToken = resp.Data.AccessToken
+		err = t.saveCfgFn(t.config)
+		errmon.ObserveErrorCtx(ctx, err)
+	default:
+		return fmt.Errorf("invalid AuthType: <%s>", t.config.Config.AuthType)
+	}
+
+	return nil
+}
+
 func getClient(
 	ctx context.Context,
 	cfg Config,
-	safeCfgFn func(Config) error,
+	saveCfgFn func(Config) error,
 ) (*helix.Client, error) {
 	options := &helix.Options{
 		ClientID:     cfg.Config.ClientID,
 		ClientSecret: cfg.Config.ClientSecret,
-		RedirectURI:  "http://0.0.0.0:8091/", // TODO: make this secure and also random
 	}
 	client, err := helix.NewClient(options)
 	if err != nil {
@@ -299,89 +495,41 @@ func getClient(
 		logger.Debugf(ctx, "updated tokens")
 		cfg.Config.UserAccessToken = newAccessToken
 		cfg.Config.RefreshToken = newRefreshToken
-		err := safeCfgFn(cfg)
+		err := saveCfgFn(cfg)
 		errmon.ObserveErrorCtx(ctx, err)
 	})
+	return client, nil
+}
 
-	switch cfg.Config.AuthType {
-	case "user":
-		client.SetUserAccessToken(cfg.Config.UserAccessToken)
-		client.SetRefreshToken(cfg.Config.RefreshToken)
+func GetAuthorizationURL(
+	params *helix.AuthorizationURLParams,
+	clientID string,
+	redirectURI string,
+) string {
+	url := helix.AuthBaseURL + "/authorize"
+	url += "?response_type=" + params.ResponseType
+	url += "&client_id=" + clientID
+	url += "&redirect_uri=" + redirectURI
 
-		if cfg.Config.UserAccessToken == "" {
-			if cfg.Config.ClientCode == "" {
-				authURL := client.GetAuthorizationURL(&helix.AuthorizationURLParams{
-					ResponseType: "code", // or "token"
-					Scopes:       []string{"channel:manage:broadcast"},
-				})
-
-				arg := oauthhandler.OAuthHandlerArgument{
-					AuthURL:     authURL,
-					RedirectURL: options.RedirectURI,
-					ExchangeFn: func(code string) error {
-						cfg.Config.ClientCode = code
-						err = safeCfgFn(cfg)
-						errmon.ObserveErrorCtx(ctx, err)
-						return nil
-					},
-				}
-
-				oauthHandler := cfg.Config.CustomOAuthHandler
-				if oauthHandler == nil {
-					oauthHandler = oauthhandler.OAuth2HandlerViaCLI
-				}
-
-				err := oauthHandler(ctx, arg)
-				if err != nil {
-					return nil, fmt.Errorf("unable to get or exchange the oauth code to a token: %w", err)
-				}
-			}
-
-			resp, err := client.RequestUserAccessToken(cfg.Config.ClientCode)
-			if err != nil {
-				return nil, fmt.Errorf("unable to get user access token: %w", err)
-			}
-			if resp.ErrorStatus != 0 {
-				return nil, fmt.Errorf("unable to query: %d %v: %v", resp.ErrorStatus, resp.Error, resp.ErrorMessage)
-			}
-			client.SetUserAccessToken(resp.Data.AccessToken)
-			client.SetRefreshToken(resp.Data.RefreshToken)
-			cfg.Config.ClientCode = ""
-			cfg.Config.UserAccessToken = resp.Data.AccessToken
-			cfg.Config.RefreshToken = resp.Data.RefreshToken
-			err = safeCfgFn(cfg)
-			errmon.ObserveErrorCtx(ctx, err)
-		}
-	case "app":
-		if cfg.Config.AppAccessToken != "" {
-			logger.Debugf(ctx, "already have an app access token")
-			client.SetUserAccessToken(cfg.Config.AppAccessToken) // shouldn't it be "SetAppAccessToken"?
-			break
-		}
-		logger.Debugf(ctx, "do not have an app access token")
-
-		resp, err := client.RequestAppAccessToken(nil)
-		if err != nil {
-			return nil, fmt.Errorf("unable to get app access token: %w", err)
-		}
-		if resp.ErrorStatus != 0 {
-			return nil, fmt.Errorf("unable to get app access token (the response contains an error): %d %v: %v", resp.ErrorStatus, resp.Error, resp.ErrorMessage)
-		}
-		logger.Debugf(ctx, "setting the app access token")
-		client.SetAppAccessToken(resp.Data.AccessToken)
-		cfg.Config.AppAccessToken = resp.Data.AccessToken
-		err = safeCfgFn(cfg)
-		errmon.ObserveErrorCtx(ctx, err)
-	default:
-		return nil, fmt.Errorf("invalid AuthType: <%s>", cfg.Config.AuthType)
+	if params.State != "" {
+		url += "&state=" + params.State
 	}
 
-	return client, nil
+	if params.ForceVerify {
+		url += "&force_verify=true"
+	}
+
+	if len(params.Scopes) != 0 {
+		url += "&scope=" + strings.Join(params.Scopes, "%20")
+	}
+
+	return url
 }
 
 func (t *Twitch) GetAllCategories(
 	ctx context.Context,
 ) ([]helix.Game, error) {
+	t.prepare(ctx)
 	categoriesMap := map[string]helix.Game{}
 	var pagination *helix.Pagination
 	for {

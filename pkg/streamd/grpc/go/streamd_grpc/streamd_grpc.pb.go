@@ -44,8 +44,19 @@ type StreamDClient interface {
 	OBSOLETE_GitInfo(ctx context.Context, in *OBSOLETE_GetGitInfoRequest, opts ...grpc.CallOption) (*OBSOLETE_GetGitInfoReply, error)
 	OBSOLETE_GitRelogin(ctx context.Context, in *OBSOLETE_GitReloginRequest, opts ...grpc.CallOption) (*OBSOLETE_GitReloginReply, error)
 	SubscribeToOAuthRequests(ctx context.Context, in *SubscribeToOAuthRequestsRequest, opts ...grpc.CallOption) (StreamD_SubscribeToOAuthRequestsClient, error)
+	SubmitOAuthCode(ctx context.Context, in *SubmitOAuthCodeRequest, opts ...grpc.CallOption) (*SubmitOAuthCodeReply, error)
 	OBSGetSceneList(ctx context.Context, in *OBSGetSceneListRequest, opts ...grpc.CallOption) (*OBSGetSceneListReply, error)
 	OBSSetCurrentProgramScene(ctx context.Context, in *OBSSetCurrentProgramSceneRequest, opts ...grpc.CallOption) (*OBSSetCurrentProgramSceneReply, error)
+	ListStreamServers(ctx context.Context, in *ListStreamServersRequest, opts ...grpc.CallOption) (*ListStreamServersReply, error)
+	StartStreamServer(ctx context.Context, in *StartStreamServerRequest, opts ...grpc.CallOption) (*StartStreamServerReply, error)
+	StopStreamServer(ctx context.Context, in *StopStreamServerRequest, opts ...grpc.CallOption) (*StopStreamServerReply, error)
+	ListStreamDestinations(ctx context.Context, in *ListStreamDestinationsRequest, opts ...grpc.CallOption) (*ListStreamDestinationsReply, error)
+	AddStreamDestination(ctx context.Context, in *AddStreamDestinationRequest, opts ...grpc.CallOption) (*AddStreamDestinationReply, error)
+	RemoveStreamDestination(ctx context.Context, in *RemoveStreamDestinationRequest, opts ...grpc.CallOption) (*RemoveStreamDestinationReply, error)
+	ListIncomingStreams(ctx context.Context, in *ListIncomingStreamsRequest, opts ...grpc.CallOption) (*ListIncomingStreamsReply, error)
+	ListStreamForwards(ctx context.Context, in *ListStreamForwardsRequest, opts ...grpc.CallOption) (*ListStreamForwardsReply, error)
+	AddStreamForward(ctx context.Context, in *AddStreamForwardRequest, opts ...grpc.CallOption) (*AddStreamForwardReply, error)
+	RemoveStreamForward(ctx context.Context, in *RemoveStreamForwardRequest, opts ...grpc.CallOption) (*RemoveStreamForwardReply, error)
 }
 
 type streamDClient struct {
@@ -277,6 +288,15 @@ func (x *streamDSubscribeToOAuthRequestsClient) Recv() (*OAuthRequest, error) {
 	return m, nil
 }
 
+func (c *streamDClient) SubmitOAuthCode(ctx context.Context, in *SubmitOAuthCodeRequest, opts ...grpc.CallOption) (*SubmitOAuthCodeReply, error) {
+	out := new(SubmitOAuthCodeReply)
+	err := c.cc.Invoke(ctx, "/StreamD/SubmitOAuthCode", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *streamDClient) OBSGetSceneList(ctx context.Context, in *OBSGetSceneListRequest, opts ...grpc.CallOption) (*OBSGetSceneListReply, error) {
 	out := new(OBSGetSceneListReply)
 	err := c.cc.Invoke(ctx, "/StreamD/OBSGetSceneList", in, out, opts...)
@@ -289,6 +309,96 @@ func (c *streamDClient) OBSGetSceneList(ctx context.Context, in *OBSGetSceneList
 func (c *streamDClient) OBSSetCurrentProgramScene(ctx context.Context, in *OBSSetCurrentProgramSceneRequest, opts ...grpc.CallOption) (*OBSSetCurrentProgramSceneReply, error) {
 	out := new(OBSSetCurrentProgramSceneReply)
 	err := c.cc.Invoke(ctx, "/StreamD/OBSSetCurrentProgramScene", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) ListStreamServers(ctx context.Context, in *ListStreamServersRequest, opts ...grpc.CallOption) (*ListStreamServersReply, error) {
+	out := new(ListStreamServersReply)
+	err := c.cc.Invoke(ctx, "/StreamD/ListStreamServers", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) StartStreamServer(ctx context.Context, in *StartStreamServerRequest, opts ...grpc.CallOption) (*StartStreamServerReply, error) {
+	out := new(StartStreamServerReply)
+	err := c.cc.Invoke(ctx, "/StreamD/StartStreamServer", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) StopStreamServer(ctx context.Context, in *StopStreamServerRequest, opts ...grpc.CallOption) (*StopStreamServerReply, error) {
+	out := new(StopStreamServerReply)
+	err := c.cc.Invoke(ctx, "/StreamD/StopStreamServer", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) ListStreamDestinations(ctx context.Context, in *ListStreamDestinationsRequest, opts ...grpc.CallOption) (*ListStreamDestinationsReply, error) {
+	out := new(ListStreamDestinationsReply)
+	err := c.cc.Invoke(ctx, "/StreamD/ListStreamDestinations", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) AddStreamDestination(ctx context.Context, in *AddStreamDestinationRequest, opts ...grpc.CallOption) (*AddStreamDestinationReply, error) {
+	out := new(AddStreamDestinationReply)
+	err := c.cc.Invoke(ctx, "/StreamD/AddStreamDestination", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) RemoveStreamDestination(ctx context.Context, in *RemoveStreamDestinationRequest, opts ...grpc.CallOption) (*RemoveStreamDestinationReply, error) {
+	out := new(RemoveStreamDestinationReply)
+	err := c.cc.Invoke(ctx, "/StreamD/RemoveStreamDestination", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) ListIncomingStreams(ctx context.Context, in *ListIncomingStreamsRequest, opts ...grpc.CallOption) (*ListIncomingStreamsReply, error) {
+	out := new(ListIncomingStreamsReply)
+	err := c.cc.Invoke(ctx, "/StreamD/ListIncomingStreams", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) ListStreamForwards(ctx context.Context, in *ListStreamForwardsRequest, opts ...grpc.CallOption) (*ListStreamForwardsReply, error) {
+	out := new(ListStreamForwardsReply)
+	err := c.cc.Invoke(ctx, "/StreamD/ListStreamForwards", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) AddStreamForward(ctx context.Context, in *AddStreamForwardRequest, opts ...grpc.CallOption) (*AddStreamForwardReply, error) {
+	out := new(AddStreamForwardReply)
+	err := c.cc.Invoke(ctx, "/StreamD/AddStreamForward", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) RemoveStreamForward(ctx context.Context, in *RemoveStreamForwardRequest, opts ...grpc.CallOption) (*RemoveStreamForwardReply, error) {
+	out := new(RemoveStreamForwardReply)
+	err := c.cc.Invoke(ctx, "/StreamD/RemoveStreamForward", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -321,8 +431,19 @@ type StreamDServer interface {
 	OBSOLETE_GitInfo(context.Context, *OBSOLETE_GetGitInfoRequest) (*OBSOLETE_GetGitInfoReply, error)
 	OBSOLETE_GitRelogin(context.Context, *OBSOLETE_GitReloginRequest) (*OBSOLETE_GitReloginReply, error)
 	SubscribeToOAuthRequests(*SubscribeToOAuthRequestsRequest, StreamD_SubscribeToOAuthRequestsServer) error
+	SubmitOAuthCode(context.Context, *SubmitOAuthCodeRequest) (*SubmitOAuthCodeReply, error)
 	OBSGetSceneList(context.Context, *OBSGetSceneListRequest) (*OBSGetSceneListReply, error)
 	OBSSetCurrentProgramScene(context.Context, *OBSSetCurrentProgramSceneRequest) (*OBSSetCurrentProgramSceneReply, error)
+	ListStreamServers(context.Context, *ListStreamServersRequest) (*ListStreamServersReply, error)
+	StartStreamServer(context.Context, *StartStreamServerRequest) (*StartStreamServerReply, error)
+	StopStreamServer(context.Context, *StopStreamServerRequest) (*StopStreamServerReply, error)
+	ListStreamDestinations(context.Context, *ListStreamDestinationsRequest) (*ListStreamDestinationsReply, error)
+	AddStreamDestination(context.Context, *AddStreamDestinationRequest) (*AddStreamDestinationReply, error)
+	RemoveStreamDestination(context.Context, *RemoveStreamDestinationRequest) (*RemoveStreamDestinationReply, error)
+	ListIncomingStreams(context.Context, *ListIncomingStreamsRequest) (*ListIncomingStreamsReply, error)
+	ListStreamForwards(context.Context, *ListStreamForwardsRequest) (*ListStreamForwardsReply, error)
+	AddStreamForward(context.Context, *AddStreamForwardRequest) (*AddStreamForwardReply, error)
+	RemoveStreamForward(context.Context, *RemoveStreamForwardRequest) (*RemoveStreamForwardReply, error)
 	mustEmbedUnimplementedStreamDServer()
 }
 
@@ -396,11 +517,44 @@ func (UnimplementedStreamDServer) OBSOLETE_GitRelogin(context.Context, *OBSOLETE
 func (UnimplementedStreamDServer) SubscribeToOAuthRequests(*SubscribeToOAuthRequestsRequest, StreamD_SubscribeToOAuthRequestsServer) error {
 	return status.Errorf(codes.Unimplemented, "method SubscribeToOAuthRequests not implemented")
 }
+func (UnimplementedStreamDServer) SubmitOAuthCode(context.Context, *SubmitOAuthCodeRequest) (*SubmitOAuthCodeReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SubmitOAuthCode not implemented")
+}
 func (UnimplementedStreamDServer) OBSGetSceneList(context.Context, *OBSGetSceneListRequest) (*OBSGetSceneListReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method OBSGetSceneList not implemented")
 }
 func (UnimplementedStreamDServer) OBSSetCurrentProgramScene(context.Context, *OBSSetCurrentProgramSceneRequest) (*OBSSetCurrentProgramSceneReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method OBSSetCurrentProgramScene not implemented")
+}
+func (UnimplementedStreamDServer) ListStreamServers(context.Context, *ListStreamServersRequest) (*ListStreamServersReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListStreamServers not implemented")
+}
+func (UnimplementedStreamDServer) StartStreamServer(context.Context, *StartStreamServerRequest) (*StartStreamServerReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StartStreamServer not implemented")
+}
+func (UnimplementedStreamDServer) StopStreamServer(context.Context, *StopStreamServerRequest) (*StopStreamServerReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StopStreamServer not implemented")
+}
+func (UnimplementedStreamDServer) ListStreamDestinations(context.Context, *ListStreamDestinationsRequest) (*ListStreamDestinationsReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListStreamDestinations not implemented")
+}
+func (UnimplementedStreamDServer) AddStreamDestination(context.Context, *AddStreamDestinationRequest) (*AddStreamDestinationReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddStreamDestination not implemented")
+}
+func (UnimplementedStreamDServer) RemoveStreamDestination(context.Context, *RemoveStreamDestinationRequest) (*RemoveStreamDestinationReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveStreamDestination not implemented")
+}
+func (UnimplementedStreamDServer) ListIncomingStreams(context.Context, *ListIncomingStreamsRequest) (*ListIncomingStreamsReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListIncomingStreams not implemented")
+}
+func (UnimplementedStreamDServer) ListStreamForwards(context.Context, *ListStreamForwardsRequest) (*ListStreamForwardsReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListStreamForwards not implemented")
+}
+func (UnimplementedStreamDServer) AddStreamForward(context.Context, *AddStreamForwardRequest) (*AddStreamForwardReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddStreamForward not implemented")
+}
+func (UnimplementedStreamDServer) RemoveStreamForward(context.Context, *RemoveStreamForwardRequest) (*RemoveStreamForwardReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveStreamForward not implemented")
 }
 func (UnimplementedStreamDServer) mustEmbedUnimplementedStreamDServer() {}
 
@@ -814,6 +968,24 @@ func (x *streamDSubscribeToOAuthRequestsServer) Send(m *OAuthRequest) error {
 	return x.ServerStream.SendMsg(m)
 }
 
+func _StreamD_SubmitOAuthCode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SubmitOAuthCodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).SubmitOAuthCode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/StreamD/SubmitOAuthCode",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).SubmitOAuthCode(ctx, req.(*SubmitOAuthCodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _StreamD_OBSGetSceneList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(OBSGetSceneListRequest)
 	if err := dec(in); err != nil {
@@ -846,6 +1018,186 @@ func _StreamD_OBSSetCurrentProgramScene_Handler(srv interface{}, ctx context.Con
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).OBSSetCurrentProgramScene(ctx, req.(*OBSSetCurrentProgramSceneRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_ListStreamServers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListStreamServersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).ListStreamServers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/StreamD/ListStreamServers",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).ListStreamServers(ctx, req.(*ListStreamServersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_StartStreamServer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartStreamServerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).StartStreamServer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/StreamD/StartStreamServer",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).StartStreamServer(ctx, req.(*StartStreamServerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_StopStreamServer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StopStreamServerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).StopStreamServer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/StreamD/StopStreamServer",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).StopStreamServer(ctx, req.(*StopStreamServerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_ListStreamDestinations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListStreamDestinationsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).ListStreamDestinations(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/StreamD/ListStreamDestinations",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).ListStreamDestinations(ctx, req.(*ListStreamDestinationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_AddStreamDestination_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddStreamDestinationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).AddStreamDestination(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/StreamD/AddStreamDestination",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).AddStreamDestination(ctx, req.(*AddStreamDestinationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_RemoveStreamDestination_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveStreamDestinationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).RemoveStreamDestination(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/StreamD/RemoveStreamDestination",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).RemoveStreamDestination(ctx, req.(*RemoveStreamDestinationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_ListIncomingStreams_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListIncomingStreamsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).ListIncomingStreams(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/StreamD/ListIncomingStreams",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).ListIncomingStreams(ctx, req.(*ListIncomingStreamsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_ListStreamForwards_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListStreamForwardsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).ListStreamForwards(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/StreamD/ListStreamForwards",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).ListStreamForwards(ctx, req.(*ListStreamForwardsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_AddStreamForward_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddStreamForwardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).AddStreamForward(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/StreamD/AddStreamForward",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).AddStreamForward(ctx, req.(*AddStreamForwardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_RemoveStreamForward_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveStreamForwardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).RemoveStreamForward(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/StreamD/RemoveStreamForward",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).RemoveStreamForward(ctx, req.(*RemoveStreamForwardRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -942,12 +1294,56 @@ var StreamD_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _StreamD_OBSOLETE_GitRelogin_Handler,
 		},
 		{
+			MethodName: "SubmitOAuthCode",
+			Handler:    _StreamD_SubmitOAuthCode_Handler,
+		},
+		{
 			MethodName: "OBSGetSceneList",
 			Handler:    _StreamD_OBSGetSceneList_Handler,
 		},
 		{
 			MethodName: "OBSSetCurrentProgramScene",
 			Handler:    _StreamD_OBSSetCurrentProgramScene_Handler,
+		},
+		{
+			MethodName: "ListStreamServers",
+			Handler:    _StreamD_ListStreamServers_Handler,
+		},
+		{
+			MethodName: "StartStreamServer",
+			Handler:    _StreamD_StartStreamServer_Handler,
+		},
+		{
+			MethodName: "StopStreamServer",
+			Handler:    _StreamD_StopStreamServer_Handler,
+		},
+		{
+			MethodName: "ListStreamDestinations",
+			Handler:    _StreamD_ListStreamDestinations_Handler,
+		},
+		{
+			MethodName: "AddStreamDestination",
+			Handler:    _StreamD_AddStreamDestination_Handler,
+		},
+		{
+			MethodName: "RemoveStreamDestination",
+			Handler:    _StreamD_RemoveStreamDestination_Handler,
+		},
+		{
+			MethodName: "ListIncomingStreams",
+			Handler:    _StreamD_ListIncomingStreams_Handler,
+		},
+		{
+			MethodName: "ListStreamForwards",
+			Handler:    _StreamD_ListStreamForwards_Handler,
+		},
+		{
+			MethodName: "AddStreamForward",
+			Handler:    _StreamD_AddStreamForward_Handler,
+		},
+		{
+			MethodName: "RemoveStreamForward",
+			Handler:    _StreamD_RemoveStreamForward_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
