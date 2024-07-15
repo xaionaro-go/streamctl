@@ -748,7 +748,7 @@ func (d *StreamD) StartStreamServer(
 		return fmt.Errorf("unable to start stream server: %w", err)
 	}
 
-	d.Config.StreamServer = d.StreamServer.Config
+	logger.Tracef(ctx, "new StreamServer.Servers config == %#+v", d.Config.StreamServer.Servers)
 	err = d.SaveConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to save config: %w", err)
@@ -789,7 +789,6 @@ func (d *StreamD) StopStreamServer(
 		return fmt.Errorf("unable to stop server %#+v: %w", *srv, err)
 	}
 
-	d.Config.StreamServer = d.StreamServer.Config
 	err = d.SaveConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to save the config: %w", err)
@@ -859,7 +858,6 @@ func (d *StreamD) AddStreamDestination(
 		return fmt.Errorf("unable to add stream destination server: %w", err)
 	}
 
-	d.Config.StreamServer = d.StreamServer.Config
 	err = d.SaveConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to save the config: %w", err)
@@ -883,7 +881,6 @@ func (d *StreamD) RemoveStreamDestination(
 		return fmt.Errorf("unable to remove stream destination server: %w", err)
 	}
 
-	d.Config.StreamServer = d.StreamServer.Config
 	err = d.SaveConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to save the config: %w", err)
@@ -941,7 +938,6 @@ func (d *StreamD) AddStreamForward(
 		return fmt.Errorf("unable to add the stream forwarding: %w", err)
 	}
 
-	d.Config.StreamServer = d.StreamServer.Config
 	err = d.SaveConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to save the config: %w", err)
@@ -970,7 +966,6 @@ func (d *StreamD) RemoveStreamForward(
 		return fmt.Errorf("unable to remove the stream forwarding: %w", err)
 	}
 
-	d.Config.StreamServer = d.StreamServer.Config
 	err = d.SaveConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to save the config: %w", err)

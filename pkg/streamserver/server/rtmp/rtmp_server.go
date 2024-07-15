@@ -58,7 +58,7 @@ func New(
 		err := ln.Close()
 		errmon.ObserveErrorCtx(ctx, err)
 	}()
-	logger.Infof(ctx, "started RTMP server at %d", cfg.Listen)
+	logger.Infof(ctx, "started RTMP server at %s", cfg.Listen)
 
 	go func() {
 		for {

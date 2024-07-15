@@ -72,7 +72,7 @@ func New(
 		err := ln.Close()
 		errmon.ObserveErrorCtx(ctx, err)
 	}()
-	logger.Infof(ctx, "started RTSP server at %d", cfg.ListenAddr)
+	logger.Infof(ctx, "started RTSP server at %s", cfg.ListenAddr)
 
 	go func() {
 		for {

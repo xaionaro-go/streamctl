@@ -126,7 +126,7 @@ func main() {
 			cfg,
 			_ui,
 			func(ctx context.Context, c config.Config) error {
-				return config.WriteConfigToPath(ctx, configPathExpanded, cfg)
+				return config.WriteConfigToPath(ctx, configPathExpanded, c)
 			},
 			belt.CtxBelt(ctx),
 		)

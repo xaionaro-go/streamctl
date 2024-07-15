@@ -160,10 +160,22 @@ func (p *Panel) displayStreamServers(
 	logger.Debugf(ctx, "displayStreamServers")
 	defer logger.Debugf(ctx, "/displayStreamServers")
 
-	for _, srv := range streamServers {
-		_ = srv
-	}
+	c := widget.NewList(
+		func() int {
+			return len(streamServers)
+		},
+		func() fyne.CanvasObject {
+			return widget.NewLabel("")
+		},
+		func(idx widget.ListItemID, co fyne.CanvasObject) {
+			o := co.(*widget.Label)
+			srv := streamServers[idx]
+			o.SetText(fmt.Sprintf("%s://%s", srv.Type, srv.ListenAddr))
+		},
+	)
 
+	p.streamServersWidget.RemoveAll()
+	p.streamServersWidget.Add(c)
 }
 
 func (p *Panel) openAddStreamWindow() {}
