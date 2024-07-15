@@ -740,7 +740,7 @@ func (d *StreamD) StartStreamServer(
 	defer d.StreamServerLocker.Unlock()
 
 	err := d.StreamServer.StartServer(
-		ctx,
+		resetContextCancellers(ctx),
 		api.ServerTypeAPI2Server(serverType),
 		listenAddr,
 	)
@@ -850,7 +850,11 @@ func (d *StreamD) AddStreamDestination(
 	d.StreamServerLocker.Lock()
 	defer d.StreamServerLocker.Unlock()
 
-	err := d.StreamServer.AddStreamDestination(ctx, types.DestinationID(destinationID), url)
+	err := d.StreamServer.AddStreamDestination(
+		resetContextCancellers(ctx),
+		types.DestinationID(destinationID),
+		url,
+	)
 	if err != nil {
 		return fmt.Errorf("unable to add stream destination server: %w", err)
 	}
@@ -929,7 +933,7 @@ func (d *StreamD) AddStreamForward(
 	defer d.StreamServerLocker.Unlock()
 
 	err := d.StreamServer.AddStreamForward(
-		ctx,
+		resetContextCancellers(ctx),
 		types.StreamID(streamID),
 		types.DestinationID(destinationID),
 	)
@@ -973,4 +977,8 @@ func (d *StreamD) RemoveStreamForward(
 	}
 
 	return nil
+}
+
+func resetContextCancellers(ctx context.Context) context.Context {
+	return belt.CtxWithBelt(context.Background(), belt.CtxBelt(ctx))
 }

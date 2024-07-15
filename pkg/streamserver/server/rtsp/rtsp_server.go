@@ -68,9 +68,11 @@ func New(
 
 	go func() {
 		<-ctx.Done()
+		logger.Infof(ctx, "closing %s", cfg.ListenAddr)
 		err := ln.Close()
 		errmon.ObserveErrorCtx(ctx, err)
 	}()
+	logger.Infof(ctx, "started RTSP server at %d", cfg.ListenAddr)
 
 	go func() {
 		for {
@@ -273,6 +275,7 @@ func (s *RTSPServer) ListenAddr() string {
 	return s.Listener.Addr().String()
 }
 func (s *RTSPServer) Close() error {
+	logger.Default().Tracef("(*RTSPServer).Close()")
 	s.CancelFn()
 	return nil
 }

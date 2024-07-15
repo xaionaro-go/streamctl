@@ -14,7 +14,7 @@ type DestinationConfig struct {
 }
 
 type Config struct {
-	Server       []Server                            `yaml:"servers"`
-	Streams      map[StreamID]StreamConfig           `yaml:"streams"`
-	Destinations map[DestinationID]DestinationConfig `yaml:"destinations"`
+	Servers      []Server                             `yaml:"servers"`
+	Streams      map[StreamID]*StreamConfig           `yaml:"streams"`
+	Destinations map[DestinationID]*DestinationConfig `yaml:"destinations"`
 }

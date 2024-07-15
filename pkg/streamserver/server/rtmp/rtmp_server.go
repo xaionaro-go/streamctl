@@ -12,6 +12,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/flv"
 	"github.com/AlexxIT/go2rtc/pkg/rtmp"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
+	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/rs/zerolog/log"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/consts"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/streams"
@@ -53,9 +54,11 @@ func New(
 
 	go func() {
 		<-ctx.Done()
+		logger.Infof(ctx, "closing %s", cfg.Listen)
 		err := ln.Close()
 		errmon.ObserveErrorCtx(ctx, err)
 	}()
+	logger.Infof(ctx, "started RTMP server at %d", cfg.Listen)
 
 	go func() {
 		for {
@@ -87,6 +90,7 @@ func (s *RTMPServer) ListenAddr() string {
 	return s.Listener.Addr().String()
 }
 func (s *RTMPServer) Close() error {
+	logger.Default().Tracef("(*RTMPServer).Close()")
 	s.CancelFn()
 	return nil
 }

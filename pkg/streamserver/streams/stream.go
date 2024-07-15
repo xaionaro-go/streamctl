@@ -12,10 +12,10 @@ import (
 type Stream struct {
 	streamHandler *StreamHandler
 
-	producers []*Producer
-	consumers []core.Consumer
-	mu        sync.Mutex
-	pending   atomic.Int32
+	producers   []*Producer
+	consumers   []core.Consumer
+	mu          sync.Mutex
+	pending     atomic.Int32
 	forwardings []*StreamForwarding
 }
 
