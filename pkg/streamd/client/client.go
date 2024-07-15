@@ -743,8 +743,8 @@ func (c *Client) ListStreamDestinations(
 	var result []api.StreamDestination
 	for _, dst := range reply.GetStreamDestinations() {
 		result = append(result, api.StreamDestination{
-			StreamID: api.StreamID(dst.GetStreamID()),
-			URL:      dst.GetUrl(),
+			ID:  api.DestinationID(dst.GetDestinationID()),
+			URL: dst.GetUrl(),
 		})
 	}
 	return result, nil
@@ -752,7 +752,7 @@ func (c *Client) ListStreamDestinations(
 
 func (c *Client) AddStreamDestination(
 	ctx context.Context,
-	streamID api.StreamID,
+	destinationID api.DestinationID,
 	url string,
 ) error {
 	client, conn, err := c.grpcClient()
@@ -763,8 +763,8 @@ func (c *Client) AddStreamDestination(
 
 	_, err = client.AddStreamDestination(ctx, &streamd_grpc.AddStreamDestinationRequest{
 		Config: &streamd_grpc.StreamDestination{
-			StreamID: string(streamID),
-			Url:      url,
+			DestinationID: string(destinationID),
+			Url:           url,
 		},
 	})
 	if err != nil {
@@ -775,7 +775,7 @@ func (c *Client) AddStreamDestination(
 
 func (c *Client) RemoveStreamDestination(
 	ctx context.Context,
-	streamID api.StreamID,
+	destinationID api.DestinationID,
 ) error {
 	client, conn, err := c.grpcClient()
 	if err != nil {
@@ -784,7 +784,7 @@ func (c *Client) RemoveStreamDestination(
 	defer conn.Close()
 
 	_, err = client.RemoveStreamDestination(ctx, &streamd_grpc.RemoveStreamDestinationRequest{
-		StreamID: string(streamID),
+		DestinationID: string(destinationID),
 	})
 	if err != nil {
 		return fmt.Errorf("unable to request to remove the stream destination: %w", err)
@@ -809,8 +809,8 @@ func (c *Client) ListStreamForwards(
 	var result []api.StreamForward
 	for _, forward := range reply.GetStreamForwards() {
 		result = append(result, api.StreamForward{
-			StreamIDSrc: api.StreamID(forward.GetStreamIDSrc()),
-			StreamIDDst: api.StreamID(forward.GetStreamIDDst()),
+			StreamID:      api.StreamID(forward.GetStreamID()),
+			DestinationID: api.DestinationID(forward.GetDestinationID()),
 		})
 	}
 	return result, nil
@@ -818,8 +818,8 @@ func (c *Client) ListStreamForwards(
 
 func (c *Client) AddStreamForward(
 	ctx context.Context,
-	streamIDSrc api.StreamID,
-	streamIDDst api.StreamID,
+	streamID api.StreamID,
+	destinationID api.DestinationID,
 ) error {
 	client, conn, err := c.grpcClient()
 	if err != nil {
@@ -829,8 +829,8 @@ func (c *Client) AddStreamForward(
 
 	_, err = client.AddStreamForward(ctx, &streamd_grpc.AddStreamForwardRequest{
 		Config: &streamd_grpc.StreamForward{
-			StreamIDSrc: string(streamIDSrc),
-			StreamIDDst: string(streamIDDst),
+			StreamID:      string(streamID),
+			DestinationID: string(destinationID),
 		},
 	})
 	if err != nil {
@@ -841,8 +841,8 @@ func (c *Client) AddStreamForward(
 
 func (c *Client) RemoveStreamForward(
 	ctx context.Context,
-	streamIDSrc api.StreamID,
-	streamIDDst api.StreamID,
+	streamID api.StreamID,
+	destinationID api.DestinationID,
 ) error {
 	client, conn, err := c.grpcClient()
 	if err != nil {
@@ -852,8 +852,8 @@ func (c *Client) RemoveStreamForward(
 
 	_, err = client.RemoveStreamForward(ctx, &streamd_grpc.RemoveStreamForwardRequest{
 		Config: &streamd_grpc.StreamForward{
-			StreamIDSrc: string(streamIDSrc),
-			StreamIDDst: string(streamIDDst),
+			StreamID:      string(streamID),
+			DestinationID: string(destinationID),
 		},
 	})
 	if err != nil {

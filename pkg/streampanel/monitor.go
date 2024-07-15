@@ -69,6 +69,9 @@ func (p *Panel) updateMonitorPage(
 	logger.Tracef(ctx, "updateMonitorPage")
 	defer logger.Tracef(ctx, "/updateMonitorPage")
 
+	p.monitorPageUpdaterLocker.Lock()
+	defer p.monitorPageUpdaterLocker.Unlock()
+
 	var wg sync.WaitGroup
 
 	wg.Add(1)

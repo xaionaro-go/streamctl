@@ -771,8 +771,8 @@ func (grpc *GRPCServer) ListStreamDestinations(
 	var result []*streamd_grpc.StreamDestination
 	for _, dst := range dsts {
 		result = append(result, &streamd_grpc.StreamDestination{
-			StreamID: string(dst.StreamID),
-			Url:      dst.URL,
+			DestinationID: string(dst.ID),
+			Url:           dst.URL,
 		})
 	}
 	return &streamd_grpc.ListStreamDestinationsReply{
@@ -786,7 +786,7 @@ func (grpc *GRPCServer) AddStreamDestination(
 ) (*streamd_grpc.AddStreamDestinationReply, error) {
 	err := grpc.StreamD.AddStreamDestination(
 		ctx,
-		api.StreamID(req.GetConfig().GetStreamID()),
+		api.DestinationID(req.GetConfig().GetDestinationID()),
 		req.GetConfig().GetUrl(),
 	)
 	if err != nil {
@@ -801,7 +801,7 @@ func (grpc *GRPCServer) RemoveStreamDestination(
 ) (*streamd_grpc.RemoveStreamDestinationReply, error) {
 	err := grpc.StreamD.RemoveStreamDestination(
 		ctx,
-		api.StreamID(req.GetStreamID()),
+		api.DestinationID(req.GetDestinationID()),
 	)
 	if err != nil {
 		return nil, err
@@ -843,8 +843,8 @@ func (grpc *GRPCServer) ListStreamForwards(
 	var result []*streamd_grpc.StreamForward
 	for _, s := range streamFwds {
 		result = append(result, &streamd_grpc.StreamForward{
-			StreamIDSrc: string(s.StreamIDSrc),
-			StreamIDDst: string(s.StreamIDDst),
+			StreamID:      string(s.StreamID),
+			DestinationID: string(s.DestinationID),
 		})
 	}
 	return &streamd_grpc.ListStreamForwardsReply{
@@ -858,8 +858,8 @@ func (grpc *GRPCServer) AddStreamForward(
 ) (*streamd_grpc.AddStreamForwardReply, error) {
 	err := grpc.StreamD.AddStreamForward(
 		ctx,
-		api.StreamID(req.GetConfig().GetStreamIDSrc()),
-		api.StreamID(req.GetConfig().GetStreamIDDst()),
+		api.StreamID(req.GetConfig().GetStreamID()),
+		api.DestinationID(req.GetConfig().GetDestinationID()),
 	)
 	if err != nil {
 		return nil, err
@@ -873,8 +873,8 @@ func (grpc *GRPCServer) RemoveStreamForward(
 ) (*streamd_grpc.RemoveStreamForwardReply, error) {
 	err := grpc.StreamD.RemoveStreamForward(
 		ctx,
-		api.StreamID(req.GetConfig().GetStreamIDSrc()),
-		api.StreamID(req.GetConfig().GetStreamIDDst()),
+		api.StreamID(req.GetConfig().GetStreamID()),
+		api.DestinationID(req.GetConfig().GetDestinationID()),
 	)
 	if err != nil {
 		return nil, err

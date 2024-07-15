@@ -1,6 +1,9 @@
 package types
 
-import "io"
+import (
+	"fmt"
+	"io"
+)
 
 type ServerType int
 
@@ -10,6 +13,19 @@ const (
 	ServerTypeRTSP
 )
 
+func (t ServerType) String() string {
+	switch t {
+	case ServerTypeUndefined:
+		return "<undefined>"
+	case ServerTypeRTMP:
+		return "rtmp"
+	case ServerTypeRTSP:
+		return "rtsp"
+	default:
+		return fmt.Sprintf("unexpected_type_%d", t)
+	}
+}
+
 type ServerHandler interface {
 	io.Closer
 
@@ -18,8 +34,10 @@ type ServerHandler interface {
 }
 
 type StreamDestination struct {
-	StreamID StreamID
-	URL      string
+	ID  DestinationID
+	URL string
 }
 
 type StreamID string
+
+type DestinationID string

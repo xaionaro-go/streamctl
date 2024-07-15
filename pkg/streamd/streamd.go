@@ -78,7 +78,6 @@ func New(
 		Config:           config,
 		Cache:            &cache.Cache{},
 		OAuthListenPorts: map[uint16]struct{}{},
-		StreamServer:     streamserver.New(),
 	}
 
 	err := d.readCache(ctx)
@@ -107,8 +106,18 @@ func (d *StreamD) Run(ctx context.Context) error {
 		d.UI.DisplayError(fmt.Errorf("unable to initialize cache: %w", err))
 	}
 
+	d.UI.SetStatus("Initializing StreamServer...")
+	if err := d.InitStreamServer(ctx); err != nil {
+		d.UI.DisplayError(fmt.Errorf("unable to initialize the stream server: %w", err))
+	}
+
 	d.UI.SetStatus("Initializing UI...")
 	return nil
+}
+
+func (d *StreamD) InitStreamServer(ctx context.Context) error {
+	d.StreamServer = streamserver.New(&d.Config.StreamServer)
+	return d.StreamServer.Init(ctx)
 }
 
 func (d *StreamD) readCache(ctx context.Context) error {
@@ -697,43 +706,21 @@ func (d *StreamD) GetOAuthListenPorts() []uint16 {
 	return ports
 }
 
-func serverTypeServer2API(t types.ServerType) api.StreamServerType {
-	switch t {
-	case types.ServerTypeUndefined:
-		return api.StreamServerTypeUndefined
-	case types.ServerTypeRTSP:
-		return api.StreamServerTypeRTSP
-	case types.ServerTypeRTMP:
-		return api.StreamServerTypeRTMP
-	default:
-		panic(fmt.Errorf("unexpected server type: %v", t))
-	}
-}
-
-func serverTypeAPI2Server(t api.StreamServerType) types.ServerType {
-	switch t {
-	case api.StreamServerTypeUndefined:
-		return types.ServerTypeUndefined
-	case api.StreamServerTypeRTSP:
-		return types.ServerTypeRTSP
-	case api.StreamServerTypeRTMP:
-		return types.ServerTypeRTMP
-	default:
-		panic(fmt.Errorf("unexpected server type: %v", t))
-	}
-}
-
 func (d *StreamD) ListStreamServers(
 	ctx context.Context,
 ) ([]api.StreamServer, error) {
+	logger.Debugf(ctx, "ListStreamServers")
+	defer logger.Debugf(ctx, "/ListStreamServers")
+
 	d.StreamServerLocker.Lock()
 	defer d.StreamServerLocker.Unlock()
+
 	servers := d.StreamServer.ListServers(ctx)
 
 	var result []api.StreamServer
 	for _, src := range servers {
 		result = append(result, api.StreamServer{
-			Type:       serverTypeServer2API(src.Type()),
+			Type:       api.ServerTypeServer2API(src.Type()),
 			ListenAddr: src.ListenAddr(),
 		})
 	}
@@ -746,35 +733,80 @@ func (d *StreamD) StartStreamServer(
 	serverType api.StreamServerType,
 	listenAddr string,
 ) error {
+	logger.Debugf(ctx, "StartStreamServer")
+	defer logger.Debugf(ctx, "/StartStreamServer")
+
 	d.StreamServerLocker.Lock()
 	defer d.StreamServerLocker.Unlock()
-	return d.StreamServer.StartServer(
+
+	err := d.StreamServer.StartServer(
 		ctx,
-		serverTypeAPI2Server(serverType),
+		api.ServerTypeAPI2Server(serverType),
 		listenAddr,
 	)
+	if err != nil {
+		return fmt.Errorf("unable to start stream server: %w", err)
+	}
+
+	d.Config.StreamServer = d.StreamServer.Config
+	err = d.SaveConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to save config: %w", err)
+	}
+
+	return nil
+}
+
+func (d *StreamD) getStreamServerByListenAddr(
+	ctx context.Context,
+	listenAddr string,
+) *types.ServerHandler {
+	for _, server := range d.StreamServer.ListServers(ctx) {
+		if server.ListenAddr() == listenAddr {
+			return &server
+		}
+	}
+	return nil
 }
 
 func (d *StreamD) StopStreamServer(
 	ctx context.Context,
 	listenAddr string,
 ) error {
+	logger.Debugf(ctx, "StopStreamServer")
+	defer logger.Debugf(ctx, "/StopStreamServer")
+
 	d.StreamServerLocker.Lock()
 	defer d.StreamServerLocker.Unlock()
-	for _, server := range d.StreamServer.ListServers(ctx) {
-		if server.ListenAddr() == listenAddr {
-			return d.StreamServer.StopServer(ctx, server)
-		}
+
+	srv := d.getStreamServerByListenAddr(ctx, listenAddr)
+	if srv == nil {
+		return fmt.Errorf("have not found any stream listeners at %s", listenAddr)
 	}
 
-	return fmt.Errorf("have not found any stream listeners at %s", listenAddr)
+	err := d.StreamServer.StopServer(ctx, *srv)
+	if err != nil {
+		return fmt.Errorf("unable to stop server %#+v: %w", *srv, err)
+	}
+
+	d.Config.StreamServer = d.StreamServer.Config
+	err = d.SaveConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to save the config: %w", err)
+	}
+
+	return nil
 }
 
 func (d *StreamD) ListIncomingStreams(
 	ctx context.Context,
 ) ([]api.IncomingStream, error) {
+	logger.Debugf(ctx, "ListIncomingStreams")
+	defer logger.Debugf(ctx, "/ListIncomingStreams")
+
 	d.StreamServerLocker.Lock()
 	defer d.StreamServerLocker.Unlock()
+
 	var result []api.IncomingStream
 	for _, src := range d.StreamServer.ListIncomingStreams(ctx) {
 		result = append(result, api.IncomingStream{
@@ -787,8 +819,12 @@ func (d *StreamD) ListIncomingStreams(
 func (d *StreamD) ListStreamDestinations(
 	ctx context.Context,
 ) ([]api.StreamDestination, error) {
+	logger.Debugf(ctx, "ListStreamDestinations")
+	defer logger.Debugf(ctx, "/ListStreamDestinations")
+
 	d.StreamServerLocker.Lock()
 	defer d.StreamServerLocker.Unlock()
+
 	streamDestinations, err := d.StreamServer.ListStreamDestinations(ctx)
 	if err != nil {
 		return nil, err
@@ -796,8 +832,8 @@ func (d *StreamD) ListStreamDestinations(
 	c := make([]api.StreamDestination, 0, len(streamDestinations))
 	for _, dst := range streamDestinations {
 		c = append(c, api.StreamDestination{
-			StreamID: api.StreamID(dst.StreamID),
-			URL:      dst.URL,
+			ID:  api.DestinationID(dst.ID),
+			URL: dst.URL,
 		})
 	}
 	return c, nil
@@ -805,21 +841,51 @@ func (d *StreamD) ListStreamDestinations(
 
 func (d *StreamD) AddStreamDestination(
 	ctx context.Context,
-	streamID api.StreamID,
+	destinationID api.DestinationID,
 	url string,
 ) error {
+	logger.Debugf(ctx, "AddStreamDestination")
+	defer logger.Debugf(ctx, "/AddStreamDestination")
+
 	d.StreamServerLocker.Lock()
 	defer d.StreamServerLocker.Unlock()
-	return d.StreamServer.AddStreamDestination(ctx, types.StreamID(streamID), url)
+
+	err := d.StreamServer.AddStreamDestination(ctx, types.DestinationID(destinationID), url)
+	if err != nil {
+		return fmt.Errorf("unable to add stream destination server: %w", err)
+	}
+
+	d.Config.StreamServer = d.StreamServer.Config
+	err = d.SaveConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to save the config: %w", err)
+	}
+
+	return nil
 }
 
 func (d *StreamD) RemoveStreamDestination(
 	ctx context.Context,
-	streamID api.StreamID,
+	destinationID api.DestinationID,
 ) error {
+	logger.Debugf(ctx, "RemoveStreamDestination")
+	defer logger.Debugf(ctx, "/RemoveStreamDestination")
+
 	d.StreamServerLocker.Lock()
 	defer d.StreamServerLocker.Unlock()
-	return d.StreamServer.RemoveStreamDestination(ctx, types.StreamID(streamID))
+
+	err := d.StreamServer.RemoveStreamDestination(ctx, types.DestinationID(destinationID))
+	if err != nil {
+		return fmt.Errorf("unable to remove stream destination server: %w", err)
+	}
+
+	d.Config.StreamServer = d.StreamServer.Config
+	err = d.SaveConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to save the config: %w", err)
+	}
+
+	return nil
 }
 
 func (d *StreamD) listStreamForwards(
@@ -832,8 +898,8 @@ func (d *StreamD) listStreamForwards(
 	}
 	for _, streamFwd := range streamForwards {
 		result = append(result, api.StreamForward{
-			StreamIDSrc: api.StreamID(streamFwd.StreamIDSrc),
-			StreamIDDst: api.StreamID(streamFwd.StreamIDDst),
+			StreamID:      api.StreamID(streamFwd.StreamID),
+			DestinationID: api.DestinationID(streamFwd.DestinationID),
 		})
 	}
 	return result, nil
@@ -842,27 +908,69 @@ func (d *StreamD) listStreamForwards(
 func (d *StreamD) ListStreamForwards(
 	ctx context.Context,
 ) ([]api.StreamForward, error) {
+	logger.Debugf(ctx, "ListStreamForwards")
+	defer logger.Debugf(ctx, "/ListStreamForwards")
+
 	d.StreamServerLocker.Lock()
 	defer d.StreamServerLocker.Unlock()
+
 	return d.listStreamForwards(ctx)
 }
 
 func (d *StreamD) AddStreamForward(
 	ctx context.Context,
-	streamIDSrc api.StreamID,
-	streamIDDst api.StreamID,
+	streamID api.StreamID,
+	destinationID api.DestinationID,
 ) error {
+	logger.Debugf(ctx, "AddStreamForward")
+	defer logger.Debugf(ctx, "/AddStreamForward")
+
 	d.StreamServerLocker.Lock()
 	defer d.StreamServerLocker.Unlock()
-	return d.StreamServer.AddStreamForward(ctx, types.StreamID(streamIDSrc), types.StreamID(streamIDDst))
+
+	err := d.StreamServer.AddStreamForward(
+		ctx,
+		types.StreamID(streamID),
+		types.DestinationID(destinationID),
+	)
+	if err != nil {
+		return fmt.Errorf("unable to add the stream forwarding: %w", err)
+	}
+
+	d.Config.StreamServer = d.StreamServer.Config
+	err = d.SaveConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to save the config: %w", err)
+	}
+
+	return nil
 }
 
 func (d *StreamD) RemoveStreamForward(
 	ctx context.Context,
-	streamIDSrc api.StreamID,
-	streamIDDst api.StreamID,
+	streamID api.StreamID,
+	destinationID api.DestinationID,
 ) error {
+	logger.Debugf(ctx, "RemoveStreamForward")
+	defer logger.Debugf(ctx, "/RemoveStreamForward")
+
 	d.StreamServerLocker.Lock()
 	defer d.StreamServerLocker.Unlock()
-	return d.StreamServer.RemoveStreamForward(ctx, types.StreamID(streamIDSrc), types.StreamID(streamIDDst))
+
+	err := d.StreamServer.RemoveStreamForward(
+		ctx,
+		types.StreamID(streamID),
+		types.DestinationID(destinationID),
+	)
+	if err != nil {
+		return fmt.Errorf("unable to remove the stream forwarding: %w", err)
+	}
+
+	d.Config.StreamServer = d.StreamServer.Config
+	err = d.SaveConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to save the config: %w", err)
+	}
+
+	return nil
 }

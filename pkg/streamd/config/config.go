@@ -10,6 +10,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
+	streamserver "github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 )
 
 type ProfileMetadata struct {
@@ -30,7 +31,8 @@ type config struct {
 	GitRepo         GitRepoConfig
 	Backends        streamcontrol.Config
 	ProfileMetadata map[streamcontrol.ProfileName]ProfileMetadata
-	SentryDSN       string `yaml:"sentry_dsn"`
+	SentryDSN       string              `yaml:"sentry_dsn"`
+	StreamServer    streamserver.Config `yaml:"stream_server"`
 }
 
 type Config config

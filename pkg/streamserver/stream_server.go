@@ -13,12 +13,16 @@ import (
 
 type StreamServer struct {
 	sync.Mutex
+	Config             types.Config
 	StreamHandler      *streams.StreamHandler
 	ServerHandlers     []types.ServerHandler
 	StreamDestinations []types.StreamDestination
 }
 
-func New() *StreamServer {
+func New(cfg *types.Config) *StreamServer {
+	if cfg == nil {
+		cfg = &types.Config{}
+	}
 	s := streams.NewStreamHandler()
 
 	s.HandleFunc("rtmp", rtmpserver.StreamsHandle)
@@ -33,7 +37,42 @@ func New() *StreamServer {
 
 	return &StreamServer{
 		StreamHandler: s,
+		Config:        *cfg,
 	}
+}
+
+func (s *StreamServer) Init(ctx context.Context) error {
+	cfg := s.Config
+
+	for _, srv := range cfg.Server {
+		err := s.StartServer(ctx, srv.Type, srv.Listen)
+		if err != nil {
+			return fmt.Errorf("unable to initialize %s server at %s: %w", srv.Type, srv.Listen, err)
+		}
+	}
+
+	for dstID, dstCfg := range cfg.Destinations {
+		err := s.AddStreamDestination(ctx, dstID, dstCfg.URL)
+		if err != nil {
+			return fmt.Errorf("unable to initialize stream destination '%s' to %#+v: %w", dstID, dstCfg, err)
+		}
+	}
+
+	for streamID, streamCfg := range cfg.Streams {
+		err := s.AddIncomingStream(ctx, streamID)
+		if err != nil {
+			return fmt.Errorf("unable to initialize stream '%s': %w", streamID, err)
+		}
+
+		for _, fwd := range streamCfg.Forwardings {
+			err := s.AddStreamForward(ctx, streamID, fwd)
+			if err != nil {
+				return fmt.Errorf("unable to launch stream forward from '%s' to '%s': %w", streamID, fwd, err)
+			}
+		}
+	}
+
+	return nil
 }
 
 func (s *StreamServer) ListServers(
@@ -157,36 +196,36 @@ func (s *StreamServer) removeIncomingStream(
 }
 
 type StreamForward struct {
-	StreamIDSrc types.StreamID
-	StreamIDDst types.StreamID
+	StreamID      types.StreamID
+	DestinationID types.DestinationID
 }
 
 func (s *StreamServer) AddStreamForward(
 	ctx context.Context,
-	streamIDSrc types.StreamID,
-	streamIDDst types.StreamID,
+	streamID types.StreamID,
+	destinationID types.DestinationID,
 ) error {
 	s.Lock()
 	defer s.Unlock()
-	return s.addStreamForward(ctx, streamIDSrc, streamIDDst)
+	return s.addStreamForward(ctx, streamID, destinationID)
 }
 
 func (s *StreamServer) addStreamForward(
 	ctx context.Context,
-	streamIDSrc types.StreamID,
-	streamIDDst types.StreamID,
+	streamID types.StreamID,
+	destinationID types.DestinationID,
 ) error {
-	streamSrc := s.StreamHandler.Get(string(streamIDSrc))
+	streamSrc := s.StreamHandler.Get(string(streamID))
 	if streamSrc != nil {
-		return fmt.Errorf("unable to find stream ID '%s'", streamIDSrc)
+		return fmt.Errorf("unable to find stream ID '%s'", streamID)
 	}
-	dst, err := s.findStreamDestinationByID(ctx, streamIDDst)
+	dst, err := s.findStreamDestinationByID(ctx, destinationID)
 	if err != nil {
-		return fmt.Errorf("unable to find stream destination '%s': %w", streamIDDst, err)
+		return fmt.Errorf("unable to find stream destination '%s': %w", destinationID, err)
 	}
 	_, err = streamSrc.Publish(ctx, dst.URL)
 	if err != nil {
-		return fmt.Errorf("unable to start publishing '%s' to '%s': %w", streamIDSrc, dst.URL, err)
+		return fmt.Errorf("unable to start publishing '%s' to '%s': %w", streamID, dst.URL, err)
 	}
 	return nil
 }
@@ -215,8 +254,8 @@ func (s *StreamServer) listStreamForwards(
 				return nil, fmt.Errorf("unable to convert URL '%s' to a stream ID: %w", fwd.URL, err)
 			}
 			result = append(result, StreamForward{
-				StreamIDSrc: streamIDSrc,
-				StreamIDDst: streamDst.StreamID,
+				StreamID:      streamIDSrc,
+				DestinationID: streamDst.ID,
 			})
 		}
 	}
@@ -225,40 +264,40 @@ func (s *StreamServer) listStreamForwards(
 
 func (s *StreamServer) RemoveStreamForward(
 	ctx context.Context,
-	streamIDSrc types.StreamID,
-	streamIDDst types.StreamID,
+	streamID types.StreamID,
+	dstID types.DestinationID,
 ) error {
 	s.Lock()
 	defer s.Unlock()
-	return s.removeStreamForward(ctx, streamIDSrc, streamIDDst)
+	return s.removeStreamForward(ctx, streamID, dstID)
 }
 
 func (s *StreamServer) removeStreamForward(
 	ctx context.Context,
-	streamIDSrc types.StreamID,
-	streamIDDst types.StreamID,
+	streamID types.StreamID,
+	dstID types.DestinationID,
 ) error {
-	stream := s.StreamHandler.Get(string(streamIDSrc))
+	stream := s.StreamHandler.Get(string(streamID))
 	if stream == nil {
-		return fmt.Errorf("unable to find a source stream with ID '%s'", streamIDSrc)
+		return fmt.Errorf("unable to find a source stream with ID '%s'", streamID)
 	}
 	for _, fwd := range stream.Forwardings() {
 		streamDst, err := s.findStreamDestinationByURL(ctx, fwd.URL)
 		if err != nil {
 			return fmt.Errorf("unable to convert URL '%s' to a stream ID: %w", fwd.URL, err)
 		}
-		if streamDst.StreamID != streamIDDst {
+		if streamDst.ID != dstID {
 			continue
 		}
 
 		err = fwd.Close()
 		if err != nil {
-			return fmt.Errorf("unable to close forwarding from %s to %s (%s): %w", streamIDSrc, streamIDDst, fwd.URL, err)
+			return fmt.Errorf("unable to close forwarding from %s to %s (%s): %w", streamID, dstID, fwd.URL, err)
 		}
 		stream.Cleanup()
 		return nil
 	}
-	return fmt.Errorf("unable to find stream forwarding from '%s' to '%s'", streamIDSrc, streamIDDst)
+	return fmt.Errorf("unable to find stream forwarding from '%s' to '%s'", streamID, dstID)
 }
 
 func (s *StreamServer) ListStreamDestinations(
@@ -279,29 +318,29 @@ func (s *StreamServer) listStreamDestinations(
 
 func (s *StreamServer) AddStreamDestination(
 	ctx context.Context,
-	streamID types.StreamID,
+	destinationID types.DestinationID,
 	url string,
 ) error {
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
-	return s.addStreamDestination(ctx, streamID, url)
+	return s.addStreamDestination(ctx, destinationID, url)
 }
 
 func (s *StreamServer) addStreamDestination(
 	_ context.Context,
-	streamID types.StreamID,
+	destinationID types.DestinationID,
 	url string,
 ) error {
 	s.StreamDestinations = append(s.StreamDestinations, types.StreamDestination{
-		StreamID: streamID,
-		URL:      url,
+		ID:  destinationID,
+		URL: url,
 	})
 	return nil
 }
 
 func (s *StreamServer) RemoveStreamDestination(
 	ctx context.Context,
-	streamID types.StreamID,
+	destinationID types.DestinationID,
 ) error {
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
@@ -311,19 +350,19 @@ func (s *StreamServer) RemoveStreamDestination(
 		return fmt.Errorf("unable to list stream forwardings: %w", err)
 	}
 	for _, fwd := range streamForwards {
-		if fwd.StreamIDDst == streamID {
-			s.removeStreamForward(ctx, fwd.StreamIDSrc, fwd.StreamIDDst)
+		if fwd.DestinationID == destinationID {
+			s.removeStreamForward(ctx, fwd.StreamID, fwd.DestinationID)
 		}
 	}
 
 	for i := range s.StreamDestinations {
-		if s.StreamDestinations[i].StreamID == streamID {
+		if s.StreamDestinations[i].ID == destinationID {
 			s.StreamDestinations = append(s.StreamDestinations[:i], s.StreamDestinations[i+1:]...)
 			return nil
 		}
 	}
 
-	return fmt.Errorf("have not found stream destination with id %s", streamID)
+	return fmt.Errorf("have not found stream destination with id %s", destinationID)
 }
 
 func (s *StreamServer) findStreamDestinationByURL(
@@ -340,12 +379,12 @@ func (s *StreamServer) findStreamDestinationByURL(
 
 func (s *StreamServer) findStreamDestinationByID(
 	_ context.Context,
-	streamID types.StreamID,
+	destinationID types.DestinationID,
 ) (types.StreamDestination, error) {
 	for _, dst := range s.StreamDestinations {
-		if dst.StreamID == streamID {
+		if dst.ID == destinationID {
 			return dst, nil
 		}
 	}
-	return types.StreamDestination{}, fmt.Errorf("unable to find a stream destination by StreamID '%s'", streamID)
+	return types.StreamDestination{}, fmt.Errorf("unable to find a stream destination by StreamID '%s'", destinationID)
 }

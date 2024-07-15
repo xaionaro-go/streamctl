@@ -111,6 +111,14 @@ type Panel struct {
 	imageLastDownloaded map[consts.ImageID][]byte
 
 	lastDisplayedError error
+
+	restreamPageUpdaterLocker sync.Mutex
+	restreamPageUpdaterCancel context.CancelFunc
+
+	streamServersWidget *fyne.Container
+	streamsWidget       *fyne.Container
+	destinationsWidget  *fyne.Container
+	restreamsWidget     *fyne.Container
 }
 
 func New(
@@ -1517,6 +1525,37 @@ func (p *Panel) initMainWindow(
 			selectScene,
 		),
 	)
+
+	p.streamServersWidget = container.NewVBox()
+	addStreamServerButton := widget.NewButtonWithIcon("Add server", theme.ContentAddIcon(), func() {
+		p.openAddStreamServerWindow(ctx)
+	})
+	p.streamsWidget = container.NewVBox()
+	addStreamButton := widget.NewButtonWithIcon("Add stream", theme.ContentAddIcon(), p.openAddStreamWindow)
+	p.destinationsWidget = container.NewVBox()
+	addDestination := widget.NewButtonWithIcon("Add destination", theme.ContentAddIcon(), p.openAddDestinationWindow)
+	p.restreamsWidget = container.NewVBox()
+	addRestream := widget.NewButtonWithIcon("Add restream", theme.ContentAddIcon(), p.openAddRestreamWindow)
+	restreamPage := container.NewBorder(
+		nil,
+		nil,
+		nil,
+		nil,
+		container.NewVBox(
+			widget.NewLabel("Servers:"),
+			p.streamServersWidget,
+			addStreamServerButton,
+			widget.NewLabel("Steams:"),
+			p.streamsWidget,
+			addStreamButton,
+			widget.NewLabel("Destinations:"),
+			p.destinationsWidget,
+			addDestination,
+			widget.NewLabel("Resteams:"),
+			p.restreamsWidget,
+			addRestream,
+		),
+	)
 	if backendEnabled[obs.ID] {
 		sceneList, err := p.StreamD.OBSGetSceneList(ctx)
 		if err != nil {
@@ -1536,16 +1575,21 @@ func (p *Panel) initMainWindow(
 		if page != consts.PageMonitor {
 			p.stopMonitorPage(ctx)
 		}
+		if page != consts.PageMonitor {
+			p.stopRestreamPage(ctx)
+		}
 
 		switch page {
 		case consts.PageControl:
 			monitorPage.Hide()
 			obsPage.Hide()
+			restreamPage.Hide()
 			profileControl.Show()
 			controlPage.Show()
 		case consts.PageMonitor:
 			controlPage.Hide()
 			profileControl.Hide()
+			restreamPage.Hide()
 			obsPage.Hide()
 			monitorPage.Show()
 			p.startMonitorPage(ctx)
@@ -1553,7 +1597,15 @@ func (p *Panel) initMainWindow(
 			controlPage.Hide()
 			profileControl.Hide()
 			monitorPage.Hide()
+			restreamPage.Hide()
 			obsPage.Show()
+		case consts.PageRestream:
+			controlPage.Hide()
+			profileControl.Hide()
+			monitorPage.Hide()
+			obsPage.Hide()
+			restreamPage.Show()
+			p.startRestreamPage(ctx)
 		}
 	}
 
@@ -1562,6 +1614,7 @@ func (p *Panel) initMainWindow(
 			string(consts.PageControl),
 			string(consts.PageMonitor),
 			string(consts.PageOBS),
+			string(consts.PageRestream),
 		},
 		func(page string) {
 			setPage(consts.Page(page))
@@ -1576,7 +1629,7 @@ func (p *Panel) initMainWindow(
 		nil,
 		nil,
 		nil,
-		container.NewStack(controlPage, monitorPage, obsPage),
+		container.NewStack(controlPage, monitorPage, obsPage, restreamPage),
 	))
 
 	w.Show()

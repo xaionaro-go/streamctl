@@ -22,7 +22,8 @@ func VarKeyImage(imageID ImageID) VarKey {
 type Page string
 
 const (
-	PageControl = Page("Control")
-	PageMonitor = Page("Monitor")
-	PageOBS     = Page("OBS")
+	PageControl  = Page("Control")
+	PageMonitor  = Page("Monitor")
+	PageOBS      = Page("OBS")
+	PageRestream = Page("Restream")
 )

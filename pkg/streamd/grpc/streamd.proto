@@ -214,7 +214,7 @@ message StopStreamServerRequest {
 message StopStreamServerReply {}
 
 message StreamDestination {
-    string streamID = 1;
+    string destinationID = 1;
     string url = 2;
 }
 
@@ -229,7 +229,7 @@ message AddStreamDestinationRequest {
 message AddStreamDestinationReply {}
 
 message RemoveStreamDestinationRequest {
-    string streamID = 1;
+    string destinationID = 1;
 }
 message RemoveStreamDestinationReply {}
 
@@ -243,8 +243,8 @@ message ListIncomingStreamsReply {
 }
 
 message StreamForward {
-    string streamIDSrc = 1;
-    string streamIDDst = 2;
+    string streamID = 1;
+    string destinationID = 2;
 }
 
 message ListStreamForwardsRequest {}

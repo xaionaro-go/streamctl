@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"crypto"
+	"fmt"
 
 	"github.com/andreykaipov/goobs/api/requests/scenes"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -10,6 +11,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 )
 
 type StreamD interface {
@@ -85,12 +87,12 @@ type StreamD interface {
 	) ([]StreamDestination, error)
 	AddStreamDestination(
 		ctx context.Context,
-		streamID StreamID,
+		destinationID DestinationID,
 		url string,
 	) error
 	RemoveStreamDestination(
 		ctx context.Context,
-		streamID StreamID,
+		destinationID DestinationID,
 	) error
 	ListStreamForwards(
 		ctx context.Context,
@@ -98,12 +100,12 @@ type StreamD interface {
 	AddStreamForward(
 		ctx context.Context,
 		streamIDSrc StreamID,
-		streamIDDst StreamID,
+		destinationID DestinationID,
 	) error
 	RemoveStreamForward(
 		ctx context.Context,
-		streamIDSrc StreamID,
-		streamIDDst StreamID,
+		streamID StreamID,
+		destinationID DestinationID,
 	) error
 }
 
@@ -125,19 +127,42 @@ const (
 	StreamServerTypeRTMP
 )
 
+func (t StreamServerType) String() string {
+	switch t {
+	case StreamServerTypeUndefined:
+		return "<undefined>"
+	case StreamServerTypeRTMP:
+		return "rtmp"
+	case StreamServerTypeRTSP:
+		return "rtsp"
+	default:
+		return fmt.Sprintf("unknown_type_%d", t)
+	}
+}
+
+func ParseStreamServerType(in string) StreamServerType {
+	switch in {
+	case "rtmp":
+		return StreamServerTypeRTMP
+	case "rtsp":
+		return StreamServerTypeRTSP
+	}
+	return StreamServerTypeUndefined
+}
+
 type StreamServer struct {
 	Type       StreamServerType
 	ListenAddr string
 }
 
 type StreamDestination struct {
-	StreamID StreamID
-	URL      string
+	ID  DestinationID
+	URL string
 }
 
 type StreamForward struct {
-	StreamIDSrc StreamID
-	StreamIDDst StreamID
+	StreamID      StreamID
+	DestinationID DestinationID
 }
 
 type IncomingStream struct {
@@ -145,3 +170,31 @@ type IncomingStream struct {
 }
 
 type StreamID string
+
+type DestinationID string
+
+func ServerTypeServer2API(t types.ServerType) StreamServerType {
+	switch t {
+	case types.ServerTypeUndefined:
+		return StreamServerTypeUndefined
+	case types.ServerTypeRTSP:
+		return StreamServerTypeRTSP
+	case types.ServerTypeRTMP:
+		return StreamServerTypeRTMP
+	default:
+		panic(fmt.Errorf("unexpected server type: %v", t))
+	}
+}
+
+func ServerTypeAPI2Server(t StreamServerType) types.ServerType {
+	switch t {
+	case StreamServerTypeUndefined:
+		return types.ServerTypeUndefined
+	case StreamServerTypeRTSP:
+		return types.ServerTypeRTSP
+	case StreamServerTypeRTMP:
+		return types.ServerTypeRTMP
+	default:
+		panic(fmt.Errorf("unexpected server type: %v", t))
+	}
+}
