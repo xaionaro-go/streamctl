@@ -210,6 +210,7 @@ require (
 	github.com/andreykaipov/goobs v1.4.1
 	github.com/anthonynsimon/bild v0.14.0
 	github.com/chai2010/webp v1.1.1
+	github.com/dustin/go-humanize v1.0.1
 	github.com/getsentry/sentry-go v0.28.1
 	github.com/go-git/go-git/v5 v5.12.0
 	github.com/go-ng/xmath v0.0.0-20230704233441-028f5ea62335
@@ -218,12 +219,14 @@ require (
 	github.com/hyprspace/hyprspace v0.10.1
 	github.com/immune-gmbh/attestation-sdk v0.0.0-20230711173209-f44e4502aeca
 	github.com/kbinani/screenshot v0.0.0-20230812210009-b87d31814237
+	github.com/kraken-hpc/go-fork v0.1.1
 	github.com/libp2p/go-libp2p v0.33.2
 	github.com/libp2p/go-libp2p-kad-dht v0.25.2
 	github.com/multiformats/go-multiaddr v0.12.3
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
 	github.com/prometheus/client_golang v1.18.0
 	github.com/rs/zerolog v1.33.0
+	github.com/sethvargo/go-password v0.3.1
 	github.com/spf13/pflag v1.0.5
 	github.com/xaionaro-go/datacounter v1.0.4
 	github.com/xaionaro-go/unsafetools v0.0.0-20210722164218-75ba48cf7b3c

@@ -13,7 +13,11 @@ var _ io.ReaderFrom = (*Config)(nil)
 func (cfg *Config) Read(
 	b []byte,
 ) (int, error) {
-	return len(b), yaml.Unmarshal(b, cfg)
+	n := len(b)
+	if err := yaml.Unmarshal(b, cfg); err != nil {
+		return n, fmt.Errorf("unable to unmarshal the config: %w", err)
+	}
+	return n, nil
 }
 
 func (cfg *Config) ReadFrom(

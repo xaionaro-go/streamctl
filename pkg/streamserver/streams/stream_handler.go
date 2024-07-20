@@ -22,11 +22,7 @@ func (s *StreamHandler) Validate(source string) error {
 	return nil
 }
 
-func (s *StreamHandler) New(name string, source string) (*Stream, error) {
-	if err := s.Validate(source); err != nil {
-		return nil, err
-	}
-
+func (s *StreamHandler) New(name string, source any) (*Stream, error) {
 	stream := s.NewStream(source)
 	s.streams[name] = stream
 	return stream, nil

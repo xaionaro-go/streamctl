@@ -119,6 +119,10 @@ type Panel struct {
 	streamsWidget       *fyne.Container
 	destinationsWidget  *fyne.Container
 	restreamsWidget     *fyne.Container
+
+	previousNumBytesLocker sync.Mutex
+	previousNumBytes       map[any][4]uint64
+	previousNumBytesTS     map[any]time.Time
 }
 
 func New(
@@ -136,13 +140,16 @@ func New(
 		return nil, fmt.Errorf("unable to read the config from path '%s': %w", configPath, err)
 	}
 
-	return &Panel{
+	p := &Panel{
 		configPath:          configPath,
 		Config:              Options(opts).ApplyOverrides(cfg),
 		Screenshoter:        screenshoter.New(screenshot.Implementation{}),
 		imageLastDownloaded: map[consts.ImageID][]byte{},
 		streamStatus:        map[streamcontrol.PlatformName]*widget.Label{},
-	}, nil
+		previousNumBytes:    map[any][4]uint64{},
+		previousNumBytesTS:  map[any]time.Time{},
+	}
+	return p, nil
 }
 
 func (p *Panel) SetStatus(msg string) {
@@ -178,15 +185,30 @@ func (opt LoopOptionStartingPage) apply(cfg *loopConfig) {
 	cfg.StartingPage = consts.Page(opt)
 }
 
+func (p *Panel) dumpConfig(ctx context.Context) {
+	if logger.FromCtx(ctx).Level() < logger.LevelTrace {
+		return
+	}
+
+	var buf bytes.Buffer
+	_, err := p.Config.WriteTo(&buf)
+	if err != nil {
+		logger.Error(ctx, err)
+		return
+	}
+
+	logger.Tracef(ctx, "the current config is: %s", buf.String())
+}
+
 func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
 	if p.defaultContext != nil {
 		return fmt.Errorf("Loop was already used, and cannot be used the second time")
 	}
+	p.dumpConfig(ctx)
 
 	initCfg := loopOptions(opts).Config()
 
 	p.defaultContext = ctx
-	logger.Debug(ctx, "config", p.Config)
 
 	if p.Config.RemoteStreamDAddr != "" {
 		if err := p.initRemoteStreamD(ctx); err != nil {
@@ -230,6 +252,9 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
 			p.DisplayError(fmt.Errorf("unable to initialize the streaming controllers: %w", err))
 		}
 		p.setStatusFunc = nil
+		if streamD, ok := p.StreamD.(*streamd.StreamD); ok {
+			assert(streamD.StreamServer != nil)
+		}
 
 		p.reinitScreenshoter(ctx)
 
@@ -241,7 +266,7 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
 
 		if p.Config.RemoteStreamDAddr == "" {
 			logger.Tracef(ctx, "hiding the loading window")
-			loadingWindow.Hide()
+			hideWindow(loadingWindow)
 		}
 
 		logger.Tracef(ctx, "ended stream controllers initialization")
@@ -1531,11 +1556,17 @@ func (p *Panel) initMainWindow(
 		p.openAddStreamServerWindow(ctx)
 	})
 	p.streamsWidget = container.NewVBox()
-	addStreamButton := widget.NewButtonWithIcon("Add stream", theme.ContentAddIcon(), p.openAddStreamWindow)
+	addStreamButton := widget.NewButtonWithIcon("Add stream", theme.ContentAddIcon(), func() {
+		p.openAddStreamWindow(ctx)
+	})
 	p.destinationsWidget = container.NewVBox()
-	addDestination := widget.NewButtonWithIcon("Add destination", theme.ContentAddIcon(), p.openAddDestinationWindow)
+	addDestination := widget.NewButtonWithIcon("Add destination", theme.ContentAddIcon(), func() {
+		p.openAddDestinationWindow(ctx)
+	})
 	p.restreamsWidget = container.NewVBox()
-	addRestream := widget.NewButtonWithIcon("Add restream", theme.ContentAddIcon(), p.openAddRestreamWindow)
+	addRestream := widget.NewButtonWithIcon("Add restream", theme.ContentAddIcon(), func() {
+		p.openAddRestreamWindow(ctx)
+	})
 	restreamPage := container.NewBorder(
 		nil,
 		nil,
@@ -2517,7 +2548,9 @@ func (p *Panel) DisplayError(err error) {
 
 func (p *Panel) waitForResponse(callback func()) {
 	p.showWaitWindow()
-	defer p.hideWaitWindow()
+	defer func() {
+		p.hideWaitWindow()
+	}()
 	callback()
 }
 
@@ -2540,6 +2573,8 @@ func (p *Panel) showWaitWindow() {
 func (p *Panel) hideWaitWindow() {
 	p.waitWindowLocker.Lock()
 	defer p.waitWindowLocker.Unlock()
+	p.waitWindow.Hide()
+	time.Sleep(100 * time.Millisecond)
 	p.waitWindow.Close()
 	p.waitWindow = nil
 }

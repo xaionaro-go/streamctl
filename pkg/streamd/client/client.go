@@ -645,13 +645,15 @@ func (c *Client) ListStreamServers(
 	}
 	var result []api.StreamServer
 	for _, server := range reply.GetStreamServers() {
-		t, err := grpcconv.StreamServerTypeGRPC2Go(server.GetServerType())
+		t, err := grpcconv.StreamServerTypeGRPC2Go(server.Config.GetServerType())
 		if err != nil {
 			return nil, fmt.Errorf("unable to convert the server type value: %w", err)
 		}
 		result = append(result, api.StreamServer{
-			Type:       t,
-			ListenAddr: server.GetListenAddr(),
+			Type:                  t,
+			ListenAddr:            server.Config.GetListenAddr(),
+			NumBytesConsumerWrote: uint64(server.GetStatistics().GetNumBytesConsumerWrote()),
+			NumBytesProducerRead:  uint64(server.GetStatistics().GetNumBytesProducerRead()),
 		})
 	}
 	return result, nil
@@ -699,6 +701,44 @@ func (c *Client) StopStreamServer(
 	})
 	if err != nil {
 		return fmt.Errorf("unable to request to stop the stream server: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) AddIncomingStream(
+	ctx context.Context,
+	streamID api.StreamID,
+) error {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = client.AddIncomingStream(ctx, &streamd_grpc.AddIncomingStreamRequest{
+		StreamID: string(streamID),
+	})
+	if err != nil {
+		return fmt.Errorf("unable to request to add the incoming stream: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) RemoveIncomingStream(
+	ctx context.Context,
+	streamID api.StreamID,
+) error {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = client.RemoveIncomingStream(ctx, &streamd_grpc.RemoveIncomingStreamRequest{
+		StreamID: string(streamID),
+	})
+	if err != nil {
+		return fmt.Errorf("unable to request to remove the incoming stream: %w", err)
 	}
 	return nil
 }
@@ -809,8 +849,11 @@ func (c *Client) ListStreamForwards(
 	var result []api.StreamForward
 	for _, forward := range reply.GetStreamForwards() {
 		result = append(result, api.StreamForward{
-			StreamID:      api.StreamID(forward.GetStreamID()),
-			DestinationID: api.DestinationID(forward.GetDestinationID()),
+			Enabled:       forward.Config.Enabled,
+			StreamID:      api.StreamID(forward.Config.GetStreamID()),
+			DestinationID: api.DestinationID(forward.Config.GetDestinationID()),
+			NumBytesWrote: uint64(forward.Statistics.NumBytesWrote),
+			NumBytesRead:  uint64(forward.Statistics.NumBytesRead),
 		})
 	}
 	return result, nil
@@ -820,6 +863,7 @@ func (c *Client) AddStreamForward(
 	ctx context.Context,
 	streamID api.StreamID,
 	destinationID api.DestinationID,
+	enabled bool,
 ) error {
 	client, conn, err := c.grpcClient()
 	if err != nil {
@@ -831,6 +875,32 @@ func (c *Client) AddStreamForward(
 		Config: &streamd_grpc.StreamForward{
 			StreamID:      string(streamID),
 			DestinationID: string(destinationID),
+			Enabled:       enabled,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("unable to request to add the stream forward: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) UpdateStreamForward(
+	ctx context.Context,
+	streamID api.StreamID,
+	destinationID api.DestinationID,
+	enabled bool,
+) error {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = client.UpdateStreamForward(ctx, &streamd_grpc.UpdateStreamForwardRequest{
+		Config: &streamd_grpc.StreamForward{
+			StreamID:      string(streamID),
+			DestinationID: string(destinationID),
+			Enabled:       enabled,
 		},
 	})
 	if err != nil {

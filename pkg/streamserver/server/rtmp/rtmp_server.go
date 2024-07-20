@@ -14,16 +14,19 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/rs/zerolog/log"
+	"github.com/xaionaro-go/datacounter"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/consts"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/server"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/streams"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 )
 
 type RTMPServer struct {
-	Config        Config
-	StreamHandler *streams.StreamHandler
-	Listener      net.Listener
-	CancelFn      context.CancelFunc
+	Config         Config
+	StreamHandler  *streams.StreamHandler
+	Listener       net.Listener
+	CancelFn       context.CancelFunc
+	TrafficCounter server.TrafficCounter
 }
 
 type Config struct {
@@ -123,7 +126,12 @@ func (s *RTMPServer) tcpHandle(netConn net.Conn) error {
 			return err
 		}
 
-		_, _ = cons.WriteTo(rtmpConn)
+		wc := datacounter.NewWriterCounter(rtmpConn)
+		s.TrafficCounter.Lock()
+		s.TrafficCounter.WriterCounter = wc
+		s.TrafficCounter.Unlock()
+
+		_, _ = cons.WriteTo(wc)
 
 		return nil
 
@@ -146,7 +154,15 @@ func (s *RTMPServer) tcpHandle(netConn net.Conn) error {
 
 		defer stream.RemoveProducer(prod)
 
-		_ = prod.Start()
+		rc := server.NewIntPtrCounter(&prod.Recv)
+		s.TrafficCounter.Lock()
+		s.TrafficCounter.ReaderCounter = rc
+		s.TrafficCounter.Unlock()
+
+		err = prod.Start()
+		if err != nil {
+			logger.Default().Error(err)
+		}
 
 		return nil
 	}
@@ -154,17 +170,30 @@ func (s *RTMPServer) tcpHandle(netConn net.Conn) error {
 	return errors.New("rtmp: unknown command: " + rtmpConn.Intent)
 }
 
+func (s *RTMPServer) NumBytesConsumerWrote() uint64 {
+	return s.TrafficCounter.NumBytesWrote()
+}
+func (s *RTMPServer) NumBytesProducerRead() uint64 {
+	return s.TrafficCounter.NumBytesRead()
+}
+
 func StreamsHandle(url string) (core.Producer, error) {
 	return rtmp.DialPlay(url)
 }
 
-func StreamsConsumerHandle(url string) (core.Consumer, func(context.Context) error, error) {
+func StreamsConsumerHandle(url string) (core.Consumer, server.NumBytesReaderWroter, func(context.Context) error, error) {
 	cons := flv.NewConsumer()
+	trafficCounter := &server.TrafficCounter{}
 	run := func(ctx context.Context) error {
 		wr, err := rtmp.DialPublish(url)
 		if err != nil {
 			return fmt.Errorf("unable to connect to '%s': %w", url, err)
 		}
+
+		wrc := datacounter.NewWriterCounter(wr)
+		trafficCounter.Lock()
+		trafficCounter.WriterCounter = wrc
+		trafficCounter.Unlock()
 
 		ctx, cancelFn := context.WithCancel(ctx)
 		defer cancelFn()
@@ -175,14 +204,14 @@ func StreamsConsumerHandle(url string) (core.Consumer, func(context.Context) err
 			errmon.ObserveErrorCtx(ctx, err)
 		}()
 
-		_, err = cons.WriteTo(wr)
+		_, err = cons.WriteTo(wrc)
 		if err != nil {
 			return fmt.Errorf("unable to write: %w", err)
 		}
 		return nil
 	}
 
-	return cons, run, nil
+	return cons, trafficCounter, run, nil
 }
 
 func (s *RTMPServer) apiHandle(w http.ResponseWriter, r *http.Request) {

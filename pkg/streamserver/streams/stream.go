@@ -23,6 +23,11 @@ func (s *StreamHandler) NewStream(source any) *Stream {
 	switch source := source.(type) {
 	case string:
 		return &Stream{
+			producers:     []*Producer{s.NewProducer(func() string { return source })},
+			streamHandler: s,
+		}
+	case func() string:
+		return &Stream{
 			producers:     []*Producer{s.NewProducer(source)},
 			streamHandler: s,
 		}
@@ -35,15 +40,15 @@ func (s *StreamHandler) NewStream(source any) *Stream {
 				logger.Default().Errorf("[stream] NewStream: Expected string, got %v", src)
 				continue
 			}
-			stream.producers = append(stream.producers, s.NewProducer(str))
+			stream.producers = append(stream.producers, s.NewProducer(func() string { return str }))
 		}
 		return stream
 	case map[string]any:
 		return s.NewStream(source["url"])
 	case nil:
-		stream := new(Stream)
-		stream.streamHandler = s
-		return stream
+		return &Stream{
+			streamHandler: s,
+		}
 	default:
 		panic(core.Caller())
 	}
@@ -51,7 +56,7 @@ func (s *StreamHandler) NewStream(source any) *Stream {
 
 func (s *Stream) Sources() (sources []string) {
 	for _, prod := range s.producers {
-		sources = append(sources, prod.url)
+		sources = append(sources, prod.urlFunc())
 	}
 	return
 }

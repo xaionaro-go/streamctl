@@ -45,12 +45,12 @@ func (cfg Config) MarshalYAML() ([]byte, error) {
 	m := map[string]any{}
 	err = goyaml.Unmarshal(b, &m)
 	if err != nil {
-		return nil, fmt.Errorf("unable to unserialize data %#+v: %w", cfg, err)
+		return nil, fmt.Errorf("unable to unserialize data %s: %w", b, err)
 	}
 
 	b, err = goyaml.Marshal(m)
 	if err != nil {
-		return nil, fmt.Errorf("unable to re-serialize data %#+v: %w", cfg, err)
+		return nil, fmt.Errorf("unable to re-serialize data %#+v: %w", m, err)
 	}
 
 	return b, nil

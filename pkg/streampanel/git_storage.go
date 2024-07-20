@@ -41,7 +41,7 @@ func (p *Panel) InputGitUserData(
 	gitRepo.SetPlaceHolder("git@github.com:myname/myrepo.git")
 
 	gitPrivateKey := widget.NewMultiLineEntry()
-	gitPrivateKey.SetText(cfg.GitRepo.PrivateKey)
+	gitPrivateKey.SetText(string(cfg.GitRepo.PrivateKey))
 	gitPrivateKey.SetMinRowsVisible(10)
 	gitPrivateKey.TextStyle.Monospace = true
 	gitPrivateKey.SetPlaceHolder(`-----BEGIN OPENSSH PRIVATE KEY-----

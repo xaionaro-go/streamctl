@@ -3,9 +3,11 @@ package streams
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/server"
 )
 
 type Handler func(source string) (core.Producer, error)
@@ -30,26 +32,34 @@ func (s *StreamHandler) HasProducer(url string) bool {
 	return false
 }
 
+type ErrNoProducer struct{}
+
+func (err ErrNoProducer) Error() string {
+	return "no producers"
+}
+
 func (s *StreamHandler) GetProducer(url string) (core.Producer, error) {
-	if i := strings.IndexByte(url, ':'); i > 0 {
-		scheme := url[:i]
+	i := strings.IndexByte(url, ':')
+	if i <= 0 {
+		return nil, fmt.Errorf("streams: empty scheme in URL: '%s'", url)
+	}
+	scheme := url[:i]
 
-		if redirect, ok := s.redirects[scheme]; ok {
-			location, err := redirect(url)
-			if err != nil {
-				return nil, err
-			}
-			if location != "" {
-				return s.GetProducer(location)
-			}
+	if redirect, ok := s.redirects[scheme]; ok {
+		location, err := redirect(url)
+		if err != nil {
+			return nil, err
 		}
-
-		if handler, ok := s.handlers[scheme]; ok {
-			return handler(url)
+		if location != "" {
+			return s.GetProducer(location)
 		}
 	}
 
-	return nil, errors.New("streams: unsupported scheme: " + url)
+	if handler, ok := s.handlers[scheme]; ok {
+		return handler(url)
+	}
+
+	return nil, errors.New("streams: unsupported scheme in URL: " + url)
 }
 
 // Redirect can return: location URL or error or empty URL and error
@@ -73,13 +83,13 @@ func (s *StreamHandler) Location(url string) (string, error) {
 
 // TODO: rework
 
-type ConsumerHandler func(url string) (core.Consumer, func(context.Context) error, error)
+type ConsumerHandler func(url string) (core.Consumer, server.NumBytesReaderWroter, func(context.Context) error, error)
 
 func (s *StreamHandler) HandleConsumerFunc(scheme string, handler ConsumerHandler) {
 	s.consumerHandlers[scheme] = handler
 }
 
-func (s *StreamHandler) GetConsumer(url string) (core.Consumer, func(context.Context) error, error) {
+func (s *StreamHandler) GetConsumer(url string) (core.Consumer, server.NumBytesReaderWroter, func(context.Context) error, error) {
 	if i := strings.IndexByte(url, ':'); i > 0 {
 		scheme := url[:i]
 
@@ -88,5 +98,5 @@ func (s *StreamHandler) GetConsumer(url string) (core.Consumer, func(context.Con
 		}
 	}
 
-	return nil, nil, errors.New("streams: unsupported scheme: " + url)
+	return nil, nil, nil, errors.New("streams: unsupported scheme: " + url)
 }

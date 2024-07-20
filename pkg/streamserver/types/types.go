@@ -83,6 +83,9 @@ type ServerHandler interface {
 
 	Type() ServerType
 	ListenAddr() string
+
+	NumBytesConsumerWrote() uint64
+	NumBytesProducerRead() uint64
 }
 
 type StreamDestination struct {

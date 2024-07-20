@@ -55,7 +55,7 @@ func (s *Stream) Play(source string) error {
 
 	for _, producer := range s.producers {
 		// start new client
-		dst, err := s.streamHandler.GetProducer(producer.url)
+		dst, err := s.streamHandler.GetProducer(producer.urlFunc())
 		if err != nil {
 			continue
 		}

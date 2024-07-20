@@ -25,7 +25,7 @@ const (
 type Producer struct {
 	core.Listener
 
-	url      string
+	urlFunc  func() string
 	template string
 
 	conn      core.Producer
@@ -41,20 +41,19 @@ type Producer struct {
 
 const SourceTemplate = "{input}"
 
-func (s *StreamHandler) NewProducer(source string) *Producer {
-	if strings.Contains(source, SourceTemplate) {
-		return &Producer{streamHandler: s, template: source}
+func (s *StreamHandler) NewProducer(source func() string) *Producer {
+	if strings.Contains(source(), SourceTemplate) {
+		return &Producer{streamHandler: s, template: source()}
 	}
 
-	return &Producer{streamHandler: s, url: source}
+	return &Producer{streamHandler: s, urlFunc: source}
 }
 
 func (p *Producer) SetSource(s string) {
-	if p.template == "" {
-		p.url = s
-	} else {
-		p.url = strings.Replace(p.template, SourceTemplate, s, 1)
+	if p.template != "" {
+		s = strings.Replace(p.template, SourceTemplate, s, 1)
 	}
+	p.urlFunc = func() string { return s }
 }
 
 func (p *Producer) Dial() error {
@@ -62,7 +61,7 @@ func (p *Producer) Dial() error {
 	defer p.mu.Unlock()
 
 	if p.state == stateNone {
-		conn, err := p.streamHandler.GetProducer(p.url)
+		conn, err := p.streamHandler.GetProducer(p.urlFunc())
 		if err != nil {
 			return err
 		}
@@ -138,7 +137,7 @@ func (p *Producer) MarshalJSON() ([]byte, error) {
 	if conn := p.conn; conn != nil {
 		return json.Marshal(conn)
 	}
-	info := map[string]string{"url": p.url}
+	info := map[string]string{"url": p.urlFunc()}
 	return json.Marshal(info)
 }
 
@@ -150,7 +149,7 @@ func (p *Producer) start() {
 		return
 	}
 
-	logger.Default().Debugf("[streams] start producer url=%s", p.url)
+	logger.Default().Debugf("[streams] start producer url=%s", p.urlFunc)
 
 	p.state = stateStart
 	p.workerID++
@@ -168,7 +167,7 @@ func (p *Producer) worker(conn core.Producer, workerID int) {
 			return
 		}
 
-		logger.Default().Warn(struct{ URL string }{URL: p.url}, err)
+		logger.Default().Warn(struct{ URL string }{URL: p.urlFunc()}, err)
 	}
 
 	p.reconnect(workerID, 0)
@@ -179,13 +178,13 @@ func (p *Producer) reconnect(workerID, retry int) {
 	defer p.mu.Unlock()
 
 	if p.workerID != workerID {
-		logger.Default().Tracef("[streams] stop reconnect url=%s", p.url)
+		logger.Default().Tracef("[streams] stop reconnect url=%s", p.urlFunc)
 		return
 	}
 
-	logger.Default().Debugf("[streams] retry=%d to url=%s", retry, p.url)
+	logger.Default().Debugf("[streams] retry=%d to url=%s", retry, p.urlFunc)
 
-	conn, err := p.streamHandler.GetProducer(p.url)
+	conn, err := p.streamHandler.GetProducer(p.urlFunc())
 	if err != nil {
 		logger.Default().Debugf("[streams] producer=%s", err)
 
@@ -258,7 +257,7 @@ func (p *Producer) stop() {
 		p.workerID++
 	}
 
-	logger.Default().Tracef("[streams] stop producer url=%s", p.url)
+	logger.Default().Tracef("[streams] stop producer url=%s", p.urlFunc)
 
 	if p.conn != nil {
 		_ = p.conn.Stop()

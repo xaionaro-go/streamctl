@@ -15,6 +15,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
 	"github.com/getsentry/sentry-go"
+	"github.com/kraken-hpc/go-fork"
 	"github.com/spf13/pflag"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -25,6 +26,15 @@ import (
 	_ "github.com/xaionaro-go/streamctl/pkg/streamserver"
 	"google.golang.org/grpc"
 )
+
+func init() {
+	fork.RegisterFunc("streamd", streamd)
+	fork.Init()
+}
+
+func streamd(remoteAddr string) {
+
+}
 
 const forceNetPProfOnAndroid = true
 
@@ -39,8 +49,13 @@ func main() {
 	heapProfile := pflag.String("go-profile-heap", "", "file to write memory profile to")
 	sentryDSN := pflag.String("sentry-dsn", "", "DSN of a Sentry instance to send error reports")
 	page := pflag.String("page", string(consts.PageControl), "DSN of a Sentry instance to send error reports")
+	splitProcess := pflag.Bool("split-process", !isMobile(), "split the process into multiple processes for better stability")
 	pflag.Parse()
+
 	l := logrus.Default().WithLevel(loggerLevel)
+	logger.Default = func() logger.Logger {
+		return l
+	}
 
 	if *cpuProfile != "" {
 		f, err := os.Create(*cpuProfile)
@@ -81,9 +96,17 @@ func main() {
 		runtime.GOMAXPROCS(16)
 	}
 
+	if *splitProcess && *listenAddr == "" {
+		listenAddr = ptr("localhost:0")
+	}
+
 	listener, err := net.Listen("tcp", *listenAddr)
 	if err != nil {
 		l.Fatalf("failed to listen: %v", err)
+	}
+
+	if *splitProcess {
+		fork.Fork("streamd", listener.Addr().String())
 	}
 
 	ctx := context.Background()
@@ -91,6 +114,10 @@ func main() {
 		<-ctx.Done()
 		listener.Close()
 	}()
+
+	if *splitProcess && *remoteAddr == "" {
+		remoteAddr = ptr(listener.Addr().String())
+	}
 
 	var opts []streampanel.Option
 	if *remoteAddr != "" {
@@ -101,7 +128,7 @@ func main() {
 	}
 	panel, panelErr := streampanel.New(*configPath, opts...)
 
-	if panel.Config.SentryDSN != "" {
+	if panel != nil && panel.Config.SentryDSN != "" {
 		l.Infof("setting up Sentry at DSN '%s'", panel.Config.SentryDSN)
 		sentryClient, err := sentry.NewClient(sentry.ClientOptions{
 			Dsn: panel.Config.SentryDSN,

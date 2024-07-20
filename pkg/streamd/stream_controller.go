@@ -2,6 +2,7 @@ package streamd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -34,7 +35,7 @@ func (d *StreamD) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context) erro
 		case strings.ToLower(string(youtube.ID)):
 			err = d.initYouTubeBackend(ctx)
 		}
-		if err == ErrSkipBackend {
+		if errors.Is(err, ErrSkipBackend) {
 			continue
 		}
 		if err != nil {

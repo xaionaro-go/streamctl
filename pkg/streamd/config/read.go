@@ -1,10 +1,12 @@
 package config
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 
+	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
@@ -22,11 +24,32 @@ func (cfg *Config) Read(
 	return len(b), cfg.UnmarshalYAML(b)
 }
 
+func (cfg *Config) traceDump() {
+	l := logger.Default()
+	if l.Level() < logger.LevelTrace {
+		return
+	}
+	if cfg == nil {
+		l.Tracef("streamd config == nil")
+		return
+	}
+
+	var buf bytes.Buffer
+	_, err := cfg.WriteTo(&buf)
+	if err != nil {
+		l.Error(err)
+		return
+	}
+	l.Tracef("streamd config == %#+v: %s", *cfg, buf.String())
+}
+
 func (cfg *Config) UnmarshalYAML(b []byte) error {
+	logger.Default().Tracef("unparsed streamd config == %s", b)
 	err := yaml.Unmarshal(b, (*config)(cfg))
 	if err != nil {
 		return fmt.Errorf("unable to unserialize data: %w", err)
 	}
+	cfg.traceDump()
 
 	if cfg.Backends == nil {
 		cfg.Backends = streamcontrol.Config{}

@@ -53,9 +53,12 @@ type StreamDClient interface {
 	ListStreamDestinations(ctx context.Context, in *ListStreamDestinationsRequest, opts ...grpc.CallOption) (*ListStreamDestinationsReply, error)
 	AddStreamDestination(ctx context.Context, in *AddStreamDestinationRequest, opts ...grpc.CallOption) (*AddStreamDestinationReply, error)
 	RemoveStreamDestination(ctx context.Context, in *RemoveStreamDestinationRequest, opts ...grpc.CallOption) (*RemoveStreamDestinationReply, error)
+	AddIncomingStream(ctx context.Context, in *AddIncomingStreamRequest, opts ...grpc.CallOption) (*AddIncomingStreamReply, error)
+	RemoveIncomingStream(ctx context.Context, in *RemoveIncomingStreamRequest, opts ...grpc.CallOption) (*RemoveIncomingStreamReply, error)
 	ListIncomingStreams(ctx context.Context, in *ListIncomingStreamsRequest, opts ...grpc.CallOption) (*ListIncomingStreamsReply, error)
 	ListStreamForwards(ctx context.Context, in *ListStreamForwardsRequest, opts ...grpc.CallOption) (*ListStreamForwardsReply, error)
 	AddStreamForward(ctx context.Context, in *AddStreamForwardRequest, opts ...grpc.CallOption) (*AddStreamForwardReply, error)
+	UpdateStreamForward(ctx context.Context, in *UpdateStreamForwardRequest, opts ...grpc.CallOption) (*UpdateStreamForwardReply, error)
 	RemoveStreamForward(ctx context.Context, in *RemoveStreamForwardRequest, opts ...grpc.CallOption) (*RemoveStreamForwardReply, error)
 }
 
@@ -369,6 +372,24 @@ func (c *streamDClient) RemoveStreamDestination(ctx context.Context, in *RemoveS
 	return out, nil
 }
 
+func (c *streamDClient) AddIncomingStream(ctx context.Context, in *AddIncomingStreamRequest, opts ...grpc.CallOption) (*AddIncomingStreamReply, error) {
+	out := new(AddIncomingStreamReply)
+	err := c.cc.Invoke(ctx, "/StreamD/AddIncomingStream", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) RemoveIncomingStream(ctx context.Context, in *RemoveIncomingStreamRequest, opts ...grpc.CallOption) (*RemoveIncomingStreamReply, error) {
+	out := new(RemoveIncomingStreamReply)
+	err := c.cc.Invoke(ctx, "/StreamD/RemoveIncomingStream", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *streamDClient) ListIncomingStreams(ctx context.Context, in *ListIncomingStreamsRequest, opts ...grpc.CallOption) (*ListIncomingStreamsReply, error) {
 	out := new(ListIncomingStreamsReply)
 	err := c.cc.Invoke(ctx, "/StreamD/ListIncomingStreams", in, out, opts...)
@@ -390,6 +411,15 @@ func (c *streamDClient) ListStreamForwards(ctx context.Context, in *ListStreamFo
 func (c *streamDClient) AddStreamForward(ctx context.Context, in *AddStreamForwardRequest, opts ...grpc.CallOption) (*AddStreamForwardReply, error) {
 	out := new(AddStreamForwardReply)
 	err := c.cc.Invoke(ctx, "/StreamD/AddStreamForward", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) UpdateStreamForward(ctx context.Context, in *UpdateStreamForwardRequest, opts ...grpc.CallOption) (*UpdateStreamForwardReply, error) {
+	out := new(UpdateStreamForwardReply)
+	err := c.cc.Invoke(ctx, "/StreamD/UpdateStreamForward", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -440,9 +470,12 @@ type StreamDServer interface {
 	ListStreamDestinations(context.Context, *ListStreamDestinationsRequest) (*ListStreamDestinationsReply, error)
 	AddStreamDestination(context.Context, *AddStreamDestinationRequest) (*AddStreamDestinationReply, error)
 	RemoveStreamDestination(context.Context, *RemoveStreamDestinationRequest) (*RemoveStreamDestinationReply, error)
+	AddIncomingStream(context.Context, *AddIncomingStreamRequest) (*AddIncomingStreamReply, error)
+	RemoveIncomingStream(context.Context, *RemoveIncomingStreamRequest) (*RemoveIncomingStreamReply, error)
 	ListIncomingStreams(context.Context, *ListIncomingStreamsRequest) (*ListIncomingStreamsReply, error)
 	ListStreamForwards(context.Context, *ListStreamForwardsRequest) (*ListStreamForwardsReply, error)
 	AddStreamForward(context.Context, *AddStreamForwardRequest) (*AddStreamForwardReply, error)
+	UpdateStreamForward(context.Context, *UpdateStreamForwardRequest) (*UpdateStreamForwardReply, error)
 	RemoveStreamForward(context.Context, *RemoveStreamForwardRequest) (*RemoveStreamForwardReply, error)
 	mustEmbedUnimplementedStreamDServer()
 }
@@ -544,6 +577,12 @@ func (UnimplementedStreamDServer) AddStreamDestination(context.Context, *AddStre
 func (UnimplementedStreamDServer) RemoveStreamDestination(context.Context, *RemoveStreamDestinationRequest) (*RemoveStreamDestinationReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RemoveStreamDestination not implemented")
 }
+func (UnimplementedStreamDServer) AddIncomingStream(context.Context, *AddIncomingStreamRequest) (*AddIncomingStreamReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddIncomingStream not implemented")
+}
+func (UnimplementedStreamDServer) RemoveIncomingStream(context.Context, *RemoveIncomingStreamRequest) (*RemoveIncomingStreamReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveIncomingStream not implemented")
+}
 func (UnimplementedStreamDServer) ListIncomingStreams(context.Context, *ListIncomingStreamsRequest) (*ListIncomingStreamsReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListIncomingStreams not implemented")
 }
@@ -552,6 +591,9 @@ func (UnimplementedStreamDServer) ListStreamForwards(context.Context, *ListStrea
 }
 func (UnimplementedStreamDServer) AddStreamForward(context.Context, *AddStreamForwardRequest) (*AddStreamForwardReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddStreamForward not implemented")
+}
+func (UnimplementedStreamDServer) UpdateStreamForward(context.Context, *UpdateStreamForwardRequest) (*UpdateStreamForwardReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateStreamForward not implemented")
 }
 func (UnimplementedStreamDServer) RemoveStreamForward(context.Context, *RemoveStreamForwardRequest) (*RemoveStreamForwardReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RemoveStreamForward not implemented")
@@ -1130,6 +1172,42 @@ func _StreamD_RemoveStreamDestination_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _StreamD_AddIncomingStream_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddIncomingStreamRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).AddIncomingStream(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/StreamD/AddIncomingStream",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).AddIncomingStream(ctx, req.(*AddIncomingStreamRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_RemoveIncomingStream_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveIncomingStreamRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).RemoveIncomingStream(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/StreamD/RemoveIncomingStream",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).RemoveIncomingStream(ctx, req.(*RemoveIncomingStreamRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _StreamD_ListIncomingStreams_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListIncomingStreamsRequest)
 	if err := dec(in); err != nil {
@@ -1180,6 +1258,24 @@ func _StreamD_AddStreamForward_Handler(srv interface{}, ctx context.Context, dec
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).AddStreamForward(ctx, req.(*AddStreamForwardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_UpdateStreamForward_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateStreamForwardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).UpdateStreamForward(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/StreamD/UpdateStreamForward",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).UpdateStreamForward(ctx, req.(*UpdateStreamForwardRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1330,6 +1426,14 @@ var StreamD_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _StreamD_RemoveStreamDestination_Handler,
 		},
 		{
+			MethodName: "AddIncomingStream",
+			Handler:    _StreamD_AddIncomingStream_Handler,
+		},
+		{
+			MethodName: "RemoveIncomingStream",
+			Handler:    _StreamD_RemoveIncomingStream_Handler,
+		},
+		{
 			MethodName: "ListIncomingStreams",
 			Handler:    _StreamD_ListIncomingStreams_Handler,
 		},
@@ -1340,6 +1444,10 @@ var StreamD_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AddStreamForward",
 			Handler:    _StreamD_AddStreamForward_Handler,
+		},
+		{
+			MethodName: "UpdateStreamForward",
+			Handler:    _StreamD_UpdateStreamForward_Handler,
 		},
 		{
 			MethodName: "RemoveStreamForward",

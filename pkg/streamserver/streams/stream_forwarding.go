@@ -2,22 +2,26 @@ package streams
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
+	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/server"
 )
 
 type StreamForwarding struct {
 	sync.Mutex
-	Stream        *Stream
-	Consumer      core.Consumer
-	StreamHandler *StreamHandler
-	CancelFunc    context.CancelFunc
-	URL           string
+	Stream         *Stream
+	Consumer       core.Consumer
+	StreamHandler  *StreamHandler
+	CancelFunc     context.CancelFunc
+	URL            string
+	TrafficCounter server.NumBytesReaderWroter
 }
 
 func NewStreamForwarding(streamHandler *StreamHandler) *StreamForwarding {
@@ -32,21 +36,39 @@ func (sf *StreamForwarding) Start(
 	sf.Lock()
 	defer sf.Unlock()
 
-	cons, run, err := sf.StreamHandler.GetConsumer(url)
+	cons, trafficCounter, run, err := sf.StreamHandler.GetConsumer(url)
 	if err != nil {
 		return fmt.Errorf("unable to initialize consumer of '%s': %w", url, err)
 	}
 	sf.Stream = s
 	sf.URL = url
 	sf.Consumer = cons
+	sf.TrafficCounter = trafficCounter
 
-	if err = s.AddConsumer(cons); err != nil {
-		return fmt.Errorf("unable to add consumer: %w", err)
-	}
 	ctx, cancelFn := context.WithCancel(ctx)
 	sf.CancelFunc = cancelFn
 
 	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			err = s.AddConsumer(cons)
+			if errors.Is(err, ErrNoProducer{}) {
+				logger.Debugf(ctx, "waiting for a producer")
+				time.Sleep(time.Second)
+				continue
+			}
+			if err != nil {
+				logger.Errorf(ctx, "unable to add consumer of '%s': %v", sf.URL, err)
+				time.Sleep(time.Second * 5)
+				continue
+			}
+			break
+		}
+
 		err := run(ctx)
 		errmon.ObserveErrorCtx(ctx, err)
 		s.RemoveConsumer(cons)

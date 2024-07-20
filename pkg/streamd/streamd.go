@@ -88,7 +88,10 @@ func New(
 	return d, nil
 }
 
-func (d *StreamD) Run(ctx context.Context) error {
+func (d *StreamD) Run(ctx context.Context) (_ret error) {
+	logger.Debugf(ctx, "StreamD.Run()")
+	defer func() { logger.Debugf(ctx, "/StreamD.Run(): %v", _ret) }()
+
 	d.UI.SetStatus("Initializing remote GIT storage...")
 	err := d.FetchConfig(ctx)
 	if err != nil {
@@ -117,6 +120,7 @@ func (d *StreamD) Run(ctx context.Context) error {
 
 func (d *StreamD) InitStreamServer(ctx context.Context) error {
 	d.StreamServer = streamserver.New(&d.Config.StreamServer)
+	assert(d.StreamServer != nil)
 	return d.StreamServer.Init(ctx)
 }
 
@@ -715,6 +719,8 @@ func (d *StreamD) ListStreamServers(
 	d.StreamServerLocker.Lock()
 	defer d.StreamServerLocker.Unlock()
 
+	assert(d.StreamServer != nil)
+
 	servers := d.StreamServer.ListServers(ctx)
 
 	var result []api.StreamServer
@@ -722,6 +728,9 @@ func (d *StreamD) ListStreamServers(
 		result = append(result, api.StreamServer{
 			Type:       api.ServerTypeServer2API(src.Type()),
 			ListenAddr: src.ListenAddr(),
+
+			NumBytesConsumerWrote: src.NumBytesConsumerWrote(),
+			NumBytesProducerRead:  src.NumBytesProducerRead(),
 		})
 	}
 
@@ -787,6 +796,52 @@ func (d *StreamD) StopStreamServer(
 	err := d.StreamServer.StopServer(ctx, *srv)
 	if err != nil {
 		return fmt.Errorf("unable to stop server %#+v: %w", *srv, err)
+	}
+
+	err = d.SaveConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to save the config: %w", err)
+	}
+
+	return nil
+}
+
+func (d *StreamD) AddIncomingStream(
+	ctx context.Context,
+	streamID api.StreamID,
+) error {
+	logger.Debugf(ctx, "AddIncomingStream")
+	defer logger.Debugf(ctx, "/AddIncomingStream")
+
+	d.StreamServerLocker.Lock()
+	defer d.StreamServerLocker.Unlock()
+
+	err := d.StreamServer.AddIncomingStream(ctx, types.StreamID(streamID))
+	if err != nil {
+		return fmt.Errorf("unable to add an incoming stream: %w", err)
+	}
+
+	err = d.SaveConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to save the config: %w", err)
+	}
+
+	return nil
+}
+
+func (d *StreamD) RemoveIncomingStream(
+	ctx context.Context,
+	streamID api.StreamID,
+) error {
+	logger.Debugf(ctx, "RemoveIncomingStream")
+	defer logger.Debugf(ctx, "/RemoveIncomingStream")
+
+	d.StreamServerLocker.Lock()
+	defer d.StreamServerLocker.Unlock()
+
+	err := d.StreamServer.RemoveIncomingStream(ctx, types.StreamID(streamID))
+	if err != nil {
+		return fmt.Errorf("unable to remove an incoming stream: %w", err)
 	}
 
 	err = d.SaveConfig(ctx)
@@ -899,8 +954,11 @@ func (d *StreamD) listStreamForwards(
 	}
 	for _, streamFwd := range streamForwards {
 		result = append(result, api.StreamForward{
+			Enabled:       streamFwd.Enabled,
 			StreamID:      api.StreamID(streamFwd.StreamID),
 			DestinationID: api.DestinationID(streamFwd.DestinationID),
+			NumBytesWrote: streamFwd.NumBytesWrote,
+			NumBytesRead:  streamFwd.NumBytesRead,
 		})
 	}
 	return result, nil
@@ -922,6 +980,7 @@ func (d *StreamD) AddStreamForward(
 	ctx context.Context,
 	streamID api.StreamID,
 	destinationID api.DestinationID,
+	enabled bool,
 ) error {
 	logger.Debugf(ctx, "AddStreamForward")
 	defer logger.Debugf(ctx, "/AddStreamForward")
@@ -933,6 +992,37 @@ func (d *StreamD) AddStreamForward(
 		resetContextCancellers(ctx),
 		types.StreamID(streamID),
 		types.DestinationID(destinationID),
+		enabled,
+	)
+	if err != nil {
+		return fmt.Errorf("unable to add the stream forwarding: %w", err)
+	}
+
+	err = d.SaveConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to save the config: %w", err)
+	}
+
+	return nil
+}
+
+func (d *StreamD) UpdateStreamForward(
+	ctx context.Context,
+	streamID api.StreamID,
+	destinationID api.DestinationID,
+	enabled bool,
+) error {
+	logger.Debugf(ctx, "AddStreamForward")
+	defer logger.Debugf(ctx, "/AddStreamForward")
+
+	d.StreamServerLocker.Lock()
+	defer d.StreamServerLocker.Unlock()
+
+	err := d.StreamServer.UpdateStreamForward(
+		resetContextCancellers(ctx),
+		types.StreamID(streamID),
+		types.DestinationID(destinationID),
+		enabled,
 	)
 	if err != nil {
 		return fmt.Errorf("unable to add the stream forwarding: %w", err)

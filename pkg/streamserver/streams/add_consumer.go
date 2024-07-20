@@ -2,6 +2,7 @@ package streams
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
@@ -11,6 +12,10 @@ import (
 func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 	// support for multiple simultaneous pending from different consumers
 	consN := s.pending.Add(1) - 1
+
+	if len(s.producers) == 0 {
+		return ErrNoProducer{}
+	}
 
 	var prodErrors = make([]error, len(s.producers))
 	var prodMedias []*core.Media
@@ -29,8 +34,8 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 			}
 
 			if err = prod.Dial(); err != nil {
-				logger.Default().WithField("error", err).Tracef("[streams] dial cons=%d prod=%d", consN, prodN)
-				prodErrors[prodN] = err
+				logger.Default().Tracef("[streams] dial cons=%d prod=%d err=%v", consN, prodN, err)
+				prodErrors[prodN] = fmt.Errorf("unable to Dial(): %w", err)
 				continue
 			}
 
@@ -53,13 +58,13 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 
 					// Step 4. Get recvonly track from producer
 					if track, err = prod.GetTrack(prodMedia, prodCodec); err != nil {
-						logger.Default().WithField("error", err).Info("[streams] can't get track")
-						prodErrors[prodN] = err
+						logger.Default().Info("[streams] can't get track; err=%v", err)
+						prodErrors[prodN] = fmt.Errorf("unable to GetTrack(): %w", err)
 						continue
 					}
 					// Step 5. Add track to consumer
 					if err = cons.AddTrack(consMedia, consCodec, track); err != nil {
-						logger.Default().WithField("error", err).Info("[streams] can't add track")
+						logger.Default().Info("[streams] can't add track; err=%v", err)
 						continue
 					}
 
@@ -68,13 +73,13 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 
 					// Step 4. Get recvonly track from consumer (backchannel)
 					if track, err = cons.(core.Producer).GetTrack(consMedia, consCodec); err != nil {
-						logger.Default().WithField("error", err).Info("[streams] can't get track")
+						logger.Default().Info("[streams] can't get track; err=%v", err)
 						continue
 					}
 					// Step 5. Add track to producer
 					if err = prod.AddTrack(prodMedia, prodCodec, track); err != nil {
-						logger.Default().WithField("error", err).Info("[streams] can't add track")
-						prodErrors[prodN] = err
+						logger.Default().Info("[streams] can't add track; err=%v", err)
+						prodErrors[prodN] = fmt.Errorf("unable to AddTrack(): %w", err)
 						continue
 					}
 				}

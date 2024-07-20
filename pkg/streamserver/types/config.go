@@ -5,8 +5,12 @@ type Server struct {
 	Listen string     `yaml:"listen"`
 }
 
+type ForwardingConfig struct {
+	Disabled bool `yaml:"disabled,omitempty"`
+}
+
 type StreamConfig struct {
-	Forwardings []DestinationID `yaml:"forwardings"`
+	Forwardings map[DestinationID]ForwardingConfig `yaml:"forwardings"`
 }
 
 type DestinationConfig struct {

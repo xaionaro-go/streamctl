@@ -38,9 +38,12 @@ service StreamD {
 	rpc ListStreamDestinations(ListStreamDestinationsRequest) returns (ListStreamDestinationsReply) {}
 	rpc AddStreamDestination(AddStreamDestinationRequest) returns (AddStreamDestinationReply) {}
 	rpc RemoveStreamDestination(RemoveStreamDestinationRequest) returns (RemoveStreamDestinationReply) {}
+    rpc AddIncomingStream(AddIncomingStreamRequest) returns (AddIncomingStreamReply) {}
+    rpc RemoveIncomingStream(RemoveIncomingStreamRequest) returns (RemoveIncomingStreamReply) {}
     rpc ListIncomingStreams(ListIncomingStreamsRequest) returns (ListIncomingStreamsReply) {}
 	rpc ListStreamForwards(ListStreamForwardsRequest) returns (ListStreamForwardsReply) {}
 	rpc AddStreamForward(AddStreamForwardRequest) returns (AddStreamForwardReply) {}
+	rpc UpdateStreamForward(UpdateStreamForwardRequest) returns (UpdateStreamForwardReply) {}
 	rpc RemoveStreamForward(RemoveStreamForwardRequest) returns (RemoveStreamForwardReply) {}
 }
 
@@ -197,9 +200,19 @@ message StreamServer {
     string listenAddr = 2;
 }
 
+message StreamServerStatistics {
+    int64 NumBytesConsumerWrote = 1;
+    int64 NumBytesProducerRead = 2;
+}
+
+message StreamServerWithStatistics {
+    StreamServer config = 1;
+    StreamServerStatistics statistics = 2;
+}
+
 message ListStreamServersRequest {}
 message ListStreamServersReply {
-    repeated StreamServer streamServers = 1;
+    repeated StreamServerWithStatistics streamServers = 1;
 }
 
 message StartStreamServerRequest {
@@ -237,6 +250,16 @@ message IncomingStream {
     string streamID = 1;
 }
 
+message AddIncomingStreamRequest {
+    string streamID = 1;
+}
+message AddIncomingStreamReply {}
+
+message RemoveIncomingStreamRequest {
+    string streamID = 1;
+}
+message RemoveIncomingStreamReply {}
+
 message ListIncomingStreamsRequest {}
 message ListIncomingStreamsReply {
     repeated IncomingStream incomingStreams = 1;
@@ -245,17 +268,33 @@ message ListIncomingStreamsReply {
 message StreamForward {
     string streamID = 1;
     string destinationID = 2;
+    bool enabled = 3;
+}
+
+message StreamForwardStatistics {
+    int64 numBytesWrote = 1;
+    int64 numBytesRead = 2;
+}
+
+message StreamForwardWithStatistics {
+    StreamForward config =  1;
+    StreamForwardStatistics statistics = 2;
 }
 
 message ListStreamForwardsRequest {}
 message ListStreamForwardsReply {
-    repeated StreamForward streamForwards = 1;
+    repeated StreamForwardWithStatistics streamForwards = 1;
 }
 
 message AddStreamForwardRequest {
     StreamForward config = 1;
 }
 message AddStreamForwardReply {}
+
+message UpdateStreamForwardRequest {
+    StreamForward config = 1;
+}
+message UpdateStreamForwardReply {}
 
 message RemoveStreamForwardRequest {
     StreamForward config = 1;

@@ -706,16 +706,22 @@ func (grpc *GRPCServer) ListStreamServers(
 		return nil, err
 	}
 
-	var result []*streamd_grpc.StreamServer
+	var result []*streamd_grpc.StreamServerWithStatistics
 	for _, srv := range servers {
 		t, err := grpcconv.StreamServerTypeGo2GRPC(srv.Type)
 		if err != nil {
 			return nil, fmt.Errorf("unable to convert the server type value: %w", err)
 		}
 
-		result = append(result, &streamd_grpc.StreamServer{
-			ServerType: t,
-			ListenAddr: srv.ListenAddr,
+		result = append(result, &streamd_grpc.StreamServerWithStatistics{
+			Config: &streamd_grpc.StreamServer{
+				ServerType: t,
+				ListenAddr: srv.ListenAddr,
+			},
+			Statistics: &streamd_grpc.StreamServerStatistics{
+				NumBytesConsumerWrote: int64(srv.NumBytesConsumerWrote),
+				NumBytesProducerRead:  int64(srv.NumBytesProducerRead),
+			},
 		})
 	}
 	return &streamd_grpc.ListStreamServersReply{
@@ -809,6 +815,28 @@ func (grpc *GRPCServer) RemoveStreamDestination(
 	return &streamd_grpc.RemoveStreamDestinationReply{}, nil
 }
 
+func (grpc *GRPCServer) AddIncomingStream(
+	ctx context.Context,
+	req *streamd_grpc.AddIncomingStreamRequest,
+) (*streamd_grpc.AddIncomingStreamReply, error) {
+	err := grpc.StreamD.AddIncomingStream(ctx, api.StreamID(req.GetStreamID()))
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.AddIncomingStreamReply{}, nil
+}
+
+func (grpc *GRPCServer) RemoveIncomingStream(
+	ctx context.Context,
+	req *streamd_grpc.RemoveIncomingStreamRequest,
+) (*streamd_grpc.RemoveIncomingStreamReply, error) {
+	err := grpc.StreamD.RemoveIncomingStream(ctx, api.StreamID(req.GetStreamID()))
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.RemoveIncomingStreamReply{}, nil
+}
+
 func (grpc *GRPCServer) ListIncomingStreams(
 	ctx context.Context,
 	req *streamd_grpc.ListIncomingStreamsRequest,
@@ -840,11 +868,18 @@ func (grpc *GRPCServer) ListStreamForwards(
 		return nil, err
 	}
 
-	var result []*streamd_grpc.StreamForward
+	var result []*streamd_grpc.StreamForwardWithStatistics
 	for _, s := range streamFwds {
-		result = append(result, &streamd_grpc.StreamForward{
-			StreamID:      string(s.StreamID),
-			DestinationID: string(s.DestinationID),
+		result = append(result, &streamd_grpc.StreamForwardWithStatistics{
+			Config: &streamd_grpc.StreamForward{
+				StreamID:      string(s.StreamID),
+				DestinationID: string(s.DestinationID),
+				Enabled:       s.Enabled,
+			},
+			Statistics: &streamd_grpc.StreamForwardStatistics{
+				NumBytesWrote: int64(s.NumBytesWrote),
+				NumBytesRead:  int64(s.NumBytesRead),
+			},
 		})
 	}
 	return &streamd_grpc.ListStreamForwardsReply{
@@ -860,11 +895,28 @@ func (grpc *GRPCServer) AddStreamForward(
 		ctx,
 		api.StreamID(req.GetConfig().GetStreamID()),
 		api.DestinationID(req.GetConfig().GetDestinationID()),
+		req.Config.Enabled,
 	)
 	if err != nil {
 		return nil, err
 	}
 	return &streamd_grpc.AddStreamForwardReply{}, nil
+}
+
+func (grpc *GRPCServer) UpdateStreamForward(
+	ctx context.Context,
+	req *streamd_grpc.UpdateStreamForwardRequest,
+) (*streamd_grpc.UpdateStreamForwardReply, error) {
+	err := grpc.StreamD.UpdateStreamForward(
+		ctx,
+		api.StreamID(req.GetConfig().GetStreamID()),
+		api.DestinationID(req.GetConfig().GetDestinationID()),
+		req.Config.Enabled,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.UpdateStreamForwardReply{}, nil
 }
 
 func (grpc *GRPCServer) RemoveStreamForward(

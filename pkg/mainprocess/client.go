@@ -1,0 +1,119 @@
+package mainprocess
+
+import (
+	"context"
+	"encoding/gob"
+	"fmt"
+	"net"
+
+	"github.com/facebookincubator/go-belt/tool/logger"
+)
+
+type Client struct {
+	Conn              net.Conn
+	Password          string
+	OnReceivedMessage OnReceivedMessageFunc
+}
+
+func NewClient(
+	myName string,
+	addr string,
+	password string,
+	onReceivedMessage OnReceivedMessageFunc,
+) (*Client, error) {
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("unable to connect to '%s': %w", addr, err)
+	}
+	logger.Default().Tracef("connected to '%s' as '%s'", conn.RemoteAddr(), conn.LocalAddr())
+
+	msg := RegistrationMessage{
+		Password: password,
+		Source:   myName,
+	}
+	encoder := gob.NewEncoder(conn)
+	if err := encoder.Encode(msg); err != nil {
+		return nil, fmt.Errorf("unable to encode&send the registration message %#+v: %w", msg, err)
+	}
+
+	var regResult RegistrationResult
+	decoder := gob.NewDecoder(conn)
+	if err := decoder.Decode(&regResult); err != nil {
+		return nil, fmt.Errorf("unable to decode&receive the registration result: %w", err)
+	}
+	if regResult.Error != "" {
+		return nil, fmt.Errorf("registration error: %s", regResult.Error)
+	}
+	logger.Default().Tracef("successfully registered the process '%s'", myName)
+
+	return &Client{
+		Conn:              conn,
+		Password:          password,
+		OnReceivedMessage: onReceivedMessage,
+	}, nil
+}
+
+func (c *Client) SendMessage(
+	ctx context.Context,
+	dst string,
+	content any,
+) error {
+	encoder := gob.NewEncoder(c.Conn)
+	msg := MessageToMain{
+		Password:    c.Password,
+		Destination: dst,
+		Content:     content,
+	}
+	err := encoder.Encode(msg)
+	logger.Tracef(ctx, "sending message %#+v: %v", msg, err)
+	if err != nil {
+		return fmt.Errorf("unable to encode&send message %#+v: %w", msg, err)
+	}
+	return nil
+}
+
+func (c *Client) Close() error {
+	return c.Conn.Close()
+}
+
+func (c *Client) Serve(ctx context.Context) error {
+	ctx, cancelFn := context.WithCancel(ctx)
+	defer cancelFn()
+	go func() {
+		<-ctx.Done()
+		err := c.Close()
+		if err != nil {
+			logger.Error(ctx, err)
+		}
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+		}
+
+		var msg MessageFromMain
+		decoder := gob.NewDecoder(c.Conn)
+		err := decoder.Decode(&msg)
+		if err != nil {
+			return fmt.Errorf("unable to receive&decode message: %w", err)
+		}
+
+		if err := c.onReceivedMessage(ctx, msg); err != nil {
+			logger.Error(ctx, err)
+		}
+	}
+}
+
+func (c *Client) onReceivedMessage(
+	ctx context.Context,
+	msg MessageFromMain,
+) error {
+	if c.OnReceivedMessage == nil {
+		return fmt.Errorf("OnReceivedMessage function is not set")
+	}
+
+	return c.OnReceivedMessage(ctx, msg.Source, msg.Content)
+}

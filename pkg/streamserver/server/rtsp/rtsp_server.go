@@ -14,17 +14,19 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/consts"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/server"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/streams"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 )
 
 type RTSPServer struct {
-	Config        Config
-	Listener      net.Listener
-	DefaultMedias []*core.Media
-	StreamHandler *streams.StreamHandler
-	Handlers      []HandlerFunc
-	CancelFn      context.CancelFunc
+	Config         Config
+	Listener       net.Listener
+	DefaultMedias  []*core.Media
+	StreamHandler  *streams.StreamHandler
+	Handlers       []HandlerFunc
+	CancelFn       context.CancelFunc
+	TrafficCounter server.TrafficCounter
 }
 
 type Config struct {
@@ -278,6 +280,13 @@ func (s *RTSPServer) Close() error {
 	logger.Default().Tracef("(*RTSPServer).Close()")
 	s.CancelFn()
 	return nil
+}
+
+func (s *RTSPServer) NumBytesConsumerWrote() uint64 {
+	return s.TrafficCounter.NumBytesWrote()
+}
+func (s *RTSPServer) NumBytesProducerRead() uint64 {
+	return s.TrafficCounter.NumBytesRead()
 }
 
 func ParseQuery(query map[string][]string) []*core.Media {

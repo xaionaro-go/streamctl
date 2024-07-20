@@ -79,6 +79,14 @@ type StreamD interface {
 		ctx context.Context,
 		listenAddr string,
 	) error
+	AddIncomingStream(
+		ctx context.Context,
+		streamID StreamID,
+	) error
+	RemoveIncomingStream(
+		ctx context.Context,
+		streamID StreamID,
+	) error
 	ListIncomingStreams(
 		ctx context.Context,
 	) ([]IncomingStream, error)
@@ -99,8 +107,15 @@ type StreamD interface {
 	) ([]StreamForward, error)
 	AddStreamForward(
 		ctx context.Context,
-		streamIDSrc StreamID,
+		streamID StreamID,
 		destinationID DestinationID,
+		enabled bool,
+	) error
+	UpdateStreamForward(
+		ctx context.Context,
+		streamID StreamID,
+		destinationID DestinationID,
+		enabled bool,
 	) error
 	RemoveStreamForward(
 		ctx context.Context,
@@ -153,6 +168,9 @@ func ParseStreamServerType(in string) StreamServerType {
 type StreamServer struct {
 	Type       StreamServerType
 	ListenAddr string
+
+	NumBytesConsumerWrote uint64
+	NumBytesProducerRead  uint64
 }
 
 type StreamDestination struct {
@@ -161,8 +179,11 @@ type StreamDestination struct {
 }
 
 type StreamForward struct {
+	Enabled       bool
 	StreamID      StreamID
 	DestinationID DestinationID
+	NumBytesWrote uint64
+	NumBytesRead  uint64
 }
 
 type IncomingStream struct {

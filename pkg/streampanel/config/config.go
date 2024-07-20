@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -37,7 +38,16 @@ func ReadConfigFromPath[CFG Config](
 		return fmt.Errorf("unable to read file '%s': %w", cfgPath, err)
 	}
 
+	logger.Default().Debugf("unparsed config == %s", b)
 	_, err = cfg.Read(b)
+
+	var cfgSerialized bytes.Buffer
+	if _, _err := cfg.WriteTo(&cfgSerialized); _err != nil {
+		logger.Default().Error(_err)
+	} else {
+		logger.Default().Debugf("parsed config == %s", cfgSerialized.String())
+	}
+
 	return err
 }
 
