@@ -37,6 +37,9 @@ func Test(t *testing.T) {
 	callCount := map[string]int{}
 
 	handleCall := func(procName string, content any) {
+		if _, ok := content.(MessageReadyConfirmed); ok {
+			return
+		}
 		logger.Tracef(ctx, "handleCall('%s', %#+v)", procName, content)
 		count := callCount[procName]
 		count++
@@ -70,6 +73,7 @@ func Test(t *testing.T) {
 		handleCall("child0", content)
 		return nil
 	})
+	c0.SendMessage(ctx, "main", MessageReady{})
 
 	c1, err := NewClient("child1", m.Addr().String(), m.Password())
 	require.NoError(t, err)
@@ -78,6 +82,7 @@ func Test(t *testing.T) {
 		handleCall("child1", content)
 		return nil
 	})
+	c1.SendMessage(ctx, "main", MessageReady{})
 
 	_, err = NewClient("child2", m.Addr().String(), m.Password())
 	require.Error(t, err)

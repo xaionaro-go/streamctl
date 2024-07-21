@@ -16,6 +16,7 @@ import (
 func init() {
 	gob.Register(RegistrationMessage{})
 	gob.Register(RegistrationResult{})
+	gob.Register(MessageReadyConfirmed{})
 	gob.Register(MessageReady{})
 	gob.Register(MessageFromMain{})
 	gob.Register(MessageToMain{})
@@ -142,6 +143,7 @@ func (m *Manager) Serve(
 			return fmt.Errorf("unable to accept connection: %w", err)
 		}
 		logger.Tracef(ctx, "accepted a connection from '%s'", conn.RemoteAddr())
+		conn.(*net.TCPConn).SetNoDelay(true)
 
 		m.addNewConnection(ctx, conn, onReceivedMessage)
 	}
@@ -292,7 +294,10 @@ func (m *Manager) processMessage(
 		logger.Tracef(ctx, "got a message to the main process from '%s': %#+v", source, message.Content)
 		switch message.Content.(type) {
 		case MessageReady:
-			return m.setReady(source, conn)
+			var result *multierror.Error
+			result = multierror.Append(result, m.SendMessagePreReady(ctx, source, MessageReadyConfirmed{}))
+			result = multierror.Append(result, m.setReady(source, conn))
+			return result.ErrorOrNil()
 		default:
 			return onReceivedMessage(ctx, source, message.Content)
 		}
@@ -520,3 +525,4 @@ func (m *Manager) SendMessage(
 }
 
 type MessageReady struct{}
+type MessageReadyConfirmed struct{}

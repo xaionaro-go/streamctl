@@ -94,7 +94,7 @@ func runSplitProcesses(
 			f := getFork(procName)
 			if f != nil {
 				time.Sleep(time.Millisecond * 100)
-				//f.Process.Kill()
+				f.Process.Kill()
 				logger.Debugf(ctx, "waiting for process '%s' to die", procName)
 				f.Wait()
 			}
@@ -203,4 +203,16 @@ func setReady(
 	if err != nil {
 		logger.Fatal(ctx, err)
 	}
+
+	err = mainProcess.ReadOne(
+		ctx,
+		func(ctx context.Context, source mainprocess.ProcessName, content any) error {
+			_, ok := content.(mainprocess.MessageReadyConfirmed)
+			if !ok {
+				return fmt.Errorf("got unexpected type '%T' instead of %T", content, mainprocess.MessageReadyConfirmed{})
+			}
+			return nil
+		},
+	)
+	assertNoError(err)
 }

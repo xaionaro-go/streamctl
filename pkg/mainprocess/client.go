@@ -24,6 +24,7 @@ func NewClient(
 		return nil, fmt.Errorf("unable to connect to '%s': %w", addr, err)
 	}
 	logger.Default().Tracef("connected to '%s' from '%s'", conn.RemoteAddr(), conn.LocalAddr())
+	conn.(*net.TCPConn).SetNoDelay(true)
 
 	msg := RegistrationMessage{
 		Password: password,

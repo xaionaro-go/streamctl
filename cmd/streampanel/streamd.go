@@ -115,6 +115,7 @@ func runStreamd(
 	}
 
 	if mainProcess != nil {
+		setReady(ctx, mainProcess)
 		go func() {
 			err := mainProcess.Serve(
 				ctx,
@@ -135,7 +136,6 @@ func runStreamd(
 			)
 			logger.Fatalf(ctx, "communication (with the main process) error: %v", err)
 		}()
-		setReady(ctx, mainProcess)
 	}
 
 	<-ctx.Done()
