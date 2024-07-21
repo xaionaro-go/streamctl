@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 
+	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/pkg/errors"
 	flvtag "github.com/yutopp/go-flv/tag"
 	"github.com/yutopp/go-rtmp"
@@ -75,14 +76,11 @@ func (h *Handler) OnPlay(ctx *rtmp.StreamContext, timestamp uint32, cmd *rtmpmsg
 	}
 
 	pubsub := h.relayService.GetPubsub(cmd.StreamName)
-	if pubsub != nil {
+	if pubsub == nil {
 		return fmt.Errorf("stream '%s' is not found", cmd.StreamName)
 	}
 
-	sub := pubsub.Sub()
-	sub.eventCallback = onEventCallback(h.conn, ctx.StreamID)
-
-	h.sub = sub
+	h.sub = pubsub.Sub(onEventCallback(h.conn, ctx.StreamID))
 
 	return nil
 }
@@ -151,7 +149,8 @@ func (h *Handler) OnVideo(timestamp uint32, payload io.Reader) error {
 }
 
 func (h *Handler) OnClose() {
-	log.Printf("OnClose")
+	logger.Default().Debugf("OnClose")
+	defer logger.Default().Debugf("/OnClose")
 
 	if h.pub != nil {
 		_ = h.pub.Close()

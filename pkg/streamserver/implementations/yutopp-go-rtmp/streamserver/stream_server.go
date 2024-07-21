@@ -214,19 +214,17 @@ func (s *StreamServer) AddIncomingStream(
 	if err != nil {
 		return err
 	}
-	s.Config.Streams[streamID] = &types.StreamConfig{}
 	return nil
 }
 
 func (s *StreamServer) addIncomingStream(
-	ctx context.Context,
+	_ context.Context,
 	streamID types.StreamID,
 ) error {
-	return nil
-	_, err := s.RelayServer.NewPubsub(string(streamID))
-	if err != nil {
-		return fmt.Errorf("unable to create the stream '%s': %w", streamID, err)
+	if _, ok := s.Config.Streams[streamID]; ok {
+		return nil
 	}
+	s.Config.Streams[streamID] = &types.StreamConfig{}
 	return nil
 }
 
@@ -241,15 +239,9 @@ func (s *StreamServer) ListIncomingStreams(
 	ctx context.Context,
 ) []IncomingStream {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
+	_ = ctx
 	s.Lock()
 	defer s.Unlock()
-	var result []IncomingStream
-	for streamID := range s.Config.Streams {
-		result = append(result, IncomingStream{
-			StreamID: streamID,
-		})
-	}
-	return result
 	return s.listIncomingStreams(ctx)
 }
 
@@ -257,13 +249,10 @@ func (s *StreamServer) listIncomingStreams(
 	_ context.Context,
 ) []IncomingStream {
 	var result []IncomingStream
-	for name := range s.RelayServer.Pubsubs() {
-		result = append(
-			result,
-			IncomingStream{
-				StreamID: types.StreamID(name),
-			},
-		)
+	for streamID := range s.Config.Streams {
+		result = append(result, IncomingStream{
+			StreamID: streamID,
+		})
 	}
 	return result
 }
@@ -275,7 +264,6 @@ func (s *StreamServer) RemoveIncomingStream(
 	ctx = belt.WithField(ctx, "module", "StreamServer")
 	s.Lock()
 	defer s.Unlock()
-	delete(s.Config.Streams, streamID)
 	return s.removeIncomingStream(ctx, streamID)
 }
 
@@ -283,10 +271,7 @@ func (s *StreamServer) removeIncomingStream(
 	_ context.Context,
 	streamID types.StreamID,
 ) error {
-	return nil
-	if err := s.RelayServer.RemovePubsub(string(streamID)); err != nil {
-		return fmt.Errorf("unable to remove stream '%s': %w", streamID, err)
-	}
+	delete(s.Config.Streams, streamID)
 	return nil
 }
 
@@ -384,8 +369,11 @@ func (s *StreamServer) UpdateStreamForward(
 
 func (s *StreamServer) ListStreamForwards(
 	ctx context.Context,
-) ([]StreamForward, error) {
+) (_ret []StreamForward, _err error) {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
+	defer func() {
+		logger.Tracef(ctx, "/ListStreamForwards(): %#+v %v", _ret, _err)
+	}()
 	s.Lock()
 	defer s.Unlock()
 
@@ -393,6 +381,7 @@ func (s *StreamServer) ListStreamForwards(
 	if err != nil {
 		return nil, fmt.Errorf("unable to get the list of active stream forwardings: %w", err)
 	}
+	logger.Tracef(ctx, "len(activeStreamForwards) == %d", len(activeStreamForwards))
 
 	type fwdID struct {
 		StreamID types.StreamID
@@ -407,8 +396,10 @@ func (s *StreamServer) ListStreamForwards(
 		}] = fwd
 	}
 
+	logger.Tracef(ctx, "len(s.Config.Streams) == %d", len(s.Config.Streams))
 	var result []StreamForward
 	for streamID, stream := range s.Config.Streams {
+		logger.Tracef(ctx, "len(s.Config.Streams[%s].Forwardings) == %d", streamID, len(stream.Forwardings))
 		for dstID, cfg := range stream.Forwardings {
 			item := StreamForward{
 				StreamID:      streamID,

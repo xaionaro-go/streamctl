@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 
+	"github.com/facebookincubator/go-belt/tool/logger"
 	flvtag "github.com/yutopp/go-flv/tag"
 	"github.com/yutopp/go-rtmp"
 	rtmpmsg "github.com/yutopp/go-rtmp/message"
@@ -15,11 +16,13 @@ type Conn interface {
 
 func onEventCallback(conn Conn, streamID uint32) func(flv *flvtag.FlvTag) error {
 	return func(flv *flvtag.FlvTag) error {
+		logger.Default().Tracef("flvtag == %#+v", *flv)
 		buf := new(bytes.Buffer)
 
 		switch flv.Data.(type) {
 		case *flvtag.AudioData:
 			d := flv.Data.(*flvtag.AudioData)
+			logger.Default().Tracef("flvtag.Data == %#+v", *d)
 
 			// Consume flv payloads (d)
 			if err := flvtag.EncodeAudioData(buf, d); err != nil {
@@ -38,6 +41,7 @@ func onEventCallback(conn Conn, streamID uint32) func(flv *flvtag.FlvTag) error 
 
 		case *flvtag.VideoData:
 			d := flv.Data.(*flvtag.VideoData)
+			logger.Default().Tracef("flvtag.Data == %#+v", *d)
 
 			// Consume flv payloads (d)
 			if err := flvtag.EncodeVideoData(buf, d); err != nil {
@@ -56,6 +60,7 @@ func onEventCallback(conn Conn, streamID uint32) func(flv *flvtag.FlvTag) error 
 
 		case *flvtag.ScriptData:
 			d := flv.Data.(*flvtag.ScriptData)
+			logger.Default().Tracef("flvtag.Data == %#+v", *d)
 
 			// Consume flv payloads (d)
 			if err := flvtag.EncodeScriptData(buf, d); err != nil {

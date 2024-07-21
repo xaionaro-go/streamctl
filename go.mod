@@ -7,8 +7,6 @@ toolchain go1.22.3
 // The original go-yaml is very slow, using the improved version instead
 replace github.com/goccy/go-yaml v1.11.3 => github.com/yoelsusanto/go-yaml v0.0.0-20240324162521-2018c1ab915b
 
-replace github.com/yutopp/go-rtmp v0.0.7 => github.com/xaionaro-go/go-rtmp v0.0.0-20240721192458-95f4555a53b1
-
 require (
 	github.com/facebookincubator/go-belt v0.0.0-20240706172357-c5875adb39ef
 	github.com/go-git/go-billy/v5 v5.5.0

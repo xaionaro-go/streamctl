@@ -97,6 +97,11 @@ func (s *RelayService) RemovePubsub(key string) error {
 	s.m.Lock()
 	defer s.m.Unlock()
 
+	return s.removePubsub(key)
+}
+func (s *RelayService) removePubsub(key string) error {
+	logger.Default().Tracef("removePubsub(%s)", key)
+
 	if _, ok := s.streams[key]; !ok {
 		return fmt.Errorf("not published: %s", key)
 	}

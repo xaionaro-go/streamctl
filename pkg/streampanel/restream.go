@@ -516,6 +516,7 @@ func (p *Panel) displayStreamForwards(
 	})
 
 	p.restreamsWidget.RemoveAll()
+	logger.Tracef(ctx, "len(fwds) == %d", len(fwds))
 	for idx, fwd := range fwds {
 		logger.Tracef(ctx, "fwds[%3d] == %#+v", idx, fwd)
 		c := container.NewHBox()

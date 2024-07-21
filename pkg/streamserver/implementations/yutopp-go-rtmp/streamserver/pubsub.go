@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"sync"
 
+	"github.com/facebookincubator/go-belt/tool/logger"
 	flvtag "github.com/yutopp/go-flv/tag"
 )
 
@@ -36,39 +37,36 @@ func (pb *Pubsub) Deregister() error {
 	pb.m.Lock()
 	defer pb.m.Unlock()
 
-	for _, sub := range pb.subs {
-		_ = sub.Close()
-	}
+	go func() {
+		for _, sub := range pb.subs {
+			_ = sub.Close()
+		}
+	}()
 
-	return pb.srv.RemovePubsub(pb.name)
+	return pb.srv.removePubsub(pb.name)
 }
 
 func (pb *Pubsub) Pub() *Pub {
 	pub := &Pub{
 		pb: pb,
 	}
-
 	pb.pub = pub
-
 	return pub
 }
 
-func (pb *Pubsub) Sub() *Sub {
+func (pb *Pubsub) Sub(eventCallback func(ft *flvtag.FlvTag) error) *Sub {
 	pb.m.Lock()
 	defer pb.m.Unlock()
 
 	subID := pb.nextSubID
 	sub := &Sub{
-		pubSub: pb,
-		subID:  subID,
-		eventCallback: func(ft *flvtag.FlvTag) error {
-			return nil
-		},
+		pubSub:        pb,
+		subID:         subID,
+		eventCallback: eventCallback,
 	}
 
 	pb.nextSubID++
 	pb.subs[subID] = sub
-
 	return sub
 }
 
@@ -80,43 +78,80 @@ func (pb *Pubsub) RemoveSub(s *Sub) {
 }
 
 type Pub struct {
+	m  sync.Mutex
 	pb *Pubsub
 
+	aacSeqHeader *flvtag.FlvTag
 	avcSeqHeader *flvtag.FlvTag
 	lastKeyFrame *flvtag.FlvTag
+}
+
+func (p *Pub) InitSub(sub *Sub) {
+	p.m.Lock()
+	avcSeqHeader := p.avcSeqHeader
+	lastKeyFrame := p.lastKeyFrame
+	aacSeqHeader := p.aacSeqHeader
+	p.m.Unlock()
+	if avcSeqHeader != nil {
+		logger.Default().Tracef("sending avcSeqHeader")
+		_ = sub.onEvent(cloneView(avcSeqHeader))
+	}
+	if lastKeyFrame != nil {
+		logger.Default().Tracef("sending lastKeyFrame")
+		_ = sub.onEvent(cloneView(lastKeyFrame))
+	}
+	if aacSeqHeader != nil {
+		logger.Default().Tracef("sending aacSeqHeader")
+		_ = sub.onEvent(cloneView(aacSeqHeader))
+	}
+
+	sub.initialized = true
 }
 
 // TODO: Should check codec types and so on.
 // In this example, checks only sequence headers and assume that AAC and AVC.
 func (p *Pub) Publish(flv *flvtag.FlvTag) error {
-	switch flv.Data.(type) {
-	case *flvtag.AudioData, *flvtag.ScriptData:
-		for _, sub := range p.pb.subs {
+	p.pb.m.Lock()
+	subs := p.pb.subs
+	p.pb.m.Unlock()
+
+	switch d := flv.Data.(type) {
+	case *flvtag.ScriptData:
+		for _, sub := range subs {
+			_ = sub.onEvent(cloneView(flv))
+		}
+
+	case *flvtag.AudioData:
+		if d.AACPacketType == flvtag.AACPacketTypeSequenceHeader {
+			p.m.Lock()
+			p.aacSeqHeader = cloneView(flv)
+			p.aacSeqHeader.Timestamp = 0
+			p.m.Unlock()
+		}
+
+		for _, sub := range subs {
 			_ = sub.onEvent(cloneView(flv))
 		}
 
 	case *flvtag.VideoData:
-		d := flv.Data.(*flvtag.VideoData)
 		if d.AVCPacketType == flvtag.AVCPacketTypeSequenceHeader {
-			p.avcSeqHeader = flv
-		}
-
-		if d.FrameType == flvtag.FrameTypeKeyFrame {
-			p.lastKeyFrame = flv
-		}
-
-		for _, sub := range p.pb.subs {
-			if !sub.initialized {
-				if p.avcSeqHeader != nil {
-					_ = sub.onEvent(cloneView(p.avcSeqHeader))
-				}
-				if p.lastKeyFrame != nil {
-					_ = sub.onEvent(cloneView(p.lastKeyFrame))
-				}
-				sub.initialized = true
-				continue
+			p.m.Lock()
+			p.avcSeqHeader = cloneView(flv)
+			p.avcSeqHeader.Timestamp = 0
+			p.m.Unlock()
+		} else {
+			if d.FrameType == flvtag.FrameTypeKeyFrame {
+				p.m.Lock()
+				p.lastKeyFrame = cloneView(flv)
+				p.lastKeyFrame.Timestamp = 0
+				p.m.Unlock()
 			}
+		}
 
+		for _, sub := range subs {
+			if !sub.initialized {
+				p.InitSub(sub)
+			}
 			_ = sub.onEvent(cloneView(flv))
 		}
 
@@ -135,8 +170,8 @@ type Sub struct {
 	pubSub *Pubsub
 	subID  uint64
 
-	initialized bool
 	closed      bool
+	initialized bool
 
 	lastTimestamp uint32
 	eventCallback func(*flvtag.FlvTag) error
