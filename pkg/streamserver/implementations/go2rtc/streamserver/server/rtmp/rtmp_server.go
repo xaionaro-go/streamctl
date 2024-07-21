@@ -16,8 +16,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/xaionaro-go/datacounter"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/consts"
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/server"
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/streams"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/go2rtc/streamserver/streams"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 )
 
@@ -26,7 +25,7 @@ type RTMPServer struct {
 	StreamHandler  *streams.StreamHandler
 	Listener       net.Listener
 	CancelFn       context.CancelFunc
-	TrafficCounter server.TrafficCounter
+	TrafficCounter types.TrafficCounter
 }
 
 type Config struct {
@@ -154,7 +153,7 @@ func (s *RTMPServer) tcpHandle(netConn net.Conn) error {
 
 		defer stream.RemoveProducer(prod)
 
-		rc := server.NewIntPtrCounter(&prod.Recv)
+		rc := types.NewIntPtrCounter(&prod.Recv)
 		s.TrafficCounter.Lock()
 		s.TrafficCounter.ReaderCounter = rc
 		s.TrafficCounter.Unlock()
@@ -181,13 +180,13 @@ func StreamsHandle(url string) (core.Producer, error) {
 	return rtmp.DialPlay(url)
 }
 
-func StreamsConsumerHandle(url string) (core.Consumer, server.NumBytesReaderWroter, func(context.Context) error, error) {
+func StreamsConsumerHandle(url string) (core.Consumer, types.NumBytesReaderWroter, func(context.Context) error, error) {
 	cons := flv.NewConsumer()
-	trafficCounter := &server.TrafficCounter{}
+	trafficCounter := &types.TrafficCounter{}
 	run := func(ctx context.Context) error {
 		wr, err := rtmp.DialPublish(url)
 		if err != nil {
-			return fmt.Errorf("unable to connect to '%s': %w", url, err)
+			return fmt.Errorf("unable to connect to RTMP destination '%s': %w", url, err)
 		}
 
 		wrc := datacounter.NewWriterCounter(wr)

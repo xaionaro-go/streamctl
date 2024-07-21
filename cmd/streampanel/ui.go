@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
@@ -69,6 +70,12 @@ func getStreamDAddress(
 			ctx,
 			func(ctx context.Context, source mainprocess.ProcessName, content any) error {
 				switch msg := content.(type) {
+				case UpdateStreamDConfig:
+					go func() {
+						time.Sleep(time.Second * 10)
+						mainProcess.SendMessage(ctx, ProcessNameStreamd, RequestStreamDConfig{})
+					}()
+					return nil
 				case GetStreamdAddressResult:
 					addr = msg.Address
 				case StreamDDied:

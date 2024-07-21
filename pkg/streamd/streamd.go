@@ -769,7 +769,7 @@ func (d *StreamD) StartStreamServer(
 func (d *StreamD) getStreamServerByListenAddr(
 	ctx context.Context,
 	listenAddr string,
-) *types.ServerHandler {
+) *types.PortServer {
 	for _, server := range d.StreamServer.ListServers(ctx) {
 		if server.ListenAddr() == listenAddr {
 			return &server

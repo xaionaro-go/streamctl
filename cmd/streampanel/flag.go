@@ -11,18 +11,20 @@ import (
 )
 
 type Flags struct {
-	LoggerLevel  logger.Level
-	ListenAddr   string
-	RemoteAddr   string
-	ConfigPath   string
-	NetPprofAddr string
-	CPUProfile   string
-	HeapProfile  string
-	SentryDSN    string
-	Page         string
-	LogFile      string
-	Subprocess   string
-	SplitProcess bool
+	LoggerLevel         logger.Level
+	ListenAddr          string
+	RemoteAddr          string
+	ConfigPath          string
+	NetPprofAddrMain    string
+	NetPprofAddrUI      string
+	NetPprofAddrStreamD string
+	CPUProfile          string
+	HeapProfile         string
+	SentryDSN           string
+	Page                string
+	LogFile             string
+	Subprocess          string
+	SplitProcess        bool
 }
 
 func parseFlags() Flags {
@@ -31,7 +33,9 @@ func parseFlags() Flags {
 	listenAddr := pflag.String("listen-addr", "", "the address to listen for incoming connections to")
 	remoteAddr := pflag.String("remote-addr", "", "the address (for example 127.0.0.1:3594) of streamd to connect to, instead of running the stream controllers locally")
 	configPath := pflag.String("config-path", "~/.streampanel.yaml", "the path to the config file")
-	netPprofAddr := pflag.String("go-net-pprof-addr", "", "address to listen to for net/pprof requests")
+	netPprofAddrMain := pflag.String("go-net-pprof-addr-main", "", "address to listen to for net/pprof requests by the main process")
+	netPprofAddrUI := pflag.String("go-net-pprof-addr-ui", "", "address to listen to for net/pprof requests by the UI process")
+	netPprofAddrStreamD := pflag.String("go-net-pprof-addr-streamd", "", "address to listen to for net/pprof requests by the streamd process")
 	cpuProfile := pflag.String("go-profile-cpu", "", "file to write cpu profile to")
 	heapProfile := pflag.String("go-profile-heap", "", "file to write memory profile to")
 	sentryDSN := pflag.String("sentry-dsn", "", "DSN of a Sentry instance to send error reports")
@@ -42,18 +46,20 @@ func parseFlags() Flags {
 	pflag.Parse()
 
 	return Flags{
-		LoggerLevel:  loggerLevel,
-		ListenAddr:   *listenAddr,
-		RemoteAddr:   *remoteAddr,
-		ConfigPath:   *configPath,
-		NetPprofAddr: *netPprofAddr,
-		CPUProfile:   *cpuProfile,
-		HeapProfile:  *heapProfile,
-		SentryDSN:    *sentryDSN,
-		Page:         *page,
-		LogFile:      *logFile,
-		Subprocess:   *subprocess,
-		SplitProcess: *splitProcess,
+		LoggerLevel:         loggerLevel,
+		ListenAddr:          *listenAddr,
+		RemoteAddr:          *remoteAddr,
+		ConfigPath:          *configPath,
+		NetPprofAddrMain:    *netPprofAddrMain,
+		NetPprofAddrUI:      *netPprofAddrUI,
+		NetPprofAddrStreamD: *netPprofAddrStreamD,
+		CPUProfile:          *cpuProfile,
+		HeapProfile:         *heapProfile,
+		SentryDSN:           *sentryDSN,
+		Page:                *page,
+		LogFile:             *logFile,
+		Subprocess:          *subprocess,
+		SplitProcess:        *splitProcess,
 	}
 }
 

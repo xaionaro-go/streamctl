@@ -137,6 +137,15 @@ func runStreamd(
 						return mainProcess.SendMessage(ctx, source, GetStreamdAddressResult{
 							Address: listener.Addr().String(),
 						})
+					case RequestStreamDConfig:
+						var buf bytes.Buffer
+						_, err := cfg.BuiltinStreamD.WriteTo(&buf)
+						if err != nil {
+							return fmt.Errorf("unable to serialize the config: %w", err)
+						}
+						return mainProcess.SendMessage(ctx, source, UpdateStreamDConfig{
+							Config: buf.String(),
+						})
 					default:
 						return fmt.Errorf("unexpected message of type %T: %#+v", content, content)
 					}
@@ -151,6 +160,7 @@ func runStreamd(
 	logger.Fatalf(ctx, "internal error: was supposed to never reach this line")
 }
 
+type RequestStreamDConfig struct{}
 type UpdateStreamDConfig struct {
 	Config string
 }

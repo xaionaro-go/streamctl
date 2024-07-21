@@ -14,8 +14,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/consts"
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/server"
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/streams"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/go2rtc/streamserver/streams"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 )
 
@@ -26,7 +25,7 @@ type RTSPServer struct {
 	StreamHandler  *streams.StreamHandler
 	Handlers       []HandlerFunc
 	CancelFn       context.CancelFunc
-	TrafficCounter server.TrafficCounter
+	TrafficCounter types.TrafficCounter
 }
 
 type Config struct {

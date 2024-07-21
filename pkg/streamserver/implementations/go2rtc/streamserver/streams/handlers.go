@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/server"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 )
 
 type Handler func(source string) (core.Producer, error)
@@ -83,13 +83,13 @@ func (s *StreamHandler) Location(url string) (string, error) {
 
 // TODO: rework
 
-type ConsumerHandler func(url string) (core.Consumer, server.NumBytesReaderWroter, func(context.Context) error, error)
+type ConsumerHandler func(url string) (core.Consumer, types.NumBytesReaderWroter, func(context.Context) error, error)
 
 func (s *StreamHandler) HandleConsumerFunc(scheme string, handler ConsumerHandler) {
 	s.consumerHandlers[scheme] = handler
 }
 
-func (s *StreamHandler) GetConsumer(url string) (core.Consumer, server.NumBytesReaderWroter, func(context.Context) error, error) {
+func (s *StreamHandler) GetConsumer(url string) (core.Consumer, types.NumBytesReaderWroter, func(context.Context) error, error) {
 	if i := strings.IndexByte(url, ':'); i > 0 {
 		scheme := url[:i]
 

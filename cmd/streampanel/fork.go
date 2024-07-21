@@ -167,8 +167,14 @@ func runFork(
 	if debugDontFork {
 		return fakeFork(ctx, procName, addr, password)
 	}
+
+	execPath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("unable to get the path of the executable: %w", err)
+	}
+
 	os.Setenv(EnvPassword, password)
-	args := []string{os.Args[0], "--sentry-dsn=" + flags.SentryDSN, "--log-level=" + flags.LoggerLevel.String(), "--subprocess=" + string(procName) + ":" + addr}
+	args := []string{execPath, "--sentry-dsn=" + flags.SentryDSN, "--log-level=" + flags.LoggerLevel.String(), "--subprocess=" + string(procName) + ":" + addr}
 	logger.Infof(ctx, "running '%s %s'", args[0], strings.Join(args[1:], " "))
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Stderr = os.Stderr

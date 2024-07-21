@@ -7,16 +7,17 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	errmonsentry "github.com/facebookincubator/go-belt/tool/experimental/errmon/implementation/sentry"
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
+	xlogrus "github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
 	"github.com/getsentry/sentry-go"
+	"github.com/sirupsen/logrus"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 )
 
 func getContext(flags Flags) context.Context {
 	ctx := context.Background()
 
-	ll := logrus.DefaultLogrusLogger()
-	l := logrus.New(ll).WithLevel(flags.LoggerLevel)
+	ll := xlogrus.DefaultLogrusLogger()
+	l := xlogrus.New(ll).WithLevel(flags.LoggerLevel)
 
 	if flags.LogFile != "" {
 		f, err := os.OpenFile(flags.LogFile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0750)
@@ -25,6 +26,8 @@ func getContext(flags Flags) context.Context {
 		}
 		ll.SetOutput(f)
 	}
+
+	logrus.SetLevel(xlogrus.LevelToLogrus(l.Level()))
 
 	if flags.SentryDSN != "" {
 		l.Infof("setting up Sentry at DSN '%s'", flags.SentryDSN)

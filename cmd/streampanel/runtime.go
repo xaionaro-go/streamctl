@@ -40,13 +40,23 @@ func initRuntime(ctx context.Context, flags Flags, _procName ProcessName) contex
 		}
 	}
 
-	if flags.NetPprofAddr != "" || (forceNetPProfOnAndroid && runtime.GOOS == "android") {
+	netPprofAddr := ""
+	if forceNetPProfOnAndroid && runtime.GOOS == "android" {
+		netPprofAddr = "localhost:0"
+	}
+	switch _procName {
+	case ProcessNameMain:
+		netPprofAddr = flags.NetPprofAddrMain
+	case ProcessNameUI:
+		netPprofAddr = flags.NetPprofAddrUI
+	case ProcessNameStreamd:
+		netPprofAddr = flags.NetPprofAddrStreamD
+	}
+
+	if netPprofAddr != "" {
 		go func() {
-			if flags.NetPprofAddr == "" {
-				flags.NetPprofAddr = "localhost:0"
-			}
-			l.Infof("starting to listen for net/pprof requests at '%s'", flags.NetPprofAddr)
-			l.Error(http.ListenAndServe(flags.NetPprofAddr, nil))
+			l.Infof("starting to listen for net/pprof requests at '%s'", netPprofAddr)
+			l.Error(http.ListenAndServe(netPprofAddr, nil))
 		}()
 	}
 

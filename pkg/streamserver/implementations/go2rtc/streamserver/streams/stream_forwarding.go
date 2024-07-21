@@ -11,7 +11,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/server"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 )
 
 type StreamForwarding struct {
@@ -21,7 +21,7 @@ type StreamForwarding struct {
 	StreamHandler  *StreamHandler
 	CancelFunc     context.CancelFunc
 	URL            string
-	TrafficCounter server.NumBytesReaderWroter
+	TrafficCounter types.NumBytesReaderWroter
 }
 
 func NewStreamForwarding(streamHandler *StreamHandler) *StreamForwarding {

@@ -78,7 +78,7 @@ func (t *ServerType) UnmarshalYAML(b []byte) error {
 	return nil
 }
 
-type ServerHandler interface {
+type PortServer interface {
 	io.Closer
 
 	Type() ServerType

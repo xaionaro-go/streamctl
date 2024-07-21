@@ -508,6 +508,13 @@ func (p *Panel) displayStreamForwards(
 	logger.Debugf(ctx, "displayStreamForwards")
 	defer logger.Debugf(ctx, "/displayStreamForwards")
 
+	sort.Slice(fwds, func(i, j int) bool {
+		if fwds[i].StreamID != fwds[j].StreamID {
+			return fwds[i].StreamID < fwds[j].StreamID
+		}
+		return fwds[i].DestinationID < fwds[j].DestinationID
+	})
+
 	p.restreamsWidget.RemoveAll()
 	for idx, fwd := range fwds {
 		logger.Tracef(ctx, "fwds[%3d] == %#+v", idx, fwd)
