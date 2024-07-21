@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"strings"
 	"sync"
 
 	"github.com/facebookincubator/go-belt"
@@ -34,6 +33,7 @@ func New(cfg *types.Config) *StreamServer {
 }
 
 func (s *StreamServer) Init(ctx context.Context) error {
+	ctx = belt.WithField(ctx, "module", "StreamServer")
 	s.Lock()
 	defer s.Unlock()
 
@@ -76,6 +76,7 @@ func (s *StreamServer) Init(ctx context.Context) error {
 func (s *StreamServer) ListServers(
 	ctx context.Context,
 ) (_ret []types.PortServer) {
+	ctx = belt.WithField(ctx, "module", "StreamServer")
 	logger.Tracef(ctx, "ListServers")
 	defer func() { logger.Tracef(ctx, "/ListServers: %d servers", len(_ret)) }()
 	s.Lock()
@@ -90,6 +91,7 @@ func (s *StreamServer) StartServer(
 	serverType types.ServerType,
 	listenAddr string,
 ) error {
+	ctx = belt.WithField(ctx, "module", "StreamServer")
 	s.Lock()
 	defer s.Unlock()
 	err := s.startServer(ctx, serverType, listenAddr)
@@ -176,6 +178,7 @@ func (s *StreamServer) StopServer(
 	ctx context.Context,
 	server types.PortServer,
 ) error {
+	ctx = belt.WithField(ctx, "module", "StreamServer")
 	s.Lock()
 	defer s.Unlock()
 	for idx, srv := range s.Config.Servers {
@@ -204,6 +207,7 @@ func (s *StreamServer) AddIncomingStream(
 	ctx context.Context,
 	streamID types.StreamID,
 ) error {
+	ctx = belt.WithField(ctx, "module", "StreamServer")
 	s.Lock()
 	defer s.Unlock()
 	err := s.addIncomingStream(ctx, streamID)
@@ -215,7 +219,7 @@ func (s *StreamServer) AddIncomingStream(
 }
 
 func (s *StreamServer) addIncomingStream(
-	_ context.Context,
+	ctx context.Context,
 	streamID types.StreamID,
 ) error {
 	return nil
@@ -236,8 +240,16 @@ type IncomingStream struct {
 func (s *StreamServer) ListIncomingStreams(
 	ctx context.Context,
 ) []IncomingStream {
+	ctx = belt.WithField(ctx, "module", "StreamServer")
 	s.Lock()
 	defer s.Unlock()
+	var result []IncomingStream
+	for streamID := range s.Config.Streams {
+		result = append(result, IncomingStream{
+			StreamID: streamID,
+		})
+	}
+	return result
 	return s.listIncomingStreams(ctx)
 }
 
@@ -260,6 +272,7 @@ func (s *StreamServer) RemoveIncomingStream(
 	ctx context.Context,
 	streamID types.StreamID,
 ) error {
+	ctx = belt.WithField(ctx, "module", "StreamServer")
 	s.Lock()
 	defer s.Unlock()
 	delete(s.Config.Streams, streamID)
@@ -291,6 +304,7 @@ func (s *StreamServer) AddStreamForward(
 	destinationID types.DestinationID,
 	enabled bool,
 ) error {
+	ctx = belt.WithField(ctx, "module", "StreamServer")
 	s.Lock()
 	defer s.Unlock()
 	streamConfig := s.Config.Streams[streamID]
@@ -320,16 +334,13 @@ func (s *StreamServer) addStreamForward(
 	if _, ok := s.ActiveStreamForwardings[destinationID]; ok {
 		return fmt.Errorf("there is already an active stream forwarding to '%s'", destinationID)
 	}
-	streamSrc := s.RelayServer.GetPubsub(string(streamID))
-	if streamSrc == nil {
-		return fmt.Errorf("unable to find stream ID '%s', available stream IDs: %s", streamID, strings.Join(s.RelayServer.PubsubNames(), ", "))
-	}
+
 	dst, err := s.findStreamDestinationByID(ctx, destinationID)
 	if err != nil {
 		return fmt.Errorf("unable to find stream destination '%s': %w", destinationID, err)
 	}
 
-	fwd, err := newActiveStreamForward(ctx, streamID, destinationID, streamSrc, dst.URL)
+	fwd, err := newActiveStreamForward(ctx, streamID, destinationID, dst.URL, s.RelayServer)
 	if err != nil {
 		return fmt.Errorf("unable to run the stream forwarding: %w", err)
 	}
@@ -344,6 +355,7 @@ func (s *StreamServer) UpdateStreamForward(
 	destinationID types.DestinationID,
 	enabled bool,
 ) error {
+	ctx = belt.WithField(ctx, "module", "StreamServer")
 	s.Lock()
 	defer s.Unlock()
 	streamConfig := s.Config.Streams[streamID]
@@ -373,6 +385,7 @@ func (s *StreamServer) UpdateStreamForward(
 func (s *StreamServer) ListStreamForwards(
 	ctx context.Context,
 ) ([]StreamForward, error) {
+	ctx = belt.WithField(ctx, "module", "StreamServer")
 	s.Lock()
 	defer s.Unlock()
 
@@ -437,6 +450,7 @@ func (s *StreamServer) RemoveStreamForward(
 	streamID types.StreamID,
 	dstID types.DestinationID,
 ) error {
+	ctx = belt.WithField(ctx, "module", "StreamServer")
 	s.Lock()
 	defer s.Unlock()
 	streamCfg := s.Config.Streams[streamID]
@@ -469,6 +483,7 @@ func (s *StreamServer) removeStreamForward(
 func (s *StreamServer) ListStreamDestinations(
 	ctx context.Context,
 ) ([]types.StreamDestination, error) {
+	ctx = belt.WithField(ctx, "module", "StreamServer")
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
 	return s.listStreamDestinations(ctx)
@@ -487,6 +502,7 @@ func (s *StreamServer) AddStreamDestination(
 	destinationID types.DestinationID,
 	url string,
 ) error {
+	ctx = belt.WithField(ctx, "module", "StreamServer")
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
 	err := s.addStreamDestination(ctx, destinationID, url)
@@ -513,6 +529,7 @@ func (s *StreamServer) RemoveStreamDestination(
 	ctx context.Context,
 	destinationID types.DestinationID,
 ) error {
+	ctx = belt.WithField(ctx, "module", "StreamServer")
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
 	for _, streamCfg := range s.Config.Streams {

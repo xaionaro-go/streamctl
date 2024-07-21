@@ -61,6 +61,9 @@ func (pb *Pubsub) Sub() *Sub {
 	sub := &Sub{
 		pubSub: pb,
 		subID:  subID,
+		eventCallback: func(ft *flvtag.FlvTag) error {
+			return nil
+		},
 	}
 
 	pb.nextSubID++
@@ -153,6 +156,9 @@ func (s *Sub) onEvent(flv *flvtag.FlvTag) error {
 }
 
 func (s *Sub) Close() error {
+	if s == nil {
+		return nil
+	}
 	if s.closed {
 		return nil
 	}
