@@ -17,7 +17,7 @@ import (
 type ProcessName = mainprocess.ProcessName
 
 const (
-	ProcessNameMain    = ProcessName("main")
+	ProcessNameMain    = mainprocess.ProcessNameMain
 	ProcessNameStreamd = ProcessName("streamd")
 	ProcessNameUI      = ProcessName("ui")
 )
@@ -38,11 +38,13 @@ func setFork(procName ProcessName, f *exec.Cmd) {
 }
 
 func init() {
+	gob.Register(MessageQuit{})
 	gob.Register(StreamDDied{})
 	gob.Register(GetFlags{})
 	gob.Register(GetFlagsResult{})
 	gob.Register(GetStreamdAddress{})
 	gob.Register(GetStreamdAddressResult{})
+	gob.Register(UpdateStreamDConfig{})
 }
 
 const (
@@ -71,7 +73,7 @@ func runSplitProcesses(
 	ctx context.Context,
 	flags Flags,
 ) {
-	go signalHandler(ctx)
+	signalsChan := signalHandler(ctx)
 
 	procList := []ProcessName{
 		ProcessNameUI,
@@ -121,7 +123,7 @@ func runSplitProcesses(
 		logger.Fatalf(ctx, "failed to start process manager: %v", err)
 	}
 	defer m.Close()
-	go m.Serve(ctx, func(ctx context.Context, source mainprocess.ProcessName, content any) error {
+	go m.Serve(ctx, func(ctx context.Context, source ProcessName, content any) error {
 		switch content.(type) {
 		case GetFlags:
 			msg := GetFlagsResult{
@@ -131,6 +133,8 @@ func runSplitProcesses(
 			if err != nil {
 				logger.Errorf(ctx, "failed to send message %#+v to '%s': %v", msg, source, err)
 			}
+		case MessageQuit:
+			signalsChan <- os.Interrupt
 		}
 		return nil
 	})
@@ -199,14 +203,14 @@ func setReady(
 	logger.Debugf(ctx, "setReady")
 	defer logger.Debugf(ctx, "/setReady")
 
-	err := mainProcess.SendMessage(ctx, "main", mainprocess.MessageReady{})
+	err := mainProcess.SendMessage(ctx, ProcessNameMain, mainprocess.MessageReady{})
 	if err != nil {
 		logger.Fatal(ctx, err)
 	}
 
 	err = mainProcess.ReadOne(
 		ctx,
-		func(ctx context.Context, source mainprocess.ProcessName, content any) error {
+		func(ctx context.Context, source ProcessName, content any) error {
 			_, ok := content.(mainprocess.MessageReadyConfirmed)
 			if !ok {
 				return fmt.Errorf("got unexpected type '%T' instead of %T", content, mainprocess.MessageReadyConfirmed{})

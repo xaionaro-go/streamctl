@@ -1,11 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	_ "net/http/pprof"
+	"os"
 
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel"
@@ -18,7 +22,7 @@ func main() {
 	flags := parseFlags()
 	ctx := getContext(flags)
 	defer belt.Flush(ctx)
-	cancelFunc := initRuntime(ctx, flags, "main")
+	cancelFunc := initRuntime(ctx, flags, ProcessNameMain)
 	defer cancelFunc()
 
 	if flags.Subprocess != "" {
@@ -31,12 +35,13 @@ func main() {
 		return
 	}
 
-	runPanel(ctx, flags)
+	runPanel(ctx, flags, nil)
 }
 
 func runPanel(
 	ctx context.Context,
 	flags Flags,
+	mainProcess *mainprocess.Client,
 ) {
 	logger.Debugf(ctx, "runPanel: %#+v", flags)
 	defer logger.Debugf(ctx, "/runPanel")
@@ -71,6 +76,36 @@ func runPanel(
 		if err != nil {
 			logger.Fatalf(ctx, "unable to server the gRPC server: %v", err)
 		}
+	}
+
+	if mainProcess != nil {
+		go func() {
+			err := mainProcess.Serve(
+				ctx,
+				func(ctx context.Context, source mainprocess.ProcessName, content any) error {
+					switch msg := content.(type) {
+					case StreamDDied:
+						logger.Errorf(ctx, "streamd died, killing myself as well (to get reborn)")
+						os.Exit(0)
+					case UpdateStreamDConfig:
+						_, err := panel.Config.BuiltinStreamD.ReadFrom(bytes.NewReader([]byte(msg.Config)))
+						if err != nil {
+							err := fmt.Errorf("unable to deserialize the updated streamd config: %w", err)
+							logger.Errorf(ctx, "%s", err)
+							return err
+						}
+						err = panel.SaveConfig(ctx)
+						if err != nil {
+							err := fmt.Errorf("unable to save the updated streamd config: %w", err)
+							logger.Errorf(ctx, "%s", err)
+							return err
+						}
+					}
+					return nil
+				},
+			)
+			logger.Fatalf(ctx, "communication (with the main process) error: %v", err)
+		}()
 	}
 
 	var loopOpts []streampanel.LoopOption

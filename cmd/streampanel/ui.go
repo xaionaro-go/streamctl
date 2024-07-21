@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
@@ -33,28 +32,18 @@ func forkUI(ctx context.Context, mainProcessAddr, password string) {
 	setReady(ctx, mainProcess)
 	streamdAddr := getStreamDAddress(ctx, mainProcess)
 
-	go func() {
-		err := mainProcess.Serve(
-			ctx,
-			func(ctx context.Context, source mainprocess.ProcessName, content any) error {
-				switch content.(type) {
-				case StreamDDied:
-					logger.Errorf(ctx, "streamd died, killing myself as well (to get reborn)")
-					os.Exit(0)
-				}
-				return nil
-			},
-		)
-		logger.Fatalf(ctx, "communication (with the main process) error: %v", err)
-	}()
-
 	logger.Debugf(ctx, "streamd remote address is %s", streamdAddr)
 	flags.RemoteAddr = streamdAddr
-	runPanel(ctx, flags)
+	runPanel(ctx, flags, mainProcess)
+	err = mainProcess.SendMessage(ctx, ProcessNameMain, MessageQuit{})
+	if err != nil {
+		logger.Error(ctx, "unable to send the Quit message to the main process: %w", err)
+	}
+	<-ctx.Done()
 }
 
+type MessageQuit struct{}
 type StreamDDied struct{}
-
 type GetStreamdAddress struct{}
 type GetStreamdAddressResult struct {
 	Address string

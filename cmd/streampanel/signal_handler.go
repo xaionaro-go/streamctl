@@ -10,7 +10,7 @@ import (
 
 func signalHandler(
 	ctx context.Context,
-) {
+) chan<- os.Signal {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	go func() {
@@ -27,4 +27,5 @@ func signalHandler(
 			os.Exit(1)
 		}
 	}()
+	return c
 }

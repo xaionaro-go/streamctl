@@ -290,7 +290,7 @@ func (m *Manager) processMessage(
 		wg.Wait()
 		close(errCh)
 		return err.ErrorOrNil()
-	case "main":
+	case ProcessNameMain:
 		logger.Tracef(ctx, "got a message to the main process from '%s': %#+v", source, message.Content)
 		switch message.Content.(type) {
 		case MessageReady:
@@ -487,7 +487,7 @@ func (m *Manager) SendMessagePreReady(
 	}
 	encoder := gob.NewEncoder(conn)
 	msg := MessageFromMain{
-		Source:      "main",
+		Source:      ProcessNameMain,
 		Password:    m.password,
 		Destination: dst,
 		Content:     content,
@@ -511,7 +511,7 @@ func (m *Manager) SendMessage(
 	}
 	encoder := gob.NewEncoder(conn)
 	msg := MessageFromMain{
-		Source:      "main",
+		Source:      ProcessNameMain,
 		Password:    m.password,
 		Destination: dst,
 		Content:     content,

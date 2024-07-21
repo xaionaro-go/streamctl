@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net"
@@ -97,7 +98,14 @@ func runStreamd(
 		cfg.BuiltinStreamD,
 		ui,
 		func(ctx context.Context, cfg config.Config) error {
-			return nil
+			var buf bytes.Buffer
+			_, err := cfg.WriteTo(&buf)
+			if err != nil {
+				return fmt.Errorf("unable to serialize the config: %w", err)
+			}
+			return mainProcess.SendMessage(ctx, ProcessNameUI, UpdateStreamDConfig{
+				Config: buf.String(),
+			})
 		},
 		belt.CtxBelt(ctx),
 	)
@@ -141,6 +149,10 @@ func runStreamd(
 	<-ctx.Done()
 
 	logger.Fatalf(ctx, "internal error: was supposed to never reach this line")
+}
+
+type UpdateStreamDConfig struct {
+	Config string
 }
 
 func initGRPCServer(

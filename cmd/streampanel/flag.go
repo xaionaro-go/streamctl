@@ -66,7 +66,7 @@ func getFlags(
 	ctx context.Context,
 	mainProcess *mainprocess.Client,
 ) Flags {
-	err := mainProcess.SendMessage(ctx, "main", GetFlags{})
+	err := mainProcess.SendMessage(ctx, ProcessNameMain, GetFlags{})
 	assertNoError(err)
 
 	var flags Flags
