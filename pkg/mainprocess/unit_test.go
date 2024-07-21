@@ -50,35 +50,36 @@ func Test(t *testing.T) {
 	}
 
 	m, err := NewManager(
-		func(ctx context.Context, source string, content any) error {
-			handleCall("main", content)
-			return nil
-		},
+		nil,
 		"child0", "child1",
 	)
 	require.NoError(t, err)
 	defer m.Close()
-	go m.Serve(belt.WithField(ctx, "process", "main"))
+	go m.Serve(
+		belt.WithField(ctx, "process", "main"),
+		func(ctx context.Context, source ProcessName, content any) error {
+			handleCall("main", content)
+			return nil
+		},
+	)
 
-	c0, err := NewClient("child0", m.Addr().String(), m.Password(), func(ctx context.Context, source string, content any) error {
+	c0, err := NewClient("child0", m.Addr().String(), m.Password())
+	require.NoError(t, err)
+	defer c0.Close()
+	go c0.Serve(belt.WithField(ctx, "process", "child0"), func(ctx context.Context, source ProcessName, content any) error {
 		handleCall("child0", content)
 		return nil
 	})
-	require.NoError(t, err)
-	defer c0.Close()
-	go c0.Serve(belt.WithField(ctx, "process", "child0"))
 
-	c1, err := NewClient("child1", m.Addr().String(), m.Password(), func(ctx context.Context, source string, content any) error {
+	c1, err := NewClient("child1", m.Addr().String(), m.Password())
+	require.NoError(t, err)
+	defer c1.Close()
+	go c1.Serve(belt.WithField(ctx, "process", "child1"), func(ctx context.Context, source ProcessName, content any) error {
 		handleCall("child1", content)
 		return nil
 	})
-	require.NoError(t, err)
-	defer c1.Close()
-	go c1.Serve(belt.WithField(ctx, "process", "child1"))
 
-	_, err = NewClient("child2", m.Addr().String(), m.Password(), func(ctx context.Context, source string, content any) error {
-		return nil
-	})
+	_, err = NewClient("child2", m.Addr().String(), m.Password())
 	require.Error(t, err)
 
 	waitCh0 := handleCallHappened["main"]

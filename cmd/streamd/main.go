@@ -40,7 +40,9 @@ func main() {
 	netPprofAddr := pflag.String("go-net-pprof-addr", "", "address to listen to for net/pprof requests")
 	cpuProfile := pflag.String("go-profile-cpu", "", "file to write cpu profile to")
 	heapProfile := pflag.String("go-profile-heap", "", "file to write memory profile to")
+	sentryDSN := pflag.String("sentry-dsn", "", "DSN of a Sentry instance to send error reports")
 	pflag.Parse()
+
 	l := logrus.Default().WithLevel(loggerLevel)
 
 	if *cpuProfile != "" {
@@ -84,6 +86,24 @@ func main() {
 
 	ctx := context.Background()
 	ctx = logger.CtxWithLogger(ctx, l)
+
+	if *sentryDSN != "" {
+		l.Infof("setting up Sentry at DSN '%s'", *sentryDSN)
+		sentryClient, err := sentry.NewClient(sentry.ClientOptions{
+			Dsn: *sentryDSN,
+		})
+		if err != nil {
+			l.Fatal(err)
+		}
+		sentryErrorMonitor := errmonsentry.New(sentryClient)
+		ctx = errmon.CtxWithErrorMonitor(ctx, sentryErrorMonitor)
+
+		l = l.WithPreHooks(observability.NewErrorMonitorLoggerHook(
+			sentryErrorMonitor,
+		))
+		ctx = logger.CtxWithLogger(ctx, l)
+	}
+
 	logger.Default = func() logger.Logger {
 		return l
 	}
@@ -132,27 +152,6 @@ func main() {
 		)
 		if err != nil {
 			l.Fatalf("unable to initialize the streamd instance: %v", err)
-		}
-
-		l := l
-		if streamD.Config.SentryDSN != "" {
-			l.Infof("setting up Sentry at DSN '%s'", streamD.Config.SentryDSN)
-			sentryClient, err := sentry.NewClient(sentry.ClientOptions{
-				Dsn: streamD.Config.SentryDSN,
-			})
-			if err != nil {
-				l.Fatal(err)
-			}
-			sentryErrorMonitor := errmonsentry.New(sentryClient)
-			ctx = errmon.CtxWithErrorMonitor(ctx, sentryErrorMonitor)
-
-			l = l.WithPreHooks(observability.NewErrorMonitorLoggerHook(
-				sentryErrorMonitor,
-			))
-			ctx = logger.CtxWithLogger(ctx, l)
-			logger.Default = func() logger.Logger {
-				return l
-			}
 		}
 
 		go func() {

@@ -17,7 +17,6 @@ type ScreenshotConfig struct {
 }
 
 type Config struct {
-	SentryDSN         string           `yaml:"sentry_dsn"`
 	RemoteStreamDAddr string           `yaml:"streamd_remote"`
 	BuiltinStreamD    streamd.Config   `yaml:"streamd_builtin"`
 	Screenshot        ScreenshotConfig `yaml:"screenshot"`

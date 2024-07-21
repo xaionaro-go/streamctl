@@ -10,16 +10,14 @@ import (
 )
 
 type Client struct {
-	Conn              net.Conn
-	Password          string
-	OnReceivedMessage OnReceivedMessageFunc
+	Conn     net.Conn
+	Password string
 }
 
 func NewClient(
-	myName string,
+	myName ProcessName,
 	addr string,
 	password string,
-	onReceivedMessage OnReceivedMessageFunc,
 ) (*Client, error) {
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
@@ -47,15 +45,14 @@ func NewClient(
 	logger.Default().Tracef("successfully registered the process '%s'", myName)
 
 	return &Client{
-		Conn:              conn,
-		Password:          password,
-		OnReceivedMessage: onReceivedMessage,
+		Conn:     conn,
+		Password: password,
 	}, nil
 }
 
 func (c *Client) SendMessage(
 	ctx context.Context,
-	dst string,
+	dst ProcessName,
 	content any,
 ) error {
 	encoder := gob.NewEncoder(c.Conn)
@@ -76,7 +73,10 @@ func (c *Client) Close() error {
 	return c.Conn.Close()
 }
 
-func (c *Client) Serve(ctx context.Context) error {
+func (c *Client) Serve(
+	ctx context.Context,
+	onReceivedMessage OnReceivedMessageFunc,
+) error {
 	ctx, cancelFn := context.WithCancel(ctx)
 	defer cancelFn()
 	go func() {
@@ -94,26 +94,26 @@ func (c *Client) Serve(ctx context.Context) error {
 		default:
 		}
 
-		var msg MessageFromMain
-		decoder := gob.NewDecoder(c.Conn)
-		err := decoder.Decode(&msg)
-		if err != nil {
-			return fmt.Errorf("unable to receive&decode message: %w", err)
-		}
-
-		if err := c.onReceivedMessage(ctx, msg); err != nil {
-			logger.Error(ctx, err)
+		if err := c.ReadOne(ctx, onReceivedMessage); err != nil {
+			return err
 		}
 	}
 }
 
-func (c *Client) onReceivedMessage(
+func (c *Client) ReadOne(
 	ctx context.Context,
-	msg MessageFromMain,
+	onReceivedMessage OnReceivedMessageFunc,
 ) error {
-	if c.OnReceivedMessage == nil {
-		return fmt.Errorf("OnReceivedMessage function is not set")
+	var msg MessageFromMain
+	decoder := gob.NewDecoder(c.Conn)
+	err := decoder.Decode(&msg)
+	if err != nil {
+		return fmt.Errorf("unable to receive&decode message: %w", err)
 	}
 
-	return c.OnReceivedMessage(ctx, msg.Source, msg.Content)
+	if err := onReceivedMessage(ctx, msg.Source, msg.Content); err != nil {
+		return fmt.Errorf("unable to process the message '%#+v': %w", msg, err)
+	}
+
+	return nil
 }

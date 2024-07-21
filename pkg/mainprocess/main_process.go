@@ -15,8 +15,16 @@ import (
 
 type OnReceivedMessageFunc func(
 	ctx context.Context,
-	source string,
+	source ProcessName,
 	content any,
+) error
+
+type LaunchClientFunc func(
+	ctx context.Context,
+	procName ProcessName,
+	addr string,
+	password string,
+	isRestart bool,
 ) error
 
 type Manager struct {
@@ -24,17 +32,17 @@ type Manager struct {
 	password string
 
 	connsLocker  sync.Mutex
-	conns        map[string]net.Conn
+	conns        map[ProcessName]net.Conn
 	connsChanged chan struct{}
 
-	allClientProcesses []string
+	allClientProcesses []ProcessName
 
-	OnReceivedMessage OnReceivedMessageFunc
+	LaunchClient LaunchClientFunc
 }
 
 func NewManager(
-	onReceivedMessage OnReceivedMessageFunc,
-	expectedClients ...string,
+	launchClient LaunchClientFunc,
+	expectedClients ...ProcessName,
 ) (*Manager, error) {
 	listener, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -47,12 +55,12 @@ func NewManager(
 	}
 
 	return &Manager{
-		OnReceivedMessage: onReceivedMessage,
+		LaunchClient: launchClient,
 
 		listener: listener,
 		password: password,
 
-		conns:        map[string]net.Conn{},
+		conns:        map[ProcessName]net.Conn{},
 		connsChanged: make(chan struct{}),
 
 		allClientProcesses: expectedClients,
@@ -71,7 +79,24 @@ func (m *Manager) Close() error {
 	return m.listener.Close()
 }
 
-func (m *Manager) Serve(ctx context.Context) error {
+func (m *Manager) VerifyEverybodyConnected(
+	ctx context.Context,
+) error {
+	m.connsLocker.Lock()
+	defer m.connsLocker.Unlock()
+
+	for _, name := range m.allClientProcesses {
+		if _, ok := m.conns[name]; !ok {
+			return fmt.Errorf("client '%s' is not connected", name)
+		}
+	}
+	return nil
+}
+
+func (m *Manager) Serve(
+	ctx context.Context,
+	onReceivedMessage OnReceivedMessageFunc,
+) error {
 	logger.Tracef(ctx, "serving listener at %s", m.listener.Addr())
 	defer logger.Tracef(ctx, "/serving listener at %s", m.listener.Addr())
 
@@ -86,6 +111,15 @@ func (m *Manager) Serve(ctx context.Context) error {
 		}
 	}()
 
+	if m.LaunchClient != nil {
+		for _, name := range m.allClientProcesses {
+			err := m.LaunchClient(ctx, name, m.listener.Addr().String(), m.password, false)
+			if err != nil {
+				return fmt.Errorf("unable to launch '%s': %w", name, err)
+			}
+		}
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -99,22 +133,24 @@ func (m *Manager) Serve(ctx context.Context) error {
 		}
 		logger.Tracef(ctx, "accepted a connection from '%s'", conn.RemoteAddr())
 
-		m.addNewConnection(ctx, conn)
+		m.addNewConnection(ctx, conn, onReceivedMessage)
 	}
 }
 
 func (m *Manager) addNewConnection(
 	ctx context.Context,
 	conn net.Conn,
+	onReceivedMessage OnReceivedMessageFunc,
 ) {
 	go func() {
-		m.handleConnection(ctx, conn)
+		m.handleConnection(ctx, conn, onReceivedMessage)
 	}()
 }
 
 func (m *Manager) handleConnection(
 	ctx context.Context,
 	conn net.Conn,
+	onReceivedMessage OnReceivedMessageFunc,
 ) {
 	var regMessage RegistrationMessage
 	logger.Tracef(ctx, "handleConnection from %s", conn.RemoteAddr())
@@ -152,7 +188,7 @@ func (m *Manager) handleConnection(
 		logger.Error(ctx, err)
 		return
 	}
-	defer func(sourceName string) {
+	defer func(sourceName ProcessName) {
 		m.unregisterConnection(sourceName)
 	}(regMessage.Source)
 	if err := encoder.Encode(RegistrationResult{}); err != nil {
@@ -161,6 +197,16 @@ func (m *Manager) handleConnection(
 		return
 	}
 	ctx = belt.WithField(ctx, "client", regMessage.Source)
+
+	defer func() {
+		if m.LaunchClient == nil {
+			return
+		}
+		err := m.LaunchClient(ctx, regMessage.Source, m.listener.Addr().String(), m.password, true)
+		if err != nil {
+			logger.Error(ctx, err)
+		}
+	}()
 
 	for {
 		select {
@@ -185,7 +231,7 @@ func (m *Manager) handleConnection(
 			return
 		}
 
-		if err := m.processMessage(ctx, regMessage.Source, message); err != nil {
+		if err := m.processMessage(ctx, regMessage.Source, message, onReceivedMessage); err != nil {
 			logger.Errorf(
 				ctx,
 				"unable to process the message %#+v from %s (%s): %w",
@@ -198,8 +244,9 @@ func (m *Manager) handleConnection(
 
 func (m *Manager) processMessage(
 	ctx context.Context,
-	source string,
+	source ProcessName,
 	message MessageToMain,
+	onReceivedMessage OnReceivedMessageFunc,
 ) (_ret error) {
 	logger.Tracef(ctx, "processing message from '%s': %#+v", source, message)
 	defer func() { logger.Tracef(ctx, "/processing message from '%s': %#+v: %v", source, message, _ret) }()
@@ -209,7 +256,7 @@ func (m *Manager) processMessage(
 		logger.Tracef(ctx, "a broadcast message from '%s': %#+v", source, message.Content)
 		var wg sync.WaitGroup
 		var err *multierror.Error
-		err = multierror.Append(err, m.onReceivedMessage(ctx, source, message.Content))
+		err = multierror.Append(err, onReceivedMessage(ctx, source, message.Content))
 
 		errCh := make(chan error)
 		go func() {
@@ -222,7 +269,7 @@ func (m *Manager) processMessage(
 				continue
 			}
 			wg.Add(1)
-			go func(dst string) {
+			go func(dst ProcessName) {
 				defer wg.Done()
 				errCh <- m.sendMessage(ctx, source, dst, message.Content)
 			}(dst)
@@ -232,37 +279,22 @@ func (m *Manager) processMessage(
 		return err.ErrorOrNil()
 	case "main":
 		logger.Tracef(ctx, "a message to the main process from '%s': %#+v", source, message.Content)
-		return m.onReceivedMessage(ctx, source, message.Content)
+		return onReceivedMessage(ctx, source, message.Content)
 	default:
 		logger.Tracef(ctx, "a message to '%s' from '%s': %#+v", message.Destination, source, message.Content)
 		return m.sendMessage(ctx, source, message.Destination, message.Content)
 	}
 }
 
-func (m *Manager) onReceivedMessage(
-	ctx context.Context,
-	source string,
-	content any,
-) error {
-	if m.OnReceivedMessage == nil {
-		err := fmt.Errorf("OnReceivedMessage is not set")
-		logger.Tracef(ctx, "%v", err)
-		return err
-	}
-
-	logger.Tracef(ctx, "calling the OnReceivedMessage function")
-	return m.OnReceivedMessage(ctx, source, content)
-}
-
 type MessageFromMain struct {
-	Source      string
+	Source      ProcessName
 	Password    string
-	Destination string
+	Destination ProcessName
 	Content     any
 }
 
 func (m *Manager) isExpectedProcess(
-	name string,
+	name ProcessName,
 ) bool {
 	for _, p := range m.allClientProcesses {
 		if name == p {
@@ -274,8 +306,8 @@ func (m *Manager) isExpectedProcess(
 
 func (m *Manager) sendMessage(
 	ctx context.Context,
-	source string,
-	destination string,
+	source ProcessName,
+	destination ProcessName,
 	content any,
 ) (_ret error) {
 	logger.Tracef(ctx, "sending message message %#+v from '%s' to '%s'", content, source, destination)
@@ -309,7 +341,7 @@ func (m *Manager) sendMessage(
 }
 
 func (m *Manager) waitForProcess(
-	name string,
+	name ProcessName,
 ) (net.Conn, error) {
 	if !m.isExpectedProcess(name) {
 		return nil, fmt.Errorf("process '%s' is not ever expected", name)
@@ -336,7 +368,7 @@ func (m *Manager) checkPassword(
 }
 
 func (m *Manager) registerConnection(
-	sourceName string,
+	sourceName ProcessName,
 	conn net.Conn,
 ) error {
 	if !m.isExpectedProcess(sourceName) {
@@ -356,7 +388,7 @@ func (m *Manager) registerConnection(
 }
 
 func (m *Manager) unregisterConnection(
-	sourceName string,
+	sourceName ProcessName,
 ) {
 	m.connsLocker.Lock()
 	defer m.connsLocker.Unlock()
@@ -368,7 +400,7 @@ func (m *Manager) unregisterConnection(
 
 type RegistrationMessage struct {
 	Password string
-	Source   string
+	Source   ProcessName
 }
 
 type RegistrationResult struct {
@@ -377,6 +409,30 @@ type RegistrationResult struct {
 
 type MessageToMain struct {
 	Password    string
-	Destination string
+	Destination ProcessName
 	Content     any
+}
+
+func (m *Manager) SendMessage(
+	ctx context.Context,
+	dst ProcessName,
+	content any,
+) error {
+	conn, err := m.waitForProcess(dst)
+	if err != nil {
+		return fmt.Errorf("unable to wait for process '%s': %w", dst, err)
+	}
+	encoder := gob.NewEncoder(conn)
+	msg := MessageFromMain{
+		Source:      "main",
+		Password:    m.password,
+		Destination: dst,
+		Content:     content,
+	}
+	err = encoder.Encode(msg)
+	logger.Tracef(ctx, "sending message %#+v: %v", msg, err)
+	if err != nil {
+		return fmt.Errorf("unable to encode&send message %#+v: %w", msg, err)
+	}
+	return nil
 }

@@ -164,7 +164,6 @@ require (
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/srwiley/oksvg v0.0.0-20221011165216-be6e8873101c // indirect
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef // indirect
-	github.com/stretchr/testify v1.9.0 // indirect
 	github.com/vishvananda/netlink v1.1.1-0.20211118161826-650dca95af54 // indirect
 	github.com/vishvananda/netns v0.0.4 // indirect
 	github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1 // indirect
@@ -219,7 +218,6 @@ require (
 	github.com/hyprspace/hyprspace v0.10.1
 	github.com/immune-gmbh/attestation-sdk v0.0.0-20230711173209-f44e4502aeca
 	github.com/kbinani/screenshot v0.0.0-20230812210009-b87d31814237
-	github.com/kraken-hpc/go-fork v0.1.1
 	github.com/libp2p/go-libp2p v0.33.2
 	github.com/libp2p/go-libp2p-kad-dht v0.25.2
 	github.com/multiformats/go-multiaddr v0.12.3
@@ -228,6 +226,7 @@ require (
 	github.com/rs/zerolog v1.33.0
 	github.com/sethvargo/go-password v0.3.1
 	github.com/spf13/pflag v1.0.5
+	github.com/stretchr/testify v1.9.0
 	github.com/xaionaro-go/datacounter v1.0.4
 	github.com/xaionaro-go/unsafetools v0.0.0-20210722164218-75ba48cf7b3c
 	github.com/yl2chen/cidranger v1.0.2

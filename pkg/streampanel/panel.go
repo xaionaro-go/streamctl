@@ -200,6 +200,23 @@ func (p *Panel) dumpConfig(ctx context.Context) {
 	logger.Tracef(ctx, "the current config is: %s", buf.String())
 }
 
+func (p *Panel) lazyInitStreamD(ctx context.Context) error {
+	if p.StreamD != nil {
+		return nil
+	}
+
+	if p.Config.RemoteStreamDAddr != "" {
+		if err := p.initRemoteStreamD(ctx); err != nil {
+			return fmt.Errorf("unable to initialize the remote stream controller '%s': %w", p.Config.RemoteStreamDAddr, err)
+		}
+	} else {
+		if err := p.initBuiltinStreamD(ctx); err != nil {
+			return fmt.Errorf("unable to initialize the builtin stream controller '%s': %w", p.configPath, err)
+		}
+	}
+	return nil
+}
+
 func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
 	if p.defaultContext != nil {
 		return fmt.Errorf("Loop was already used, and cannot be used the second time")
@@ -210,14 +227,8 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
 
 	p.defaultContext = ctx
 
-	if p.Config.RemoteStreamDAddr != "" {
-		if err := p.initRemoteStreamD(ctx); err != nil {
-			return fmt.Errorf("unable to initialize the remote stream controller '%s': %w", p.Config.RemoteStreamDAddr, err)
-		}
-	} else {
-		if err := p.initBuiltinStreamD(ctx); err != nil {
-			return fmt.Errorf("unable to initialize the builtin stream controller '%s': %w", p.configPath, err)
-		}
+	if err := p.lazyInitStreamD(ctx); err != nil {
+		return fmt.Errorf("unable to initialize stream controller: %w", err)
 	}
 
 	p.app = fyneapp.New()

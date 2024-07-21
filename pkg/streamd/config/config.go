@@ -19,13 +19,11 @@ type ProfileMetadata struct {
 	MaxOrder                 int
 }
 
-
 type config struct {
 	CachePath       *string `yaml:"cache_path"`
 	GitRepo         GitRepoConfig
 	Backends        streamcontrol.Config
 	ProfileMetadata map[streamcontrol.ProfileName]ProfileMetadata
-	SentryDSN       string              `yaml:"sentry_dsn"`
 	StreamServer    streamserver.Config `yaml:"stream_server"`
 }
 

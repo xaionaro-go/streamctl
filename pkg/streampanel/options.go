@@ -6,4 +6,3 @@ type Config = config.Config
 type Option = config.Option
 type Options = config.Options
 type OptionRemoteStreamDAddr = config.OptionRemoteStreamDAddr
-type OptionSentryDSN = config.OptionSentryDSN
