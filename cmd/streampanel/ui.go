@@ -30,18 +30,25 @@ func forkUI(ctx context.Context, mainProcessAddr, password string) {
 	cancelFunc := initRuntime(ctx, flags, procName)
 	defer cancelFunc()
 
+	setReady(ctx, mainProcess)
 	streamdAddr := getStreamDAddress(ctx, mainProcess)
-	go mainProcess.Serve(
-		ctx,
-		func(ctx context.Context, source mainprocess.ProcessName, content any) error {
-			switch content.(type) {
-			case StreamDDied:
-				os.Exit(0)
-			}
-			return nil
-		},
-	)
 
+	go func() {
+		err := mainProcess.Serve(
+			ctx,
+			func(ctx context.Context, source mainprocess.ProcessName, content any) error {
+				switch content.(type) {
+				case StreamDDied:
+					logger.Errorf(ctx, "streamd died, killing myself as well (to get reborn)")
+					os.Exit(0)
+				}
+				return nil
+			},
+		)
+		logger.Fatalf(ctx, "communication (with the main process) error: %v", err)
+	}()
+
+	logger.Debugf(ctx, "streamd remote address is %s", streamdAddr)
 	flags.RemoteAddr = streamdAddr
 	runPanel(ctx, flags)
 }
@@ -57,12 +64,18 @@ func getStreamDAddress(
 	ctx context.Context,
 	mainProcess *mainprocess.Client,
 ) string {
-	err := mainProcess.SendMessage(ctx, "streamd", GetStreamdAddress{})
+	logger.Debugf(ctx, "getStreamDAddress")
+	defer logger.Debugf(ctx, "/getStreamDAddress")
+
+	logger.Debugf(ctx, "requesting the streamd address")
+	err := mainProcess.SendMessage(ctx, ProcessNameStreamd, GetStreamdAddress{})
+	logger.Debugf(ctx, "/requesting the streamd address: %v", err)
 	assertNoError(err)
 
 	var addr string
 	for {
 		readOnceMore := false
+		logger.Debugf(ctx, "waiting for the streamd address")
 		err = mainProcess.ReadOne(
 			ctx,
 			func(ctx context.Context, source mainprocess.ProcessName, content any) error {
@@ -77,6 +90,7 @@ func getStreamDAddress(
 				return nil
 			},
 		)
+		logger.Debugf(ctx, "/waiting for the streamd address: readOnceMore:%v err:%v", readOnceMore, err)
 		assertNoError(err)
 
 		if readOnceMore {

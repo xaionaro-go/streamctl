@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
 	"sync"
@@ -42,12 +43,13 @@ func forkStreamd(ctx context.Context, mainProcessAddr, password string) {
 	cancelFunc := initRuntime(ctx, flags, procName)
 	defer cancelFunc()
 
-	runStreamd(ctx, flags)
+	runStreamd(ctx, flags, mainProcess)
 }
 
 func runStreamd(
 	ctx context.Context,
 	flags Flags,
+	mainProcess *mainprocess.Client,
 ) {
 	logger.Debugf(ctx, "runStreamd: %#+v", flags)
 	defer logger.Debugf(ctx, "/runStreamd")
@@ -67,6 +69,7 @@ func runStreamd(
 	}
 
 	var streamdGRPCLocker sync.Mutex
+	streamdGRPCLocker.Lock()
 
 	var streamdGRPC *server.GRPCServer
 	ui := ui.NewUI(
@@ -103,18 +106,39 @@ func runStreamd(
 	}
 
 	var listener net.Listener
-	var grpcServer *grpc.Server
-	listener, grpcServer, streamdGRPC = initGRPCServer(ctx, streamD, flags.ListenAddr)
+	listener, _, streamdGRPC = initGRPCServer(ctx, streamD, flags.ListenAddr)
+	streamdGRPCLocker.Unlock()
 
 	err = streamD.Run(ctx)
 	if err != nil {
 		logger.Fatalf(ctx, "unable to start streamd: %v", err)
 	}
 
-	err = grpcServer.Serve(listener)
-	if err != nil {
-		logger.Fatalf(ctx, "unable to server the gRPC server: %v", err)
+	if mainProcess != nil {
+		go func() {
+			err := mainProcess.Serve(
+				ctx,
+				func(
+					ctx context.Context,
+					source mainprocess.ProcessName,
+					content any,
+				) error {
+					switch content.(type) {
+					case GetStreamdAddress:
+						return mainProcess.SendMessage(ctx, source, GetStreamdAddressResult{
+							Address: listener.Addr().String(),
+						})
+					default:
+						return fmt.Errorf("unexpected message of type %T: %#+v", content, content)
+					}
+				},
+			)
+			logger.Fatalf(ctx, "communication (with the main process) error: %v", err)
+		}()
+		setReady(ctx, mainProcess)
 	}
+
+	<-ctx.Done()
 
 	logger.Fatalf(ctx, "internal error: was supposed to never reach this line")
 }

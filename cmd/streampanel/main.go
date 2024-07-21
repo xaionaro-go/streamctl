@@ -38,6 +38,9 @@ func runPanel(
 	ctx context.Context,
 	flags Flags,
 ) {
+	logger.Debugf(ctx, "runPanel: %#+v", flags)
+	defer logger.Debugf(ctx, "/runPanel")
+
 	var opts []streampanel.Option
 	if flags.RemoteAddr != "" {
 		opts = append(opts, streampanel.OptionRemoteStreamDAddr(flags.RemoteAddr))

@@ -23,7 +23,7 @@ func NewClient(
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect to '%s': %w", addr, err)
 	}
-	logger.Default().Tracef("connected to '%s' as '%s'", conn.RemoteAddr(), conn.LocalAddr())
+	logger.Default().Tracef("connected to '%s' from '%s'", conn.RemoteAddr(), conn.LocalAddr())
 
 	msg := RegistrationMessage{
 		Password: password,

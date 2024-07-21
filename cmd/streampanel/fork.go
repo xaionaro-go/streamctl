@@ -71,6 +71,8 @@ func runSplitProcesses(
 	ctx context.Context,
 	flags Flags,
 ) {
+	go signalHandler(ctx)
+
 	procList := []ProcessName{
 		ProcessNameUI,
 	}
@@ -97,7 +99,7 @@ func runSplitProcesses(
 				f.Wait()
 			}
 
-			logger.Infof(ctx, "running process '%s'", procName)
+			logger.Debugf(ctx, "running process '%s'", procName)
 			err := runFork(ctx, flags, procName, addr, password)
 			if err != nil {
 				panic(err)
@@ -125,7 +127,7 @@ func runSplitProcesses(
 			msg := GetFlagsResult{
 				Flags: flags,
 			}
-			err := m.SendMessage(ctx, source, msg)
+			err := m.SendMessagePreReady(ctx, source, msg)
 			if err != nil {
 				logger.Errorf(ctx, "failed to send message %#+v to '%s': %v", msg, source, err)
 			}
@@ -169,7 +171,12 @@ func runFork(
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
 	setFork(procName, cmd)
-	go cmd.Run()
+	go func() {
+		err := cmd.Run()
+		if err != nil {
+			logger.Errorf(ctx, "error running '%s %s': %v", args[0], strings.Join(args[1:], " "), err)
+		}
+	}()
 	return nil
 }
 
@@ -183,4 +190,17 @@ func fakeFork(ctx context.Context, procName ProcessName, addr, password string) 
 		return nil
 	}
 	return fmt.Errorf("unexpected process name: %s", procName)
+}
+
+func setReady(
+	ctx context.Context,
+	mainProcess *mainprocess.Client,
+) {
+	logger.Debugf(ctx, "setReady")
+	defer logger.Debugf(ctx, "/setReady")
+
+	err := mainProcess.SendMessage(ctx, "main", mainprocess.MessageReady{})
+	if err != nil {
+		logger.Fatal(ctx, err)
+	}
 }
