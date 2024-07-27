@@ -56,7 +56,7 @@ func (p *Panel) downloadImage(
 
 	ctx context.Context,
 	imageID consts.ImageID,
-) ([]byte, error) {
+) ([]byte, bool, error) {
 	p.imageLocker.Lock()
 	defer p.imageLocker.Unlock()
 	varKey := consts.VarKeyImage(imageID)
@@ -69,35 +69,36 @@ func (p *Panel) downloadImage(
 
 		hash, err := p.StreamD.GetVariableHash(ctx, varKey, hashType)
 		if err != nil {
-			return nil, fmt.Errorf("unable to get a screenshot: %w", err)
+			return nil, false, fmt.Errorf("unable to get a screenshot: %w", err)
 		}
 
 		logger.Tracef(ctx, "oldHash == %X; newHash == %X", oldHash, hash)
 		if bytes.Equal(hash, oldHash) {
-			return oldImage, nil
+			return oldImage, false, nil
 		}
 	}
 	logger.Tracef(ctx, "no image cache, downloading '%s'", varKey)
 
 	b, err := p.StreamD.GetVariable(ctx, varKey)
 	if err != nil {
-		return nil, fmt.Errorf("unable to get a screenshot: %w", err)
+		return nil, false, fmt.Errorf("unable to get a screenshot: %w", err)
 	}
 
+	logger.Tracef(ctx, "downloaded %d bytes", len(b))
 	bDup := make([]byte, len(b))
 	copy(bDup, b)
 	p.imageLastDownloaded[imageID] = bDup
 
-	return b, nil
+	return b, true, nil
 }
 
 func (p *Panel) getImage(
 	ctx context.Context,
 	imageID consts.ImageID,
-) (image.Image, error) {
-	b, err := p.downloadImage(ctx, imageID)
+) (image.Image, bool, error) {
+	b, changed, err := p.downloadImage(ctx, imageID)
 	if err != nil {
-		return nil, fmt.Errorf("unable to download image '%s': %w", imageID, err)
+		return nil, false, fmt.Errorf("unable to download image '%s': %w", imageID, err)
 	}
 
 	mimeType := http.DetectContentType(b)
@@ -110,13 +111,13 @@ func (p *Panel) getImage(
 	case "image/webp":
 		img, err = webp.Decode(bytes.NewReader(b))
 	default:
-		return nil, fmt.Errorf("unexpected image type %s", mimeType)
+		return nil, false, fmt.Errorf("unexpected image type %s", mimeType)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("unable to decode the screenshot: %w", err)
+		return nil, false, fmt.Errorf("unable to decode the screenshot: %w", err)
 	}
 
-	return img, nil
+	return img, changed, nil
 }
 
 func imgFitTo(src image.Image, size image.Point) image.Image {

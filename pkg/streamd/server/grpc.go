@@ -317,6 +317,19 @@ func (grpc *GRPCServer) EndStream(
 	return &streamd_grpc.EndStreamReply{}, nil
 }
 
+func (grpc *GRPCServer) IsBackendEnabled(
+	ctx context.Context,
+	req *streamd_grpc.IsBackendEnabledRequest,
+) (*streamd_grpc.IsBackendEnabledReply, error) {
+	enabled, err := grpc.StreamD.IsBackendEnabled(ctx, streamcontrol.PlatformName(req.GetPlatID()))
+	if err != nil {
+		return nil, fmt.Errorf("unable to check if backend '%s' is enabled: %w", req.GetPlatID(), err)
+	}
+	return &streamd_grpc.IsBackendEnabledReply{
+		IsInitialized: enabled,
+	}, nil
+}
+
 func (grpc *GRPCServer) GetBackendInfo(
 	ctx context.Context,
 	req *streamd_grpc.GetBackendInfoRequest,

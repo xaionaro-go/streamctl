@@ -7,6 +7,8 @@ toolchain go1.22.3
 // The original go-yaml is very slow, using the improved version instead
 replace github.com/goccy/go-yaml v1.11.3 => github.com/yoelsusanto/go-yaml v0.0.0-20240324162521-2018c1ab915b
 
+replace github.com/yutopp/go-rtmp v0.0.7 => ../go-rtmp/
+
 require (
 	github.com/facebookincubator/go-belt v0.0.0-20240706172357-c5875adb39ef
 	github.com/go-git/go-billy/v5 v5.5.0
@@ -220,8 +222,10 @@ require (
 	fyne.io/fyne/v2 v2.4.6-0.20240630191754-79694263c06a
 	github.com/AlexxIT/go2rtc v1.9.4
 	github.com/DataDog/gostackparse v0.6.0
+	github.com/adrg/libvlc-go/v3 v3.1.5
 	github.com/andreykaipov/goobs v1.4.1
 	github.com/anthonynsimon/bild v0.14.0
+	github.com/blang/mpv v0.0.0-20160810175505-d56d7352e068
 	github.com/chai2010/webp v1.1.1
 	github.com/dustin/go-humanize v1.0.1
 	github.com/getsentry/sentry-go v0.28.1

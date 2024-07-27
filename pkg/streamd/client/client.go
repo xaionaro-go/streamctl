@@ -145,7 +145,7 @@ func (c *Client) IsBackendEnabled(ctx context.Context, id streamcontrol.Platform
 	}
 	defer conn.Close()
 
-	reply, err := client.GetBackendInfo(ctx, &streamd_grpc.GetBackendInfoRequest{
+	reply, err := client.IsBackendEnabled(ctx, &streamd_grpc.IsBackendEnabledRequest{
 		PlatID: string(id),
 	})
 	if err != nil {

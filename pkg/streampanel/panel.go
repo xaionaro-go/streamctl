@@ -1386,7 +1386,6 @@ func (p *Panel) initMainWindow(
 	} {
 		isEnabled, err := p.StreamD.IsBackendEnabled(ctx, backendID)
 		if err != nil {
-			w.Close()
 			p.DisplayError(fmt.Errorf("unable to get info if backend '%s' is enabled: %w", backendID, err))
 		}
 		backendEnabled[backendID] = isEnabled

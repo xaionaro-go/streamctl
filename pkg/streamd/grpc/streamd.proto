@@ -10,6 +10,7 @@ service StreamD {
     rpc StartStream(StartStreamRequest) returns (StartStreamReply) {}
     rpc EndStream(EndStreamRequest) returns (EndStreamReply) {}
     rpc GetStreamStatus(GetStreamStatusRequest) returns (GetStreamStatusReply) {}
+    rpc IsBackendEnabled(IsBackendEnabledRequest) returns (IsBackendEnabledReply) {}
     rpc GetBackendInfo(GetBackendInfoRequest) returns (GetBackendInfoReply) {}
     rpc Restart(RestartRequest) returns (RestartReply) {}
     rpc SetTitle(SetTitleRequest) returns (SetTitleReply) {}
@@ -87,6 +88,12 @@ message GetBackendInfoRequest {
 message GetBackendInfoReply {
     bool isInitialized = 1;
     string data = 2;
+}
+message IsBackendEnabledRequest {
+    string platID = 1;
+}
+message IsBackendEnabledReply {
+    bool isInitialized = 1;
 }
 message RestartRequest {}
 message RestartReply {}

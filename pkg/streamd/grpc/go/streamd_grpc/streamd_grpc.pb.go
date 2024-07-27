@@ -30,6 +30,7 @@ type StreamDClient interface {
 	StartStream(ctx context.Context, in *StartStreamRequest, opts ...grpc.CallOption) (*StartStreamReply, error)
 	EndStream(ctx context.Context, in *EndStreamRequest, opts ...grpc.CallOption) (*EndStreamReply, error)
 	GetStreamStatus(ctx context.Context, in *GetStreamStatusRequest, opts ...grpc.CallOption) (*GetStreamStatusReply, error)
+	IsBackendEnabled(ctx context.Context, in *IsBackendEnabledRequest, opts ...grpc.CallOption) (*IsBackendEnabledReply, error)
 	GetBackendInfo(ctx context.Context, in *GetBackendInfoRequest, opts ...grpc.CallOption) (*GetBackendInfoReply, error)
 	Restart(ctx context.Context, in *RestartRequest, opts ...grpc.CallOption) (*RestartReply, error)
 	SetTitle(ctx context.Context, in *SetTitleRequest, opts ...grpc.CallOption) (*SetTitleReply, error)
@@ -136,6 +137,15 @@ func (c *streamDClient) EndStream(ctx context.Context, in *EndStreamRequest, opt
 func (c *streamDClient) GetStreamStatus(ctx context.Context, in *GetStreamStatusRequest, opts ...grpc.CallOption) (*GetStreamStatusReply, error) {
 	out := new(GetStreamStatusReply)
 	err := c.cc.Invoke(ctx, "/StreamD/GetStreamStatus", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) IsBackendEnabled(ctx context.Context, in *IsBackendEnabledRequest, opts ...grpc.CallOption) (*IsBackendEnabledReply, error) {
+	out := new(IsBackendEnabledReply)
+	err := c.cc.Invoke(ctx, "/StreamD/IsBackendEnabled", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -447,6 +457,7 @@ type StreamDServer interface {
 	StartStream(context.Context, *StartStreamRequest) (*StartStreamReply, error)
 	EndStream(context.Context, *EndStreamRequest) (*EndStreamReply, error)
 	GetStreamStatus(context.Context, *GetStreamStatusRequest) (*GetStreamStatusReply, error)
+	IsBackendEnabled(context.Context, *IsBackendEnabledRequest) (*IsBackendEnabledReply, error)
 	GetBackendInfo(context.Context, *GetBackendInfoRequest) (*GetBackendInfoReply, error)
 	Restart(context.Context, *RestartRequest) (*RestartReply, error)
 	SetTitle(context.Context, *SetTitleRequest) (*SetTitleReply, error)
@@ -507,6 +518,9 @@ func (UnimplementedStreamDServer) EndStream(context.Context, *EndStreamRequest) 
 }
 func (UnimplementedStreamDServer) GetStreamStatus(context.Context, *GetStreamStatusRequest) (*GetStreamStatusReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetStreamStatus not implemented")
+}
+func (UnimplementedStreamDServer) IsBackendEnabled(context.Context, *IsBackendEnabledRequest) (*IsBackendEnabledReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method IsBackendEnabled not implemented")
 }
 func (UnimplementedStreamDServer) GetBackendInfo(context.Context, *GetBackendInfoRequest) (*GetBackendInfoReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetBackendInfo not implemented")
@@ -751,6 +765,24 @@ func _StreamD_GetStreamStatus_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).GetStreamStatus(ctx, req.(*GetStreamStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_IsBackendEnabled_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IsBackendEnabledRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).IsBackendEnabled(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/StreamD/IsBackendEnabled",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).IsBackendEnabled(ctx, req.(*IsBackendEnabledRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1336,6 +1368,10 @@ var StreamD_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetStreamStatus",
 			Handler:    _StreamD_GetStreamStatus_Handler,
+		},
+		{
+			MethodName: "IsBackendEnabled",
+			Handler:    _StreamD_IsBackendEnabled_Handler,
 		},
 		{
 			MethodName: "GetBackendInfo",

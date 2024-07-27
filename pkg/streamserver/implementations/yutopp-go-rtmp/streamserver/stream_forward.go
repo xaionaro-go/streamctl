@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 	"sync"
@@ -121,9 +122,27 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 
 	logger.Tracef(ctx, "connecting to '%s'", urlParsed.String())
 	if urlParsed.Port() == "" {
-		urlParsed.Host += ":1935"
+		switch urlParsed.Scheme {
+		case "rtmp":
+			urlParsed.Host += ":1935"
+		case "rtmps":
+			urlParsed.Host += ":443"
+		default:
+			return fmt.Errorf("unexpected scheme '%s' in URL '%s'", urlParsed.Scheme, urlParsed.String())
+		}
 	}
-	client, err := rtmp.Dial("rtmp", urlParsed.Host, &rtmp.ConnConfig{
+	var dialFunc func(protocol, addr string, config *rtmp.ConnConfig) (*rtmp.ClientConn, error)
+	switch urlParsed.Scheme {
+	case "rtmp":
+		dialFunc = rtmp.Dial
+	case "rtmps":
+		dialFunc = func(protocol, addr string, config *rtmp.ConnConfig) (*rtmp.ClientConn, error) {
+			return rtmp.TLSDial(protocol, addr, config, http.DefaultTransport.(*http.Transport).TLSClientConfig)
+		}
+	default:
+		return fmt.Errorf("unexpected scheme '%s' in URL '%s'", urlParsed.Scheme, urlParsed.String())
+	}
+	client, err := dialFunc(urlParsed.Scheme, urlParsed.Host, &rtmp.ConnConfig{
 		Logger: xlogger.LogrusFieldLoggerFromCtx(ctx),
 	})
 	if err != nil {

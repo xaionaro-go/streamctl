@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	//"image"
+	"image"
 	"time"
 
 	"fyne.io/fyne/v2/canvas"
@@ -31,18 +31,34 @@ func (p *Panel) startMonitorPage(
 	ctx, cancelFn := context.WithCancel(ctx)
 	p.monitorPageUpdaterCancel = cancelFn
 	go func(ctx context.Context) {
-		p.updateMonitorPage(ctx)
+		p.updateMonitorPageImages(ctx)
+		p.updateMonitorPageStreamStatus(ctx)
 
-		t := time.NewTicker(200 * time.Millisecond)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-t.C:
+		go func() {
+			t := time.NewTicker(200 * time.Millisecond)
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.C:
+				}
+
+				p.updateMonitorPageImages(ctx)
 			}
+		}()
 
-			p.updateMonitorPage(ctx)
-		}
+		go func() {
+			t := time.NewTicker(2 * time.Second)
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.C:
+				}
+
+				p.updateMonitorPageStreamStatus(ctx)
+			}
+		}()
 	}(ctx)
 }
 
@@ -63,11 +79,11 @@ func (p *Panel) stopMonitorPage(
 	p.monitorPageUpdaterCancel = nil
 }
 
-func (p *Panel) updateMonitorPage(
+func (p *Panel) updateMonitorPageImages(
 	ctx context.Context,
 ) {
-	logger.Tracef(ctx, "updateMonitorPage")
-	defer logger.Tracef(ctx, "/updateMonitorPage")
+	logger.Tracef(ctx, "updateMonitorPageImages")
+	defer logger.Tracef(ctx, "/updateMonitorPageImages")
 
 	p.monitorPageUpdaterLocker.Lock()
 	defer p.monitorPageUpdaterLocker.Unlock()
@@ -77,13 +93,16 @@ func (p *Panel) updateMonitorPage(
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		img, err := p.getImage(ctx, consts.ImageScreenshot)
+		img, changed, err := p.getImage(ctx, consts.ImageScreenshot)
 
 		if err != nil {
 			logger.Error(ctx, err)
 		} else {
+			if !changed {
+				return
+			}
 			//s := p.mainWindow.Canvas().Size()
-			//img = imgFitTo(img, image.Point{X: int(s.Width), Y: int(s.Height)})
+			//img = imgFitTo(img, image.Point{X: 1450, Y: 1450})
 			img = adjust.Brightness(img, -0.5)
 			imgFyne := canvas.NewImageFromImage(img)
 			imgFyne.FillMode = canvas.ImageFillOriginal
@@ -98,12 +117,16 @@ func (p *Panel) updateMonitorPage(
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		img, err := p.getImage(ctx, consts.ImageChat)
+		img, changed, err := p.getImage(ctx, consts.ImageChat)
 		if err != nil {
 			logger.Error(ctx, err)
 		} else {
+			if !changed {
+				return
+			}
 			//s := p.mainWindow.Canvas().Size()
 			//img = imgFitTo(img, image.Point{X: int(s.Width), Y: int(s.Height)})
+			img = imgFitTo(img, image.Point{X: 1450, Y: 1450})
 			imgFyne := canvas.NewImageFromImage(img)
 			imgFyne.FillMode = canvas.ImageFillOriginal
 
@@ -114,6 +137,18 @@ func (p *Panel) updateMonitorPage(
 		}
 	}()
 
+}
+
+func (p *Panel) updateMonitorPageStreamStatus(
+	ctx context.Context,
+) {
+	logger.Tracef(ctx, "updateMonitorPageStreamStatus")
+	defer logger.Tracef(ctx, "/updateMonitorPageStreamStatus")
+
+	p.monitorPageUpdaterLocker.Lock()
+	defer p.monitorPageUpdaterLocker.Unlock()
+
+	var wg sync.WaitGroup
 	for _, platID := range []streamcontrol.PlatformName{
 		obs.ID,
 		youtube.ID,
