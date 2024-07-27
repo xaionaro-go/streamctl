@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/url"
 	"sync"
 
 	"github.com/facebookincubator/go-belt"
@@ -62,7 +63,7 @@ func (s *StreamServer) Init(ctx context.Context) error {
 
 		for dstID, fwd := range streamCfg.Forwardings {
 			if !fwd.Disabled {
-				err := s.addStreamForward(ctx, streamID, dstID)
+				_, err := s.addStreamForward(ctx, streamID, dstID)
 				if err != nil {
 					return fmt.Errorf("unable to launch stream forward from '%s' to '%s': %w", streamID, dstID, err)
 				}
@@ -276,11 +277,12 @@ func (s *StreamServer) removeIncomingStream(
 }
 
 type StreamForward struct {
-	StreamID      types.StreamID
-	DestinationID types.DestinationID
-	Enabled       bool
-	NumBytesWrote uint64
-	NumBytesRead  uint64
+	StreamID         types.StreamID
+	DestinationID    types.DestinationID
+	Enabled          bool
+	ActiveForwarding *ActiveStreamForwarding
+	NumBytesWrote    uint64
+	NumBytesRead     uint64
 }
 
 func (s *StreamServer) AddStreamForward(
@@ -288,13 +290,13 @@ func (s *StreamServer) AddStreamForward(
 	streamID types.StreamID,
 	destinationID types.DestinationID,
 	enabled bool,
-) error {
+) (*StreamForward, error) {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
 	s.Lock()
 	defer s.Unlock()
 	streamConfig := s.Config.Streams[streamID]
 	if _, ok := streamConfig.Forwardings[destinationID]; ok {
-		return fmt.Errorf("the forwarding %s->%s already exists", streamID, destinationID)
+		return nil, fmt.Errorf("the forwarding %s->%s already exists", streamID, destinationID)
 	}
 
 	streamConfig.Forwardings[destinationID] = types.ForwardingConfig{
@@ -302,36 +304,59 @@ func (s *StreamServer) AddStreamForward(
 	}
 
 	if enabled {
-		err := s.addStreamForward(ctx, streamID, destinationID)
+		fwd, err := s.addStreamForward(ctx, streamID, destinationID)
 		if err != nil {
-			return err
+			return nil, err
 		}
+		return fwd, nil
 	}
-	return nil
+	return &StreamForward{
+		StreamID:      streamID,
+		DestinationID: destinationID,
+		Enabled:       enabled,
+	}, nil
 }
 
 func (s *StreamServer) addStreamForward(
 	ctx context.Context,
 	streamID types.StreamID,
 	destinationID types.DestinationID,
-) error {
+) (*StreamForward, error) {
 	ctx = belt.WithField(ctx, "stream_forward", fmt.Sprintf("%s->%s", streamID, destinationID))
 	if _, ok := s.ActiveStreamForwardings[destinationID]; ok {
-		return fmt.Errorf("there is already an active stream forwarding to '%s'", destinationID)
+		return nil, fmt.Errorf("there is already an active stream forwarding to '%s'", destinationID)
 	}
 
 	dst, err := s.findStreamDestinationByID(ctx, destinationID)
 	if err != nil {
-		return fmt.Errorf("unable to find stream destination '%s': %w", destinationID, err)
+		return nil, fmt.Errorf("unable to find stream destination '%s': %w", destinationID, err)
 	}
 
-	fwd, err := newActiveStreamForward(ctx, streamID, destinationID, dst.URL, s.RelayServer)
+	urlParsed, err := url.Parse(dst.URL)
 	if err != nil {
-		return fmt.Errorf("unable to run the stream forwarding: %w", err)
+		return nil, fmt.Errorf("unable to parse URL '%s': %w", dst.URL, err)
+	}
+
+	if urlParsed.Host == "" {
+		portSrv := s.ServerHandlers[0]
+		urlParsed.Scheme = portSrv.Type().String()
+		urlParsed.Host = portSrv.ListenAddr()
+	}
+
+	fwd, err := NewActiveStreamForward(ctx, streamID, destinationID, urlParsed.String(), s.RelayServer)
+	if err != nil {
+		return nil, fmt.Errorf("unable to run the stream forwarding: %w", err)
 	}
 	s.ActiveStreamForwardings[destinationID] = fwd
 
-	return nil
+	return &StreamForward{
+		StreamID:         streamID,
+		DestinationID:    destinationID,
+		Enabled:          true,
+		ActiveForwarding: fwd,
+		NumBytesWrote:    0,
+		NumBytesRead:     0,
+	}, nil
 }
 
 func (s *StreamServer) UpdateStreamForward(
@@ -339,32 +364,45 @@ func (s *StreamServer) UpdateStreamForward(
 	streamID types.StreamID,
 	destinationID types.DestinationID,
 	enabled bool,
-) error {
+) (*StreamForward, error) {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
 	s.Lock()
 	defer s.Unlock()
 	streamConfig := s.Config.Streams[streamID]
 	fwdCfg, ok := streamConfig.Forwardings[destinationID]
 	if !ok {
-		return fmt.Errorf("the forwarding %s->%s does not exist", streamID, destinationID)
+		return nil, fmt.Errorf("the forwarding %s->%s does not exist", streamID, destinationID)
 	}
 
+	var fwd *StreamForward
 	if fwdCfg.Disabled && enabled {
-		err := s.addStreamForward(ctx, streamID, destinationID)
+		var err error
+		fwd, err = s.addStreamForward(ctx, streamID, destinationID)
 		if err != nil {
-			return err
+			return nil, fmt.Errorf("unable to active the stream: %w", err)
 		}
 	}
 	if !fwdCfg.Disabled && !enabled {
 		err := s.removeStreamForward(ctx, streamID, destinationID)
 		if err != nil {
-			return err
+			return nil, fmt.Errorf("unable to deactivate the stream: %w", err)
 		}
 	}
 	streamConfig.Forwardings[destinationID] = types.ForwardingConfig{
 		Disabled: !enabled,
 	}
-	return nil
+
+	r := &StreamForward{
+		StreamID:      streamID,
+		DestinationID: destinationID,
+		Enabled:       enabled,
+		NumBytesWrote: 0,
+		NumBytesRead:  0,
+	}
+	if fwd != nil {
+		r.ActiveForwarding = fwd.ActiveForwarding
+	}
+	return r, nil
 }
 
 func (s *StreamServer) ListStreamForwards(

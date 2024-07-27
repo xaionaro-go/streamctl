@@ -988,7 +988,7 @@ func (d *StreamD) AddStreamForward(
 	d.StreamServerLocker.Lock()
 	defer d.StreamServerLocker.Unlock()
 
-	err := d.StreamServer.AddStreamForward(
+	_, err := d.StreamServer.AddStreamForward(
 		resetContextCancellers(ctx),
 		types.StreamID(streamID),
 		types.DestinationID(destinationID),
@@ -1018,7 +1018,7 @@ func (d *StreamD) UpdateStreamForward(
 	d.StreamServerLocker.Lock()
 	defer d.StreamServerLocker.Unlock()
 
-	err := d.StreamServer.UpdateStreamForward(
+	_, err := d.StreamServer.UpdateStreamForward(
 		resetContextCancellers(ctx),
 		types.StreamID(streamID),
 		types.DestinationID(destinationID),

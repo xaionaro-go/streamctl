@@ -1,16 +1,19 @@
 package player
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/blang/mpv"
+	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 )
 
@@ -36,6 +39,10 @@ var _ Player = (*MPV)(nil)
 func NewMPV(title string, pathToMPV string) (*MPV, error) {
 	if pathToMPV == "" {
 		pathToMPV = "mpv"
+		switch runtime.GOOS {
+		case "windows":
+			pathToMPV += ".exe"
+		}
 	}
 
 	myPid := os.Getpid()
@@ -103,6 +110,26 @@ func (p *MPV) initEndCh() {
 func (p *MPV) IsEnded() bool {
 	filename, _ := p.MPVClient.Filename()
 	return filename != ""
+}
+
+func (p *MPV) GetPosition() time.Duration {
+	ts, err := p.MPVClient.Position()
+	if err != nil {
+		logger.Debugf(context.TODO(), "unable to get current position: %v", err)
+		return 0
+	}
+
+	return time.Duration(ts * float64(time.Second))
+}
+
+func (p *MPV) GetLength() time.Duration {
+	ts, err := p.MPVClient.Duration()
+	if err != nil {
+		logger.Debugf(context.TODO(), "unable to get the total length: %v", err)
+		return 0
+	}
+
+	return time.Duration(ts * float64(time.Second))
 }
 
 func (p *MPV) SetSpeed(speed float64) error {

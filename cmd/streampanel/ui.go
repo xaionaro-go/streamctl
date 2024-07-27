@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
@@ -30,7 +29,6 @@ func forkUI(ctx context.Context, mainProcessAddr, password string) {
 	cancelFunc := initRuntime(ctx, flags, procName)
 	defer cancelFunc()
 
-	setReady(ctx, mainProcess)
 	streamdAddr := getStreamDAddress(ctx, mainProcess)
 
 	logger.Debugf(ctx, "streamd remote address is %s", streamdAddr)
@@ -40,6 +38,8 @@ func forkUI(ctx context.Context, mainProcessAddr, password string) {
 	if err != nil {
 		logger.Error(ctx, "unable to send the Quit message to the main process: %w", err)
 	}
+
+	logger.Infof(ctx, "UI is ready")
 	<-ctx.Done()
 }
 
@@ -57,43 +57,29 @@ func getStreamDAddress(
 	logger.Debugf(ctx, "getStreamDAddress")
 	defer logger.Debugf(ctx, "/getStreamDAddress")
 
+	setReadyFor(ctx, mainProcess, GetStreamdAddressResult{})
+
 	logger.Debugf(ctx, "requesting the streamd address")
 	err := mainProcess.SendMessage(ctx, ProcessNameStreamd, GetStreamdAddress{})
 	logger.Debugf(ctx, "/requesting the streamd address: %v", err)
 	assertNoError(err)
 
 	var addr string
-	for {
-		readOnceMore := false
-		logger.Debugf(ctx, "waiting for the streamd address")
-		err = mainProcess.ReadOne(
-			ctx,
-			func(ctx context.Context, source mainprocess.ProcessName, content any) error {
-				switch msg := content.(type) {
-				case UpdateStreamDConfig:
-					go func() {
-						time.Sleep(time.Second * 10)
-						mainProcess.SendMessage(ctx, ProcessNameStreamd, RequestStreamDConfig{})
-					}()
-					return nil
-				case GetStreamdAddressResult:
-					addr = msg.Address
-				case StreamDDied:
-					readOnceMore = true
-				default:
-					return fmt.Errorf("got unexpected type '%T' instead of %T", content, GetStreamdAddressResult{})
-				}
-				return nil
-			},
-		)
-		logger.Debugf(ctx, "/waiting for the streamd address: readOnceMore:%v err:%v", readOnceMore, err)
-		assertNoError(err)
-
-		if readOnceMore {
-			continue
-		}
-		break
-	}
+	logger.Debugf(ctx, "waiting for the streamd address")
+	err = mainProcess.ReadOne(
+		ctx,
+		func(ctx context.Context, source mainprocess.ProcessName, content any) error {
+			switch msg := content.(type) {
+			case GetStreamdAddressResult:
+				addr = msg.Address
+			default:
+				return fmt.Errorf("got unexpected type '%T' instead of %T", content, GetStreamdAddressResult{})
+			}
+			return nil
+		},
+	)
+	logger.Debugf(ctx, "/waiting for the streamd address: err:%v", err)
+	assertNoError(err)
 
 	return addr
 }

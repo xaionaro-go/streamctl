@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/gob"
 	"fmt"
 	"net"
 	"os"
@@ -23,6 +24,13 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
 	"google.golang.org/grpc"
 )
+
+func init() {
+	gob.Register(RequestStreamDConfig{})
+	gob.Register(mainprocess.MessageReady{
+		ReadyForMessages: []any{GetStreamdAddress{}, RequestStreamDConfig{}},
+	})
+}
 
 func forkStreamd(ctx context.Context, mainProcessAddr, password string) {
 	procName := ProcessNameStreamd
@@ -123,7 +131,7 @@ func runStreamd(
 	}
 
 	if mainProcess != nil {
-		setReady(ctx, mainProcess)
+		setReadyFor(ctx, mainProcess, GetStreamdAddress{}, RequestStreamDConfig{})
 		go func() {
 			err := mainProcess.Serve(
 				ctx,
@@ -155,6 +163,7 @@ func runStreamd(
 		}()
 	}
 
+	logger.Infof(ctx, "streamd is ready")
 	<-ctx.Done()
 
 	logger.Fatalf(ctx, "internal error: was supposed to never reach this line")

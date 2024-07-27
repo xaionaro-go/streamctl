@@ -119,6 +119,7 @@ type Panel struct {
 	streamsWidget       *fyne.Container
 	destinationsWidget  *fyne.Container
 	restreamsWidget     *fyne.Container
+	playersWidget       *fyne.Container
 
 	previousNumBytesLocker sync.Mutex
 	previousNumBytes       map[any][4]uint64
@@ -1577,6 +1578,10 @@ func (p *Panel) initMainWindow(
 	addRestream := widget.NewButtonWithIcon("Add restream", theme.ContentAddIcon(), func() {
 		p.openAddRestreamWindow(ctx)
 	})
+	p.playersWidget = container.NewVBox()
+	addPlayer := widget.NewButtonWithIcon("Add player", theme.ContentAddIcon(), func() {
+		p.openAddPlayerWindow(ctx)
+	})
 	restreamPage := container.NewBorder(
 		nil,
 		nil,
@@ -1595,6 +1600,9 @@ func (p *Panel) initMainWindow(
 			widget.NewLabel("Resteams:"),
 			p.restreamsWidget,
 			addRestream,
+			widget.NewLabel("Players:"),
+			p.playersWidget,
+			addPlayer,
 		),
 	)
 	if backendEnabled[obs.ID] {

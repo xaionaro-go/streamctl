@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
 )
@@ -73,6 +74,7 @@ func runSplitProcesses(
 	ctx context.Context,
 	flags Flags,
 ) {
+	ctx = belt.WithField(ctx, "process", "main")
 	signalsChan := signalHandler(ctx)
 
 	procList := []ProcessName{
@@ -142,7 +144,7 @@ func runSplitProcesses(
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(10 * time.Second):
+		case <-time.After(time.Second):
 		}
 
 		err := m.VerifyEverybodyConnected(ctx)
@@ -181,8 +183,12 @@ func runFork(
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
 	setFork(procName, cmd)
+	err = cmd.Start()
+	if err != nil {
+		return fmt.Errorf("unable to start '%s %s': %w", args[0], strings.Join(args[1:], " "), err)
+	}
 	go func() {
-		err := cmd.Run()
+		err := cmd.Wait()
 		if err != nil {
 			logger.Errorf(ctx, "error running '%s %s': %v", args[0], strings.Join(args[1:], " "), err)
 		}
@@ -202,14 +208,17 @@ func fakeFork(ctx context.Context, procName ProcessName, addr, password string) 
 	return fmt.Errorf("unexpected process name: %s", procName)
 }
 
-func setReady(
+func setReadyFor(
 	ctx context.Context,
 	mainProcess *mainprocess.Client,
+	msgTypes ...any,
 ) {
-	logger.Debugf(ctx, "setReady")
-	defer logger.Debugf(ctx, "/setReady")
+	logger.Debugf(ctx, "setReadyFor: %#+v", msgTypes)
+	defer logger.Debugf(ctx, "/setReadyFor: %#+v", msgTypes)
 
-	err := mainProcess.SendMessage(ctx, ProcessNameMain, mainprocess.MessageReady{})
+	err := mainProcess.SendMessage(ctx, ProcessNameMain, mainprocess.MessageReady{
+		ReadyForMessages: msgTypes,
+	})
 	if err != nil {
 		logger.Fatal(ctx, err)
 	}

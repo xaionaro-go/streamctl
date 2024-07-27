@@ -56,7 +56,7 @@ func GetStreamProfile[T StreamProfile](
 	if err != nil {
 		return nil, fmt.Errorf("unable to deserialize: %w: <%s>", err, b)
 	}
-	logger.Debugf(ctx, "converted %#+v (%s) to %#+v", v, v, profile)
+	logger.Tracef(ctx, "converted %#+v (%s) to %#+v", v, v, profile)
 	return &profile, nil
 }
 
@@ -70,7 +70,7 @@ func ConvertStreamProfiles[T StreamProfile](
 			return err
 		}
 		m[k] = *profile
-		logger.Debugf(ctx, "converted %#+v (%s) to %#+v", v, v, profile)
+		logger.Tracef(ctx, "converted %#+v (%s) to %#+v", v, v, profile)
 	}
 	return nil
 }

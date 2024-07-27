@@ -37,9 +37,6 @@ func Test(t *testing.T) {
 	callCount := map[string]int{}
 
 	handleCall := func(procName string, content any) {
-		if _, ok := content.(MessageReadyConfirmed); ok {
-			return
-		}
 		logger.Tracef(ctx, "handleCall('%s', %#+v)", procName, content)
 		count := callCount[procName]
 		count++

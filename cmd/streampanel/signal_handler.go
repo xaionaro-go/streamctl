@@ -20,7 +20,7 @@ func signalHandler(
 				logger.Debugf(ctx, "killing '%s'", name)
 				err := f.Process.Kill()
 				if err != nil {
-					logger.Error(ctx, "unable to kill '%s': %w", name, err)
+					logger.Errorf(ctx, "unable to kill '%s': %v", name, err)
 				}
 			}
 			forkLocker.Unlock()

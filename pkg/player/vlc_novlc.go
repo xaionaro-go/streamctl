@@ -5,6 +5,7 @@ package player
 
 import (
 	"fmt"
+	"time"
 )
 
 const SupportedVLC = false
@@ -28,6 +29,14 @@ func (*VLC) EndChan() <-chan struct{} {
 }
 
 func (*VLC) IsEnded() bool {
+	panic("compiled without VLC support")
+}
+
+func (p *VLC) GetPosition() time.Duration {
+	panic("compiled without VLC support")
+}
+
+func (p *VLC) GetLength() time.Duration {
 	panic("compiled without VLC support")
 }
 

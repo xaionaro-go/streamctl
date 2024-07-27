@@ -37,7 +37,7 @@ type ActiveStreamForwarding struct {
 	eventChan     chan *flvtag.FlvTag
 }
 
-func newActiveStreamForward(
+func NewActiveStreamForward(
 	ctx context.Context,
 	streamID types.StreamID,
 	dstID types.DestinationID,

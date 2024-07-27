@@ -9,8 +9,10 @@ import (
 	"net/url"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	vlc "github.com/adrg/libvlc-go/v3"
+	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"golang.org/x/net/context"
 )
@@ -119,6 +121,24 @@ func (p *VLC) IsEnded() bool {
 	p.StatusMutex.Lock()
 	defer p.StatusMutex.Unlock()
 	return p.IsStopped
+}
+
+func (p *VLC) GetPosition() time.Duration {
+	ts, err := p.Player.MediaTime()
+	if err != nil {
+		logger.Debugf(context.TODO(), "unable to get current position: %v", err)
+		return 0
+	}
+	return time.Duration(ts) * time.Millisecond
+}
+
+func (p *VLC) GetLength() time.Duration {
+	ts, err := p.Player.MediaLength()
+	if err != nil {
+		logger.Debugf(context.TODO(), "unable to get the total length: %v", err)
+		return 0
+	}
+	return time.Duration(ts) * time.Millisecond
 }
 
 func (p *VLC) SetSpeed(speed float64) error {

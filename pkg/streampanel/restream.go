@@ -420,6 +420,71 @@ func (p *Panel) displayStreamDestinations(
 	}
 }
 
+func (p *Panel) openAddPlayerWindow(ctx context.Context) {
+	w := p.app.NewWindow(appName + ": Add player")
+	resizeWindow(w, fyne.NewSize(400, 300))
+
+	enabledCheck := widget.NewCheck("Enable", func(b bool) {})
+
+	inStreams, err := p.StreamD.ListIncomingStreams(ctx)
+	if err != nil {
+		p.DisplayError(err)
+		return
+	}
+
+	dsts, err := p.StreamD.ListStreamDestinations(ctx)
+	if err != nil {
+		p.DisplayError(err)
+		return
+	}
+
+	var inStreamStrs []string
+	for _, inStream := range inStreams {
+		inStreamStrs = append(inStreamStrs, string(inStream.StreamID))
+	}
+	inStreamsSelect := widget.NewSelect(inStreamStrs, func(s string) {})
+
+	var dstStrs []string
+	dstMap := map[string]api.DestinationID{}
+	for _, dst := range dsts {
+		k := string(dst.ID) + ": " + dst.URL
+		dstStrs = append(dstStrs, k)
+		dstMap[k] = dst.ID
+	}
+	dstSelect := widget.NewSelect(dstStrs, func(s string) {})
+
+	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
+		p.waitForResponse(func() {
+			err := p.addStreamForward(
+				ctx,
+				api.StreamID(inStreamsSelect.Selected),
+				dstMap[dstSelect.Selected],
+				enabledCheck.Checked,
+			)
+			if err != nil {
+				p.DisplayError(err)
+				return
+			}
+			w.Close()
+			p.initRestreamPage(ctx)
+		})
+	})
+
+	w.SetContent(container.NewBorder(
+		nil,
+		container.NewHBox(saveButton),
+		nil,
+		nil,
+		container.NewVBox(
+			widget.NewLabel("From:"),
+			inStreamsSelect,
+			widget.NewLabel("To:"),
+			dstSelect,
+		),
+	))
+	w.Show()
+}
+
 func (p *Panel) openAddRestreamWindow(ctx context.Context) {
 	w := p.app.NewWindow(appName + ": Add restreaming (stream forwarding)")
 	resizeWindow(w, fyne.NewSize(400, 300))

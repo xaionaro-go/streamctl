@@ -5,19 +5,21 @@ import (
 	"encoding/gob"
 	"fmt"
 	"net"
+	"reflect"
 	"sync"
 
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
+	"github.com/immune-gmbh/attestation-sdk/pkg/lockmap"
 	"github.com/sethvargo/go-password/password"
 )
 
 func init() {
 	gob.Register(RegistrationMessage{})
 	gob.Register(RegistrationResult{})
-	gob.Register(MessageReadyConfirmed{})
 	gob.Register(MessageReady{})
+	gob.Register(MessageReadyConfirmed{})
 	gob.Register(MessageFromMain{})
 	gob.Register(MessageToMain{})
 }
@@ -40,10 +42,11 @@ type Manager struct {
 	listener net.Listener
 	password string
 
-	connsLocker  sync.Mutex
-	conns        map[ProcessName]net.Conn
-	connsReady   map[ProcessName]net.Conn
-	connsChanged chan struct{}
+	connsLocker   sync.Mutex
+	conns         map[ProcessName]net.Conn
+	connLocker    *lockmap.LockMap
+	childReadyFor map[ProcessName]map[reflect.Type]struct{}
+	connsChanged  chan struct{}
 
 	allClientProcesses []ProcessName
 
@@ -70,9 +73,10 @@ func NewManager(
 		listener: listener,
 		password: password,
 
-		conns:        map[ProcessName]net.Conn{},
-		connsReady:   map[ProcessName]net.Conn{},
-		connsChanged: make(chan struct{}),
+		conns:         map[ProcessName]net.Conn{},
+		connLocker:    lockmap.NewLockMap(),
+		childReadyFor: map[ProcessName]map[reflect.Type]struct{}{},
+		connsChanged:  make(chan struct{}),
 
 		allClientProcesses: expectedClients,
 	}, nil
@@ -194,14 +198,14 @@ func (m *Manager) handleConnection(
 		logger.Warn(ctx, err)
 		return
 	}
-	if err := m.registerConnection(regMessage.Source, conn); err != nil {
+	if err := m.registerConnection(ctx, regMessage.Source, conn); err != nil {
 		err = fmt.Errorf("unable to register process '%s': %w", regMessage.Source, err)
 		encoder.Encode(RegistrationResult{Error: err.Error()})
 		logger.Error(ctx, err)
 		return
 	}
 	defer func(sourceName ProcessName) {
-		m.unregisterConnection(sourceName)
+		m.unregisterConnection(ctx, sourceName)
 	}(regMessage.Source)
 	if err := encoder.Encode(RegistrationResult{}); err != nil {
 		err = fmt.Errorf("unable to encode&send the registration result to '%s': %w", regMessage.Source, err)
@@ -243,7 +247,7 @@ func (m *Manager) handleConnection(
 			return
 		}
 
-		if err := m.processMessage(ctx, regMessage.Source, message, onReceivedMessage, conn); err != nil {
+		if err := m.processMessage(ctx, regMessage.Source, message, onReceivedMessage); err != nil {
 			logger.Errorf(
 				ctx,
 				"unable to process the message %#+v from %s (%s): %w",
@@ -259,7 +263,6 @@ func (m *Manager) processMessage(
 	source ProcessName,
 	message MessageToMain,
 	onReceivedMessage OnReceivedMessageFunc,
-	conn net.Conn,
 ) (_ret error) {
 	logger.Tracef(ctx, "processing message from '%s': %#+v", source, message)
 	defer func() { logger.Tracef(ctx, "/processing message from '%s': %#+v: %v", source, message, _ret) }()
@@ -292,11 +295,13 @@ func (m *Manager) processMessage(
 		return err.ErrorOrNil()
 	case ProcessNameMain:
 		logger.Tracef(ctx, "got a message to the main process from '%s': %#+v", source, message.Content)
-		switch message.Content.(type) {
+		switch content := message.Content.(type) {
 		case MessageReady:
 			var result *multierror.Error
 			result = multierror.Append(result, m.SendMessagePreReady(ctx, source, MessageReadyConfirmed{}))
-			result = multierror.Append(result, m.setReady(source, conn))
+			for _, sample := range content.ReadyForMessages {
+				result = multierror.Append(result, m.setReady(source, reflect.TypeOf(sample)))
+			}
 			return result.ErrorOrNil()
 		default:
 			return onReceivedMessage(ctx, source, message.Content)
@@ -340,23 +345,28 @@ func (m *Manager) sendMessage(
 		return fmt.Errorf("process '%s' is not ever expected", destination)
 	}
 
-	message := MessageFromMain{
-		Source:      source,
-		Password:    m.password,
-		Destination: destination,
-		Content:     content,
-	}
+	go func() {
+		conn, err := m.waitForReadyProcess(ctx, destination, reflect.TypeOf(content))
+		if err != nil {
+			logger.Errorf(ctx, "%v", fmt.Errorf("unable to wait for process '%s': %w", destination, err))
+			return
+		}
 
-	conn, err := m.waitForReadyProcess(destination)
-	if err != nil {
-		return fmt.Errorf("unable to wait for process '%s': %w", destination, err)
-	}
+		message := MessageFromMain{
+			Source:      source,
+			Password:    m.password,
+			Destination: destination,
+			Content:     content,
+		}
 
-	encoder := gob.NewEncoder(conn)
-	err = encoder.Encode(message)
-	if err != nil {
-		return fmt.Errorf("unable to encode&send message: %w", err)
-	}
+		h := m.connLocker.Lock(destination)
+		defer h.Unlock()
+		err = gob.NewEncoder(conn).Encode(message)
+		if err != nil {
+			logger.Errorf(ctx, "%v", fmt.Errorf("unable to encode&send message: %w", err))
+			return
+		}
+	}()
 
 	return nil
 }
@@ -383,22 +393,38 @@ func (m *Manager) waitForProcess(
 }
 
 func (m *Manager) waitForReadyProcess(
+	ctx context.Context,
 	name ProcessName,
+	msgType reflect.Type,
 ) (net.Conn, error) {
+	logger.Debugf(ctx, "waitForReadyProcess(ctx, '%s', '%s')", name, msgType)
+	defer logger.Debugf(ctx, "/waitForReadyProcess(ctx, '%s', '%s')", name, msgType)
 	if !m.isExpectedProcess(name) {
 		return nil, fmt.Errorf("process '%s' is not ever expected", name)
+	}
+	if msgType.Kind() == reflect.Pointer {
+		msgType = msgType.Elem()
 	}
 
 	for {
 		m.connsLocker.Lock()
-		conn := m.connsReady[name]
 		ch := m.connsChanged
+		conn := m.conns[name]
+		readyMap := m.childReadyFor[name]
+		isReady := false
+		if readyMap != nil {
+			if _, ok := readyMap[msgType]; ok {
+				isReady = true
+			}
+		}
 		m.connsLocker.Unlock()
 
-		if conn != nil {
+		if conn != nil && isReady {
+			logger.Debugf(ctx, "waitForReadyProcess(ctx, '%s', '%s'): waiting is complete", name, msgType)
 			return conn, nil
 		}
 
+		logger.Debugf(ctx, "waitForReadyProcess(ctx, '%s', '%s'): waiting for a change in connections", name, msgType)
 		<-ch
 	}
 }
@@ -410,9 +436,12 @@ func (m *Manager) checkPassword(
 }
 
 func (m *Manager) registerConnection(
+	ctx context.Context,
 	sourceName ProcessName,
 	conn net.Conn,
 ) error {
+	logger.Debugf(ctx, "registerConnection(ctx, '%s', %s)", sourceName, conn.RemoteAddr().String())
+	defer logger.Debugf(ctx, "/registerConnection(ctx, '%s', %s)", sourceName, conn.RemoteAddr().String())
 	if !m.isExpectedProcess(sourceName) {
 		return fmt.Errorf("process '%s' is not ever expected", sourceName)
 	}
@@ -420,7 +449,8 @@ func (m *Manager) registerConnection(
 	m.connsLocker.Lock()
 	defer m.connsLocker.Unlock()
 	if conn, ok := m.conns[sourceName]; ok {
-		return fmt.Errorf("process '%s' is already registered at %s", sourceName, conn.RemoteAddr().String())
+		conn.Close()
+		logger.Warnf(ctx, "closing the old registered connection")
 	}
 	m.conns[sourceName] = conn
 	var oldCh chan struct{}
@@ -431,18 +461,26 @@ func (m *Manager) registerConnection(
 
 func (m *Manager) setReady(
 	sourceName ProcessName,
-	conn net.Conn,
+	msgType reflect.Type,
 ) error {
 	if !m.isExpectedProcess(sourceName) {
 		return fmt.Errorf("process '%s' is not ever expected", sourceName)
 	}
+	if msgType.Kind() == reflect.Pointer {
+		msgType = msgType.Elem()
+	}
 
 	m.connsLocker.Lock()
 	defer m.connsLocker.Unlock()
-	if _, ok := m.connsReady[sourceName]; ok {
-		return fmt.Errorf("process '%s' is already ready", sourceName)
+	readyMap := m.childReadyFor[sourceName]
+	if readyMap == nil {
+		m.childReadyFor[sourceName] = map[reflect.Type]struct{}{}
+		readyMap = m.childReadyFor[sourceName]
 	}
-	m.connsReady[sourceName] = conn
+	if _, ok := readyMap[msgType]; ok {
+		return fmt.Errorf("process '%s' is already ready for '%s'", sourceName, msgType)
+	}
+	readyMap[msgType] = struct{}{}
 	var oldCh chan struct{}
 	oldCh, m.connsChanged = m.connsChanged, make(chan struct{})
 	close(oldCh)
@@ -450,12 +488,15 @@ func (m *Manager) setReady(
 }
 
 func (m *Manager) unregisterConnection(
+	ctx context.Context,
 	sourceName ProcessName,
 ) {
+	logger.Infof(ctx, "unregistering process '%s'", string(sourceName))
+	defer logger.Infof(ctx, "/unregistering process '%s'", string(sourceName))
 	m.connsLocker.Lock()
 	defer m.connsLocker.Unlock()
 	delete(m.conns, sourceName)
-	delete(m.connsReady, sourceName)
+	delete(m.childReadyFor, sourceName)
 	var oldCh chan struct{}
 	oldCh, m.connsChanged = m.connsChanged, make(chan struct{})
 	close(oldCh)
@@ -481,6 +522,9 @@ func (m *Manager) SendMessagePreReady(
 	dst ProcessName,
 	content any,
 ) error {
+	logger.Debugf(ctx, "SendMessagePreReady(ctx, '%s', %T)", dst, content)
+	defer logger.Debugf(ctx, "/SendMessagePreReady(ctx, '%s', %T)", dst, content)
+
 	conn, err := m.waitForProcess(dst)
 	if err != nil {
 		return fmt.Errorf("unable to wait for process '%s': %w", dst, err)
@@ -492,6 +536,8 @@ func (m *Manager) SendMessagePreReady(
 		Destination: dst,
 		Content:     content,
 	}
+	h := m.connLocker.Lock(dst)
+	defer h.Unlock()
 	err = encoder.Encode(msg)
 	logger.Tracef(ctx, "sending message %#+v: %v", msg, err)
 	if err != nil {
@@ -505,7 +551,10 @@ func (m *Manager) SendMessage(
 	dst ProcessName,
 	content any,
 ) error {
-	conn, err := m.waitForReadyProcess(dst)
+	logger.Debugf(ctx, "SendMessage(ctx, '%s', %T)", dst, content)
+	defer logger.Debugf(ctx, "/SendMessage(ctx, '%s', %T)", dst, content)
+
+	conn, err := m.waitForReadyProcess(ctx, dst, reflect.TypeOf(content))
 	if err != nil {
 		return fmt.Errorf("unable to wait for process '%s': %w", dst, err)
 	}
@@ -516,6 +565,8 @@ func (m *Manager) SendMessage(
 		Destination: dst,
 		Content:     content,
 	}
+	h := m.connLocker.Lock(dst)
+	defer h.Unlock()
 	err = encoder.Encode(msg)
 	logger.Tracef(ctx, "sending message %#+v: %v", msg, err)
 	if err != nil {
@@ -524,5 +575,7 @@ func (m *Manager) SendMessage(
 	return nil
 }
 
-type MessageReady struct{}
+type MessageReady struct {
+	ReadyForMessages []any
+}
 type MessageReadyConfirmed struct{}

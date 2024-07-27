@@ -5,13 +5,15 @@ import (
 	"encoding/gob"
 	"fmt"
 	"net"
+	"sync"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 )
 
 type Client struct {
-	Conn     net.Conn
-	Password string
+	WriteLocker sync.Mutex
+	Conn        net.Conn
+	Password    string
 }
 
 func NewClient(
@@ -56,12 +58,16 @@ func (c *Client) SendMessage(
 	dst ProcessName,
 	content any,
 ) error {
+	logger.Debugf(ctx, "SendMessage(ctx, '%s', %T)", dst, content)
+	defer logger.Debugf(ctx, "/SendMessage(ctx, '%s', %T)", dst, content)
 	encoder := gob.NewEncoder(c.Conn)
 	msg := MessageToMain{
 		Password:    c.Password,
 		Destination: dst,
 		Content:     content,
 	}
+	c.WriteLocker.Lock()
+	defer c.WriteLocker.Unlock()
 	err := encoder.Encode(msg)
 	logger.Tracef(ctx, "sending message %#+v: %v", msg, err)
 	if err != nil {

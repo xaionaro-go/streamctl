@@ -79,6 +79,7 @@ func runPanel(
 	}
 
 	if mainProcess != nil {
+		setReadyFor(ctx, mainProcess, StreamDDied{}, UpdateStreamDConfig{})
 		go func() {
 			err := mainProcess.Serve(
 				ctx,
