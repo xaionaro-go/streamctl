@@ -13,12 +13,11 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 )
 
 type StreamPortServer struct {
 	Addr string
-	Type types.ServerType
+	Type api.StreamServerType
 }
 
 type StreamServer interface {
@@ -225,48 +224,42 @@ func (p *StreamPlayer) openStream(ctx context.Context) error {
 	return nil
 }
 
+func (p *StreamPlayer) Resetup(opts ...Option) {
+	for _, opt := range opts {
+		opt.Apply(&p.Config)
+	}
+}
+
 func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 	logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop", p.StreamID)
 	defer logger.Debugf(ctx, "/StreamPlayer[%s].controllerLoop", p.StreamID)
 
 	// wait for video to start:
-	func() {
+	{
 		var ch <-chan struct{}
 		_ch := make(chan struct{})
 		close(_ch)
 		ch = _ch
 
-		var waitPublisherCtx context.Context
-		var waitPublisherCancel context.CancelFunc
-		defer func() {
-			if waitPublisherCancel != nil {
-				waitPublisherCancel()
-			}
-		}()
-		for {
-			select {
-			case <-ch:
-				if waitPublisherCancel != nil {
-					waitPublisherCancel()
-				}
-				waitPublisherCtx, waitPublisherCancel = context.WithCancel(ctx)
-				var err error
-				ch, err = p.Parent.StreamServer.WaitPublisher(waitPublisherCtx, p.StreamID)
-				logger.Debugf(ctx, "got a waiter from WaitPublisher for '%s'; %v", p.StreamID, err)
-				errmon.ObserveErrorCtx(ctx, err)
-			default:
-			}
+		for func() bool {
+			waitPublisherCtx, waitPublisherCancel := context.WithCancel(ctx)
+			defer waitPublisherCancel()
+
+			var err error
+			ch, err = p.Parent.StreamServer.WaitPublisher(waitPublisherCtx, p.StreamID)
+			logger.Debugf(ctx, "got a waiter from WaitPublisher for '%s'; %v", p.StreamID, err)
+			errmon.ObserveErrorCtx(ctx, err)
 
 			logger.Debugf(ctx, "waiting for stream '%s'", p.StreamID)
 			select {
 			case <-ctx.Done():
 				errmon.ObserveErrorCtx(ctx, p.Close())
-				return
+				return false
 			case <-ch:
 			}
 
 			logger.Tracef(ctx, "player has ended, reopening the stream")
-			err := p.openStream(ctx)
+			err = p.openStream(ctx)
 			errmon.ObserveErrorCtx(ctx, err)
 
 			startedWaitingForBuffering := time.Now()
@@ -274,12 +267,16 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 				pos := p.Player.GetPosition()
 				logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: pos == %v", p.StreamID, pos)
 				if pos != 0 {
-					return
+					return false
 				}
 				time.Sleep(100 * time.Millisecond)
 			}
+			return true
+		}() {
 		}
-	}()
+	}
+
+	logger.Debugf(ctx, "finished waiting for a publisher at '%s'", p.StreamID)
 
 	t := time.NewTicker(100 * time.Millisecond)
 	defer t.Stop()

@@ -13,8 +13,18 @@ type Config struct {
 	ReadTimeout           time.Duration
 }
 
+func (cfg Config) Options() Options {
+	return Options{
+		OptionJitterBufDuration(cfg.JitterBufDuration),
+		OptionCatchupMaxSpeedFactor(cfg.CatchupMaxSpeedFactor),
+		OptionMaxCatchupAtLag(cfg.MaxCatchupAtLag),
+		OptionStartTimeout(cfg.StartTimeout),
+		OptionReadTimeout(cfg.ReadTimeout),
+	}
+}
+
 type Option interface {
-	apply(cfg *Config)
+	Apply(cfg *Config)
 }
 
 type Options []Option
@@ -27,7 +37,7 @@ func (s Options) Config() Config {
 
 func (s Options) apply(cfg *Config) {
 	for _, opt := range s {
-		opt.apply(cfg)
+		opt.Apply(cfg)
 	}
 }
 
@@ -43,30 +53,30 @@ var DefaultConfig = func(ctx context.Context) Config {
 
 type OptionJitterBufDuration time.Duration
 
-func (s OptionJitterBufDuration) apply(cfg *Config) {
+func (s OptionJitterBufDuration) Apply(cfg *Config) {
 	cfg.JitterBufDuration = time.Duration(s)
 }
 
 type OptionCatchupMaxSpeedFactor float64
 
-func (s OptionCatchupMaxSpeedFactor) apply(cfg *Config) {
+func (s OptionCatchupMaxSpeedFactor) Apply(cfg *Config) {
 	cfg.CatchupMaxSpeedFactor = float64(s)
 }
 
 type OptionMaxCatchupAtLag time.Duration
 
-func (s OptionMaxCatchupAtLag) apply(cfg *Config) {
+func (s OptionMaxCatchupAtLag) Apply(cfg *Config) {
 	cfg.MaxCatchupAtLag = time.Duration(s)
 }
 
 type OptionStartTimeout time.Duration
 
-func (s OptionStartTimeout) apply(cfg *Config) {
+func (s OptionStartTimeout) Apply(cfg *Config) {
 	cfg.StartTimeout = time.Duration(s)
 }
 
 type OptionReadTimeout time.Duration
 
-func (s OptionReadTimeout) apply(cfg *Config) {
+func (s OptionReadTimeout) Apply(cfg *Config) {
 	cfg.ReadTimeout = time.Duration(s)
 }

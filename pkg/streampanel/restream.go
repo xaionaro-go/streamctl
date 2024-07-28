@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"unicode"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -19,6 +20,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/config"
+	"github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	"github.com/xaionaro-go/streamctl/pkg/xfyne"
 )
 
@@ -425,7 +427,36 @@ func (p *Panel) displayStreamDestinations(
 }
 
 func (p *Panel) openAddPlayerWindow(ctx context.Context) {
-	w := p.app.NewWindow(appName + ": Add player")
+	p.openAddOrEditPlayerWindow(ctx, "Add player", false, types.DefaultConfig(ctx), nil, p.addStreamPlayer)
+}
+
+func (p *Panel) openEditPlayerWindow(
+	ctx context.Context,
+	streamID api.StreamID,
+) {
+	player, ok := p.Config.StreamPlayers[streamID]
+	if !ok {
+		p.DisplayError(fmt.Errorf("unable to find a stream player for '%s'", streamID))
+		return
+	}
+	p.openAddOrEditPlayerWindow(ctx, "Edit player", !player.Disabled, player.StreamPlayback, &streamID, p.updateStreamPlayer)
+}
+
+func (p *Panel) openAddOrEditPlayerWindow(
+	ctx context.Context,
+	title string,
+	isEnabled bool,
+	cfg types.Config,
+	forceStreamID *api.StreamID,
+	addOrEditStreamPlayer func(
+		ctx context.Context,
+		streamID api.StreamID,
+		playerType player.Backend,
+		disabled bool,
+		streamPlaybackConfig types.Config,
+	) error,
+) {
+	w := p.app.NewWindow(appName + ": " + title)
 	resizeWindow(w, fyne.NewSize(400, 300))
 
 	var playerStrs []string
@@ -450,14 +481,118 @@ func (p *Panel) openAddPlayerWindow(ctx context.Context) {
 		inStreamStrs = append(inStreamStrs, string(inStream.StreamID))
 	}
 	inStreamsSelect := widget.NewSelect(inStreamStrs, func(s string) {})
+	if forceStreamID != nil {
+		inStreamsSelect.SetSelected(string(*forceStreamID))
+		inStreamsSelect.Disable()
+	}
+
+	jitterBufDuration := widget.NewEntry()
+	jitterBufDuration.SetPlaceHolder("amount of seconds")
+	jitterBufDuration.SetText(fmt.Sprintf("%f", cfg.JitterBufDuration.Seconds()))
+	jitterBufDuration.OnChanged = func(s string) {
+		filtered := removeNonDigitsAndDots(s)
+		if s != filtered {
+			jitterBufDuration.SetText(filtered)
+		}
+	}
+	jitterBufDuration.OnSubmitted = func(s string) {
+		f, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to parse '%s' as float: %w", s, err))
+			return
+		}
+
+		cfg.JitterBufDuration = time.Duration(f * float64(time.Second))
+	}
+
+	maxCatchupAtLag := widget.NewEntry()
+	maxCatchupAtLag.SetPlaceHolder("amount of seconds")
+	maxCatchupAtLag.SetText(fmt.Sprintf("%f", cfg.MaxCatchupAtLag.Seconds()))
+	maxCatchupAtLag.OnChanged = func(s string) {
+		filtered := removeNonDigitsAndDots(s)
+		if s != filtered {
+			maxCatchupAtLag.SetText(filtered)
+		}
+	}
+	maxCatchupAtLag.OnSubmitted = func(s string) {
+		f, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to parse '%s' as float: %w", s, err))
+			return
+		}
+
+		cfg.MaxCatchupAtLag = time.Duration(f * float64(time.Second))
+	}
+
+	startTimeout := widget.NewEntry()
+	startTimeout.SetPlaceHolder("amount of seconds")
+	startTimeout.SetText(fmt.Sprintf("%f", cfg.StartTimeout.Seconds()))
+	startTimeout.OnChanged = func(s string) {
+		filtered := removeNonDigitsAndDots(s)
+		if s != filtered {
+			startTimeout.SetText(filtered)
+		}
+	}
+	startTimeout.OnSubmitted = func(s string) {
+		f, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to parse '%s' as float: %w", s, err))
+			return
+		}
+
+		cfg.StartTimeout = time.Duration(f * float64(time.Second))
+	}
+
+	readTimeout := widget.NewEntry()
+	readTimeout.SetPlaceHolder("amount of seconds")
+	readTimeout.SetText(fmt.Sprintf("%f", cfg.ReadTimeout.Seconds()))
+	readTimeout.OnChanged = func(s string) {
+		filtered := removeNonDigitsAndDots(s)
+		if s != filtered {
+			readTimeout.SetText(filtered)
+		}
+	}
+	readTimeout.OnSubmitted = func(s string) {
+		f, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to parse '%s' as float: %w", s, err))
+			return
+		}
+
+		cfg.ReadTimeout = time.Duration(f * float64(time.Second))
+	}
+
+	catchupMaxSpeedFactor := widget.NewEntry()
+	catchupMaxSpeedFactor.SetPlaceHolder("1.0")
+	catchupMaxSpeedFactor.SetText(fmt.Sprintf("%f", cfg.CatchupMaxSpeedFactor))
+	catchupMaxSpeedFactor.OnChanged = func(s string) {
+		filtered := removeNonDigitsAndDots(s)
+		if s != filtered {
+			catchupMaxSpeedFactor.SetText(filtered)
+		}
+	}
+	catchupMaxSpeedFactor.OnSubmitted = func(s string) {
+		f, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to parse '%s' as float: %w", s, err))
+			return
+		}
+
+		cfg.CatchupMaxSpeedFactor = f
+	}
 
 	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
+		if inStreamsSelect.Selected == "" {
+			p.DisplayError(fmt.Errorf("stream is not selected"))
+			return
+		}
 		p.waitForResponse(func() {
-			err := p.addStreamPlayer(
+			err := addOrEditStreamPlayer(
 				ctx,
 				api.StreamID(inStreamsSelect.Selected),
 				player.Backend(playerSelect.Selected),
-				true,
+				!isEnabled,
+				cfg,
 			)
 			if err != nil {
 				p.DisplayError(err)
@@ -478,6 +613,18 @@ func (p *Panel) openAddPlayerWindow(ctx context.Context) {
 			playerSelect,
 			widget.NewLabel("Stream:"),
 			inStreamsSelect,
+			widget.NewSeparator(),
+			widget.NewSeparator(),
+			widget.NewLabel("Start timeout (seconds):"),
+			startTimeout,
+			widget.NewLabel("Read timeout (seconds):"),
+			readTimeout,
+			widget.NewLabel("Jitter buffer size (seconds):"),
+			jitterBufDuration,
+			widget.NewLabel("Maximal catchup speed (float):"),
+			catchupMaxSpeedFactor,
+			widget.NewLabel("Maximal catchup at lab (seconds):"),
+			maxCatchupAtLag,
 		),
 	))
 	w.Show()
@@ -534,6 +681,9 @@ func (p *Panel) displayStreamPlayers(
 			w.Show()
 			p.initRestreamPage(ctx)
 		})
+		editButton := widget.NewButtonWithIcon("", theme.ListIcon(), func() {
+			p.openEditPlayerWindow(ctx, player.StreamID)
+		})
 		icon := theme.MediaStopIcon()
 		label := "Stop"
 		title := fmt.Sprintf("Stop %s on '%s' ?", player.Player, player.StreamID)
@@ -558,6 +708,7 @@ func (p *Panel) displayStreamPlayers(
 							player.StreamID,
 							player.Player,
 							!player.Disabled,
+							player.StreamPlayback,
 						)
 						if err != nil {
 							p.DisplayError(err)
@@ -574,6 +725,7 @@ func (p *Panel) displayStreamPlayers(
 		caption := widget.NewLabel(string(player.StreamID) + " (" + string(player.Player) + ")")
 		c.RemoveAll()
 		c.Add(deleteButton)
+		c.Add(editButton)
 		c.Add(playPauseButton)
 		c.Add(caption)
 		if !player.Disabled {
@@ -808,4 +960,14 @@ func (p *Panel) updateRestreamPage(
 		// whatever
 	}()
 	wg.Wait()
+}
+
+func removeNonDigitsAndDots(input string) string {
+	var result []rune
+	for _, r := range input {
+		if unicode.IsDigit(r) && r != '.' {
+			result = append(result, r)
+		}
+	}
+	return string(result)
 }

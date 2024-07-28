@@ -1601,10 +1601,17 @@ func (p *Panel) initMainWindow(
 	addRestream := widget.NewButtonWithIcon("Add restream", theme.ContentAddIcon(), func() {
 		p.openAddRestreamWindow(ctx)
 	})
+	playersLabel := widget.NewLabel("Players:")
 	p.playersWidget = container.NewVBox()
 	addPlayer := widget.NewButtonWithIcon("Add player", theme.ContentAddIcon(), func() {
 		p.openAddPlayerWindow(ctx)
 	})
+	switch runtime.GOOS {
+	case "android":
+		playersLabel.Hide()
+		p.playersWidget.Hide()
+		addPlayer.Hide()
+	}
 	restreamPage := container.NewBorder(
 		nil,
 		nil,
@@ -1623,7 +1630,7 @@ func (p *Panel) initMainWindow(
 			widget.NewLabel("Resteams:"),
 			p.restreamsWidget,
 			addRestream,
-			widget.NewLabel("Players:"),
+			playersLabel,
 			p.playersWidget,
 			addPlayer,
 		),

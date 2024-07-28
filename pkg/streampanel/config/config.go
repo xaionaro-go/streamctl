@@ -11,6 +11,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/screenshot"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	streamd "github.com/xaionaro-go/streamctl/pkg/streamd/config"
+	"github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 )
 
 type ScreenshotConfig struct {
@@ -19,8 +20,9 @@ type ScreenshotConfig struct {
 }
 
 type PlayerConfig struct {
-	Player   player.Backend `yaml:"player,omitempty"`
-	Disabled bool           `yaml:"disabled,omitempty"`
+	Player         player.Backend `yaml:"player,omitempty"`
+	Disabled       bool           `yaml:"disabled,omitempty"`
+	StreamPlayback types.Config   `yaml:"stream_playback,omitempty"`
 }
 
 type Config struct {

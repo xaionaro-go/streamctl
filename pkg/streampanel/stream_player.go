@@ -10,7 +10,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/config"
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 )
 
 type StreamPlayerStreamServer struct {
@@ -37,7 +37,7 @@ func (s *StreamPlayerStreamServer) GetPortServers(
 	for _, srv := range srvs {
 		result = append(result, streamplayer.StreamPortServer{
 			Addr: srv.ListenAddr,
-			Type: types.ServerType(srv.Type),
+			Type: srv.Type,
 		})
 	}
 
@@ -87,7 +87,7 @@ func (p *Panel) updateStreamPlayers(
 			continue
 		}
 
-		_, err := p.StreamPlayers.Create(ctx, streamID)
+		_, err := p.StreamPlayers.Create(ctx, streamID, player.StreamPlayback.Options()...)
 		if err != nil {
 			logger.Warnf(ctx, "unable to start the player for stream '%s': %w", streamID, err)
 			result = multierror.Append(result, fmt.Errorf("unable to create a stream player for stream '%s': %w", streamID, err))
@@ -104,10 +104,12 @@ func (p *Panel) addStreamPlayer(
 	streamID api.StreamID,
 	playerType player.Backend,
 	disabled bool,
+	streamPlaybackConfig types.Config,
 ) error {
 	p.Config.StreamPlayers[streamID] = config.PlayerConfig{
-		Player:   playerType,
-		Disabled: disabled,
+		Player:         playerType,
+		Disabled:       disabled,
+		StreamPlayback: streamPlaybackConfig,
 	}
 
 	if err := p.SaveConfig(ctx); err != nil {
@@ -126,8 +128,9 @@ func (p *Panel) updateStreamPlayer(
 	streamID api.StreamID,
 	playerType player.Backend,
 	disabled bool,
+	streamPlaybackConfig types.Config,
 ) error {
-	return p.addStreamPlayer(ctx, streamID, playerType, disabled)
+	return p.addStreamPlayer(ctx, streamID, playerType, disabled, streamPlaybackConfig)
 }
 
 func (p *Panel) removeStreamPlayer(

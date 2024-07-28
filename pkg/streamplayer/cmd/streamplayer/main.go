@@ -2,8 +2,12 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"strconv"
 	"strings"
+	"time"
+	"unicode"
 
 	fyneapp "fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
@@ -18,6 +22,7 @@ import (
 	ptypes "github.com/xaionaro-go/streamctl/pkg/player/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
+	"github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver"
 	sstypes "github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 )
@@ -61,7 +66,7 @@ func main() {
 	err := ss.Init(ctx)
 	assertNoError(ctx, err)
 	sp := streamplayer.New(NewStreamPlayerStreamServer(ss), m)
-	_, err = sp.Create(ctx, api.StreamID(*streamID))
+	p, err := sp.Create(ctx, api.StreamID(*streamID))
 	assertNoError(ctx, err)
 
 	app := fyneapp.New()
@@ -73,6 +78,103 @@ func main() {
 		assertNoError(ctx, err)
 	})
 
+	defaultCfg := types.DefaultConfig(ctx)
+
+	jitterBufDuration := widget.NewEntry()
+	jitterBufDuration.SetPlaceHolder("amount of seconds")
+	jitterBufDuration.SetText(fmt.Sprintf("%f", defaultCfg.JitterBufDuration.Seconds()))
+	jitterBufDuration.OnChanged = func(s string) {
+		filtered := removeNonDigitsAndDots(s)
+		if s != filtered {
+			jitterBufDuration.SetText(filtered)
+		}
+	}
+	jitterBufDuration.OnSubmitted = func(s string) {
+		f, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			errorMessage.SetText(fmt.Sprintf("unable to parse '%s' as float: %s", s, err))
+			return
+		}
+
+		p.Resetup(types.OptionJitterBufDuration(time.Duration(f * float64(time.Second))))
+	}
+
+	maxCatchupAtLag := widget.NewEntry()
+	maxCatchupAtLag.SetPlaceHolder("amount of seconds")
+	maxCatchupAtLag.SetText(fmt.Sprintf("%f", defaultCfg.MaxCatchupAtLag.Seconds()))
+	maxCatchupAtLag.OnChanged = func(s string) {
+		filtered := removeNonDigitsAndDots(s)
+		if s != filtered {
+			maxCatchupAtLag.SetText(filtered)
+		}
+	}
+	maxCatchupAtLag.OnSubmitted = func(s string) {
+		f, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			errorMessage.SetText(fmt.Sprintf("unable to parse '%s' as float: %s", s, err))
+			return
+		}
+
+		p.Resetup(types.OptionMaxCatchupAtLag(time.Duration(f * float64(time.Second))))
+	}
+
+	startTimeout := widget.NewEntry()
+	startTimeout.SetPlaceHolder("amount of seconds")
+	startTimeout.SetText(fmt.Sprintf("%f", defaultCfg.StartTimeout.Seconds()))
+	startTimeout.OnChanged = func(s string) {
+		filtered := removeNonDigitsAndDots(s)
+		if s != filtered {
+			startTimeout.SetText(filtered)
+		}
+	}
+	startTimeout.OnSubmitted = func(s string) {
+		f, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			errorMessage.SetText(fmt.Sprintf("unable to parse '%s' as float: %s", s, err))
+			return
+		}
+
+		p.Resetup(types.OptionStartTimeout(time.Duration(f * float64(time.Second))))
+	}
+
+	readTimeout := widget.NewEntry()
+	readTimeout.SetPlaceHolder("amount of seconds")
+	readTimeout.SetText(fmt.Sprintf("%f", defaultCfg.ReadTimeout.Seconds()))
+	readTimeout.OnChanged = func(s string) {
+		filtered := removeNonDigitsAndDots(s)
+		if s != filtered {
+			readTimeout.SetText(filtered)
+		}
+	}
+	readTimeout.OnSubmitted = func(s string) {
+		f, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			errorMessage.SetText(fmt.Sprintf("unable to parse '%s' as float: %s", s, err))
+			return
+		}
+
+		p.Resetup(types.OptionReadTimeout(time.Duration(f * float64(time.Second))))
+	}
+
+	catchupMaxSpeedFactor := widget.NewEntry()
+	catchupMaxSpeedFactor.SetPlaceHolder("1.0")
+	catchupMaxSpeedFactor.SetText(fmt.Sprintf("%f", defaultCfg.CatchupMaxSpeedFactor))
+	catchupMaxSpeedFactor.OnChanged = func(s string) {
+		filtered := removeNonDigitsAndDots(s)
+		if s != filtered {
+			catchupMaxSpeedFactor.SetText(filtered)
+		}
+	}
+	catchupMaxSpeedFactor.OnSubmitted = func(s string) {
+		f, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			errorMessage.SetText(fmt.Sprintf("unable to parse '%s' as float: %s", s, err))
+			return
+		}
+
+		p.Resetup(types.OptionCatchupMaxSpeedFactor(f))
+	}
+
 	w := app.NewWindow("player controls")
 	w.SetContent(container.NewBorder(
 		nil,
@@ -80,6 +182,16 @@ func main() {
 		nil,
 		nil,
 		container.NewVBox(
+			widget.NewLabel("Start timeout (seconds):"),
+			startTimeout,
+			widget.NewLabel("Read timeout (seconds):"),
+			readTimeout,
+			widget.NewLabel("Jitter buffer size (seconds):"),
+			jitterBufDuration,
+			widget.NewLabel("Maximal catchup speed (float):"),
+			catchupMaxSpeedFactor,
+			widget.NewLabel("Maximal catchup at lab (seconds):"),
+			maxCatchupAtLag,
 			closeButton,
 		),
 	))
@@ -106,7 +218,7 @@ func (s *StreamPlayerStreamServer) GetPortServers(
 	for _, srv := range s.StreamServer.ServerHandlers {
 		result = append(result, streamplayer.StreamPortServer{
 			Addr: srv.ListenAddr(),
-			Type: srv.Type(),
+			Type: api.ServerTypeServer2API(srv.Type()),
 		})
 	}
 	return result, nil
@@ -128,4 +240,14 @@ func (s *StreamPlayerStreamServer) WaitPublisher(
 		close(ch)
 	}()
 	return ch, nil
+}
+
+func removeNonDigitsAndDots(input string) string {
+	var result []rune
+	for _, r := range input {
+		if unicode.IsDigit(r) && r != '.' {
+			result = append(result, r)
+		}
+	}
+	return string(result)
 }
