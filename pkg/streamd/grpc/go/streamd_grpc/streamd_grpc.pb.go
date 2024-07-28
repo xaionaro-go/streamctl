@@ -61,6 +61,7 @@ type StreamDClient interface {
 	AddStreamForward(ctx context.Context, in *AddStreamForwardRequest, opts ...grpc.CallOption) (*AddStreamForwardReply, error)
 	UpdateStreamForward(ctx context.Context, in *UpdateStreamForwardRequest, opts ...grpc.CallOption) (*UpdateStreamForwardReply, error)
 	RemoveStreamForward(ctx context.Context, in *RemoveStreamForwardRequest, opts ...grpc.CallOption) (*RemoveStreamForwardReply, error)
+	WaitForStreamPublisher(ctx context.Context, in *WaitForStreamPublisherRequest, opts ...grpc.CallOption) (StreamD_WaitForStreamPublisherClient, error)
 }
 
 type streamDClient struct {
@@ -445,6 +446,38 @@ func (c *streamDClient) RemoveStreamForward(ctx context.Context, in *RemoveStrea
 	return out, nil
 }
 
+func (c *streamDClient) WaitForStreamPublisher(ctx context.Context, in *WaitForStreamPublisherRequest, opts ...grpc.CallOption) (StreamD_WaitForStreamPublisherClient, error) {
+	stream, err := c.cc.NewStream(ctx, &StreamD_ServiceDesc.Streams[1], "/StreamD/WaitForStreamPublisher", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &streamDWaitForStreamPublisherClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type StreamD_WaitForStreamPublisherClient interface {
+	Recv() (*StreamPublisher, error)
+	grpc.ClientStream
+}
+
+type streamDWaitForStreamPublisherClient struct {
+	grpc.ClientStream
+}
+
+func (x *streamDWaitForStreamPublisherClient) Recv() (*StreamPublisher, error) {
+	m := new(StreamPublisher)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // StreamDServer is the server API for StreamD service.
 // All implementations must embed UnimplementedStreamDServer
 // for forward compatibility
@@ -488,6 +521,7 @@ type StreamDServer interface {
 	AddStreamForward(context.Context, *AddStreamForwardRequest) (*AddStreamForwardReply, error)
 	UpdateStreamForward(context.Context, *UpdateStreamForwardRequest) (*UpdateStreamForwardReply, error)
 	RemoveStreamForward(context.Context, *RemoveStreamForwardRequest) (*RemoveStreamForwardReply, error)
+	WaitForStreamPublisher(*WaitForStreamPublisherRequest, StreamD_WaitForStreamPublisherServer) error
 	mustEmbedUnimplementedStreamDServer()
 }
 
@@ -611,6 +645,9 @@ func (UnimplementedStreamDServer) UpdateStreamForward(context.Context, *UpdateSt
 }
 func (UnimplementedStreamDServer) RemoveStreamForward(context.Context, *RemoveStreamForwardRequest) (*RemoveStreamForwardReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RemoveStreamForward not implemented")
+}
+func (UnimplementedStreamDServer) WaitForStreamPublisher(*WaitForStreamPublisherRequest, StreamD_WaitForStreamPublisherServer) error {
+	return status.Errorf(codes.Unimplemented, "method WaitForStreamPublisher not implemented")
 }
 func (UnimplementedStreamDServer) mustEmbedUnimplementedStreamDServer() {}
 
@@ -1330,6 +1367,27 @@ func _StreamD_RemoveStreamForward_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _StreamD_WaitForStreamPublisher_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(WaitForStreamPublisherRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(StreamDServer).WaitForStreamPublisher(m, &streamDWaitForStreamPublisherServer{stream})
+}
+
+type StreamD_WaitForStreamPublisherServer interface {
+	Send(*StreamPublisher) error
+	grpc.ServerStream
+}
+
+type streamDWaitForStreamPublisherServer struct {
+	grpc.ServerStream
+}
+
+func (x *streamDWaitForStreamPublisherServer) Send(m *StreamPublisher) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // StreamD_ServiceDesc is the grpc.ServiceDesc for StreamD service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1494,6 +1552,11 @@ var StreamD_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "SubscribeToOAuthRequests",
 			Handler:       _StreamD_SubscribeToOAuthRequests_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "WaitForStreamPublisher",
+			Handler:       _StreamD_WaitForStreamPublisher_Handler,
 			ServerStreams: true,
 		},
 	},

@@ -16,7 +16,9 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/dustin/go-humanize"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
+	"github.com/xaionaro-go/streamctl/pkg/streampanel/config"
 	"github.com/xaionaro-go/streamctl/pkg/xfyne"
 )
 
@@ -83,6 +85,8 @@ func (p *Panel) initRestreamPage(
 	} else {
 		p.displayStreamForwards(ctx, streamFwds)
 	}
+
+	p.displayStreamPlayers(ctx)
 }
 
 func (p *Panel) openAddStreamServerWindow(ctx context.Context) {
@@ -424,15 +428,18 @@ func (p *Panel) openAddPlayerWindow(ctx context.Context) {
 	w := p.app.NewWindow(appName + ": Add player")
 	resizeWindow(w, fyne.NewSize(400, 300))
 
-	enabledCheck := widget.NewCheck("Enable", func(b bool) {})
-
-	inStreams, err := p.StreamD.ListIncomingStreams(ctx)
-	if err != nil {
-		p.DisplayError(err)
+	var playerStrs []string
+	for _, p := range player.SupportedBackends() {
+		playerStrs = append(playerStrs, string(p))
+	}
+	if len(playerStrs) == 0 {
+		p.DisplayError(fmt.Errorf("no players supported in this build of the application"))
 		return
 	}
+	playerSelect := widget.NewSelect(playerStrs, func(s string) {})
+	playerSelect.SetSelectedIndex(0)
 
-	dsts, err := p.StreamD.ListStreamDestinations(ctx)
+	inStreams, err := p.StreamD.ListIncomingStreams(ctx)
 	if err != nil {
 		p.DisplayError(err)
 		return
@@ -444,22 +451,13 @@ func (p *Panel) openAddPlayerWindow(ctx context.Context) {
 	}
 	inStreamsSelect := widget.NewSelect(inStreamStrs, func(s string) {})
 
-	var dstStrs []string
-	dstMap := map[string]api.DestinationID{}
-	for _, dst := range dsts {
-		k := string(dst.ID) + ": " + dst.URL
-		dstStrs = append(dstStrs, k)
-		dstMap[k] = dst.ID
-	}
-	dstSelect := widget.NewSelect(dstStrs, func(s string) {})
-
 	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
 		p.waitForResponse(func() {
-			err := p.addStreamForward(
+			err := p.addStreamPlayer(
 				ctx,
 				api.StreamID(inStreamsSelect.Selected),
-				dstMap[dstSelect.Selected],
-				enabledCheck.Checked,
+				player.Backend(playerSelect.Selected),
+				true,
 			)
 			if err != nil {
 				p.DisplayError(err)
@@ -476,13 +474,118 @@ func (p *Panel) openAddPlayerWindow(ctx context.Context) {
 		nil,
 		nil,
 		container.NewVBox(
-			widget.NewLabel("From:"),
+			widget.NewLabel("Player:"),
+			playerSelect,
+			widget.NewLabel("Stream:"),
 			inStreamsSelect,
-			widget.NewLabel("To:"),
-			dstSelect,
 		),
 	))
 	w.Show()
+}
+
+func (p *Panel) displayStreamPlayers(
+	ctx context.Context,
+) {
+	logger.Debugf(ctx, "displayStreamPlayers")
+	defer logger.Debugf(ctx, "/displayStreamPlayers")
+
+	type PlayerConfig struct {
+		StreamID api.StreamID
+		config.PlayerConfig
+	}
+
+	players := make([]PlayerConfig, 0, len(p.Config.StreamPlayers))
+	for streamID, player := range p.Config.StreamPlayers {
+		players = append(players, PlayerConfig{
+			StreamID:     api.StreamID(streamID),
+			PlayerConfig: player,
+		})
+	}
+
+	sort.Slice(players, func(i, j int) bool {
+		return players[i].StreamID < players[j].StreamID
+	})
+
+	p.playersWidget.RemoveAll()
+	for idx, player := range players {
+		logger.Tracef(ctx, "players[%3d] == %#+v", idx, player)
+		c := container.NewHBox()
+		deleteButton := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
+			w := dialog.NewConfirm(
+				fmt.Sprintf("Delete player for stream '%s' (%s) ?", player.StreamID, player.Player),
+				"",
+				func(b bool) {
+					if !b {
+						return
+					}
+					logger.Debugf(ctx, "remove player '%s' (%s)", player.StreamID, player.Player)
+					defer logger.Debugf(ctx, "/remove player '%s' (%s)", player.StreamID, player.Player)
+					p.waitForResponse(func() {
+						err := p.removeStreamPlayer(ctx, player.StreamID)
+						if err != nil {
+							p.DisplayError(err)
+							return
+						}
+					})
+					p.initRestreamPage(ctx)
+				},
+				p.mainWindow,
+			)
+			w.Show()
+			p.initRestreamPage(ctx)
+		})
+		icon := theme.MediaStopIcon()
+		label := "Stop"
+		title := fmt.Sprintf("Stop %s on '%s' ?", player.Player, player.StreamID)
+		if player.Disabled {
+			icon = theme.MediaPlayIcon()
+			label = "Start"
+			title = fmt.Sprintf("Start %s on '%s' ?", player.Player, player.StreamID)
+		}
+		playPauseButton := widget.NewButtonWithIcon(label, icon, func() {
+			w := dialog.NewConfirm(
+				title,
+				"",
+				func(b bool) {
+					if !b {
+						return
+					}
+					logger.Debugf(ctx, "stop/start player %s on '%s': disabled:%v->%v", player.Player, player.StreamID, player.Disabled, !player.Disabled)
+					defer logger.Debugf(ctx, "/stop/start player %s on '%s': disabled:%v->%v", player.Player, player.StreamID, player.Disabled, !player.Disabled)
+					p.waitForResponse(func() {
+						err := p.updateStreamPlayer(
+							ctx,
+							player.StreamID,
+							player.Player,
+							!player.Disabled,
+						)
+						if err != nil {
+							p.DisplayError(err)
+							return
+						}
+					})
+					p.initRestreamPage(ctx)
+				},
+				p.mainWindow,
+			)
+			w.Show()
+			p.initRestreamPage(ctx)
+		})
+		caption := widget.NewLabel(string(player.StreamID) + " (" + string(player.Player) + ")")
+		c.RemoveAll()
+		c.Add(deleteButton)
+		c.Add(playPauseButton)
+		c.Add(caption)
+		if !player.Disabled {
+			player := p.StreamPlayers.Get(player.StreamID)
+			if player != nil {
+				pos := player.Player.GetPosition()
+				c.Add(widget.NewSeparator())
+				c.Add(widget.NewLabel(pos.String()))
+			}
+		}
+		p.playersWidget.Add(c)
+	}
 }
 
 func (p *Panel) openAddRestreamWindow(ctx context.Context) {
@@ -625,8 +728,8 @@ func (p *Panel) displayStreamForwards(
 					if !b {
 						return
 					}
-					logger.Debugf(ctx, "pause/unpause restreaming (stream forwarding): disabled:%v->%v", fwd.Enabled, !fwd.Enabled)
-					defer logger.Debugf(ctx, "/pause/unpause restreaming (stream forwarding): disabled:%v->%v", !fwd.Enabled, fwd.Enabled)
+					logger.Debugf(ctx, "pause/unpause restreaming (stream forwarding): enabled:%v->%v", fwd.Enabled, !fwd.Enabled)
+					defer logger.Debugf(ctx, "/pause/unpause restreaming (stream forwarding): enabled:%v->%v", !fwd.Enabled, fwd.Enabled)
 					p.waitForResponse(func() {
 						err := p.StreamD.UpdateStreamForward(
 							ctx,

@@ -946,3 +946,32 @@ func (grpc *GRPCServer) RemoveStreamForward(
 	}
 	return &streamd_grpc.RemoveStreamForwardReply{}, nil
 }
+
+func (grpc *GRPCServer) WaitForStreamPublisher(
+	req *streamd_grpc.WaitForStreamPublisherRequest,
+	sender streamd_grpc.StreamD_WaitForStreamPublisherServer,
+) (_ret error) {
+	ctx := sender.Context()
+	logger.Tracef(ctx, "WaitForStreamPublisher(): StreamID:%s", req.GetStreamID())
+	defer func() {
+		logger.Tracef(ctx, "/WaitForStreamPublisher(): StreamID:%s", req.GetStreamID(), _ret)
+	}()
+
+	for {
+		ch, err := grpc.StreamD.WaitForStreamPublisher(
+			ctx,
+			api.StreamID(req.GetStreamID()),
+		)
+		if err != nil {
+			return fmt.Errorf("streamd returned error: %w", err)
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ch:
+		}
+
+		return sender.Send(&streamd_grpc.StreamPublisher{})
+	}
+}

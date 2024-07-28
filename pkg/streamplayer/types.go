@@ -1,4 +1,4 @@
-package playersrv
+package streamplayer
 
 import (
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer/types"

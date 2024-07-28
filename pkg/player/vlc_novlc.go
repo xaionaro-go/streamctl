@@ -40,6 +40,14 @@ func (p *VLC) GetLength() time.Duration {
 	panic("compiled without VLC support")
 }
 
+func (p *VLC) ProcessTitle() string {
+	panic("compiled without VLC support")
+}
+
+func (p *VLC) GetLink() string {
+	panic("compiled without VLC support")
+}
+
 func (*VLC) SetSpeed(speed float64) error {
 	panic("compiled without VLC support")
 }

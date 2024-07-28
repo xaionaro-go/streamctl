@@ -9,6 +9,7 @@ type Config struct {
 	JitterBufDuration     time.Duration
 	CatchupMaxSpeedFactor float64
 	MaxCatchupAtLag       time.Duration
+	StartTimeout          time.Duration
 	ReadTimeout           time.Duration
 }
 
@@ -32,9 +33,10 @@ func (s Options) apply(cfg *Config) {
 
 var DefaultConfig = func(ctx context.Context) Config {
 	return Config{
-		JitterBufDuration:     time.Second,
+		JitterBufDuration:     3 * time.Second,
 		CatchupMaxSpeedFactor: 10,
 		MaxCatchupAtLag:       21 * time.Second,
+		StartTimeout:          60 * time.Second,
 		ReadTimeout:           10 * time.Second,
 	}
 }
@@ -55,6 +57,12 @@ type OptionMaxCatchupAtLag time.Duration
 
 func (s OptionMaxCatchupAtLag) apply(cfg *Config) {
 	cfg.MaxCatchupAtLag = time.Duration(s)
+}
+
+type OptionStartTimeout time.Duration
+
+func (s OptionStartTimeout) apply(cfg *Config) {
+	cfg.StartTimeout = time.Duration(s)
 }
 
 type OptionReadTimeout time.Duration

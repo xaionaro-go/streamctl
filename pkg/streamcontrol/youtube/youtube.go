@@ -932,7 +932,7 @@ func (yt *YouTube) fixError(ctx context.Context, err error, counterPtr *int) boo
 	}
 
 	if strings.Contains(err.Error(), "token expired") {
-		logger.Tracef(ctx, "token expired")
+		logger.Debugf(ctx, "token expired")
 		return tryGetNewToken()
 	}
 
@@ -942,7 +942,7 @@ func (yt *YouTube) fixError(ctx context.Context, err error, counterPtr *int) boo
 	}
 
 	if gErr.Code == 401 {
-		logger.Tracef(ctx, "error 401")
+		logger.Debugf(ctx, "error 401")
 		return tryGetNewToken()
 	}
 

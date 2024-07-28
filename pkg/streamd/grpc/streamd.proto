@@ -46,6 +46,7 @@ service StreamD {
 	rpc AddStreamForward(AddStreamForwardRequest) returns (AddStreamForwardReply) {}
 	rpc UpdateStreamForward(UpdateStreamForwardRequest) returns (UpdateStreamForwardReply) {}
 	rpc RemoveStreamForward(RemoveStreamForwardRequest) returns (RemoveStreamForwardReply) {}
+    rpc WaitForStreamPublisher(WaitForStreamPublisherRequest) returns (stream StreamPublisher) {}
 }
 
 message GetConfigRequest {}
@@ -307,3 +308,8 @@ message RemoveStreamForwardRequest {
     StreamForward config = 1;
 }
 message RemoveStreamForwardReply {}
+
+message WaitForStreamPublisherRequest {
+    optional string streamID = 1;
+}
+message StreamPublisher {}

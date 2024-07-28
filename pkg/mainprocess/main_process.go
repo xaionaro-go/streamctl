@@ -7,6 +7,7 @@ import (
 	"net"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
@@ -361,6 +362,7 @@ func (m *Manager) sendMessage(
 
 		h := m.connLocker.Lock(destination)
 		defer h.Unlock()
+		defer time.Sleep(100 * time.Millisecond) // TODO: Delete this horrible hack (that is introduced to avoid erasing messages in the buffer)
 		err = gob.NewEncoder(conn).Encode(message)
 		if err != nil {
 			logger.Errorf(ctx, "%v", fmt.Errorf("unable to encode&send message: %w", err))

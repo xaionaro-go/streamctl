@@ -931,3 +931,48 @@ func (c *Client) RemoveStreamForward(
 	}
 	return nil
 }
+
+func (c *Client) WaitForStreamPublisher(
+	ctx context.Context,
+	streamID api.StreamID,
+) (chan struct{}, error) {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return nil, err
+	}
+
+	waiter, err := client.WaitForStreamPublisher(ctx, &streamd_grpc.WaitForStreamPublisherRequest{
+		StreamID: ptr(string(streamID)),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("unable to get a publisher waiter for stream '%s': %w", streamID, err)
+	}
+
+	ctx, cancelFn := context.WithCancel(ctx)
+	go func() {
+		<-ctx.Done()
+		conn.Close()
+	}()
+
+	result := make(chan struct{})
+	waiter.CloseSend()
+	go func() {
+		defer cancelFn()
+		defer conn.Close()
+		defer func() {
+			close(result)
+		}()
+
+		_, err := waiter.Recv()
+		if err == io.EOF {
+			logger.Debugf(ctx, "the receiver is closed: %v", err)
+			return
+		}
+		if err != nil {
+			logger.Errorf(ctx, "unable to read data: %v", err)
+			return
+		}
+	}()
+
+	return result, nil
+}

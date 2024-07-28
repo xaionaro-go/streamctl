@@ -111,9 +111,12 @@ func runStreamd(
 			if err != nil {
 				return fmt.Errorf("unable to serialize the config: %w", err)
 			}
-			return mainProcess.SendMessage(ctx, ProcessNameUI, UpdateStreamDConfig{
-				Config: buf.String(),
-			})
+			if mainProcess != nil {
+				return mainProcess.SendMessage(ctx, ProcessNameUI, UpdateStreamDConfig{
+					Config: buf.String(),
+				})
+			}
+			panic("not implemented")
 		},
 		belt.CtxBelt(ctx),
 	)
@@ -125,12 +128,10 @@ func runStreamd(
 	listener, _, streamdGRPC = initGRPCServer(ctx, streamD, flags.ListenAddr)
 	streamdGRPCLocker.Unlock()
 
-	err = streamD.Run(ctx)
-	if err != nil {
-		logger.Fatalf(ctx, "unable to start streamd: %v", err)
-	}
-
+	var configLocker sync.Mutex
+	configLocker.Lock()
 	if mainProcess != nil {
+		logger.Debugf(ctx, "starting the IPC server")
 		setReadyFor(ctx, mainProcess, GetStreamdAddress{}, RequestStreamDConfig{})
 		go func() {
 			err := mainProcess.Serve(
@@ -147,7 +148,9 @@ func runStreamd(
 						})
 					case RequestStreamDConfig:
 						var buf bytes.Buffer
+						configLocker.Lock()
 						_, err := cfg.BuiltinStreamD.WriteTo(&buf)
+						configLocker.Unlock()
 						if err != nil {
 							return fmt.Errorf("unable to serialize the config: %w", err)
 						}
@@ -162,6 +165,12 @@ func runStreamd(
 			logger.Fatalf(ctx, "communication (with the main process) error: %v", err)
 		}()
 	}
+
+	err = streamD.Run(ctx)
+	if err != nil {
+		logger.Fatalf(ctx, "unable to start streamd: %v", err)
+	}
+	configLocker.Unlock()
 
 	logger.Infof(ctx, "streamd is ready")
 	<-ctx.Done()

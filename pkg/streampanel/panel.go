@@ -31,6 +31,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/go-ng/xmath"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
+	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/screenshot"
 	"github.com/xaionaro-go/streamctl/pkg/screenshoter"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -44,10 +45,12 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/config"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
+	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
 )
 
 const appName = "StreamPanel"
+const youtubeTitleLength = 90
 
 type Profile struct {
 	streamdconfig.ProfileMetadata
@@ -56,8 +59,9 @@ type Profile struct {
 }
 
 type Panel struct {
-	StreamD      api.StreamD
-	Screenshoter Screenshoter
+	StreamD       api.StreamD
+	Screenshoter  Screenshoter
+	StreamPlayers *streamplayer.StreamPlayers
 
 	OnInternallySubmittedOAuthCode func(
 		ctx context.Context,
@@ -232,6 +236,8 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
 		return fmt.Errorf("unable to initialize stream controller: %w", err)
 	}
 
+	p.StreamPlayers = streamplayer.New(NewStreamPlayerStreamServer(p.StreamD), player.NewManager())
+
 	p.app = fyneapp.New()
 	p.app.Driver().SetDisableScreenBlanking(true)
 
@@ -275,6 +281,8 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
 			err = fmt.Errorf("unable to arrange the profiles: %w", err)
 			p.DisplayError(err)
 		}
+
+		p.updateStreamPlayers(ctx)
 
 		if p.Config.RemoteStreamDAddr == "" {
 			logger.Tracef(ctx, "hiding the loading window")
@@ -1004,6 +1012,9 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 
 	oldScreenshoterEnabled := p.Config.Screenshot.Enabled != nil && *p.Config.Screenshot.Enabled
 
+	mpvPathEntry := widget.NewEntry()
+	mpvPathEntry.SetText(p.Config.VideoPlayer.MPV.Path)
+
 	cancelButton := widget.NewButtonWithIcon("Cancel", theme.CancelIcon(), func() {
 		w.Close()
 	})
@@ -1027,6 +1038,8 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 		obsCfg.SetCustomString(
 			config.CustomConfigKeyAfterStreamStop, afterStopStreamCommandEntry.Text)
 		cfg.Backends[obs.ID] = obsCfg
+
+		p.Config.VideoPlayer.MPV.Path = mpvPathEntry.Text
 
 		if err := p.StreamD.SetConfig(ctx, cfg); err != nil {
 			p.DisplayError(fmt.Errorf("unable to update the remote config: %w", err))
@@ -1199,6 +1212,11 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 			container.NewHBox(
 				screenshotCropXEntry, screenshotCropYEntry, screenshotCropWEntry, screenshotCropHEntry,
 			),
+			widget.NewSeparator(),
+			widget.NewSeparator(),
+			widget.NewRichTextFromMarkdown(`# Video players`),
+			widget.NewLabel("Path to 'mpv':"),
+			mpvPathEntry,
 			widget.NewSeparator(),
 			widget.NewSeparator(),
 			widget.NewRichTextFromMarkdown(`# Commands`),
@@ -1458,6 +1476,11 @@ func (p *Panel) initMainWindow(
 	}
 	p.streamTitleField = widget.NewEntry()
 	p.streamTitleField.SetPlaceHolder("stream title")
+	p.streamTitleField.OnChanged = func(s string) {
+		if len(s) > youtubeTitleLength {
+			p.streamTitleField.SetText(s[:youtubeTitleLength])
+		}
+	}
 	p.streamTitleField.OnSubmitted = func(s string) {
 		if p.updateTimerHandler == nil {
 			return
@@ -2095,6 +2118,11 @@ func (p *Panel) profileWindow(
 	profileName.SetPlaceHolder("profile name")
 	profileName.SetText(string(values.Name))
 	defaultStreamTitle := widget.NewEntry()
+	defaultStreamTitle.OnChanged = func(s string) {
+		if len(s) > youtubeTitleLength {
+			defaultStreamTitle.SetText(s[:youtubeTitleLength])
+		}
+	}
 	defaultStreamTitle.SetPlaceHolder("default stream title")
 	defaultStreamTitle.SetText(values.DefaultStreamTitle)
 	defaultStreamDescription := widget.NewMultiLineEntry()

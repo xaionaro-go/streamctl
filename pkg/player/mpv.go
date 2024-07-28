@@ -24,6 +24,7 @@ const (
 var mpvCount uint64
 
 type MPV struct {
+	PlayerCommon
 	SocketPath string
 	Cmd        *exec.Cmd
 	IPCClient  *mpv.IPCClient
@@ -69,6 +70,9 @@ func NewMPV(title string, pathToMPV string) (*MPV, error) {
 	ipcc := mpv.NewIPCClient(socketPath)
 	mpvc := mpv.NewClient(ipcc)
 	return &MPV{
+		PlayerCommon: PlayerCommon{
+			Title: title,
+		},
 		SocketPath: socketPath,
 		Cmd:        cmd,
 		IPCClient:  ipcc,
@@ -79,6 +83,11 @@ func NewMPV(title string, pathToMPV string) (*MPV, error) {
 
 func (p *MPV) OpenURL(link string) error {
 	return p.MPVClient.Loadfile(link, mpv.LoadFileModeReplace)
+}
+
+func (p *MPV) GetLink() string {
+	r, _ := p.MPVClient.Filename()
+	return r
 }
 
 func (p *MPV) EndChan() <-chan struct{} {
@@ -108,14 +117,17 @@ func (p *MPV) initEndCh() {
 }
 
 func (p *MPV) IsEnded() bool {
-	filename, _ := p.MPVClient.Filename()
+	filename, err := p.MPVClient.Filename()
+	if err != nil {
+		logger.Tracef(context.TODO(), "unable to get the filename: %v", err)
+	}
 	return filename != ""
 }
 
 func (p *MPV) GetPosition() time.Duration {
 	ts, err := p.MPVClient.Position()
 	if err != nil {
-		logger.Debugf(context.TODO(), "unable to get current position: %v", err)
+		logger.Tracef(context.TODO(), "unable to get current position: %v", err)
 		return 0
 	}
 

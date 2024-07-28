@@ -19,16 +19,26 @@ import (
 
 const SupportedVLC = true
 
-func (*Manager) NewVLC(title string) (*VLC, error) {
-	return NewVLC(title)
+func (m *Manager) NewVLC(title string) (*VLC, error) {
+	r, err := NewVLC(title)
+	if err != nil {
+		return nil, err
+	}
+
+	m.PlayersLocker.Lock()
+	defer m.PlayersLocker.Unlock()
+	m.Players = append(m.Players, r)
+	return r, nil
 }
 
 type VLC struct {
+	PlayerCommon
 	StatusMutex      sync.Mutex
 	Player           *vlc.Player
 	Media            *vlc.Media
 	EventManager     *vlc.EventManager
 	DetachEventsFunc context.CancelFunc
+	LastURL          string
 
 	IsStopped bool
 
@@ -48,6 +58,9 @@ func NewVLC(title string) (*VLC, error) {
 	}
 
 	p := &VLC{
+		PlayerCommon: PlayerCommon{
+			Title: title,
+		},
 		EndCh: make(chan struct{}),
 	}
 
@@ -103,12 +116,19 @@ func (p *VLC) OpenURL(link string) error {
 		return fmt.Errorf("unable to open '%s': %w", link, err)
 	}
 	p.Media = media
+	p.LastURL = link
 
 	if err := p.play(); err != nil {
 		return fmt.Errorf("opened, but unable to start playing '%s': %w", link, err)
 	}
 
 	return nil
+}
+
+func (p *VLC) GetLink() string {
+	p.StatusMutex.Lock()
+	defer p.StatusMutex.Unlock()
+	return p.LastURL
 }
 
 func (p *VLC) EndChan() <-chan struct{} {
@@ -126,7 +146,7 @@ func (p *VLC) IsEnded() bool {
 func (p *VLC) GetPosition() time.Duration {
 	ts, err := p.Player.MediaTime()
 	if err != nil {
-		logger.Debugf(context.TODO(), "unable to get current position: %v", err)
+		logger.Tracef(context.TODO(), "unable to get current position: %v", err)
 		return 0
 	}
 	return time.Duration(ts) * time.Millisecond

@@ -5,6 +5,7 @@ import (
 	"crypto"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/andreykaipov/goobs/api/requests/scenes"
@@ -58,7 +59,9 @@ type StreamD struct {
 	OAuthListenPortsLocker sync.Mutex
 	OAuthListenPorts       map[uint16]struct{}
 
-	StreamServerLocker sync.Mutex
+	ControllersLocker sync.RWMutex
+
+	StreamServerLocker sync.RWMutex
 	StreamServer       *streamserver.StreamServer
 }
 
@@ -88,9 +91,19 @@ func New(
 	return d, nil
 }
 
-func (d *StreamD) Run(ctx context.Context) (_ret error) {
+func (d *StreamD) Run(ctx context.Context) (_ret error) { // TODO: delete the fetchConfig parameter
 	logger.Debugf(ctx, "StreamD.Run()")
 	defer func() { logger.Debugf(ctx, "/StreamD.Run(): %v", _ret) }()
+
+	if !d.StreamServerLocker.TryLock() {
+		return fmt.Errorf("somebody already locked StreamServerLocker")
+	}
+	defer d.StreamServerLocker.Unlock()
+
+	if !d.ControllersLocker.TryLock() {
+		return fmt.Errorf("somebody already locked ControllersLocker")
+	}
+	defer d.ControllersLocker.Unlock()
 
 	d.UI.SetStatus("Initializing remote GIT storage...")
 	err := d.FetchConfig(ctx)
@@ -110,7 +123,7 @@ func (d *StreamD) Run(ctx context.Context) (_ret error) {
 	}
 
 	d.UI.SetStatus("Initializing StreamServer...")
-	if err := d.InitStreamServer(ctx); err != nil {
+	if err := d.initStreamServer(ctx); err != nil {
 		d.UI.DisplayError(fmt.Errorf("unable to initialize the stream server: %w", err))
 	}
 
@@ -119,6 +132,11 @@ func (d *StreamD) Run(ctx context.Context) (_ret error) {
 }
 
 func (d *StreamD) InitStreamServer(ctx context.Context) error {
+	d.ControllersLocker.Lock()
+	defer d.ControllersLocker.Unlock()
+	return d.initStreamServer(ctx)
+}
+func (d *StreamD) initStreamServer(ctx context.Context) error {
 	d.StreamServer = streamserver.New(&d.Config.StreamServer)
 	assert(d.StreamServer != nil)
 	return d.StreamServer.Init(ctx)
@@ -354,6 +372,8 @@ func (d *StreamD) SetConfig(ctx context.Context, cfg *config.Config) error {
 }
 
 func (d *StreamD) IsBackendEnabled(ctx context.Context, id streamcontrol.PlatformName) (bool, error) {
+	d.ControllersLocker.RLock()
+	defer d.ControllersLocker.RUnlock()
 	switch id {
 	case obs.ID:
 		return d.StreamControllers.OBS != nil, nil
@@ -377,6 +397,8 @@ func (d *StreamD) StartStream(
 	profile streamcontrol.AbstractStreamProfile,
 	customArgs ...any,
 ) (_err error) {
+	d.ControllersLocker.RLock()
+	defer d.ControllersLocker.RUnlock()
 	defer func() { logger.Debugf(ctx, "/StartStream(%s): %v", platID, _err) }()
 	switch platID {
 	case obs.ID:
@@ -415,6 +437,8 @@ func (d *StreamD) StartStream(
 }
 
 func (d *StreamD) EndStream(ctx context.Context, platID streamcontrol.PlatformName) error {
+	d.ControllersLocker.RLock()
+	defer d.ControllersLocker.RUnlock()
 	switch platID {
 	case obs.ID:
 		return d.StreamControllers.OBS.EndStream(d.ctxForController(ctx))
@@ -514,6 +538,8 @@ func (d *StreamD) GetStreamStatus(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
 ) (*streamcontrol.StreamStatus, error) {
+	d.ControllersLocker.RLock()
+	defer d.ControllersLocker.RUnlock()
 	c, err := d.streamController(ctx, platID)
 	if err != nil {
 		return nil, err
@@ -531,6 +557,8 @@ func (d *StreamD) SetTitle(
 	platID streamcontrol.PlatformName,
 	title string,
 ) error {
+	d.ControllersLocker.RLock()
+	defer d.ControllersLocker.RUnlock()
 	c, err := d.streamController(ctx, platID)
 	if err != nil {
 		return err
@@ -544,6 +572,8 @@ func (d *StreamD) SetDescription(
 	platID streamcontrol.PlatformName,
 	description string,
 ) error {
+	d.ControllersLocker.RLock()
+	defer d.ControllersLocker.RUnlock()
 	c, err := d.streamController(ctx, platID)
 	if err != nil {
 		return err
@@ -563,6 +593,8 @@ func (d *StreamD) ApplyProfile(
 	profile streamcontrol.AbstractStreamProfile,
 	customArgs ...any,
 ) error {
+	d.ControllersLocker.RLock()
+	defer d.ControllersLocker.RUnlock()
 	c, err := d.streamController(d.ctxForController(ctx), platID)
 	if err != nil {
 		return err
@@ -578,6 +610,9 @@ func (d *StreamD) UpdateStream(
 	profile streamcontrol.AbstractStreamProfile,
 	customArgs ...any,
 ) error {
+	d.ControllersLocker.RLock()
+	defer d.ControllersLocker.RUnlock()
+
 	err := d.SetTitle(d.ctxForController(ctx), platID, title)
 	if err != nil {
 		return fmt.Errorf("unable to set the title: %w", err)
@@ -641,6 +676,9 @@ func (d *StreamD) SetVariable(
 func (d *StreamD) OBSGetSceneList(
 	ctx context.Context,
 ) (*scenes.GetSceneListResponse, error) {
+	d.ControllersLocker.RLock()
+	defer d.ControllersLocker.RUnlock()
+
 	obs := d.StreamControllers.OBS
 	if obs == nil {
 		return nil, fmt.Errorf("OBS is not initialized")
@@ -653,6 +691,9 @@ func (d *StreamD) OBSSetCurrentProgramScene(
 	ctx context.Context,
 	req *scenes.SetCurrentProgramSceneParams,
 ) error {
+	d.ControllersLocker.RLock()
+	defer d.ControllersLocker.RUnlock()
+
 	obs := d.StreamControllers.OBS
 	if obs == nil {
 		return fmt.Errorf("OBS is not initialized")
@@ -1066,4 +1107,22 @@ func (d *StreamD) RemoveStreamForward(
 
 func resetContextCancellers(ctx context.Context) context.Context {
 	return belt.CtxWithBelt(context.Background(), belt.CtxBelt(ctx))
+}
+
+func (d *StreamD) WaitForStreamPublisher(
+	ctx context.Context,
+	streamID api.StreamID,
+) (chan struct{}, error) {
+	streamIDParts := strings.Split(string(streamID), "/")
+	localAppName := string(streamID)
+	if len(streamIDParts) == 2 {
+		localAppName = streamIDParts[1]
+	}
+
+	ch := make(chan struct{})
+	go func() {
+		d.StreamServer.RelayServer.WaitPubsub(ctx, localAppName)
+		close(ch)
+	}()
+	return ch, nil
 }

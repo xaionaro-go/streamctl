@@ -7,7 +7,9 @@ import (
 	"os"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/screenshot"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	streamd "github.com/xaionaro-go/streamctl/pkg/streamd/config"
 )
 
@@ -16,10 +18,21 @@ type ScreenshotConfig struct {
 	screenshot.Config `yaml:"screenshot,inline"`
 }
 
+type PlayerConfig struct {
+	Player   player.Backend `yaml:"player,omitempty"`
+	Disabled bool           `yaml:"disabled,omitempty"`
+}
+
 type Config struct {
 	RemoteStreamDAddr string           `yaml:"streamd_remote"`
 	BuiltinStreamD    streamd.Config   `yaml:"streamd_builtin"`
 	Screenshot        ScreenshotConfig `yaml:"screenshot"`
+	StreamPlayers     map[api.StreamID]PlayerConfig
+	VideoPlayer       struct {
+		MPV struct {
+			Path string `yaml:"path"`
+		} `yaml:"mpv"`
+	} `yaml:"video_player"`
 }
 
 func DefaultConfig() Config {

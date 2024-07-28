@@ -122,6 +122,10 @@ type StreamD interface {
 		streamID StreamID,
 		destinationID DestinationID,
 	) error
+	WaitForStreamPublisher(
+		ctx context.Context,
+		streamID StreamID,
+	) (chan struct{}, error)
 }
 
 type BackendDataOBS struct{}
