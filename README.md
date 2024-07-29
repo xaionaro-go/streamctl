@@ -2,6 +2,8 @@
 
 `<TBD>`
 
+![StreamPanel screenshot](./doc/streampanel.gif)
+
 # CLI: `streamctl`
 ```
 xaionaro@void:~/go/src/github.com/xaionaro-go/streamctl$ go run ./cmd/streamctl/
