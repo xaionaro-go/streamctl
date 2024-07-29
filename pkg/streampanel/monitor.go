@@ -2,14 +2,14 @@ package streampanel
 
 import (
 	"context"
+	"runtime"
 	"sync"
 
 	"image"
 	"time"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 	"github.com/anthonynsimon/bild/adjust"
 	"github.com/facebookincubator/go-belt/tool/logger"
@@ -85,6 +85,18 @@ func (p *Panel) updateMonitorPageImages(
 	logger.Tracef(ctx, "updateMonitorPageImages")
 	defer logger.Tracef(ctx, "/updateMonitorPageImages")
 
+	var winSize fyne.Size
+	switch runtime.GOOS {
+	default:
+		winSize = p.monitorPage.Size()
+	}
+	lastWinSize := p.monitorLastWinSize
+	p.monitorLastWinSize = winSize
+
+	if lastWinSize != winSize {
+		logger.Debugf(ctx, "window size changed %#+v -> %#+v", lastWinSize, winSize)
+	}
+
 	p.monitorPageUpdaterLocker.Lock()
 	defer p.monitorPageUpdaterLocker.Unlock()
 
@@ -98,16 +110,17 @@ func (p *Panel) updateMonitorPageImages(
 		if err != nil {
 			logger.Error(ctx, err)
 		} else {
-			if !changed {
+			if !changed && lastWinSize == winSize {
 				return
 			}
-			//s := p.mainWindow.Canvas().Size()
-			//img = imgFitTo(img, image.Point{X: 1450, Y: 1450})
+			logger.Tracef(ctx, "updating the screenshot image: %v %#+v %#+v", changed, lastWinSize, winSize)
+			//img = imgFitTo(img, image.Point{X: int(winSize.Width), Y: int(winSize.Height)})
+			img = imgFillTo(ctx, img, image.Point{X: int(winSize.Width), Y: int(winSize.Height)}, alignStart, alignStart)
 			img = adjust.Brightness(img, -0.5)
 			imgFyne := canvas.NewImageFromImage(img)
-			imgFyne.FillMode = canvas.ImageFillOriginal
+			imgFyne.FillMode = canvas.ImageFillContain
+			logger.Tracef(ctx, "screenshot image size: %#+v", img.Bounds().Size())
 
-			p.screenshotContainer.Layout = layout.NewBorderLayout(imgFyne, nil, nil, nil)
 			p.screenshotContainer.Objects = p.screenshotContainer.Objects[:0]
 			p.screenshotContainer.Objects = append(p.screenshotContainer.Objects, imgFyne)
 			p.screenshotContainer.Refresh()
@@ -121,18 +134,18 @@ func (p *Panel) updateMonitorPageImages(
 		if err != nil {
 			logger.Error(ctx, err)
 		} else {
-			if !changed {
+			if !changed && lastWinSize == winSize {
 				return
 			}
-			//s := p.mainWindow.Canvas().Size()
-			//img = imgFitTo(img, image.Point{X: int(s.Width), Y: int(s.Height)})
-			img = imgFitTo(img, image.Point{X: 1450, Y: 1450})
+			logger.Tracef(ctx, "updating the chat image: %v %#+v %#+v", changed, lastWinSize, winSize)
+			//img = imgFitTo(img, image.Point{X: int(winSize.Width), Y: int(winSize.Height)})
+			img = imgFillTo(ctx, img, image.Point{X: int(winSize.Width), Y: int(winSize.Height)}, alignStart, alignEnd)
 			imgFyne := canvas.NewImageFromImage(img)
-			imgFyne.FillMode = canvas.ImageFillOriginal
+			imgFyne.FillMode = canvas.ImageFillContain
+			logger.Tracef(ctx, "chat image size: %#+v", img.Bounds().Size())
 
-			p.chatContainer.Layout = layout.NewVBoxLayout()
 			p.chatContainer.Objects = p.chatContainer.Objects[:0]
-			p.chatContainer.Objects = append(p.chatContainer.Objects, layout.NewSpacer(), container.NewHBox(imgFyne, layout.NewSpacer()))
+			p.chatContainer.Objects = append(p.chatContainer.Objects, imgFyne)
 			p.chatContainer.Refresh()
 		}
 	}()

@@ -37,7 +37,14 @@ type MPV struct {
 
 var _ Player = (*MPV)(nil)
 
-func NewMPV(title string, pathToMPV string) (*MPV, error) {
+func NewMPV(title string, pathToMPV string) (_ret *MPV, _err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			_err = fmt.Errorf("got panic: %v", r)
+			_ret = nil
+			return
+		}
+	}()
 	if pathToMPV == "" {
 		pathToMPV = "mpv"
 		switch runtime.GOOS {

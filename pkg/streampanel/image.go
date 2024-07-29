@@ -121,13 +121,92 @@ func (p *Panel) getImage(
 }
 
 func imgFitTo(src image.Image, size image.Point) image.Image {
-	sizeCur := src.Bounds().Max
+	sizeCur := src.Bounds().Size()
 	factor := math.MaxFloat64
 	factor = math.Min(factor, float64(size.X)/float64(sizeCur.X))
 	factor = math.Min(factor, float64(size.Y)/float64(sizeCur.Y))
 	newWidth := uint(float64(sizeCur.X) * factor)
 	newHeight := uint(float64(sizeCur.Y) * factor)
 	return resize.Resize(newWidth, newHeight, src, resize.Lanczos3)
+}
+
+type align int
+
+const (
+	alignCenter = align(iota)
+	alignStart
+	alignEnd
+)
+
+func imgFillTo(
+	ctx context.Context,
+	src image.Image,
+	size image.Point,
+	alignX align,
+	alignY align,
+) image.Image {
+	sizeCur := src.Bounds().Size()
+	ratioCur := float64(sizeCur.X) / float64(sizeCur.Y)
+	ratioNew := float64(size.X) / float64(size.Y)
+
+	if ratioCur == ratioNew {
+		return src
+	}
+	if math.IsNaN(ratioNew) {
+		return src
+	}
+
+	var sizeNew image.Point
+	if ratioCur < ratioNew {
+		sizeNew = image.Point{
+			X: int(float64(sizeCur.Y) * ratioNew),
+			Y: sizeCur.Y,
+		}
+	} else {
+		sizeNew = image.Point{
+			X: sizeCur.X,
+			Y: int(float64(sizeCur.X) / ratioNew),
+		}
+	}
+
+	logger.Tracef(ctx, "ratio: %v -> %v; size: %#+v -> %#+v", ratioCur, ratioNew, sizeCur, sizeNew)
+	img := image.NewRGBA(image.Rectangle{
+		Max: sizeNew,
+	})
+
+	var offsetX, offsetY int
+	if ratioCur < ratioNew {
+		offsetX = sizeNew.X - sizeCur.X
+		switch alignX {
+		case alignStart:
+			offsetX *= 0
+		case alignCenter:
+			offsetX /= 2
+		case alignEnd:
+			offsetX /= 1
+		}
+	} else {
+		offsetY = sizeNew.Y - sizeCur.Y
+		switch alignY {
+		case alignStart:
+			offsetY *= 0
+		case alignCenter:
+			offsetY /= 2
+		case alignEnd:
+			offsetY /= 1
+		}
+	}
+
+	for x := 0; x < sizeCur.X; x++ {
+		for y := 0; y < sizeCur.Y; y++ {
+			xNew := x + offsetX
+			yNew := y + offsetY
+
+			img.Set(xNew, yNew, src.At(x, y))
+		}
+	}
+
+	return img
 }
 
 const (

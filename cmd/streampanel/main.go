@@ -30,7 +30,7 @@ func main() {
 		return
 	}
 
-	if flags.SplitProcess {
+	if flags.SplitProcess && flags.RemoteAddr == "" {
 		runSplitProcesses(ctx, flags)
 		return
 	}

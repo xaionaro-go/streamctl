@@ -88,8 +88,10 @@ type Panel struct {
 	streamTitleField       *widget.Entry
 	streamDescriptionField *widget.Entry
 
+	monitorPage              *fyne.Container
 	monitorPageUpdaterLocker sync.Mutex
 	monitorPageUpdaterCancel context.CancelFunc
+	monitorLastWinSize       fyne.Size
 	screenshotContainer      *fyne.Container
 	chatContainer            *fyne.Container
 
@@ -1394,6 +1396,7 @@ func (p *Panel) initMainWindow(
 	startingPage consts.Page,
 ) {
 	w := p.app.NewWindow(appName)
+	p.mainWindow = w
 	w.SetMaster()
 	resizeWindow(w, fyne.NewSize(400, 600))
 
@@ -1538,28 +1541,28 @@ func (p *Panel) initMainWindow(
 	monitorBackgroundFyne := canvas.NewImageFromImage(monitorBackground)
 	monitorBackgroundFyne.FillMode = canvas.ImageFillStretch
 
-	p.screenshotContainer = container.NewBorder(nil, nil, nil, nil)
+	p.screenshotContainer = container.NewStack()
 	obsLabel := widget.NewLabel("OBS:")
-	obsLabel.Importance = widget.LowImportance
+	obsLabel.Importance = widget.HighImportance
 	p.streamStatus[obs.ID] = widget.NewLabel("")
 	twLabel := widget.NewLabel("TW:")
-	twLabel.Importance = widget.LowImportance
+	twLabel.Importance = widget.HighImportance
 	p.streamStatus[twitch.ID] = widget.NewLabel("")
 	ytLabel := widget.NewLabel("YT:")
-	ytLabel.Importance = widget.LowImportance
+	ytLabel.Importance = widget.HighImportance
 	p.streamStatus[youtube.ID] = widget.NewLabel("")
 	streamInfoContainer := container.NewBorder(
 		nil,
 		nil,
 		nil,
 		container.NewVBox(
-			container.NewHBox(obsLabel, p.streamStatus[obs.ID]),
-			container.NewHBox(twLabel, p.streamStatus[twitch.ID]),
-			container.NewHBox(ytLabel, p.streamStatus[youtube.ID]),
+			container.NewHBox(layout.NewSpacer(), obsLabel, p.streamStatus[obs.ID]),
+			container.NewHBox(layout.NewSpacer(), twLabel, p.streamStatus[twitch.ID]),
+			container.NewHBox(layout.NewSpacer(), ytLabel, p.streamStatus[youtube.ID]),
 		),
 	)
-	p.chatContainer = container.NewBorder(nil, nil, nil, nil)
-	monitorPage := container.NewStack(
+	p.chatContainer = container.NewStack()
+	p.monitorPage = container.NewStack(
 		monitorBackgroundFyne,
 		p.screenshotContainer,
 		streamInfoContainer,
@@ -1660,7 +1663,7 @@ func (p *Panel) initMainWindow(
 
 		switch page {
 		case consts.PageControl:
-			monitorPage.Hide()
+			p.monitorPage.Hide()
 			obsPage.Hide()
 			restreamPage.Hide()
 			profileControl.Show()
@@ -1670,18 +1673,18 @@ func (p *Panel) initMainWindow(
 			profileControl.Hide()
 			restreamPage.Hide()
 			obsPage.Hide()
-			monitorPage.Show()
+			p.monitorPage.Show()
 			p.startMonitorPage(ctx)
 		case consts.PageOBS:
 			controlPage.Hide()
 			profileControl.Hide()
-			monitorPage.Hide()
+			p.monitorPage.Hide()
 			restreamPage.Hide()
 			obsPage.Show()
 		case consts.PageRestream:
 			controlPage.Hide()
 			profileControl.Hide()
-			monitorPage.Hide()
+			p.monitorPage.Hide()
 			obsPage.Hide()
 			restreamPage.Show()
 			p.startRestreamPage(ctx)
@@ -1708,11 +1711,10 @@ func (p *Panel) initMainWindow(
 		nil,
 		nil,
 		nil,
-		container.NewStack(controlPage, monitorPage, obsPage, restreamPage),
+		container.NewStack(controlPage, p.monitorPage, obsPage, restreamPage),
 	))
 
 	w.Show()
-	p.mainWindow = w
 	p.profilesListWidget = profilesList
 
 	if _, ok := p.StreamD.(*client.Client); ok {
