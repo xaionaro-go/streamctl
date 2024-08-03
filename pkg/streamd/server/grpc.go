@@ -1224,7 +1224,7 @@ func (grpc *GRPCServer) SubscribeToConfigChanges(
 		srv,
 	)
 }
-func (grpc *GRPCServer) SubscribeToStreamChanges(
+func (grpc *GRPCServer) SubscribeToStreamsChanges(
 	req *streamd_grpc.SubscribeToStreamsChangesRequest,
 	srv streamd_grpc.StreamD_SubscribeToStreamsChangesServer,
 ) error {

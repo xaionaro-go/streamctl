@@ -1405,7 +1405,8 @@ func (p *Panel) getUpdatedStatus_startStopStreamButton(ctx context.Context) {
 	p.streamMutex.Lock()
 	defer p.streamMutex.Unlock()
 
-	if isEnabled, _ := p.StreamD.IsBackendEnabled(ctx, obs.ID); isEnabled {
+	obsIsEnabled, _ := p.StreamD.IsBackendEnabled(ctx, obs.ID)
+	if obsIsEnabled {
 		obsStreamStatus, err := p.StreamD.GetStreamStatus(ctx, obs.ID)
 		if err != nil {
 			logger.Error(ctx, fmt.Errorf("unable to get stream status from OBS: %w", err))
@@ -1428,7 +1429,6 @@ func (p *Panel) getUpdatedStatus_startStopStreamButton(ctx context.Context) {
 			}
 			return
 		}
-
 	}
 
 	if p.updateTimerHandler != nil {
@@ -1446,7 +1446,9 @@ func (p *Panel) getUpdatedStatus_startStopStreamButton(ctx context.Context) {
 	}
 
 	if !ytIsEnabled || !p.youtubeCheck.Checked {
-		p.startStopButton.Enable()
+		if obsIsEnabled {
+			p.startStopButton.Enable()
+		}
 		return
 	}
 
@@ -1763,22 +1765,36 @@ func (p *Panel) initMainWindow(
 	p.profilesListWidget = profilesList
 
 	if _, ok := p.StreamD.(*client.Client); ok {
-		go func() {
-			p.getUpdatedStatus(ctx)
-
-			t := time.NewTicker(1 * time.Second)
-			for {
-				select {
-				case <-ctx.Done():
-					t.Stop()
-					return
-				case <-t.C:
-				}
-
-				p.getUpdatedStatus(ctx)
-			}
-		}()
+		p.subscribeUpdateControlPage(ctx)
 	}
+}
+
+func (p *Panel) subscribeUpdateControlPage(ctx context.Context) {
+	go func() {
+		logger.Debugf(ctx, "subscribe to streams and config changes")
+		defer logger.Debugf(ctx, "/subscribe to streams and config changes")
+
+		chStreams, err := p.StreamD.SubscribeToStreamsChanges(ctx)
+		if err != nil {
+			p.DisplayError(err)
+			//return
+		}
+		chConfigs, err := p.StreamD.SubscribeToConfigChanges(ctx)
+		if err != nil {
+			p.DisplayError(err)
+			//return
+		}
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-chStreams:
+			case <-chConfigs:
+			}
+			p.getUpdatedStatus(ctx)
+		}
+	}()
 }
 
 func (p *Panel) getSelectedProfile() Profile {

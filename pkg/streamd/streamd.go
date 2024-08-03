@@ -1482,6 +1482,7 @@ func eventSubToChan[T any](
 	go func() {
 		<-ctx.Done()
 		d.EventBus.Unsubscribe(topic, callback)
+		d.EventBus.WaitAsync()
 		close(r)
 	}()
 	return r, nil

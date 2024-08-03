@@ -75,6 +75,16 @@ var (
 		Run:  variablesSet,
 	}
 
+	Config = &cobra.Command{
+		Use: "config",
+	}
+
+	ConfigGet = &cobra.Command{
+		Use:  "get",
+		Args: cobra.ExactArgs(0),
+		Run:  configGet,
+	}
+
 	LoggerLevel = logger.LevelWarning
 )
 
@@ -87,6 +97,9 @@ func init() {
 	Variables.AddCommand(VariablesGet)
 	Variables.AddCommand(VariablesGetHash)
 	Variables.AddCommand(VariablesSet)
+
+	Root.AddCommand(Config)
+	Config.AddCommand(ConfigGet)
 
 	Root.PersistentFlags().Var(&LoggerLevel, "log-level", "")
 	Root.PersistentFlags().String("remote-addr", "localhost:3594", "the path to the config file")
@@ -211,4 +224,17 @@ func variablesSet(cmd *cobra.Command, args []string) {
 
 	err = streamD.SetVariable(ctx, consts.VarKey(variableKey), value)
 	assertNoError(ctx, err)
+}
+
+func configGet(cmd *cobra.Command, args []string) {
+	ctx := cmd.Context()
+
+	remoteAddr, err := cmd.Flags().GetString("remote-addr")
+	assertNoError(ctx, err)
+	streamD := client.New(remoteAddr)
+
+	cfg, err := streamD.GetConfig(ctx)
+	assertNoError(ctx, err)
+
+	cfg.WriteTo(os.Stdout)
 }
