@@ -108,8 +108,6 @@ github.com/bketelsen/crypt v0.0.4/go.mod h1:aI6NrJ0pMGgvZKL1iVgXLnfIFJtfV+bKCoqO
 github.com/blang/mpv v0.0.0-20160810175505-d56d7352e068 h1:P3ukpA1t7dgNIfe21LpB+zIBDQ1Dik9K1DMPdO/TcUA=
 github.com/blang/mpv v0.0.0-20160810175505-d56d7352e068/go.mod h1:E3TTEJpVApQMkhVk3Lr0sAmcbcclY3pGgPbRsy+rdlk=
 github.com/bradfitz/go-smtpd v0.0.0-20170404230938-deb6d6237625/go.mod h1:HYsPBTaaSFSlLx/70C2HPIMNZpVV8+vt/A+FMnYP11g=
-github.com/bshuster-repo/logrus-logstash-hook v1.1.0 h1:o2FzZifLg+z/DN1OFmzTWzZZx/roaqt8IPZCIVco8r4=
-github.com/bshuster-repo/logrus-logstash-hook v1.1.0/go.mod h1:Q2aXOe7rNuPgbBtPCOzYyWDvKX7+FpxE5sRdvcPoui0=
 github.com/buger/jsonparser v0.0.0-20181115193947-bf1c66bbce23/go.mod h1:bbYlZJ7hK1yFx9hf58LP0zeX7UjIGs20ufpu3evjr+s=
 github.com/buger/jsonparser v1.1.1 h1:2PnMjfWD7wBILjqQbt530v576A/cAbQvEW9gGIpYMUs=
 github.com/buger/jsonparser v1.1.1/go.mod h1:6RYKKt7H4d4+iWqouImQ9R2FZql3VbhNgx27UK13J/0=
@@ -624,8 +622,6 @@ github.com/mwitkow/go-conntrack v0.0.0-20161129095857-cc309e4a2223/go.mod h1:qRW
 github.com/neelance/astrewrite v0.0.0-20160511093645-99348263ae86/go.mod h1:kHJEU3ofeGjhHklVoIGuVj85JJwZ6kWPaJwCIxgnFmo=
 github.com/neelance/sourcemap v0.0.0-20151028013722-8c68805598ab/go.mod h1:Qr6/a/Q4r9LP1IltGz7tA7iOK1WonHEYhu1HRBA7ZiM=
 github.com/neelance/sourcemap v0.0.0-20200213170602-2833bce08e4c/go.mod h1:Qr6/a/Q4r9LP1IltGz7tA7iOK1WonHEYhu1HRBA7ZiM=
-github.com/netbrain/goautosocket v0.0.0-20150624145746-bef85f0aef40 h1:bOeCk5udqJgLIrCzxS5nZcufOTHtu7ap5bYsqx4w4/I=
-github.com/netbrain/goautosocket v0.0.0-20150624145746-bef85f0aef40/go.mod h1:o7i/4orMnh/ZmJef4SeqvqHo2ZjO++jU9e03S9725r8=
 github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 h1:zYyBkD/k9seD2A7fsi6Oo2LfFZAehjjQMERAvZLEDnQ=
 github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646/go.mod h1:jpp1/29i3P1S/RLdc7JQKbRpFeM1dOBd8T9ki5s+AY8=
 github.com/nicklaw5/helix/v2 v2.26.0 h1:Qkc/R0eCDdWtUmnczk2g03+mObPUfc49Kz2Bt4B5d0g=
@@ -769,7 +765,6 @@ github.com/sigurn/crc8 v0.0.0-20220107193325-2243fe600f9f/go.mod h1:vQhwQ4meQEDf
 github.com/sirupsen/logrus v1.2.0/go.mod h1:LxeOpSwHxABJmUn/MG1IvRgCAasNZTLOkJPxbbu5VWo=
 github.com/sirupsen/logrus v1.5.0/go.mod h1:+F7Ogzej0PZc/94MaYx/nvG9jOFMD2osvC3s+Squfpo=
 github.com/sirupsen/logrus v1.7.0/go.mod h1:yWOB1SBYBC5VeMP7gHvWumXLIWorT60ONWic61uBYv0=
-github.com/sirupsen/logrus v1.8.1/go.mod h1:yWOB1SBYBC5VeMP7gHvWumXLIWorT60ONWic61uBYv0=
 github.com/sirupsen/logrus v1.9.3 h1:dueUQJ1C2q9oE3F7wvmSGAaVtTmUizReu6fjN8uqzbQ=
 github.com/sirupsen/logrus v1.9.3/go.mod h1:naHLuLoDiP4jHNo9R0sCBMtWGeIprob74mVsIT4qYEQ=
 github.com/skeema/knownhosts v1.2.2 h1:Iug2P4fLmDw9f41PB6thxUkNUkJzB5i+1/exaj40L3A=
@@ -851,8 +846,10 @@ github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1 h1:EKhdz
 github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1/go.mod h1:8UvriyWtv5Q5EOgjHaSseUEdkQfvwFv1I/In/O2M9gc=
 github.com/xaionaro-go/datacounter v1.0.4 h1:+QMZLmu73R5WGkQfUPwlXF/JFN+Weo4iuDZkiL2wVm8=
 github.com/xaionaro-go/datacounter v1.0.4/go.mod h1:Sf9vBevuV6w5iE6K3qJ9pWVKcyS60clWBUSQLjt5++c=
-github.com/xaionaro-go/logrustash v0.0.0-20240802233403-ebd6f6de4d72 h1:ZcqGmjSWwdJDMhiLL6KUa/M8iXL0C3ac8u/FaKCgMOc=
-github.com/xaionaro-go/logrustash v0.0.0-20240802233403-ebd6f6de4d72/go.mod h1:QiAWsz86DdO+WcFAyT95EDL2dPVtyYKTS+4ENnCCurY=
+github.com/xaionaro-go/goautosocket v0.0.0-20240803221104-cef7f165571a h1:nnSVcn4e9TkQ5GuN/MoeET18gSYudJJMtlKXFRHvVjQ=
+github.com/xaionaro-go/goautosocket v0.0.0-20240803221104-cef7f165571a/go.mod h1:7X2d4ohzI2SqqM/dNgIlBx3hUl6dB6clspwt+9c9IqA=
+github.com/xaionaro-go/logrustash v0.0.0-20240803221212-52f205f3f1f2 h1:J6HNJRYV42vTeH3UM4Z9kQU1zwxsyTjoaSF5YgUklZ0=
+github.com/xaionaro-go/logrustash v0.0.0-20240803221212-52f205f3f1f2/go.mod h1:5CziRurpvKGPZSyV7roFe47V0cj8ireI+n9TiN/ygZ0=
 github.com/xaionaro-go/unsafetools v0.0.0-20210722164218-75ba48cf7b3c h1:WeiZrQbFImtlpYCHdxWpjm033Zm0n1ihx3bD/9b6rYI=
 github.com/xaionaro-go/unsafetools v0.0.0-20210722164218-75ba48cf7b3c/go.mod h1:fnHPnf0CsRZNVxlSs0ZdUiYW49mLF5QFycfmoT+LuO4=
 github.com/xanzy/ssh-agent v0.3.3 h1:+/15pJfg/RsTxqYcX6fHqOXZwwMP+2VyYWJeWM2qQFM=

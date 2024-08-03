@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"strings"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/spf13/pflag"
@@ -11,40 +12,52 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 )
 
+type loggerLevel logger.Level
+
+func (l *loggerLevel) UnmarshalYAML(b []byte) error {
+	var r logger.Level
+	r.Set(strings.Trim(string(b), " "))
+	if r == logger.LevelUndefined {
+		return fmt.Errorf("unexpected logger level '%s'", b)
+	}
+	*l = loggerLevel(r)
+	return nil
+}
+
 type Flags struct {
-	LoggerLevel         logger.Level
-	ListenAddr          string
-	RemoteAddr          string
-	ConfigPath          string
-	NetPprofAddrMain    string
-	NetPprofAddrUI      string
-	NetPprofAddrStreamD string
-	CPUProfile          string
-	HeapProfile         string
-	LogstashAddr        string
-	SentryDSN           string
-	Page                string
-	LogFile             string
-	Subprocess          string
-	SplitProcess        bool
+	LoggerLevel         loggerLevel `yaml:"LoggerLevel,omitempty"`
+	ListenAddr          string      `yaml:"ListenAddr,omitempty"`
+	RemoteAddr          string      `yaml:"RemoteAddr,omitempty"`
+	ConfigPath          string      `yaml:"ConfigPath,omitempty"`
+	NetPprofAddrMain    string      `yaml:"NetPprofAddrMain,omitempty"`
+	NetPprofAddrUI      string      `yaml:"NetPprofAddrUI,omitempty"`
+	NetPprofAddrStreamD string      `yaml:"NetPprofAddrStreamD,omitempty"`
+	CPUProfile          string      `yaml:"CPUProfile,omitempty"`
+	HeapProfile         string      `yaml:"HeapProfile,omitempty"`
+	LogstashAddr        string      `yaml:"LogstashAddr,omitempty"`
+	SentryDSN           string      `yaml:"SentryDSN,omitempty"`
+	Page                string      `yaml:"Page,omitempty"`
+	LogFile             string      `yaml:"LogFile,omitempty"`
+	Subprocess          string      `yaml:"Subprocess,omitempty"`
+	SplitProcess        bool        `yaml:"SplitProcess,omitempty"`
 }
 
 var platformGetFlagsFuncs []func(*Flags)
 
 func parseFlags() Flags {
-	var loggerLevel logger.Level
+	var loggerLevelValue logger.Level
 	var defaultLogFile string
 	if ForceDebug {
-		loggerLevel = logger.LevelTrace
+		loggerLevelValue = logger.LevelTrace
 		switch runtime.GOOS {
 		case "android":
 			defaultLogFile = "~/trace.log"
 		}
 	} else {
-		loggerLevel = logger.LevelWarning
+		loggerLevelValue = logger.LevelWarning
 		defaultLogFile = ""
 	}
-	pflag.Var(&loggerLevel, "log-level", "Log level")
+	pflag.Var(&loggerLevelValue, "log-level", "Log level")
 	listenAddr := pflag.String("listen-addr", "", "the address to listen for incoming connections to")
 	remoteAddr := pflag.String("remote-addr", "", "the address (for example 127.0.0.1:3594) of streamd to connect to, instead of running the stream controllers locally")
 	configPath := pflag.String("config-path", "~/.streampanel.yaml", "the path to the config file")
@@ -62,7 +75,7 @@ func parseFlags() Flags {
 	pflag.Parse()
 
 	flags := Flags{
-		LoggerLevel:         loggerLevel,
+		LoggerLevel:         loggerLevel(loggerLevelValue),
 		ListenAddr:          *listenAddr,
 		RemoteAddr:          *remoteAddr,
 		ConfigPath:          *configPath,

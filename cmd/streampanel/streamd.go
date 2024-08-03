@@ -66,6 +66,12 @@ func runStreamd(
 		logger.Fatal(ctx, "not implemented")
 	}
 
+	ctx = belt.WithField(ctx, "streamd_addr", flags.RemoteAddr)
+	l := logger.FromCtx(ctx)
+	logger.Default = func() logger.Logger {
+		return l
+	}
+
 	configPath, err := xpath.Expand(flags.ConfigPath)
 	if err != nil {
 		logger.Fatal(ctx, err)

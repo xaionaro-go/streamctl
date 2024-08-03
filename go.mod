@@ -1,6 +1,6 @@
 module github.com/xaionaro-go/streamctl
 
-go 1.22.0
+go 1.22.1
 
 toolchain go1.22.3
 
@@ -16,6 +16,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/nicklaw5/helix/v2 v2.26.0
 	github.com/spf13/cobra v1.8.0
+	github.com/xaionaro-go/logrustash v0.0.0-20240803221212-52f205f3f1f2
 	golang.org/x/oauth2 v0.17.0
 	google.golang.org/api v0.169.0
 )
@@ -139,7 +140,6 @@ require (
 	github.com/multiformats/go-multihash v0.2.3 // indirect
 	github.com/multiformats/go-multistream v0.5.0 // indirect
 	github.com/multiformats/go-varint v0.0.7 // indirect
-	github.com/netbrain/goautosocket v0.0.0-20150624145746-bef85f0aef40 // indirect
 	github.com/nicksnyder/go-i18n/v2 v2.4.0 // indirect
 	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d // indirect
 	github.com/onsi/ginkgo/v2 v2.15.0 // indirect
@@ -181,7 +181,7 @@ require (
 	github.com/vishvananda/netlink v1.1.1-0.20211118161826-650dca95af54 // indirect
 	github.com/vishvananda/netns v0.0.4 // indirect
 	github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1 // indirect
-	github.com/xaionaro-go/logrustash v0.0.0-20240802233403-ebd6f6de4d72 // indirect
+	github.com/xaionaro-go/goautosocket v0.0.0-20240803221104-cef7f165571a // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	github.com/yuin/goldmark v1.7.1 // indirect
 	github.com/yutopp/go-amf0 v0.1.0 // indirect
@@ -214,7 +214,6 @@ require (
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gvisor.dev/gvisor v0.0.0-20230927004350-cbd86285d259 // indirect
 	lukechampine.com/blake3 v1.2.1 // indirect
@@ -231,7 +230,6 @@ require (
 	github.com/anthonynsimon/bild v0.14.0
 	github.com/asaskevich/EventBus v0.0.0-20200907212545-49d423059eef
 	github.com/blang/mpv v0.0.0-20160810175505-d56d7352e068
-	github.com/bshuster-repo/logrus-logstash-hook v1.1.0
 	github.com/chai2010/webp v1.1.1
 	github.com/dustin/go-humanize v1.0.1
 	github.com/getsentry/sentry-go v0.28.1
@@ -264,4 +262,5 @@ require (
 	golang.org/x/net v0.26.0
 	google.golang.org/grpc v1.63.2
 	google.golang.org/protobuf v1.33.1-0.20240408130810-98873a205002
+	gopkg.in/yaml.v2 v2.4.0
 )

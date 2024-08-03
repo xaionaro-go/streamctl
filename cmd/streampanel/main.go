@@ -29,6 +29,13 @@ func main() {
 	flags := parseFlags()
 	ctx := getContext(flags)
 	defer belt.Flush(ctx)
+	{
+		// rerunning flag parsing just for logs of parsing the flags (after initializing the logger in `getContext` above)
+		for _, platformGetFlagsFunc := range platformGetFlagsFuncs {
+			platformGetFlagsFunc(&flags)
+		}
+		logger.Debugf(ctx, "flags == %#+v", flags)
+	}
 	cancelFunc := initRuntime(ctx, flags, ProcessNameMain)
 	defer cancelFunc()
 
@@ -61,6 +68,10 @@ func runPanel(
 	panel, panelErr := streampanel.New(flags.ConfigPath, opts...)
 	if panelErr != nil {
 		logger.Fatal(ctx, panelErr)
+	}
+
+	if panel.Config.RemoteStreamDAddr != "" {
+		ctx = belt.WithField(ctx, "streamd_addr", panel.Config.RemoteStreamDAddr)
 	}
 
 	if !flags.SplitProcess && flags.ListenAddr != "" {

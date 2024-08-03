@@ -1,10 +1,11 @@
-//go:build android
-// +build android
+//go:build android || android_test
+// +build android android_test
 
 package main
 
 import (
 	"context"
+	"io"
 	"os"
 	"os/exec"
 	"reflect"
@@ -12,7 +13,7 @@ import (
 	"strings"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/go-yaml/yaml"
+	"github.com/goccy/go-yaml"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
 )
@@ -36,7 +37,7 @@ func getFlagsAndroidFromSysprop(flags *Flags) {
 	sv := reflect.ValueOf(flags).Elem()
 	st := reflect.TypeOf(flags).Elem()
 	for i := 0; i < sv.NumField(); i++ {
-		f := sv.Index(i)
+		f := sv.Field(i)
 		t := st.Field(i)
 		sysPropName := "streaming." + strings.ToLower(streampanel.AppName) + ".flags." + t.Name
 		value, err := getSystemProperty(sysPropName)
@@ -72,28 +73,35 @@ func getFlagsAndroidFromSysprop(flags *Flags) {
 	}
 }
 
+var androidFS = os.DirFS("/")
+
 func getFlagsAndroidFromFiles(flags *Flags) {
-	filePathUnexpanded := "~/flags.json"
+	filePathUnexpanded := "~/flags.yaml"
 	ctx := context.TODO()
 	flagsFilePath, err := xpath.Expand(filePathUnexpanded)
 	if err != nil {
 		logger.Errorf(ctx, "unable to expand '%s': %v", filePathUnexpanded, err)
 		return
 	}
+	flagsFilePath = strings.Trim(flagsFilePath, "/")
 
-	_, statErr := os.Stat(flagsFilePath)
-	if os.IsNotExist(statErr) {
+	f, err := androidFS.Open(flagsFilePath)
+	if os.IsNotExist(err) {
 		logger.Debugf(ctx, "file '%s' does not exist", flagsFilePath)
 		return
 	}
+	defer f.Close()
 
-	flagsSerialized, err := os.ReadFile(flagsFilePath)
+	flagsSerialized, err := io.ReadAll(f)
 	if err != nil {
 		logger.Errorf(ctx, "unable to read the file '%s': %v", flagsFilePath, err)
 		return
 	}
+
 	err = yaml.Unmarshal(flagsSerialized, flags)
 	if err != nil {
 		logger.Errorf(ctx, "unable to unserialize '%s': %v", flagsSerialized, err)
 	}
+
+	logger.Debugf(ctx, "successfully parsed file '%s' with content '%s'; now the flags == %#+v", flagsFilePath, flagsSerialized, *flags)
 }

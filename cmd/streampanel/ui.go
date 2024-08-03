@@ -33,6 +33,13 @@ func forkUI(ctx context.Context, mainProcessAddr, password string) {
 
 	logger.Debugf(ctx, "streamd remote address is %s", streamdAddr)
 	flags.RemoteAddr = streamdAddr
+
+	ctx = belt.WithField(ctx, "streamd_addr", flags.RemoteAddr)
+	l := logger.FromCtx(ctx)
+	logger.Default = func() logger.Logger {
+		return l
+	}
+
 	logger.Infof(ctx, "running the UI")
 	runPanel(ctx, flags, mainProcess)
 	err = mainProcess.SendMessage(ctx, ProcessNameMain, MessageQuit{})
