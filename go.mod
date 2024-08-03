@@ -139,6 +139,7 @@ require (
 	github.com/multiformats/go-multihash v0.2.3 // indirect
 	github.com/multiformats/go-multistream v0.5.0 // indirect
 	github.com/multiformats/go-varint v0.0.7 // indirect
+	github.com/netbrain/goautosocket v0.0.0-20150624145746-bef85f0aef40 // indirect
 	github.com/nicksnyder/go-i18n/v2 v2.4.0 // indirect
 	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d // indirect
 	github.com/onsi/ginkgo/v2 v2.15.0 // indirect
@@ -180,6 +181,7 @@ require (
 	github.com/vishvananda/netlink v1.1.1-0.20211118161826-650dca95af54 // indirect
 	github.com/vishvananda/netns v0.0.4 // indirect
 	github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1 // indirect
+	github.com/xaionaro-go/logrustash v0.0.0-20240802233403-ebd6f6de4d72 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	github.com/yuin/goldmark v1.7.1 // indirect
 	github.com/yutopp/go-amf0 v0.1.0 // indirect
@@ -197,7 +199,6 @@ require (
 	golang.org/x/image v0.18.0 // indirect
 	golang.org/x/mobile v0.0.0-20231127183840-76ac6878050a // indirect
 	golang.org/x/mod v0.18.0 // indirect
-	golang.org/x/net v0.26.0 // indirect
 	golang.org/x/sync v0.7.0 // indirect
 	golang.org/x/sys v0.21.0 // indirect
 	golang.org/x/text v0.16.0 // indirect
@@ -211,6 +212,7 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20240415180920-8c6c420018be // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240415141817-7cd4c1c1f9ec // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
+	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
@@ -219,13 +221,17 @@ require (
 )
 
 require (
-	fyne.io/fyne/v2 v2.4.6-0.20240630191754-79694263c06a
+	fyne.io/fyne/v2 v2.5.0
+	github.com/AgustinSRG/go-child-process-manager v1.0.1
 	github.com/AlexxIT/go2rtc v1.9.4
 	github.com/DataDog/gostackparse v0.6.0
+	github.com/DexterLB/mpvipc v0.0.0-20230829142118-145d6eabdc37
 	github.com/adrg/libvlc-go/v3 v3.1.5
 	github.com/andreykaipov/goobs v1.4.1
 	github.com/anthonynsimon/bild v0.14.0
+	github.com/asaskevich/EventBus v0.0.0-20200907212545-49d423059eef
 	github.com/blang/mpv v0.0.0-20160810175505-d56d7352e068
+	github.com/bshuster-repo/logrus-logstash-hook v1.1.0
 	github.com/chai2010/webp v1.1.1
 	github.com/dustin/go-humanize v1.0.1
 	github.com/getsentry/sentry-go v0.28.1
@@ -255,6 +261,7 @@ require (
 	github.com/yutopp/go-flv v0.3.1
 	github.com/yutopp/go-rtmp v0.0.7
 	golang.org/x/crypto v0.24.0
+	golang.org/x/net v0.26.0
 	google.golang.org/grpc v1.63.2
 	google.golang.org/protobuf v1.33.1-0.20240408130810-98873a205002
 )

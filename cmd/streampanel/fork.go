@@ -144,7 +144,7 @@ func runSplitProcesses(
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(time.Second):
+		case <-time.After(3 * time.Second):
 		}
 
 		err := m.VerifyEverybodyConnected(ctx)

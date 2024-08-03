@@ -6,6 +6,7 @@ import (
 
 	"github.com/gwuhaolin/livego/protocol/rtmp"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
 
 type PortServer struct {
@@ -21,8 +22,8 @@ var _ types.PortServer = (*PortServer)(nil)
 func (srv *PortServer) Close() error {
 	return srv.Listener.Close()
 }
-func (srv *PortServer) Type() types.ServerType {
-	return types.ServerTypeRTMP
+func (srv *PortServer) Type() streamtypes.ServerType {
+	return streamtypes.ServerTypeRTMP
 }
 func (srv *PortServer) ListenAddr() string {
 	return srv.Listener.Addr().String()

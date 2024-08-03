@@ -4,14 +4,18 @@ import (
 	"context"
 	"crypto"
 	"fmt"
+	"os"
 	"sort"
-	"strings"
 	"sync"
+	"time"
 
 	"github.com/andreykaipov/goobs/api/requests/scenes"
+	eventbus "github.com/asaskevich/EventBus"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/hashicorp/go-multierror"
+	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/repository"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
@@ -20,11 +24,16 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/cache"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/events"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/memoize"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/ui"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
+	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
+	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
 )
 
@@ -63,6 +72,10 @@ type StreamD struct {
 
 	StreamServerLocker sync.RWMutex
 	StreamServer       *streamserver.StreamServer
+
+	StreamStatusCache *memoize.MemoizeData
+
+	EventBus eventbus.Bus
 }
 
 var _ api.StreamD = (*StreamD)(nil)
@@ -76,11 +89,13 @@ func New(
 	ctx := belt.CtxWithBelt(context.Background(), b)
 
 	d := &StreamD{
-		UI:               ui,
-		SaveConfigFunc:   saveCfgFunc,
-		Config:           config,
-		Cache:            &cache.Cache{},
-		OAuthListenPorts: map[uint16]struct{}{},
+		UI:                ui,
+		SaveConfigFunc:    saveCfgFunc,
+		Config:            config,
+		Cache:             &cache.Cache{},
+		OAuthListenPorts:  map[uint16]struct{}{},
+		StreamStatusCache: memoize.NewMemoizeData(),
+		EventBus:          eventbus.New(),
 	}
 
 	err := d.readCache(ctx)
@@ -136,15 +151,19 @@ func (d *StreamD) InitStreamServer(ctx context.Context) error {
 	defer d.ControllersLocker.Unlock()
 	return d.initStreamServer(ctx)
 }
+
 func (d *StreamD) initStreamServer(ctx context.Context) error {
-	d.StreamServer = streamserver.New(&d.Config.StreamServer)
+	d.StreamServer = streamserver.New(&d.Config.StreamServer, newPlatformsControllerAdapter(d.StreamControllers))
 	assert(d.StreamServer != nil)
+	defer d.notifyAboutChange(ctx, events.StreamServersChange)
 	return d.StreamServer.Init(ctx)
 }
 
 func (d *StreamD) readCache(ctx context.Context) error {
 	logger.Tracef(ctx, "readCache")
 	defer logger.Tracef(ctx, "/readCache")
+
+	d.Cache = &cache.Cache{}
 
 	if d.Config.CachePath == nil {
 		d.Config.CachePath = config.NewConfig().CachePath
@@ -159,6 +178,11 @@ func (d *StreamD) readCache(ctx context.Context) error {
 	cachePath, err := xpath.Expand(*d.Config.CachePath)
 	if err != nil {
 		return fmt.Errorf("unable to expand path '%s': %w", *d.Config.CachePath, err)
+	}
+
+	if _, err := os.Stat(cachePath); os.IsNotExist(err) {
+		logger.Debugf(ctx, "cache file does not exist")
+		return nil
 	}
 
 	err = cache.ReadCacheFromPath(ctx, cachePath, d.Cache)
@@ -338,6 +362,7 @@ func (d *StreamD) normalizeYoutubeData() {
 }
 
 func (d *StreamD) SaveConfig(ctx context.Context) error {
+	defer d.notifyAboutChange(ctx, events.ConfigChange)
 	err := d.SaveConfigFunc(ctx, d.Config)
 	if err != nil {
 		return err
@@ -397,9 +422,25 @@ func (d *StreamD) StartStream(
 	profile streamcontrol.AbstractStreamProfile,
 	customArgs ...any,
 ) (_err error) {
+	logger.Debugf(ctx, "StartStream(%s)", platID)
 	d.ControllersLocker.RLock()
 	defer d.ControllersLocker.RUnlock()
 	defer func() { logger.Debugf(ctx, "/StartStream(%s): %v", platID, _err) }()
+	defer d.notifyAboutChange(ctx, events.StreamsChange)
+
+	defer func() {
+		d.StreamStatusCache.InvalidateCache(ctx)
+		if platID == youtube.ID {
+			go func() {
+				now := time.Now()
+				time.Sleep(10 * time.Second)
+				for time.Since(now) < 5*time.Minute {
+					d.StreamStatusCache.InvalidateCache(ctx)
+					time.Sleep(20 * time.Second)
+				}
+			}()
+		}
+	}()
 	switch platID {
 	case obs.ID:
 		profile, err := streamcontrol.GetStreamProfile[obs.StreamProfile](ctx, profile)
@@ -437,8 +478,11 @@ func (d *StreamD) StartStream(
 }
 
 func (d *StreamD) EndStream(ctx context.Context, platID streamcontrol.PlatformName) error {
+	defer d.notifyAboutChange(ctx, events.StreamsChange)
+
 	d.ControllersLocker.RLock()
 	defer d.ControllersLocker.RUnlock()
+	defer d.StreamStatusCache.InvalidateCache(ctx)
 	switch platID {
 	case obs.ID:
 		return d.StreamControllers.OBS.EndStream(d.ctxForController(ctx))
@@ -538,6 +582,20 @@ func (d *StreamD) GetStreamStatus(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
 ) (*streamcontrol.StreamStatus, error) {
+	cacheDuration := 5 * time.Second
+	switch platID {
+	case obs.ID:
+		cacheDuration = 3 * time.Second
+	case youtube.ID:
+		cacheDuration = 5 * time.Minute
+	}
+	return memoize.Memoize(d.StreamStatusCache, d.getStreamStatus, ctx, platID, cacheDuration)
+}
+
+func (d *StreamD) getStreamStatus(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+) (*streamcontrol.StreamStatus, error) {
 	d.ControllersLocker.RLock()
 	defer d.ControllersLocker.RUnlock()
 	c, err := d.streamController(ctx, platID)
@@ -557,6 +615,8 @@ func (d *StreamD) SetTitle(
 	platID streamcontrol.PlatformName,
 	title string,
 ) error {
+	defer d.notifyAboutChange(ctx, events.StreamsChange)
+
 	d.ControllersLocker.RLock()
 	defer d.ControllersLocker.RUnlock()
 	c, err := d.streamController(ctx, platID)
@@ -572,6 +632,8 @@ func (d *StreamD) SetDescription(
 	platID streamcontrol.PlatformName,
 	description string,
 ) error {
+	defer d.notifyAboutChange(ctx, events.StreamsChange)
+
 	d.ControllersLocker.RLock()
 	defer d.ControllersLocker.RUnlock()
 	c, err := d.streamController(ctx, platID)
@@ -593,6 +655,8 @@ func (d *StreamD) ApplyProfile(
 	profile streamcontrol.AbstractStreamProfile,
 	customArgs ...any,
 ) error {
+	defer d.notifyAboutChange(ctx, events.StreamsChange)
+
 	d.ControllersLocker.RLock()
 	defer d.ControllersLocker.RUnlock()
 	c, err := d.streamController(d.ctxForController(ctx), platID)
@@ -610,6 +674,8 @@ func (d *StreamD) UpdateStream(
 	profile streamcontrol.AbstractStreamProfile,
 	customArgs ...any,
 ) error {
+	defer d.notifyAboutChange(ctx, events.StreamsChange)
+
 	d.ControllersLocker.RLock()
 	defer d.ControllersLocker.RUnlock()
 
@@ -691,6 +757,8 @@ func (d *StreamD) OBSSetCurrentProgramScene(
 	ctx context.Context,
 	req *scenes.SetCurrentProgramSceneParams,
 ) error {
+	defer d.notifyAboutChange(ctx, events.OBSCurrentProgramScene)
+
 	d.ControllersLocker.RLock()
 	defer d.ControllersLocker.RUnlock()
 
@@ -757,7 +825,10 @@ func (d *StreamD) ListStreamServers(
 	logger.Debugf(ctx, "ListStreamServers")
 	defer logger.Debugf(ctx, "/ListStreamServers")
 
+	logger.Tracef(ctx, "d.StreamServerLocker.Lock()-ing")
 	d.StreamServerLocker.Lock()
+	logger.Tracef(ctx, "d.StreamServerLocker.Lock()-ed")
+	defer logger.Tracef(ctx, "d.StreamServerLocker.Unlock()-ed")
 	defer d.StreamServerLocker.Unlock()
 
 	assert(d.StreamServer != nil)
@@ -767,7 +838,7 @@ func (d *StreamD) ListStreamServers(
 	var result []api.StreamServer
 	for _, src := range servers {
 		result = append(result, api.StreamServer{
-			Type:       api.ServerTypeServer2API(src.Type()),
+			Type:       src.Type(),
 			ListenAddr: src.ListenAddr(),
 
 			NumBytesConsumerWrote: src.NumBytesConsumerWrote(),
@@ -785,13 +856,17 @@ func (d *StreamD) StartStreamServer(
 ) error {
 	logger.Debugf(ctx, "StartStreamServer")
 	defer logger.Debugf(ctx, "/StartStreamServer")
+	defer d.notifyAboutChange(ctx, events.StreamServersChange)
 
+	logger.Tracef(ctx, "d.StreamServerLocker.Lock()-ing")
 	d.StreamServerLocker.Lock()
+	logger.Tracef(ctx, "d.StreamServerLocker.Lock()-ed")
+	defer logger.Tracef(ctx, "d.StreamServerLocker.Unlock()-ed")
 	defer d.StreamServerLocker.Unlock()
 
 	err := d.StreamServer.StartServer(
 		resetContextCancellers(ctx),
-		api.ServerTypeAPI2Server(serverType),
+		serverType,
 		listenAddr,
 	)
 	if err != nil {
@@ -825,8 +900,12 @@ func (d *StreamD) StopStreamServer(
 ) error {
 	logger.Debugf(ctx, "StopStreamServer")
 	defer logger.Debugf(ctx, "/StopStreamServer")
+	defer d.notifyAboutChange(ctx, events.StreamServersChange)
 
+	logger.Tracef(ctx, "d.StreamServerLocker.Lock()-ing")
 	d.StreamServerLocker.Lock()
+	logger.Tracef(ctx, "d.StreamServerLocker.Lock()-ed")
+	defer logger.Tracef(ctx, "d.StreamServerLocker.Unlock()-ed")
 	defer d.StreamServerLocker.Unlock()
 
 	srv := d.getStreamServerByListenAddr(ctx, listenAddr)
@@ -853,8 +932,12 @@ func (d *StreamD) AddIncomingStream(
 ) error {
 	logger.Debugf(ctx, "AddIncomingStream")
 	defer logger.Debugf(ctx, "/AddIncomingStream")
+	defer d.notifyAboutChange(ctx, events.IncomingStreamsChange)
 
+	logger.Tracef(ctx, "d.StreamServerLocker.Lock()-ing")
 	d.StreamServerLocker.Lock()
+	logger.Tracef(ctx, "d.StreamServerLocker.Lock()-ed")
+	defer logger.Tracef(ctx, "d.StreamServerLocker.Unlock()-ed")
 	defer d.StreamServerLocker.Unlock()
 
 	err := d.StreamServer.AddIncomingStream(ctx, types.StreamID(streamID))
@@ -876,8 +959,12 @@ func (d *StreamD) RemoveIncomingStream(
 ) error {
 	logger.Debugf(ctx, "RemoveIncomingStream")
 	defer logger.Debugf(ctx, "/RemoveIncomingStream")
+	defer d.notifyAboutChange(ctx, events.IncomingStreamsChange)
 
+	logger.Tracef(ctx, "d.StreamServerLocker.Lock()-ing")
 	d.StreamServerLocker.Lock()
+	logger.Tracef(ctx, "d.StreamServerLocker.Lock()-ed")
+	defer logger.Tracef(ctx, "d.StreamServerLocker.Unlock()-ed")
 	defer d.StreamServerLocker.Unlock()
 
 	err := d.StreamServer.RemoveIncomingStream(ctx, types.StreamID(streamID))
@@ -899,7 +986,10 @@ func (d *StreamD) ListIncomingStreams(
 	logger.Debugf(ctx, "ListIncomingStreams")
 	defer logger.Debugf(ctx, "/ListIncomingStreams")
 
+	logger.Tracef(ctx, "d.StreamServerLocker.Lock()-ing")
 	d.StreamServerLocker.Lock()
+	logger.Tracef(ctx, "d.StreamServerLocker.Lock()-ed")
+	defer logger.Tracef(ctx, "d.StreamServerLocker.Unlock()-ed")
 	defer d.StreamServerLocker.Unlock()
 
 	var result []api.IncomingStream
@@ -917,7 +1007,10 @@ func (d *StreamD) ListStreamDestinations(
 	logger.Debugf(ctx, "ListStreamDestinations")
 	defer logger.Debugf(ctx, "/ListStreamDestinations")
 
+	logger.Tracef(ctx, "d.StreamServerLocker.Lock()-ing")
 	d.StreamServerLocker.Lock()
+	logger.Tracef(ctx, "d.StreamServerLocker.Lock()-ed")
+	defer logger.Tracef(ctx, "d.StreamServerLocker.Unlock()-ed")
 	defer d.StreamServerLocker.Unlock()
 
 	streamDestinations, err := d.StreamServer.ListStreamDestinations(ctx)
@@ -941,8 +1034,12 @@ func (d *StreamD) AddStreamDestination(
 ) error {
 	logger.Debugf(ctx, "AddStreamDestination")
 	defer logger.Debugf(ctx, "/AddStreamDestination")
+	defer d.notifyAboutChange(ctx, events.StreamDestinationsChange)
 
+	logger.Tracef(ctx, "d.StreamServerLocker.Lock()-ing")
 	d.StreamServerLocker.Lock()
+	logger.Tracef(ctx, "d.StreamServerLocker.Lock()-ed")
+	defer logger.Tracef(ctx, "d.StreamServerLocker.Unlock()-ed")
 	defer d.StreamServerLocker.Unlock()
 
 	err := d.StreamServer.AddStreamDestination(
@@ -968,8 +1065,12 @@ func (d *StreamD) RemoveStreamDestination(
 ) error {
 	logger.Debugf(ctx, "RemoveStreamDestination")
 	defer logger.Debugf(ctx, "/RemoveStreamDestination")
+	defer d.notifyAboutChange(ctx, events.StreamDestinationsChange)
 
+	logger.Tracef(ctx, "d.StreamServerLocker.Lock()-ing")
 	d.StreamServerLocker.Lock()
+	logger.Tracef(ctx, "d.StreamServerLocker.Lock()-ed")
+	defer logger.Tracef(ctx, "d.StreamServerLocker.Unlock()-ed")
 	defer d.StreamServerLocker.Unlock()
 
 	err := d.StreamServer.RemoveStreamDestination(ctx, types.DestinationID(destinationID))
@@ -1011,7 +1112,10 @@ func (d *StreamD) ListStreamForwards(
 	logger.Debugf(ctx, "ListStreamForwards")
 	defer logger.Debugf(ctx, "/ListStreamForwards")
 
+	logger.Tracef(ctx, "d.StreamServerLocker.Lock()-ing")
 	d.StreamServerLocker.Lock()
+	logger.Tracef(ctx, "d.StreamServerLocker.Lock()-ed")
+	defer logger.Tracef(ctx, "d.StreamServerLocker.Unlock()-ed")
 	defer d.StreamServerLocker.Unlock()
 
 	return d.listStreamForwards(ctx)
@@ -1022,11 +1126,16 @@ func (d *StreamD) AddStreamForward(
 	streamID api.StreamID,
 	destinationID api.DestinationID,
 	enabled bool,
+	quirks api.StreamForwardingQuirks,
 ) error {
 	logger.Debugf(ctx, "AddStreamForward")
 	defer logger.Debugf(ctx, "/AddStreamForward")
+	defer d.notifyAboutChange(ctx, events.StreamForwardsChange)
 
+	logger.Tracef(ctx, "d.StreamServerLocker.Lock()-ing")
 	d.StreamServerLocker.Lock()
+	logger.Tracef(ctx, "d.StreamServerLocker.Lock()-ed")
+	defer logger.Tracef(ctx, "d.StreamServerLocker.Unlock()-ed")
 	defer d.StreamServerLocker.Unlock()
 
 	_, err := d.StreamServer.AddStreamForward(
@@ -1034,6 +1143,7 @@ func (d *StreamD) AddStreamForward(
 		types.StreamID(streamID),
 		types.DestinationID(destinationID),
 		enabled,
+		quirks,
 	)
 	if err != nil {
 		return fmt.Errorf("unable to add the stream forwarding: %w", err)
@@ -1052,11 +1162,16 @@ func (d *StreamD) UpdateStreamForward(
 	streamID api.StreamID,
 	destinationID api.DestinationID,
 	enabled bool,
+	quirks api.StreamForwardingQuirks,
 ) error {
 	logger.Debugf(ctx, "AddStreamForward")
 	defer logger.Debugf(ctx, "/AddStreamForward")
+	defer d.notifyAboutChange(ctx, events.StreamForwardsChange)
 
+	logger.Tracef(ctx, "d.StreamServerLocker.Lock()-ing")
 	d.StreamServerLocker.Lock()
+	logger.Tracef(ctx, "d.StreamServerLocker.Lock()-ed")
+	defer logger.Tracef(ctx, "d.StreamServerLocker.Unlock()-ed")
 	defer d.StreamServerLocker.Unlock()
 
 	_, err := d.StreamServer.UpdateStreamForward(
@@ -1064,6 +1179,7 @@ func (d *StreamD) UpdateStreamForward(
 		types.StreamID(streamID),
 		types.DestinationID(destinationID),
 		enabled,
+		quirks,
 	)
 	if err != nil {
 		return fmt.Errorf("unable to add the stream forwarding: %w", err)
@@ -1084,8 +1200,12 @@ func (d *StreamD) RemoveStreamForward(
 ) error {
 	logger.Debugf(ctx, "RemoveStreamForward")
 	defer logger.Debugf(ctx, "/RemoveStreamForward")
+	defer d.notifyAboutChange(ctx, events.StreamForwardsChange)
 
+	logger.Tracef(ctx, "d.StreamServerLocker.Lock()-ing")
 	d.StreamServerLocker.Lock()
+	logger.Tracef(ctx, "d.StreamServerLocker.Lock()-ed")
+	defer logger.Tracef(ctx, "d.StreamServerLocker.Unlock()-ed")
 	defer d.StreamServerLocker.Unlock()
 
 	err := d.StreamServer.RemoveStreamForward(
@@ -1112,17 +1232,299 @@ func resetContextCancellers(ctx context.Context) context.Context {
 func (d *StreamD) WaitForStreamPublisher(
 	ctx context.Context,
 	streamID api.StreamID,
-) (chan struct{}, error) {
-	streamIDParts := strings.Split(string(streamID), "/")
-	localAppName := string(streamID)
-	if len(streamIDParts) == 2 {
-		localAppName = streamIDParts[1]
+) (<-chan struct{}, error) {
+	return streamserver.NewStreamPlayerStreamServer(d.StreamServer).WaitPublisher(ctx, streamID)
+}
+
+func (d *StreamD) GetStreamPortServers(
+	ctx context.Context,
+) ([]streamplayer.StreamPortServer, error) {
+	return streamserver.NewStreamPlayerStreamServer(d.StreamServer).GetPortServers(ctx)
+}
+
+func (d *StreamD) AddStreamPlayer(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+	playerType player.Backend,
+	disabled bool,
+	streamPlaybackConfig sptypes.Config,
+) error {
+	defer d.notifyAboutChange(ctx, events.StreamPlayersChange)
+	var result *multierror.Error
+	result = multierror.Append(result, d.StreamServer.AddStreamPlayer(
+		ctx,
+		streamID,
+		playerType,
+		disabled,
+		streamPlaybackConfig,
+	))
+	result = multierror.Append(result, d.SaveConfig(ctx))
+	return result.ErrorOrNil()
+}
+
+func (d *StreamD) UpdateStreamPlayer(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+	playerType player.Backend,
+	disabled bool,
+	streamPlaybackConfig sptypes.Config,
+) error {
+	defer d.notifyAboutChange(ctx, events.StreamPlayersChange)
+	var result *multierror.Error
+	result = multierror.Append(result, d.StreamServer.UpdateStreamPlayer(
+		ctx,
+		streamID,
+		playerType,
+		disabled,
+		streamPlaybackConfig,
+	))
+	result = multierror.Append(result, d.SaveConfig(ctx))
+	return result.ErrorOrNil()
+}
+
+func (d *StreamD) RemoveStreamPlayer(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+) error {
+	defer d.notifyAboutChange(ctx, events.StreamPlayersChange)
+	var result *multierror.Error
+	result = multierror.Append(result, d.StreamServer.RemoveStreamPlayer(
+		ctx,
+		streamID,
+	))
+	result = multierror.Append(result, d.SaveConfig(ctx))
+	return result.ErrorOrNil()
+}
+
+func (d *StreamD) ListStreamPlayers(
+	ctx context.Context,
+) ([]api.StreamPlayer, error) {
+	var result []api.StreamPlayer
+	for streamID, streamCfg := range d.StreamServer.Config.Streams {
+		playerCfg := streamCfg.Player
+		if playerCfg == nil {
+			continue
+		}
+
+		result = append(result, api.StreamPlayer{
+			StreamID:             streamID,
+			PlayerType:           playerCfg.Player,
+			Disabled:             playerCfg.Disabled,
+			StreamPlaybackConfig: playerCfg.StreamPlayback,
+		})
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].StreamID < result[j].StreamID
+	})
+	return result, nil
+}
+
+func (d *StreamD) GetStreamPlayer(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+) (*api.StreamPlayer, error) {
+	streamCfg, ok := d.StreamServer.Config.Streams[streamID]
+	if !ok {
+		return nil, fmt.Errorf("no stream '%s'", streamID)
+	}
+	playerCfg := streamCfg.Player
+	if playerCfg == nil {
+		return nil, fmt.Errorf("no stream player defined for '%s'", streamID)
+	}
+	return &api.StreamPlayer{
+		StreamID:             streamID,
+		PlayerType:           playerCfg.Player,
+		Disabled:             playerCfg.Disabled,
+		StreamPlaybackConfig: playerCfg.StreamPlayback,
+	}, nil
+}
+
+func (d *StreamD) StreamPlayerProcessTitle(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+) (string, error) {
+	streamPlayer := d.StreamServer.StreamPlayers.Get(streamID)
+	if streamPlayer == nil || streamPlayer.Player == nil {
+		return "", fmt.Errorf("there is no active player '%s'", streamID)
+	}
+	return streamPlayer.Player.ProcessTitle(ctx)
+}
+func (d *StreamD) StreamPlayerOpenURL(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+	link string,
+) error {
+	streamPlayer := d.StreamServer.StreamPlayers.Get(streamID)
+	if streamPlayer == nil || streamPlayer.Player == nil {
+		return fmt.Errorf("there is no active player '%s'", streamID)
+	}
+	return streamPlayer.Player.OpenURL(ctx, link)
+}
+func (d *StreamD) StreamPlayerGetLink(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+) (string, error) {
+	streamPlayer := d.StreamServer.StreamPlayers.Get(streamID)
+	if streamPlayer == nil || streamPlayer.Player == nil {
+		return "", fmt.Errorf("there is no active player '%s'", streamID)
+	}
+	return streamPlayer.Player.GetLink(ctx)
+}
+func (d *StreamD) StreamPlayerEndChan(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+) (<-chan struct{}, error) {
+	streamPlayer := d.StreamServer.StreamPlayers.Get(streamID)
+	if streamPlayer == nil || streamPlayer.Player == nil {
+		return nil, fmt.Errorf("there is no active player '%s'", streamID)
+	}
+	return streamPlayer.Player.EndChan(ctx)
+}
+func (d *StreamD) StreamPlayerIsEnded(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+) (bool, error) {
+	streamPlayer := d.StreamServer.StreamPlayers.Get(streamID)
+	if streamPlayer == nil || streamPlayer.Player == nil {
+		return false, fmt.Errorf("there is no active player '%s'", streamID)
+	}
+	return streamPlayer.Player.IsEnded(ctx)
+}
+func (d *StreamD) StreamPlayerGetPosition(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+) (time.Duration, error) {
+	streamPlayer := d.StreamServer.StreamPlayers.Get(streamID)
+	if streamPlayer == nil || streamPlayer.Player == nil {
+		return 0, fmt.Errorf("there is no active player '%s'", streamID)
+	}
+	return streamPlayer.Player.GetPosition(ctx)
+}
+func (d *StreamD) StreamPlayerGetLength(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+) (time.Duration, error) {
+	streamPlayer := d.StreamServer.StreamPlayers.Get(streamID)
+	if streamPlayer == nil || streamPlayer.Player == nil {
+		return 0, fmt.Errorf("there is no active player '%s'", streamID)
+	}
+	return streamPlayer.Player.GetLength(ctx)
+}
+func (d *StreamD) StreamPlayerSetSpeed(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+	speed float64,
+) error {
+	streamPlayer := d.StreamServer.StreamPlayers.Get(streamID)
+	if streamPlayer == nil || streamPlayer.Player == nil {
+		return fmt.Errorf("there is no active player '%s'", streamID)
+	}
+	return streamPlayer.Player.SetSpeed(ctx, speed)
+}
+func (d *StreamD) StreamPlayerSetPause(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+	pause bool,
+) error {
+	streamPlayer := d.StreamServer.StreamPlayers.Get(streamID)
+	if streamPlayer == nil || streamPlayer.Player == nil {
+		return fmt.Errorf("there is no active player '%s'", streamID)
+	}
+	return streamPlayer.Player.SetPause(ctx, pause)
+}
+func (d *StreamD) StreamPlayerStop(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+) error {
+	streamPlayer := d.StreamServer.StreamPlayers.Get(streamID)
+	if streamPlayer == nil || streamPlayer.Player == nil {
+		return fmt.Errorf("there is no active player '%s'", streamID)
+	}
+	return streamPlayer.Player.Stop(ctx)
+}
+func (d *StreamD) StreamPlayerClose(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+) error {
+	streamPlayer := d.StreamServer.StreamPlayers.Get(streamID)
+	if streamPlayer == nil || streamPlayer.Player == nil {
+		return fmt.Errorf("there is no active player '%s'", streamID)
+	}
+	return streamPlayer.Player.Close(ctx)
+}
+
+func (d *StreamD) notifyAboutChange(
+	_ context.Context,
+	topic events.Event,
+) {
+	d.EventBus.Publish(topic)
+}
+
+func eventSubToChan[T any](
+	ctx context.Context,
+	d *StreamD,
+	topic events.Event,
+) (<-chan T, error) {
+	r := make(chan T)
+	callback := func() {
+		var zeroValue T
+		select {
+		case r <- zeroValue:
+		case <-time.After(time.Minute):
+			logger.Errorf(ctx, "unable to notify about '%s': timeout", topic)
+		}
+	}
+	err := d.EventBus.SubscribeAsync(topic, callback, true)
+	if err != nil {
+		return nil, fmt.Errorf("unable to subscribe: %w", err)
 	}
 
-	ch := make(chan struct{})
 	go func() {
-		d.StreamServer.RelayServer.WaitPubsub(ctx, localAppName)
-		close(ch)
+		<-ctx.Done()
+		d.EventBus.Unsubscribe(topic, callback)
+		close(r)
 	}()
-	return ch, nil
+	return r, nil
+}
+
+func (d *StreamD) SubscribeToConfigChanges(
+	ctx context.Context,
+) (<-chan api.DiffConfig, error) {
+	return eventSubToChan[api.DiffConfig](ctx, d, events.ConfigChange)
+}
+
+func (d *StreamD) SubscribeToStreamsChanges(
+	ctx context.Context,
+) (<-chan api.DiffStreams, error) {
+	return eventSubToChan[api.DiffStreams](ctx, d, events.StreamsChange)
+}
+
+func (d *StreamD) SubscribeToStreamServersChanges(
+	ctx context.Context,
+) (<-chan api.DiffStreamServers, error) {
+	return eventSubToChan[api.DiffStreamServers](ctx, d, events.StreamServersChange)
+}
+
+func (d *StreamD) SubscribeToStreamDestinationsChanges(
+	ctx context.Context,
+) (<-chan api.DiffStreamDestinations, error) {
+	return eventSubToChan[api.DiffStreamDestinations](ctx, d, events.StreamDestinationsChange)
+}
+
+func (d *StreamD) SubscribeToIncomingStreamsChanges(
+	ctx context.Context,
+) (<-chan api.DiffIncomingStreams, error) {
+	return eventSubToChan[api.DiffIncomingStreams](ctx, d, events.IncomingStreamsChange)
+}
+
+func (d *StreamD) SubscribeToStreamForwardsChanges(
+	ctx context.Context,
+) (<-chan api.DiffStreamForwards, error) {
+	return eventSubToChan[api.DiffStreamForwards](ctx, d, events.StreamForwardsChange)
+}
+
+func (d *StreamD) SubscribeToStreamPlayersChanges(
+	ctx context.Context,
+) (<-chan api.DiffStreamPlayers, error) {
+	return eventSubToChan[api.DiffStreamPlayers](ctx, d, events.StreamPlayersChange)
 }

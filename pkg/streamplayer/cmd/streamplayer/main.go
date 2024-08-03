@@ -25,6 +25,8 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver"
 	sstypes "github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
+	"github.com/xaionaro-go/streamctl/pkg/xfyne"
 )
 
 func assertNoError(ctx context.Context, err error) {
@@ -54,15 +56,18 @@ func main() {
 	}
 
 	m := player.NewManager(ptypes.OptionPathToMPV(*mpvPath))
-	ss := streamserver.New(&sstypes.Config{
-		Servers: []sstypes.Server{{
-			Type:   sstypes.ServerTypeRTMP,
-			Listen: *rtmpListenAddr,
-		}},
-		Streams: map[sstypes.StreamID]*sstypes.StreamConfig{
-			sstypes.StreamID(*streamID): {},
+	ss := streamserver.New(
+		&sstypes.Config{
+			Servers: []sstypes.Server{{
+				Type:   streamtypes.ServerTypeRTMP,
+				Listen: *rtmpListenAddr,
+			}},
+			Streams: map[sstypes.StreamID]*sstypes.StreamConfig{
+				sstypes.StreamID(*streamID): {},
+			},
 		},
-	})
+		dummyPlatformsController{},
+	)
 	err := ss.Init(ctx)
 	assertNoError(ctx, err)
 	sp := streamplayer.New(NewStreamPlayerStreamServer(ss), m)
@@ -80,15 +85,9 @@ func main() {
 
 	defaultCfg := types.DefaultConfig(ctx)
 
-	jitterBufDuration := widget.NewEntry()
+	jitterBufDuration := xfyne.NewNumericalEntry()
 	jitterBufDuration.SetPlaceHolder("amount of seconds")
 	jitterBufDuration.SetText(fmt.Sprintf("%f", defaultCfg.JitterBufDuration.Seconds()))
-	jitterBufDuration.OnChanged = func(s string) {
-		filtered := removeNonDigitsAndDots(s)
-		if s != filtered {
-			jitterBufDuration.SetText(filtered)
-		}
-	}
 	jitterBufDuration.OnSubmitted = func(s string) {
 		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
@@ -99,15 +98,9 @@ func main() {
 		p.Resetup(types.OptionJitterBufDuration(time.Duration(f * float64(time.Second))))
 	}
 
-	maxCatchupAtLag := widget.NewEntry()
+	maxCatchupAtLag := xfyne.NewNumericalEntry()
 	maxCatchupAtLag.SetPlaceHolder("amount of seconds")
 	maxCatchupAtLag.SetText(fmt.Sprintf("%f", defaultCfg.MaxCatchupAtLag.Seconds()))
-	maxCatchupAtLag.OnChanged = func(s string) {
-		filtered := removeNonDigitsAndDots(s)
-		if s != filtered {
-			maxCatchupAtLag.SetText(filtered)
-		}
-	}
 	maxCatchupAtLag.OnSubmitted = func(s string) {
 		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
@@ -118,15 +111,9 @@ func main() {
 		p.Resetup(types.OptionMaxCatchupAtLag(time.Duration(f * float64(time.Second))))
 	}
 
-	startTimeout := widget.NewEntry()
+	startTimeout := xfyne.NewNumericalEntry()
 	startTimeout.SetPlaceHolder("amount of seconds")
 	startTimeout.SetText(fmt.Sprintf("%f", defaultCfg.StartTimeout.Seconds()))
-	startTimeout.OnChanged = func(s string) {
-		filtered := removeNonDigitsAndDots(s)
-		if s != filtered {
-			startTimeout.SetText(filtered)
-		}
-	}
 	startTimeout.OnSubmitted = func(s string) {
 		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
@@ -137,15 +124,9 @@ func main() {
 		p.Resetup(types.OptionStartTimeout(time.Duration(f * float64(time.Second))))
 	}
 
-	readTimeout := widget.NewEntry()
+	readTimeout := xfyne.NewNumericalEntry()
 	readTimeout.SetPlaceHolder("amount of seconds")
 	readTimeout.SetText(fmt.Sprintf("%f", defaultCfg.ReadTimeout.Seconds()))
-	readTimeout.OnChanged = func(s string) {
-		filtered := removeNonDigitsAndDots(s)
-		if s != filtered {
-			readTimeout.SetText(filtered)
-		}
-	}
 	readTimeout.OnSubmitted = func(s string) {
 		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
@@ -156,15 +137,9 @@ func main() {
 		p.Resetup(types.OptionReadTimeout(time.Duration(f * float64(time.Second))))
 	}
 
-	catchupMaxSpeedFactor := widget.NewEntry()
+	catchupMaxSpeedFactor := xfyne.NewNumericalEntry()
 	catchupMaxSpeedFactor.SetPlaceHolder("1.0")
 	catchupMaxSpeedFactor.SetText(fmt.Sprintf("%f", defaultCfg.CatchupMaxSpeedFactor))
-	catchupMaxSpeedFactor.OnChanged = func(s string) {
-		filtered := removeNonDigitsAndDots(s)
-		if s != filtered {
-			catchupMaxSpeedFactor.SetText(filtered)
-		}
-	}
 	catchupMaxSpeedFactor.OnSubmitted = func(s string) {
 		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
@@ -218,7 +193,7 @@ func (s *StreamPlayerStreamServer) GetPortServers(
 	for _, srv := range s.StreamServer.ServerHandlers {
 		result = append(result, streamplayer.StreamPortServer{
 			Addr: srv.ListenAddr(),
-			Type: api.ServerTypeServer2API(srv.Type()),
+			Type: srv.Type(),
 		})
 	}
 	return result, nil

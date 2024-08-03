@@ -7,6 +7,9 @@ import (
 
 type StreamServer = streamserver.StreamServer
 
-func New(cfg *types.Config) *StreamServer {
-	return streamserver.New(cfg)
+func New(
+	cfg *types.Config,
+	platformsController streamserver.PlatformsController,
+) *StreamServer {
+	return streamserver.New(cfg, platformsController)
 }

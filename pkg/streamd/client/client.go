@@ -5,23 +5,31 @@ import (
 	"context"
 	"crypto"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"runtime"
+	"strings"
 	"time"
 
 	"github.com/andreykaipov/goobs/api/requests/scenes"
 	"github.com/andreykaipov/goobs/api/typedefs"
+	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
+	"github.com/xaionaro-go/streamctl/pkg/player"
+	"github.com/xaionaro-go/streamctl/pkg/player/protobuf/go/player_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	obs "github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs/types"
 	twitch "github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/types"
 	youtube "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
-	"github.com/xaionaro-go/streamctl/pkg/streamd/api/grpcconv"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/goconv"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
+	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -393,7 +401,7 @@ func (c *Client) ApplyProfile(
 
 	logger.Debugf(ctx, "serialized profile: '%s'", profile)
 
-	_, err = client.SetApplyProfile(ctx, &streamd_grpc.SetApplyProfileRequest{
+	_, err = client.ApplyProfile(ctx, &streamd_grpc.ApplyProfileRequest{
 		PlatID:  string(platID),
 		Profile: string(b),
 	})
@@ -645,7 +653,7 @@ func (c *Client) ListStreamServers(
 	}
 	var result []api.StreamServer
 	for _, server := range reply.GetStreamServers() {
-		t, err := grpcconv.StreamServerTypeGRPC2Go(server.Config.GetServerType())
+		t, err := goconv.StreamServerTypeGRPC2Go(server.Config.GetServerType())
 		if err != nil {
 			return nil, fmt.Errorf("unable to convert the server type value: %w", err)
 		}
@@ -670,7 +678,7 @@ func (c *Client) StartStreamServer(
 	}
 	defer conn.Close()
 
-	t, err := grpcconv.StreamServerTypeGo2GRPC(serverType)
+	t, err := goconv.StreamServerTypeGo2GRPC(serverType)
 	if err != nil {
 		return fmt.Errorf("unable to convert the server type: %w", err)
 	}
@@ -864,6 +872,7 @@ func (c *Client) AddStreamForward(
 	streamID api.StreamID,
 	destinationID api.DestinationID,
 	enabled bool,
+	quirks api.StreamForwardingQuirks,
 ) error {
 	client, conn, err := c.grpcClient()
 	if err != nil {
@@ -876,6 +885,13 @@ func (c *Client) AddStreamForward(
 			StreamID:      string(streamID),
 			DestinationID: string(destinationID),
 			Enabled:       enabled,
+			Quirks: &streamd_grpc.StreamForwardQuirks{
+				RestartUntilYoutubeRecognizesStream: &streamd_grpc.RestartUntilYoutubeRecognizesStream{
+					Enabled:        quirks.RestartUntilYoutubeRecognizesStream.Enabled,
+					StartTimeout:   quirks.RestartUntilYoutubeRecognizesStream.StartTimeout.Seconds(),
+					StopStartDelay: quirks.RestartUntilYoutubeRecognizesStream.StopStartDelay.Seconds(),
+				},
+			},
 		},
 	})
 	if err != nil {
@@ -889,6 +905,7 @@ func (c *Client) UpdateStreamForward(
 	streamID api.StreamID,
 	destinationID api.DestinationID,
 	enabled bool,
+	quirks api.StreamForwardingQuirks,
 ) error {
 	client, conn, err := c.grpcClient()
 	if err != nil {
@@ -901,6 +918,13 @@ func (c *Client) UpdateStreamForward(
 			StreamID:      string(streamID),
 			DestinationID: string(destinationID),
 			Enabled:       enabled,
+			Quirks: &streamd_grpc.StreamForwardQuirks{
+				RestartUntilYoutubeRecognizesStream: &streamd_grpc.RestartUntilYoutubeRecognizesStream{
+					Enabled:        quirks.RestartUntilYoutubeRecognizesStream.Enabled,
+					StartTimeout:   quirks.RestartUntilYoutubeRecognizesStream.StartTimeout.Seconds(),
+					StopStartDelay: quirks.RestartUntilYoutubeRecognizesStream.StopStartDelay.Seconds(),
+				},
+			},
 		},
 	})
 	if err != nil {
@@ -935,7 +959,7 @@ func (c *Client) RemoveStreamForward(
 func (c *Client) WaitForStreamPublisher(
 	ctx context.Context,
 	streamID api.StreamID,
-) (chan struct{}, error) {
+) (<-chan struct{}, error) {
 	client, conn, err := c.grpcClient()
 	if err != nil {
 		return nil, err
@@ -975,4 +999,565 @@ func (c *Client) WaitForStreamPublisher(
 	}()
 
 	return result, nil
+}
+
+func (c *Client) AddStreamPlayer(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+	playerType player.Backend,
+	disabled bool,
+	streamPlaybackConfig sptypes.Config,
+) error {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = client.AddStreamPlayer(ctx, &streamd_grpc.AddStreamPlayerRequest{
+		Config: &streamd_grpc.StreamPlayerConfig{
+			StreamID:             string(streamID),
+			PlayerType:           goconv.StreamPlayerTypeGo2GRPC(playerType),
+			Disabled:             disabled,
+			StreamPlaybackConfig: goconv.StreamPlaybackConfigGo2GRPC(&streamPlaybackConfig),
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("unable to request to remove the stream forward: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) UpdateStreamPlayer(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+	playerType player.Backend,
+	disabled bool,
+	streamPlaybackConfig sptypes.Config,
+) error {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = client.UpdateStreamPlayer(ctx, &streamd_grpc.UpdateStreamPlayerRequest{
+		Config: &streamd_grpc.StreamPlayerConfig{
+			StreamID:             string(streamID),
+			PlayerType:           goconv.StreamPlayerTypeGo2GRPC(playerType),
+			Disabled:             disabled,
+			StreamPlaybackConfig: goconv.StreamPlaybackConfigGo2GRPC(&streamPlaybackConfig),
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("unable to request to remove the stream forward: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) RemoveStreamPlayer(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+) error {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = client.RemoveStreamPlayer(ctx, &streamd_grpc.RemoveStreamPlayerRequest{
+		StreamID: string(streamID),
+	})
+	if err != nil {
+		return fmt.Errorf("unable to request to remove the stream forward: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) ListStreamPlayers(
+	ctx context.Context,
+) ([]api.StreamPlayer, error) {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	resp, err := client.ListStreamPlayers(ctx, &streamd_grpc.ListStreamPlayersRequest{})
+	if err != nil {
+		return nil, fmt.Errorf("unable to query: %w", err)
+	}
+
+	result := make([]api.StreamPlayer, 0, len(resp.GetPlayers()))
+	for _, player := range resp.GetPlayers() {
+		result = append(result, api.StreamPlayer{
+			StreamID:             streamtypes.StreamID(player.GetStreamID()),
+			PlayerType:           goconv.StreamPlayerTypeGRPC2Go(player.PlayerType),
+			Disabled:             player.GetDisabled(),
+			StreamPlaybackConfig: goconv.StreamPlaybackConfigGRPC2Go(player.GetStreamPlaybackConfig()),
+		})
+	}
+	return result, nil
+}
+
+func (c *Client) GetStreamPlayer(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+) (*api.StreamPlayer, error) {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	resp, err := client.GetStreamPlayer(ctx, &streamd_grpc.GetStreamPlayerRequest{
+		StreamID: string(streamID),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("unable to query: %w", err)
+	}
+
+	cfg := resp.GetConfig()
+	return &api.StreamPlayer{
+		StreamID:             streamID,
+		PlayerType:           goconv.StreamPlayerTypeGRPC2Go(cfg.PlayerType),
+		Disabled:             cfg.GetDisabled(),
+		StreamPlaybackConfig: goconv.StreamPlaybackConfigGRPC2Go(cfg.StreamPlaybackConfig),
+	}, nil
+}
+
+func (c *Client) StreamPlayerProcessTitle(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+) (string, error) {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+
+	resp, err := client.StreamPlayerProcessTitle(ctx, &streamd_grpc.StreamPlayerProcessTitleRequest{
+		StreamID: string(streamID),
+	})
+	if err != nil {
+		return "", fmt.Errorf("unable to query: %w", err)
+	}
+	return resp.Reply.GetTitle(), nil
+}
+
+func (c *Client) StreamPlayerOpenURL(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+	link string,
+) error {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = client.StreamPlayerOpen(ctx, &streamd_grpc.StreamPlayerOpenRequest{
+		StreamID: string(streamID),
+		Request:  &player_grpc.OpenRequest{},
+	})
+	if err != nil {
+		return fmt.Errorf("unable to query: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) StreamPlayerGetLink(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+) (string, error) {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+
+	resp, err := client.StreamPlayerGetLink(ctx, &streamd_grpc.StreamPlayerGetLinkRequest{
+		StreamID: string(streamID),
+		Request:  &player_grpc.GetLinkRequest{},
+	})
+	if err != nil {
+		return "", fmt.Errorf("unable to query: %w", err)
+	}
+	return resp.GetReply().Link, nil
+}
+
+func (c *Client) StreamPlayerEndChan(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+) (<-chan struct{}, error) {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	ctx, cancelFn := context.WithCancel(ctx)
+	go func() {
+		<-ctx.Done()
+		conn.Close()
+	}()
+
+	waiter, err := client.StreamPlayerEndChan(ctx, &streamd_grpc.StreamPlayerEndChanRequest{
+		StreamID: string(streamID),
+		Request:  &player_grpc.EndChanRequest{},
+	})
+	if err != nil {
+		cancelFn()
+		return nil, fmt.Errorf("unable to query: %w", err)
+	}
+	result := make(chan struct{})
+	waiter.CloseSend()
+	go func() {
+		defer cancelFn()
+		defer func() {
+			close(result)
+		}()
+
+		_, err := waiter.Recv()
+		if err == io.EOF {
+			logger.Debugf(ctx, "the receiver is closed: %v", err)
+			return
+		}
+		if err != nil {
+			logger.Errorf(ctx, "unable to read data: %v", err)
+			return
+		}
+	}()
+
+	return result, nil
+}
+
+func (c *Client) StreamPlayerIsEnded(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+) (bool, error) {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return false, err
+	}
+	defer conn.Close()
+
+	resp, err := client.StreamPlayerIsEnded(ctx, &streamd_grpc.StreamPlayerIsEndedRequest{
+		StreamID: string(streamID),
+		Request:  &player_grpc.IsEndedRequest{},
+	})
+	if err != nil {
+		return false, fmt.Errorf("unable to query: %w", err)
+	}
+	return resp.GetReply().IsEnded, nil
+}
+
+func (c *Client) StreamPlayerGetPosition(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+) (time.Duration, error) {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Close()
+
+	resp, err := client.StreamPlayerGetPosition(ctx, &streamd_grpc.StreamPlayerGetPositionRequest{
+		StreamID: string(streamID),
+		Request:  &player_grpc.GetPositionRequest{},
+	})
+	if err != nil {
+		return 0, fmt.Errorf("unable to query: %w", err)
+	}
+	return time.Duration(float64(time.Second) * resp.GetReply().GetPositionSecs()), nil
+}
+
+func (c *Client) StreamPlayerGetLength(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+) (time.Duration, error) {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Close()
+
+	resp, err := client.StreamPlayerGetLength(ctx, &streamd_grpc.StreamPlayerGetLengthRequest{
+		StreamID: string(streamID),
+		Request:  &player_grpc.GetLengthRequest{},
+	})
+	if err != nil {
+		return 0, fmt.Errorf("unable to query: %w", err)
+	}
+	return time.Duration(float64(time.Second) * resp.GetReply().GetLengthSecs()), nil
+}
+
+func (c *Client) StreamPlayerSetSpeed(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+	speed float64,
+) error {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = client.StreamPlayerSetSpeed(ctx, &streamd_grpc.StreamPlayerSetSpeedRequest{
+		StreamID: string(streamID),
+		Request: &player_grpc.SetSpeedRequest{
+			Speed: speed,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("unable to query: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) StreamPlayerSetPause(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+	pause bool,
+) error {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = client.StreamPlayerSetPause(ctx, &streamd_grpc.StreamPlayerSetPauseRequest{
+		StreamID: string(streamID),
+		Request: &player_grpc.SetPauseRequest{
+			SetPaused: pause,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("unable to query: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) StreamPlayerStop(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+) error {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = client.StreamPlayerStop(ctx, &streamd_grpc.StreamPlayerStopRequest{
+		StreamID: string(streamID),
+		Request:  &player_grpc.StopRequest{},
+	})
+	if err != nil {
+		return fmt.Errorf("unable to query: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) StreamPlayerClose(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+) error {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = client.StreamPlayerClose(ctx, &streamd_grpc.StreamPlayerCloseRequest{
+		StreamID: string(streamID),
+		Request:  &player_grpc.CloseRequest{},
+	})
+	if err != nil {
+		return fmt.Errorf("unable to query: %w", err)
+	}
+	return nil
+}
+
+type receiver[T any] interface {
+	grpc.ClientStream
+
+	Recv() (*T, error)
+}
+
+func unwrapChan[E any, R any, S receiver[R]](
+	ctx context.Context,
+	c *Client,
+	fn func(ctx context.Context, client streamd_grpc.StreamDClient) (S, error),
+) (<-chan E, error) {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return nil, err
+	}
+
+	pc, _, _, _ := runtime.Caller(1)
+	caller := runtime.FuncForPC(pc)
+	ctx = belt.WithField(ctx, "func", caller.Name())
+
+	ctx, cancelFn := context.WithCancel(ctx)
+	sub, err := fn(ctx, client)
+	if err != nil {
+		cancelFn()
+		return nil, fmt.Errorf("unable to subscribe: %w", err)
+	}
+
+	r := make(chan E)
+	go func() {
+		defer conn.Close()
+		defer cancelFn()
+		for {
+			event, err := sub.Recv()
+			if err != nil {
+				switch {
+				case errors.Is(err, io.EOF):
+					logger.Debugf(ctx, "the receiver is closed: %v", err)
+					return
+				case strings.Contains(err.Error(), grpc.ErrClientConnClosing.Error()):
+					logger.Debugf(ctx, "apparently we are closing the client: %v", err)
+					return
+				case strings.Contains(err.Error(), context.Canceled.Error()):
+					logger.Debugf(ctx, "subscription was cancelled: %v", err)
+					return
+				default:
+					logger.Errorf(ctx, "unable to read data: %v", err)
+					return
+				}
+			}
+
+			_ = event
+			var eventParsed E
+			r <- eventParsed
+		}
+	}()
+	return r, nil
+}
+
+func (c *Client) SubscribeToConfigChanges(
+	ctx context.Context,
+) (<-chan api.DiffConfig, error) {
+	return unwrapChan[api.DiffConfig](
+		ctx,
+		c,
+		func(
+			ctx context.Context,
+			client streamd_grpc.StreamDClient,
+		) (streamd_grpc.StreamD_SubscribeToConfigChangesClient, error) {
+			return client.SubscribeToConfigChanges(
+				ctx,
+				&streamd_grpc.SubscribeToConfigChangesRequest{},
+			)
+		},
+	)
+}
+
+func (c *Client) SubscribeToStreamsChanges(
+	ctx context.Context,
+) (<-chan api.DiffStreams, error) {
+	return unwrapChan[api.DiffStreams](
+		ctx,
+		c,
+		func(
+			ctx context.Context,
+			client streamd_grpc.StreamDClient,
+		) (streamd_grpc.StreamD_SubscribeToStreamsChangesClient, error) {
+			return client.SubscribeToStreamsChanges(
+				ctx,
+				&streamd_grpc.SubscribeToStreamsChangesRequest{},
+			)
+		},
+	)
+}
+
+func (c *Client) SubscribeToStreamServersChanges(
+	ctx context.Context,
+) (<-chan api.DiffStreamServers, error) {
+	return unwrapChan[api.DiffStreamServers](
+		ctx,
+		c,
+		func(
+			ctx context.Context,
+			client streamd_grpc.StreamDClient,
+		) (streamd_grpc.StreamD_SubscribeToStreamServersChangesClient, error) {
+			return client.SubscribeToStreamServersChanges(
+				ctx,
+				&streamd_grpc.SubscribeToStreamServersChangesRequest{},
+			)
+		},
+	)
+}
+
+func (c *Client) SubscribeToStreamDestinationsChanges(
+	ctx context.Context,
+) (<-chan api.DiffStreamDestinations, error) {
+	return unwrapChan[api.DiffStreamDestinations](
+		ctx,
+		c,
+		func(
+			ctx context.Context,
+			client streamd_grpc.StreamDClient,
+		) (streamd_grpc.StreamD_SubscribeToStreamDestinationsChangesClient, error) {
+			return client.SubscribeToStreamDestinationsChanges(
+				ctx,
+				&streamd_grpc.SubscribeToStreamDestinationsChangesRequest{},
+			)
+		},
+	)
+}
+
+func (c *Client) SubscribeToIncomingStreamsChanges(
+	ctx context.Context,
+) (<-chan api.DiffIncomingStreams, error) {
+	return unwrapChan[api.DiffIncomingStreams](
+		ctx,
+		c,
+		func(
+			ctx context.Context,
+			client streamd_grpc.StreamDClient,
+		) (streamd_grpc.StreamD_SubscribeToIncomingStreamsChangesClient, error) {
+			return client.SubscribeToIncomingStreamsChanges(
+				ctx,
+				&streamd_grpc.SubscribeToIncomingStreamsChangesRequest{},
+			)
+		},
+	)
+}
+
+func (c *Client) SubscribeToStreamForwardsChanges(
+	ctx context.Context,
+) (<-chan api.DiffStreamForwards, error) {
+	return unwrapChan[api.DiffStreamForwards](
+		ctx,
+		c,
+		func(
+			ctx context.Context,
+			client streamd_grpc.StreamDClient,
+		) (streamd_grpc.StreamD_SubscribeToStreamForwardsChangesClient, error) {
+			return client.SubscribeToStreamForwardsChanges(
+				ctx,
+				&streamd_grpc.SubscribeToStreamForwardsChangesRequest{},
+			)
+		},
+	)
+}
+
+func (c *Client) SubscribeToStreamPlayersChanges(
+	ctx context.Context,
+) (<-chan api.DiffStreamPlayers, error) {
+	return unwrapChan[api.DiffStreamPlayers](
+		ctx,
+		c,
+		func(
+			ctx context.Context,
+			client streamd_grpc.StreamDClient,
+		) (streamd_grpc.StreamD_SubscribeToStreamPlayersChangesClient, error) {
+			return client.SubscribeToStreamPlayersChanges(
+				ctx,
+				&streamd_grpc.SubscribeToStreamPlayersChangesRequest{},
+			)
+		},
+	)
 }

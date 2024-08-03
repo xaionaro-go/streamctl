@@ -7,6 +7,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 
+	child_process_manager "github.com/AgustinSRG/go-child-process-manager"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
@@ -19,6 +20,12 @@ import (
 const forceNetPProfOnAndroid = true
 
 func main() {
+	err := child_process_manager.InitializeChildProcessManager()
+	if err != nil {
+		panic(err)
+	}
+	defer child_process_manager.DisposeChildProcessManager()
+
 	flags := parseFlags()
 	ctx := getContext(flags)
 	defer belt.Flush(ctx)

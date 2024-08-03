@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/andreykaipov/goobs/api/requests/scenes"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
@@ -15,29 +14,31 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-multierror"
-	"github.com/immune-gmbh/attestation-sdk/pkg/lockmap"
-	"github.com/immune-gmbh/attestation-sdk/pkg/objhash"
+	"github.com/xaionaro-go/streamctl/pkg/player/protobuf/go/player_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	"github.com/xaionaro-go/streamctl/pkg/streamd"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
-	"github.com/xaionaro-go/streamctl/pkg/streamd/api/grpcconv"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/goconv"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/memoize"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/platcollection"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
+	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type GRPCServer struct {
 	streamd_grpc.UnimplementedStreamDServer
-	StreamD                api.StreamD
-	Cache                  map[objhash.ObjHash]any
-	CacheMetaLock          sync.Mutex
-	CacheLockMap           *lockmap.LockMap
-	OAuthURLHandlerLocker  sync.Mutex
-	OAuthURLHandlers       map[uint16]map[uuid.UUID]*OAuthURLHandler
-	YouTubeStreamStartedAt time.Time
+	StreamD               api.StreamD
+	MemoizeDataValue      *memoize.MemoizeData
+	OAuthURLHandlerLocker sync.Mutex
+	OAuthURLHandlers      map[uint16]map[uuid.UUID]*OAuthURLHandler
 
 	UnansweredOAuthRequestsLocker sync.Mutex
 	UnansweredOAuthRequests       map[streamcontrol.PlatformName]map[uint16]*streamd_grpc.OAuthRequest
@@ -52,115 +53,24 @@ var _ streamd_grpc.StreamDServer = (*GRPCServer)(nil)
 
 func NewGRPCServer(streamd api.StreamD) *GRPCServer {
 	return &GRPCServer{
-		StreamD:      streamd,
-		Cache:        map[objhash.ObjHash]any{},
-		CacheLockMap: lockmap.NewLockMap(),
+		StreamD:          streamd,
+		MemoizeDataValue: memoize.NewMemoizeData(),
 
 		OAuthURLHandlers:        map[uint16]map[uuid.UUID]*OAuthURLHandler{},
 		UnansweredOAuthRequests: map[streamcontrol.PlatformName]map[uint16]*streamd_grpc.OAuthRequest{},
 	}
 }
 
-const timeFormat = time.RFC3339
-
-func memoize[REQ any, REPLY any, T func(context.Context, *REQ) (*REPLY, error)](
-	grpc *GRPCServer,
-	fn T,
-	ctx context.Context,
-	req *REQ,
-	cacheDuration time.Duration,
-) (_ret *REPLY, _err error) {
-	logger.Debugf(ctx, "memoize %T", (*REQ)(nil))
-	defer logger.Debugf(ctx, "/memoize %T", (*REQ)(nil))
-
-	key, err := objhash.Build(fmt.Sprintf("%T", req), req)
-	errmon.ObserveErrorCtx(ctx, err)
-	if err != nil {
-		return fn(ctx, req)
-	}
-	logger.Debugf(ctx, "cache key %X", key[:])
-
-	grpc.CacheMetaLock.Lock()
-	logger.Tracef(ctx, "grpc.CacheMetaLock.Lock()-ed")
-	cache := grpc.Cache
-
-	h := grpc.CacheLockMap.Lock(key)
-	logger.Tracef(ctx, "grpc.CacheLockMap.Lock(%X)-ed", key[:])
-
-	type cacheItem struct {
-		Reply   *REPLY
-		Error   error
-		SavedAt time.Time
-	}
-
-	if h.UserData != nil {
-		if v, ok := h.UserData.(cacheItem); ok {
-			grpc.CacheMetaLock.Unlock()
-			logger.Tracef(ctx, "grpc.CacheMetaLock.Unlock()-ed")
-			h.Unlock()
-			logger.Tracef(ctx, "grpc.CacheLockMap.Unlock(%X)-ed", key[:])
-			logger.Debugf(ctx, "re-using the value")
-			return v.Reply, v.Error
-		} else {
-			logger.Errorf(ctx, "cache-failure: expected type %T, but got %T", (*cacheItem)(nil), h.UserData)
-		}
-	}
-
-	//Jul 01 16:47:27 dx-landing start.sh[15530]: {"level":"error","ts":1719852447.1707313,"caller":"server/grpc.go:91","msg":"cache-failure: expected type
-	//server.cacheItem[github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc.GetStreamStatusRequest,github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc.GetStreamStatusReply,func(context.Context, *github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc.GetStreamStatusRequest) (*github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc.GetStreamStatusReply, error)], but got
-	//server.cacheItem[github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc.GetBackendInfoRequest,github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc.GetBackendInfoReply,func(context.Context, *github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc.GetBackendInfoRequest) (*github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc.GetBackendInfoReply, error)]"}
-
-	cachedResult, ok := cache[key]
-
-	if ok {
-		if v, ok := cachedResult.(cacheItem); ok {
-			cutoffTS := time.Now().Add(-cacheDuration)
-			if cacheDuration > 0 && !v.SavedAt.Before(cutoffTS) {
-				grpc.CacheMetaLock.Unlock()
-				logger.Tracef(ctx, "grpc.CacheMetaLock.Unlock()-ed")
-				h.UserData = nil
-				h.Unlock()
-				logger.Tracef(ctx, "grpc.CacheLockMap.Unlock(%X)-ed", key[:])
-				logger.Debugf(ctx, "using the cached value")
-				return v.Reply, v.Error
-			}
-			logger.Debugf(ctx, "the cached value expired: %s < %s", v.SavedAt.Format(timeFormat), cutoffTS.Format(timeFormat))
-			delete(cache, key)
-		} else {
-			logger.Errorf(ctx, "cache-failure: expected type %T, but got %T", (*cacheItem)(nil), cachedResult)
-		}
-	}
-	grpc.CacheMetaLock.Unlock()
-	logger.Tracef(ctx, "grpc.CacheMetaLock.Unlock()-ed")
-
-	var ts time.Time
-	defer func() {
-		cacheItem := cacheItem{
-			Reply:   _ret,
-			Error:   _err,
-			SavedAt: ts,
-		}
-		h.UserData = cacheItem
-		h.Unlock()
-		logger.Tracef(ctx, "grpc.CacheLockMap.Unlock(%X)-ed", key[:])
-
-		grpc.CacheMetaLock.Lock()
-		logger.Tracef(ctx, "grpc.CacheMetaLock.Lock()-ed")
-		defer logger.Tracef(ctx, "grpc.CacheMetaLock.Unlock()-ed")
-		defer grpc.CacheMetaLock.Unlock()
-		cache[key] = cacheItem
-	}()
-
-	logger.Tracef(ctx, "no cache")
-	ts = time.Now()
-	return fn(ctx, req)
+func (grpc *GRPCServer) MemoizeData() *memoize.MemoizeData {
+	return grpc.MemoizeDataValue
 }
 
 func (grpc *GRPCServer) Close() error {
 	err := &multierror.Error{}
 	grpc.OAuthURLHandlerLocker.Lock()
+	hs := grpc.OAuthURLHandlers
 	grpc.OAuthURLHandlerLocker.Unlock()
-	for listenPort, sender := range grpc.OAuthURLHandlers {
+	for listenPort, sender := range hs {
 		_ = sender // TODO: invent sender.Close()
 		delete(grpc.OAuthURLHandlers, listenPort)
 	}
@@ -168,24 +78,10 @@ func (grpc *GRPCServer) Close() error {
 }
 
 func (grpc *GRPCServer) invalidateCache(ctx context.Context) {
-	logger.Debugf(ctx, "invalidateCache()")
-	defer logger.Debugf(ctx, "/invalidateCache()")
-
-	grpc.CacheMetaLock.Lock()
-	defer grpc.CacheMetaLock.Unlock()
-
-	grpc.CacheLockMap = lockmap.NewLockMap()
-	grpc.Cache = map[objhash.ObjHash]any{}
+	grpc.MemoizeDataValue.InvalidateCache(ctx)
 }
 
 func (grpc *GRPCServer) GetConfig(
-	ctx context.Context,
-	req *streamd_grpc.GetConfigRequest,
-) (*streamd_grpc.GetConfigReply, error) {
-	return memoize(grpc, grpc.getConfig, ctx, req, time.Second)
-}
-
-func (grpc *GRPCServer) getConfig(
 	ctx context.Context,
 	req *streamd_grpc.GetConfigRequest,
 ) (*streamd_grpc.GetConfigReply, error) {
@@ -298,9 +194,6 @@ func (grpc *GRPCServer) StartStream(
 		return nil, fmt.Errorf("unable to start the stream: %w", err)
 	}
 
-	grpc.CacheMetaLock.Lock()
-	grpc.YouTubeStreamStartedAt = time.Now()
-	grpc.CacheMetaLock.Unlock()
 	grpc.invalidateCache(ctx)
 	return &streamd_grpc.StartStreamReply{}, nil
 }
@@ -331,13 +224,6 @@ func (grpc *GRPCServer) IsBackendEnabled(
 }
 
 func (grpc *GRPCServer) GetBackendInfo(
-	ctx context.Context,
-	req *streamd_grpc.GetBackendInfoRequest,
-) (*streamd_grpc.GetBackendInfoReply, error) {
-	return memoize(grpc, grpc.getBackendInfo, ctx, req, time.Second)
-}
-
-func (grpc *GRPCServer) getBackendInfo(
 	ctx context.Context,
 	req *streamd_grpc.GetBackendInfoRequest,
 ) (*streamd_grpc.GetBackendInfoReply, error) {
@@ -373,6 +259,92 @@ func (grpc *GRPCServer) Restart(
 	return &streamd_grpc.RestartReply{}, nil
 }
 
+func (grpc *GRPCServer) SetTitle(
+	ctx context.Context,
+	req *streamd_grpc.SetTitleRequest,
+) (*streamd_grpc.SetTitleReply, error) {
+	err := grpc.StreamD.SetTitle(
+		ctx,
+		streamcontrol.PlatformName(req.GetPlatID()),
+		req.GetTitle(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.SetTitleReply{}, nil
+}
+
+func (grpc *GRPCServer) SetDescription(
+	ctx context.Context,
+	req *streamd_grpc.SetDescriptionRequest,
+) (*streamd_grpc.SetDescriptionReply, error) {
+	err := grpc.StreamD.SetDescription(
+		ctx,
+		streamcontrol.PlatformName(req.GetPlatID()),
+		req.GetDescription(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.SetDescriptionReply{}, nil
+}
+
+func (grpc *GRPCServer) ApplyProfile(
+	ctx context.Context,
+	req *streamd_grpc.ApplyProfileRequest,
+) (*streamd_grpc.ApplyProfileReply, error) {
+	platID := streamcontrol.PlatformName(req.GetPlatID())
+	profile, err := platcollection.NewStreamProfile(platID)
+	if err != nil {
+		return nil, fmt.Errorf("unable to build a profile for platform '%s': %w", platID, err)
+	}
+	err = yaml.Unmarshal([]byte(req.GetProfile()), profile)
+	if err != nil {
+		return nil, fmt.Errorf("unable to unserialize the profile '%s': %w", req.GetProfile(), err)
+	}
+
+	logger.Debugf(ctx, "unserialized profile: %#+v", profile)
+
+	err = grpc.StreamD.ApplyProfile(
+		ctx,
+		streamcontrol.PlatformName(req.GetPlatID()),
+		profile,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("unable to apply the profile %#+v: %w", profile, err)
+	}
+	return &streamd_grpc.ApplyProfileReply{}, nil
+}
+
+func (grpc *GRPCServer) UpdateStream(
+	ctx context.Context,
+	req *streamd_grpc.UpdateStreamRequest,
+) (*streamd_grpc.UpdateStreamReply, error) {
+	platID := streamcontrol.PlatformName(req.GetPlatID())
+	profile, err := platcollection.NewStreamProfile(platID)
+	if err != nil {
+		return nil, fmt.Errorf("unable to build a profile for platform '%s': %w", platID, err)
+	}
+	err = yaml.Unmarshal([]byte(req.GetProfile()), profile)
+	if err != nil {
+		return nil, fmt.Errorf("unable to unserialize the profile '%s': %w", req.GetProfile(), err)
+	}
+
+	logger.Debugf(ctx, "unserialized profile: %#+v", profile)
+
+	err = grpc.StreamD.UpdateStream(
+		ctx,
+		platID,
+		req.GetTitle(),
+		req.GetDescription(),
+		profile,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("unable to update stream details: %w", err)
+	}
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateStream not implemented")
+}
+
 func (grpc *GRPCServer) OBSOLETE_FetchConfig(
 	ctx context.Context,
 	req *streamd_grpc.OBSOLETE_FetchConfigRequest,
@@ -386,13 +358,6 @@ func (grpc *GRPCServer) OBSOLETE_FetchConfig(
 }
 
 func (grpc *GRPCServer) OBSOLETE_GitInfo(
-	ctx context.Context,
-	req *streamd_grpc.OBSOLETE_GetGitInfoRequest,
-) (*streamd_grpc.OBSOLETE_GetGitInfoReply, error) {
-	return memoize(grpc, grpc._OBSOLETE_GitInfo, ctx, req, time.Minute)
-}
-
-func (grpc *GRPCServer) _OBSOLETE_GitInfo(
 	ctx context.Context,
 	req *streamd_grpc.OBSOLETE_GetGitInfoRequest,
 ) (*streamd_grpc.OBSOLETE_GetGitInfoReply, error) {
@@ -424,33 +389,9 @@ func (grpc *GRPCServer) GetStreamStatus(
 	logger.Tracef(ctx, "GetStreamStatus()")
 	defer logger.Tracef(ctx, "/GetStreamStatus()")
 
-	cacheDuration := time.Minute
-	switch streamcontrol.PlatformName(req.PlatID) {
-	case obs.ID:
-		cacheDuration = 10 * time.Second
-	case youtube.ID:
-		if grpc.YouTubeStreamStartedAt.After(time.Now().Add(-time.Minute)) {
-			cacheDuration = 15 * time.Second
-		} else {
-			cacheDuration = 10 * time.Minute
-		}
-	case twitch.ID:
-		cacheDuration = time.Minute
-	}
-
 	if req.NoCache {
-		cacheDuration = 0
+		ctx = memoize.SetNoCache(ctx, true)
 	}
-
-	return memoize(grpc, grpc.getStreamStatus, ctx, req, cacheDuration)
-}
-
-func (grpc *GRPCServer) getStreamStatus(
-	ctx context.Context,
-	req *streamd_grpc.GetStreamStatusRequest,
-) (*streamd_grpc.GetStreamStatusReply, error) {
-	logger.Tracef(ctx, "getStreamStatus()")
-	defer logger.Tracef(ctx, "/getStreamStatus()")
 
 	platID := streamcontrol.PlatformName(req.GetPlatID())
 	streamStatus, err := grpc.StreamD.GetStreamStatus(ctx, platID)
@@ -721,7 +662,7 @@ func (grpc *GRPCServer) ListStreamServers(
 
 	var result []*streamd_grpc.StreamServerWithStatistics
 	for _, srv := range servers {
-		t, err := grpcconv.StreamServerTypeGo2GRPC(srv.Type)
+		t, err := goconv.StreamServerTypeGo2GRPC(srv.Type)
 		if err != nil {
 			return nil, fmt.Errorf("unable to convert the server type value: %w", err)
 		}
@@ -746,7 +687,7 @@ func (grpc *GRPCServer) StartStreamServer(
 	ctx context.Context,
 	req *streamd_grpc.StartStreamServerRequest,
 ) (*streamd_grpc.StartStreamServerReply, error) {
-	t, err := grpcconv.StreamServerTypeGRPC2Go(req.GetConfig().GetServerType())
+	t, err := goconv.StreamServerTypeGRPC2Go(req.GetConfig().GetServerType())
 	if err != nil {
 		return nil, fmt.Errorf("unable to convert the server type value: %w", err)
 	}
@@ -904,11 +845,19 @@ func (grpc *GRPCServer) AddStreamForward(
 	ctx context.Context,
 	req *streamd_grpc.AddStreamForwardRequest,
 ) (*streamd_grpc.AddStreamForwardReply, error) {
+	cfg := req.GetConfig()
 	err := grpc.StreamD.AddStreamForward(
 		ctx,
 		api.StreamID(req.GetConfig().GetStreamID()),
 		api.DestinationID(req.GetConfig().GetDestinationID()),
-		req.Config.Enabled,
+		cfg.Enabled,
+		api.StreamForwardingQuirks{
+			RestartUntilYoutubeRecognizesStream: api.RestartUntilYoutubeRecognizesStream{
+				Enabled:        cfg.Quirks.RestartUntilYoutubeRecognizesStream.Enabled,
+				StartTimeout:   sec2dur(cfg.Quirks.RestartUntilYoutubeRecognizesStream.StartTimeout),
+				StopStartDelay: sec2dur(cfg.Quirks.RestartUntilYoutubeRecognizesStream.StopStartDelay),
+			},
+		},
 	)
 	if err != nil {
 		return nil, err
@@ -920,11 +869,19 @@ func (grpc *GRPCServer) UpdateStreamForward(
 	ctx context.Context,
 	req *streamd_grpc.UpdateStreamForwardRequest,
 ) (*streamd_grpc.UpdateStreamForwardReply, error) {
+	cfg := req.GetConfig()
 	err := grpc.StreamD.UpdateStreamForward(
 		ctx,
 		api.StreamID(req.GetConfig().GetStreamID()),
 		api.DestinationID(req.GetConfig().GetDestinationID()),
-		req.Config.Enabled,
+		cfg.Enabled,
+		api.StreamForwardingQuirks{
+			RestartUntilYoutubeRecognizesStream: api.RestartUntilYoutubeRecognizesStream{
+				Enabled:        cfg.Quirks.RestartUntilYoutubeRecognizesStream.Enabled,
+				StartTimeout:   sec2dur(cfg.Quirks.RestartUntilYoutubeRecognizesStream.StartTimeout),
+				StopStartDelay: sec2dur(cfg.Quirks.RestartUntilYoutubeRecognizesStream.StopStartDelay),
+			},
+		},
 	)
 	if err != nil {
 		return nil, err
@@ -954,24 +911,371 @@ func (grpc *GRPCServer) WaitForStreamPublisher(
 	ctx := sender.Context()
 	logger.Tracef(ctx, "WaitForStreamPublisher(): StreamID:%s", req.GetStreamID())
 	defer func() {
-		logger.Tracef(ctx, "/WaitForStreamPublisher(): StreamID:%s", req.GetStreamID(), _ret)
+		logger.Tracef(ctx, "/WaitForStreamPublisher(): StreamID:%s: %v", req.GetStreamID(), _ret)
 	}()
 
-	for {
-		ch, err := grpc.StreamD.WaitForStreamPublisher(
-			ctx,
-			api.StreamID(req.GetStreamID()),
-		)
-		if err != nil {
-			return fmt.Errorf("streamd returned error: %w", err)
-		}
+	ch, err := grpc.StreamD.WaitForStreamPublisher(
+		ctx,
+		api.StreamID(req.GetStreamID()),
+	)
+	if err != nil {
+		return fmt.Errorf("streamd returned error: %w", err)
+	}
 
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-ch:
+	}
+
+	return sender.Send(&streamd_grpc.StreamPublisher{})
+}
+
+func (grpc *GRPCServer) AddStreamPlayer(
+	ctx context.Context,
+	req *streamd_grpc.AddStreamPlayerRequest,
+) (_ret *streamd_grpc.AddStreamPlayerReply, _err error) {
+	cfg := req.GetConfig()
+	logger.Tracef(ctx, "AddStreamPlayer(): StreamID:%s", cfg.StreamID)
+	defer func() {
+		logger.Tracef(ctx, "/AddStreamPlayer(): StreamID:%s: %v", cfg.StreamID, _err)
+	}()
+
+	err := grpc.StreamD.AddStreamPlayer(
+		ctx,
+		streamtypes.StreamID(cfg.GetStreamID()),
+		goconv.StreamPlayerTypeGRPC2Go(cfg.PlayerType),
+		cfg.GetDisabled(),
+		goconv.StreamPlaybackConfigGRPC2Go(cfg.GetStreamPlaybackConfig()),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.AddStreamPlayerReply{}, nil
+}
+
+func (grpc *GRPCServer) RemoveStreamPlayer(
+	ctx context.Context,
+	req *streamd_grpc.RemoveStreamPlayerRequest,
+) (_req *streamd_grpc.RemoveStreamPlayerReply, _err error) {
+	logger.Tracef(ctx, "AddStreamPlayer(): StreamID:%s", req.GetStreamID())
+	defer func() {
+		logger.Tracef(ctx, "/AddStreamPlayer(): StreamID:%s: %v", req.GetStreamID(), _err)
+	}()
+
+	err := grpc.StreamD.RemoveStreamPlayer(
+		ctx,
+		streamtypes.StreamID(req.GetStreamID()),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.RemoveStreamPlayerReply{}, nil
+}
+
+func (grpc *GRPCServer) UpdateStreamPlayer(
+	ctx context.Context,
+	req *streamd_grpc.UpdateStreamPlayerRequest,
+) (_req *streamd_grpc.UpdateStreamPlayerReply, _err error) {
+	cfg := req.GetConfig()
+	logger.Tracef(ctx, "UpdateStreamPlayer(): StreamID:%s", cfg.StreamID)
+	defer func() {
+		logger.Tracef(ctx, "/UpdateStreamPlayer(): StreamID:%s: %v", cfg.StreamID, _err)
+	}()
+
+	err := grpc.StreamD.UpdateStreamPlayer(
+		ctx,
+		streamtypes.StreamID(cfg.GetStreamID()),
+		goconv.StreamPlayerTypeGRPC2Go(cfg.PlayerType),
+		cfg.GetDisabled(),
+		goconv.StreamPlaybackConfigGRPC2Go(cfg.GetStreamPlaybackConfig()),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.UpdateStreamPlayerReply{}, nil
+}
+
+func (grpc *GRPCServer) ListStreamPlayers(
+	ctx context.Context,
+	req *streamd_grpc.ListStreamPlayersRequest,
+) (*streamd_grpc.ListStreamPlayersReply, error) {
+	players, err := grpc.StreamD.ListStreamPlayers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*streamd_grpc.StreamPlayerConfig, 0, len(players))
+	for _, player := range players {
+		result = append(result, &streamd_grpc.StreamPlayerConfig{
+			StreamID:             string(player.StreamID),
+			PlayerType:           goconv.StreamPlayerTypeGo2GRPC(player.PlayerType),
+			Disabled:             player.Disabled,
+			StreamPlaybackConfig: goconv.StreamPlaybackConfigGo2GRPC(&player.StreamPlaybackConfig),
+		})
+	}
+	return &streamd_grpc.ListStreamPlayersReply{
+		Players: result,
+	}, nil
+}
+func (grpc *GRPCServer) GetStreamPlayer(
+	ctx context.Context,
+	req *streamd_grpc.GetStreamPlayerRequest,
+) (*streamd_grpc.GetStreamPlayerReply, error) {
+	player, err := grpc.StreamD.GetStreamPlayer(ctx, streamtypes.StreamID(req.GetStreamID()))
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.GetStreamPlayerReply{
+		Config: &streamd_grpc.StreamPlayerConfig{
+			StreamID:             string(player.StreamID),
+			PlayerType:           goconv.StreamPlayerTypeGo2GRPC(player.PlayerType),
+			Disabled:             player.Disabled,
+			StreamPlaybackConfig: goconv.StreamPlaybackConfigGo2GRPC(&player.StreamPlaybackConfig),
+		},
+	}, nil
+}
+
+func (grpc *GRPCServer) StreamPlayerOpen(
+	ctx context.Context,
+	req *streamd_grpc.StreamPlayerOpenRequest,
+) (*streamd_grpc.StreamPlayerOpenReply, error) {
+	err := grpc.StreamD.StreamPlayerOpenURL(ctx, streamtypes.StreamID(req.GetStreamID()), req.GetRequest().GetLink())
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.StreamPlayerOpenReply{
+		Reply: &player_grpc.OpenReply{},
+	}, nil
+}
+func (grpc *GRPCServer) StreamPlayerProcessTitle(
+	ctx context.Context,
+	req *streamd_grpc.StreamPlayerProcessTitleRequest,
+) (*streamd_grpc.StreamPlayerProcessTitleReply, error) {
+	title, err := grpc.StreamD.StreamPlayerProcessTitle(ctx, streamtypes.StreamID(req.GetStreamID()))
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.StreamPlayerProcessTitleReply{
+		Reply: &player_grpc.ProcessTitleReply{
+			Title: title,
+		},
+	}, nil
+}
+func (grpc *GRPCServer) StreamPlayerGetLink(
+	ctx context.Context,
+	req *streamd_grpc.StreamPlayerGetLinkRequest,
+) (*streamd_grpc.StreamPlayerGetLinkReply, error) {
+	link, err := grpc.StreamD.StreamPlayerGetLink(ctx, streamtypes.StreamID(req.GetStreamID()))
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.StreamPlayerGetLinkReply{
+		Reply: &player_grpc.GetLinkReply{
+			Link: link,
+		},
+	}, nil
+}
+func (grpc *GRPCServer) StreamPlayerEndChan(
+	req *streamd_grpc.StreamPlayerEndChanRequest,
+	srv streamd_grpc.StreamD_StreamPlayerEndChanServer,
+) error {
+	ctx := srv.Context()
+	ch, err := grpc.StreamD.StreamPlayerEndChan(ctx, streamtypes.StreamID(req.GetStreamID()))
+	if err != nil {
+		return err
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-ch:
+	}
+	return srv.Send(&streamd_grpc.StreamPlayerEndChanReply{
+		Reply: &player_grpc.EndChanReply{},
+	})
+}
+func (grpc *GRPCServer) StreamPlayerIsEnded(
+	ctx context.Context,
+	req *streamd_grpc.StreamPlayerIsEndedRequest,
+) (*streamd_grpc.StreamPlayerIsEndedReply, error) {
+	isEnded, err := grpc.StreamD.StreamPlayerIsEnded(ctx, streamtypes.StreamID(req.GetStreamID()))
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.StreamPlayerIsEndedReply{
+		Reply: &player_grpc.IsEndedReply{
+			IsEnded: isEnded,
+		},
+	}, nil
+}
+func (grpc *GRPCServer) StreamPlayerGetPosition(
+	ctx context.Context,
+	req *streamd_grpc.StreamPlayerGetPositionRequest,
+) (*streamd_grpc.StreamPlayerGetPositionReply, error) {
+	pos, err := grpc.StreamD.StreamPlayerGetPosition(ctx, streamtypes.StreamID(req.GetStreamID()))
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.StreamPlayerGetPositionReply{
+		Reply: &player_grpc.GetPositionReply{
+			PositionSecs: pos.Seconds(),
+		},
+	}, nil
+}
+func (grpc *GRPCServer) StreamPlayerGetLength(
+	ctx context.Context,
+	req *streamd_grpc.StreamPlayerGetLengthRequest,
+) (*streamd_grpc.StreamPlayerGetLengthReply, error) {
+	l, err := grpc.StreamD.StreamPlayerGetPosition(ctx, streamtypes.StreamID(req.GetStreamID()))
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.StreamPlayerGetLengthReply{
+		Reply: &player_grpc.GetLengthReply{
+			LengthSecs: l.Seconds(),
+		},
+	}, nil
+}
+func (grpc *GRPCServer) StreamPlayerSetSpeed(
+	ctx context.Context,
+	req *streamd_grpc.StreamPlayerSetSpeedRequest,
+) (*streamd_grpc.StreamPlayerSetSpeedReply, error) {
+	err := grpc.StreamD.StreamPlayerSetSpeed(ctx, streamtypes.StreamID(req.GetStreamID()), req.GetRequest().Speed)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.StreamPlayerSetSpeedReply{
+		Reply: &player_grpc.SetSpeedReply{},
+	}, nil
+}
+func (grpc *GRPCServer) StreamPlayerSetPause(
+	ctx context.Context,
+	req *streamd_grpc.StreamPlayerSetPauseRequest,
+) (*streamd_grpc.StreamPlayerSetPauseReply, error) {
+	err := grpc.StreamD.StreamPlayerSetPause(ctx, streamtypes.StreamID(req.GetStreamID()), req.GetRequest().SetPaused)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.StreamPlayerSetPauseReply{
+		Reply: &player_grpc.SetPauseReply{},
+	}, nil
+}
+func (grpc *GRPCServer) StreamPlayerStop(
+	ctx context.Context,
+	req *streamd_grpc.StreamPlayerStopRequest,
+) (*streamd_grpc.StreamPlayerStopReply, error) {
+	err := grpc.StreamD.StreamPlayerStop(ctx, streamtypes.StreamID(req.GetStreamID()))
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.StreamPlayerStopReply{
+		Reply: &player_grpc.StopReply{},
+	}, nil
+}
+func (grpc *GRPCServer) StreamPlayerClose(
+	ctx context.Context,
+	req *streamd_grpc.StreamPlayerCloseRequest,
+) (*streamd_grpc.StreamPlayerCloseReply, error) {
+	err := grpc.StreamD.StreamPlayerClose(ctx, streamtypes.StreamID(req.GetStreamID()))
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.StreamPlayerCloseReply{
+		Reply: &player_grpc.CloseReply{},
+	}, nil
+}
+
+type sender[T any] interface {
+	grpc.ServerStream
+
+	Context() context.Context
+	Send(*T) error
+}
+
+func wrapChan[T any, E any](
+	getChan func(ctx context.Context) (<-chan E, error),
+	sender sender[T],
+) error {
+	ctx, cancelFn := context.WithCancel(sender.Context())
+	defer cancelFn()
+	ch, err := getChan(ctx)
+	if err != nil {
+		return err
+	}
+	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ch:
 		}
-
-		return sender.Send(&streamd_grpc.StreamPublisher{})
+		var result T
+		err := sender.Send(&result)
+		if err != nil {
+			return fmt.Errorf("unable to send %#+v: %w", result, err)
+		}
 	}
+}
+
+func (grpc *GRPCServer) SubscribeToConfigChanges(
+	req *streamd_grpc.SubscribeToConfigChangesRequest,
+	srv streamd_grpc.StreamD_SubscribeToConfigChangesServer,
+) error {
+	return wrapChan(
+		grpc.StreamD.SubscribeToConfigChanges,
+		srv,
+	)
+}
+func (grpc *GRPCServer) SubscribeToStreamChanges(
+	req *streamd_grpc.SubscribeToStreamsChangesRequest,
+	srv streamd_grpc.StreamD_SubscribeToStreamsChangesServer,
+) error {
+	return wrapChan(
+		grpc.StreamD.SubscribeToStreamsChanges,
+		srv,
+	)
+}
+func (grpc *GRPCServer) SubscribeToStreamServersChanges(
+	req *streamd_grpc.SubscribeToStreamServersChangesRequest,
+	srv streamd_grpc.StreamD_SubscribeToStreamServersChangesServer,
+) error {
+	return wrapChan(
+		grpc.StreamD.SubscribeToStreamServersChanges,
+		srv,
+	)
+}
+func (grpc *GRPCServer) SubscribeToStreamDestinationsChanges(
+	req *streamd_grpc.SubscribeToStreamDestinationsChangesRequest,
+	srv streamd_grpc.StreamD_SubscribeToStreamDestinationsChangesServer,
+) error {
+	return wrapChan(
+		grpc.StreamD.SubscribeToStreamDestinationsChanges,
+		srv,
+	)
+}
+func (grpc *GRPCServer) SubscribeToIncomingStreamsChanges(
+	req *streamd_grpc.SubscribeToIncomingStreamsChangesRequest,
+	srv streamd_grpc.StreamD_SubscribeToIncomingStreamsChangesServer,
+) error {
+	return wrapChan(
+		grpc.StreamD.SubscribeToIncomingStreamsChanges,
+		srv,
+	)
+}
+func (grpc *GRPCServer) SubscribeToStreamForwardsChanges(
+	req *streamd_grpc.SubscribeToStreamForwardsChangesRequest,
+	srv streamd_grpc.StreamD_SubscribeToStreamForwardsChangesServer,
+) error {
+	return wrapChan(
+		grpc.StreamD.SubscribeToStreamForwardsChanges,
+		srv,
+	)
+}
+
+func (grpc *GRPCServer) SubscribeToStreamPlayersChanges(
+	req *streamd_grpc.SubscribeToStreamPlayersChangesRequest,
+	srv streamd_grpc.StreamD_SubscribeToStreamPlayersChangesServer,
+) error {
+	return wrapChan(
+		grpc.StreamD.SubscribeToStreamPlayersChanges,
+		srv,
+	)
 }

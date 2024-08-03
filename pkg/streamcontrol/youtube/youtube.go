@@ -824,17 +824,42 @@ func (yt *YouTube) GetStreamStatus(
 		return nil, fmt.Errorf("unable to get active broadcasts info: %w", err)
 	}
 
+	var upcomingBroadcasts []*youtube.LiveBroadcast
+	err = yt.IterateUpcomingBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
+		upcomingBroadcasts = append(upcomingBroadcasts, broadcast)
+		return nil
+	}, liveBroadcastParts...)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get upcoming broadcasts info: %w", err)
+	}
+
+	streams, err := yt.ListStreams(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get streams info: %w", err)
+	}
+
 	customData := StreamStatusCustomData{
-		ActiveBroadcasts: activeBroadcasts,
+		ActiveBroadcasts:   activeBroadcasts,
+		UpcomingBroadcasts: upcomingBroadcasts,
+		Streams:            streams,
 	}
 	if logger.GetLevel(ctx) >= logger.LevelTrace {
-		logger.Tracef(ctx, "len(customData.Streams) == %d", len(customData.Streams))
-		for idx, stream := range customData.Streams {
-			b, err := json.Marshal(stream)
+		logger.Tracef(ctx, "len(customData.UpcomingBroadcasts) == %d; len(customData.Streams) == %d", len(customData.UpcomingBroadcasts), len(customData.Streams))
+		for idx, broadcast := range customData.UpcomingBroadcasts {
+			b, err := json.Marshal(broadcast)
 			if err != nil {
-				logger.Tracef(ctx, "Streams[%3d] == %#+v", idx, *stream)
+				logger.Tracef(ctx, "UpcomingBroadcasts[%3d] == %#+v", idx, *broadcast)
 			} else {
-				logger.Tracef(ctx, "Streams[%3d] == %s", idx, b)
+				logger.Tracef(ctx, "UpcomingBroadcasts[%3d] == %s", idx, b)
+			}
+		}
+		logger.Tracef(ctx, "len(customData.ActiveBroadcasts) == %d", len(customData.ActiveBroadcasts))
+		for idx, bc := range customData.ActiveBroadcasts {
+			b, err := json.Marshal(bc)
+			if err != nil {
+				logger.Tracef(ctx, "ActiveBroadcasts[%3d] == %#+v", idx, *bc)
+			} else {
+				logger.Tracef(ctx, "ActiveBroadcasts[%3d] == %s", idx, b)
 			}
 		}
 	}

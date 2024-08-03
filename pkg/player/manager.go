@@ -1,6 +1,7 @@
 package player
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -15,35 +16,27 @@ type Manager struct {
 }
 
 func NewManager(opts ...types.Option) *Manager {
-	return &Manager{}
-}
-
-func (m *Manager) NewMPV(title string) (*MPV, error) {
-	r, err := NewMPV(title, m.Config.PathToMPV)
-	if err != nil {
-		return nil, err
+	return &Manager{
+		Config: types.Options(opts).Config(),
 	}
-
-	m.PlayersLocker.Lock()
-	defer m.PlayersLocker.Unlock()
-	m.Players = append(m.Players, r)
-	return r, nil
 }
 
 type Backend string
 
 const (
 	BackendUndefined = ""
-	BackendVLC       = "vlc"
+	BackendLibVLC    = "libvlc"
 	BackendMPV       = "mpv"
 )
 
 func SupportedBackends() []Backend {
 	var result []Backend
-	if SupportedVLC {
-		result = append(result, BackendVLC)
+	if SupportedLibVLC {
+		result = append(result, BackendLibVLC)
 	}
-	result = append(result, BackendMPV)
+	if SupportedMPV {
+		result = append(result, BackendMPV)
+	}
 	return result
 }
 
@@ -52,14 +45,15 @@ func (m *Manager) SupportedBackends() []Backend {
 }
 
 func (m *Manager) NewPlayer(
+	ctx context.Context,
 	title string,
 	backend Backend,
 ) (Player, error) {
 	switch backend {
-	case BackendVLC:
-		return m.NewVLC(title)
+	case BackendLibVLC:
+		return m.NewLibVLC(ctx, title)
 	case BackendMPV:
-		return m.NewMPV(title)
+		return m.NewMPV(ctx, title)
 	default:
 		return nil, fmt.Errorf("unexpected backend type: '%s'", backend)
 	}

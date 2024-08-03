@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/yutopp/go-rtmp"
 )
 
@@ -20,8 +21,8 @@ var _ types.PortServer = (*PortServer)(nil)
 func (srv *PortServer) Close() error {
 	return srv.Server.Close()
 }
-func (srv *PortServer) Type() types.ServerType {
-	return types.ServerTypeRTMP
+func (srv *PortServer) Type() streamtypes.ServerType {
+	return streamtypes.ServerTypeRTMP
 }
 func (srv *PortServer) ListenAddr() string {
 	return srv.Listener.Addr().String()

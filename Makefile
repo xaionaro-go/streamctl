@@ -1,9 +1,13 @@
 
 ENABLE_VLC?=false
+FORCE_DEBUG?=false
 
 GOTAGS:=
 ifeq ($(ENABLE_VLC), true)
 	GOTAGS:=$(GOTAGS),with_libvlc
+endif
+ifeq ($(FORCE_DEBUG), true)
+	GOTAGS:=$(GOTAGS),force_debug
 endif
 GOTAGS:=$(GOTAGS:,%=%)
 

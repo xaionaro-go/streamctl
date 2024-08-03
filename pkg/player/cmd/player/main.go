@@ -1,19 +1,23 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
-	"unicode"
+	"time"
 
 	fyneapp "fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/facebookincubator/go-belt"
+	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
 	"github.com/spf13/pflag"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/player/types"
+	"github.com/xaionaro-go/streamctl/pkg/xfyne"
 )
 
 func backendsToStrings(backends []player.Backend) []string {
@@ -24,35 +28,48 @@ func backendsToStrings(backends []player.Backend) []string {
 	return result
 }
 
-func assertNoError(err error) {
+func assertNoError(ctx context.Context, err error) {
 	if err == nil {
 		return
 	}
-	log.Fatal(err)
+	logger.Fatal(ctx, err)
 }
 
 func main() {
 	backends := backendsToStrings(player.SupportedBackends())
-
+	loggerLevel := logger.LevelInfo
+	pflag.Var(&loggerLevel, "log-level", "Log level")
 	mpvPath := pflag.String("mpv", "mpv", "path to mpv")
 	backend := pflag.String("backend", backends[0], "player backend, supported values: "+strings.Join(backends, ", "))
 	pflag.Parse()
+
+	l := logrus.Default().WithLevel(loggerLevel)
+	ctx := logger.CtxWithLogger(context.Background(), l)
+	logger.Default = func() logger.Logger {
+		return l
+	}
+	defer belt.Flush(ctx)
+
 	if pflag.NArg() != 1 {
-		log.Fatal("exactly one argument expected")
+		l.Fatal("exactly one argument expected")
 	}
 	mediaPath := pflag.Arg(0)
 
 	m := player.NewManager(types.OptionPathToMPV(*mpvPath))
-	p, err := m.NewPlayer("player demonstration", player.Backend(*backend))
-	assertNoError(err)
+	p, err := m.NewPlayer(ctx, "player demonstration", player.Backend(*backend))
+	assertNoError(ctx, err)
 
-	assertNoError(p.OpenURL(mediaPath))
+	assertNoError(ctx, p.OpenURL(ctx, mediaPath))
 
 	app := fyneapp.New()
 
 	go func() {
 		for {
-			<-p.EndChan()
+			ch, err := p.EndChan(ctx)
+			if err != nil {
+				panic(err)
+			}
+			<-ch
 			w := app.NewWindow("file ended")
 			b := widget.NewButton("Close", func() {
 				w.Close()
@@ -64,14 +81,8 @@ func main() {
 
 	errorMessage := widget.NewLabel("")
 
-	setSpeed := widget.NewEntry()
-	setSpeed.SetText("1")
-	setSpeed.OnChanged = func(s string) {
-		filtered := removeNonDigits(s)
-		if s != filtered {
-			setSpeed.SetText(filtered)
-		}
-	}
+	setSpeed := xfyne.NewNumericalEntry()
+	setSpeed.SetText("1.0")
 	setSpeed.OnSubmitted = func(s string) {
 		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
@@ -79,7 +90,7 @@ func main() {
 			return
 		}
 
-		err = p.SetSpeed(f)
+		err = p.SetSpeed(ctx, f)
 		if err != nil {
 			errorMessage.SetText(fmt.Sprintf("unable to set speed to '%f': %s", f, err))
 			return
@@ -88,7 +99,7 @@ func main() {
 	}
 
 	isPaused := false
-	p.SetPause(isPaused)
+	p.SetPause(ctx, isPaused)
 	var pauseUnpause *widget.Button
 	pauseUnpause = widget.NewButtonWithIcon("Pause", theme.MediaPauseIcon(), func() {
 		isPaused = !isPaused
@@ -100,7 +111,7 @@ func main() {
 			pauseUnpause.SetText("Pause")
 			pauseUnpause.SetIcon(theme.MediaPauseIcon())
 		}
-		err := p.SetPause(isPaused)
+		err := p.SetPause(ctx, isPaused)
 		if err != nil {
 			errorMessage.SetText(fmt.Sprintf("unable to set pause to '%v': %s", isPaused, err))
 			return
@@ -109,16 +120,37 @@ func main() {
 	})
 
 	stopButton := widget.NewButtonWithIcon("Stop", theme.MediaStopIcon(), func() {
-		p.Stop()
+		p.Stop(ctx)
 	})
 
 	closeButton := widget.NewButtonWithIcon("Close", theme.WindowCloseIcon(), func() {
-		p.Stop()
+		p.Stop(ctx)
 	})
+
+	posLabel := widget.NewLabel("")
+	go func() {
+		t := time.NewTicker(time.Millisecond * 100)
+		for {
+			<-t.C
+			l, err := p.GetLength(ctx)
+			if err != nil {
+				posLabel.SetText(fmt.Sprintf("unable to get the length: %v", err))
+				return
+			}
+
+			pos, err := p.GetPosition(ctx)
+			if err != nil {
+				posLabel.SetText(fmt.Sprintf("unable to get the position: %v", err))
+				return
+			}
+
+			posLabel.SetText(pos.String() + " / " + l.String())
+		}
+	}()
 
 	w := app.NewWindow("player controls")
 	w.SetContent(container.NewBorder(
-		nil,
+		posLabel,
 		errorMessage,
 		nil,
 		nil,
@@ -131,14 +163,4 @@ func main() {
 	))
 	w.Show()
 	app.Run()
-}
-
-func removeNonDigits(input string) string {
-	var result []rune
-	for _, r := range input {
-		if unicode.IsDigit(r) {
-			result = append(result, r)
-		}
-	}
-	return string(result)
 }

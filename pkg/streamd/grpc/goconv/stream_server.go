@@ -1,19 +1,20 @@
-package grpcconv
+package goconv
 
 import (
 	"fmt"
 
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
+	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
 
 func StreamServerTypeGo2GRPC(t api.StreamServerType) (streamd_grpc.StreamServerType, error) {
 	switch t {
-	case api.StreamServerTypeUndefined:
+	case streamtypes.ServerTypeUndefined:
 		return streamd_grpc.StreamServerType_Undefined, nil
-	case api.StreamServerTypeRTMP:
+	case streamtypes.ServerTypeRTMP:
 		return streamd_grpc.StreamServerType_RTMP, nil
-	case api.StreamServerTypeRTSP:
+	case streamtypes.ServerTypeRTSP:
 		return streamd_grpc.StreamServerType_RTSP, nil
 	}
 	return streamd_grpc.StreamServerType_Undefined, fmt.Errorf("unexpected value: %v", t)
@@ -22,11 +23,11 @@ func StreamServerTypeGo2GRPC(t api.StreamServerType) (streamd_grpc.StreamServerT
 func StreamServerTypeGRPC2Go(t streamd_grpc.StreamServerType) (api.StreamServerType, error) {
 	switch t {
 	case streamd_grpc.StreamServerType_Undefined:
-		return api.StreamServerTypeUndefined, nil
+		return streamtypes.ServerTypeUndefined, nil
 	case streamd_grpc.StreamServerType_RTMP:
-		return api.StreamServerTypeRTMP, nil
+		return streamtypes.ServerTypeRTMP, nil
 	case streamd_grpc.StreamServerType_RTSP:
-		return api.StreamServerTypeRTSP, nil
+		return streamtypes.ServerTypeRTSP, nil
 	}
-	return api.StreamServerTypeUndefined, fmt.Errorf("unexpected value: %v", t)
+	return streamtypes.ServerTypeUndefined, fmt.Errorf("unexpected value: %v", t)
 }

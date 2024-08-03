@@ -540,6 +540,7 @@ func (m *Manager) SendMessagePreReady(
 	}
 	h := m.connLocker.Lock(dst)
 	defer h.Unlock()
+	defer time.Sleep(100 * time.Millisecond) // TODO: Delete this horrible hack (that is introduced to avoid erasing messages in the buffer)
 	err = encoder.Encode(msg)
 	logger.Tracef(ctx, "sending message %#+v: %v", msg, err)
 	if err != nil {

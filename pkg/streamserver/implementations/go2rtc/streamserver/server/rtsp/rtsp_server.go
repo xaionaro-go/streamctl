@@ -16,6 +16,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/consts"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/go2rtc/streamserver/streams"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
 
 type RTSPServer struct {
@@ -269,8 +270,8 @@ func (s *RTSPServer) tcpHandler(conn *rtsp.Conn) {
 	_ = conn.Close()
 }
 
-func (s *RTSPServer) Type() types.ServerType {
-	return types.ServerTypeRTSP
+func (s *RTSPServer) Type() streamtypes.ServerType {
+	return streamtypes.ServerTypeRTSP
 }
 func (s *RTSPServer) ListenAddr() string {
 	return s.Listener.Addr().String()

@@ -15,6 +15,7 @@ import (
 	"github.com/gwuhaolin/livego/protocol/rtmp"
 	"github.com/spf13/viper"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
 
 type StreamServer struct {
@@ -89,7 +90,7 @@ func (s *StreamServer) ListServers(
 
 func (s *StreamServer) StartServer(
 	ctx context.Context,
-	serverType types.ServerType,
+	serverType streamtypes.ServerType,
 	listenAddr string,
 ) error {
 	s.Lock()
@@ -107,7 +108,7 @@ func (s *StreamServer) StartServer(
 
 func (s *StreamServer) startServer(
 	ctx context.Context,
-	serverType types.ServerType,
+	serverType streamtypes.ServerType,
 	listenAddr string,
 ) (_ret error) {
 	logger.Tracef(ctx, "startServer(%s, '%s')", serverType, listenAddr)
@@ -115,7 +116,7 @@ func (s *StreamServer) startServer(
 	var srv types.PortServer
 	var err error
 	switch serverType {
-	case types.ServerTypeRTMP:
+	case streamtypes.ServerTypeRTMP:
 		var listener net.Listener
 		listener, err = net.Listen("tcp", listenAddr)
 		if err != nil {
@@ -135,7 +136,7 @@ func (s *StreamServer) startServer(
 			}
 		}()
 		srv = portServer
-	case types.ServerTypeRTSP:
+	case streamtypes.ServerTypeRTSP:
 		return fmt.Errorf("RTSP is not supported, yet")
 	default:
 		return fmt.Errorf("unexpected server type %v", serverType)

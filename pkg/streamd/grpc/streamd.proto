@@ -1,10 +1,14 @@
 syntax = "proto3";
+package streamd;
 option go_package = "go/streamd_grpc";
+
+import "player/player.proto";
 
 service StreamD {
     rpc GetConfig(GetConfigRequest) returns (GetConfigReply) {}
     rpc SetConfig(SetConfigRequest) returns (SetConfigReply) {}
     rpc SaveConfig(SaveConfigRequest) returns (SaveConfigReply) {}
+    rpc SubscribeToConfigChanges(SubscribeToConfigChangesRequest) returns (stream ConfigChange) {}
     rpc ResetCache(ResetCacheRequest) returns (ResetCacheReply) {}
     rpc InitCache(InitCacheRequest) returns (InitCacheReply) {}
     rpc StartStream(StartStreamRequest) returns (StartStreamReply) {}
@@ -12,10 +16,11 @@ service StreamD {
     rpc GetStreamStatus(GetStreamStatusRequest) returns (GetStreamStatusReply) {}
     rpc IsBackendEnabled(IsBackendEnabledRequest) returns (IsBackendEnabledReply) {}
     rpc GetBackendInfo(GetBackendInfoRequest) returns (GetBackendInfoReply) {}
+    rpc SubscribeToStreamsChanges(SubscribeToStreamsChangesRequest) returns (stream StreamsChange) {}
     rpc Restart(RestartRequest) returns (RestartReply) {}
     rpc SetTitle(SetTitleRequest) returns (SetTitleReply) {}
     rpc SetDescription(SetDescriptionRequest) returns (SetDescriptionReply) {}
-    rpc SetApplyProfile(SetApplyProfileRequest) returns (SetApplyProfileReply) {}
+    rpc ApplyProfile(ApplyProfileRequest) returns (ApplyProfileReply) {}
     rpc UpdateStream(UpdateStreamRequest) returns (UpdateStreamReply) {}
     rpc GetVariable(GetVariableRequest) returns(GetVariableReply) {}
     rpc GetVariableHash(GetVariableHashRequest) returns(GetVariableHashReply) {}
@@ -36,19 +41,40 @@ service StreamD {
     rpc ListStreamServers(ListStreamServersRequest) returns (ListStreamServersReply) {}
 	rpc StartStreamServer(StartStreamServerRequest) returns (StartStreamServerReply) {}
 	rpc StopStreamServer(StopStreamServerRequest) returns (StopStreamServerReply) {}
+    rpc SubscribeToStreamServersChanges(SubscribeToStreamServersChangesRequest) returns (stream StreamServersChange) {}
 	rpc ListStreamDestinations(ListStreamDestinationsRequest) returns (ListStreamDestinationsReply) {}
 	rpc AddStreamDestination(AddStreamDestinationRequest) returns (AddStreamDestinationReply) {}
 	rpc RemoveStreamDestination(RemoveStreamDestinationRequest) returns (RemoveStreamDestinationReply) {}
+    rpc SubscribeToStreamDestinationsChanges(SubscribeToStreamDestinationsChangesRequest) returns (stream StreamDestinationsChange) {}
     rpc AddIncomingStream(AddIncomingStreamRequest) returns (AddIncomingStreamReply) {}
     rpc RemoveIncomingStream(RemoveIncomingStreamRequest) returns (RemoveIncomingStreamReply) {}
     rpc ListIncomingStreams(ListIncomingStreamsRequest) returns (ListIncomingStreamsReply) {}
+    rpc SubscribeToIncomingStreamsChanges(SubscribeToIncomingStreamsChangesRequest) returns (stream IncomingStreamsChange) {}
 	rpc ListStreamForwards(ListStreamForwardsRequest) returns (ListStreamForwardsReply) {}
 	rpc AddStreamForward(AddStreamForwardRequest) returns (AddStreamForwardReply) {}
 	rpc UpdateStreamForward(UpdateStreamForwardRequest) returns (UpdateStreamForwardReply) {}
 	rpc RemoveStreamForward(RemoveStreamForwardRequest) returns (RemoveStreamForwardReply) {}
+    rpc SubscribeToStreamForwardsChanges(SubscribeToStreamForwardsChangesRequest) returns (stream StreamForwardsChange) {}
     rpc WaitForStreamPublisher(WaitForStreamPublisherRequest) returns (stream StreamPublisher) {}
-}
+    rpc AddStreamPlayer(AddStreamPlayerRequest) returns (AddStreamPlayerReply) {}
+    rpc RemoveStreamPlayer(RemoveStreamPlayerRequest) returns (RemoveStreamPlayerReply) {}
+    rpc UpdateStreamPlayer(UpdateStreamPlayerRequest) returns (UpdateStreamPlayerReply) {}
+    rpc ListStreamPlayers(ListStreamPlayersRequest) returns (ListStreamPlayersReply) {}
+    rpc GetStreamPlayer(GetStreamPlayerRequest) returns (GetStreamPlayerReply) {}
+    rpc SubscribeToStreamPlayersChanges(SubscribeToStreamPlayersChangesRequest) returns (stream StreamPlayersChange) {}
 
+    rpc StreamPlayerOpen(StreamPlayerOpenRequest) returns (StreamPlayerOpenReply) {}
+    rpc StreamPlayerProcessTitle(StreamPlayerProcessTitleRequest) returns (StreamPlayerProcessTitleReply) {}
+	rpc StreamPlayerGetLink(StreamPlayerGetLinkRequest) returns (StreamPlayerGetLinkReply) {}
+	rpc StreamPlayerEndChan(StreamPlayerEndChanRequest) returns (stream StreamPlayerEndChanReply) {}
+	rpc StreamPlayerIsEnded(StreamPlayerIsEndedRequest) returns (StreamPlayerIsEndedReply) {}
+	rpc StreamPlayerGetPosition(StreamPlayerGetPositionRequest) returns (StreamPlayerGetPositionReply) {}
+	rpc StreamPlayerGetLength(StreamPlayerGetLengthRequest) returns (StreamPlayerGetLengthReply) {}
+	rpc StreamPlayerSetSpeed(StreamPlayerSetSpeedRequest) returns (StreamPlayerSetSpeedReply) {}
+	rpc StreamPlayerSetPause(StreamPlayerSetPauseRequest) returns (StreamPlayerSetPauseReply) {}
+	rpc StreamPlayerStop(StreamPlayerStopRequest) returns (StreamPlayerStopReply) {}
+	rpc StreamPlayerClose(StreamPlayerCloseRequest) returns (StreamPlayerCloseReply) {}
+}
 message GetConfigRequest {}
 message GetConfigReply {
     string config = 1;
@@ -109,11 +135,11 @@ message SetDescriptionRequest  {
     string description = 2;
 }
 message SetDescriptionReply {}
-message SetApplyProfileRequest {
+message ApplyProfileRequest {
     string platID = 1;
     string profile = 2;
 }
-message SetApplyProfileReply {}
+message ApplyProfileReply {}
 message UpdateStreamRequest {
     string platID = 1;
     string title = 2;
@@ -273,10 +299,21 @@ message ListIncomingStreamsReply {
     repeated IncomingStream incomingStreams = 1;
 }
 
+message RestartUntilYoutubeRecognizesStream {
+    bool enabled = 1;
+	double startTimeout = 2;
+    double stopStartDelay = 3;
+}
+
+message StreamForwardQuirks {
+    RestartUntilYoutubeRecognizesStream restartUntilYoutubeRecognizesStream = 1;
+}
+
 message StreamForward {
     string streamID = 1;
     string destinationID = 2;
     bool enabled = 3;
+    StreamForwardQuirks quirks = 4;
 }
 
 message StreamForwardStatistics {
@@ -313,3 +350,139 @@ message WaitForStreamPublisherRequest {
     optional string streamID = 1;
 }
 message StreamPublisher {}
+
+enum PlayerType {
+    PlayerTypeAuto = 0;
+    PlayerTypeLibVLC = 1;
+    PlayerTypeMPV = 2;
+}
+
+message StreamPlaybackConfig {
+    double JitterBufDurationSecs = 1;
+	double CatchupMaxSpeedFactor = 2;
+	double MaxCatchupAtLagSecs   = 3;
+	double StartTimeoutSecs      = 4;
+	double ReadTimeoutSecs       = 5;
+}
+message StreamPlayerConfig {
+    string streamID = 1;
+	PlayerType playerType = 2;
+	bool disabled = 3;
+	StreamPlaybackConfig streamPlaybackConfig = 4;
+}
+message AddStreamPlayerRequest {
+    StreamPlayerConfig config = 1;
+}
+message AddStreamPlayerReply {}
+message RemoveStreamPlayerRequest {
+    string streamID = 1;
+}
+message RemoveStreamPlayerReply {}
+message UpdateStreamPlayerRequest {
+    StreamPlayerConfig config = 1;
+}
+message UpdateStreamPlayerReply {}
+
+message ListStreamPlayersRequest {}
+message ListStreamPlayersReply {
+    repeated StreamPlayerConfig players = 1;
+}
+message GetStreamPlayerRequest {
+    string streamID = 1;
+}
+message GetStreamPlayerReply {
+    StreamPlayerConfig config = 1;
+}
+
+message StreamPlayerOpenRequest {
+    string streamID = 1;
+    player.OpenRequest request = 2;
+}
+message StreamPlayerOpenReply {
+    player.OpenReply reply = 1;
+}
+message StreamPlayerProcessTitleRequest  {
+    string streamID = 1;
+    player.ProcessTitleRequest request = 2;
+}
+message StreamPlayerProcessTitleReply {
+    player.ProcessTitleReply reply = 1;    
+}
+message StreamPlayerGetLinkRequest {
+    string streamID = 1;
+    player.GetLinkRequest request = 2;
+}
+message StreamPlayerGetLinkReply {
+    player.GetLinkReply reply = 1;
+}
+message StreamPlayerEndChanRequest {
+    string streamID = 1;
+    player.EndChanRequest request = 2;
+}
+message StreamPlayerEndChanReply {
+    player.EndChanReply reply = 1;
+}
+message StreamPlayerIsEndedRequest {
+    string streamID = 1;
+    player.IsEndedRequest request = 2;
+}
+message StreamPlayerIsEndedReply {
+    player.IsEndedReply reply = 1;
+}
+message StreamPlayerGetPositionRequest {
+    string streamID = 1;
+    player.GetPositionRequest request = 2;
+}
+message StreamPlayerGetPositionReply {
+    player.GetPositionReply reply = 1;
+}
+message StreamPlayerGetLengthRequest {
+    string streamID = 1;
+    player.GetLengthRequest request = 2;
+}
+message StreamPlayerGetLengthReply {
+    player.GetLengthReply reply = 1;
+}
+message StreamPlayerSetSpeedRequest {
+    string streamID = 1;
+    player.SetSpeedRequest request = 2;
+}
+message StreamPlayerSetSpeedReply {
+    player.SetSpeedReply reply = 1;
+}
+message StreamPlayerSetPauseRequest {
+    string streamID = 1;
+    player.SetPauseRequest request = 2;
+}
+message StreamPlayerSetPauseReply {
+    player.SetPauseReply reply = 1;
+}
+message StreamPlayerStopRequest {
+    string streamID = 1;
+    player.StopRequest request = 2;
+}
+message StreamPlayerStopReply {
+    player.StopReply reply = 1;
+}
+message StreamPlayerCloseRequest {
+    string streamID = 1;
+    player.CloseRequest request = 2;
+}
+message StreamPlayerCloseReply {
+    player.CloseReply reply = 1;
+}
+
+message SubscribeToConfigChangesRequest {}
+message ConfigChange {}
+message SubscribeToStreamsChangesRequest {}
+message StreamsChange {}
+message SubscribeToStreamServersChangesRequest {}
+message StreamServersChange {}
+message SubscribeToStreamDestinationsChangesRequest {}
+message StreamDestinationsChange {}
+message SubscribeToIncomingStreamsChangesRequest {}
+message IncomingStreamsChange {}
+message SubscribeToStreamForwardsChangesRequest {}
+message StreamForwardsChange {}
+message SubscribeToStreamPlayersChangesRequest {}
+message StreamPlayersChange {}

@@ -6,9 +6,7 @@ import (
 	"math"
 	"sort"
 	"strconv"
-	"sync"
 	"time"
-	"unicode"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -19,8 +17,9 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
-	"github.com/xaionaro-go/streamctl/pkg/streampanel/config"
-	"github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
+	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
+	sstypes "github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/streamctl/pkg/xfyne"
 )
 
@@ -38,20 +37,6 @@ func (p *Panel) startRestreamPage(
 
 	p.initRestreamPage(ctx)
 
-	go func(ctx context.Context) {
-		p.updateRestreamPage(ctx)
-
-		t := time.NewTicker(1 * time.Second)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-t.C:
-			}
-
-			p.updateRestreamPage(ctx)
-		}
-	}(ctx)
 }
 
 func (p *Panel) initRestreamPage(
@@ -60,48 +45,123 @@ func (p *Panel) initRestreamPage(
 	logger.Debugf(ctx, "initRestreamPage")
 	defer logger.Debugf(ctx, "/initRestreamPage")
 
-	streamServers, err := p.StreamD.ListStreamServers(ctx)
-	if err != nil {
-		p.DisplayError(err)
-	} else {
-		p.displayStreamServers(ctx, streamServers)
-	}
+	go func() {
+		updateData := func() {
+			inStreams, err := p.StreamD.ListIncomingStreams(ctx)
+			if err != nil {
+				p.DisplayError(err)
+			} else {
+				p.displayIncomingServers(ctx, inStreams)
+			}
+		}
+		updateData()
 
-	inStreams, err := p.StreamD.ListIncomingStreams(ctx)
-	if err != nil {
-		p.DisplayError(err)
-	} else {
-		p.displayIncomingServers(ctx, inStreams)
-	}
+		ch, err := p.StreamD.SubscribeToIncomingStreamsChanges(ctx)
+		if err != nil {
+			p.DisplayError(err)
+			return
+		}
+		for range ch {
+			updateData()
+		}
+	}()
 
-	dsts, err := p.StreamD.ListStreamDestinations(ctx)
-	if err != nil {
-		p.DisplayError(err)
-	} else {
-		p.displayStreamDestinations(ctx, dsts)
-	}
+	go func() {
+		updateData := func() {
+			streamServers, err := p.StreamD.ListStreamServers(ctx)
+			if err != nil {
+				p.DisplayError(err)
+			} else {
+				p.displayStreamServers(ctx, streamServers)
+			}
+		}
+		updateData()
 
-	streamFwds, err := p.StreamD.ListStreamForwards(ctx)
-	if err != nil {
-		p.DisplayError(err)
-	} else {
-		p.displayStreamForwards(ctx, streamFwds)
-	}
+		ch, err := p.StreamD.SubscribeToStreamServersChanges(ctx)
+		if err != nil {
+			p.DisplayError(err)
+			return
+		}
+		for range ch {
+			updateData()
+		}
+	}()
 
-	p.displayStreamPlayers(ctx)
+	go func() {
+		updateData := func() {
+			dsts, err := p.StreamD.ListStreamDestinations(ctx)
+			if err != nil {
+				p.DisplayError(err)
+			} else {
+				p.displayStreamDestinations(ctx, dsts)
+			}
+		}
+		updateData()
+
+		ch, err := p.StreamD.SubscribeToStreamDestinationsChanges(ctx)
+		if err != nil {
+			p.DisplayError(err)
+			return
+		}
+		for range ch {
+			updateData()
+		}
+	}()
+
+	go func() {
+		updateData := func() {
+			streamFwds, err := p.StreamD.ListStreamForwards(ctx)
+			if err != nil {
+				p.DisplayError(err)
+			} else {
+				p.displayStreamForwards(ctx, streamFwds)
+			}
+		}
+		updateData()
+
+		ch, err := p.StreamD.SubscribeToStreamForwardsChanges(ctx)
+		if err != nil {
+			p.DisplayError(err)
+			return
+		}
+		for range ch {
+			updateData()
+		}
+	}()
+
+	go func() {
+		updateData := func() {
+			streamPlayers, err := p.StreamD.ListStreamPlayers(ctx)
+			if err != nil {
+				p.DisplayError(err)
+			} else {
+				p.displayStreamPlayers(ctx, streamPlayers)
+			}
+		}
+		updateData()
+
+		ch, err := p.StreamD.SubscribeToStreamPlayersChanges(ctx)
+		if err != nil {
+			p.DisplayError(err)
+			return
+		}
+		for range ch {
+			updateData()
+		}
+	}()
 }
 
 func (p *Panel) openAddStreamServerWindow(ctx context.Context) {
-	w := p.app.NewWindow(appName + ": Add Stream Server")
+	w := p.app.NewWindow(AppName + ": Add Stream Server")
 	resizeWindow(w, fyne.NewSize(400, 300))
 
-	currentProtocol := api.StreamServerTypeRTMP
+	currentProtocol := streamtypes.ServerTypeRTMP
 	protocolSelectLabel := widget.NewLabel("Protocol:")
 	protocolSelect := widget.NewSelect([]string{
-		api.StreamServerTypeRTMP.String(),
-		api.StreamServerTypeRTSP.String(),
+		streamtypes.ServerTypeRTMP.String(),
+		streamtypes.ServerTypeRTSP.String(),
 	}, func(s string) {
-		currentProtocol = api.ParseStreamServerType(s)
+		currentProtocol = streamtypes.ParseServerType(s)
 	})
 	protocolSelect.SetSelected(currentProtocol.String())
 
@@ -173,7 +233,7 @@ func (p *Panel) displayStreamServers(
 	logger.Debugf(ctx, "displayStreamServers")
 	defer logger.Debugf(ctx, "/displayStreamServers")
 
-	p.streamServersWidget.RemoveAll()
+	var objs []fyne.CanvasObject
 	for idx, srv := range streamServers {
 		logger.Tracef(ctx, "streamServer[%3d] == %#+v", idx, srv)
 		c := container.NewHBox()
@@ -219,8 +279,10 @@ func (p *Panel) displayStreamServers(
 		p.previousNumBytesLocker.Unlock()
 
 		c.Add(bwText)
-		p.streamServersWidget.Add(c)
+		objs = append(objs, c)
 	}
+	p.streamServersWidget.Objects = objs
+	p.streamServersWidget.Refresh()
 }
 
 func bwString(
@@ -252,7 +314,7 @@ func bwString(
 }
 
 func (p *Panel) openAddStreamWindow(ctx context.Context) {
-	w := p.app.NewWindow(appName + ": Add incoming stream")
+	w := p.app.NewWindow(AppName + ": Add incoming stream")
 	resizeWindow(w, fyne.NewSize(400, 300))
 
 	streamIDEntry := widget.NewEntry()
@@ -301,7 +363,7 @@ func (p *Panel) displayIncomingServers(
 		return inStreams[i].StreamID < inStreams[j].StreamID
 	})
 
-	p.streamsWidget.RemoveAll()
+	var objs []fyne.CanvasObject
 	for idx, stream := range inStreams {
 		logger.Tracef(ctx, "inStream[%3d] == %#+v", idx, stream)
 		c := container.NewHBox()
@@ -333,13 +395,14 @@ func (p *Panel) displayIncomingServers(
 		c.RemoveAll()
 		c.Add(button)
 		c.Add(label)
-		p.streamsWidget.Add(c)
+		objs = append(objs, c)
 	}
+	p.streamsWidget.Objects = objs
 	p.streamsWidget.Refresh()
 }
 
 func (p *Panel) openAddDestinationWindow(ctx context.Context) {
-	w := p.app.NewWindow(appName + ": Add stream destination")
+	w := p.app.NewWindow(AppName + ": Add stream destination")
 	resizeWindow(w, fyne.NewSize(400, 300))
 
 	destinationIDEntry := widget.NewEntry()
@@ -390,10 +453,9 @@ func (p *Panel) displayStreamDestinations(
 	logger.Debugf(ctx, "displayStreamDestinations")
 	defer logger.Debugf(ctx, "/displayStreamDestinations")
 
-	p.destinationsWidget.RemoveAll()
+	var objs []fyne.CanvasObject
 	for idx, dst := range dsts {
 		logger.Tracef(ctx, "dsts[%3d] == %#+v", idx, dst)
-		c := container.NewHBox()
 		deleteButton := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
 			w := dialog.NewConfirm(
 				fmt.Sprintf("Delete destination %s ?", dst.ID),
@@ -419,44 +481,56 @@ func (p *Panel) displayStreamDestinations(
 			p.initRestreamPage(ctx)
 		})
 		label := widget.NewLabel(string(dst.ID) + ": " + string(dst.URL))
-		c.RemoveAll()
-		c.Add(deleteButton)
-		c.Add(label)
-		p.destinationsWidget.Add(c)
+		objs = append(objs, container.NewHBox(
+			deleteButton,
+			label,
+		))
 	}
+	p.destinationsWidget.Objects = objs
+	p.destinationsWidget.Refresh()
 }
 
 func (p *Panel) openAddPlayerWindow(ctx context.Context) {
-	p.openAddOrEditPlayerWindow(ctx, "Add player", false, types.DefaultConfig(ctx), nil, p.addStreamPlayer)
+	p.openAddOrEditPlayerWindow(ctx, "Add player", false, sptypes.DefaultConfig(ctx), nil, p.StreamD.AddStreamPlayer)
 }
 
 func (p *Panel) openEditPlayerWindow(
 	ctx context.Context,
 	streamID api.StreamID,
 ) {
-	player, ok := p.Config.StreamPlayers[streamID]
+	cfg, err := p.StreamD.GetConfig(ctx)
+	if err != nil {
+		p.DisplayError(fmt.Errorf("unable to get the current config: %w", err))
+		return
+	}
+	streamCfg, ok := cfg.StreamServer.Streams[streamID]
 	if !ok {
+		p.DisplayError(fmt.Errorf("unable to find a stream '%s'", streamID))
+		return
+	}
+	playerCfg := streamCfg.Player
+	if playerCfg == nil {
 		p.DisplayError(fmt.Errorf("unable to find a stream player for '%s'", streamID))
 		return
 	}
-	p.openAddOrEditPlayerWindow(ctx, "Edit player", !player.Disabled, player.StreamPlayback, &streamID, p.updateStreamPlayer)
+	p.openAddOrEditPlayerWindow(ctx, "Edit player", !playerCfg.Disabled, playerCfg.StreamPlayback, &streamID, p.StreamD.UpdateStreamPlayer)
 }
 
 func (p *Panel) openAddOrEditPlayerWindow(
 	ctx context.Context,
 	title string,
 	isEnabled bool,
-	cfg types.Config,
+	cfg sptypes.Config,
 	forceStreamID *api.StreamID,
 	addOrEditStreamPlayer func(
 		ctx context.Context,
 		streamID api.StreamID,
 		playerType player.Backend,
 		disabled bool,
-		streamPlaybackConfig types.Config,
+		streamPlaybackConfig sptypes.Config,
 	) error,
 ) {
-	w := p.app.NewWindow(appName + ": " + title)
+	w := p.app.NewWindow(AppName + ": " + title)
 	resizeWindow(w, fyne.NewSize(400, 300))
 
 	var playerStrs []string
@@ -486,15 +560,9 @@ func (p *Panel) openAddOrEditPlayerWindow(
 		inStreamsSelect.Disable()
 	}
 
-	jitterBufDuration := widget.NewEntry()
+	jitterBufDuration := xfyne.NewNumericalEntry()
 	jitterBufDuration.SetPlaceHolder("amount of seconds")
-	jitterBufDuration.SetText(fmt.Sprintf("%f", cfg.JitterBufDuration.Seconds()))
-	jitterBufDuration.OnChanged = func(s string) {
-		filtered := removeNonDigitsAndDots(s)
-		if s != filtered {
-			jitterBufDuration.SetText(filtered)
-		}
-	}
+	jitterBufDuration.SetText(fmt.Sprintf("%v", cfg.JitterBufDuration.Seconds()))
 	jitterBufDuration.OnSubmitted = func(s string) {
 		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
@@ -505,15 +573,9 @@ func (p *Panel) openAddOrEditPlayerWindow(
 		cfg.JitterBufDuration = time.Duration(f * float64(time.Second))
 	}
 
-	maxCatchupAtLag := widget.NewEntry()
+	maxCatchupAtLag := xfyne.NewNumericalEntry()
 	maxCatchupAtLag.SetPlaceHolder("amount of seconds")
-	maxCatchupAtLag.SetText(fmt.Sprintf("%f", cfg.MaxCatchupAtLag.Seconds()))
-	maxCatchupAtLag.OnChanged = func(s string) {
-		filtered := removeNonDigitsAndDots(s)
-		if s != filtered {
-			maxCatchupAtLag.SetText(filtered)
-		}
-	}
+	maxCatchupAtLag.SetText(fmt.Sprintf("%v", cfg.MaxCatchupAtLag.Seconds()))
 	maxCatchupAtLag.OnSubmitted = func(s string) {
 		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
@@ -524,15 +586,9 @@ func (p *Panel) openAddOrEditPlayerWindow(
 		cfg.MaxCatchupAtLag = time.Duration(f * float64(time.Second))
 	}
 
-	startTimeout := widget.NewEntry()
+	startTimeout := xfyne.NewNumericalEntry()
 	startTimeout.SetPlaceHolder("amount of seconds")
-	startTimeout.SetText(fmt.Sprintf("%f", cfg.StartTimeout.Seconds()))
-	startTimeout.OnChanged = func(s string) {
-		filtered := removeNonDigitsAndDots(s)
-		if s != filtered {
-			startTimeout.SetText(filtered)
-		}
-	}
+	startTimeout.SetText(fmt.Sprintf("%v", cfg.StartTimeout.Seconds()))
 	startTimeout.OnSubmitted = func(s string) {
 		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
@@ -543,15 +599,9 @@ func (p *Panel) openAddOrEditPlayerWindow(
 		cfg.StartTimeout = time.Duration(f * float64(time.Second))
 	}
 
-	readTimeout := widget.NewEntry()
+	readTimeout := xfyne.NewNumericalEntry()
 	readTimeout.SetPlaceHolder("amount of seconds")
-	readTimeout.SetText(fmt.Sprintf("%f", cfg.ReadTimeout.Seconds()))
-	readTimeout.OnChanged = func(s string) {
-		filtered := removeNonDigitsAndDots(s)
-		if s != filtered {
-			readTimeout.SetText(filtered)
-		}
-	}
+	readTimeout.SetText(fmt.Sprintf("%v", cfg.ReadTimeout.Seconds()))
 	readTimeout.OnSubmitted = func(s string) {
 		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
@@ -562,15 +612,9 @@ func (p *Panel) openAddOrEditPlayerWindow(
 		cfg.ReadTimeout = time.Duration(f * float64(time.Second))
 	}
 
-	catchupMaxSpeedFactor := widget.NewEntry()
-	catchupMaxSpeedFactor.SetPlaceHolder("1.0")
-	catchupMaxSpeedFactor.SetText(fmt.Sprintf("%f", cfg.CatchupMaxSpeedFactor))
-	catchupMaxSpeedFactor.OnChanged = func(s string) {
-		filtered := removeNonDigitsAndDots(s)
-		if s != filtered {
-			catchupMaxSpeedFactor.SetText(filtered)
-		}
-	}
+	catchupMaxSpeedFactor := xfyne.NewNumericalEntry()
+	catchupMaxSpeedFactor.SetPlaceHolder("2.0")
+	catchupMaxSpeedFactor.SetText(fmt.Sprintf("%v", cfg.CatchupMaxSpeedFactor))
 	catchupMaxSpeedFactor.OnSubmitted = func(s string) {
 		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
@@ -632,43 +676,31 @@ func (p *Panel) openAddOrEditPlayerWindow(
 
 func (p *Panel) displayStreamPlayers(
 	ctx context.Context,
+	players []api.StreamPlayer,
 ) {
 	logger.Debugf(ctx, "displayStreamPlayers")
 	defer logger.Debugf(ctx, "/displayStreamPlayers")
-
-	type PlayerConfig struct {
-		StreamID api.StreamID
-		config.PlayerConfig
-	}
-
-	players := make([]PlayerConfig, 0, len(p.Config.StreamPlayers))
-	for streamID, player := range p.Config.StreamPlayers {
-		players = append(players, PlayerConfig{
-			StreamID:     api.StreamID(streamID),
-			PlayerConfig: player,
-		})
-	}
 
 	sort.Slice(players, func(i, j int) bool {
 		return players[i].StreamID < players[j].StreamID
 	})
 
-	p.playersWidget.RemoveAll()
+	var objs []fyne.CanvasObject
 	for idx, player := range players {
 		logger.Tracef(ctx, "players[%3d] == %#+v", idx, player)
 		c := container.NewHBox()
 		deleteButton := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
 			w := dialog.NewConfirm(
-				fmt.Sprintf("Delete player for stream '%s' (%s) ?", player.StreamID, player.Player),
+				fmt.Sprintf("Delete player for stream '%s' (%s) ?", player.StreamID, player.PlayerType),
 				"",
 				func(b bool) {
 					if !b {
 						return
 					}
-					logger.Debugf(ctx, "remove player '%s' (%s)", player.StreamID, player.Player)
-					defer logger.Debugf(ctx, "/remove player '%s' (%s)", player.StreamID, player.Player)
+					logger.Debugf(ctx, "remove player '%s' (%s)", player.StreamID, player.PlayerType)
+					defer logger.Debugf(ctx, "/remove player '%s' (%s)", player.StreamID, player.PlayerType)
 					p.waitForResponse(func() {
-						err := p.removeStreamPlayer(ctx, player.StreamID)
+						err := p.StreamD.RemoveStreamPlayer(ctx, player.StreamID)
 						if err != nil {
 							p.DisplayError(err)
 							return
@@ -686,11 +718,11 @@ func (p *Panel) displayStreamPlayers(
 		})
 		icon := theme.MediaStopIcon()
 		label := "Stop"
-		title := fmt.Sprintf("Stop %s on '%s' ?", player.Player, player.StreamID)
+		title := fmt.Sprintf("Stop %s on '%s' ?", player.PlayerType, player.StreamID)
 		if player.Disabled {
 			icon = theme.MediaPlayIcon()
 			label = "Start"
-			title = fmt.Sprintf("Start %s on '%s' ?", player.Player, player.StreamID)
+			title = fmt.Sprintf("Start %s on '%s' ?", player.PlayerType, player.StreamID)
 		}
 		playPauseButton := widget.NewButtonWithIcon(label, icon, func() {
 			w := dialog.NewConfirm(
@@ -700,15 +732,15 @@ func (p *Panel) displayStreamPlayers(
 					if !b {
 						return
 					}
-					logger.Debugf(ctx, "stop/start player %s on '%s': disabled:%v->%v", player.Player, player.StreamID, player.Disabled, !player.Disabled)
-					defer logger.Debugf(ctx, "/stop/start player %s on '%s': disabled:%v->%v", player.Player, player.StreamID, player.Disabled, !player.Disabled)
+					logger.Debugf(ctx, "stop/start player %s on '%s': disabled:%v->%v", player.PlayerType, player.StreamID, player.Disabled, !player.Disabled)
+					defer logger.Debugf(ctx, "/stop/start player %s on '%s': disabled:%v->%v", player.PlayerType, player.StreamID, player.Disabled, !player.Disabled)
 					p.waitForResponse(func() {
-						err := p.updateStreamPlayer(
+						err := p.StreamD.UpdateStreamPlayer(
 							ctx,
 							player.StreamID,
-							player.Player,
+							player.PlayerType,
 							!player.Disabled,
-							player.StreamPlayback,
+							player.StreamPlaybackConfig,
 						)
 						if err != nil {
 							p.DisplayError(err)
@@ -722,26 +754,29 @@ func (p *Panel) displayStreamPlayers(
 			w.Show()
 			p.initRestreamPage(ctx)
 		})
-		caption := widget.NewLabel(string(player.StreamID) + " (" + string(player.Player) + ")")
+		caption := widget.NewLabel(string(player.StreamID) + " (" + string(player.PlayerType) + ")")
 		c.RemoveAll()
 		c.Add(deleteButton)
 		c.Add(editButton)
 		c.Add(playPauseButton)
 		c.Add(caption)
 		if !player.Disabled {
-			player := p.StreamPlayers.Get(player.StreamID)
-			if player != nil {
-				pos := player.Player.GetPosition()
+			pos, err := p.StreamD.StreamPlayerGetPosition(ctx, player.StreamID)
+			if err != nil {
+				logger.Errorf(ctx, "unable to get the current position at player '%s': %v", player.StreamID, err)
+			} else {
 				c.Add(widget.NewSeparator())
 				c.Add(widget.NewLabel(pos.String()))
 			}
 		}
-		p.playersWidget.Add(c)
+		objs = append(objs, c)
 	}
+	p.playersWidget.Objects = objs
+	p.playersWidget.Refresh()
 }
 
 func (p *Panel) openAddRestreamWindow(ctx context.Context) {
-	w := p.app.NewWindow(appName + ": Add restreaming (stream forwarding)")
+	w := p.app.NewWindow(AppName + ": Add restreaming (stream forwarding)")
 	resizeWindow(w, fyne.NewSize(400, 300))
 
 	enabledCheck := widget.NewCheck("Enable", func(b bool) {})
@@ -773,6 +808,28 @@ func (p *Panel) openAddRestreamWindow(ctx context.Context) {
 	}
 	dstSelect := widget.NewSelect(dstStrs, func(s string) {})
 
+	quirksYoutubeRestart := sstypes.DefaultRestartUntilYoutubeRecognizesStreamConfig()
+
+	youtubeStartTimeout := xfyne.NewNumericalEntry()
+	youtubeStartTimeout.SetText(fmt.Sprintf("%v", quirksYoutubeRestart.StartTimeout.Seconds()))
+	youtubeStopStartDelay := xfyne.NewNumericalEntry()
+	youtubeStopStartDelay.SetText(fmt.Sprintf("%v", quirksYoutubeRestart.StopStartDelay.Seconds()))
+	restartUntilYouTubeStartsParams := container.NewVBox(
+		widget.NewLabel("Wait until try restarting (seconds):"),
+		youtubeStartTimeout,
+		widget.NewLabel("Delay between stopping and starting (seconds):"),
+		youtubeStopStartDelay,
+	)
+	restartUntilYouTubeStartsParams.Hide()
+
+	restartUntilYouTubeStarts := widget.NewCheck("Restart until YouTube recognizes the stream", func(b bool) {
+		if b {
+			restartUntilYouTubeStartsParams.Show()
+		} else {
+			restartUntilYouTubeStartsParams.Hide()
+		}
+	})
+
 	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
 		p.waitForResponse(func() {
 			err := p.addStreamForward(
@@ -780,6 +837,9 @@ func (p *Panel) openAddRestreamWindow(ctx context.Context) {
 				api.StreamID(inStreamsSelect.Selected),
 				dstMap[dstSelect.Selected],
 				enabledCheck.Checked,
+				sstypes.ForwardingQuirks{
+					RestartUntilYoutubeRecognizesStream: quirksYoutubeRestart,
+				},
 			)
 			if err != nil {
 				p.DisplayError(err)
@@ -800,6 +860,11 @@ func (p *Panel) openAddRestreamWindow(ctx context.Context) {
 			inStreamsSelect,
 			widget.NewLabel("To:"),
 			dstSelect,
+			widget.NewSeparator(),
+			widget.NewSeparator(),
+			widget.NewRichTextFromMarkdown("## Quirks"),
+			restartUntilYouTubeStarts,
+			restartUntilYouTubeStartsParams,
 		),
 	))
 	w.Show()
@@ -810,6 +875,7 @@ func (p *Panel) addStreamForward(
 	streamID api.StreamID,
 	dstID api.DestinationID,
 	enabled bool,
+	quirks sstypes.ForwardingQuirks,
 ) error {
 	logger.Debugf(ctx, "addStreamForward")
 	defer logger.Debugf(ctx, "/addStreamForward")
@@ -818,6 +884,7 @@ func (p *Panel) addStreamForward(
 		streamID,
 		dstID,
 		enabled,
+		quirks,
 	)
 }
 
@@ -835,7 +902,7 @@ func (p *Panel) displayStreamForwards(
 		return fwds[i].DestinationID < fwds[j].DestinationID
 	})
 
-	p.restreamsWidget.RemoveAll()
+	var objs []fyne.CanvasObject
 	logger.Tracef(ctx, "len(fwds) == %d", len(fwds))
 	for idx, fwd := range fwds {
 		logger.Tracef(ctx, "fwds[%3d] == %#+v", idx, fwd)
@@ -888,6 +955,7 @@ func (p *Panel) displayStreamForwards(
 							fwd.StreamID,
 							fwd.DestinationID,
 							!fwd.Enabled,
+							fwd.Quirks,
 						)
 						if err != nil {
 							p.DisplayError(err)
@@ -924,8 +992,10 @@ func (p *Panel) displayStreamForwards(
 
 			c.Add(bwText)
 		}
-		p.restreamsWidget.Add(c)
+		objs = append(objs, c)
 	}
+	p.restreamsWidget.Objects = objs
+	p.restreamsWidget.Refresh()
 }
 
 func (p *Panel) stopRestreamPage(
@@ -943,31 +1013,4 @@ func (p *Panel) stopRestreamPage(
 
 	p.restreamPageUpdaterCancel()
 	p.restreamPageUpdaterCancel = nil
-}
-
-func (p *Panel) updateRestreamPage(
-	ctx context.Context,
-) {
-	logger.Tracef(ctx, "updateRestreamPage")
-	defer logger.Tracef(ctx, "/updateRestreamPage")
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
-		p.initRestreamPage(ctx)
-		// whatever
-	}()
-	wg.Wait()
-}
-
-func removeNonDigitsAndDots(input string) string {
-	var result []rune
-	for _, r := range input {
-		if unicode.IsDigit(r) && r != '.' {
-			result = append(result, r)
-		}
-	}
-	return string(result)
 }

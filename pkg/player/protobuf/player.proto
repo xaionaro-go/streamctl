@@ -1,0 +1,69 @@
+syntax = "proto3";
+package player;
+option go_package = "github.com/xaionaro-go/streamctl/pkg/player/protobuf/go/player_grpc";
+
+service Player {
+	rpc Open(OpenRequest) returns (OpenReply) {}
+    rpc ProcessTitle(ProcessTitleRequest) returns (ProcessTitleReply) {}
+	rpc GetLink(GetLinkRequest) returns (GetLinkReply) {}
+	rpc EndChan(EndChanRequest) returns (stream EndChanReply) {}
+	rpc IsEnded(IsEndedRequest) returns (IsEndedReply) {}
+	rpc GetPosition(GetPositionRequest) returns (GetPositionReply) {}
+	rpc GetLength(GetLengthRequest) returns (GetLengthReply) {}
+	rpc SetSpeed(SetSpeedRequest) returns (SetSpeedReply) {}
+	rpc SetPause(SetPauseRequest) returns (SetPauseReply) {}
+	rpc Stop(StopRequest) returns (StopReply) {}
+	rpc Close(CloseRequest) returns (CloseReply) {}
+}
+
+enum LoggingLevel {
+	LoggingLevelNone = 0;
+	LoggingLevelFatal = 1;
+	LoggingLevelPanic = 2;
+	LoggingLevelError = 3;
+	LoggingLevelWarn = 4;
+	LoggingLevelInfo = 5;
+	LoggingLevelDebug = 6;
+	LoggingLevelTrace = 7;
+}
+
+message ProcessTitleRequest {}
+message ProcessTitleReply {
+    string title = 1;
+}
+message OpenRequest {
+    string link = 1;
+    string title = 2;
+	LoggingLevel loggingLevel = 3;
+}
+message OpenReply {}
+message GetLinkRequest {}
+message GetLinkReply {
+	string link = 1;
+}
+message EndChanRequest {}
+message EndChanReply {}
+message IsEndedRequest {}
+message IsEndedReply {
+	bool isEnded = 1;
+}
+message GetPositionRequest {}
+message GetPositionReply {
+	double positionSecs = 1;
+}
+message GetLengthRequest {}
+message GetLengthReply {
+	double lengthSecs = 1;
+}
+message SetSpeedRequest {
+    double speed = 1;
+}
+message SetSpeedReply {}
+message SetPauseRequest {
+    bool setPaused = 1;
+}
+message SetPauseReply {}
+message StopRequest {}
+message StopReply {}
+message CloseRequest {}
+message CloseReply {}

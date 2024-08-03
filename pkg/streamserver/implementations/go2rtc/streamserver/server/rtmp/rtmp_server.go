@@ -18,6 +18,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/consts"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/go2rtc/streamserver/streams"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
 
 type RTMPServer struct {
@@ -85,8 +86,8 @@ func New(
 	return s, nil
 }
 
-func (s *RTMPServer) Type() types.ServerType {
-	return types.ServerTypeRTMP
+func (s *RTMPServer) Type() streamtypes.ServerType {
+	return streamtypes.ServerTypeRTMP
 }
 func (s *RTMPServer) ListenAddr() string {
 	return s.Listener.Addr().String()

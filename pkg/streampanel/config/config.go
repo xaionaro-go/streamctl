@@ -7,11 +7,8 @@ import (
 	"os"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/screenshot"
-	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	streamd "github.com/xaionaro-go/streamctl/pkg/streamd/config"
-	"github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 )
 
 type ScreenshotConfig struct {
@@ -19,22 +16,10 @@ type ScreenshotConfig struct {
 	screenshot.Config `yaml:"screenshot,inline"`
 }
 
-type PlayerConfig struct {
-	Player         player.Backend `yaml:"player,omitempty"`
-	Disabled       bool           `yaml:"disabled,omitempty"`
-	StreamPlayback types.Config   `yaml:"stream_playback,omitempty"`
-}
-
 type Config struct {
 	RemoteStreamDAddr string           `yaml:"streamd_remote"`
 	BuiltinStreamD    streamd.Config   `yaml:"streamd_builtin"`
 	Screenshot        ScreenshotConfig `yaml:"screenshot"`
-	StreamPlayers     map[api.StreamID]PlayerConfig
-	VideoPlayer       struct {
-		MPV struct {
-			Path string `yaml:"path"`
-		} `yaml:"mpv"`
-	} `yaml:"video_player"`
 }
 
 func DefaultConfig() Config {
@@ -47,6 +32,10 @@ func ReadConfigFromPath[CFG Config](
 	cfgPath string,
 	cfg *Config,
 ) error {
+	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
+		return nil
+	}
+
 	b, err := os.ReadFile(cfgPath)
 	if err != nil {
 		return fmt.Errorf("unable to read file '%s': %w", cfgPath, err)

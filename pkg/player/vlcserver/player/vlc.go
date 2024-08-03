@@ -17,22 +17,8 @@ import (
 	"golang.org/x/net/context"
 )
 
-const SupportedVLC = true
-
-func (m *Manager) NewVLC(title string) (*VLC, error) {
-	r, err := NewVLC(title)
-	if err != nil {
-		return nil, err
-	}
-
-	m.PlayersLocker.Lock()
-	defer m.PlayersLocker.Unlock()
-	m.Players = append(m.Players, r)
-	return r, nil
-}
-
 type VLC struct {
-	PlayerCommon
+	Title            string
 	StatusMutex      sync.Mutex
 	Player           *vlc.Player
 	Media            *vlc.Media
@@ -45,8 +31,6 @@ type VLC struct {
 	EndCh chan struct{}
 }
 
-var _ Player = (*VLC)(nil)
-
 var vlcPlayerCounter int64 = 0
 
 func NewVLC(title string) (*VLC, error) {
@@ -58,9 +42,7 @@ func NewVLC(title string) (*VLC, error) {
 	}
 
 	p := &VLC{
-		PlayerCommon: PlayerCommon{
-			Title: title,
-		},
+		Title: title,
 		EndCh: make(chan struct{}),
 	}
 
@@ -93,6 +75,10 @@ func NewVLC(title string) (*VLC, error) {
 	}
 
 	return p, nil
+}
+
+func (p *VLC) ProcessTitle() string {
+	return p.Title
 }
 
 func (p *VLC) OpenURL(link string) error {

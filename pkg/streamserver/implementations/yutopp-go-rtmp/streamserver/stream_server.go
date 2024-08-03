@@ -7,13 +7,22 @@ import (
 	"net"
 	"net/url"
 	"sync"
+	"time"
 
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/player"
+	playertypes "github.com/xaionaro-go/streamctl/pkg/player/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/streamctl/pkg/xlogger"
 	"github.com/yutopp/go-rtmp"
 )
+
+type PlatformsController interface {
+	CheckStreamStarted(ctx context.Context, destination *url.URL) (bool, error)
+}
 
 type StreamServer struct {
 	sync.Mutex
@@ -22,15 +31,26 @@ type StreamServer struct {
 	ServerHandlers          []types.PortServer
 	StreamDestinations      []types.StreamDestination
 	ActiveStreamForwardings map[types.DestinationID]*ActiveStreamForwarding
+	PlatformsController     PlatformsController
+	StreamPlayers           *streamplayer.StreamPlayers
 }
 
-func New(cfg *types.Config) *StreamServer {
-	return &StreamServer{
+func New(
+	cfg *types.Config,
+	platformsController PlatformsController,
+) *StreamServer {
+	s := &StreamServer{
 		RelayServer: NewRelayService(),
 		Config:      cfg,
 
 		ActiveStreamForwardings: map[types.DestinationID]*ActiveStreamForwarding{},
+		PlatformsController:     platformsController,
 	}
+	s.StreamPlayers = streamplayer.New(
+		NewStreamPlayerStreamServer(s),
+		player.NewManager(playertypes.OptionPathToMPV(cfg.VideoPlayer.MPV.Path)),
+	)
+	return s
 }
 
 func (s *StreamServer) Init(ctx context.Context) error {
@@ -63,13 +83,20 @@ func (s *StreamServer) Init(ctx context.Context) error {
 
 		for dstID, fwd := range streamCfg.Forwardings {
 			if !fwd.Disabled {
-				_, err := s.addStreamForward(ctx, streamID, dstID)
+				_, err := s.addStreamForward(ctx, streamID, dstID, fwd.Quirks)
 				if err != nil {
 					return fmt.Errorf("unable to launch stream forward from '%s' to '%s': %w", streamID, dstID, err)
 				}
 			}
 		}
 	}
+
+	go func() {
+		err := s.setupStreamPlayers(ctx)
+		if err != nil {
+			logger.Error(ctx, err)
+		}
+	}()
 
 	return nil
 }
@@ -89,7 +116,7 @@ func (s *StreamServer) ListServers(
 
 func (s *StreamServer) StartServer(
 	ctx context.Context,
-	serverType types.ServerType,
+	serverType streamtypes.ServerType,
 	listenAddr string,
 ) error {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
@@ -108,7 +135,7 @@ func (s *StreamServer) StartServer(
 
 func (s *StreamServer) startServer(
 	ctx context.Context,
-	serverType types.ServerType,
+	serverType streamtypes.ServerType,
 	listenAddr string,
 ) (_ret error) {
 	logger.Tracef(ctx, "startServer(%s, '%s')", serverType, listenAddr)
@@ -116,7 +143,7 @@ func (s *StreamServer) startServer(
 	var srv types.PortServer
 	var err error
 	switch serverType {
-	case types.ServerTypeRTMP:
+	case streamtypes.ServerTypeRTMP:
 		var listener net.Listener
 		listener, err = net.Listen("tcp", listenAddr)
 		if err != nil {
@@ -150,7 +177,7 @@ func (s *StreamServer) startServer(
 			}
 		}()
 		srv = portSrv
-	case types.ServerTypeRTSP:
+	case streamtypes.ServerTypeRTSP:
 		return fmt.Errorf("RTSP is not supported, yet")
 	default:
 		return fmt.Errorf("unexpected server type %v", serverType)
@@ -280,6 +307,7 @@ type StreamForward struct {
 	StreamID         types.StreamID
 	DestinationID    types.DestinationID
 	Enabled          bool
+	Quirks           types.ForwardingQuirks
 	ActiveForwarding *ActiveStreamForwarding
 	NumBytesWrote    uint64
 	NumBytesRead     uint64
@@ -290,6 +318,7 @@ func (s *StreamServer) AddStreamForward(
 	streamID types.StreamID,
 	destinationID types.DestinationID,
 	enabled bool,
+	quirks types.ForwardingQuirks,
 ) (*StreamForward, error) {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
 	s.Lock()
@@ -301,10 +330,11 @@ func (s *StreamServer) AddStreamForward(
 
 	streamConfig.Forwardings[destinationID] = types.ForwardingConfig{
 		Disabled: !enabled,
+		Quirks:   quirks,
 	}
 
 	if enabled {
-		fwd, err := s.addStreamForward(ctx, streamID, destinationID)
+		fwd, err := s.addStreamForward(ctx, streamID, destinationID, quirks)
 		if err != nil {
 			return nil, err
 		}
@@ -314,6 +344,7 @@ func (s *StreamServer) AddStreamForward(
 		StreamID:      streamID,
 		DestinationID: destinationID,
 		Enabled:       enabled,
+		Quirks:        quirks,
 	}, nil
 }
 
@@ -321,6 +352,7 @@ func (s *StreamServer) addStreamForward(
 	ctx context.Context,
 	streamID types.StreamID,
 	destinationID types.DestinationID,
+	quirks types.ForwardingQuirks,
 ) (*StreamForward, error) {
 	ctx = belt.WithField(ctx, "stream_forward", fmt.Sprintf("%s->%s", streamID, destinationID))
 	if _, ok := s.ActiveStreamForwardings[destinationID]; ok {
@@ -349,14 +381,82 @@ func (s *StreamServer) addStreamForward(
 	}
 	s.ActiveStreamForwardings[destinationID] = fwd
 
-	return &StreamForward{
+	result := &StreamForward{
 		StreamID:         streamID,
 		DestinationID:    destinationID,
 		Enabled:          true,
+		Quirks:           quirks,
 		ActiveForwarding: fwd,
 		NumBytesWrote:    0,
 		NumBytesRead:     0,
-	}, nil
+	}
+
+	if quirks.RestartUntilYoutubeRecognizesStream.Enabled {
+		go s.restartUntilYoutubeRecognizesStream(ctx, result, quirks.RestartUntilYoutubeRecognizesStream)
+	}
+
+	return result, nil
+}
+
+func (s *StreamServer) restartUntilYoutubeRecognizesStream(
+	ctx context.Context,
+	fwd *StreamForward,
+	cfg types.RestartUntilYoutubeRecognizesStream,
+) {
+	if !cfg.Enabled {
+		logger.Errorf(ctx, "an attempt to start restartUntilYoutubeRecognizesStream when the hack is disabled for this stream forwarder: %#+v", cfg)
+		return
+	}
+
+	if s.PlatformsController == nil {
+		logger.Errorf(ctx, "PlatformsController is nil")
+		return
+	}
+
+	if fwd.ActiveForwarding == nil {
+		logger.Error(ctx, "ActiveForwarding is nil")
+		return
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(cfg.StartTimeout):
+		}
+
+		for {
+			started, err := s.PlatformsController.CheckStreamStarted(
+				ctx,
+				fwd.ActiveForwarding.URL,
+			)
+			if err != nil {
+				logger.Errorf(ctx, "unable to check if the stream with URL '%s' is started: %v", fwd.ActiveForwarding.URL, err)
+				time.Sleep(time.Second)
+				continue
+			}
+			if started {
+				return
+			}
+			break
+		}
+
+		err := fwd.ActiveForwarding.Stop()
+		if err != nil {
+			logger.Errorf(ctx, "unable to stop stream forwarding: %v", err)
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(cfg.StopStartDelay):
+		}
+
+		err = fwd.ActiveForwarding.Start(ctx)
+		if err != nil {
+			logger.Errorf(ctx, "unable to stop stream forwarding: %v", err)
+		}
+	}
 }
 
 func (s *StreamServer) UpdateStreamForward(
@@ -364,6 +464,7 @@ func (s *StreamServer) UpdateStreamForward(
 	streamID types.StreamID,
 	destinationID types.DestinationID,
 	enabled bool,
+	quirks types.ForwardingQuirks,
 ) (*StreamForward, error) {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
 	s.Lock()
@@ -377,7 +478,7 @@ func (s *StreamServer) UpdateStreamForward(
 	var fwd *StreamForward
 	if fwdCfg.Disabled && enabled {
 		var err error
-		fwd, err = s.addStreamForward(ctx, streamID, destinationID)
+		fwd, err = s.addStreamForward(ctx, streamID, destinationID, quirks)
 		if err != nil {
 			return nil, fmt.Errorf("unable to active the stream: %w", err)
 		}
@@ -396,6 +497,7 @@ func (s *StreamServer) UpdateStreamForward(
 		StreamID:      streamID,
 		DestinationID: destinationID,
 		Enabled:       enabled,
+		Quirks:        quirks,
 		NumBytesWrote: 0,
 		NumBytesRead:  0,
 	}

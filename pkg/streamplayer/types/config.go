@@ -14,13 +14,23 @@ type Config struct {
 }
 
 func (cfg Config) Options() Options {
-	return Options{
-		OptionJitterBufDuration(cfg.JitterBufDuration),
-		OptionCatchupMaxSpeedFactor(cfg.CatchupMaxSpeedFactor),
-		OptionMaxCatchupAtLag(cfg.MaxCatchupAtLag),
-		OptionStartTimeout(cfg.StartTimeout),
-		OptionReadTimeout(cfg.ReadTimeout),
+	var opts Options
+	if cfg.JitterBufDuration != 0 {
+		opts = append(opts, OptionJitterBufDuration(cfg.JitterBufDuration))
 	}
+	if cfg.CatchupMaxSpeedFactor != 0 {
+		opts = append(opts, OptionCatchupMaxSpeedFactor(cfg.CatchupMaxSpeedFactor))
+	}
+	if cfg.CatchupMaxSpeedFactor != 0 {
+		opts = append(opts, OptionMaxCatchupAtLag(cfg.MaxCatchupAtLag))
+	}
+	if cfg.CatchupMaxSpeedFactor != 0 {
+		opts = append(opts, OptionStartTimeout(cfg.StartTimeout))
+	}
+	if cfg.CatchupMaxSpeedFactor != 0 {
+		opts = append(opts, OptionReadTimeout(cfg.ReadTimeout))
+	}
+	return opts
 }
 
 type Option interface {

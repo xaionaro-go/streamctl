@@ -11,6 +11,7 @@ import (
 	rtspserver "github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/go2rtc/streamserver/server/rtsp"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/go2rtc/streamserver/streams"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
 
 type StreamServer struct {
@@ -103,7 +104,7 @@ func (s *StreamServer) ListServers(
 
 func (s *StreamServer) StartServer(
 	ctx context.Context,
-	serverType types.ServerType,
+	serverType streamtypes.ServerType,
 	listenAddr string,
 ) error {
 	s.Lock()
@@ -121,7 +122,7 @@ func (s *StreamServer) StartServer(
 
 func (s *StreamServer) startServer(
 	ctx context.Context,
-	serverType types.ServerType,
+	serverType streamtypes.ServerType,
 	listenAddr string,
 ) (_ret error) {
 	logger.Tracef(ctx, "startServer(%s, '%s')", serverType, listenAddr)
@@ -129,11 +130,11 @@ func (s *StreamServer) startServer(
 	var srv types.PortServer
 	var err error
 	switch serverType {
-	case types.ServerTypeRTMP:
+	case streamtypes.ServerTypeRTMP:
 		srv, err = rtmpserver.New(ctx, rtmpserver.Config{
 			Listen: listenAddr,
 		}, s.StreamHandler)
-	case types.ServerTypeRTSP:
+	case streamtypes.ServerTypeRTSP:
 		srv, err = rtspserver.New(ctx, rtspserver.Config{
 			ListenAddr: listenAddr,
 		}, s.StreamHandler)

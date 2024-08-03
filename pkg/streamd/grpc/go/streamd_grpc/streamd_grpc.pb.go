@@ -25,6 +25,7 @@ type StreamDClient interface {
 	GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigReply, error)
 	SetConfig(ctx context.Context, in *SetConfigRequest, opts ...grpc.CallOption) (*SetConfigReply, error)
 	SaveConfig(ctx context.Context, in *SaveConfigRequest, opts ...grpc.CallOption) (*SaveConfigReply, error)
+	SubscribeToConfigChanges(ctx context.Context, in *SubscribeToConfigChangesRequest, opts ...grpc.CallOption) (StreamD_SubscribeToConfigChangesClient, error)
 	ResetCache(ctx context.Context, in *ResetCacheRequest, opts ...grpc.CallOption) (*ResetCacheReply, error)
 	InitCache(ctx context.Context, in *InitCacheRequest, opts ...grpc.CallOption) (*InitCacheReply, error)
 	StartStream(ctx context.Context, in *StartStreamRequest, opts ...grpc.CallOption) (*StartStreamReply, error)
@@ -32,10 +33,11 @@ type StreamDClient interface {
 	GetStreamStatus(ctx context.Context, in *GetStreamStatusRequest, opts ...grpc.CallOption) (*GetStreamStatusReply, error)
 	IsBackendEnabled(ctx context.Context, in *IsBackendEnabledRequest, opts ...grpc.CallOption) (*IsBackendEnabledReply, error)
 	GetBackendInfo(ctx context.Context, in *GetBackendInfoRequest, opts ...grpc.CallOption) (*GetBackendInfoReply, error)
+	SubscribeToStreamsChanges(ctx context.Context, in *SubscribeToStreamsChangesRequest, opts ...grpc.CallOption) (StreamD_SubscribeToStreamsChangesClient, error)
 	Restart(ctx context.Context, in *RestartRequest, opts ...grpc.CallOption) (*RestartReply, error)
 	SetTitle(ctx context.Context, in *SetTitleRequest, opts ...grpc.CallOption) (*SetTitleReply, error)
 	SetDescription(ctx context.Context, in *SetDescriptionRequest, opts ...grpc.CallOption) (*SetDescriptionReply, error)
-	SetApplyProfile(ctx context.Context, in *SetApplyProfileRequest, opts ...grpc.CallOption) (*SetApplyProfileReply, error)
+	ApplyProfile(ctx context.Context, in *ApplyProfileRequest, opts ...grpc.CallOption) (*ApplyProfileReply, error)
 	UpdateStream(ctx context.Context, in *UpdateStreamRequest, opts ...grpc.CallOption) (*UpdateStreamReply, error)
 	GetVariable(ctx context.Context, in *GetVariableRequest, opts ...grpc.CallOption) (*GetVariableReply, error)
 	GetVariableHash(ctx context.Context, in *GetVariableHashRequest, opts ...grpc.CallOption) (*GetVariableHashReply, error)
@@ -51,17 +53,38 @@ type StreamDClient interface {
 	ListStreamServers(ctx context.Context, in *ListStreamServersRequest, opts ...grpc.CallOption) (*ListStreamServersReply, error)
 	StartStreamServer(ctx context.Context, in *StartStreamServerRequest, opts ...grpc.CallOption) (*StartStreamServerReply, error)
 	StopStreamServer(ctx context.Context, in *StopStreamServerRequest, opts ...grpc.CallOption) (*StopStreamServerReply, error)
+	SubscribeToStreamServersChanges(ctx context.Context, in *SubscribeToStreamServersChangesRequest, opts ...grpc.CallOption) (StreamD_SubscribeToStreamServersChangesClient, error)
 	ListStreamDestinations(ctx context.Context, in *ListStreamDestinationsRequest, opts ...grpc.CallOption) (*ListStreamDestinationsReply, error)
 	AddStreamDestination(ctx context.Context, in *AddStreamDestinationRequest, opts ...grpc.CallOption) (*AddStreamDestinationReply, error)
 	RemoveStreamDestination(ctx context.Context, in *RemoveStreamDestinationRequest, opts ...grpc.CallOption) (*RemoveStreamDestinationReply, error)
+	SubscribeToStreamDestinationsChanges(ctx context.Context, in *SubscribeToStreamDestinationsChangesRequest, opts ...grpc.CallOption) (StreamD_SubscribeToStreamDestinationsChangesClient, error)
 	AddIncomingStream(ctx context.Context, in *AddIncomingStreamRequest, opts ...grpc.CallOption) (*AddIncomingStreamReply, error)
 	RemoveIncomingStream(ctx context.Context, in *RemoveIncomingStreamRequest, opts ...grpc.CallOption) (*RemoveIncomingStreamReply, error)
 	ListIncomingStreams(ctx context.Context, in *ListIncomingStreamsRequest, opts ...grpc.CallOption) (*ListIncomingStreamsReply, error)
+	SubscribeToIncomingStreamsChanges(ctx context.Context, in *SubscribeToIncomingStreamsChangesRequest, opts ...grpc.CallOption) (StreamD_SubscribeToIncomingStreamsChangesClient, error)
 	ListStreamForwards(ctx context.Context, in *ListStreamForwardsRequest, opts ...grpc.CallOption) (*ListStreamForwardsReply, error)
 	AddStreamForward(ctx context.Context, in *AddStreamForwardRequest, opts ...grpc.CallOption) (*AddStreamForwardReply, error)
 	UpdateStreamForward(ctx context.Context, in *UpdateStreamForwardRequest, opts ...grpc.CallOption) (*UpdateStreamForwardReply, error)
 	RemoveStreamForward(ctx context.Context, in *RemoveStreamForwardRequest, opts ...grpc.CallOption) (*RemoveStreamForwardReply, error)
+	SubscribeToStreamForwardsChanges(ctx context.Context, in *SubscribeToStreamForwardsChangesRequest, opts ...grpc.CallOption) (StreamD_SubscribeToStreamForwardsChangesClient, error)
 	WaitForStreamPublisher(ctx context.Context, in *WaitForStreamPublisherRequest, opts ...grpc.CallOption) (StreamD_WaitForStreamPublisherClient, error)
+	AddStreamPlayer(ctx context.Context, in *AddStreamPlayerRequest, opts ...grpc.CallOption) (*AddStreamPlayerReply, error)
+	RemoveStreamPlayer(ctx context.Context, in *RemoveStreamPlayerRequest, opts ...grpc.CallOption) (*RemoveStreamPlayerReply, error)
+	UpdateStreamPlayer(ctx context.Context, in *UpdateStreamPlayerRequest, opts ...grpc.CallOption) (*UpdateStreamPlayerReply, error)
+	ListStreamPlayers(ctx context.Context, in *ListStreamPlayersRequest, opts ...grpc.CallOption) (*ListStreamPlayersReply, error)
+	GetStreamPlayer(ctx context.Context, in *GetStreamPlayerRequest, opts ...grpc.CallOption) (*GetStreamPlayerReply, error)
+	SubscribeToStreamPlayersChanges(ctx context.Context, in *SubscribeToStreamPlayersChangesRequest, opts ...grpc.CallOption) (StreamD_SubscribeToStreamPlayersChangesClient, error)
+	StreamPlayerOpen(ctx context.Context, in *StreamPlayerOpenRequest, opts ...grpc.CallOption) (*StreamPlayerOpenReply, error)
+	StreamPlayerProcessTitle(ctx context.Context, in *StreamPlayerProcessTitleRequest, opts ...grpc.CallOption) (*StreamPlayerProcessTitleReply, error)
+	StreamPlayerGetLink(ctx context.Context, in *StreamPlayerGetLinkRequest, opts ...grpc.CallOption) (*StreamPlayerGetLinkReply, error)
+	StreamPlayerEndChan(ctx context.Context, in *StreamPlayerEndChanRequest, opts ...grpc.CallOption) (StreamD_StreamPlayerEndChanClient, error)
+	StreamPlayerIsEnded(ctx context.Context, in *StreamPlayerIsEndedRequest, opts ...grpc.CallOption) (*StreamPlayerIsEndedReply, error)
+	StreamPlayerGetPosition(ctx context.Context, in *StreamPlayerGetPositionRequest, opts ...grpc.CallOption) (*StreamPlayerGetPositionReply, error)
+	StreamPlayerGetLength(ctx context.Context, in *StreamPlayerGetLengthRequest, opts ...grpc.CallOption) (*StreamPlayerGetLengthReply, error)
+	StreamPlayerSetSpeed(ctx context.Context, in *StreamPlayerSetSpeedRequest, opts ...grpc.CallOption) (*StreamPlayerSetSpeedReply, error)
+	StreamPlayerSetPause(ctx context.Context, in *StreamPlayerSetPauseRequest, opts ...grpc.CallOption) (*StreamPlayerSetPauseReply, error)
+	StreamPlayerStop(ctx context.Context, in *StreamPlayerStopRequest, opts ...grpc.CallOption) (*StreamPlayerStopReply, error)
+	StreamPlayerClose(ctx context.Context, in *StreamPlayerCloseRequest, opts ...grpc.CallOption) (*StreamPlayerCloseReply, error)
 }
 
 type streamDClient struct {
@@ -74,7 +97,7 @@ func NewStreamDClient(cc grpc.ClientConnInterface) StreamDClient {
 
 func (c *streamDClient) GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigReply, error) {
 	out := new(GetConfigReply)
-	err := c.cc.Invoke(ctx, "/StreamD/GetConfig", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/GetConfig", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +106,7 @@ func (c *streamDClient) GetConfig(ctx context.Context, in *GetConfigRequest, opt
 
 func (c *streamDClient) SetConfig(ctx context.Context, in *SetConfigRequest, opts ...grpc.CallOption) (*SetConfigReply, error) {
 	out := new(SetConfigReply)
-	err := c.cc.Invoke(ctx, "/StreamD/SetConfig", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/SetConfig", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -92,16 +115,48 @@ func (c *streamDClient) SetConfig(ctx context.Context, in *SetConfigRequest, opt
 
 func (c *streamDClient) SaveConfig(ctx context.Context, in *SaveConfigRequest, opts ...grpc.CallOption) (*SaveConfigReply, error) {
 	out := new(SaveConfigReply)
-	err := c.cc.Invoke(ctx, "/StreamD/SaveConfig", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/SaveConfig", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
+func (c *streamDClient) SubscribeToConfigChanges(ctx context.Context, in *SubscribeToConfigChangesRequest, opts ...grpc.CallOption) (StreamD_SubscribeToConfigChangesClient, error) {
+	stream, err := c.cc.NewStream(ctx, &StreamD_ServiceDesc.Streams[0], "/streamd.StreamD/SubscribeToConfigChanges", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &streamDSubscribeToConfigChangesClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type StreamD_SubscribeToConfigChangesClient interface {
+	Recv() (*ConfigChange, error)
+	grpc.ClientStream
+}
+
+type streamDSubscribeToConfigChangesClient struct {
+	grpc.ClientStream
+}
+
+func (x *streamDSubscribeToConfigChangesClient) Recv() (*ConfigChange, error) {
+	m := new(ConfigChange)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func (c *streamDClient) ResetCache(ctx context.Context, in *ResetCacheRequest, opts ...grpc.CallOption) (*ResetCacheReply, error) {
 	out := new(ResetCacheReply)
-	err := c.cc.Invoke(ctx, "/StreamD/ResetCache", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/ResetCache", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +165,7 @@ func (c *streamDClient) ResetCache(ctx context.Context, in *ResetCacheRequest, o
 
 func (c *streamDClient) InitCache(ctx context.Context, in *InitCacheRequest, opts ...grpc.CallOption) (*InitCacheReply, error) {
 	out := new(InitCacheReply)
-	err := c.cc.Invoke(ctx, "/StreamD/InitCache", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/InitCache", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +174,7 @@ func (c *streamDClient) InitCache(ctx context.Context, in *InitCacheRequest, opt
 
 func (c *streamDClient) StartStream(ctx context.Context, in *StartStreamRequest, opts ...grpc.CallOption) (*StartStreamReply, error) {
 	out := new(StartStreamReply)
-	err := c.cc.Invoke(ctx, "/StreamD/StartStream", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/StartStream", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +183,7 @@ func (c *streamDClient) StartStream(ctx context.Context, in *StartStreamRequest,
 
 func (c *streamDClient) EndStream(ctx context.Context, in *EndStreamRequest, opts ...grpc.CallOption) (*EndStreamReply, error) {
 	out := new(EndStreamReply)
-	err := c.cc.Invoke(ctx, "/StreamD/EndStream", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/EndStream", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +192,7 @@ func (c *streamDClient) EndStream(ctx context.Context, in *EndStreamRequest, opt
 
 func (c *streamDClient) GetStreamStatus(ctx context.Context, in *GetStreamStatusRequest, opts ...grpc.CallOption) (*GetStreamStatusReply, error) {
 	out := new(GetStreamStatusReply)
-	err := c.cc.Invoke(ctx, "/StreamD/GetStreamStatus", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/GetStreamStatus", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +201,7 @@ func (c *streamDClient) GetStreamStatus(ctx context.Context, in *GetStreamStatus
 
 func (c *streamDClient) IsBackendEnabled(ctx context.Context, in *IsBackendEnabledRequest, opts ...grpc.CallOption) (*IsBackendEnabledReply, error) {
 	out := new(IsBackendEnabledReply)
-	err := c.cc.Invoke(ctx, "/StreamD/IsBackendEnabled", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/IsBackendEnabled", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -155,16 +210,48 @@ func (c *streamDClient) IsBackendEnabled(ctx context.Context, in *IsBackendEnabl
 
 func (c *streamDClient) GetBackendInfo(ctx context.Context, in *GetBackendInfoRequest, opts ...grpc.CallOption) (*GetBackendInfoReply, error) {
 	out := new(GetBackendInfoReply)
-	err := c.cc.Invoke(ctx, "/StreamD/GetBackendInfo", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/GetBackendInfo", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
+func (c *streamDClient) SubscribeToStreamsChanges(ctx context.Context, in *SubscribeToStreamsChangesRequest, opts ...grpc.CallOption) (StreamD_SubscribeToStreamsChangesClient, error) {
+	stream, err := c.cc.NewStream(ctx, &StreamD_ServiceDesc.Streams[1], "/streamd.StreamD/SubscribeToStreamsChanges", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &streamDSubscribeToStreamsChangesClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type StreamD_SubscribeToStreamsChangesClient interface {
+	Recv() (*StreamsChange, error)
+	grpc.ClientStream
+}
+
+type streamDSubscribeToStreamsChangesClient struct {
+	grpc.ClientStream
+}
+
+func (x *streamDSubscribeToStreamsChangesClient) Recv() (*StreamsChange, error) {
+	m := new(StreamsChange)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func (c *streamDClient) Restart(ctx context.Context, in *RestartRequest, opts ...grpc.CallOption) (*RestartReply, error) {
 	out := new(RestartReply)
-	err := c.cc.Invoke(ctx, "/StreamD/Restart", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/Restart", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +260,7 @@ func (c *streamDClient) Restart(ctx context.Context, in *RestartRequest, opts ..
 
 func (c *streamDClient) SetTitle(ctx context.Context, in *SetTitleRequest, opts ...grpc.CallOption) (*SetTitleReply, error) {
 	out := new(SetTitleReply)
-	err := c.cc.Invoke(ctx, "/StreamD/SetTitle", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/SetTitle", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -182,16 +269,16 @@ func (c *streamDClient) SetTitle(ctx context.Context, in *SetTitleRequest, opts 
 
 func (c *streamDClient) SetDescription(ctx context.Context, in *SetDescriptionRequest, opts ...grpc.CallOption) (*SetDescriptionReply, error) {
 	out := new(SetDescriptionReply)
-	err := c.cc.Invoke(ctx, "/StreamD/SetDescription", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/SetDescription", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *streamDClient) SetApplyProfile(ctx context.Context, in *SetApplyProfileRequest, opts ...grpc.CallOption) (*SetApplyProfileReply, error) {
-	out := new(SetApplyProfileReply)
-	err := c.cc.Invoke(ctx, "/StreamD/SetApplyProfile", in, out, opts...)
+func (c *streamDClient) ApplyProfile(ctx context.Context, in *ApplyProfileRequest, opts ...grpc.CallOption) (*ApplyProfileReply, error) {
+	out := new(ApplyProfileReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/ApplyProfile", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +287,7 @@ func (c *streamDClient) SetApplyProfile(ctx context.Context, in *SetApplyProfile
 
 func (c *streamDClient) UpdateStream(ctx context.Context, in *UpdateStreamRequest, opts ...grpc.CallOption) (*UpdateStreamReply, error) {
 	out := new(UpdateStreamReply)
-	err := c.cc.Invoke(ctx, "/StreamD/UpdateStream", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/UpdateStream", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +296,7 @@ func (c *streamDClient) UpdateStream(ctx context.Context, in *UpdateStreamReques
 
 func (c *streamDClient) GetVariable(ctx context.Context, in *GetVariableRequest, opts ...grpc.CallOption) (*GetVariableReply, error) {
 	out := new(GetVariableReply)
-	err := c.cc.Invoke(ctx, "/StreamD/GetVariable", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/GetVariable", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +305,7 @@ func (c *streamDClient) GetVariable(ctx context.Context, in *GetVariableRequest,
 
 func (c *streamDClient) GetVariableHash(ctx context.Context, in *GetVariableHashRequest, opts ...grpc.CallOption) (*GetVariableHashReply, error) {
 	out := new(GetVariableHashReply)
-	err := c.cc.Invoke(ctx, "/StreamD/GetVariableHash", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/GetVariableHash", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +314,7 @@ func (c *streamDClient) GetVariableHash(ctx context.Context, in *GetVariableHash
 
 func (c *streamDClient) SetVariable(ctx context.Context, in *SetVariableRequest, opts ...grpc.CallOption) (*SetVariableReply, error) {
 	out := new(SetVariableReply)
-	err := c.cc.Invoke(ctx, "/StreamD/SetVariable", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/SetVariable", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +323,7 @@ func (c *streamDClient) SetVariable(ctx context.Context, in *SetVariableRequest,
 
 func (c *streamDClient) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context, in *EXPERIMENTAL_ReinitStreamControllersRequest, opts ...grpc.CallOption) (*EXPERIMENTAL_ReinitStreamControllersReply, error) {
 	out := new(EXPERIMENTAL_ReinitStreamControllersReply)
-	err := c.cc.Invoke(ctx, "/StreamD/EXPERIMENTAL_ReinitStreamControllers", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/EXPERIMENTAL_ReinitStreamControllers", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +332,7 @@ func (c *streamDClient) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context
 
 func (c *streamDClient) OBSOLETE_FetchConfig(ctx context.Context, in *OBSOLETE_FetchConfigRequest, opts ...grpc.CallOption) (*OBSOLETE_FetchConfigReply, error) {
 	out := new(OBSOLETE_FetchConfigReply)
-	err := c.cc.Invoke(ctx, "/StreamD/OBSOLETE_FetchConfig", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/OBSOLETE_FetchConfig", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -254,7 +341,7 @@ func (c *streamDClient) OBSOLETE_FetchConfig(ctx context.Context, in *OBSOLETE_F
 
 func (c *streamDClient) OBSOLETE_GitInfo(ctx context.Context, in *OBSOLETE_GetGitInfoRequest, opts ...grpc.CallOption) (*OBSOLETE_GetGitInfoReply, error) {
 	out := new(OBSOLETE_GetGitInfoReply)
-	err := c.cc.Invoke(ctx, "/StreamD/OBSOLETE_GitInfo", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/OBSOLETE_GitInfo", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +350,7 @@ func (c *streamDClient) OBSOLETE_GitInfo(ctx context.Context, in *OBSOLETE_GetGi
 
 func (c *streamDClient) OBSOLETE_GitRelogin(ctx context.Context, in *OBSOLETE_GitReloginRequest, opts ...grpc.CallOption) (*OBSOLETE_GitReloginReply, error) {
 	out := new(OBSOLETE_GitReloginReply)
-	err := c.cc.Invoke(ctx, "/StreamD/OBSOLETE_GitRelogin", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/OBSOLETE_GitRelogin", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -271,7 +358,7 @@ func (c *streamDClient) OBSOLETE_GitRelogin(ctx context.Context, in *OBSOLETE_Gi
 }
 
 func (c *streamDClient) SubscribeToOAuthRequests(ctx context.Context, in *SubscribeToOAuthRequestsRequest, opts ...grpc.CallOption) (StreamD_SubscribeToOAuthRequestsClient, error) {
-	stream, err := c.cc.NewStream(ctx, &StreamD_ServiceDesc.Streams[0], "/StreamD/SubscribeToOAuthRequests", opts...)
+	stream, err := c.cc.NewStream(ctx, &StreamD_ServiceDesc.Streams[2], "/streamd.StreamD/SubscribeToOAuthRequests", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -304,7 +391,7 @@ func (x *streamDSubscribeToOAuthRequestsClient) Recv() (*OAuthRequest, error) {
 
 func (c *streamDClient) SubmitOAuthCode(ctx context.Context, in *SubmitOAuthCodeRequest, opts ...grpc.CallOption) (*SubmitOAuthCodeReply, error) {
 	out := new(SubmitOAuthCodeReply)
-	err := c.cc.Invoke(ctx, "/StreamD/SubmitOAuthCode", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/SubmitOAuthCode", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -313,7 +400,7 @@ func (c *streamDClient) SubmitOAuthCode(ctx context.Context, in *SubmitOAuthCode
 
 func (c *streamDClient) OBSGetSceneList(ctx context.Context, in *OBSGetSceneListRequest, opts ...grpc.CallOption) (*OBSGetSceneListReply, error) {
 	out := new(OBSGetSceneListReply)
-	err := c.cc.Invoke(ctx, "/StreamD/OBSGetSceneList", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/OBSGetSceneList", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -322,7 +409,7 @@ func (c *streamDClient) OBSGetSceneList(ctx context.Context, in *OBSGetSceneList
 
 func (c *streamDClient) OBSSetCurrentProgramScene(ctx context.Context, in *OBSSetCurrentProgramSceneRequest, opts ...grpc.CallOption) (*OBSSetCurrentProgramSceneReply, error) {
 	out := new(OBSSetCurrentProgramSceneReply)
-	err := c.cc.Invoke(ctx, "/StreamD/OBSSetCurrentProgramScene", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/OBSSetCurrentProgramScene", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -331,7 +418,7 @@ func (c *streamDClient) OBSSetCurrentProgramScene(ctx context.Context, in *OBSSe
 
 func (c *streamDClient) ListStreamServers(ctx context.Context, in *ListStreamServersRequest, opts ...grpc.CallOption) (*ListStreamServersReply, error) {
 	out := new(ListStreamServersReply)
-	err := c.cc.Invoke(ctx, "/StreamD/ListStreamServers", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/ListStreamServers", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -340,7 +427,7 @@ func (c *streamDClient) ListStreamServers(ctx context.Context, in *ListStreamSer
 
 func (c *streamDClient) StartStreamServer(ctx context.Context, in *StartStreamServerRequest, opts ...grpc.CallOption) (*StartStreamServerReply, error) {
 	out := new(StartStreamServerReply)
-	err := c.cc.Invoke(ctx, "/StreamD/StartStreamServer", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/StartStreamServer", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -349,16 +436,48 @@ func (c *streamDClient) StartStreamServer(ctx context.Context, in *StartStreamSe
 
 func (c *streamDClient) StopStreamServer(ctx context.Context, in *StopStreamServerRequest, opts ...grpc.CallOption) (*StopStreamServerReply, error) {
 	out := new(StopStreamServerReply)
-	err := c.cc.Invoke(ctx, "/StreamD/StopStreamServer", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/StopStreamServer", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
+func (c *streamDClient) SubscribeToStreamServersChanges(ctx context.Context, in *SubscribeToStreamServersChangesRequest, opts ...grpc.CallOption) (StreamD_SubscribeToStreamServersChangesClient, error) {
+	stream, err := c.cc.NewStream(ctx, &StreamD_ServiceDesc.Streams[3], "/streamd.StreamD/SubscribeToStreamServersChanges", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &streamDSubscribeToStreamServersChangesClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type StreamD_SubscribeToStreamServersChangesClient interface {
+	Recv() (*StreamServersChange, error)
+	grpc.ClientStream
+}
+
+type streamDSubscribeToStreamServersChangesClient struct {
+	grpc.ClientStream
+}
+
+func (x *streamDSubscribeToStreamServersChangesClient) Recv() (*StreamServersChange, error) {
+	m := new(StreamServersChange)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func (c *streamDClient) ListStreamDestinations(ctx context.Context, in *ListStreamDestinationsRequest, opts ...grpc.CallOption) (*ListStreamDestinationsReply, error) {
 	out := new(ListStreamDestinationsReply)
-	err := c.cc.Invoke(ctx, "/StreamD/ListStreamDestinations", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/ListStreamDestinations", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -367,7 +486,7 @@ func (c *streamDClient) ListStreamDestinations(ctx context.Context, in *ListStre
 
 func (c *streamDClient) AddStreamDestination(ctx context.Context, in *AddStreamDestinationRequest, opts ...grpc.CallOption) (*AddStreamDestinationReply, error) {
 	out := new(AddStreamDestinationReply)
-	err := c.cc.Invoke(ctx, "/StreamD/AddStreamDestination", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/AddStreamDestination", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -376,16 +495,48 @@ func (c *streamDClient) AddStreamDestination(ctx context.Context, in *AddStreamD
 
 func (c *streamDClient) RemoveStreamDestination(ctx context.Context, in *RemoveStreamDestinationRequest, opts ...grpc.CallOption) (*RemoveStreamDestinationReply, error) {
 	out := new(RemoveStreamDestinationReply)
-	err := c.cc.Invoke(ctx, "/StreamD/RemoveStreamDestination", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/RemoveStreamDestination", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
+func (c *streamDClient) SubscribeToStreamDestinationsChanges(ctx context.Context, in *SubscribeToStreamDestinationsChangesRequest, opts ...grpc.CallOption) (StreamD_SubscribeToStreamDestinationsChangesClient, error) {
+	stream, err := c.cc.NewStream(ctx, &StreamD_ServiceDesc.Streams[4], "/streamd.StreamD/SubscribeToStreamDestinationsChanges", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &streamDSubscribeToStreamDestinationsChangesClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type StreamD_SubscribeToStreamDestinationsChangesClient interface {
+	Recv() (*StreamDestinationsChange, error)
+	grpc.ClientStream
+}
+
+type streamDSubscribeToStreamDestinationsChangesClient struct {
+	grpc.ClientStream
+}
+
+func (x *streamDSubscribeToStreamDestinationsChangesClient) Recv() (*StreamDestinationsChange, error) {
+	m := new(StreamDestinationsChange)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func (c *streamDClient) AddIncomingStream(ctx context.Context, in *AddIncomingStreamRequest, opts ...grpc.CallOption) (*AddIncomingStreamReply, error) {
 	out := new(AddIncomingStreamReply)
-	err := c.cc.Invoke(ctx, "/StreamD/AddIncomingStream", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/AddIncomingStream", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -394,7 +545,7 @@ func (c *streamDClient) AddIncomingStream(ctx context.Context, in *AddIncomingSt
 
 func (c *streamDClient) RemoveIncomingStream(ctx context.Context, in *RemoveIncomingStreamRequest, opts ...grpc.CallOption) (*RemoveIncomingStreamReply, error) {
 	out := new(RemoveIncomingStreamReply)
-	err := c.cc.Invoke(ctx, "/StreamD/RemoveIncomingStream", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/RemoveIncomingStream", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -403,16 +554,48 @@ func (c *streamDClient) RemoveIncomingStream(ctx context.Context, in *RemoveInco
 
 func (c *streamDClient) ListIncomingStreams(ctx context.Context, in *ListIncomingStreamsRequest, opts ...grpc.CallOption) (*ListIncomingStreamsReply, error) {
 	out := new(ListIncomingStreamsReply)
-	err := c.cc.Invoke(ctx, "/StreamD/ListIncomingStreams", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/ListIncomingStreams", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
+func (c *streamDClient) SubscribeToIncomingStreamsChanges(ctx context.Context, in *SubscribeToIncomingStreamsChangesRequest, opts ...grpc.CallOption) (StreamD_SubscribeToIncomingStreamsChangesClient, error) {
+	stream, err := c.cc.NewStream(ctx, &StreamD_ServiceDesc.Streams[5], "/streamd.StreamD/SubscribeToIncomingStreamsChanges", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &streamDSubscribeToIncomingStreamsChangesClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type StreamD_SubscribeToIncomingStreamsChangesClient interface {
+	Recv() (*IncomingStreamsChange, error)
+	grpc.ClientStream
+}
+
+type streamDSubscribeToIncomingStreamsChangesClient struct {
+	grpc.ClientStream
+}
+
+func (x *streamDSubscribeToIncomingStreamsChangesClient) Recv() (*IncomingStreamsChange, error) {
+	m := new(IncomingStreamsChange)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func (c *streamDClient) ListStreamForwards(ctx context.Context, in *ListStreamForwardsRequest, opts ...grpc.CallOption) (*ListStreamForwardsReply, error) {
 	out := new(ListStreamForwardsReply)
-	err := c.cc.Invoke(ctx, "/StreamD/ListStreamForwards", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/ListStreamForwards", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -421,7 +604,7 @@ func (c *streamDClient) ListStreamForwards(ctx context.Context, in *ListStreamFo
 
 func (c *streamDClient) AddStreamForward(ctx context.Context, in *AddStreamForwardRequest, opts ...grpc.CallOption) (*AddStreamForwardReply, error) {
 	out := new(AddStreamForwardReply)
-	err := c.cc.Invoke(ctx, "/StreamD/AddStreamForward", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/AddStreamForward", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -430,7 +613,7 @@ func (c *streamDClient) AddStreamForward(ctx context.Context, in *AddStreamForwa
 
 func (c *streamDClient) UpdateStreamForward(ctx context.Context, in *UpdateStreamForwardRequest, opts ...grpc.CallOption) (*UpdateStreamForwardReply, error) {
 	out := new(UpdateStreamForwardReply)
-	err := c.cc.Invoke(ctx, "/StreamD/UpdateStreamForward", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/UpdateStreamForward", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -439,15 +622,47 @@ func (c *streamDClient) UpdateStreamForward(ctx context.Context, in *UpdateStrea
 
 func (c *streamDClient) RemoveStreamForward(ctx context.Context, in *RemoveStreamForwardRequest, opts ...grpc.CallOption) (*RemoveStreamForwardReply, error) {
 	out := new(RemoveStreamForwardReply)
-	err := c.cc.Invoke(ctx, "/StreamD/RemoveStreamForward", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/RemoveStreamForward", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
+func (c *streamDClient) SubscribeToStreamForwardsChanges(ctx context.Context, in *SubscribeToStreamForwardsChangesRequest, opts ...grpc.CallOption) (StreamD_SubscribeToStreamForwardsChangesClient, error) {
+	stream, err := c.cc.NewStream(ctx, &StreamD_ServiceDesc.Streams[6], "/streamd.StreamD/SubscribeToStreamForwardsChanges", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &streamDSubscribeToStreamForwardsChangesClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type StreamD_SubscribeToStreamForwardsChangesClient interface {
+	Recv() (*StreamForwardsChange, error)
+	grpc.ClientStream
+}
+
+type streamDSubscribeToStreamForwardsChangesClient struct {
+	grpc.ClientStream
+}
+
+func (x *streamDSubscribeToStreamForwardsChangesClient) Recv() (*StreamForwardsChange, error) {
+	m := new(StreamForwardsChange)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func (c *streamDClient) WaitForStreamPublisher(ctx context.Context, in *WaitForStreamPublisherRequest, opts ...grpc.CallOption) (StreamD_WaitForStreamPublisherClient, error) {
-	stream, err := c.cc.NewStream(ctx, &StreamD_ServiceDesc.Streams[1], "/StreamD/WaitForStreamPublisher", opts...)
+	stream, err := c.cc.NewStream(ctx, &StreamD_ServiceDesc.Streams[7], "/streamd.StreamD/WaitForStreamPublisher", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -478,6 +693,205 @@ func (x *streamDWaitForStreamPublisherClient) Recv() (*StreamPublisher, error) {
 	return m, nil
 }
 
+func (c *streamDClient) AddStreamPlayer(ctx context.Context, in *AddStreamPlayerRequest, opts ...grpc.CallOption) (*AddStreamPlayerReply, error) {
+	out := new(AddStreamPlayerReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/AddStreamPlayer", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) RemoveStreamPlayer(ctx context.Context, in *RemoveStreamPlayerRequest, opts ...grpc.CallOption) (*RemoveStreamPlayerReply, error) {
+	out := new(RemoveStreamPlayerReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/RemoveStreamPlayer", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) UpdateStreamPlayer(ctx context.Context, in *UpdateStreamPlayerRequest, opts ...grpc.CallOption) (*UpdateStreamPlayerReply, error) {
+	out := new(UpdateStreamPlayerReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/UpdateStreamPlayer", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) ListStreamPlayers(ctx context.Context, in *ListStreamPlayersRequest, opts ...grpc.CallOption) (*ListStreamPlayersReply, error) {
+	out := new(ListStreamPlayersReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/ListStreamPlayers", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) GetStreamPlayer(ctx context.Context, in *GetStreamPlayerRequest, opts ...grpc.CallOption) (*GetStreamPlayerReply, error) {
+	out := new(GetStreamPlayerReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/GetStreamPlayer", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) SubscribeToStreamPlayersChanges(ctx context.Context, in *SubscribeToStreamPlayersChangesRequest, opts ...grpc.CallOption) (StreamD_SubscribeToStreamPlayersChangesClient, error) {
+	stream, err := c.cc.NewStream(ctx, &StreamD_ServiceDesc.Streams[8], "/streamd.StreamD/SubscribeToStreamPlayersChanges", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &streamDSubscribeToStreamPlayersChangesClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type StreamD_SubscribeToStreamPlayersChangesClient interface {
+	Recv() (*StreamPlayersChange, error)
+	grpc.ClientStream
+}
+
+type streamDSubscribeToStreamPlayersChangesClient struct {
+	grpc.ClientStream
+}
+
+func (x *streamDSubscribeToStreamPlayersChangesClient) Recv() (*StreamPlayersChange, error) {
+	m := new(StreamPlayersChange)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *streamDClient) StreamPlayerOpen(ctx context.Context, in *StreamPlayerOpenRequest, opts ...grpc.CallOption) (*StreamPlayerOpenReply, error) {
+	out := new(StreamPlayerOpenReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/StreamPlayerOpen", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) StreamPlayerProcessTitle(ctx context.Context, in *StreamPlayerProcessTitleRequest, opts ...grpc.CallOption) (*StreamPlayerProcessTitleReply, error) {
+	out := new(StreamPlayerProcessTitleReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/StreamPlayerProcessTitle", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) StreamPlayerGetLink(ctx context.Context, in *StreamPlayerGetLinkRequest, opts ...grpc.CallOption) (*StreamPlayerGetLinkReply, error) {
+	out := new(StreamPlayerGetLinkReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/StreamPlayerGetLink", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) StreamPlayerEndChan(ctx context.Context, in *StreamPlayerEndChanRequest, opts ...grpc.CallOption) (StreamD_StreamPlayerEndChanClient, error) {
+	stream, err := c.cc.NewStream(ctx, &StreamD_ServiceDesc.Streams[9], "/streamd.StreamD/StreamPlayerEndChan", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &streamDStreamPlayerEndChanClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type StreamD_StreamPlayerEndChanClient interface {
+	Recv() (*StreamPlayerEndChanReply, error)
+	grpc.ClientStream
+}
+
+type streamDStreamPlayerEndChanClient struct {
+	grpc.ClientStream
+}
+
+func (x *streamDStreamPlayerEndChanClient) Recv() (*StreamPlayerEndChanReply, error) {
+	m := new(StreamPlayerEndChanReply)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *streamDClient) StreamPlayerIsEnded(ctx context.Context, in *StreamPlayerIsEndedRequest, opts ...grpc.CallOption) (*StreamPlayerIsEndedReply, error) {
+	out := new(StreamPlayerIsEndedReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/StreamPlayerIsEnded", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) StreamPlayerGetPosition(ctx context.Context, in *StreamPlayerGetPositionRequest, opts ...grpc.CallOption) (*StreamPlayerGetPositionReply, error) {
+	out := new(StreamPlayerGetPositionReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/StreamPlayerGetPosition", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) StreamPlayerGetLength(ctx context.Context, in *StreamPlayerGetLengthRequest, opts ...grpc.CallOption) (*StreamPlayerGetLengthReply, error) {
+	out := new(StreamPlayerGetLengthReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/StreamPlayerGetLength", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) StreamPlayerSetSpeed(ctx context.Context, in *StreamPlayerSetSpeedRequest, opts ...grpc.CallOption) (*StreamPlayerSetSpeedReply, error) {
+	out := new(StreamPlayerSetSpeedReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/StreamPlayerSetSpeed", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) StreamPlayerSetPause(ctx context.Context, in *StreamPlayerSetPauseRequest, opts ...grpc.CallOption) (*StreamPlayerSetPauseReply, error) {
+	out := new(StreamPlayerSetPauseReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/StreamPlayerSetPause", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) StreamPlayerStop(ctx context.Context, in *StreamPlayerStopRequest, opts ...grpc.CallOption) (*StreamPlayerStopReply, error) {
+	out := new(StreamPlayerStopReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/StreamPlayerStop", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) StreamPlayerClose(ctx context.Context, in *StreamPlayerCloseRequest, opts ...grpc.CallOption) (*StreamPlayerCloseReply, error) {
+	out := new(StreamPlayerCloseReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/StreamPlayerClose", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // StreamDServer is the server API for StreamD service.
 // All implementations must embed UnimplementedStreamDServer
 // for forward compatibility
@@ -485,6 +899,7 @@ type StreamDServer interface {
 	GetConfig(context.Context, *GetConfigRequest) (*GetConfigReply, error)
 	SetConfig(context.Context, *SetConfigRequest) (*SetConfigReply, error)
 	SaveConfig(context.Context, *SaveConfigRequest) (*SaveConfigReply, error)
+	SubscribeToConfigChanges(*SubscribeToConfigChangesRequest, StreamD_SubscribeToConfigChangesServer) error
 	ResetCache(context.Context, *ResetCacheRequest) (*ResetCacheReply, error)
 	InitCache(context.Context, *InitCacheRequest) (*InitCacheReply, error)
 	StartStream(context.Context, *StartStreamRequest) (*StartStreamReply, error)
@@ -492,10 +907,11 @@ type StreamDServer interface {
 	GetStreamStatus(context.Context, *GetStreamStatusRequest) (*GetStreamStatusReply, error)
 	IsBackendEnabled(context.Context, *IsBackendEnabledRequest) (*IsBackendEnabledReply, error)
 	GetBackendInfo(context.Context, *GetBackendInfoRequest) (*GetBackendInfoReply, error)
+	SubscribeToStreamsChanges(*SubscribeToStreamsChangesRequest, StreamD_SubscribeToStreamsChangesServer) error
 	Restart(context.Context, *RestartRequest) (*RestartReply, error)
 	SetTitle(context.Context, *SetTitleRequest) (*SetTitleReply, error)
 	SetDescription(context.Context, *SetDescriptionRequest) (*SetDescriptionReply, error)
-	SetApplyProfile(context.Context, *SetApplyProfileRequest) (*SetApplyProfileReply, error)
+	ApplyProfile(context.Context, *ApplyProfileRequest) (*ApplyProfileReply, error)
 	UpdateStream(context.Context, *UpdateStreamRequest) (*UpdateStreamReply, error)
 	GetVariable(context.Context, *GetVariableRequest) (*GetVariableReply, error)
 	GetVariableHash(context.Context, *GetVariableHashRequest) (*GetVariableHashReply, error)
@@ -511,17 +927,38 @@ type StreamDServer interface {
 	ListStreamServers(context.Context, *ListStreamServersRequest) (*ListStreamServersReply, error)
 	StartStreamServer(context.Context, *StartStreamServerRequest) (*StartStreamServerReply, error)
 	StopStreamServer(context.Context, *StopStreamServerRequest) (*StopStreamServerReply, error)
+	SubscribeToStreamServersChanges(*SubscribeToStreamServersChangesRequest, StreamD_SubscribeToStreamServersChangesServer) error
 	ListStreamDestinations(context.Context, *ListStreamDestinationsRequest) (*ListStreamDestinationsReply, error)
 	AddStreamDestination(context.Context, *AddStreamDestinationRequest) (*AddStreamDestinationReply, error)
 	RemoveStreamDestination(context.Context, *RemoveStreamDestinationRequest) (*RemoveStreamDestinationReply, error)
+	SubscribeToStreamDestinationsChanges(*SubscribeToStreamDestinationsChangesRequest, StreamD_SubscribeToStreamDestinationsChangesServer) error
 	AddIncomingStream(context.Context, *AddIncomingStreamRequest) (*AddIncomingStreamReply, error)
 	RemoveIncomingStream(context.Context, *RemoveIncomingStreamRequest) (*RemoveIncomingStreamReply, error)
 	ListIncomingStreams(context.Context, *ListIncomingStreamsRequest) (*ListIncomingStreamsReply, error)
+	SubscribeToIncomingStreamsChanges(*SubscribeToIncomingStreamsChangesRequest, StreamD_SubscribeToIncomingStreamsChangesServer) error
 	ListStreamForwards(context.Context, *ListStreamForwardsRequest) (*ListStreamForwardsReply, error)
 	AddStreamForward(context.Context, *AddStreamForwardRequest) (*AddStreamForwardReply, error)
 	UpdateStreamForward(context.Context, *UpdateStreamForwardRequest) (*UpdateStreamForwardReply, error)
 	RemoveStreamForward(context.Context, *RemoveStreamForwardRequest) (*RemoveStreamForwardReply, error)
+	SubscribeToStreamForwardsChanges(*SubscribeToStreamForwardsChangesRequest, StreamD_SubscribeToStreamForwardsChangesServer) error
 	WaitForStreamPublisher(*WaitForStreamPublisherRequest, StreamD_WaitForStreamPublisherServer) error
+	AddStreamPlayer(context.Context, *AddStreamPlayerRequest) (*AddStreamPlayerReply, error)
+	RemoveStreamPlayer(context.Context, *RemoveStreamPlayerRequest) (*RemoveStreamPlayerReply, error)
+	UpdateStreamPlayer(context.Context, *UpdateStreamPlayerRequest) (*UpdateStreamPlayerReply, error)
+	ListStreamPlayers(context.Context, *ListStreamPlayersRequest) (*ListStreamPlayersReply, error)
+	GetStreamPlayer(context.Context, *GetStreamPlayerRequest) (*GetStreamPlayerReply, error)
+	SubscribeToStreamPlayersChanges(*SubscribeToStreamPlayersChangesRequest, StreamD_SubscribeToStreamPlayersChangesServer) error
+	StreamPlayerOpen(context.Context, *StreamPlayerOpenRequest) (*StreamPlayerOpenReply, error)
+	StreamPlayerProcessTitle(context.Context, *StreamPlayerProcessTitleRequest) (*StreamPlayerProcessTitleReply, error)
+	StreamPlayerGetLink(context.Context, *StreamPlayerGetLinkRequest) (*StreamPlayerGetLinkReply, error)
+	StreamPlayerEndChan(*StreamPlayerEndChanRequest, StreamD_StreamPlayerEndChanServer) error
+	StreamPlayerIsEnded(context.Context, *StreamPlayerIsEndedRequest) (*StreamPlayerIsEndedReply, error)
+	StreamPlayerGetPosition(context.Context, *StreamPlayerGetPositionRequest) (*StreamPlayerGetPositionReply, error)
+	StreamPlayerGetLength(context.Context, *StreamPlayerGetLengthRequest) (*StreamPlayerGetLengthReply, error)
+	StreamPlayerSetSpeed(context.Context, *StreamPlayerSetSpeedRequest) (*StreamPlayerSetSpeedReply, error)
+	StreamPlayerSetPause(context.Context, *StreamPlayerSetPauseRequest) (*StreamPlayerSetPauseReply, error)
+	StreamPlayerStop(context.Context, *StreamPlayerStopRequest) (*StreamPlayerStopReply, error)
+	StreamPlayerClose(context.Context, *StreamPlayerCloseRequest) (*StreamPlayerCloseReply, error)
 	mustEmbedUnimplementedStreamDServer()
 }
 
@@ -537,6 +974,9 @@ func (UnimplementedStreamDServer) SetConfig(context.Context, *SetConfigRequest) 
 }
 func (UnimplementedStreamDServer) SaveConfig(context.Context, *SaveConfigRequest) (*SaveConfigReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SaveConfig not implemented")
+}
+func (UnimplementedStreamDServer) SubscribeToConfigChanges(*SubscribeToConfigChangesRequest, StreamD_SubscribeToConfigChangesServer) error {
+	return status.Errorf(codes.Unimplemented, "method SubscribeToConfigChanges not implemented")
 }
 func (UnimplementedStreamDServer) ResetCache(context.Context, *ResetCacheRequest) (*ResetCacheReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ResetCache not implemented")
@@ -559,6 +999,9 @@ func (UnimplementedStreamDServer) IsBackendEnabled(context.Context, *IsBackendEn
 func (UnimplementedStreamDServer) GetBackendInfo(context.Context, *GetBackendInfoRequest) (*GetBackendInfoReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetBackendInfo not implemented")
 }
+func (UnimplementedStreamDServer) SubscribeToStreamsChanges(*SubscribeToStreamsChangesRequest, StreamD_SubscribeToStreamsChangesServer) error {
+	return status.Errorf(codes.Unimplemented, "method SubscribeToStreamsChanges not implemented")
+}
 func (UnimplementedStreamDServer) Restart(context.Context, *RestartRequest) (*RestartReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Restart not implemented")
 }
@@ -568,8 +1011,8 @@ func (UnimplementedStreamDServer) SetTitle(context.Context, *SetTitleRequest) (*
 func (UnimplementedStreamDServer) SetDescription(context.Context, *SetDescriptionRequest) (*SetDescriptionReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetDescription not implemented")
 }
-func (UnimplementedStreamDServer) SetApplyProfile(context.Context, *SetApplyProfileRequest) (*SetApplyProfileReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SetApplyProfile not implemented")
+func (UnimplementedStreamDServer) ApplyProfile(context.Context, *ApplyProfileRequest) (*ApplyProfileReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ApplyProfile not implemented")
 }
 func (UnimplementedStreamDServer) UpdateStream(context.Context, *UpdateStreamRequest) (*UpdateStreamReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateStream not implemented")
@@ -616,6 +1059,9 @@ func (UnimplementedStreamDServer) StartStreamServer(context.Context, *StartStrea
 func (UnimplementedStreamDServer) StopStreamServer(context.Context, *StopStreamServerRequest) (*StopStreamServerReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StopStreamServer not implemented")
 }
+func (UnimplementedStreamDServer) SubscribeToStreamServersChanges(*SubscribeToStreamServersChangesRequest, StreamD_SubscribeToStreamServersChangesServer) error {
+	return status.Errorf(codes.Unimplemented, "method SubscribeToStreamServersChanges not implemented")
+}
 func (UnimplementedStreamDServer) ListStreamDestinations(context.Context, *ListStreamDestinationsRequest) (*ListStreamDestinationsReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListStreamDestinations not implemented")
 }
@@ -625,6 +1071,9 @@ func (UnimplementedStreamDServer) AddStreamDestination(context.Context, *AddStre
 func (UnimplementedStreamDServer) RemoveStreamDestination(context.Context, *RemoveStreamDestinationRequest) (*RemoveStreamDestinationReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RemoveStreamDestination not implemented")
 }
+func (UnimplementedStreamDServer) SubscribeToStreamDestinationsChanges(*SubscribeToStreamDestinationsChangesRequest, StreamD_SubscribeToStreamDestinationsChangesServer) error {
+	return status.Errorf(codes.Unimplemented, "method SubscribeToStreamDestinationsChanges not implemented")
+}
 func (UnimplementedStreamDServer) AddIncomingStream(context.Context, *AddIncomingStreamRequest) (*AddIncomingStreamReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddIncomingStream not implemented")
 }
@@ -633,6 +1082,9 @@ func (UnimplementedStreamDServer) RemoveIncomingStream(context.Context, *RemoveI
 }
 func (UnimplementedStreamDServer) ListIncomingStreams(context.Context, *ListIncomingStreamsRequest) (*ListIncomingStreamsReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListIncomingStreams not implemented")
+}
+func (UnimplementedStreamDServer) SubscribeToIncomingStreamsChanges(*SubscribeToIncomingStreamsChangesRequest, StreamD_SubscribeToIncomingStreamsChangesServer) error {
+	return status.Errorf(codes.Unimplemented, "method SubscribeToIncomingStreamsChanges not implemented")
 }
 func (UnimplementedStreamDServer) ListStreamForwards(context.Context, *ListStreamForwardsRequest) (*ListStreamForwardsReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListStreamForwards not implemented")
@@ -646,8 +1098,62 @@ func (UnimplementedStreamDServer) UpdateStreamForward(context.Context, *UpdateSt
 func (UnimplementedStreamDServer) RemoveStreamForward(context.Context, *RemoveStreamForwardRequest) (*RemoveStreamForwardReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RemoveStreamForward not implemented")
 }
+func (UnimplementedStreamDServer) SubscribeToStreamForwardsChanges(*SubscribeToStreamForwardsChangesRequest, StreamD_SubscribeToStreamForwardsChangesServer) error {
+	return status.Errorf(codes.Unimplemented, "method SubscribeToStreamForwardsChanges not implemented")
+}
 func (UnimplementedStreamDServer) WaitForStreamPublisher(*WaitForStreamPublisherRequest, StreamD_WaitForStreamPublisherServer) error {
 	return status.Errorf(codes.Unimplemented, "method WaitForStreamPublisher not implemented")
+}
+func (UnimplementedStreamDServer) AddStreamPlayer(context.Context, *AddStreamPlayerRequest) (*AddStreamPlayerReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddStreamPlayer not implemented")
+}
+func (UnimplementedStreamDServer) RemoveStreamPlayer(context.Context, *RemoveStreamPlayerRequest) (*RemoveStreamPlayerReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveStreamPlayer not implemented")
+}
+func (UnimplementedStreamDServer) UpdateStreamPlayer(context.Context, *UpdateStreamPlayerRequest) (*UpdateStreamPlayerReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateStreamPlayer not implemented")
+}
+func (UnimplementedStreamDServer) ListStreamPlayers(context.Context, *ListStreamPlayersRequest) (*ListStreamPlayersReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListStreamPlayers not implemented")
+}
+func (UnimplementedStreamDServer) GetStreamPlayer(context.Context, *GetStreamPlayerRequest) (*GetStreamPlayerReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetStreamPlayer not implemented")
+}
+func (UnimplementedStreamDServer) SubscribeToStreamPlayersChanges(*SubscribeToStreamPlayersChangesRequest, StreamD_SubscribeToStreamPlayersChangesServer) error {
+	return status.Errorf(codes.Unimplemented, "method SubscribeToStreamPlayersChanges not implemented")
+}
+func (UnimplementedStreamDServer) StreamPlayerOpen(context.Context, *StreamPlayerOpenRequest) (*StreamPlayerOpenReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StreamPlayerOpen not implemented")
+}
+func (UnimplementedStreamDServer) StreamPlayerProcessTitle(context.Context, *StreamPlayerProcessTitleRequest) (*StreamPlayerProcessTitleReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StreamPlayerProcessTitle not implemented")
+}
+func (UnimplementedStreamDServer) StreamPlayerGetLink(context.Context, *StreamPlayerGetLinkRequest) (*StreamPlayerGetLinkReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StreamPlayerGetLink not implemented")
+}
+func (UnimplementedStreamDServer) StreamPlayerEndChan(*StreamPlayerEndChanRequest, StreamD_StreamPlayerEndChanServer) error {
+	return status.Errorf(codes.Unimplemented, "method StreamPlayerEndChan not implemented")
+}
+func (UnimplementedStreamDServer) StreamPlayerIsEnded(context.Context, *StreamPlayerIsEndedRequest) (*StreamPlayerIsEndedReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StreamPlayerIsEnded not implemented")
+}
+func (UnimplementedStreamDServer) StreamPlayerGetPosition(context.Context, *StreamPlayerGetPositionRequest) (*StreamPlayerGetPositionReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StreamPlayerGetPosition not implemented")
+}
+func (UnimplementedStreamDServer) StreamPlayerGetLength(context.Context, *StreamPlayerGetLengthRequest) (*StreamPlayerGetLengthReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StreamPlayerGetLength not implemented")
+}
+func (UnimplementedStreamDServer) StreamPlayerSetSpeed(context.Context, *StreamPlayerSetSpeedRequest) (*StreamPlayerSetSpeedReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StreamPlayerSetSpeed not implemented")
+}
+func (UnimplementedStreamDServer) StreamPlayerSetPause(context.Context, *StreamPlayerSetPauseRequest) (*StreamPlayerSetPauseReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StreamPlayerSetPause not implemented")
+}
+func (UnimplementedStreamDServer) StreamPlayerStop(context.Context, *StreamPlayerStopRequest) (*StreamPlayerStopReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StreamPlayerStop not implemented")
+}
+func (UnimplementedStreamDServer) StreamPlayerClose(context.Context, *StreamPlayerCloseRequest) (*StreamPlayerCloseReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StreamPlayerClose not implemented")
 }
 func (UnimplementedStreamDServer) mustEmbedUnimplementedStreamDServer() {}
 
@@ -672,7 +1178,7 @@ func _StreamD_GetConfig_Handler(srv interface{}, ctx context.Context, dec func(i
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/GetConfig",
+		FullMethod: "/streamd.StreamD/GetConfig",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).GetConfig(ctx, req.(*GetConfigRequest))
@@ -690,7 +1196,7 @@ func _StreamD_SetConfig_Handler(srv interface{}, ctx context.Context, dec func(i
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/SetConfig",
+		FullMethod: "/streamd.StreamD/SetConfig",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).SetConfig(ctx, req.(*SetConfigRequest))
@@ -708,12 +1214,33 @@ func _StreamD_SaveConfig_Handler(srv interface{}, ctx context.Context, dec func(
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/SaveConfig",
+		FullMethod: "/streamd.StreamD/SaveConfig",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).SaveConfig(ctx, req.(*SaveConfigRequest))
 	}
 	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_SubscribeToConfigChanges_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(SubscribeToConfigChangesRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(StreamDServer).SubscribeToConfigChanges(m, &streamDSubscribeToConfigChangesServer{stream})
+}
+
+type StreamD_SubscribeToConfigChangesServer interface {
+	Send(*ConfigChange) error
+	grpc.ServerStream
+}
+
+type streamDSubscribeToConfigChangesServer struct {
+	grpc.ServerStream
+}
+
+func (x *streamDSubscribeToConfigChangesServer) Send(m *ConfigChange) error {
+	return x.ServerStream.SendMsg(m)
 }
 
 func _StreamD_ResetCache_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -726,7 +1253,7 @@ func _StreamD_ResetCache_Handler(srv interface{}, ctx context.Context, dec func(
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/ResetCache",
+		FullMethod: "/streamd.StreamD/ResetCache",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).ResetCache(ctx, req.(*ResetCacheRequest))
@@ -744,7 +1271,7 @@ func _StreamD_InitCache_Handler(srv interface{}, ctx context.Context, dec func(i
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/InitCache",
+		FullMethod: "/streamd.StreamD/InitCache",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).InitCache(ctx, req.(*InitCacheRequest))
@@ -762,7 +1289,7 @@ func _StreamD_StartStream_Handler(srv interface{}, ctx context.Context, dec func
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/StartStream",
+		FullMethod: "/streamd.StreamD/StartStream",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).StartStream(ctx, req.(*StartStreamRequest))
@@ -780,7 +1307,7 @@ func _StreamD_EndStream_Handler(srv interface{}, ctx context.Context, dec func(i
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/EndStream",
+		FullMethod: "/streamd.StreamD/EndStream",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).EndStream(ctx, req.(*EndStreamRequest))
@@ -798,7 +1325,7 @@ func _StreamD_GetStreamStatus_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/GetStreamStatus",
+		FullMethod: "/streamd.StreamD/GetStreamStatus",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).GetStreamStatus(ctx, req.(*GetStreamStatusRequest))
@@ -816,7 +1343,7 @@ func _StreamD_IsBackendEnabled_Handler(srv interface{}, ctx context.Context, dec
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/IsBackendEnabled",
+		FullMethod: "/streamd.StreamD/IsBackendEnabled",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).IsBackendEnabled(ctx, req.(*IsBackendEnabledRequest))
@@ -834,12 +1361,33 @@ func _StreamD_GetBackendInfo_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/GetBackendInfo",
+		FullMethod: "/streamd.StreamD/GetBackendInfo",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).GetBackendInfo(ctx, req.(*GetBackendInfoRequest))
 	}
 	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_SubscribeToStreamsChanges_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(SubscribeToStreamsChangesRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(StreamDServer).SubscribeToStreamsChanges(m, &streamDSubscribeToStreamsChangesServer{stream})
+}
+
+type StreamD_SubscribeToStreamsChangesServer interface {
+	Send(*StreamsChange) error
+	grpc.ServerStream
+}
+
+type streamDSubscribeToStreamsChangesServer struct {
+	grpc.ServerStream
+}
+
+func (x *streamDSubscribeToStreamsChangesServer) Send(m *StreamsChange) error {
+	return x.ServerStream.SendMsg(m)
 }
 
 func _StreamD_Restart_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -852,7 +1400,7 @@ func _StreamD_Restart_Handler(srv interface{}, ctx context.Context, dec func(int
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/Restart",
+		FullMethod: "/streamd.StreamD/Restart",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).Restart(ctx, req.(*RestartRequest))
@@ -870,7 +1418,7 @@ func _StreamD_SetTitle_Handler(srv interface{}, ctx context.Context, dec func(in
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/SetTitle",
+		FullMethod: "/streamd.StreamD/SetTitle",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).SetTitle(ctx, req.(*SetTitleRequest))
@@ -888,7 +1436,7 @@ func _StreamD_SetDescription_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/SetDescription",
+		FullMethod: "/streamd.StreamD/SetDescription",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).SetDescription(ctx, req.(*SetDescriptionRequest))
@@ -896,20 +1444,20 @@ func _StreamD_SetDescription_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
-func _StreamD_SetApplyProfile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SetApplyProfileRequest)
+func _StreamD_ApplyProfile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ApplyProfileRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(StreamDServer).SetApplyProfile(ctx, in)
+		return srv.(StreamDServer).ApplyProfile(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/SetApplyProfile",
+		FullMethod: "/streamd.StreamD/ApplyProfile",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(StreamDServer).SetApplyProfile(ctx, req.(*SetApplyProfileRequest))
+		return srv.(StreamDServer).ApplyProfile(ctx, req.(*ApplyProfileRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -924,7 +1472,7 @@ func _StreamD_UpdateStream_Handler(srv interface{}, ctx context.Context, dec fun
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/UpdateStream",
+		FullMethod: "/streamd.StreamD/UpdateStream",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).UpdateStream(ctx, req.(*UpdateStreamRequest))
@@ -942,7 +1490,7 @@ func _StreamD_GetVariable_Handler(srv interface{}, ctx context.Context, dec func
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/GetVariable",
+		FullMethod: "/streamd.StreamD/GetVariable",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).GetVariable(ctx, req.(*GetVariableRequest))
@@ -960,7 +1508,7 @@ func _StreamD_GetVariableHash_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/GetVariableHash",
+		FullMethod: "/streamd.StreamD/GetVariableHash",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).GetVariableHash(ctx, req.(*GetVariableHashRequest))
@@ -978,7 +1526,7 @@ func _StreamD_SetVariable_Handler(srv interface{}, ctx context.Context, dec func
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/SetVariable",
+		FullMethod: "/streamd.StreamD/SetVariable",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).SetVariable(ctx, req.(*SetVariableRequest))
@@ -996,7 +1544,7 @@ func _StreamD_EXPERIMENTAL_ReinitStreamControllers_Handler(srv interface{}, ctx 
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/EXPERIMENTAL_ReinitStreamControllers",
+		FullMethod: "/streamd.StreamD/EXPERIMENTAL_ReinitStreamControllers",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).EXPERIMENTAL_ReinitStreamControllers(ctx, req.(*EXPERIMENTAL_ReinitStreamControllersRequest))
@@ -1014,7 +1562,7 @@ func _StreamD_OBSOLETE_FetchConfig_Handler(srv interface{}, ctx context.Context,
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/OBSOLETE_FetchConfig",
+		FullMethod: "/streamd.StreamD/OBSOLETE_FetchConfig",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).OBSOLETE_FetchConfig(ctx, req.(*OBSOLETE_FetchConfigRequest))
@@ -1032,7 +1580,7 @@ func _StreamD_OBSOLETE_GitInfo_Handler(srv interface{}, ctx context.Context, dec
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/OBSOLETE_GitInfo",
+		FullMethod: "/streamd.StreamD/OBSOLETE_GitInfo",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).OBSOLETE_GitInfo(ctx, req.(*OBSOLETE_GetGitInfoRequest))
@@ -1050,7 +1598,7 @@ func _StreamD_OBSOLETE_GitRelogin_Handler(srv interface{}, ctx context.Context, 
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/OBSOLETE_GitRelogin",
+		FullMethod: "/streamd.StreamD/OBSOLETE_GitRelogin",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).OBSOLETE_GitRelogin(ctx, req.(*OBSOLETE_GitReloginRequest))
@@ -1089,7 +1637,7 @@ func _StreamD_SubmitOAuthCode_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/SubmitOAuthCode",
+		FullMethod: "/streamd.StreamD/SubmitOAuthCode",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).SubmitOAuthCode(ctx, req.(*SubmitOAuthCodeRequest))
@@ -1107,7 +1655,7 @@ func _StreamD_OBSGetSceneList_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/OBSGetSceneList",
+		FullMethod: "/streamd.StreamD/OBSGetSceneList",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).OBSGetSceneList(ctx, req.(*OBSGetSceneListRequest))
@@ -1125,7 +1673,7 @@ func _StreamD_OBSSetCurrentProgramScene_Handler(srv interface{}, ctx context.Con
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/OBSSetCurrentProgramScene",
+		FullMethod: "/streamd.StreamD/OBSSetCurrentProgramScene",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).OBSSetCurrentProgramScene(ctx, req.(*OBSSetCurrentProgramSceneRequest))
@@ -1143,7 +1691,7 @@ func _StreamD_ListStreamServers_Handler(srv interface{}, ctx context.Context, de
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/ListStreamServers",
+		FullMethod: "/streamd.StreamD/ListStreamServers",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).ListStreamServers(ctx, req.(*ListStreamServersRequest))
@@ -1161,7 +1709,7 @@ func _StreamD_StartStreamServer_Handler(srv interface{}, ctx context.Context, de
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/StartStreamServer",
+		FullMethod: "/streamd.StreamD/StartStreamServer",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).StartStreamServer(ctx, req.(*StartStreamServerRequest))
@@ -1179,12 +1727,33 @@ func _StreamD_StopStreamServer_Handler(srv interface{}, ctx context.Context, dec
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/StopStreamServer",
+		FullMethod: "/streamd.StreamD/StopStreamServer",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).StopStreamServer(ctx, req.(*StopStreamServerRequest))
 	}
 	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_SubscribeToStreamServersChanges_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(SubscribeToStreamServersChangesRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(StreamDServer).SubscribeToStreamServersChanges(m, &streamDSubscribeToStreamServersChangesServer{stream})
+}
+
+type StreamD_SubscribeToStreamServersChangesServer interface {
+	Send(*StreamServersChange) error
+	grpc.ServerStream
+}
+
+type streamDSubscribeToStreamServersChangesServer struct {
+	grpc.ServerStream
+}
+
+func (x *streamDSubscribeToStreamServersChangesServer) Send(m *StreamServersChange) error {
+	return x.ServerStream.SendMsg(m)
 }
 
 func _StreamD_ListStreamDestinations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -1197,7 +1766,7 @@ func _StreamD_ListStreamDestinations_Handler(srv interface{}, ctx context.Contex
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/ListStreamDestinations",
+		FullMethod: "/streamd.StreamD/ListStreamDestinations",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).ListStreamDestinations(ctx, req.(*ListStreamDestinationsRequest))
@@ -1215,7 +1784,7 @@ func _StreamD_AddStreamDestination_Handler(srv interface{}, ctx context.Context,
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/AddStreamDestination",
+		FullMethod: "/streamd.StreamD/AddStreamDestination",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).AddStreamDestination(ctx, req.(*AddStreamDestinationRequest))
@@ -1233,12 +1802,33 @@ func _StreamD_RemoveStreamDestination_Handler(srv interface{}, ctx context.Conte
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/RemoveStreamDestination",
+		FullMethod: "/streamd.StreamD/RemoveStreamDestination",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).RemoveStreamDestination(ctx, req.(*RemoveStreamDestinationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_SubscribeToStreamDestinationsChanges_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(SubscribeToStreamDestinationsChangesRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(StreamDServer).SubscribeToStreamDestinationsChanges(m, &streamDSubscribeToStreamDestinationsChangesServer{stream})
+}
+
+type StreamD_SubscribeToStreamDestinationsChangesServer interface {
+	Send(*StreamDestinationsChange) error
+	grpc.ServerStream
+}
+
+type streamDSubscribeToStreamDestinationsChangesServer struct {
+	grpc.ServerStream
+}
+
+func (x *streamDSubscribeToStreamDestinationsChangesServer) Send(m *StreamDestinationsChange) error {
+	return x.ServerStream.SendMsg(m)
 }
 
 func _StreamD_AddIncomingStream_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -1251,7 +1841,7 @@ func _StreamD_AddIncomingStream_Handler(srv interface{}, ctx context.Context, de
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/AddIncomingStream",
+		FullMethod: "/streamd.StreamD/AddIncomingStream",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).AddIncomingStream(ctx, req.(*AddIncomingStreamRequest))
@@ -1269,7 +1859,7 @@ func _StreamD_RemoveIncomingStream_Handler(srv interface{}, ctx context.Context,
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/RemoveIncomingStream",
+		FullMethod: "/streamd.StreamD/RemoveIncomingStream",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).RemoveIncomingStream(ctx, req.(*RemoveIncomingStreamRequest))
@@ -1287,12 +1877,33 @@ func _StreamD_ListIncomingStreams_Handler(srv interface{}, ctx context.Context, 
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/ListIncomingStreams",
+		FullMethod: "/streamd.StreamD/ListIncomingStreams",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).ListIncomingStreams(ctx, req.(*ListIncomingStreamsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_SubscribeToIncomingStreamsChanges_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(SubscribeToIncomingStreamsChangesRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(StreamDServer).SubscribeToIncomingStreamsChanges(m, &streamDSubscribeToIncomingStreamsChangesServer{stream})
+}
+
+type StreamD_SubscribeToIncomingStreamsChangesServer interface {
+	Send(*IncomingStreamsChange) error
+	grpc.ServerStream
+}
+
+type streamDSubscribeToIncomingStreamsChangesServer struct {
+	grpc.ServerStream
+}
+
+func (x *streamDSubscribeToIncomingStreamsChangesServer) Send(m *IncomingStreamsChange) error {
+	return x.ServerStream.SendMsg(m)
 }
 
 func _StreamD_ListStreamForwards_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -1305,7 +1916,7 @@ func _StreamD_ListStreamForwards_Handler(srv interface{}, ctx context.Context, d
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/ListStreamForwards",
+		FullMethod: "/streamd.StreamD/ListStreamForwards",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).ListStreamForwards(ctx, req.(*ListStreamForwardsRequest))
@@ -1323,7 +1934,7 @@ func _StreamD_AddStreamForward_Handler(srv interface{}, ctx context.Context, dec
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/AddStreamForward",
+		FullMethod: "/streamd.StreamD/AddStreamForward",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).AddStreamForward(ctx, req.(*AddStreamForwardRequest))
@@ -1341,7 +1952,7 @@ func _StreamD_UpdateStreamForward_Handler(srv interface{}, ctx context.Context, 
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/UpdateStreamForward",
+		FullMethod: "/streamd.StreamD/UpdateStreamForward",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).UpdateStreamForward(ctx, req.(*UpdateStreamForwardRequest))
@@ -1359,12 +1970,33 @@ func _StreamD_RemoveStreamForward_Handler(srv interface{}, ctx context.Context, 
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/StreamD/RemoveStreamForward",
+		FullMethod: "/streamd.StreamD/RemoveStreamForward",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).RemoveStreamForward(ctx, req.(*RemoveStreamForwardRequest))
 	}
 	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_SubscribeToStreamForwardsChanges_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(SubscribeToStreamForwardsChangesRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(StreamDServer).SubscribeToStreamForwardsChanges(m, &streamDSubscribeToStreamForwardsChangesServer{stream})
+}
+
+type StreamD_SubscribeToStreamForwardsChangesServer interface {
+	Send(*StreamForwardsChange) error
+	grpc.ServerStream
+}
+
+type streamDSubscribeToStreamForwardsChangesServer struct {
+	grpc.ServerStream
+}
+
+func (x *streamDSubscribeToStreamForwardsChangesServer) Send(m *StreamForwardsChange) error {
+	return x.ServerStream.SendMsg(m)
 }
 
 func _StreamD_WaitForStreamPublisher_Handler(srv interface{}, stream grpc.ServerStream) error {
@@ -1388,11 +2020,323 @@ func (x *streamDWaitForStreamPublisherServer) Send(m *StreamPublisher) error {
 	return x.ServerStream.SendMsg(m)
 }
 
+func _StreamD_AddStreamPlayer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddStreamPlayerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).AddStreamPlayer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/AddStreamPlayer",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).AddStreamPlayer(ctx, req.(*AddStreamPlayerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_RemoveStreamPlayer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveStreamPlayerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).RemoveStreamPlayer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/RemoveStreamPlayer",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).RemoveStreamPlayer(ctx, req.(*RemoveStreamPlayerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_UpdateStreamPlayer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateStreamPlayerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).UpdateStreamPlayer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/UpdateStreamPlayer",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).UpdateStreamPlayer(ctx, req.(*UpdateStreamPlayerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_ListStreamPlayers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListStreamPlayersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).ListStreamPlayers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/ListStreamPlayers",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).ListStreamPlayers(ctx, req.(*ListStreamPlayersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_GetStreamPlayer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetStreamPlayerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).GetStreamPlayer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/GetStreamPlayer",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).GetStreamPlayer(ctx, req.(*GetStreamPlayerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_SubscribeToStreamPlayersChanges_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(SubscribeToStreamPlayersChangesRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(StreamDServer).SubscribeToStreamPlayersChanges(m, &streamDSubscribeToStreamPlayersChangesServer{stream})
+}
+
+type StreamD_SubscribeToStreamPlayersChangesServer interface {
+	Send(*StreamPlayersChange) error
+	grpc.ServerStream
+}
+
+type streamDSubscribeToStreamPlayersChangesServer struct {
+	grpc.ServerStream
+}
+
+func (x *streamDSubscribeToStreamPlayersChangesServer) Send(m *StreamPlayersChange) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _StreamD_StreamPlayerOpen_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StreamPlayerOpenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).StreamPlayerOpen(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/StreamPlayerOpen",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).StreamPlayerOpen(ctx, req.(*StreamPlayerOpenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_StreamPlayerProcessTitle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StreamPlayerProcessTitleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).StreamPlayerProcessTitle(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/StreamPlayerProcessTitle",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).StreamPlayerProcessTitle(ctx, req.(*StreamPlayerProcessTitleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_StreamPlayerGetLink_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StreamPlayerGetLinkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).StreamPlayerGetLink(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/StreamPlayerGetLink",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).StreamPlayerGetLink(ctx, req.(*StreamPlayerGetLinkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_StreamPlayerEndChan_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(StreamPlayerEndChanRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(StreamDServer).StreamPlayerEndChan(m, &streamDStreamPlayerEndChanServer{stream})
+}
+
+type StreamD_StreamPlayerEndChanServer interface {
+	Send(*StreamPlayerEndChanReply) error
+	grpc.ServerStream
+}
+
+type streamDStreamPlayerEndChanServer struct {
+	grpc.ServerStream
+}
+
+func (x *streamDStreamPlayerEndChanServer) Send(m *StreamPlayerEndChanReply) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _StreamD_StreamPlayerIsEnded_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StreamPlayerIsEndedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).StreamPlayerIsEnded(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/StreamPlayerIsEnded",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).StreamPlayerIsEnded(ctx, req.(*StreamPlayerIsEndedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_StreamPlayerGetPosition_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StreamPlayerGetPositionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).StreamPlayerGetPosition(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/StreamPlayerGetPosition",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).StreamPlayerGetPosition(ctx, req.(*StreamPlayerGetPositionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_StreamPlayerGetLength_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StreamPlayerGetLengthRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).StreamPlayerGetLength(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/StreamPlayerGetLength",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).StreamPlayerGetLength(ctx, req.(*StreamPlayerGetLengthRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_StreamPlayerSetSpeed_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StreamPlayerSetSpeedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).StreamPlayerSetSpeed(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/StreamPlayerSetSpeed",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).StreamPlayerSetSpeed(ctx, req.(*StreamPlayerSetSpeedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_StreamPlayerSetPause_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StreamPlayerSetPauseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).StreamPlayerSetPause(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/StreamPlayerSetPause",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).StreamPlayerSetPause(ctx, req.(*StreamPlayerSetPauseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_StreamPlayerStop_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StreamPlayerStopRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).StreamPlayerStop(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/StreamPlayerStop",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).StreamPlayerStop(ctx, req.(*StreamPlayerStopRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_StreamPlayerClose_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StreamPlayerCloseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).StreamPlayerClose(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/StreamPlayerClose",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).StreamPlayerClose(ctx, req.(*StreamPlayerCloseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // StreamD_ServiceDesc is the grpc.ServiceDesc for StreamD service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var StreamD_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "StreamD",
+	ServiceName: "streamd.StreamD",
 	HandlerType: (*StreamDServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -1448,8 +2392,8 @@ var StreamD_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _StreamD_SetDescription_Handler,
 		},
 		{
-			MethodName: "SetApplyProfile",
-			Handler:    _StreamD_SetApplyProfile_Handler,
+			MethodName: "ApplyProfile",
+			Handler:    _StreamD_ApplyProfile_Handler,
 		},
 		{
 			MethodName: "UpdateStream",
@@ -1547,16 +2491,116 @@ var StreamD_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "RemoveStreamForward",
 			Handler:    _StreamD_RemoveStreamForward_Handler,
 		},
+		{
+			MethodName: "AddStreamPlayer",
+			Handler:    _StreamD_AddStreamPlayer_Handler,
+		},
+		{
+			MethodName: "RemoveStreamPlayer",
+			Handler:    _StreamD_RemoveStreamPlayer_Handler,
+		},
+		{
+			MethodName: "UpdateStreamPlayer",
+			Handler:    _StreamD_UpdateStreamPlayer_Handler,
+		},
+		{
+			MethodName: "ListStreamPlayers",
+			Handler:    _StreamD_ListStreamPlayers_Handler,
+		},
+		{
+			MethodName: "GetStreamPlayer",
+			Handler:    _StreamD_GetStreamPlayer_Handler,
+		},
+		{
+			MethodName: "StreamPlayerOpen",
+			Handler:    _StreamD_StreamPlayerOpen_Handler,
+		},
+		{
+			MethodName: "StreamPlayerProcessTitle",
+			Handler:    _StreamD_StreamPlayerProcessTitle_Handler,
+		},
+		{
+			MethodName: "StreamPlayerGetLink",
+			Handler:    _StreamD_StreamPlayerGetLink_Handler,
+		},
+		{
+			MethodName: "StreamPlayerIsEnded",
+			Handler:    _StreamD_StreamPlayerIsEnded_Handler,
+		},
+		{
+			MethodName: "StreamPlayerGetPosition",
+			Handler:    _StreamD_StreamPlayerGetPosition_Handler,
+		},
+		{
+			MethodName: "StreamPlayerGetLength",
+			Handler:    _StreamD_StreamPlayerGetLength_Handler,
+		},
+		{
+			MethodName: "StreamPlayerSetSpeed",
+			Handler:    _StreamD_StreamPlayerSetSpeed_Handler,
+		},
+		{
+			MethodName: "StreamPlayerSetPause",
+			Handler:    _StreamD_StreamPlayerSetPause_Handler,
+		},
+		{
+			MethodName: "StreamPlayerStop",
+			Handler:    _StreamD_StreamPlayerStop_Handler,
+		},
+		{
+			MethodName: "StreamPlayerClose",
+			Handler:    _StreamD_StreamPlayerClose_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "SubscribeToConfigChanges",
+			Handler:       _StreamD_SubscribeToConfigChanges_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "SubscribeToStreamsChanges",
+			Handler:       _StreamD_SubscribeToStreamsChanges_Handler,
+			ServerStreams: true,
+		},
 		{
 			StreamName:    "SubscribeToOAuthRequests",
 			Handler:       _StreamD_SubscribeToOAuthRequests_Handler,
 			ServerStreams: true,
 		},
 		{
+			StreamName:    "SubscribeToStreamServersChanges",
+			Handler:       _StreamD_SubscribeToStreamServersChanges_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "SubscribeToStreamDestinationsChanges",
+			Handler:       _StreamD_SubscribeToStreamDestinationsChanges_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "SubscribeToIncomingStreamsChanges",
+			Handler:       _StreamD_SubscribeToIncomingStreamsChanges_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "SubscribeToStreamForwardsChanges",
+			Handler:       _StreamD_SubscribeToStreamForwardsChanges_Handler,
+			ServerStreams: true,
+		},
+		{
 			StreamName:    "WaitForStreamPublisher",
 			Handler:       _StreamD_WaitForStreamPublisher_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "SubscribeToStreamPlayersChanges",
+			Handler:       _StreamD_SubscribeToStreamPlayersChanges_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "StreamPlayerEndChan",
+			Handler:       _StreamD_StreamPlayerEndChan_Handler,
 			ServerStreams: true,
 		},
 	},

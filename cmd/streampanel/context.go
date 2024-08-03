@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"io"
 	"os"
 
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
@@ -11,6 +12,7 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/sirupsen/logrus"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/streamctl/pkg/xpath"
 )
 
 func getContext(flags Flags) context.Context {
@@ -20,11 +22,16 @@ func getContext(flags Flags) context.Context {
 	l := xlogrus.New(ll).WithLevel(flags.LoggerLevel)
 
 	if flags.LogFile != "" {
-		f, err := os.OpenFile(flags.LogFile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0750)
+		logPath, err := xpath.Expand(flags.LogFile)
 		if err != nil {
-			l.Errorf("failed to open log file '%s': %v", flags.LogFile, err)
+			l.Errorf("unable to expand path '%s': %w", flags.LogFile, err)
+		} else {
+			f, err := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0750)
+			if err != nil {
+				l.Errorf("failed to open log file '%s': %v", flags.LogFile, err)
+			}
+			ll.SetOutput(io.MultiWriter(os.Stderr, f))
 		}
-		ll.SetOutput(f)
 	}
 
 	logrus.SetLevel(xlogrus.LevelToLogrus(l.Level()))
@@ -45,6 +52,12 @@ func getContext(flags Flags) context.Context {
 	}
 
 	ctx = logger.CtxWithLogger(ctx, l)
+
+	if flags.LogstashAddr != "" {
+		ctx = observability.CtxWithLogstash(ctx, flags.LogstashAddr, "streampanel")
+	}
+
+	l = logger.FromCtx(ctx)
 	logger.Default = func() logger.Logger {
 		return l
 	}

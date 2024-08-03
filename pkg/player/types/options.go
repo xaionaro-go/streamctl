@@ -6,11 +6,16 @@ type Option interface {
 
 type Options []Option
 
-func (options Options) Apply(cfg Config) Config {
-	for _, option := range options {
-		option.Apply(&cfg)
-	}
+func (options Options) Config() Config {
+	cfg := Config{}
+	options.Apply(&cfg)
 	return cfg
+}
+
+func (options Options) Apply(cfg *Config) {
+	for _, option := range options {
+		option.Apply(cfg)
+	}
 }
 
 type OptionPathToMPV string

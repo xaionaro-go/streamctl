@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"runtime"
 	"runtime/pprof"
+	"time"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 )
@@ -16,6 +18,23 @@ func initRuntime(ctx context.Context, flags Flags, _procName ProcessName) contex
 	var closeFuncs []func()
 
 	l := logger.FromCtx(ctx)
+
+	if ForceDebug {
+		go func() {
+			t := time.NewTicker(time.Second)
+			defer t.Stop()
+			for {
+				var buf bytes.Buffer
+				err := pprof.Lookup("goroutine").WriteTo(&buf, 1)
+				if err != nil {
+					l.Error(err)
+					continue
+				}
+				l.Tracef("stacktraces:\n%s", buf.String())
+				<-t.C
+			}
+		}()
+	}
 
 	if flags.CPUProfile != "" {
 		f, err := os.Create(flags.CPUProfile + "-" + procName)
@@ -42,9 +61,6 @@ func initRuntime(ctx context.Context, flags Flags, _procName ProcessName) contex
 	}
 
 	netPprofAddr := ""
-	if forceNetPProfOnAndroid && runtime.GOOS == "android" {
-		netPprofAddr = "localhost:0"
-	}
 	switch _procName {
 	case ProcessNameMain:
 		netPprofAddr = flags.NetPprofAddrMain
@@ -52,6 +68,13 @@ func initRuntime(ctx context.Context, flags Flags, _procName ProcessName) contex
 		netPprofAddr = flags.NetPprofAddrUI
 	case ProcessNameStreamd:
 		netPprofAddr = flags.NetPprofAddrStreamD
+	}
+	if netPprofAddr == "" && forceNetPProfOnAndroid && runtime.GOOS == "android" {
+		if ForceDebug {
+			netPprofAddr = "0.0.0.0:0"
+		} else {
+			netPprofAddr = "localhost:0"
+		}
 	}
 
 	if netPprofAddr != "" {

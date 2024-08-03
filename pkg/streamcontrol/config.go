@@ -187,8 +187,11 @@ func (cfg *Config) UnmarshalYAML(b []byte) error {
 	}
 
 	for k, v := range t {
-		vOrig, ok := (*cfg)[k]
-		if !ok {
+		if v == nil {
+			continue
+		}
+		vOrig := (*cfg)[k]
+		if vOrig == nil {
 			(*cfg)[k] = &PlatformConfig[any, AbstractStreamProfile]{
 				Config:         &RawMessage{},
 				StreamProfiles: make(StreamProfiles[AbstractStreamProfile]),

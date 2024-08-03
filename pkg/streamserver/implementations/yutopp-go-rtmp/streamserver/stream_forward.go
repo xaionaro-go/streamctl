@@ -28,9 +28,11 @@ type ActiveStreamForwarding struct {
 	Locker        sync.Mutex
 	StreamID      types.StreamID
 	DestinationID types.DestinationID
+	URL           *url.URL
 	Client        *rtmp.ClientConn
 	OutStream     *rtmp.Stream
 	Sub           *Sub
+	RelayService  *RelayService
 	CancelFunc    context.CancelFunc
 	ReadCount     atomic.Uint64
 	WriteCount    atomic.Uint64
@@ -44,28 +46,39 @@ func NewActiveStreamForward(
 	urlString string,
 	relayService *RelayService,
 ) (*ActiveStreamForwarding, error) {
-	ctx, cancelFn := context.WithCancel(ctx)
-	fwd := &ActiveStreamForwarding{
-		StreamID:      streamID,
-		DestinationID: dstID,
-		CancelFunc:    cancelFn,
-		eventChan:     make(chan *flvtag.FlvTag),
-	}
-
 	urlParsed, err := url.Parse(urlString)
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse URL '%s': %w", urlString, err)
 	}
+	fwd := &ActiveStreamForwarding{
+		StreamID:      streamID,
+		DestinationID: dstID,
+		URL:           urlParsed,
+		RelayService:  relayService,
+		eventChan:     make(chan *flvtag.FlvTag),
+	}
+	if err := fwd.Start(ctx); err != nil {
+		return nil, fmt.Errorf("unable to start the forwarder: %w", err)
+	}
+	return fwd, nil
+}
 
+func (fwd *ActiveStreamForwarding) Start(ctx context.Context) error {
+	fwd.Locker.Lock()
+	defer fwd.Locker.Unlock()
+	if fwd.CancelFunc != nil {
+		return fmt.Errorf("the stream forwarder is already running")
+	}
+	ctx, cancelFn := context.WithCancel(ctx)
+	fwd.CancelFunc = cancelFn
 	go func() {
 		for {
 			err := fwd.waitForPublisherAndStart(
 				ctx,
-				relayService,
-				urlParsed,
 			)
 			select {
 			case <-ctx.Done():
+				fwd.Close()
 				return
 			default:
 			}
@@ -74,14 +87,15 @@ func NewActiveStreamForward(
 			}
 		}
 	}()
+	return nil
+}
 
-	return fwd, nil
+func (fwd *ActiveStreamForwarding) Stop() error {
+	return fwd.Close()
 }
 
 func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 	ctx context.Context,
-	relayService *RelayService,
-	urlParsed *url.URL,
 ) (_ret error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -91,10 +105,9 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 			return
 		}
 		logger.Errorf(ctx, "%v", _ret)
-		fwd.Close()
 	}()
 
-	pathParts := strings.SplitN(urlParsed.Path, "/", -2)
+	pathParts := strings.SplitN(fwd.URL.Path, "/", -2)
 	remoteAppName := "live"
 	apiKey := pathParts[len(pathParts)-1]
 	if len(pathParts) >= 2 {
@@ -110,18 +123,19 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 	ctx = belt.WithField(belt.WithField(ctx, "appNameLocal", localAppName), "appNameRemote", apiKey)
 
 	logger.Tracef(ctx, "wait for stream '%s'", streamID)
-	pubSub := relayService.WaitPubsub(ctx, localAppName)
+	pubSub := fwd.RelayService.WaitPubsub(ctx, localAppName)
 	logger.Tracef(ctx, "wait for stream '%s' result: %#+v", streamID, pubSub)
 	if pubSub == nil {
 		return fmt.Errorf(
 			"unable to find stream ID '%s', available stream IDs: %s",
 			streamID,
-			strings.Join(relayService.PubsubNames(), ", "),
+			strings.Join(fwd.RelayService.PubsubNames(), ", "),
 		)
 	}
 
-	logger.Tracef(ctx, "connecting to '%s'", urlParsed.String())
-	if urlParsed.Port() == "" {
+	urlParsed := ptr(*fwd.URL)
+	logger.Tracef(ctx, "connecting to '%s'", fwd.URL.String())
+	if fwd.URL.Port() == "" {
 		switch urlParsed.Scheme {
 		case "rtmp":
 			urlParsed.Host += ":1935"
@@ -275,6 +289,10 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 func (fwd *ActiveStreamForwarding) Close() error {
 	fwd.Locker.Lock()
 	defer fwd.Locker.Unlock()
+	if fwd.CancelFunc == nil {
+		return fmt.Errorf("the stream was not started yet")
+	}
+
 	var result *multierror.Error
 	fwd.CancelFunc()
 	if fwd.Sub != nil {

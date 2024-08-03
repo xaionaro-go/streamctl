@@ -159,6 +159,7 @@ func (p *StreamPlayer) start(ctx context.Context) error {
 
 	playerType := p.Parent.PlayerManager.SupportedBackends()[0]
 	player, err := p.Parent.PlayerManager.NewPlayer(
+		ctx,
 		StreamID2Title(p.StreamID),
 		playerType,
 	)
@@ -167,11 +168,13 @@ func (p *StreamPlayer) start(ctx context.Context) error {
 		return fmt.Errorf("unable to run a video player '%s': %w", playerType, err)
 	}
 	p.Player = player
+	logger.Tracef(ctx, "initialized player #%+v", player)
 
 	if err := p.openStream(ctx); err != nil {
 		errmon.ObserveErrorCtx(ctx, p.Close())
 		return fmt.Errorf("unable to open the stream in the player: %w", err)
 	}
+	logger.Tracef(ctx, "the player #%+v opened the stream", player)
 
 	go p.controllerLoop(ctx)
 	return nil
@@ -181,7 +184,7 @@ func (p *StreamPlayer) stop(ctx context.Context) error {
 	logger.Debugf(ctx, "StreamPlayers.stop(ctx): '%s'", p.StreamID)
 	defer logger.Debugf(ctx, "/StreamPlayers.stop(ctx): '%s'", p.StreamID)
 
-	if err := p.Player.Close(); err != nil {
+	if err := p.Player.Close(ctx); err != nil {
 		errmon.ObserveErrorCtx(ctx, p.Close())
 		return fmt.Errorf("unable to close the player: %w", err)
 	}
@@ -217,7 +220,7 @@ func (p *StreamPlayer) openStream(ctx context.Context) error {
 	u.Path = string(p.StreamID)
 
 	logger.Debugf(ctx, "opening '%s'", u.String())
-	if err := p.Player.OpenURL(u.String()); err != nil {
+	if err := p.Player.OpenURL(ctx, u.String()); err != nil {
 		return fmt.Errorf("unable to open '%s' in the player: %w", u.String(), err)
 	}
 
@@ -264,7 +267,12 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 
 			startedWaitingForBuffering := time.Now()
 			for time.Since(startedWaitingForBuffering) <= p.Config.StartTimeout {
-				pos := p.Player.GetPosition()
+				pos, err := p.Player.GetPosition(ctx)
+				if err != nil {
+					logger.Errorf(ctx, "StreamPlayer[%s].controllerLoop: unable to get the current position: %v", p.StreamID, err)
+					time.Sleep(time.Second)
+					return true
+				}
 				logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: pos == %v", p.StreamID, pos)
 				if pos != 0 {
 					return false
@@ -294,8 +302,18 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 		}
 
 		now := time.Now()
-		l := p.Player.GetLength()
-		pos := p.Player.GetPosition()
+		l, err := p.Player.GetLength(ctx)
+		if err != nil {
+			logger.Errorf(ctx, "StreamPlayer[%s].controllerLoop: unable to get the current length: %v", p.StreamID, err)
+			time.Sleep(time.Second)
+			continue
+		}
+		pos, err := p.Player.GetPosition(ctx)
+		if err != nil {
+			logger.Errorf(ctx, "StreamPlayer[%s].controllerLoop: unable to get the current position: %v", p.StreamID, err)
+			time.Sleep(time.Second)
+			continue
+		}
 		logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: now == %v, len == %v; pos == %v", now, l, pos)
 		if pos != prevPos {
 			posUpdatedAt = now
@@ -319,7 +337,7 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 				continue
 			}
 			logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: resetting the speed to 1")
-			err := p.Player.SetSpeed(1)
+			err := p.Player.SetSpeed(ctx, 1)
 			if err != nil {
 				logger.Errorf(ctx, "unable to reset the speed to 1: %w", err)
 				continue
@@ -334,7 +352,7 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 				(p.Config.MaxCatchupAtLag.Seconds()-p.Config.JitterBufDuration.Seconds())
 
 		logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: setting the speed to %v", speed)
-		err := p.Player.SetSpeed(speed)
+		err = p.Player.SetSpeed(ctx, speed)
 		if err != nil {
 			logger.Errorf(ctx, "unable to set the speed to %v: %w", speed, err)
 			continue
@@ -351,7 +369,7 @@ func (p *StreamPlayer) Close() error {
 	}
 
 	if p.Player != nil {
-		err = multierror.Append(err, p.Player.Close())
+		err = multierror.Append(err, p.Player.Close(context.TODO()))
 		p.Player = nil
 	}
 

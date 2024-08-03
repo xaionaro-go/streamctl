@@ -3,15 +3,18 @@ package api
 import (
 	"context"
 	"crypto"
-	"fmt"
+	"time"
 
 	"github.com/andreykaipov/goobs/api/requests/scenes"
+	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/cache"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
+	sstypes "github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
 
 type StreamD interface {
@@ -110,12 +113,14 @@ type StreamD interface {
 		streamID StreamID,
 		destinationID DestinationID,
 		enabled bool,
+		quirks StreamForwardingQuirks,
 	) error
 	UpdateStreamForward(
 		ctx context.Context,
 		streamID StreamID,
 		destinationID DestinationID,
 		enabled bool,
+		quirks StreamForwardingQuirks,
 	) error
 	RemoveStreamForward(
 		ctx context.Context,
@@ -125,7 +130,60 @@ type StreamD interface {
 	WaitForStreamPublisher(
 		ctx context.Context,
 		streamID StreamID,
-	) (chan struct{}, error)
+	) (<-chan struct{}, error)
+
+	AddStreamPlayer(
+		ctx context.Context,
+		streamID streamtypes.StreamID,
+		playerType player.Backend,
+		disabled bool,
+		streamPlaybackConfig sptypes.Config,
+	) error
+	UpdateStreamPlayer(
+		ctx context.Context,
+		streamID streamtypes.StreamID,
+		playerType player.Backend,
+		disabled bool,
+		streamPlaybackConfig sptypes.Config,
+	) error
+	RemoveStreamPlayer(
+		ctx context.Context,
+		streamID streamtypes.StreamID,
+	) error
+	ListStreamPlayers(
+		ctx context.Context,
+	) ([]StreamPlayer, error)
+	GetStreamPlayer(
+		ctx context.Context,
+		streamID streamtypes.StreamID,
+	) (*StreamPlayer, error)
+
+	StreamPlayerProcessTitle(ctx context.Context, streamID StreamID) (string, error)
+	StreamPlayerOpenURL(ctx context.Context, streamID StreamID, link string) error
+	StreamPlayerGetLink(ctx context.Context, streamID StreamID) (string, error)
+	StreamPlayerEndChan(ctx context.Context, streamID StreamID) (<-chan struct{}, error)
+	StreamPlayerIsEnded(ctx context.Context, streamID StreamID) (bool, error)
+	StreamPlayerGetPosition(ctx context.Context, streamID StreamID) (time.Duration, error)
+	StreamPlayerGetLength(ctx context.Context, streamID StreamID) (time.Duration, error)
+	StreamPlayerSetSpeed(ctx context.Context, streamID StreamID, speed float64) error
+	StreamPlayerSetPause(ctx context.Context, streamID StreamID, pause bool) error
+	StreamPlayerStop(ctx context.Context, streamID StreamID) error
+	StreamPlayerClose(ctx context.Context, streamID StreamID) error
+
+	SubscribeToConfigChanges(ctx context.Context) (<-chan DiffConfig, error)
+	SubscribeToStreamsChanges(ctx context.Context) (<-chan DiffStreams, error)
+	SubscribeToStreamServersChanges(ctx context.Context) (<-chan DiffStreamServers, error)
+	SubscribeToStreamDestinationsChanges(ctx context.Context) (<-chan DiffStreamDestinations, error)
+	SubscribeToIncomingStreamsChanges(ctx context.Context) (<-chan DiffIncomingStreams, error)
+	SubscribeToStreamForwardsChanges(ctx context.Context) (<-chan DiffStreamForwards, error)
+	SubscribeToStreamPlayersChanges(ctx context.Context) (<-chan DiffStreamPlayers, error)
+}
+
+type StreamPlayer struct {
+	StreamID             streamtypes.StreamID
+	PlayerType           player.Backend
+	Disabled             bool
+	StreamPlaybackConfig sptypes.Config
 }
 
 type BackendDataOBS struct{}
@@ -138,36 +196,7 @@ type BackendDataYouTube struct {
 	Cache cache.YouTube
 }
 
-type StreamServerType int
-
-const (
-	StreamServerTypeUndefined = StreamServerType(iota)
-	StreamServerTypeRTSP
-	StreamServerTypeRTMP
-)
-
-func (t StreamServerType) String() string {
-	switch t {
-	case StreamServerTypeUndefined:
-		return "<undefined>"
-	case StreamServerTypeRTMP:
-		return "rtmp"
-	case StreamServerTypeRTSP:
-		return "rtsp"
-	default:
-		return fmt.Sprintf("unknown_type_%d", t)
-	}
-}
-
-func ParseStreamServerType(in string) StreamServerType {
-	switch in {
-	case "rtmp":
-		return StreamServerTypeRTMP
-	case "rtsp":
-		return StreamServerTypeRTSP
-	}
-	return StreamServerTypeUndefined
-}
+type StreamServerType = streamtypes.ServerType
 
 type StreamServer struct {
 	Type       StreamServerType
@@ -186,6 +215,7 @@ type StreamForward struct {
 	Enabled       bool
 	StreamID      StreamID
 	DestinationID DestinationID
+	Quirks        StreamForwardingQuirks
 	NumBytesWrote uint64
 	NumBytesRead  uint64
 }
@@ -194,32 +224,17 @@ type IncomingStream struct {
 	StreamID StreamID
 }
 
-type StreamID string
+type StreamID = streamtypes.StreamID
 
 type DestinationID string
 
-func ServerTypeServer2API(t types.ServerType) StreamServerType {
-	switch t {
-	case types.ServerTypeUndefined:
-		return StreamServerTypeUndefined
-	case types.ServerTypeRTSP:
-		return StreamServerTypeRTSP
-	case types.ServerTypeRTMP:
-		return StreamServerTypeRTMP
-	default:
-		panic(fmt.Errorf("unexpected server type: %v", t))
-	}
-}
+type StreamForwardingQuirks = sstypes.ForwardingQuirks
+type RestartUntilYoutubeRecognizesStream = sstypes.RestartUntilYoutubeRecognizesStream
 
-func ServerTypeAPI2Server(t StreamServerType) types.ServerType {
-	switch t {
-	case StreamServerTypeUndefined:
-		return types.ServerTypeUndefined
-	case StreamServerTypeRTSP:
-		return types.ServerTypeRTSP
-	case StreamServerTypeRTMP:
-		return types.ServerTypeRTMP
-	default:
-		panic(fmt.Errorf("unexpected server type: %v", t))
-	}
-}
+type DiffConfig struct{}
+type DiffStreams struct{}
+type DiffStreamServers struct{}
+type DiffStreamDestinations struct{}
+type DiffIncomingStreams struct{}
+type DiffStreamForwards struct{}
+type DiffStreamPlayers struct{}
