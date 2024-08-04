@@ -847,7 +847,7 @@ func (yt *YouTube) GetStreamStatus(
 		UpcomingBroadcasts: upcomingBroadcasts,
 		Streams:            streams,
 	}
-	if logger.GetLevel(ctx) >= logger.LevelTrace {
+	if observability.LogLevelFilter.GetLevel() >= logger.LevelTrace {
 		logger.Tracef(ctx, "len(customData.UpcomingBroadcasts) == %d; len(customData.Streams) == %d", len(customData.UpcomingBroadcasts), len(customData.Streams))
 		for idx, broadcast := range customData.UpcomingBroadcasts {
 			b, err := json.Marshal(broadcast)

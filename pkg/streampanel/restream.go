@@ -793,8 +793,69 @@ func (p *Panel) displayStreamPlayers(
 	}
 }
 
+func (p *Panel) openEditRestreamWindow(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+	dstID streamtypes.DestinationID,
+) {
+	cfg, err := p.StreamD.GetConfig(ctx)
+	if err != nil {
+		p.DisplayError(fmt.Errorf("unable to get the current config: %w", err))
+		return
+	}
+	streamCfg, ok := cfg.StreamServer.Streams[streamID]
+	if !ok {
+		p.DisplayError(fmt.Errorf("unable to find a stream '%s'", streamID))
+		return
+	}
+	fwd, ok := streamCfg.Forwardings[dstID]
+	if !ok {
+		p.DisplayError(fmt.Errorf("unable to find a stream forwarding %s -> %s", streamID, dstID))
+		return
+	}
+	p.openAddOrEditRestreamWindow(
+		ctx,
+		"Edit the restreaming (stream forwarding)",
+		streamID,
+		dstID,
+		fwd,
+		p.updateStreamForward,
+	)
+}
+
 func (p *Panel) openAddRestreamWindow(ctx context.Context) {
-	w := p.app.NewWindow(AppName + ": Add restreaming (stream forwarding)")
+	p.openAddOrEditRestreamWindow(
+		ctx,
+		"Add a restreaming (stream forwarding)",
+		"",
+		"",
+		sstypes.ForwardingConfig{
+			Disabled: false,
+			Quirks: sstypes.ForwardingQuirks{
+				RestartUntilYoutubeRecognizesStream: sstypes.DefaultRestartUntilYoutubeRecognizesStreamConfig(),
+			},
+		},
+		p.addStreamForward,
+	)
+}
+
+func (p *Panel) openAddOrEditRestreamWindow(
+	ctx context.Context,
+	title string,
+	streamID streamtypes.StreamID,
+	dstID api.DestinationID,
+	fwd sstypes.ForwardingConfig,
+	addOrEditStreamForward func(
+		ctx context.Context,
+		streamID api.StreamID,
+		dstID api.DestinationID,
+		enabled bool,
+		quirks sstypes.ForwardingQuirks,
+	) error,
+) {
+	logger.Debugf(ctx, "openAddOrEditRestreamWindow(ctx, '%s', '%s', '%s', %#+v)", title, streamID, dstID, fwd)
+	defer logger.Debugf(ctx, "/openAddOrEditRestreamWindow(ctx, '%s', '%s', '%s', %#+v)", title, streamID, dstID, fwd)
+	w := p.app.NewWindow(AppName + ": " + title)
 	resizeWindow(w, fyne.NewSize(400, 300))
 
 	enabledCheck := widget.NewCheck("Enable", func(b bool) {})
@@ -816,6 +877,10 @@ func (p *Panel) openAddRestreamWindow(ctx context.Context) {
 		inStreamStrs = append(inStreamStrs, string(inStream.StreamID))
 	}
 	inStreamsSelect := widget.NewSelect(inStreamStrs, func(s string) {})
+	if streamID != "" {
+		inStreamsSelect.SetSelected(string(streamID))
+		inStreamsSelect.Disable()
+	}
 
 	var dstStrs []string
 	dstMap := map[string]api.DestinationID{}
@@ -825,8 +890,12 @@ func (p *Panel) openAddRestreamWindow(ctx context.Context) {
 		dstMap[k] = dst.ID
 	}
 	dstSelect := widget.NewSelect(dstStrs, func(s string) {})
+	if dstID != "" {
+		dstSelect.SetSelected(string(dstID))
+		dstSelect.Disable()
+	}
 
-	quirksYoutubeRestart := sstypes.DefaultRestartUntilYoutubeRecognizesStreamConfig()
+	quirksYoutubeRestart := fwd.Quirks.RestartUntilYoutubeRecognizesStream
 
 	youtubeStartTimeout := xfyne.NewNumericalEntry()
 	youtubeStartTimeout.SetText(fmt.Sprintf("%v", quirksYoutubeRestart.StartTimeout.Seconds()))
@@ -847,12 +916,13 @@ func (p *Panel) openAddRestreamWindow(ctx context.Context) {
 			restartUntilYouTubeStartsParams.Hide()
 		}
 	})
+	restartUntilYouTubeStarts.SetChecked(quirksYoutubeRestart.Enabled)
 
 	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
 		p.waitForResponse(func() {
-			err := p.addStreamForward(
+			err := addOrEditStreamForward(
 				ctx,
-				api.StreamID(inStreamsSelect.Selected),
+				streamtypes.StreamID(inStreamsSelect.Selected),
 				dstMap[dstSelect.Selected],
 				enabledCheck.Checked,
 				sstypes.ForwardingQuirks{
@@ -885,6 +955,24 @@ func (p *Panel) openAddRestreamWindow(ctx context.Context) {
 		),
 	))
 	w.Show()
+}
+
+func (p *Panel) updateStreamForward(
+	ctx context.Context,
+	streamID api.StreamID,
+	dstID api.DestinationID,
+	enabled bool,
+	quirks sstypes.ForwardingQuirks,
+) error {
+	logger.Debugf(ctx, "updateStreamForward")
+	defer logger.Debugf(ctx, "/updateStreamForward")
+	return p.StreamD.UpdateStreamForward(
+		ctx,
+		streamID,
+		dstID,
+		enabled,
+		quirks,
+	)
 }
 
 func (p *Panel) addStreamForward(
@@ -948,6 +1036,9 @@ func (p *Panel) displayStreamForwards(
 			)
 			w.Show()
 		})
+		editButton := widget.NewButtonWithIcon("", theme.ListIcon(), func() {
+			p.openEditRestreamWindow(ctx, fwd.StreamID, fwd.DestinationID)
+		})
 		icon := theme.MediaPauseIcon()
 		label := "Pause"
 		title := fmt.Sprintf("Pause forwarding %s -> %s ?", fwd.StreamID, fwd.DestinationID)
@@ -984,9 +1075,14 @@ func (p *Panel) displayStreamForwards(
 			)
 			w.Show()
 		})
-		caption := widget.NewLabel(string(fwd.StreamID) + " -> " + string(fwd.DestinationID))
+		captionStr := string(fwd.StreamID) + " -> " + string(fwd.DestinationID)
+		if fwd.Quirks.RestartUntilYoutubeRecognizesStream.Enabled {
+			captionStr += " (Quirks:YT)"
+		}
+		caption := widget.NewLabel(captionStr)
 		c.RemoveAll()
 		c.Add(deleteButton)
+		c.Add(editButton)
 		c.Add(playPauseButton)
 		c.Add(caption)
 		if fwd.Enabled {

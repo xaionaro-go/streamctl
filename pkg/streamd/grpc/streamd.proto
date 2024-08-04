@@ -5,6 +5,8 @@ option go_package = "go/streamd_grpc";
 import "player/player.proto";
 
 service StreamD {
+    rpc SetLoggingLevel(SetLoggingLevelRequest) returns (SetLoggingLevelReply) {}
+    rpc GetLoggingLevel(GetLoggingLevelRequest) returns (GetLoggingLevelReply) {}
     rpc GetConfig(GetConfigRequest) returns (GetConfigReply) {}
     rpc SetConfig(SetConfigRequest) returns (SetConfigReply) {}
     rpc SaveConfig(SaveConfigRequest) returns (SaveConfigReply) {}
@@ -75,6 +77,27 @@ service StreamD {
 	rpc StreamPlayerStop(StreamPlayerStopRequest) returns (StreamPlayerStopReply) {}
 	rpc StreamPlayerClose(StreamPlayerCloseRequest) returns (StreamPlayerCloseReply) {}
 }
+
+enum LoggingLevel {
+    none = 0;
+    fatal = 1;
+    panic = 2;
+    error = 3;
+    warning = 4;
+    info = 5;
+    debug = 6;
+    trace = 7;
+}
+
+message SetLoggingLevelRequest {
+    LoggingLevel loggingLevel = 1;
+}
+message SetLoggingLevelReply {}
+message GetLoggingLevelRequest {}
+message GetLoggingLevelReply {
+    LoggingLevel loggingLevel = 1;
+}
+
 message GetConfigRequest {}
 message GetConfigReply {
     string config = 1;

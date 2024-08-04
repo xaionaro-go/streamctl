@@ -1552,3 +1552,13 @@ func (d *StreamD) SubscribeToStreamPlayersChanges(
 ) (<-chan api.DiffStreamPlayers, error) {
 	return eventSubToChan[api.DiffStreamPlayers](ctx, d, events.StreamPlayersChange)
 }
+
+func (d *StreamD) SetLoggingLevel(ctx context.Context, level logger.Level) error {
+	observability.LogLevelFilter.SetLevel(level)
+	d.UI.SetLoggingLevel(ctx, level)
+	return nil
+}
+
+func (d *StreamD) GetLoggingLevel(ctx context.Context) (logger.Level, error) {
+	return observability.LogLevelFilter.GetLevel(), nil
+}

@@ -45,6 +45,7 @@ func main() {
 		return
 	}
 	ctx = belt.WithField(ctx, "process", ProcessNameMain)
+	defer func() { observability.PanicIfNotNil(ctx, recover()) }()
 
 	if flags.SplitProcess && flags.RemoteAddr == "" {
 		runSplitProcesses(ctx, cancelFunc, flags)

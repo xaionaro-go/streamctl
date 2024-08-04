@@ -8,6 +8,7 @@ import (
 )
 
 type StreamID string
+type DestinationID string
 
 type ServerType int
 

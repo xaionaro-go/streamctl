@@ -8,6 +8,7 @@ import (
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
@@ -26,7 +27,7 @@ func (cfg *Config) Read(
 
 func (cfg *Config) traceDump() {
 	l := logger.Default()
-	if l.Level() < logger.LevelTrace {
+	if observability.LogLevelFilter.GetLevel() < logger.LevelTrace {
 		return
 	}
 	if cfg == nil {

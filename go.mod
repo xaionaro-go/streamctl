@@ -10,7 +10,7 @@ replace github.com/goccy/go-yaml v1.11.3 => github.com/yoelsusanto/go-yaml v0.0.
 replace github.com/yutopp/go-rtmp v0.0.7 => ../go-rtmp/
 
 require (
-	github.com/facebookincubator/go-belt v0.0.0-20240707112111-9cf347bf49e2
+	github.com/facebookincubator/go-belt v0.0.0-20240804203001-846c4409d41c
 	github.com/go-git/go-billy/v5 v5.5.0
 	github.com/goccy/go-yaml v1.11.3
 	github.com/hashicorp/go-multierror v1.1.1
@@ -213,7 +213,6 @@ require (
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gvisor.dev/gvisor v0.0.0-20230927004350-cbd86285d259 // indirect
 	lukechampine.com/blake3 v1.2.1 // indirect
 )
@@ -262,4 +261,5 @@ require (
 	google.golang.org/grpc v1.63.2
 	google.golang.org/protobuf v1.33.1-0.20240408130810-98873a205002
 	gopkg.in/yaml.v2 v2.4.0
+	gopkg.in/yaml.v3 v3.0.1
 )

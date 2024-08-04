@@ -51,6 +51,8 @@ func forkStreamd(preCtx context.Context, mainProcessAddr, password string) {
 	logger.Debugf(ctx, "flags == %#+v", flags)
 	ctx, cancelFunc := initRuntime(ctx, flags, procName)
 	defer cancelFunc()
+	defer func() { observability.PanicIfNotNil(ctx, recover()) }()
+
 	childProcessSignalHandler(ctx, cancelFunc)
 
 	runStreamd(ctx, cancelFunc, flags, mainProcess)
@@ -108,6 +110,9 @@ func runStreamd(
 			logger.Infof(ctx, "restarting streamd")
 			cancelFunc()
 			os.Exit(0)
+		},
+		func(ctx context.Context, l logger.Level) {
+			observability.LogLevelFilter.SetLevel(l)
 		},
 	)
 
@@ -174,7 +179,7 @@ func runStreamd(
 			select {
 			case <-ctx.Done():
 				return
-			default:
+			case <-time.After(10 * time.Millisecond): // TODO: here should be `default:` instead of this ugly racy hack
 			}
 			logger.Panicf(ctx, "communication (with the main process) error: %v", err)
 		})

@@ -21,7 +21,7 @@ type RestartUntilYoutubeRecognizesStream struct {
 
 func DefaultRestartUntilYoutubeRecognizesStreamConfig() RestartUntilYoutubeRecognizesStream {
 	return RestartUntilYoutubeRecognizesStream{
-		Enabled:        true,
+		Enabled:        false,
 		StartTimeout:   20 * time.Second,
 		StopStartDelay: 10 * time.Second,
 	}

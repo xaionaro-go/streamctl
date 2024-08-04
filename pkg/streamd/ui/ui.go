@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 
+	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	obs "github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs/types"
@@ -36,4 +37,8 @@ type UI interface {
 		platID streamcontrol.PlatformName,
 		code string,
 	) error
+	SetLoggingLevel(
+		ctx context.Context,
+		level logger.Level,
+	)
 }

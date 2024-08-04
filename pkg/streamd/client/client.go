@@ -30,6 +30,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/goconv"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -862,13 +863,24 @@ func (c *Client) ListStreamForwards(
 
 	var result []api.StreamForward
 	for _, forward := range reply.GetStreamForwards() {
-		result = append(result, api.StreamForward{
+		item := api.StreamForward{
 			Enabled:       forward.Config.Enabled,
 			StreamID:      api.StreamID(forward.Config.GetStreamID()),
 			DestinationID: api.DestinationID(forward.Config.GetDestinationID()),
 			NumBytesWrote: uint64(forward.Statistics.NumBytesWrote),
 			NumBytesRead:  uint64(forward.Statistics.NumBytesRead),
-		})
+		}
+		restartUntilYoutubeRecognizesStream := forward.GetConfig().GetQuirks().GetRestartUntilYoutubeRecognizesStream()
+		if restartUntilYoutubeRecognizesStream != nil {
+			item.Quirks = api.StreamForwardingQuirks{
+				RestartUntilYoutubeRecognizesStream: types.RestartUntilYoutubeRecognizesStream{
+					Enabled:        restartUntilYoutubeRecognizesStream.Enabled,
+					StartTimeout:   time.Duration(float64(time.Second) * restartUntilYoutubeRecognizesStream.StartTimeout),
+					StopStartDelay: time.Duration(float64(time.Second) * restartUntilYoutubeRecognizesStream.StopStartDelay),
+				},
+			}
+		}
+		result = append(result, item)
 	}
 	return result, nil
 }
@@ -1581,4 +1593,34 @@ func (c *Client) SubscribeToStreamPlayersChanges(
 			)
 		},
 	)
+}
+
+func (c *Client) SetLoggingLevel(ctx context.Context, level logger.Level) error {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = client.SetLoggingLevel(ctx, &streamd_grpc.SetLoggingLevelRequest{
+		LoggingLevel: goconv.LoggingLevelGo2GRPC(level),
+	})
+	if err != nil {
+		return fmt.Errorf("unable to set the logging level: %w", err)
+	}
+	return nil
+}
+func (c *Client) GetLoggingLevel(ctx context.Context) (logger.Level, error) {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return logger.LevelUndefined, err
+	}
+	defer conn.Close()
+
+	reply, err := client.GetLoggingLevel(ctx, &streamd_grpc.GetLoggingLevelRequest{})
+	if err != nil {
+		return logger.LevelUndefined, fmt.Errorf("unable to get the logging level: %w", err)
+	}
+
+	return goconv.LoggingLevelGRPC2Go(reply.GetLoggingLevel()), nil
 }

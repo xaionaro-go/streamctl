@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/andreykaipov/goobs/api/requests/scenes"
+	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/cache"
@@ -19,6 +20,8 @@ import (
 
 type StreamD interface {
 	Run(ctx context.Context) error
+	SetLoggingLevel(ctx context.Context, level logger.Level) error
+	GetLoggingLevel(ctx context.Context) (logger.Level, error)
 	FetchConfig(ctx context.Context) error
 	ResetCache(ctx context.Context) error
 	InitCache(ctx context.Context) error
@@ -225,8 +228,7 @@ type IncomingStream struct {
 }
 
 type StreamID = streamtypes.StreamID
-
-type DestinationID string
+type DestinationID = streamtypes.DestinationID
 
 type StreamForwardingQuirks = sstypes.ForwardingQuirks
 type RestartUntilYoutubeRecognizesStream = sstypes.RestartUntilYoutubeRecognizesStream

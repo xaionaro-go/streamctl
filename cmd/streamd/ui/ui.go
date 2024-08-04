@@ -18,11 +18,12 @@ import (
 )
 
 type UI struct {
-	OAuthURLOpenFn  func(listenPort uint16, platID streamcontrol.PlatformName, authURL string) bool
-	Belt            *belt.Belt
-	RestartFn       func(context.Context, string)
-	CodeChMap       map[streamcontrol.PlatformName]chan string
-	CodeChMapLocker sync.Mutex
+	OAuthURLOpenFn    func(listenPort uint16, platID streamcontrol.PlatformName, authURL string) bool
+	Belt              *belt.Belt
+	RestartFn         func(context.Context, string)
+	CodeChMap         map[streamcontrol.PlatformName]chan string
+	CodeChMapLocker   sync.Mutex
+	SetLoggingLevelFn func(context.Context, logger.Level)
 }
 
 var _ ui.UI = (*UI)(nil)
@@ -31,13 +32,19 @@ func NewUI(
 	ctx context.Context,
 	oauthURLOpener func(listenPort uint16, platID streamcontrol.PlatformName, authURL string) bool,
 	restartFn func(context.Context, string),
+	setLoggingLevel func(context.Context, logger.Level),
 ) *UI {
 	return &UI{
-		OAuthURLOpenFn: oauthURLOpener,
-		Belt:           belt.CtxBelt(ctx),
-		RestartFn:      restartFn,
-		CodeChMap:      map[streamcontrol.PlatformName]chan string{},
+		OAuthURLOpenFn:    oauthURLOpener,
+		Belt:              belt.CtxBelt(ctx),
+		RestartFn:         restartFn,
+		CodeChMap:         map[streamcontrol.PlatformName]chan string{},
+		SetLoggingLevelFn: setLoggingLevel,
 	}
+}
+
+func (ui *UI) SetLoggingLevel(ctx context.Context, level logger.Level) {
+	ui.SetLoggingLevelFn(ctx, level)
 }
 
 func (ui *UI) SetStatus(msg string) {

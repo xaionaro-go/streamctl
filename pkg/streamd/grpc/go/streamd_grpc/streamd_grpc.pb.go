@@ -22,6 +22,8 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type StreamDClient interface {
+	SetLoggingLevel(ctx context.Context, in *SetLoggingLevelRequest, opts ...grpc.CallOption) (*SetLoggingLevelReply, error)
+	GetLoggingLevel(ctx context.Context, in *GetLoggingLevelRequest, opts ...grpc.CallOption) (*GetLoggingLevelReply, error)
 	GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigReply, error)
 	SetConfig(ctx context.Context, in *SetConfigRequest, opts ...grpc.CallOption) (*SetConfigReply, error)
 	SaveConfig(ctx context.Context, in *SaveConfigRequest, opts ...grpc.CallOption) (*SaveConfigReply, error)
@@ -93,6 +95,24 @@ type streamDClient struct {
 
 func NewStreamDClient(cc grpc.ClientConnInterface) StreamDClient {
 	return &streamDClient{cc}
+}
+
+func (c *streamDClient) SetLoggingLevel(ctx context.Context, in *SetLoggingLevelRequest, opts ...grpc.CallOption) (*SetLoggingLevelReply, error) {
+	out := new(SetLoggingLevelReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/SetLoggingLevel", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) GetLoggingLevel(ctx context.Context, in *GetLoggingLevelRequest, opts ...grpc.CallOption) (*GetLoggingLevelReply, error) {
+	out := new(GetLoggingLevelReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/GetLoggingLevel", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *streamDClient) GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigReply, error) {
@@ -896,6 +916,8 @@ func (c *streamDClient) StreamPlayerClose(ctx context.Context, in *StreamPlayerC
 // All implementations must embed UnimplementedStreamDServer
 // for forward compatibility
 type StreamDServer interface {
+	SetLoggingLevel(context.Context, *SetLoggingLevelRequest) (*SetLoggingLevelReply, error)
+	GetLoggingLevel(context.Context, *GetLoggingLevelRequest) (*GetLoggingLevelReply, error)
 	GetConfig(context.Context, *GetConfigRequest) (*GetConfigReply, error)
 	SetConfig(context.Context, *SetConfigRequest) (*SetConfigReply, error)
 	SaveConfig(context.Context, *SaveConfigRequest) (*SaveConfigReply, error)
@@ -966,6 +988,12 @@ type StreamDServer interface {
 type UnimplementedStreamDServer struct {
 }
 
+func (UnimplementedStreamDServer) SetLoggingLevel(context.Context, *SetLoggingLevelRequest) (*SetLoggingLevelReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetLoggingLevel not implemented")
+}
+func (UnimplementedStreamDServer) GetLoggingLevel(context.Context, *GetLoggingLevelRequest) (*GetLoggingLevelReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetLoggingLevel not implemented")
+}
 func (UnimplementedStreamDServer) GetConfig(context.Context, *GetConfigRequest) (*GetConfigReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetConfig not implemented")
 }
@@ -1166,6 +1194,42 @@ type UnsafeStreamDServer interface {
 
 func RegisterStreamDServer(s grpc.ServiceRegistrar, srv StreamDServer) {
 	s.RegisterService(&StreamD_ServiceDesc, srv)
+}
+
+func _StreamD_SetLoggingLevel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetLoggingLevelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).SetLoggingLevel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/SetLoggingLevel",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).SetLoggingLevel(ctx, req.(*SetLoggingLevelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_GetLoggingLevel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetLoggingLevelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).GetLoggingLevel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/GetLoggingLevel",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).GetLoggingLevel(ctx, req.(*GetLoggingLevelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _StreamD_GetConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -2339,6 +2403,14 @@ var StreamD_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "streamd.StreamD",
 	HandlerType: (*StreamDServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "SetLoggingLevel",
+			Handler:    _StreamD_SetLoggingLevel_Handler,
+		},
+		{
+			MethodName: "GetLoggingLevel",
+			Handler:    _StreamD_GetLoggingLevel_Handler,
+		},
 		{
 			MethodName: "GetConfig",
 			Handler:    _StreamD_GetConfig_Handler,

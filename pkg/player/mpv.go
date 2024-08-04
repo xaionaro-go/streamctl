@@ -19,6 +19,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 )
 
 const SupportedMPV = true
@@ -92,7 +93,7 @@ func NewMPV(
 	args := []string{pathToMPV, "--idle", "--input-ipc-server=" + socketPath, fmt.Sprintf("--title=%s", title)}
 	logger.Tracef(ctx, "running command '%s %s'", args[0], strings.Join(args[1:], " "))
 	cmd := exec.Command(args[0], args[1:]...)
-	if logger.FromCtx(ctx).Level() >= logger.LevelTrace {
+	if observability.LogLevelFilter.GetLevel() >= logger.LevelTrace {
 		cmd.Stdout = os.Stderr
 		cmd.Stderr = os.Stderr
 	}

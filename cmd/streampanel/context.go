@@ -23,10 +23,12 @@ import (
 func getContext(
 	flags Flags,
 ) context.Context {
+	observability.LogLevelFilter.SetLevel(logger.Level(flags.LoggerLevel))
+
 	ctx := context.Background()
 
 	ll := xlogrus.DefaultLogrusLogger()
-	l := xlogrus.New(ll).WithLevel(logger.Level(flags.LoggerLevel))
+	l := xlogrus.New(ll).WithLevel(logger.LevelTrace).WithPreHooks(&observability.LogLevelFilter)
 
 	if flags.LogFile != "" {
 		logPathUnexpanded := flags.LogFile
@@ -92,8 +94,7 @@ func getContext(
 		ctx = observability.CtxWithLogstash(
 			ctx,
 			flags.LogstashAddr,
-			"streampanel",
-			flags.SentryDSN == "",
+			strings.ToLower(streampanel.AppName),
 		)
 	}
 

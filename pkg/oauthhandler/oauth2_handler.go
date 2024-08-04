@@ -36,6 +36,7 @@ func OAuth2HandlerViaCLI(ctx context.Context, arg OAuthHandlerArgument) error {
 func OAuth2HandlerViaBrowser(ctx context.Context, arg OAuthHandlerArgument) error {
 	ctx, cancelFn := context.WithCancel(ctx)
 	defer cancelFn()
+
 	codeCh, _, err := NewCodeReceiver(ctx, arg.ListenPort)
 	if err != nil {
 		return err

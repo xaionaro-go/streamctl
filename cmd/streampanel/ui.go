@@ -8,6 +8,7 @@ import (
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 )
 
 func forkUI(preCtx context.Context, mainProcessAddr, password string) {
@@ -27,6 +28,8 @@ func forkUI(preCtx context.Context, mainProcessAddr, password string) {
 	logger.Debugf(ctx, "flags == %#+v", flags)
 	ctx, cancelFunc := initRuntime(ctx, flags, procName)
 	defer cancelFunc()
+	defer func() { observability.PanicIfNotNil(ctx, recover()) }()
+
 	childProcessSignalHandler(ctx, cancelFunc)
 
 	streamdAddr := getStreamDAddress(ctx, mainProcess)

@@ -43,7 +43,9 @@ func main() {
 	sentryDSN := pflag.String("sentry-dsn", "", "DSN of a Sentry instance to send error reports")
 	pflag.Parse()
 
-	l := logrus.Default().WithLevel(loggerLevel)
+	l := logrus.Default().WithLevel(logger.LevelTrace)
+	observability.LogLevelFilter.SetLevel(loggerLevel)
+	l = l.WithPreHooks(&observability.LogLevelFilter)
 
 	if *cpuProfile != "" {
 		f, err := os.Create(*cpuProfile)
@@ -200,6 +202,9 @@ func main() {
 		},
 		func(ctx context.Context, s string) {
 			restart()
+		},
+		func(ctx context.Context, l logger.Level) {
+			observability.LogLevelFilter.SetLevel(l)
 		},
 	)
 

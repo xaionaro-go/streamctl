@@ -4,8 +4,6 @@ import (
 	"context"
 	"net/url"
 
-	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
-	errlogger "github.com/facebookincubator/go-belt/tool/experimental/errmon/implementation/logger"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
 	"github.com/xaionaro-go/logrustash"
@@ -15,7 +13,6 @@ func CtxWithLogstash(
 	ctx context.Context,
 	logstashAddr string,
 	appName string,
-	overwriteErrMon bool,
 ) context.Context {
 	addr, err := url.Parse(logstashAddr)
 	if err != nil {
@@ -39,8 +36,5 @@ func CtxWithLogstash(
 		emitter.LogrusEntry.Logger,
 		hook,
 	))
-	if overwriteErrMon {
-		errmon.CtxWithErrorMonitor(ctx, errlogger.New(l))
-	}
 	return logger.CtxWithLogger(ctx, l)
 }

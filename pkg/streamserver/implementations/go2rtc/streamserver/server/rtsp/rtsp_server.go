@@ -122,7 +122,7 @@ func Handler(rawURL string) (core.Producer, error) {
 		conn.Transport = query.Get("transport")
 	}
 
-	if logger.Default().Level() >= logger.LevelTrace {
+	if observability.LogLevelFilter.GetLevel() >= logger.LevelTrace {
 		conn.Listen(func(msg any) {
 			switch msg := msg.(type) {
 			case *tcp.Request:
@@ -162,7 +162,7 @@ func (s *RTSPServer) tcpHandler(conn *rtsp.Conn) {
 	var name string
 	var closer func()
 
-	trace := logger.Default().Level() >= logger.LevelTrace
+	trace := observability.LogLevelFilter.GetLevel() >= logger.LevelTrace
 
 	conn.Listen(func(msg any) {
 		if trace {

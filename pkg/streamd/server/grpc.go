@@ -81,6 +81,30 @@ func (grpc *GRPCServer) invalidateCache(ctx context.Context) {
 	grpc.MemoizeDataValue.InvalidateCache(ctx)
 }
 
+func (grpc *GRPCServer) SetLoggingLevel(
+	ctx context.Context,
+	req *streamd_grpc.SetLoggingLevelRequest,
+) (*streamd_grpc.SetLoggingLevelReply, error) {
+	err := grpc.StreamD.SetLoggingLevel(ctx, goconv.LoggingLevelGRPC2Go(req.GetLoggingLevel()))
+	if err != nil {
+		return nil, fmt.Errorf("unable to set the logging level: %w", err)
+	}
+	return &streamd_grpc.SetLoggingLevelReply{}, nil
+}
+
+func (grpc *GRPCServer) GetLoggingLevel(
+	ctx context.Context,
+	req *streamd_grpc.GetLoggingLevelRequest,
+) (*streamd_grpc.GetLoggingLevelReply, error) {
+	level, err := grpc.StreamD.GetLoggingLevel(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to query the logging level: %w", err)
+	}
+	return &streamd_grpc.GetLoggingLevelReply{
+		LoggingLevel: goconv.LoggingLevelGo2GRPC(level),
+	}, nil
+}
+
 func (grpc *GRPCServer) GetConfig(
 	ctx context.Context,
 	req *streamd_grpc.GetConfigRequest,

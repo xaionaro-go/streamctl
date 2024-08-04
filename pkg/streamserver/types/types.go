@@ -23,4 +23,4 @@ type StreamDestination struct {
 
 type StreamID = streamtypes.StreamID
 
-type DestinationID string
+type DestinationID = streamtypes.DestinationID

@@ -441,6 +441,10 @@ func (p *Panel) initBuiltinStreamD(ctx context.Context) error {
 	return nil
 }
 
+func (p *Panel) SetLoggingLevel(ctx context.Context, level logger.Level) {
+	observability.LogLevelFilter.SetLevel(level)
+}
+
 func (p *Panel) initRemoteStreamD(context.Context) error {
 	p.StreamD = client.New(p.Config.RemoteStreamDAddr)
 	return nil
@@ -607,6 +611,7 @@ func (p *Panel) openBrowser(authURL string) error {
 	waitCh := make(chan struct{})
 
 	w := p.app.NewWindow(AppName + ": Browser selection window")
+	resizeWindow(w, fyne.NewSize(600, 400))
 	promptText := widget.NewRichTextWithText("It is required to confirm access in Twitch/YouTube using browser. Select a browser for that (or leave the field empty for auto-selection):")
 	promptText.Wrapping = fyne.TextWrapWord
 	browserField := widget.NewEntry()
@@ -1000,7 +1005,13 @@ func (p *Panel) setFilter(ctx context.Context, filter string) {
 }
 
 func (p *Panel) openSettingsWindow(ctx context.Context) error {
-	cfg, err := p.StreamD.GetConfig(ctx)
+	var (
+		cfg *streamdconfig.Config
+		err error
+	)
+	p.waitForResponse(func() {
+		cfg, err = p.StreamD.GetConfig(ctx)
+	})
 	if err != nil {
 		return fmt.Errorf("unable to get config: %w", err)
 	}
@@ -1303,11 +1314,13 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 }
 
 func (p *Panel) resetCache(ctx context.Context) {
-	p.StreamD.ResetCache(ctx)
-	err := p.StreamD.InitCache(ctx)
-	if err != nil {
-		p.DisplayError(fmt.Errorf("unable to re-initialize the cache: %w", err))
-	}
+	p.waitForResponse(func() {
+		p.StreamD.ResetCache(ctx)
+		err := p.StreamD.InitCache(ctx)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to re-initialize the cache: %w", err))
+		}
+	})
 }
 
 func (p *Panel) openMenuWindow(ctx context.Context) {
