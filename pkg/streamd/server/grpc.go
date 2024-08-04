@@ -848,7 +848,7 @@ func (grpc *GRPCServer) ListStreamForwards(
 
 	var result []*streamd_grpc.StreamForwardWithStatistics
 	for _, s := range streamFwds {
-		result = append(result, &streamd_grpc.StreamForwardWithStatistics{
+		item := &streamd_grpc.StreamForwardWithStatistics{
 			Config: &streamd_grpc.StreamForward{
 				StreamID:      string(s.StreamID),
 				DestinationID: string(s.DestinationID),
@@ -858,7 +858,15 @@ func (grpc *GRPCServer) ListStreamForwards(
 				NumBytesWrote: int64(s.NumBytesWrote),
 				NumBytesRead:  int64(s.NumBytesRead),
 			},
-		})
+		}
+		item.Config.Quirks = &streamd_grpc.StreamForwardQuirks{
+			RestartUntilYoutubeRecognizesStream: &streamd_grpc.RestartUntilYoutubeRecognizesStream{
+				Enabled:        s.Quirks.RestartUntilYoutubeRecognizesStream.Enabled,
+				StartTimeout:   s.Quirks.RestartUntilYoutubeRecognizesStream.StartTimeout.Seconds(),
+				StopStartDelay: s.Quirks.RestartUntilYoutubeRecognizesStream.StopStartDelay.Seconds(),
+			},
+		}
+		result = append(result, item)
 	}
 	return &streamd_grpc.ListStreamForwardsReply{
 		StreamForwards: result,

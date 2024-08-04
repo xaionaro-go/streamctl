@@ -56,6 +56,7 @@ func (p *Panel) initRestreamPage(
 			return
 		}
 		for range ch {
+			logger.Debugf(ctx, "got event IncomingStreamsChange")
 			updateData()
 		}
 	})
@@ -77,6 +78,7 @@ func (p *Panel) initRestreamPage(
 			return
 		}
 		for range ch {
+			logger.Debugf(ctx, "got event StreamServersChange")
 			updateData()
 		}
 	})
@@ -98,6 +100,7 @@ func (p *Panel) initRestreamPage(
 			return
 		}
 		for range ch {
+			logger.Debugf(ctx, "got event StreamDestinationsChange")
 			updateData()
 		}
 	})
@@ -119,6 +122,7 @@ func (p *Panel) initRestreamPage(
 			return
 		}
 		for range ch {
+			logger.Debugf(ctx, "got event StreamForwardsChange")
 			updateData()
 		}
 	})
@@ -140,6 +144,7 @@ func (p *Panel) initRestreamPage(
 			return
 		}
 		for range ch {
+			logger.Debugf(ctx, "got event StreamPlayersChange")
 			updateData()
 		}
 	})
@@ -883,24 +888,51 @@ func (p *Panel) openAddOrEditRestreamWindow(
 	}
 
 	var dstStrs []string
-	dstMap := map[string]api.DestinationID{}
+	dstMapCaption2ID := map[string]api.DestinationID{}
+	dstMapID2Caption := map[api.DestinationID]string{}
 	for _, dst := range dsts {
 		k := string(dst.ID) + ": " + dst.URL
 		dstStrs = append(dstStrs, k)
-		dstMap[k] = dst.ID
+		dstMapCaption2ID[k] = dst.ID
+		dstMapID2Caption[dst.ID] = k
 	}
 	dstSelect := widget.NewSelect(dstStrs, func(s string) {})
 	if dstID != "" {
-		dstSelect.SetSelected(string(dstID))
+		dstSelect.SetSelected(dstMapID2Caption[dstID])
 		dstSelect.Disable()
 	}
 
 	quirksYoutubeRestart := fwd.Quirks.RestartUntilYoutubeRecognizesStream
 
+	if !quirksYoutubeRestart.Enabled {
+		if quirksYoutubeRestart.StartTimeout == 0 {
+			quirksYoutubeRestart.StartTimeout = sstypes.DefaultRestartUntilYoutubeRecognizesStreamConfig().StartTimeout
+		}
+		if quirksYoutubeRestart.StopStartDelay == 0 {
+			quirksYoutubeRestart.StopStartDelay = sstypes.DefaultRestartUntilYoutubeRecognizesStreamConfig().StopStartDelay
+		}
+	}
+
 	youtubeStartTimeout := xfyne.NewNumericalEntry()
 	youtubeStartTimeout.SetText(fmt.Sprintf("%v", quirksYoutubeRestart.StartTimeout.Seconds()))
+	youtubeStartTimeout.OnChanged = func(s string) {
+		v, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			p.DisplayError(err)
+			return
+		}
+		quirksYoutubeRestart.StartTimeout = time.Duration(v * float64(time.Second))
+	}
 	youtubeStopStartDelay := xfyne.NewNumericalEntry()
 	youtubeStopStartDelay.SetText(fmt.Sprintf("%v", quirksYoutubeRestart.StopStartDelay.Seconds()))
+	youtubeStopStartDelay.OnChanged = func(s string) {
+		v, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			p.DisplayError(err)
+			return
+		}
+		quirksYoutubeRestart.StopStartDelay = time.Duration(v * float64(time.Second))
+	}
 	restartUntilYouTubeStartsParams := container.NewVBox(
 		widget.NewLabel("Wait until try restarting (seconds):"),
 		youtubeStartTimeout,
@@ -909,13 +941,17 @@ func (p *Panel) openAddOrEditRestreamWindow(
 	)
 	restartUntilYouTubeStartsParams.Hide()
 
-	restartUntilYouTubeStarts := widget.NewCheck("Restart until YouTube recognizes the stream", func(b bool) {
-		if b {
-			restartUntilYouTubeStartsParams.Show()
-		} else {
-			restartUntilYouTubeStartsParams.Hide()
-		}
-	})
+	restartUntilYouTubeStarts := widget.NewCheck(
+		"Restart until YouTube recognizes the stream",
+		func(b bool) {
+			if b {
+				restartUntilYouTubeStartsParams.Show()
+			} else {
+				restartUntilYouTubeStartsParams.Hide()
+			}
+			quirksYoutubeRestart.Enabled = b
+		},
+	)
 	restartUntilYouTubeStarts.SetChecked(quirksYoutubeRestart.Enabled)
 
 	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
@@ -923,7 +959,7 @@ func (p *Panel) openAddOrEditRestreamWindow(
 			err := addOrEditStreamForward(
 				ctx,
 				streamtypes.StreamID(inStreamsSelect.Selected),
-				dstMap[dstSelect.Selected],
+				dstMapCaption2ID[dstSelect.Selected],
 				enabledCheck.Checked,
 				sstypes.ForwardingQuirks{
 					RestartUntilYoutubeRecognizesStream: quirksYoutubeRestart,
@@ -1130,6 +1166,9 @@ func (p *Panel) streamServersUpdater(
 ) context.CancelFunc {
 	ctx, cancelFn := context.WithCancel(ctx)
 	observability.Go(ctx, func() {
+		logger.Debugf(ctx, "streamServersUpdater: updater")
+		defer logger.Debugf(ctx, "streamServersUpdater: /updater")
+
 		updateData := func() {
 			streamServers, err := p.StreamD.ListStreamServers(ctx)
 			if err != nil {
@@ -1167,6 +1206,9 @@ func (p *Panel) startStreamPlayersUpdater(
 ) context.CancelFunc {
 	ctx, cancelFn := context.WithCancel(ctx)
 	observability.Go(ctx, func() {
+		logger.Debugf(ctx, "startStreamPlayersUpdater: updater")
+		defer logger.Debugf(ctx, "startStreamPlayersUpdater: /updater")
+
 		updateData := func() {
 			streamPlayers, err := p.StreamD.ListStreamPlayers(ctx)
 			if err != nil {
@@ -1204,6 +1246,9 @@ func (p *Panel) startStreamForwardersUpdater(
 ) context.CancelFunc {
 	ctx, cancelFn := context.WithCancel(ctx)
 	observability.Go(ctx, func() {
+		logger.Debugf(ctx, "startStreamForwardersUpdater: updater")
+		defer logger.Debugf(ctx, "startStreamForwardersUpdater: /updater")
+
 		updateData := func() {
 			streamFwds, err := p.StreamD.ListStreamForwards(ctx)
 			if err != nil {

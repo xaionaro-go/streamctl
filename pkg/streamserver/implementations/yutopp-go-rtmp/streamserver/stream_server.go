@@ -443,6 +443,8 @@ func (s *StreamServer) restartUntilYoutubeRecognizesStream(
 	fwd *StreamForward,
 	cfg types.RestartUntilYoutubeRecognizesStream,
 ) {
+	ctx = belt.WithField(ctx, "module", "restartUntilYoutubeRecognizesStream")
+	ctx = belt.WithField(ctx, "stream_forward", fmt.Sprintf("%s->%s", fwd.StreamID, fwd.DestinationID))
 	if !cfg.Enabled {
 		logger.Errorf(ctx, "an attempt to start restartUntilYoutubeRecognizesStream when the hack is disabled for this stream forwarder: %#+v", cfg)
 		return
@@ -464,12 +466,14 @@ func (s *StreamServer) restartUntilYoutubeRecognizesStream(
 			return
 		case <-time.After(cfg.StartTimeout):
 		}
+		logger.Debugf(ctx, "waited %v, checking if the remote platform accepted the stream", cfg.StartTimeout)
 
 		for {
 			started, err := s.PlatformsController.CheckStreamStarted(
 				ctx,
 				fwd.ActiveForwarding.URL,
 			)
+			logger.Debugf(ctx, "the result of checking the stream on the remote platform: %v %v", started, err)
 			if err != nil {
 				logger.Errorf(ctx, "unable to check if the stream with URL '%s' is started: %v", fwd.ActiveForwarding.URL, err)
 				time.Sleep(time.Second)
@@ -480,6 +484,8 @@ func (s *StreamServer) restartUntilYoutubeRecognizesStream(
 			}
 			break
 		}
+
+		logger.Infof(ctx, "the remote platform still does not see the stream, restarting the stream forwarding: stopping...")
 
 		err := fwd.ActiveForwarding.Stop()
 		if err != nil {
@@ -492,9 +498,11 @@ func (s *StreamServer) restartUntilYoutubeRecognizesStream(
 		case <-time.After(cfg.StopStartDelay):
 		}
 
+		logger.Infof(ctx, "the remote platform still does not see the stream, restarting the stream forwarding: starting...")
+
 		err = fwd.ActiveForwarding.Start(ctx)
 		if err != nil {
-			logger.Errorf(ctx, "unable to stop stream forwarding: %v", err)
+			logger.Errorf(ctx, "unable to start stream forwarding: %v", err)
 		}
 	}
 }
@@ -531,6 +539,7 @@ func (s *StreamServer) UpdateStreamForward(
 	}
 	streamConfig.Forwardings[destinationID] = types.ForwardingConfig{
 		Disabled: !enabled,
+		Quirks:   quirks,
 	}
 
 	r := &StreamForward{
@@ -585,6 +594,7 @@ func (s *StreamServer) ListStreamForwards(
 				StreamID:      streamID,
 				DestinationID: dstID,
 				Enabled:       !cfg.Disabled,
+				Quirks:        cfg.Quirks,
 			}
 			if activeFwd, ok := m[fwdID{
 				StreamID: streamID,

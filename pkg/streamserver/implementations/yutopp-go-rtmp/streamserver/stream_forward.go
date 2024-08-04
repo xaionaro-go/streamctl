@@ -296,6 +296,7 @@ func (fwd *ActiveStreamForwarding) Close() error {
 
 	var result *multierror.Error
 	fwd.CancelFunc()
+	fwd.CancelFunc = nil
 	if fwd.Sub != nil {
 		result = multierror.Append(result, fwd.Sub.Close())
 		fwd.Sub = nil

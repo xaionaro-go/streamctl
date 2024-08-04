@@ -1115,13 +1115,15 @@ func (d *StreamD) listStreamForwards(
 		return nil, err
 	}
 	for _, streamFwd := range streamForwards {
-		result = append(result, api.StreamForward{
+		item := api.StreamForward{
 			Enabled:       streamFwd.Enabled,
 			StreamID:      api.StreamID(streamFwd.StreamID),
 			DestinationID: api.DestinationID(streamFwd.DestinationID),
 			NumBytesWrote: streamFwd.NumBytesWrote,
 			NumBytesRead:  streamFwd.NumBytesRead,
-		})
+			Quirks:        streamFwd.Quirks,
+		}
+		result = append(result, item)
 	}
 	return result, nil
 }

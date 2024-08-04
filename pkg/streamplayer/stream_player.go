@@ -338,7 +338,7 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 			time.Sleep(time.Second)
 			continue
 		}
-		logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: now == %v, len == %v; pos == %v", now, l, pos)
+		logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: now == %v, len == %v; pos == %v", p.StreamID, now, l, pos)
 		if pos != prevPos {
 			posUpdatedAt = now
 			prevPos = pos
@@ -355,12 +355,12 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 		}
 
 		lag := l - pos
-		logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: lag == %v", lag)
+		logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: lag == %v", p.StreamID, lag)
 		if lag <= p.Config.JitterBufDuration {
 			if curSpeed == 1 {
 				continue
 			}
-			logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: resetting the speed to 1")
+			logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: resetting the speed to 1", p.StreamID)
 			err := p.Player.SetSpeed(ctx, 1)
 			if err != nil {
 				logger.Errorf(ctx, "unable to reset the speed to 1: %w", err)
@@ -375,7 +375,7 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 				(lag.Seconds()-p.Config.JitterBufDuration.Seconds())/
 				(p.Config.MaxCatchupAtLag.Seconds()-p.Config.JitterBufDuration.Seconds())
 
-		logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: setting the speed to %v", speed)
+		logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: setting the speed to %v", p.StreamID, speed)
 		err = p.Player.SetSpeed(ctx, speed)
 		if err != nil {
 			logger.Errorf(ctx, "unable to set the speed to %v: %w", speed, err)
