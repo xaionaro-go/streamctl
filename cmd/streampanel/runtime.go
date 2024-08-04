@@ -95,6 +95,14 @@ func initRuntime(
 		runtime.GOMAXPROCS(16)
 	}
 
+	observability.Go(ctx, func() {
+		t := time.NewTicker(time.Second)
+		for {
+			<-t.C
+			belt.Flush(ctx)
+		}
+	})
+
 	ctx, cancelFn := context.WithCancel(ctx)
 	return ctx, func() {
 		defer belt.Flush(ctx)

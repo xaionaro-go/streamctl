@@ -29,7 +29,11 @@ func getContext(
 	l := xlogrus.New(ll).WithLevel(logger.Level(flags.LoggerLevel))
 
 	if flags.LogFile != "" {
-		logPath, err := xpath.Expand(flags.LogFile)
+		logPathUnexpanded := flags.LogFile
+		if flags.Subprocess != "" {
+			logPathUnexpanded += "-" + flags.Subprocess
+		}
+		logPath, err := xpath.Expand(logPathUnexpanded)
 		if err != nil {
 			l.Errorf("unable to expand path '%s': %w", flags.LogFile, err)
 		} else {
