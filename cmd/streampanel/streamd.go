@@ -14,6 +14,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/cmd/streamd/ui"
 	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
@@ -139,7 +140,7 @@ func runStreamd(
 	if mainProcess != nil {
 		logger.Debugf(ctx, "starting the IPC server")
 		setReadyFor(ctx, mainProcess, GetStreamdAddress{}, RequestStreamDConfig{})
-		go func() {
+		observability.Go(ctx, func() {
 			err := mainProcess.Serve(
 				ctx,
 				func(
@@ -169,7 +170,7 @@ func runStreamd(
 				},
 			)
 			logger.Fatalf(ctx, "communication (with the main process) error: %v", err)
-		}()
+		})
 	}
 
 	err = streamD.Run(ctx)
@@ -198,23 +199,23 @@ func initGRPCServer(
 	if err != nil {
 		logger.Fatalf(ctx, "failed to listen: %v", err)
 	}
-	go func() {
+	observability.Go(ctx, func() {
 		<-ctx.Done()
 		listener.Close()
-	}()
+	})
 
 	grpcServer := grpc.NewServer()
 	streamdGRPC := server.NewGRPCServer(streamD)
 	streamd_grpc.RegisterStreamDServer(grpcServer, streamdGRPC)
 
 	// start the server:
-	go func() {
+	observability.Go(ctx, func() {
 		logger.Infof(ctx, "started server at %s", listener.Addr().String())
 		err = grpcServer.Serve(listener)
 		if err != nil {
 			logger.Fatal(ctx, err)
 		}
-	}()
+	})
 
 	return listener, grpcServer, streamdGRPC
 }

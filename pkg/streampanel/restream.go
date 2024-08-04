@@ -15,6 +15,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/dustin/go-humanize"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
@@ -38,7 +39,7 @@ func (p *Panel) initRestreamPage(
 	logger.Debugf(ctx, "initRestreamPage")
 	defer logger.Debugf(ctx, "/initRestreamPage")
 
-	go func() {
+	observability.Go(ctx, func() {
 		updateData := func() {
 			inStreams, err := p.StreamD.ListIncomingStreams(ctx)
 			if err != nil {
@@ -57,9 +58,9 @@ func (p *Panel) initRestreamPage(
 		for range ch {
 			updateData()
 		}
-	}()
+	})
 
-	go func() {
+	observability.Go(ctx, func() {
 		updateData := func() {
 			streamServers, err := p.StreamD.ListStreamServers(ctx)
 			if err != nil {
@@ -78,9 +79,9 @@ func (p *Panel) initRestreamPage(
 		for range ch {
 			updateData()
 		}
-	}()
+	})
 
-	go func() {
+	observability.Go(ctx, func() {
 		updateData := func() {
 			dsts, err := p.StreamD.ListStreamDestinations(ctx)
 			if err != nil {
@@ -99,9 +100,9 @@ func (p *Panel) initRestreamPage(
 		for range ch {
 			updateData()
 		}
-	}()
+	})
 
-	go func() {
+	observability.Go(ctx, func() {
 		updateData := func() {
 			streamFwds, err := p.StreamD.ListStreamForwards(ctx)
 			if err != nil {
@@ -120,9 +121,9 @@ func (p *Panel) initRestreamPage(
 		for range ch {
 			updateData()
 		}
-	}()
+	})
 
-	go func() {
+	observability.Go(ctx, func() {
 		updateData := func() {
 			streamPlayers, err := p.StreamD.ListStreamPlayers(ctx)
 			if err != nil {
@@ -141,7 +142,7 @@ func (p *Panel) initRestreamPage(
 		for range ch {
 			updateData()
 		}
-	}()
+	})
 }
 
 func (p *Panel) openAddStreamServerWindow(ctx context.Context) {
@@ -1032,7 +1033,7 @@ func (p *Panel) streamServersUpdater(
 	ctx context.Context,
 ) context.CancelFunc {
 	ctx, cancelFn := context.WithCancel(ctx)
-	go func() {
+	observability.Go(ctx, func() {
 		updateData := func() {
 			streamServers, err := p.StreamD.ListStreamServers(ctx)
 			if err != nil {
@@ -1061,7 +1062,7 @@ func (p *Panel) streamServersUpdater(
 			}
 			updateData()
 		}
-	}()
+	})
 	return cancelFn
 }
 
@@ -1069,7 +1070,7 @@ func (p *Panel) startStreamPlayersUpdater(
 	ctx context.Context,
 ) context.CancelFunc {
 	ctx, cancelFn := context.WithCancel(ctx)
-	go func() {
+	observability.Go(ctx, func() {
 		updateData := func() {
 			streamPlayers, err := p.StreamD.ListStreamPlayers(ctx)
 			if err != nil {
@@ -1098,7 +1099,7 @@ func (p *Panel) startStreamPlayersUpdater(
 			}
 			updateData()
 		}
-	}()
+	})
 	return cancelFn
 }
 
@@ -1106,7 +1107,7 @@ func (p *Panel) startStreamForwardersUpdater(
 	ctx context.Context,
 ) context.CancelFunc {
 	ctx, cancelFn := context.WithCancel(ctx)
-	go func() {
+	observability.Go(ctx, func() {
 		updateData := func() {
 			streamFwds, err := p.StreamD.ListStreamForwards(ctx)
 			if err != nil {
@@ -1135,6 +1136,6 @@ func (p *Panel) startStreamForwardersUpdater(
 			}
 			updateData()
 		}
-	}()
+	})
 	return cancelFn
 }

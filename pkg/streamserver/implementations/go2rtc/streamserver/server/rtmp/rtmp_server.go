@@ -15,6 +15,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/rs/zerolog/log"
 	"github.com/xaionaro-go/datacounter"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/consts"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/go2rtc/streamserver/streams"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
@@ -55,15 +56,15 @@ func New(
 		Listener:      ln,
 	}
 
-	go func() {
+	observability.Go(ctx, func() {
 		<-ctx.Done()
 		logger.Infof(ctx, "closing %s", cfg.Listen)
 		err := ln.Close()
 		errmon.ObserveErrorCtx(ctx, err)
-	}()
+	})
 	logger.Infof(ctx, "started RTMP server at %s", cfg.Listen)
 
-	go func() {
+	observability.Go(ctx, func() {
 		for {
 			if ctx.Err() != nil {
 				return
@@ -75,13 +76,13 @@ func New(
 				return
 			}
 
-			go func() {
+			observability.Go(ctx, func() {
 				if err = s.tcpHandle(conn); err != nil {
 					errmon.ObserveErrorCtx(ctx, err)
 				}
-			}()
+			})
 		}
-	}()
+	})
 
 	return s, nil
 }
@@ -197,12 +198,12 @@ func StreamsConsumerHandle(url string) (core.Consumer, types.NumBytesReaderWrote
 
 		ctx, cancelFn := context.WithCancel(ctx)
 		defer cancelFn()
-		go func() {
+		observability.Go(ctx, func() {
 			<-ctx.Done()
 			cancelFn()
 			err := wr.(io.Closer).Close()
 			errmon.ObserveErrorCtx(ctx, err)
-		}()
+		})
 
 		_, err = cons.WriteTo(wrc)
 		if err != nil {

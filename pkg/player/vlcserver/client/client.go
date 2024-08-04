@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player/protobuf/go/player_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/player/types"
 	"google.golang.org/grpc"
@@ -127,7 +128,7 @@ func (c *Client) EndChan(ctx context.Context) (<-chan struct{}, error) {
 
 	result := make(chan struct{})
 	waiter.CloseSend()
-	go func() {
+	observability.Go(ctx, func() {
 		defer conn.Close()
 		defer func() {
 			close(result)
@@ -142,7 +143,7 @@ func (c *Client) EndChan(ctx context.Context) (<-chan struct{}, error) {
 			logger.Errorf(ctx, "unable to read data: %v", err)
 			return
 		}
-	}()
+	})
 
 	return result, nil
 }

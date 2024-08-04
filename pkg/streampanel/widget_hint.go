@@ -9,6 +9,7 @@ import (
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/unsafetools"
 )
 
@@ -60,7 +61,7 @@ func (w *HintWidget) MouseIn(ev *desktop.MouseEvent) {
 		panic("should not have happened")
 	}
 	w.RecheckerCancelFn = cancelFn
-	go func() {
+	observability.Go(ctx, func() {
 		for {
 			select {
 			case <-ctx.Done():
@@ -80,7 +81,7 @@ func (w *HintWidget) MouseIn(ev *desktop.MouseEvent) {
 			pos.Y += 5
 			w.Hint.Move(pos)
 		}
-	}()
+	})
 }
 func (w *HintWidget) MouseMoved(*desktop.MouseEvent) {
 }

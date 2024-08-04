@@ -33,6 +33,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/yl2chen/cidranger"
 )
 
@@ -160,9 +161,9 @@ func UpRun(
 	if ok {
 		metricsTuple := fmt.Sprintf("127.0.0.1:%s", metricsPort)
 		http.Handle("/metrics", promhttp.Handler())
-		go func() {
+		observability.Go(ctx, func() {
 			http.ListenAndServe(metricsTuple, nil)
-		}()
+		})
 		fmt.Printf("[+] Listening for metrics scrape requests on http://%s/metrics\n", metricsTuple)
 	}
 

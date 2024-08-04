@@ -2,9 +2,11 @@ package streamserver
 
 import (
 	"bytes"
+	"context"
 	"sync"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	flvtag "github.com/yutopp/go-flv/tag"
 )
 
@@ -37,11 +39,11 @@ func (pb *Pubsub) Deregister() error {
 	pb.m.Lock()
 	defer pb.m.Unlock()
 
-	go func() {
+	observability.Go(context.TODO(), func() {
 		for _, sub := range pb.subs {
 			_ = sub.Close()
 		}
-	}()
+	})
 
 	return pb.srv.removePubsub(pb.name)
 }

@@ -1,13 +1,16 @@
 package streams
 
 import (
+	"context"
 	"errors"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 )
 
 func (s *Stream) Play(source string) error {
+	ctx := context.TODO()
 	s.mu.Lock()
 	for _, producer := range s.producers {
 		if producer.state == stateInternal && producer.conn != nil {
@@ -45,10 +48,10 @@ func (s *Stream) Play(source string) error {
 
 		s.AddInternalProducer(src)
 
-		go func() {
+		observability.Go(ctx, func() {
 			_ = src.Start()
 			s.RemoveProducer(src)
-		}()
+		})
 
 		return nil
 	}
@@ -82,19 +85,19 @@ func (s *Stream) Play(source string) error {
 		s.AddInternalProducer(src)
 		s.AddInternalConsumer(cons)
 
-		go func() {
+		observability.Go(ctx, func() {
 			_ = dst.Start()
 			_ = src.Stop()
 			s.RemoveInternalConsumer(cons)
-		}()
+		})
 
-		go func() {
+		observability.Go(ctx, func() {
 			_ = src.Start()
 			// little timeout before stop dst, so the buffer can be transferred
 			time.Sleep(time.Second)
 			_ = dst.Stop()
 			s.RemoveProducer(src)
-		}()
+		})
 
 		return nil
 	}

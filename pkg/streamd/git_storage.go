@@ -9,6 +9,7 @@ import (
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/repository"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 )
@@ -200,7 +201,7 @@ func (d *StreamD) startPeriodicGitSyncer(ctx context.Context) {
 	d.GitSyncerMutex.Unlock()
 
 	d.gitSync(ctx)
-	go func() {
+	observability.Go(ctx, func() {
 		err := d.sendConfigViaGIT(ctx)
 		if err != nil {
 			d.UI.DisplayError(fmt.Errorf("unable to send the config to the remote git repository: %w", err))
@@ -220,7 +221,7 @@ func (d *StreamD) startPeriodicGitSyncer(ctx context.Context) {
 
 			d.gitSync(ctx)
 		}
-	}()
+	})
 }
 
 func (d *StreamD) OBSOLETE_GitRelogin(ctx context.Context) error {

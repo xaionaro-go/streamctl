@@ -18,6 +18,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
 	"github.com/spf13/pflag"
 
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	ptypes "github.com/xaionaro-go/streamctl/pkg/player/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
@@ -210,10 +211,10 @@ func (s *StreamPlayerStreamServer) WaitPublisher(
 	}
 
 	ch := make(chan struct{})
-	go func() {
+	observability.Go(ctx, func() {
 		s.StreamServer.RelayServer.WaitPubsub(ctx, localAppName)
 		close(ch)
-	}()
+	})
 	return ch, nil
 }
 

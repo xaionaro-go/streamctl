@@ -11,6 +11,7 @@ import (
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 )
 
 type StreamProfileBase struct {
@@ -242,10 +243,10 @@ func (s StreamControllers) ApplyProfiles(
 			}
 		}(p)
 	}
-	go func() {
+	observability.Go(ctx, func() {
 		wg.Wait()
 		close(errCh)
-	}()
+	})
 	var result error
 	for err := range errCh {
 		result = multierror.Append(result, err)
@@ -257,7 +258,7 @@ func (s StreamControllers) SetTitle(
 	ctx context.Context,
 	title string,
 ) error {
-	return s.concurrently(func(c AbstractStreamController) error {
+	return s.concurrently(ctx, func(c AbstractStreamController) error {
 		err := c.SetTitle(ctx, title)
 		logger.Debugf(ctx, "SetTitle: %T: <%s>: %v", c.GetImplementation(), title, err)
 		if err != nil {
@@ -271,7 +272,7 @@ func (s StreamControllers) SetDescription(
 	ctx context.Context,
 	description string,
 ) error {
-	return s.concurrently(func(c AbstractStreamController) error {
+	return s.concurrently(ctx, func(c AbstractStreamController) error {
 		logger.Debugf(ctx, "SetDescription: %T: <%s>", c.GetImplementation(), description)
 		if err := c.SetDescription(ctx, description); err != nil {
 			return fmt.Errorf("StreamController %T return error: %w", c.GetImplementation(), err)
@@ -285,7 +286,7 @@ func (s StreamControllers) InsertAdsCuePoint(
 	ts time.Time,
 	duration time.Duration,
 ) error {
-	return s.concurrently(func(c AbstractStreamController) error {
+	return s.concurrently(ctx, func(c AbstractStreamController) error {
 		if err := c.InsertAdsCuePoint(ctx, ts, duration); err != nil {
 			return fmt.Errorf("StreamController %T return error: %w", c.GetImplementation(), err)
 		}
@@ -304,7 +305,7 @@ func (s StreamControllers) StartStream(
 	for _, p := range profiles {
 		m[reflect.TypeOf(p)] = p
 	}
-	return s.concurrently(func(c AbstractStreamController) error {
+	return s.concurrently(ctx, func(c AbstractStreamController) error {
 		profile := m[c.StreamProfileType()]
 		logger.Debugf(ctx, "profile == %#+v", profile)
 		if err := c.StartStream(ctx, title, description, profile, customArgs...); err != nil {
@@ -317,7 +318,7 @@ func (s StreamControllers) StartStream(
 func (s StreamControllers) EndStream(
 	ctx context.Context,
 ) error {
-	return s.concurrently(func(c AbstractStreamController) error {
+	return s.concurrently(ctx, func(c AbstractStreamController) error {
 		if err := c.EndStream(ctx); err != nil {
 			return fmt.Errorf("StreamController %T return error: %w", c.GetImplementation(), err)
 		}
@@ -328,7 +329,7 @@ func (s StreamControllers) EndStream(
 func (s StreamControllers) Flush(
 	ctx context.Context,
 ) error {
-	return s.concurrently(func(c AbstractStreamController) error {
+	return s.concurrently(ctx, func(c AbstractStreamController) error {
 		if err := c.Flush(ctx); err != nil {
 			return fmt.Errorf("StreamController %T return error: %w", c.GetImplementation(), err)
 		}
@@ -336,7 +337,10 @@ func (s StreamControllers) Flush(
 	})
 }
 
-func (s StreamControllers) concurrently(callback func(c AbstractStreamController) error) error {
+func (s StreamControllers) concurrently(
+	ctx context.Context,
+	callback func(c AbstractStreamController) error,
+) error {
 	var wg sync.WaitGroup
 	errCh := make(chan error)
 	for _, c := range s {
@@ -348,10 +352,10 @@ func (s StreamControllers) concurrently(callback func(c AbstractStreamController
 			}
 		}(c)
 	}
-	go func() {
+	observability.Go(ctx, func() {
 		wg.Wait()
 		close(errCh)
-	}()
+	})
 
 	var result error
 	for err := range errCh {

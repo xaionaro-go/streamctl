@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os/exec"
 	"runtime"
+
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 )
 
 type OAuthHandlerArgument struct {
@@ -74,12 +76,12 @@ func NewCodeReceiver(
 		}),
 	}
 
-	go func() {
+	observability.Go(ctx, func() {
 		<-ctx.Done()
 		listener.Close()
 		srv.Close()
 		close(codeCh)
-	}()
+	})
 
 	go srv.Serve(listener)
 

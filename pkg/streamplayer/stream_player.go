@@ -11,6 +11,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 )
@@ -302,10 +303,10 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 		}
 	}
 
-	go func() {
+	observability.Go(ctx, func() {
 		time.Sleep(time.Second) // TODO: delete this ugly racy hack
 		p.notifyStart(context.WithValue(ctx, CtxKeyStreamPlayer, p))
-	}()
+	})
 
 	logger.Debugf(ctx, "finished waiting for a publisher at '%s'", p.StreamID)
 

@@ -13,6 +13,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/anthonynsimon/bild/adjust"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
@@ -30,7 +31,7 @@ func (p *Panel) startMonitorPage(
 		p.updateMonitorPageImages(ctx)
 		p.updateMonitorPageStreamStatus(ctx)
 
-		go func() {
+		observability.Go(ctx, func() {
 			t := time.NewTicker(200 * time.Millisecond)
 			for {
 				select {
@@ -41,9 +42,9 @@ func (p *Panel) startMonitorPage(
 
 				p.updateMonitorPageImages(ctx)
 			}
-		}()
+		})
 
-		go func() {
+		observability.Go(ctx, func() {
 			t := time.NewTicker(2 * time.Second)
 			for {
 				select {
@@ -54,7 +55,7 @@ func (p *Panel) startMonitorPage(
 
 				p.updateMonitorPageStreamStatus(ctx)
 			}
-		}()
+		})
 	}(ctx)
 }
 
@@ -79,7 +80,7 @@ func (p *Panel) updateMonitorPageImages(
 	var wg sync.WaitGroup
 
 	wg.Add(1)
-	go func() {
+	observability.Go(ctx, func() {
 		defer wg.Done()
 		img, changed, err := p.getImage(ctx, consts.ImageScreenshot)
 
@@ -101,10 +102,10 @@ func (p *Panel) updateMonitorPageImages(
 			p.screenshotContainer.Objects = append(p.screenshotContainer.Objects, imgFyne)
 			p.screenshotContainer.Refresh()
 		}
-	}()
+	})
 
 	wg.Add(1)
-	go func() {
+	observability.Go(ctx, func() {
 		defer wg.Done()
 		img, changed, err := p.getImage(ctx, consts.ImageChat)
 		if err != nil {
@@ -124,7 +125,7 @@ func (p *Panel) updateMonitorPageImages(
 			p.chatContainer.Objects = append(p.chatContainer.Objects, imgFyne)
 			p.chatContainer.Refresh()
 		}
-	}()
+	})
 
 }
 
@@ -141,7 +142,7 @@ func (p *Panel) updateMonitorPageStreamStatus(
 		twitch.ID,
 	} {
 		wg.Add(1)
-		go func() {
+		observability.Go(ctx, func() {
 			defer wg.Done()
 
 			dst := p.streamStatus[platID]
@@ -178,7 +179,7 @@ func (p *Panel) updateMonitorPageStreamStatus(
 			} else {
 				dst.SetText("started")
 			}
-		}()
+		})
 	}
 
 	wg.Wait()

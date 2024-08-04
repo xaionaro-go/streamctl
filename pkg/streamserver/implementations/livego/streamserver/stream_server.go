@@ -14,6 +14,7 @@ import (
 	"github.com/gwuhaolin/livego/configure"
 	"github.com/gwuhaolin/livego/protocol/rtmp"
 	"github.com/spf13/viper"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
@@ -128,13 +129,13 @@ func (s *StreamServer) startServer(
 			Listener: listener,
 		}
 		portServer.Server = rtmp.NewRtmpServer(portServer.Stream, nil)
-		go func() {
+		observability.Go(ctx, func() {
 			err = portServer.Server.Serve(listener)
 			if err != nil {
 				err = fmt.Errorf("unable to start serving RTMP at '%s': %w", listener.Addr().String(), err)
 				logger.Error(ctx, err)
 			}
-		}()
+		})
 		srv = portServer
 	case streamtypes.ServerTypeRTSP:
 		return fmt.Errorf("RTSP is not supported, yet")

@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/immune-gmbh/attestation-sdk/pkg/lockmap"
 	"github.com/sethvargo/go-password/password"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 )
 
 func init() {
@@ -119,13 +120,13 @@ func (m *Manager) Serve(
 	ctx, cancelFn := context.WithCancel(ctx)
 	defer cancelFn()
 
-	go func() {
+	observability.Go(ctx, func() {
 		<-ctx.Done()
 		err := m.Close()
 		if err != nil {
 			logger.Error(ctx, err)
 		}
-	}()
+	})
 
 	if m.LaunchClient != nil {
 		for _, name := range m.allClientProcesses {
@@ -159,9 +160,9 @@ func (m *Manager) addNewConnection(
 	conn net.Conn,
 	onReceivedMessage OnReceivedMessageFunc,
 ) {
-	go func() {
+	observability.Go(ctx, func() {
 		m.handleConnection(ctx, conn, onReceivedMessage)
-	}()
+	})
 }
 
 func (m *Manager) handleConnection(
@@ -174,10 +175,10 @@ func (m *Manager) handleConnection(
 	defer func() { logger.Tracef(ctx, "/handleConnection from %s (%s)", conn.RemoteAddr(), regMessage.Source) }()
 
 	ctx, cancelFn := context.WithCancel(ctx)
-	go func() {
+	observability.Go(ctx, func() {
 		<-ctx.Done()
 		conn.Close()
-	}()
+	})
 	defer cancelFn()
 
 	encoder := gob.NewEncoder(conn)
@@ -276,11 +277,11 @@ func (m *Manager) processMessage(
 		err = multierror.Append(err, onReceivedMessage(ctx, source, message.Content))
 
 		errCh := make(chan error)
-		go func() {
+		observability.Go(ctx, func() {
 			for e := range errCh {
 				err = multierror.Append(err, e)
 			}
-		}()
+		})
 		for _, dst := range m.allClientProcesses {
 			if dst == source {
 				continue
@@ -346,7 +347,7 @@ func (m *Manager) sendMessage(
 		return fmt.Errorf("process '%s' is not ever expected", destination)
 	}
 
-	go func() {
+	observability.Go(ctx, func() {
 		conn, err := m.waitForReadyProcess(ctx, destination, reflect.TypeOf(content))
 		if err != nil {
 			logger.Errorf(ctx, "%v", fmt.Errorf("unable to wait for process '%s': %w", destination, err))
@@ -368,7 +369,7 @@ func (m *Manager) sendMessage(
 			logger.Errorf(ctx, "%v", fmt.Errorf("unable to encode&send message: %w", err))
 			return
 		}
-	}()
+	})
 
 	return nil
 }

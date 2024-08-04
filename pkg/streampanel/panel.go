@@ -31,6 +31,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/go-ng/xmath"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/screenshot"
 	"github.com/xaionaro-go/streamctl/pkg/screenshoter"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -264,17 +265,17 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
 	closeLoadingWindow := func() {
 		logger.Tracef(ctx, "closing the loading window")
 		loadingWindow.Hide()
-		go func() {
+		observability.Go(ctx, func() {
 			time.Sleep(10 * time.Millisecond)
 			loadingWindow.Hide()
 			time.Sleep(100 * time.Millisecond)
 			loadingWindow.Hide()
 			time.Sleep(time.Second)
 			loadingWindow.Close()
-		}()
+		})
 	}
 
-	go func() {
+	observability.Go(ctx, func() {
 		if streamD, ok := p.StreamD.(*client.Client); ok {
 			p.setStatusFunc("Connecting...")
 			err := p.startOAuthListenerForRemoteStreamD(ctx, streamD)
@@ -290,10 +291,10 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
 			defer closeLoadingWindow()
 			streamD := p.StreamD.(*streamd.StreamD)
 			streamD.AddOAuthListenPort(8091)
-			go func() {
+			observability.Go(ctx, func() {
 				<-ctx.Done()
 				streamD.RemoveOAuthListenPort(8091)
-			}()
+			})
 			logger.Tracef(ctx, "started oauth listener for the local streamd")
 		}
 
@@ -323,7 +324,7 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
 		}*/
 
 		logger.Tracef(ctx, "ended stream controllers initialization")
-	}()
+	})
 
 	p.app.Run()
 	return nil
@@ -347,7 +348,7 @@ func (p *Panel) startOAuthListenerForRemoteStreamD(
 	}
 
 	logger.Tracef(ctx, "started oauth listener for the remote streamd")
-	go func() {
+	observability.Go(ctx, func() {
 		defer cancelFn()
 		defer p.DisplayError(fmt.Errorf("oauth handler was closed"))
 		for {
@@ -383,7 +384,7 @@ func (p *Panel) startOAuthListenerForRemoteStreamD(
 				}
 			}
 		}
-	}()
+	})
 	return nil
 }
 
@@ -1789,7 +1790,7 @@ func (p *Panel) subscribeUpdateControlPage(ctx context.Context) {
 
 	p.getUpdatedStatus(ctx)
 
-	go func() {
+	observability.Go(ctx, func() {
 		for {
 			select {
 			case <-ctx.Done():
@@ -1799,7 +1800,7 @@ func (p *Panel) subscribeUpdateControlPage(ctx context.Context) {
 			}
 			p.getUpdatedStatus(ctx)
 		}
-	}()
+	})
 }
 
 func (p *Panel) getSelectedProfile() Profile {
@@ -1821,7 +1822,7 @@ func (p *Panel) execCommand(ctx context.Context, cmdString string) {
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	go func() {
+	observability.Go(ctx, func() {
 		err := cmd.Run()
 		if err != nil {
 			p.DisplayError(err)
@@ -1829,7 +1830,7 @@ func (p *Panel) execCommand(ctx context.Context, cmdString string) {
 
 		logger.Debugf(ctx, "stdout: %s", stdout.Bytes())
 		logger.Debugf(ctx, "stderr: %s", stderr.Bytes())
-	}()
+	})
 }
 
 func (p *Panel) streamIsRunning(
@@ -2441,10 +2442,10 @@ func (p *Panel) profileWindow(
 			for _, cat := range dataTwitch.Cache.Categories {
 				if cleanTwitchCategoryName(cat.Name) == text {
 					setSelectedTwitchCategory(cat.Name)
-					go func() {
+					observability.Go(ctx, func() {
 						time.Sleep(100 * time.Millisecond)
 						twitchCategory.SetText("")
-					}()
+					})
 					return
 				}
 			}
@@ -2535,10 +2536,10 @@ func (p *Panel) profileWindow(
 			for _, bc := range dataYouTube.Cache.Broadcasts {
 				if cleanYoutubeRecordingName(bc.Snippet.Title) == text {
 					setSelectedYoutubeBroadcast(bc)
-					go func() {
+					observability.Go(ctx, func() {
 						time.Sleep(100 * time.Millisecond)
 						youtubeTemplate.SetText("")
-					}()
+					})
 					return
 				}
 			}

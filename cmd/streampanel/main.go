@@ -11,6 +11,7 @@ import (
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel"
@@ -98,7 +99,7 @@ func runPanel(
 
 	if mainProcess != nil {
 		setReadyFor(ctx, mainProcess, StreamDDied{}, UpdateStreamDConfig{})
-		go func() {
+		observability.Go(ctx, func() {
 			err := mainProcess.Serve(
 				ctx,
 				func(ctx context.Context, source mainprocess.ProcessName, content any) error {
@@ -124,7 +125,7 @@ func runPanel(
 				},
 			)
 			logger.Fatalf(ctx, "communication (with the main process) error: %v", err)
-		}()
+		})
 	}
 
 	var loopOpts []streampanel.LoopOption

@@ -13,6 +13,7 @@ import (
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 )
 
 type ProcessName = mainprocess.ProcessName
@@ -140,7 +141,7 @@ func runSplitProcesses(
 		}
 		return nil
 	})
-	go func() {
+	observability.Go(ctx, func() {
 		select {
 		case <-ctx.Done():
 			return
@@ -151,7 +152,7 @@ func runSplitProcesses(
 		if err != nil {
 			logger.Fatalf(ctx, "%s", err)
 		}
-	}()
+	})
 
 	<-ctx.Done()
 }
@@ -187,12 +188,12 @@ func runFork(
 	if err != nil {
 		return fmt.Errorf("unable to start '%s %s': %w", args[0], strings.Join(args[1:], " "), err)
 	}
-	go func() {
+	observability.Go(ctx, func() {
 		err := cmd.Wait()
 		if err != nil {
 			logger.Errorf(ctx, "error running '%s %s': %v", args[0], strings.Join(args[1:], " "), err)
 		}
-	}()
+	})
 	return nil
 }
 

@@ -15,6 +15,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
 	"github.com/spf13/pflag"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/player/types"
 	"github.com/xaionaro-go/streamctl/pkg/xfyne"
@@ -63,7 +64,7 @@ func main() {
 
 	app := fyneapp.New()
 
-	go func() {
+	observability.Go(ctx, func() {
 		for {
 			ch, err := p.EndChan(ctx)
 			if err != nil {
@@ -77,7 +78,7 @@ func main() {
 			w.SetContent(container.NewStack(b))
 			w.Show()
 		}
-	}()
+	})
 
 	errorMessage := widget.NewLabel("")
 
@@ -128,7 +129,7 @@ func main() {
 	})
 
 	posLabel := widget.NewLabel("")
-	go func() {
+	observability.Go(ctx, func() {
 		t := time.NewTicker(time.Millisecond * 100)
 		for {
 			<-t.C
@@ -146,7 +147,7 @@ func main() {
 
 			posLabel.SetText(pos.String() + " / " + l.String())
 		}
-	}()
+	})
 
 	w := app.NewWindow("player controls")
 	w.SetContent(container.NewBorder(

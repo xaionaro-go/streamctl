@@ -13,6 +13,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/consts"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/go2rtc/streamserver/streams"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
@@ -68,15 +69,15 @@ func New(
 		s.DefaultMedias = ParseQuery(query)
 	}
 
-	go func() {
+	observability.Go(ctx, func() {
 		<-ctx.Done()
 		logger.Infof(ctx, "closing %s", cfg.ListenAddr)
 		err := ln.Close()
 		errmon.ObserveErrorCtx(ctx, err)
-	}()
+	})
 	logger.Infof(ctx, "started RTSP server at %s", cfg.ListenAddr)
 
-	go func() {
+	observability.Go(ctx, func() {
 		for {
 			if ctx.Err() != nil {
 				return
@@ -95,7 +96,7 @@ func New(
 			}
 			go s.tcpHandler(c)
 		}
-	}()
+	})
 
 	return s, nil
 }

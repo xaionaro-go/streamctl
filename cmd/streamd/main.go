@@ -69,23 +69,23 @@ func main() {
 		}
 	}
 
+	ctx := context.Background()
+	ctx = logger.CtxWithLogger(ctx, l)
+
 	if *netPprofAddr != "" || (forceNetPProfOnAndroid && runtime.GOOS == "android") {
-		go func() {
+		observability.Go(ctx, func() {
 			if *netPprofAddr == "" {
 				*netPprofAddr = "localhost:0"
 			}
 			l.Infof("starting to listen for net/pprof requests at '%s'", *netPprofAddr)
 			l.Error(http.ListenAndServe(*netPprofAddr, nil))
-		}()
+		})
 	}
 
 	if oldValue := runtime.GOMAXPROCS(0); oldValue < 16 {
 		l.Infof("increased GOMAXPROCS from %d to %d", oldValue, 16)
 		runtime.GOMAXPROCS(16)
 	}
-
-	ctx := context.Background()
-	ctx = logger.CtxWithLogger(ctx, l)
 
 	if *sentryDSN != "" {
 		l.Infof("setting up Sentry at DSN '%s'", *sentryDSN)
@@ -154,21 +154,21 @@ func main() {
 			l.Fatalf("unable to initialize the streamd instance: %v", err)
 		}
 
-		go func() {
+		observability.Go(ctx, func() {
 			if err = streamD.Run(ctx); err != nil {
 				l.Errorf("streamd returned an error: %v", err)
 			}
-		}()
+		})
 
 		listener, err := net.Listen("tcp", *listenAddr)
 		if err != nil {
 			log.Fatalf("failed to listen: %v", err)
 		}
 
-		go func() {
+		observability.Go(ctx, func() {
 			<-ctx.Done()
 			listener.Close()
-		}()
+		})
 
 		grpcServer := grpc.NewServer()
 		streamdGRPC = server.NewGRPCServer(streamD)

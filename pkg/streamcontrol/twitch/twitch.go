@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/nicklaw5/helix/v2"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 )
 
@@ -358,13 +359,13 @@ func (t *Twitch) getNewToken(
 			var resultErr error
 			errCh := make(chan error)
 			errWg.Add(1)
-			go func() {
+			observability.Go(ctx, func() {
 				errWg.Done()
 				for err := range errCh {
 					errmon.ObserveErrorCtx(ctx, err)
 					resultErr = multierror.Append(resultErr, err)
 				}
-			}()
+			})
 
 			alreadyListening := map[uint16]struct{}{}
 			var wg sync.WaitGroup
@@ -412,7 +413,7 @@ func (t *Twitch) getNewToken(
 			}
 
 			wg.Add(1)
-			go func() {
+			observability.Go(ctx, func() {
 				defer wg.Done()
 				t := time.NewTicker(time.Second)
 				for {
@@ -431,12 +432,12 @@ func (t *Twitch) getNewToken(
 					}
 					alreadyListening = alreadyListeningNext
 				}
-			}()
+			})
 
-			go func() {
+			observability.Go(ctx, func() {
 				wg.Wait()
 				close(errCh)
-			}()
+			})
 			<-ctx.Done()
 			if !success {
 				errWg.Wait()

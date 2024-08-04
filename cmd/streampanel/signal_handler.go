@@ -6,6 +6,7 @@ import (
 	"os/signal"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 )
 
 func signalHandler(
@@ -13,7 +14,7 @@ func signalHandler(
 ) chan<- os.Signal {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
-	go func() {
+	observability.Go(ctx, func() {
 		for range c {
 			forkLocker.Lock()
 			for name, f := range forkMap {
@@ -26,6 +27,6 @@ func signalHandler(
 			forkLocker.Unlock()
 			os.Exit(1)
 		}
-	}()
+	})
 	return c
 }

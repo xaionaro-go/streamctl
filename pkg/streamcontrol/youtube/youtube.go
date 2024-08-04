@@ -20,6 +20,7 @@ import (
 	"github.com/go-yaml/yaml"
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -67,7 +68,7 @@ func New(
 		return nil, fmt.Errorf("connection verification failed: %w", err)
 	}
 
-	go func() {
+	observability.Go(ctx, func() {
 		ticker := time.NewTicker(time.Minute)
 		for {
 			select {
@@ -82,7 +83,7 @@ func New(
 				}
 			}
 		}
-	}()
+	})
 
 	return yt, nil
 }
@@ -211,13 +212,13 @@ func getToken(ctx context.Context, cfg Config) (*oauth2.Token, error) {
 	var resultErr error
 	errCh := make(chan error)
 	errWg.Add(1)
-	go func() {
+	observability.Go(ctx, func() {
 		errWg.Done()
 		for err := range errCh {
 			errmon.ObserveErrorCtx(ctx, err)
 			resultErr = multierror.Append(resultErr, err)
 		}
-	}()
+	})
 
 	alreadyListening := map[uint16]struct{}{}
 
@@ -268,7 +269,7 @@ func getToken(ctx context.Context, cfg Config) (*oauth2.Token, error) {
 	}
 
 	wg.Add(1)
-	go func() {
+	observability.Go(ctx, func() {
 		defer wg.Done()
 		t := time.NewTicker(time.Second)
 		for {
@@ -287,12 +288,12 @@ func getToken(ctx context.Context, cfg Config) (*oauth2.Token, error) {
 			}
 			alreadyListening = alreadyListeningNext
 		}
-	}()
+	})
 
-	go func() {
+	observability.Go(ctx, func() {
 		wg.Wait()
 		close(errCh)
-	}()
+	})
 	<-ctx.Done()
 
 	if tok == nil {

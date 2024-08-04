@@ -11,6 +11,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 )
 
@@ -48,7 +49,7 @@ func (sf *StreamForwarding) Start(
 	ctx, cancelFn := context.WithCancel(ctx)
 	sf.CancelFunc = cancelFn
 
-	go func() {
+	observability.Go(ctx, func() {
 		for {
 			select {
 			case <-ctx.Done():
@@ -81,7 +82,7 @@ func (sf *StreamForwarding) Start(
 			err := sf.Close()
 			errmon.ObserveErrorCtx(ctx, err)
 		}
-	}()
+	})
 
 	return nil
 }

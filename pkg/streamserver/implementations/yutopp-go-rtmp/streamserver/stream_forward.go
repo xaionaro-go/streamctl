@@ -13,6 +13,7 @@ import (
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/xlogger"
 	flvtag "github.com/yutopp/go-flv/tag"
@@ -71,7 +72,7 @@ func (fwd *ActiveStreamForwarding) Start(ctx context.Context) error {
 	}
 	ctx, cancelFn := context.WithCancel(ctx)
 	fwd.CancelFunc = cancelFn
-	go func() {
+	observability.Go(ctx, func() {
 		for {
 			err := fwd.waitForPublisherAndStart(
 				ctx,
@@ -86,7 +87,7 @@ func (fwd *ActiveStreamForwarding) Start(ctx context.Context) error {
 				logger.Errorf(ctx, "%s", err)
 			}
 		}
-	}()
+	})
 	return nil
 }
 

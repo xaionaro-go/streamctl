@@ -17,6 +17,7 @@ import (
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/player/protobuf/go/player_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -463,7 +464,7 @@ func (c *Client) SubscriberToOAuthURLs(
 		return nil, fmt.Errorf("unable to subscribe to oauth URLs: %w", err)
 	}
 	subClient.CloseSend()
-	go func() {
+	observability.Go(ctx, func() {
 		defer conn.Close()
 		defer func() {
 			close(result)
@@ -482,7 +483,7 @@ func (c *Client) SubscriberToOAuthURLs(
 
 			result <- res
 		}
-	}()
+	})
 
 	return result, nil
 }
@@ -973,14 +974,14 @@ func (c *Client) WaitForStreamPublisher(
 	}
 
 	ctx, cancelFn := context.WithCancel(ctx)
-	go func() {
+	observability.Go(ctx, func() {
 		<-ctx.Done()
 		conn.Close()
-	}()
+	})
 
 	result := make(chan struct{})
 	waiter.CloseSend()
-	go func() {
+	observability.Go(ctx, func() {
 		defer cancelFn()
 		defer conn.Close()
 		defer func() {
@@ -996,7 +997,7 @@ func (c *Client) WaitForStreamPublisher(
 			logger.Errorf(ctx, "unable to read data: %v", err)
 			return
 		}
-	}()
+	})
 
 	return result, nil
 }
@@ -1197,10 +1198,10 @@ func (c *Client) StreamPlayerEndChan(
 	defer conn.Close()
 
 	ctx, cancelFn := context.WithCancel(ctx)
-	go func() {
+	observability.Go(ctx, func() {
 		<-ctx.Done()
 		conn.Close()
-	}()
+	})
 
 	waiter, err := client.StreamPlayerEndChan(ctx, &streamd_grpc.StreamPlayerEndChanRequest{
 		StreamID: string(streamID),
@@ -1212,7 +1213,7 @@ func (c *Client) StreamPlayerEndChan(
 	}
 	result := make(chan struct{})
 	waiter.CloseSend()
-	go func() {
+	observability.Go(ctx, func() {
 		defer cancelFn()
 		defer func() {
 			close(result)
@@ -1227,7 +1228,7 @@ func (c *Client) StreamPlayerEndChan(
 			logger.Errorf(ctx, "unable to read data: %v", err)
 			return
 		}
-	}()
+	})
 
 	return result, nil
 }
@@ -1406,7 +1407,7 @@ func unwrapChan[E any, R any, S receiver[R]](
 	}
 
 	r := make(chan E)
-	go func() {
+	observability.Go(ctx, func() {
 		defer conn.Close()
 		defer cancelFn()
 		for {
@@ -1432,7 +1433,7 @@ func unwrapChan[E any, R any, S receiver[R]](
 			var eventParsed E
 			r <- eventParsed
 		}
-	}()
+	})
 	return r, nil
 }
 

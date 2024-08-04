@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 )
 
 type Client struct {
@@ -86,13 +87,13 @@ func (c *Client) Serve(
 ) error {
 	ctx, cancelFn := context.WithCancel(ctx)
 	defer cancelFn()
-	go func() {
+	observability.Go(ctx, func() {
 		<-ctx.Done()
 		err := c.Close()
 		if err != nil {
 			logger.Error(ctx, err)
 		}
-	}()
+	})
 
 	for {
 		select {

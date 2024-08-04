@@ -8,6 +8,7 @@ import (
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
@@ -39,10 +40,10 @@ func (s *StreamPlayerStreamServer) WaitPublisher(
 	}
 
 	ch := make(chan struct{})
-	go func() {
+	observability.Go(ctx, func() {
 		s.RelayServer.WaitPubsub(ctx, localAppName)
 		close(ch)
-	}()
+	})
 	return ch, nil
 }
 

@@ -15,6 +15,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/repository"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -256,24 +257,24 @@ func (d *StreamD) InitCache(ctx context.Context) error {
 	var wg sync.WaitGroup
 
 	wg.Add(1)
-	go func() {
+	observability.Go(ctx, func() {
 		defer wg.Done()
 		_changedCache := d.initTwitchData(ctx)
 		d.normalizeTwitchData()
 		if _changedCache {
 			changedCache = true
 		}
-	}()
+	})
 
 	wg.Add(1)
-	go func() {
+	observability.Go(ctx, func() {
 		defer wg.Done()
 		_changedCache := d.initYoutubeData(ctx)
 		d.normalizeYoutubeData()
 		if _changedCache {
 			changedCache = true
 		}
-	}()
+	})
 
 	wg.Wait()
 	if changedCache {
@@ -387,14 +388,14 @@ func (d *StreamD) SaveConfig(ctx context.Context) error {
 		return err
 	}
 
-	go func() {
+	observability.Go(ctx, func() {
 		if d.GitStorage != nil {
 			err = d.sendConfigViaGIT(ctx)
 			if err != nil {
 				d.UI.DisplayError(fmt.Errorf("unable to send the config to the remote git repository: %w", err))
 			}
 		}
-	}()
+	})
 
 	return nil
 }
@@ -450,14 +451,14 @@ func (d *StreamD) StartStream(
 	defer func() {
 		d.StreamStatusCache.InvalidateCache(ctx)
 		if platID == youtube.ID {
-			go func() {
+			observability.Go(ctx, func() {
 				now := time.Now()
 				time.Sleep(10 * time.Second)
 				for time.Since(now) < 5*time.Minute {
 					d.StreamStatusCache.InvalidateCache(ctx)
 					time.Sleep(20 * time.Second)
 				}
-			}()
+			})
 		}
 	}()
 	switch platID {
@@ -1501,12 +1502,12 @@ func eventSubToChan[T any](
 		return nil, fmt.Errorf("unable to subscribe: %w", err)
 	}
 
-	go func() {
+	observability.Go(ctx, func() {
 		<-ctx.Done()
 		d.EventBus.Unsubscribe(topic, callback)
 		d.EventBus.WaitAsync()
 		close(r)
-	}()
+	})
 	return r, nil
 }
 

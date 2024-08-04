@@ -11,6 +11,7 @@ import (
 
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	playertypes "github.com/xaionaro-go/streamctl/pkg/player/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
@@ -120,7 +121,7 @@ func (s *StreamServer) Init(
 		}
 	}
 
-	go func() {
+	observability.Go(ctx, func() {
 		var opts setupStreamPlayersOptions
 		if initCfg.DefaultStreamPlayerOptions != nil {
 			opts = append(opts, setupStreamPlayersOptionDefaultStreamPlayerOptions(initCfg.DefaultStreamPlayerOptions))
@@ -129,7 +130,7 @@ func (s *StreamServer) Init(
 		if err != nil {
 			logger.Error(ctx, err)
 		}
-	}()
+	})
 
 	return nil
 }
@@ -202,13 +203,13 @@ func (s *StreamServer) startServer(
 				}
 			},
 		})
-		go func() {
+		observability.Go(ctx, func() {
 			err = portSrv.Serve(listener)
 			if err != nil {
 				err = fmt.Errorf("unable to start serving RTMP at '%s': %w", listener.Addr().String(), err)
 				logger.Error(ctx, err)
 			}
-		}()
+		})
 		srv = portSrv
 	case streamtypes.ServerTypeRTSP:
 		return fmt.Errorf("RTSP is not supported, yet")

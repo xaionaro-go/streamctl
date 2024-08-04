@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 )
 
 func initRuntime(ctx context.Context, flags Flags, _procName ProcessName) context.CancelFunc {
@@ -20,7 +21,7 @@ func initRuntime(ctx context.Context, flags Flags, _procName ProcessName) contex
 	l := logger.FromCtx(ctx)
 
 	if ForceDebug {
-		go func() {
+		observability.Go(ctx, func() {
 			t := time.NewTicker(time.Second)
 			defer t.Stop()
 			for {
@@ -33,7 +34,7 @@ func initRuntime(ctx context.Context, flags Flags, _procName ProcessName) contex
 				l.Tracef("stacktraces:\n%s", buf.String())
 				<-t.C
 			}
-		}()
+		})
 	}
 
 	if flags.CPUProfile != "" {
@@ -78,10 +79,10 @@ func initRuntime(ctx context.Context, flags Flags, _procName ProcessName) contex
 	}
 
 	if netPprofAddr != "" {
-		go func() {
+		observability.Go(ctx, func() {
 			l.Infof("starting to listen for net/pprof requests at '%s'", netPprofAddr)
 			l.Error(http.ListenAndServe(netPprofAddr, nil))
-		}()
+		})
 	}
 
 	if oldValue := runtime.GOMAXPROCS(0); oldValue < 16 {
