@@ -1804,12 +1804,14 @@ func (p *Panel) subscribeUpdateControlPage(ctx context.Context) {
 	p.getUpdatedStatus(ctx)
 
 	observability.Go(ctx, func() {
+		t := time.NewTicker(time.Second * 5)
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-chStreams:
 			case <-chConfigs:
+			case <-t.C:
 			}
 			p.getUpdatedStatus(ctx)
 		}
