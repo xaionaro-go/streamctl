@@ -2056,10 +2056,20 @@ func (p *Panel) onStartStopButton(ctx context.Context) {
 	p.streamMutex.Unlock()
 
 	if shouldStop {
-		p.stopStream(ctx)
+		w := dialog.NewConfirm(
+			"Ending the stream",
+			"Are you sure you want to end the stream?",
+			func(b bool) {
+				if b {
+					p.waitForResponse(func() { p.stopStream(ctx) })
+				}
+			},
+			p.mainWindow,
+		)
+		w.Show()
 	} else {
 		w := dialog.NewConfirm(
-			"Stream confirmation",
+			"Starting the stream",
 			"Are you ready to start the stream?",
 			func(b bool) {
 				if b {
