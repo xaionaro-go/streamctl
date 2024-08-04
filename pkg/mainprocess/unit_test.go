@@ -56,7 +56,7 @@ func Test(t *testing.T) {
 	require.NoError(t, err)
 	defer m.Close()
 	go m.Serve(
-		belt.WithField(ctx, "process", "main"),
+		belt.WithField(ctx, "process", ProcessNameMain),
 		func(ctx context.Context, source ProcessName, content any) error {
 			handleCall("main", content)
 			return nil

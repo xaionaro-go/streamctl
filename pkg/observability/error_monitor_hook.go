@@ -2,6 +2,7 @@ package observability
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"runtime"
 
@@ -68,7 +69,7 @@ func NewErrorMonitorLoggerHook(
 		ErrorMonitor: errorMonitor,
 		SendChan:     make(chan ErrorMonitorMessage, 10),
 	}
-	go result.senderLoop()
+	GoSafe(context.TODO(), result.senderLoop)
 	return result
 }
 

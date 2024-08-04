@@ -94,7 +94,7 @@ func New(
 			if cfg.Username != "" && !conn.RemoteAddr().(*net.TCPAddr).IP.IsLoopback() {
 				c.Auth(cfg.Username, cfg.Password)
 			}
-			go s.tcpHandler(c)
+			observability.Go(ctx, func() { s.tcpHandler(c) })
 		}
 	})
 

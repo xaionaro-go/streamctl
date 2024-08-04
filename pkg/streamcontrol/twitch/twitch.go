@@ -377,35 +377,38 @@ func (t *Twitch) getNewToken(
 				}
 				logger.Tracef(ctx, "starting the oauth handler at port %d", listenPort)
 				wg.Add(1)
-				go func(listenPort uint16) {
-					defer wg.Done()
-					authURL := GetAuthorizationURL(
-						&helix.AuthorizationURLParams{
-							ResponseType: "code", // or "token"
-							Scopes:       []string{"channel:manage:broadcast"},
-						},
-						t.config.Config.ClientID,
-						fmt.Sprintf("127.0.0.1:%d", listenPort),
-					)
+				{
+					listenPort := listenPort
+					observability.Go(ctx, func() {
+						defer wg.Done()
+						authURL := GetAuthorizationURL(
+							&helix.AuthorizationURLParams{
+								ResponseType: "code", // or "token"
+								Scopes:       []string{"channel:manage:broadcast"},
+							},
+							t.config.Config.ClientID,
+							fmt.Sprintf("127.0.0.1:%d", listenPort),
+						)
 
-					arg := oauthhandler.OAuthHandlerArgument{
-						AuthURL: authURL,
-						ExchangeFn: func(code string) error {
-							t.config.Config.ClientCode = code
-							err := t.saveCfgFn(t.config)
-							errmon.ObserveErrorCtx(ctx, err)
-							return nil
-						},
-					}
+						arg := oauthhandler.OAuthHandlerArgument{
+							AuthURL: authURL,
+							ExchangeFn: func(code string) error {
+								t.config.Config.ClientCode = code
+								err := t.saveCfgFn(t.config)
+								errmon.ObserveErrorCtx(ctx, err)
+								return nil
+							},
+						}
 
-					err := oauthHandler(ctx, arg)
-					if err != nil {
-						errCh <- fmt.Errorf("unable to get or exchange the oauth code to a token: %w", err)
-						return
-					}
-					cancelFunc()
-					success = true
-				}(listenPort)
+						err := oauthHandler(ctx, arg)
+						if err != nil {
+							errCh <- fmt.Errorf("unable to get or exchange the oauth code to a token: %w", err)
+							return
+						}
+						cancelFunc()
+						success = true
+					})
+				}
 			}
 
 			for _, listenPort := range getPortsFn() {

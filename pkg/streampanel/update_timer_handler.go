@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2/widget"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 )
 
 type updateTimerHandler struct {
@@ -23,7 +24,7 @@ func newUpdateTimerHandler(startStopButton *widget.Button, startedAt time.Time) 
 		startTS:         startedAt,
 	}
 	h.startStopButton.Text = "..."
-	go h.loop()
+	observability.Go(ctx, h.loop)
 	return h
 }
 

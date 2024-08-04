@@ -229,19 +229,22 @@ func (s StreamControllers) ApplyProfiles(
 	errCh := make(chan error)
 	for _, p := range profiles {
 		wg.Add(1)
-		go func(p AbstractStreamProfile) {
-			defer wg.Done()
-			profileType := reflect.TypeOf(p)
-			c, ok := m[profileType]
-			if !ok {
-				errCh <- ErrNoStreamControllerForProfile{StreamProfile: p}
-				return
-			}
-			if err := c.ApplyProfile(ctx, p); err != nil {
-				errCh <- fmt.Errorf("StreamController %T return error: %w", c.GetImplementation(), err)
-				return
-			}
-		}(p)
+		{
+			p := p
+			observability.Go(ctx, func() {
+				defer wg.Done()
+				profileType := reflect.TypeOf(p)
+				c, ok := m[profileType]
+				if !ok {
+					errCh <- ErrNoStreamControllerForProfile{StreamProfile: p}
+					return
+				}
+				if err := c.ApplyProfile(ctx, p); err != nil {
+					errCh <- fmt.Errorf("StreamController %T return error: %w", c.GetImplementation(), err)
+					return
+				}
+			})
+		}
 	}
 	observability.Go(ctx, func() {
 		wg.Wait()
@@ -345,12 +348,15 @@ func (s StreamControllers) concurrently(
 	errCh := make(chan error)
 	for _, c := range s {
 		wg.Add(1)
-		go func(c AbstractStreamController) {
-			defer wg.Done()
-			if err := callback(c); err != nil {
-				errCh <- err
-			}
-		}(c)
+		{
+			c := c
+			observability.Go(ctx, func() {
+				defer wg.Done()
+				if err := callback(c); err != nil {
+					errCh <- err
+				}
+			})
+		}
 	}
 	observability.Go(ctx, func() {
 		wg.Wait()

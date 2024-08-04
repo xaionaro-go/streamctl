@@ -1047,7 +1047,7 @@ func (p *Panel) streamServersUpdater(
 			p.streamServersLocker.Lock()
 			defer p.streamServersLocker.Unlock()
 			p.streamServersUpdaterCanceller = nil
-			go updateData()
+			observability.Go(ctx, updateData)
 		}()
 
 		logger.Debugf(ctx, "streamServersUpdater")
@@ -1084,7 +1084,7 @@ func (p *Panel) startStreamPlayersUpdater(
 			p.streamPlayersLocker.Lock()
 			defer p.streamPlayersLocker.Unlock()
 			p.streamPlayersUpdaterCanceller = nil
-			go updateData()
+			observability.Go(ctx, updateData)
 		}()
 
 		logger.Debugf(ctx, "streamPlayersUpdater")
@@ -1121,7 +1121,7 @@ func (p *Panel) startStreamForwardersUpdater(
 			p.streamForwardersLocker.Lock()
 			defer p.streamForwardersLocker.Unlock()
 			p.streamForwardersUpdaterCanceller = nil
-			go updateData()
+			observability.Go(ctx, updateData)
 		}()
 
 		logger.Debugf(ctx, "streamForwardersUpdater")

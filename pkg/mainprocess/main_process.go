@@ -124,7 +124,7 @@ func (m *Manager) Serve(
 		<-ctx.Done()
 		err := m.Close()
 		if err != nil {
-			logger.Error(ctx, err)
+			logger.Debug(ctx, err)
 		}
 	})
 
@@ -238,6 +238,12 @@ func (m *Manager) handleConnection(
 		decoder := gob.NewDecoder(conn)
 		err := decoder.Decode(&message)
 		logger.Tracef(ctx, "getting a message from '%s': %#+v %#+v", regMessage.Source, message, err)
+		select {
+		case <-ctx.Done():
+			logger.Tracef(ctx, "context was closed")
+			return
+		default:
+		}
 		if err != nil {
 			err = fmt.Errorf(
 				"unable to parse the message from %s (%s): %w",
@@ -287,10 +293,13 @@ func (m *Manager) processMessage(
 				continue
 			}
 			wg.Add(1)
-			go func(dst ProcessName) {
-				defer wg.Done()
-				errCh <- m.sendMessage(ctx, source, dst, message.Content)
-			}(dst)
+			{
+				dst := dst
+				observability.Go(ctx, func() {
+					defer wg.Done()
+					errCh <- m.sendMessage(ctx, source, dst, message.Content)
+				})
+			}
 		}
 		wg.Wait()
 		close(errCh)

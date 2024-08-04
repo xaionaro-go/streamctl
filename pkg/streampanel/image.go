@@ -14,6 +14,7 @@ import (
 	"github.com/chai2010/webp"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/nfnt/resize"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/screenshot"
 	"github.com/xaionaro-go/streamctl/pkg/screenshoter"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
@@ -258,10 +259,12 @@ func (p *Panel) reinitScreenshoter(ctx context.Context) {
 
 	ctx, cancelFunc := context.WithCancel(ctx)
 	p.screenshoterClose = cancelFunc
-	go p.Screenshoter.Loop(
-		ctx,
-		200*time.Millisecond,
-		p.Config.Screenshot.Config,
-		func(ctx context.Context, img *image.RGBA) { p.setScreenshot(ctx, img) },
-	)
+	observability.Go(ctx, func() {
+		p.Screenshoter.Loop(
+			ctx,
+			200*time.Millisecond,
+			p.Config.Screenshot.Config,
+			func(ctx context.Context, img *image.RGBA) { p.setScreenshot(ctx, img) },
+		)
+	})
 }

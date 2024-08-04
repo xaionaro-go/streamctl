@@ -29,7 +29,6 @@ func main() {
 
 	flags := parseFlags()
 	ctx := getContext(flags)
-	defer belt.Flush(ctx)
 	{
 		// rerunning flag parsing just for logs of parsing the flags (after initializing the logger in `getContext` above)
 		for _, platformGetFlagsFunc := range platformGetFlagsFuncs {
@@ -37,16 +36,17 @@ func main() {
 		}
 		logger.Debugf(ctx, "flags == %#+v", flags)
 	}
-	cancelFunc := initRuntime(ctx, flags, ProcessNameMain)
+	ctx, cancelFunc := initRuntime(ctx, flags, ProcessNameMain)
 	defer cancelFunc()
 
 	if flags.Subprocess != "" {
 		runSubprocess(ctx, flags.Subprocess)
 		return
 	}
+	ctx = belt.WithField(ctx, "process", ProcessNameMain)
 
 	if flags.SplitProcess && flags.RemoteAddr == "" {
-		runSplitProcesses(ctx, flags)
+		runSplitProcesses(ctx, cancelFunc, flags)
 		return
 	}
 
@@ -124,6 +124,11 @@ func runPanel(
 					return nil
 				},
 			)
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
 			logger.Fatalf(ctx, "communication (with the main process) error: %v", err)
 		})
 	}

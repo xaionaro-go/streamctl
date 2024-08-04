@@ -27,7 +27,7 @@ func (p *Panel) startMonitorPage(
 	logger.Debugf(ctx, "startMonitorPage")
 	defer logger.Debugf(ctx, "/startMonitorPage")
 
-	go func(ctx context.Context) {
+	observability.Go(ctx, func() {
 		p.updateMonitorPageImages(ctx)
 		p.updateMonitorPageStreamStatus(ctx)
 
@@ -56,7 +56,7 @@ func (p *Panel) startMonitorPage(
 				p.updateMonitorPageStreamStatus(ctx)
 			}
 		})
-	}(ctx)
+	})
 }
 
 func (p *Panel) updateMonitorPageImages(

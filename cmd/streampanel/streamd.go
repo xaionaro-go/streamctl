@@ -35,7 +35,6 @@ func init() {
 
 func forkStreamd(ctx context.Context, mainProcessAddr, password string) {
 	procName := ProcessNameStreamd
-	ctx = belt.WithField(ctx, "process", procName)
 
 	mainProcess, err := mainprocess.NewClient(
 		procName,
@@ -47,10 +46,8 @@ func forkStreamd(ctx context.Context, mainProcessAddr, password string) {
 	}
 	flags := getFlags(ctx, mainProcess)
 	ctx = getContext(flags)
-	ctx = belt.WithField(ctx, "process", procName)
-	defer belt.Flush(ctx)
 	logger.Debugf(ctx, "flags == %#+v", flags)
-	cancelFunc := initRuntime(ctx, flags, procName)
+	ctx, cancelFunc := initRuntime(ctx, flags, procName)
 	defer cancelFunc()
 
 	runStreamd(ctx, flags, mainProcess)
@@ -169,6 +166,11 @@ func runStreamd(
 					}
 				},
 			)
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
 			logger.Fatalf(ctx, "communication (with the main process) error: %v", err)
 		})
 	}

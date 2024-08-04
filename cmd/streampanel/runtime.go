@@ -10,11 +10,16 @@ import (
 	"runtime/pprof"
 	"time"
 
+	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 )
 
-func initRuntime(ctx context.Context, flags Flags, _procName ProcessName) context.CancelFunc {
+func initRuntime(
+	ctx context.Context,
+	flags Flags,
+	_procName ProcessName,
+) (context.Context, context.CancelFunc) {
 	procName := string(_procName)
 	var closeFuncs []func()
 
@@ -90,7 +95,11 @@ func initRuntime(ctx context.Context, flags Flags, _procName ProcessName) contex
 		runtime.GOMAXPROCS(16)
 	}
 
-	return func() {
+	defer belt.Flush(ctx)
+
+	ctx, cancelFn := context.WithCancel(ctx)
+	return ctx, func() {
+		cancelFn()
 		for i := len(closeFuncs) - 1; i >= 0; i-- {
 			closeFuncs[i]()
 		}

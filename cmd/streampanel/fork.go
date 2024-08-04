@@ -63,6 +63,10 @@ func runSubprocess(
 	}
 	procName := ProcessName(parts[0])
 	addr := parts[1]
+
+	ctx = belt.WithField(ctx, "process", procName)
+	childProcessSignalHandler(ctx)
+
 	switch procName {
 	case ProcessNameStreamd:
 		forkStreamd(ctx, addr, os.Getenv(EnvPassword))
@@ -73,10 +77,11 @@ func runSubprocess(
 
 func runSplitProcesses(
 	ctx context.Context,
+	cancelFunc context.CancelFunc,
 	flags Flags,
 ) {
-	ctx = belt.WithField(ctx, "process", "main")
-	signalsChan := signalHandler(ctx)
+	ctx = belt.WithField(ctx, "process", ProcessNameMain)
+	signalsChan := mainProcessSignalHandler(ctx, cancelFunc)
 
 	procList := []ProcessName{
 		ProcessNameUI,
@@ -126,20 +131,22 @@ func runSplitProcesses(
 		logger.Fatalf(ctx, "failed to start process manager: %v", err)
 	}
 	defer m.Close()
-	go m.Serve(ctx, func(ctx context.Context, source ProcessName, content any) error {
-		switch content.(type) {
-		case GetFlags:
-			msg := GetFlagsResult{
-				Flags: flags,
+	observability.Go(ctx, func() {
+		m.Serve(ctx, func(ctx context.Context, source ProcessName, content any) error {
+			switch content.(type) {
+			case GetFlags:
+				msg := GetFlagsResult{
+					Flags: flags,
+				}
+				err := m.SendMessagePreReady(ctx, source, msg)
+				if err != nil {
+					logger.Errorf(ctx, "failed to send message %#+v to '%s': %v", msg, source, err)
+				}
+			case MessageQuit:
+				signalsChan <- os.Interrupt
 			}
-			err := m.SendMessagePreReady(ctx, source, msg)
-			if err != nil {
-				logger.Errorf(ctx, "failed to send message %#+v to '%s': %v", msg, source, err)
-			}
-		case MessageQuit:
-			signalsChan <- os.Interrupt
-		}
-		return nil
+			return nil
+		})
 	})
 	observability.Go(ctx, func() {
 		select {
@@ -200,10 +207,10 @@ func runFork(
 func fakeFork(ctx context.Context, procName ProcessName, addr, password string) error {
 	switch procName {
 	case ProcessNameStreamd:
-		go forkUI(ctx, addr, password)
+		observability.Go(ctx, func() { forkUI(ctx, addr, password) })
 		return nil
 	case ProcessNameUI:
-		go forkStreamd(ctx, addr, password)
+		observability.Go(ctx, func() { forkStreamd(ctx, addr, password) })
 		return nil
 	}
 	return fmt.Errorf("unexpected process name: %s", procName)

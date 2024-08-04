@@ -234,34 +234,37 @@ func getToken(ctx context.Context, cfg Config) (*oauth2.Token, error) {
 		oauthCfg := getAuthCfgBase(cfg)
 		oauthCfg.RedirectURL = fmt.Sprintf("http://127.0.0.1:%d", listenPort)
 		wg.Add(1)
-		go func(oauthCfg *oauth2.Config) {
-			defer wg.Done()
-			oauthHandlerArg := oauthhandler.OAuthHandlerArgument{
-				AuthURL:    oauthCfg.AuthCodeURL("state-token", oauth2.AccessTypeOffline),
-				ListenPort: listenPort,
-				ExchangeFn: func(code string) error {
-					_tok, err := oauthCfg.Exchange(ctx, code)
-					if err != nil {
-						return fmt.Errorf("unable to get a token: %w", err)
-					}
-					tok = _tok
-					cancelFn()
-					return nil
-				},
-			}
+		{
+			oauthCfg := oauthCfg
+			observability.Go(ctx, func() {
+				defer wg.Done()
+				oauthHandlerArg := oauthhandler.OAuthHandlerArgument{
+					AuthURL:    oauthCfg.AuthCodeURL("state-token", oauth2.AccessTypeOffline),
+					ListenPort: listenPort,
+					ExchangeFn: func(code string) error {
+						_tok, err := oauthCfg.Exchange(ctx, code)
+						if err != nil {
+							return fmt.Errorf("unable to get a token: %w", err)
+						}
+						tok = _tok
+						cancelFn()
+						return nil
+					},
+				}
 
-			oauthHandler := cfg.Config.CustomOAuthHandler
-			if oauthHandler == nil {
-				oauthHandler = oauthhandler.OAuth2HandlerViaCLI
-			}
-			logger.Tracef(ctx, "calling oauthHandler for %d", listenPort)
-			err := oauthHandler(ctx, oauthHandlerArg)
-			logger.Tracef(ctx, "called oauthHandler for %d: %v", listenPort, err)
-			if err != nil {
-				errCh <- err
-				return
-			}
-		}(oauthCfg)
+				oauthHandler := cfg.Config.CustomOAuthHandler
+				if oauthHandler == nil {
+					oauthHandler = oauthhandler.OAuth2HandlerViaCLI
+				}
+				logger.Tracef(ctx, "calling oauthHandler for %d", listenPort)
+				err := oauthHandler(ctx, oauthHandlerArg)
+				logger.Tracef(ctx, "called oauthHandler for %d: %v", listenPort, err)
+				if err != nil {
+					errCh <- err
+					return
+				}
+			})
+		}
 	}
 
 	for _, listenPort := range cfg.Config.GetOAuthListenPorts() {

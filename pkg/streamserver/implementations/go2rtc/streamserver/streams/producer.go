@@ -1,6 +1,7 @@
 package streams
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 )
 
 type state byte
@@ -154,7 +156,10 @@ func (p *Producer) start() {
 	p.state = stateStart
 	p.workerID++
 
-	go p.worker(p.conn, p.workerID)
+	{
+		conn, workerID := p.conn, p.workerID
+		observability.Go(context.TODO(), func() { p.worker(conn, workerID) })
+	}
 }
 
 func (p *Producer) worker(conn core.Producer, workerID int) {
@@ -239,7 +244,7 @@ func (p *Producer) reconnect(workerID, retry int) {
 	// swap connections
 	p.conn = conn
 
-	go p.worker(conn, workerID)
+	observability.Go(context.TODO(), func() { p.worker(conn, workerID) })
 }
 
 func (p *Producer) stop() {

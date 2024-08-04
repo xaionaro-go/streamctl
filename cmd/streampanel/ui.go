@@ -11,7 +11,6 @@ import (
 
 func forkUI(ctx context.Context, mainProcessAddr, password string) {
 	procName := ProcessNameUI
-	ctx = belt.WithField(ctx, "process", procName)
 
 	mainProcess, err := mainprocess.NewClient(
 		procName,
@@ -23,10 +22,8 @@ func forkUI(ctx context.Context, mainProcessAddr, password string) {
 	}
 	flags := getFlags(ctx, mainProcess)
 	ctx = getContext(flags)
-	ctx = belt.WithField(ctx, "process", procName)
-	defer belt.Flush(ctx)
 	logger.Debugf(ctx, "flags == %#+v", flags)
-	cancelFunc := initRuntime(ctx, flags, procName)
+	ctx, cancelFunc := initRuntime(ctx, flags, procName)
 	defer cancelFunc()
 
 	streamdAddr := getStreamDAddress(ctx, mainProcess)

@@ -83,7 +83,9 @@ func NewCodeReceiver(
 		close(codeCh)
 	})
 
-	go srv.Serve(listener)
+	observability.Go(ctx, func() {
+		srv.Serve(listener)
+	})
 
 	return codeCh, uint16(listener.Addr().(*net.TCPAddr).Port), nil
 }

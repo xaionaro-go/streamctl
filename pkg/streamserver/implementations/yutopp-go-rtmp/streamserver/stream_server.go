@@ -426,7 +426,13 @@ func (s *StreamServer) addStreamForward(
 	}
 
 	if quirks.RestartUntilYoutubeRecognizesStream.Enabled {
-		go s.restartUntilYoutubeRecognizesStream(ctx, result, quirks.RestartUntilYoutubeRecognizesStream)
+		observability.Go(ctx, func() {
+			s.restartUntilYoutubeRecognizesStream(
+				ctx,
+				result,
+				quirks.RestartUntilYoutubeRecognizesStream,
+			)
+		})
 	}
 
 	return result, nil

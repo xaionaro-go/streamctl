@@ -177,7 +177,7 @@ func (p *StreamPlayer) start(ctx context.Context) error {
 	}
 	logger.Tracef(ctx, "the player #%+v opened the stream", player)
 
-	go p.controllerLoop(ctx)
+	observability.Go(ctx, func() { p.controllerLoop(ctx) })
 	return nil
 }
 
