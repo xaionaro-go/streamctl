@@ -54,25 +54,24 @@ const (
 )
 
 func runSubprocess(
-	ctx context.Context,
+	preCtx context.Context,
 	subprocessFlag string,
 ) {
 	parts := strings.SplitN(subprocessFlag, ":", 2)
 	if len(parts) != 2 {
-		logger.Fatalf(ctx, "expected 2 parts in --subprocess: name and address, separated via a colon")
+		logger.Panicf(belt.WithField(preCtx, "process", ""), "expected 2 parts in --subprocess: name and address, separated via a colon")
 	}
 	procName := ProcessName(parts[0])
 	addr := parts[1]
 
-	ctx = belt.WithField(ctx, "process", procName)
-	logger.Debugf(ctx, "process name is %s", procName)
-	childProcessSignalHandler(ctx)
+	preCtx = belt.WithField(preCtx, "process", procName)
+	logger.Debugf(preCtx, "process name is %s", procName)
 
 	switch procName {
 	case ProcessNameStreamd:
-		forkStreamd(ctx, addr, os.Getenv(EnvPassword))
+		forkStreamd(preCtx, addr, os.Getenv(EnvPassword))
 	case ProcessNameUI:
-		forkUI(ctx, addr, os.Getenv(EnvPassword))
+		forkUI(preCtx, addr, os.Getenv(EnvPassword))
 	}
 }
 

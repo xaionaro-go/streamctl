@@ -2,6 +2,7 @@ package observability
 
 import (
 	"sync"
+	"time"
 
 	"github.com/facebookincubator/go-belt/pkg/field"
 	xlogrus "github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
@@ -42,4 +43,33 @@ func (h *HookAdapter) ProcessLogEntry(entry *logger.Entry) bool {
 	})
 	return true
 }
-func (h *HookAdapter) Flush() {}
+
+type Flusher interface {
+	Flush()
+}
+
+type FlusherErr interface {
+	Flush() error
+}
+
+type FlusherDeadlined interface {
+	Flush(timeout time.Duration)
+}
+
+type FlusherDeadlinedErr interface {
+	Flush(timeout time.Duration) error
+}
+
+func (h *HookAdapter) Flush() {
+	timeout := 5 * time.Second
+	switch flusher := h.LogrusHook.(type) {
+	case Flusher:
+		flusher.Flush()
+	case FlusherErr:
+		flusher.Flush()
+	case FlusherDeadlined:
+		flusher.Flush(timeout)
+	case FlusherDeadlinedErr:
+		flusher.Flush(timeout)
+	}
+}

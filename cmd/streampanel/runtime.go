@@ -95,10 +95,9 @@ func initRuntime(
 		runtime.GOMAXPROCS(16)
 	}
 
-	defer belt.Flush(ctx)
-
 	ctx, cancelFn := context.WithCancel(ctx)
 	return ctx, func() {
+		defer belt.Flush(ctx)
 		cancelFn()
 		for i := len(closeFuncs) - 1; i >= 0; i-- {
 			closeFuncs[i]()

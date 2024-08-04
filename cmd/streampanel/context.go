@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/user"
 	"strings"
+	"time"
 
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
@@ -19,7 +20,9 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
 )
 
-func getContext(flags Flags) context.Context {
+func getContext(
+	flags Flags,
+) context.Context {
 	ctx := context.Background()
 
 	ll := xlogrus.DefaultLogrusLogger()
@@ -30,11 +33,35 @@ func getContext(flags Flags) context.Context {
 		if err != nil {
 			l.Errorf("unable to expand path '%s': %w", flags.LogFile, err)
 		} else {
-			f, err := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0750)
-			if err != nil {
-				l.Errorf("failed to open log file '%s': %v", flags.LogFile, err)
+			var closeFile context.CancelFunc
+			rotateFunc := func() {
+				if closeFile != nil {
+					closeFile()
+					closeFile = nil
+				}
+				f, err := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0750)
+				if err != nil {
+					l.Errorf("failed to open log file '%s': %v", flags.LogFile, err)
+					return
+				}
+				ll.SetOutput(io.MultiWriter(os.Stderr, f))
+				closeFile = func() { f.Close() }
 			}
-			ll.SetOutput(io.MultiWriter(os.Stderr, f))
+			rotateFunc()
+			observability.Go(ctx, func() {
+				defer func() {
+					logger.Debugf(ctx, "log rotator is closed")
+				}()
+				t := time.NewTicker(12 * time.Hour)
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case <-t.C:
+						rotateFunc()
+					}
+				}
+			})
 		}
 	}
 
@@ -58,7 +85,12 @@ func getContext(flags Flags) context.Context {
 	ctx = logger.CtxWithLogger(ctx, l)
 
 	if flags.LogstashAddr != "" {
-		ctx = observability.CtxWithLogstash(ctx, flags.LogstashAddr, "streampanel")
+		ctx = observability.CtxWithLogstash(
+			ctx,
+			flags.LogstashAddr,
+			"streampanel",
+			flags.SentryDSN == "",
+		)
 	}
 
 	ctx = belt.WithField(ctx, "program", strings.ToLower(streampanel.AppName))

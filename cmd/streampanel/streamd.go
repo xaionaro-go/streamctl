@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
@@ -33,7 +34,7 @@ func init() {
 	})
 }
 
-func forkStreamd(ctx context.Context, mainProcessAddr, password string) {
+func forkStreamd(preCtx context.Context, mainProcessAddr, password string) {
 	procName := ProcessNameStreamd
 
 	mainProcess, err := mainprocess.NewClient(
@@ -44,25 +45,27 @@ func forkStreamd(ctx context.Context, mainProcessAddr, password string) {
 	if err != nil {
 		panic(err)
 	}
-	flags := getFlags(ctx, mainProcess)
-	ctx = getContext(flags)
+	flags := getFlags(preCtx, mainProcess)
+	ctx := getContext(flags)
 	ctx = belt.WithField(ctx, "process", procName)
 	logger.Debugf(ctx, "flags == %#+v", flags)
 	ctx, cancelFunc := initRuntime(ctx, flags, procName)
 	defer cancelFunc()
+	childProcessSignalHandler(ctx, cancelFunc)
 
-	runStreamd(ctx, flags, mainProcess)
+	runStreamd(ctx, cancelFunc, flags, mainProcess)
 }
 
 func runStreamd(
 	ctx context.Context,
+	cancelFunc context.CancelFunc,
 	flags Flags,
 	mainProcess *mainprocess.Client,
 ) {
 	logger.Debugf(ctx, "runStreamd: %#+v", flags)
 	defer logger.Debugf(ctx, "/runStreamd")
 	if flags.RemoteAddr != "" {
-		logger.Fatal(ctx, "not implemented")
+		logger.Panic(ctx, "not implemented")
 	}
 
 	ctx = belt.WithField(ctx, "streamd_addr", flags.RemoteAddr)
@@ -73,13 +76,13 @@ func runStreamd(
 
 	configPath, err := xpath.Expand(flags.ConfigPath)
 	if err != nil {
-		logger.Fatal(ctx, err)
+		logger.Panic(ctx, err)
 	}
 
 	var cfg streampanelconfig.Config
 	err = streampanelconfig.ReadConfigFromPath(configPath, &cfg)
 	if err != nil {
-		logger.Fatalf(ctx, "unable to read the config from path '%s': %v", flags.ConfigPath, err)
+		logger.Panicf(ctx, "unable to read the config from path '%s': %v", flags.ConfigPath, err)
 	}
 
 	var streamdGRPCLocker sync.Mutex
@@ -103,6 +106,7 @@ func runStreamd(
 		},
 		func(ctx context.Context, s string) {
 			logger.Infof(ctx, "restarting streamd")
+			cancelFunc()
 			os.Exit(0)
 		},
 	)
@@ -126,7 +130,7 @@ func runStreamd(
 		belt.CtxBelt(ctx),
 	)
 	if err != nil {
-		logger.Fatalf(ctx, "unable to initialize streamd: %v", err)
+		logger.Panicf(ctx, "unable to initialize streamd: %v", err)
 	}
 
 	var listener net.Listener
@@ -172,20 +176,21 @@ func runStreamd(
 				return
 			default:
 			}
-			logger.Fatalf(ctx, "communication (with the main process) error: %v", err)
+			logger.Panicf(ctx, "communication (with the main process) error: %v", err)
 		})
 	}
 
 	err = streamD.Run(ctx)
 	if err != nil {
-		logger.Fatalf(ctx, "unable to start streamd: %v", err)
+		logger.Panicf(ctx, "unable to start streamd: %v", err)
 	}
 	configLocker.Unlock()
 
 	logger.Infof(ctx, "streamd is ready")
 	<-ctx.Done()
+	time.Sleep(5 * time.Second)
 
-	logger.Fatalf(ctx, "internal error: was supposed to never reach this line")
+	logger.Panicf(ctx, "internal error: was supposed to never reach this line")
 }
 
 type RequestStreamDConfig struct{}
@@ -200,7 +205,7 @@ func initGRPCServer(
 ) (net.Listener, *grpc.Server, *server.GRPCServer) {
 	listener, err := net.Listen("tcp", listenAddr)
 	if err != nil {
-		logger.Fatalf(ctx, "failed to listen: %v", err)
+		logger.Panicf(ctx, "failed to listen: %v", err)
 	}
 	observability.Go(ctx, func() {
 		<-ctx.Done()
@@ -215,8 +220,13 @@ func initGRPCServer(
 	observability.Go(ctx, func() {
 		logger.Infof(ctx, "started server at %s", listener.Addr().String())
 		err = grpcServer.Serve(listener)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(10 * time.Millisecond): // TODO: remove this hack
+		}
 		if err != nil {
-			logger.Fatal(ctx, err)
+			logger.Panic(ctx, err)
 		}
 	})
 

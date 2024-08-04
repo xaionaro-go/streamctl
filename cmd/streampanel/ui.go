@@ -3,13 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
 )
 
-func forkUI(ctx context.Context, mainProcessAddr, password string) {
+func forkUI(preCtx context.Context, mainProcessAddr, password string) {
 	procName := ProcessNameUI
 
 	mainProcess, err := mainprocess.NewClient(
@@ -20,12 +21,13 @@ func forkUI(ctx context.Context, mainProcessAddr, password string) {
 	if err != nil {
 		panic(err)
 	}
-	flags := getFlags(ctx, mainProcess)
-	ctx = getContext(flags)
+	flags := getFlags(preCtx, mainProcess)
+	ctx := getContext(flags)
 	ctx = belt.WithField(ctx, "process", procName)
 	logger.Debugf(ctx, "flags == %#+v", flags)
 	ctx, cancelFunc := initRuntime(ctx, flags, procName)
 	defer cancelFunc()
+	childProcessSignalHandler(ctx, cancelFunc)
 
 	streamdAddr := getStreamDAddress(ctx, mainProcess)
 
@@ -39,12 +41,13 @@ func forkUI(ctx context.Context, mainProcessAddr, password string) {
 	}
 
 	logger.Infof(ctx, "running the UI")
-	runPanel(ctx, flags, mainProcess)
+	runPanel(ctx, cancelFunc, flags, mainProcess)
 	err = mainProcess.SendMessage(ctx, ProcessNameMain, MessageQuit{})
 	if err != nil {
 		logger.Error(ctx, "unable to send the Quit message to the main process: %w", err)
 	}
 	<-ctx.Done() // wait for get killed by the main process (should happen in matter of milliseconds)
+	time.Sleep(5 * time.Second)
 }
 
 type MessageQuit struct{}

@@ -472,6 +472,11 @@ func (c *Client) SubscriberToOAuthURLs(
 
 		for {
 			res, err := subClient.Recv()
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
 			if err == io.EOF {
 				logger.Debugf(ctx, "the receiver is closed: %v", err)
 				return
@@ -989,6 +994,11 @@ func (c *Client) WaitForStreamPublisher(
 		}()
 
 		_, err := waiter.Recv()
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
 		if err == io.EOF {
 			logger.Debugf(ctx, "the receiver is closed: %v", err)
 			return
@@ -1220,6 +1230,11 @@ func (c *Client) StreamPlayerEndChan(
 		}()
 
 		_, err := waiter.Recv()
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
 		if err == io.EOF {
 			logger.Debugf(ctx, "the receiver is closed: %v", err)
 			return
@@ -1412,6 +1427,11 @@ func unwrapChan[E any, R any, S receiver[R]](
 		defer cancelFn()
 		for {
 			event, err := sub.Recv()
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
 			if err != nil {
 				switch {
 				case errors.Is(err, io.EOF):

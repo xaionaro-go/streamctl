@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 )
@@ -55,7 +54,7 @@ func mainProcessSignalHandler(
 			}
 			wg.Wait()
 			forkLocker.Unlock()
-			belt.Flush(ctx)
+			cancelFn()
 			os.Exit(0)
 		}
 	})
@@ -64,13 +63,15 @@ func mainProcessSignalHandler(
 
 func childProcessSignalHandler(
 	ctx context.Context,
+	cancelFunc context.CancelFunc,
 ) chan<- os.Signal {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	observability.Go(ctx, func() {
 		for range c {
 			logger.Infof(ctx, "received an interruption signal")
-			belt.Flush(ctx)
+			cancelFunc()
+			time.Sleep(100 * time.Millisecond) // TODO: delete this hack
 			os.Exit(0)
 		}
 	})

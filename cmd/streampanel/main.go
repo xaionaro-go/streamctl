@@ -6,6 +6,7 @@ import (
 	"fmt"
 	_ "net/http/pprof"
 	"os"
+	"time"
 
 	child_process_manager "github.com/AgustinSRG/go-child-process-manager"
 	"github.com/facebookincubator/go-belt"
@@ -50,11 +51,13 @@ func main() {
 		return
 	}
 
-	runPanel(ctx, flags, nil)
+	runPanel(ctx, cancelFunc, flags, nil)
+	time.Sleep(5 * time.Second)
 }
 
 func runPanel(
 	ctx context.Context,
+	cancelFunc context.CancelFunc,
 	flags Flags,
 	mainProcess *mainprocess.Client,
 ) {
@@ -68,7 +71,7 @@ func runPanel(
 
 	panel, panelErr := streampanel.New(flags.ConfigPath, opts...)
 	if panelErr != nil {
-		logger.Fatal(ctx, panelErr)
+		logger.Panic(ctx, panelErr)
 	}
 
 	if panel.Config.RemoteStreamDAddr != "" {
@@ -93,7 +96,7 @@ func runPanel(
 
 		err := grpcServer.Serve(listener)
 		if err != nil {
-			logger.Fatalf(ctx, "unable to server the gRPC server: %v", err)
+			logger.Panicf(ctx, "unable to server the gRPC server: %v", err)
 		}
 	}
 
@@ -106,6 +109,7 @@ func runPanel(
 					switch msg := content.(type) {
 					case StreamDDied:
 						logger.Errorf(ctx, "streamd died, killing myself as well (to get reborn)")
+						cancelFunc()
 						os.Exit(0)
 					case UpdateStreamDConfig:
 						_, err := panel.Config.BuiltinStreamD.ReadFrom(bytes.NewReader([]byte(msg.Config)))
@@ -127,9 +131,9 @@ func runPanel(
 			select {
 			case <-ctx.Done():
 				return
-			default:
+			case <-time.After(10 * time.Millisecond): // TODO: remove this hack
 			}
-			logger.Fatalf(ctx, "communication (with the main process) error: %v", err)
+			logger.Panicf(ctx, "communication (with the main process) error: %v", err)
 		})
 	}
 
@@ -139,6 +143,6 @@ func runPanel(
 	}
 	err := panel.Loop(ctx, loopOpts...)
 	if err != nil {
-		logger.Fatal(ctx, err)
+		logger.Panic(ctx, err)
 	}
 }

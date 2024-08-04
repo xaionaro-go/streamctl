@@ -4,11 +4,13 @@
 package vlcserver
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
 	"os"
 
+	"github.com/facebookincubator/go-belt"
 	"github.com/xaionaro-go/streamctl/pkg/player/vlcserver/server"
 )
 
@@ -19,6 +21,7 @@ const (
 func init() {
 	if os.Getenv(EnvKeyIsVLCServer) != "" {
 		runVLCServer()
+		belt.Flush(context.TODO())
 		os.Exit(0)
 	}
 }
