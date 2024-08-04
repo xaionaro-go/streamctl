@@ -180,8 +180,8 @@ github.com/envoyproxy/go-control-plane v0.9.7/go.mod h1:cwu0lG7PUMfa9snN8LXBig5y
 github.com/envoyproxy/go-control-plane v0.9.9-0.20201210154907-fd9021fe5dad/go.mod h1:cXg6YxExXjJnVBQHBLXeUAgxn2UodCpnH306RInaBQk=
 github.com/envoyproxy/go-control-plane v0.9.9-0.20210217033140-668b12f5399d/go.mod h1:cXg6YxExXjJnVBQHBLXeUAgxn2UodCpnH306RInaBQk=
 github.com/envoyproxy/protoc-gen-validate v0.1.0/go.mod h1:iSmxcyjqTsJpI2R4NaDN7+kN2VEUnK/pcBlmesArF7c=
-github.com/facebookincubator/go-belt v0.0.0-20240706172357-c5875adb39ef h1:ZsOEnpQjCQAF4cPK0gwt/fN65sbOg1e7zbfXIX4iMQ4=
-github.com/facebookincubator/go-belt v0.0.0-20240706172357-c5875adb39ef/go.mod h1:BLkOQHXT14GLgKvM22LB/fDcq1stjijrTOJQEk3xrUA=
+github.com/facebookincubator/go-belt v0.0.0-20240707112111-9cf347bf49e2 h1:TjgMDyXmX5ZGuDDS98ol5CLcVtrIGHNwQtA24Z2xBrY=
+github.com/facebookincubator/go-belt v0.0.0-20240707112111-9cf347bf49e2/go.mod h1:BLkOQHXT14GLgKvM22LB/fDcq1stjijrTOJQEk3xrUA=
 github.com/fatih/color v1.7.0/go.mod h1:Zm6kSWBoL9eyXnKyktHP6abPY2pDugNf5KwzbycvMj4=
 github.com/fatih/color v1.10.0 h1:s36xzo75JdqLaaWoiEHk767eHiwo0598uUxyfiPkDsg=
 github.com/fatih/color v1.10.0/go.mod h1:ELkj/draVOlAH/xkhN6mQ50Qd0MPOk5AAr3maGEBuJM=
@@ -846,10 +846,8 @@ github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1 h1:EKhdz
 github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1/go.mod h1:8UvriyWtv5Q5EOgjHaSseUEdkQfvwFv1I/In/O2M9gc=
 github.com/xaionaro-go/datacounter v1.0.4 h1:+QMZLmu73R5WGkQfUPwlXF/JFN+Weo4iuDZkiL2wVm8=
 github.com/xaionaro-go/datacounter v1.0.4/go.mod h1:Sf9vBevuV6w5iE6K3qJ9pWVKcyS60clWBUSQLjt5++c=
-github.com/xaionaro-go/goautosocket v0.0.0-20240803221104-cef7f165571a h1:nnSVcn4e9TkQ5GuN/MoeET18gSYudJJMtlKXFRHvVjQ=
-github.com/xaionaro-go/goautosocket v0.0.0-20240803221104-cef7f165571a/go.mod h1:7X2d4ohzI2SqqM/dNgIlBx3hUl6dB6clspwt+9c9IqA=
-github.com/xaionaro-go/logrustash v0.0.0-20240803221212-52f205f3f1f2 h1:J6HNJRYV42vTeH3UM4Z9kQU1zwxsyTjoaSF5YgUklZ0=
-github.com/xaionaro-go/logrustash v0.0.0-20240803221212-52f205f3f1f2/go.mod h1:5CziRurpvKGPZSyV7roFe47V0cj8ireI+n9TiN/ygZ0=
+github.com/xaionaro-go/logrustash v0.0.0-20240804141650-d48034780a5f h1:mMrVrYtH9MyCUzBwPvuEntvqdCJ0zifCfqV6bHU6z1M=
+github.com/xaionaro-go/logrustash v0.0.0-20240804141650-d48034780a5f/go.mod h1:aszOZHoPPSgKwdbJUgonps3MSODqctkNhwQDDwlw0Eg=
 github.com/xaionaro-go/unsafetools v0.0.0-20210722164218-75ba48cf7b3c h1:WeiZrQbFImtlpYCHdxWpjm033Zm0n1ihx3bD/9b6rYI=
 github.com/xaionaro-go/unsafetools v0.0.0-20210722164218-75ba48cf7b3c/go.mod h1:fnHPnf0CsRZNVxlSs0ZdUiYW49mLF5QFycfmoT+LuO4=
 github.com/xanzy/ssh-agent v0.3.3 h1:+/15pJfg/RsTxqYcX6fHqOXZwwMP+2VyYWJeWM2qQFM=

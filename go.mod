@@ -10,13 +10,13 @@ replace github.com/goccy/go-yaml v1.11.3 => github.com/yoelsusanto/go-yaml v0.0.
 replace github.com/yutopp/go-rtmp v0.0.7 => ../go-rtmp/
 
 require (
-	github.com/facebookincubator/go-belt v0.0.0-20240706172357-c5875adb39ef
+	github.com/facebookincubator/go-belt v0.0.0-20240707112111-9cf347bf49e2
 	github.com/go-git/go-billy/v5 v5.5.0
 	github.com/goccy/go-yaml v1.11.3
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/nicklaw5/helix/v2 v2.26.0
 	github.com/spf13/cobra v1.8.0
-	github.com/xaionaro-go/logrustash v0.0.0-20240803221212-52f205f3f1f2
+	github.com/xaionaro-go/logrustash v0.0.0-20240804141650-d48034780a5f
 	golang.org/x/oauth2 v0.17.0
 	google.golang.org/api v0.169.0
 )
@@ -181,7 +181,6 @@ require (
 	github.com/vishvananda/netlink v1.1.1-0.20211118161826-650dca95af54 // indirect
 	github.com/vishvananda/netns v0.0.4 // indirect
 	github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1 // indirect
-	github.com/xaionaro-go/goautosocket v0.0.0-20240803221104-cef7f165571a // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	github.com/yuin/goldmark v1.7.1 // indirect
 	github.com/yutopp/go-amf0 v0.1.0 // indirect

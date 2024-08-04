@@ -20,7 +20,7 @@ func CtxWithLogstash(
 		return ctx
 	}
 
-	hook, err := logrustash.NewAsyncHook(addr.Scheme, addr.Host, appName)
+	hook, err := logrustash.NewHook(addr.Scheme, addr.Host, appName)
 	if err != nil {
 		logger.Errorf(ctx, "unable to initialize the hook: %w", err)
 		return ctx
