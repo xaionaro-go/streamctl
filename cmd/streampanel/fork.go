@@ -65,6 +65,7 @@ func runSubprocess(
 	addr := parts[1]
 
 	ctx = belt.WithField(ctx, "process", procName)
+	logger.Debugf(ctx, "process name is %s", procName)
 	childProcessSignalHandler(ctx)
 
 	switch procName {

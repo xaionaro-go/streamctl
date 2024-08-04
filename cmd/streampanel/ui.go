@@ -22,6 +22,7 @@ func forkUI(ctx context.Context, mainProcessAddr, password string) {
 	}
 	flags := getFlags(ctx, mainProcess)
 	ctx = getContext(flags)
+	ctx = belt.WithField(ctx, "process", procName)
 	logger.Debugf(ctx, "flags == %#+v", flags)
 	ctx, cancelFunc := initRuntime(ctx, flags, procName)
 	defer cancelFunc()
