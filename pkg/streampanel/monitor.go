@@ -26,10 +26,6 @@ func (p *Panel) startMonitorPage(
 	logger.Debugf(ctx, "startMonitorPage")
 	defer logger.Debugf(ctx, "/startMonitorPage")
 
-	p.monitorPageUpdaterLocker.Lock()
-	defer p.monitorPageUpdaterLocker.Unlock()
-	ctx, cancelFn := context.WithCancel(ctx)
-	p.monitorPageUpdaterCancel = cancelFn
 	go func(ctx context.Context) {
 		p.updateMonitorPageImages(ctx)
 		p.updateMonitorPageStreamStatus(ctx)
@@ -62,23 +58,6 @@ func (p *Panel) startMonitorPage(
 	}(ctx)
 }
 
-func (p *Panel) stopMonitorPage(
-	ctx context.Context,
-) {
-	logger.Debugf(ctx, "stopMonitorPage")
-	defer logger.Debugf(ctx, "/stopMonitorPage")
-
-	p.monitorPageUpdaterLocker.Lock()
-	defer p.monitorPageUpdaterLocker.Unlock()
-
-	if p.monitorPageUpdaterCancel == nil {
-		return
-	}
-
-	p.monitorPageUpdaterCancel()
-	p.monitorPageUpdaterCancel = nil
-}
-
 func (p *Panel) updateMonitorPageImages(
 	ctx context.Context,
 ) {
@@ -96,9 +75,6 @@ func (p *Panel) updateMonitorPageImages(
 	if lastWinSize != winSize {
 		logger.Debugf(ctx, "window size changed %#+v -> %#+v", lastWinSize, winSize)
 	}
-
-	p.monitorPageUpdaterLocker.Lock()
-	defer p.monitorPageUpdaterLocker.Unlock()
 
 	var wg sync.WaitGroup
 
@@ -157,9 +133,6 @@ func (p *Panel) updateMonitorPageStreamStatus(
 ) {
 	logger.Tracef(ctx, "updateMonitorPageStreamStatus")
 	defer logger.Tracef(ctx, "/updateMonitorPageStreamStatus")
-
-	p.monitorPageUpdaterLocker.Lock()
-	defer p.monitorPageUpdaterLocker.Unlock()
 
 	var wg sync.WaitGroup
 	for _, platID := range []streamcontrol.PlatformName{

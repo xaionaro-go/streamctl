@@ -233,6 +233,24 @@ func (p *StreamPlayer) Resetup(opts ...Option) {
 	}
 }
 
+func (p *StreamPlayer) notifyStart(ctx context.Context) {
+	logger.Debugf(ctx, "notifyStart")
+	defer logger.Debugf(ctx, "/notifyStart")
+
+	for _, f := range p.Config.NotifierStart {
+		func(f FuncNotifyStart) {
+			defer func() {
+				r := recover()
+				if r != nil {
+					logger.Error(ctx, "got panic during notification about a start: %v", r)
+				}
+			}()
+
+			f(ctx, p.StreamID)
+		}(f)
+	}
+}
+
 func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 	logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop", p.StreamID)
 	defer logger.Debugf(ctx, "/StreamPlayer[%s].controllerLoop", p.StreamID)
@@ -269,9 +287,9 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 			for time.Since(startedWaitingForBuffering) <= p.Config.StartTimeout {
 				pos, err := p.Player.GetPosition(ctx)
 				if err != nil {
-					logger.Errorf(ctx, "StreamPlayer[%s].controllerLoop: unable to get the current position: %v", p.StreamID, err)
-					time.Sleep(time.Second)
-					return true
+					logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: unable to get the current position: %v", p.StreamID, err)
+					time.Sleep(100 * time.Millisecond)
+					continue
 				}
 				logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: pos == %v", p.StreamID, pos)
 				if pos != 0 {
@@ -283,6 +301,11 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 		}() {
 		}
 	}
+
+	go func() {
+		time.Sleep(time.Second) // TODO: delete this ugly racy hack
+		p.notifyStart(context.WithValue(ctx, CtxKeyStreamPlayer, p))
+	}()
 
 	logger.Debugf(ctx, "finished waiting for a publisher at '%s'", p.StreamID)
 

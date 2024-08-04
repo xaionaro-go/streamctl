@@ -29,14 +29,7 @@ func (p *Panel) startRestreamPage(
 	logger.Debugf(ctx, "startRestreamPage")
 	defer logger.Debugf(ctx, "/startRestreamPage")
 
-	p.restreamPageUpdaterLocker.Lock()
-	defer p.restreamPageUpdaterLocker.Unlock()
-
-	ctx, cancelFn := context.WithCancel(ctx)
-	p.restreamPageUpdaterCancel = cancelFn
-
 	p.initRestreamPage(ctx)
-
 }
 
 func (p *Panel) initRestreamPage(
@@ -193,7 +186,6 @@ func (p *Panel) openAddStreamServerWindow(ctx context.Context) {
 				return
 			}
 			w.Close()
-			p.initRestreamPage(ctx)
 		})
 	})
 
@@ -233,6 +225,8 @@ func (p *Panel) displayStreamServers(
 	logger.Debugf(ctx, "displayStreamServers")
 	defer logger.Debugf(ctx, "/displayStreamServers")
 
+	hasDynamicValue := false
+
 	var objs []fyne.CanvasObject
 	for idx, srv := range streamServers {
 		logger.Tracef(ctx, "streamServer[%3d] == %#+v", idx, srv)
@@ -254,7 +248,6 @@ func (p *Panel) displayStreamServers(
 							return
 						}
 					})
-					p.initRestreamPage(ctx)
 				},
 				p.mainWindow,
 			)
@@ -273,7 +266,9 @@ func (p *Panel) displayStreamServers(
 		p.previousNumBytesLocker.Lock()
 		prevNumBytes := p.previousNumBytes[key]
 		now := time.Now()
-		bwText := widget.NewRichTextWithText(bwString(srv.NumBytesProducerRead, prevNumBytes[0], srv.NumBytesConsumerWrote, prevNumBytes[1], now, p.previousNumBytesTS[key]))
+		bwStr := bwString(srv.NumBytesProducerRead, prevNumBytes[0], srv.NumBytesConsumerWrote, prevNumBytes[1], now, p.previousNumBytesTS[key])
+		bwText := widget.NewRichTextWithText(bwStr)
+		hasDynamicValue = hasDynamicValue || bwStr != ""
 		p.previousNumBytes[key] = [4]uint64{srv.NumBytesProducerRead, srv.NumBytesConsumerWrote}
 		p.previousNumBytesTS[key] = now
 		p.previousNumBytesLocker.Unlock()
@@ -283,6 +278,20 @@ func (p *Panel) displayStreamServers(
 	}
 	p.streamServersWidget.Objects = objs
 	p.streamServersWidget.Refresh()
+
+	p.streamServersLocker.Lock()
+	defer p.streamServersLocker.Unlock()
+	cancelFn := p.streamServersUpdaterCanceller
+	if hasDynamicValue {
+		if cancelFn == nil {
+			p.streamServersUpdaterCanceller = p.streamServersUpdater(ctx)
+		}
+	} else {
+		if cancelFn != nil {
+			cancelFn()
+			p.streamServersUpdaterCanceller = nil
+		}
+	}
 }
 
 func bwString(
@@ -328,7 +337,6 @@ func (p *Panel) openAddStreamWindow(ctx context.Context) {
 				return
 			}
 			w.Close()
-			p.initRestreamPage(ctx)
 		})
 	})
 
@@ -384,12 +392,10 @@ func (p *Panel) displayIncomingServers(
 							return
 						}
 					})
-					p.initRestreamPage(ctx)
 				},
 				p.mainWindow,
 			)
 			w.Show()
-			p.initRestreamPage(ctx)
 		})
 		label := widget.NewLabel(string(stream.StreamID))
 		c.RemoveAll()
@@ -419,7 +425,6 @@ func (p *Panel) openAddDestinationWindow(ctx context.Context) {
 				return
 			}
 			w.Close()
-			p.initRestreamPage(ctx)
 		})
 	})
 
@@ -473,12 +478,10 @@ func (p *Panel) displayStreamDestinations(
 							return
 						}
 					})
-					p.initRestreamPage(ctx)
 				},
 				p.mainWindow,
 			)
 			w.Show()
-			p.initRestreamPage(ctx)
 		})
 		label := widget.NewLabel(string(dst.ID) + ": " + string(dst.URL))
 		objs = append(objs, container.NewHBox(
@@ -643,7 +646,6 @@ func (p *Panel) openAddOrEditPlayerWindow(
 				return
 			}
 			w.Close()
-			p.initRestreamPage(ctx)
 		})
 	})
 
@@ -681,6 +683,8 @@ func (p *Panel) displayStreamPlayers(
 	logger.Debugf(ctx, "displayStreamPlayers")
 	defer logger.Debugf(ctx, "/displayStreamPlayers")
 
+	hasDynamicValue := false
+
 	sort.Slice(players, func(i, j int) bool {
 		return players[i].StreamID < players[j].StreamID
 	})
@@ -706,12 +710,10 @@ func (p *Panel) displayStreamPlayers(
 							return
 						}
 					})
-					p.initRestreamPage(ctx)
 				},
 				p.mainWindow,
 			)
 			w.Show()
-			p.initRestreamPage(ctx)
 		})
 		editButton := widget.NewButtonWithIcon("", theme.ListIcon(), func() {
 			p.openEditPlayerWindow(ctx, player.StreamID)
@@ -747,12 +749,10 @@ func (p *Panel) displayStreamPlayers(
 							return
 						}
 					})
-					p.initRestreamPage(ctx)
 				},
 				p.mainWindow,
 			)
 			w.Show()
-			p.initRestreamPage(ctx)
 		})
 		caption := widget.NewLabel(string(player.StreamID) + " (" + string(player.PlayerType) + ")")
 		c.RemoveAll()
@@ -766,13 +766,30 @@ func (p *Panel) displayStreamPlayers(
 				logger.Errorf(ctx, "unable to get the current position at player '%s': %v", player.StreamID, err)
 			} else {
 				c.Add(widget.NewSeparator())
-				c.Add(widget.NewLabel(pos.String()))
+				posStr := pos.String()
+				posLabel := widget.NewLabel(posStr)
+				hasDynamicValue = hasDynamicValue || posStr != ""
+				c.Add(posLabel)
 			}
 		}
 		objs = append(objs, c)
 	}
 	p.playersWidget.Objects = objs
 	p.playersWidget.Refresh()
+
+	p.streamPlayersLocker.Lock()
+	defer p.streamPlayersLocker.Unlock()
+	cancelFn := p.streamPlayersUpdaterCanceller
+	if hasDynamicValue {
+		if cancelFn == nil {
+			p.streamPlayersUpdaterCanceller = p.startStreamPlayersUpdater(ctx)
+		}
+	} else {
+		if cancelFn != nil {
+			cancelFn()
+			p.streamPlayersUpdaterCanceller = nil
+		}
+	}
 }
 
 func (p *Panel) openAddRestreamWindow(ctx context.Context) {
@@ -846,7 +863,6 @@ func (p *Panel) openAddRestreamWindow(ctx context.Context) {
 				return
 			}
 			w.Close()
-			p.initRestreamPage(ctx)
 		})
 	})
 
@@ -895,6 +911,8 @@ func (p *Panel) displayStreamForwards(
 	logger.Debugf(ctx, "displayStreamForwards")
 	defer logger.Debugf(ctx, "/displayStreamForwards")
 
+	hasDynamicValue := false
+
 	sort.Slice(fwds, func(i, j int) bool {
 		if fwds[i].StreamID != fwds[j].StreamID {
 			return fwds[i].StreamID < fwds[j].StreamID
@@ -924,12 +942,10 @@ func (p *Panel) displayStreamForwards(
 							return
 						}
 					})
-					p.initRestreamPage(ctx)
 				},
 				p.mainWindow,
 			)
 			w.Show()
-			p.initRestreamPage(ctx)
 		})
 		icon := theme.MediaPauseIcon()
 		label := "Pause"
@@ -962,12 +978,10 @@ func (p *Panel) displayStreamForwards(
 							return
 						}
 					})
-					p.initRestreamPage(ctx)
 				},
 				p.mainWindow,
 			)
 			w.Show()
-			p.initRestreamPage(ctx)
 		})
 		caption := widget.NewLabel(string(fwd.StreamID) + " -> " + string(fwd.DestinationID))
 		c.RemoveAll()
@@ -985,7 +999,9 @@ func (p *Panel) displayStreamForwards(
 			now := time.Now()
 			p.previousNumBytesLocker.Lock()
 			prevNumBytes := p.previousNumBytes[key]
-			bwText := widget.NewRichTextWithText(bwString(fwd.NumBytesRead, prevNumBytes[0], fwd.NumBytesWrote, prevNumBytes[1], now, p.previousNumBytesTS[key]))
+			bwStr := bwString(fwd.NumBytesRead, prevNumBytes[0], fwd.NumBytesWrote, prevNumBytes[1], now, p.previousNumBytesTS[key])
+			bwText := widget.NewRichTextWithText(bwStr)
+			hasDynamicValue = hasDynamicValue || bwStr != ""
 			p.previousNumBytes[key] = [4]uint64{fwd.NumBytesRead, fwd.NumBytesWrote}
 			p.previousNumBytesTS[key] = now
 			p.previousNumBytesLocker.Unlock()
@@ -996,21 +1012,129 @@ func (p *Panel) displayStreamForwards(
 	}
 	p.restreamsWidget.Objects = objs
 	p.restreamsWidget.Refresh()
+
+	p.streamForwardersLocker.Lock()
+	defer p.streamForwardersLocker.Unlock()
+	cancelFn := p.streamForwardersUpdaterCanceller
+	if hasDynamicValue {
+		if cancelFn == nil {
+			p.streamForwardersUpdaterCanceller = p.startStreamForwardersUpdater(ctx)
+		}
+	} else {
+		if cancelFn != nil {
+			cancelFn()
+			p.streamForwardersUpdaterCanceller = nil
+		}
+	}
 }
 
-func (p *Panel) stopRestreamPage(
+func (p *Panel) streamServersUpdater(
 	ctx context.Context,
-) {
-	logger.Debugf(ctx, "stopRestreamPage")
-	defer logger.Debugf(ctx, "/stopRestreamPage")
+) context.CancelFunc {
+	ctx, cancelFn := context.WithCancel(ctx)
+	go func() {
+		updateData := func() {
+			streamServers, err := p.StreamD.ListStreamServers(ctx)
+			if err != nil {
+				p.DisplayError(err)
+			} else {
+				p.displayStreamServers(ctx, streamServers)
+			}
+		}
 
-	p.restreamPageUpdaterLocker.Lock()
-	defer p.restreamPageUpdaterLocker.Unlock()
+		defer func() {
+			p.streamServersLocker.Lock()
+			defer p.streamServersLocker.Unlock()
+			p.streamServersUpdaterCanceller = nil
+			go updateData()
+		}()
 
-	if p.restreamPageUpdaterCancel == nil {
-		return
-	}
+		logger.Debugf(ctx, "streamServersUpdater")
+		defer logger.Debugf(ctx, "/streamServersUpdater")
 
-	p.restreamPageUpdaterCancel()
-	p.restreamPageUpdaterCancel = nil
+		t := time.NewTicker(time.Second)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+			updateData()
+		}
+	}()
+	return cancelFn
+}
+
+func (p *Panel) startStreamPlayersUpdater(
+	ctx context.Context,
+) context.CancelFunc {
+	ctx, cancelFn := context.WithCancel(ctx)
+	go func() {
+		updateData := func() {
+			streamPlayers, err := p.StreamD.ListStreamPlayers(ctx)
+			if err != nil {
+				p.DisplayError(err)
+			} else {
+				p.displayStreamPlayers(ctx, streamPlayers)
+			}
+		}
+
+		defer func() {
+			p.streamPlayersLocker.Lock()
+			defer p.streamPlayersLocker.Unlock()
+			p.streamPlayersUpdaterCanceller = nil
+			go updateData()
+		}()
+
+		logger.Debugf(ctx, "streamPlayersUpdater")
+		defer logger.Debugf(ctx, "/streamPlayersUpdater")
+
+		t := time.NewTicker(time.Second)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+			updateData()
+		}
+	}()
+	return cancelFn
+}
+
+func (p *Panel) startStreamForwardersUpdater(
+	ctx context.Context,
+) context.CancelFunc {
+	ctx, cancelFn := context.WithCancel(ctx)
+	go func() {
+		updateData := func() {
+			streamFwds, err := p.StreamD.ListStreamForwards(ctx)
+			if err != nil {
+				p.DisplayError(err)
+			} else {
+				p.displayStreamForwards(ctx, streamFwds)
+			}
+		}
+
+		defer func() {
+			p.streamForwardersLocker.Lock()
+			defer p.streamForwardersLocker.Unlock()
+			p.streamForwardersUpdaterCanceller = nil
+			go updateData()
+		}()
+
+		logger.Debugf(ctx, "streamForwardersUpdater")
+		defer logger.Debugf(ctx, "/streamForwardersUpdater")
+
+		t := time.NewTicker(time.Second)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+			updateData()
+		}
+	}()
+	return cancelFn
 }

@@ -62,9 +62,36 @@ func (s *StreamPlayerStreamServer) GetPortServers(
 	return result, nil
 }
 
+type setupStreamPlayersConfig struct {
+	DefaultStreamPlayerOptions streamplayer.Options
+}
+
+type setupStreamPlayersOption interface {
+	apply(*setupStreamPlayersConfig)
+}
+
+type setupStreamPlayersOptions []setupStreamPlayersOption
+
+func (s setupStreamPlayersOptions) Config() setupStreamPlayersConfig {
+	cfg := setupStreamPlayersConfig{}
+	for _, opt := range s {
+		opt.apply(&cfg)
+	}
+	return cfg
+}
+
+type setupStreamPlayersOptionDefaultStreamPlayerOptions streamplayer.Options
+
+func (opt setupStreamPlayersOptionDefaultStreamPlayerOptions) apply(cfg *setupStreamPlayersConfig) {
+	cfg.DefaultStreamPlayerOptions = (streamplayer.Options)(opt)
+}
+
 func (s *StreamServer) setupStreamPlayers(
 	ctx context.Context,
+	opts ...setupStreamPlayersOption,
 ) error {
+	setupCfg := setupStreamPlayersOptions(opts).Config()
+
 	var streamIDsToDelete []api.StreamID
 
 	logger.Tracef(ctx, "p.StreamPlayers.StreamPlayersLocker.Lock()-ing")
@@ -105,10 +132,14 @@ func (s *StreamServer) setupStreamPlayers(
 			continue
 		}
 
+		ssOpts := playerCfg.StreamPlayback.Options()
+		if setupCfg.DefaultStreamPlayerOptions != nil {
+			ssOpts = append(ssOpts, setupCfg.DefaultStreamPlayerOptions...)
+		}
 		_, err := s.StreamPlayers.Create(
 			detachDone(ctx),
 			streamID,
-			playerCfg.StreamPlayback.Options()...,
+			ssOpts...,
 		)
 		if err != nil {
 			err = fmt.Errorf("unable to create a stream player for stream '%s': %w", streamID, err)
@@ -126,21 +157,54 @@ func detachDone(ctx context.Context) context.Context {
 	return belt.CtxWithBelt(context.Background(), belt.CtxBelt(ctx))
 }
 
+type AddStreamPlayerConfig struct {
+	DefaultStreamPlayerOptions streamplayer.Options
+}
+
+type AddStreamPlayerOption interface {
+	apply(*AddStreamPlayerConfig)
+}
+
+type AddStreamPlayerOptions []AddStreamPlayerOption
+
+func (s AddStreamPlayerOptions) Config() AddStreamPlayerConfig {
+	cfg := AddStreamPlayerConfig{}
+	for _, opt := range s {
+		opt.apply(&cfg)
+	}
+	return cfg
+}
+
+type AddStreamPlayerOptionDefaultStreamPlayerOptions streamplayer.Options
+
+func (opt AddStreamPlayerOptionDefaultStreamPlayerOptions) apply(cfg *AddStreamPlayerConfig) {
+	cfg.DefaultStreamPlayerOptions = (streamplayer.Options)(opt)
+}
+
 func (s *StreamServer) AddStreamPlayer(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 	playerType player.Backend,
 	disabled bool,
 	streamPlaybackConfig sptypes.Config,
+	opts ...AddStreamPlayerOption,
 ) error {
+	cfg := AddStreamPlayerOptions(opts).Config()
+
 	s.Config.Streams[streamID].Player = &sstypes.PlayerConfig{
 		Player:         playerType,
 		Disabled:       disabled,
 		StreamPlayback: streamPlaybackConfig,
 	}
 
-	if err := s.setupStreamPlayers(ctx); err != nil {
-		return fmt.Errorf("unable to setup the stream players: %w", err)
+	{
+		var opts setupStreamPlayersOptions
+		if cfg.DefaultStreamPlayerOptions != nil {
+			opts = append(opts, setupStreamPlayersOptionDefaultStreamPlayerOptions(cfg.DefaultStreamPlayerOptions))
+		}
+		if err := s.setupStreamPlayers(ctx, opts...); err != nil {
+			return fmt.Errorf("unable to setup the stream players: %w", err)
+		}
 	}
 
 	return nil

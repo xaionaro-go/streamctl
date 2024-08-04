@@ -3,7 +3,11 @@ package types
 import (
 	"context"
 	"time"
+
+	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
+
+type FuncNotifyStart func(ctx context.Context, streamID streamtypes.StreamID)
 
 type Config struct {
 	JitterBufDuration     time.Duration
@@ -11,6 +15,7 @@ type Config struct {
 	MaxCatchupAtLag       time.Duration
 	StartTimeout          time.Duration
 	ReadTimeout           time.Duration
+	NotifierStart         []FuncNotifyStart
 }
 
 func (cfg Config) Options() Options {
@@ -21,14 +26,17 @@ func (cfg Config) Options() Options {
 	if cfg.CatchupMaxSpeedFactor != 0 {
 		opts = append(opts, OptionCatchupMaxSpeedFactor(cfg.CatchupMaxSpeedFactor))
 	}
-	if cfg.CatchupMaxSpeedFactor != 0 {
+	if cfg.MaxCatchupAtLag != 0 {
 		opts = append(opts, OptionMaxCatchupAtLag(cfg.MaxCatchupAtLag))
 	}
-	if cfg.CatchupMaxSpeedFactor != 0 {
+	if cfg.StartTimeout != 0 {
 		opts = append(opts, OptionStartTimeout(cfg.StartTimeout))
 	}
-	if cfg.CatchupMaxSpeedFactor != 0 {
+	if cfg.ReadTimeout != 0 {
 		opts = append(opts, OptionReadTimeout(cfg.ReadTimeout))
+	}
+	if cfg.NotifierStart != nil {
+		opts = append(opts, OptionNotifierStart(cfg.NotifierStart))
 	}
 	return opts
 }
@@ -89,4 +97,10 @@ type OptionReadTimeout time.Duration
 
 func (s OptionReadTimeout) Apply(cfg *Config) {
 	cfg.ReadTimeout = time.Duration(s)
+}
+
+type OptionNotifierStart []FuncNotifyStart
+
+func (s OptionNotifierStart) Apply(cfg *Config) {
+	cfg.NotifierStart = ([]FuncNotifyStart)(s)
 }

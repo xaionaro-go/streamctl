@@ -85,12 +85,10 @@ type Panel struct {
 	streamTitleField       *widget.Entry
 	streamDescriptionField *widget.Entry
 
-	monitorPage              *fyne.Container
-	monitorPageUpdaterLocker sync.Mutex
-	monitorPageUpdaterCancel context.CancelFunc
-	monitorLastWinSize       fyne.Size
-	screenshotContainer      *fyne.Container
-	chatContainer            *fyne.Container
+	monitorPage         *fyne.Container
+	monitorLastWinSize  fyne.Size
+	screenshotContainer *fyne.Container
+	chatContainer       *fyne.Container
 
 	streamStatus map[streamcontrol.PlatformName]*widget.Label
 
@@ -115,9 +113,6 @@ type Panel struct {
 
 	lastDisplayedError error
 
-	restreamPageUpdaterLocker sync.Mutex
-	restreamPageUpdaterCancel context.CancelFunc
-
 	streamServersWidget *fyne.Container
 	streamsWidget       *fyne.Container
 	destinationsWidget  *fyne.Container
@@ -127,6 +122,13 @@ type Panel struct {
 	previousNumBytesLocker sync.Mutex
 	previousNumBytes       map[any][4]uint64
 	previousNumBytesTS     map[any]time.Time
+
+	streamServersLocker              sync.Mutex
+	streamServersUpdaterCanceller    context.CancelFunc
+	streamForwardersLocker           sync.Mutex
+	streamForwardersUpdaterCanceller context.CancelFunc
+	streamPlayersLocker              sync.Mutex
+	streamPlayersUpdaterCanceller    context.CancelFunc
 
 	obsSelectScene *widget.Select
 }
@@ -1697,16 +1699,17 @@ func (p *Panel) initMainWindow(
 		),
 	)
 
+	var cancelPage context.CancelFunc
 	setPage := func(page consts.Page) {
 		logger.Debugf(ctx, "setPage(%s)", page)
 		defer logger.Debugf(ctx, "/setPage(%s)", page)
 
-		if page != consts.PageMonitor {
-			p.stopMonitorPage(ctx)
+		if cancelPage != nil {
+			cancelPage()
 		}
-		if page != consts.PageMonitor {
-			p.stopRestreamPage(ctx)
-		}
+
+		var pageCtx context.Context
+		pageCtx, cancelPage = context.WithCancel(ctx)
 
 		switch page {
 		case consts.PageControl:
@@ -1721,7 +1724,7 @@ func (p *Panel) initMainWindow(
 			restreamPage.Hide()
 			obsPage.Hide()
 			p.monitorPage.Show()
-			p.startMonitorPage(ctx)
+			p.startMonitorPage(pageCtx)
 		case consts.PageOBS:
 			controlPage.Hide()
 			profileControl.Hide()
@@ -1734,7 +1737,7 @@ func (p *Panel) initMainWindow(
 			p.monitorPage.Hide()
 			obsPage.Hide()
 			restreamPage.Show()
-			p.startRestreamPage(ctx)
+			p.startRestreamPage(pageCtx)
 		}
 	}
 
@@ -1770,21 +1773,23 @@ func (p *Panel) initMainWindow(
 }
 
 func (p *Panel) subscribeUpdateControlPage(ctx context.Context) {
+	logger.Debugf(ctx, "subscribe to streams and config changes")
+	defer logger.Debugf(ctx, "/subscribe to streams and config changes")
+
+	chStreams, err := p.StreamD.SubscribeToStreamsChanges(ctx)
+	if err != nil {
+		p.DisplayError(err)
+		//return
+	}
+	chConfigs, err := p.StreamD.SubscribeToConfigChanges(ctx)
+	if err != nil {
+		p.DisplayError(err)
+		//return
+	}
+
+	p.getUpdatedStatus(ctx)
+
 	go func() {
-		logger.Debugf(ctx, "subscribe to streams and config changes")
-		defer logger.Debugf(ctx, "/subscribe to streams and config changes")
-
-		chStreams, err := p.StreamD.SubscribeToStreamsChanges(ctx)
-		if err != nil {
-			p.DisplayError(err)
-			//return
-		}
-		chConfigs, err := p.StreamD.SubscribeToConfigChanges(ctx)
-		if err != nil {
-			p.DisplayError(err)
-			//return
-		}
-
 		for {
 			select {
 			case <-ctx.Done():
@@ -2183,7 +2188,7 @@ func (p *Panel) profileWindow(
 	)
 
 	w := p.app.NewWindow(windowName)
-	resizeWindow(w, fyne.NewSize(400, 300))
+	resizeWindow(w, fyne.NewSize(1500, 1000))
 	profileName := widget.NewEntry()
 	profileName.SetPlaceHolder("profile name")
 	profileName.SetText(string(values.Name))

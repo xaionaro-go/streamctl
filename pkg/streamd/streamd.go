@@ -32,6 +32,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver"
+	streamserverimpl "github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/yutopp-go-rtmp/streamserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
@@ -156,7 +157,25 @@ func (d *StreamD) initStreamServer(ctx context.Context) error {
 	d.StreamServer = streamserver.New(&d.Config.StreamServer, newPlatformsControllerAdapter(d.StreamControllers))
 	assert(d.StreamServer != nil)
 	defer d.notifyAboutChange(ctx, events.StreamServersChange)
-	return d.StreamServer.Init(ctx)
+	return d.StreamServer.Init(ctx, streamserverimpl.InitOptionDefaultStreamPlayerOptions(d.streamPlayerOptions()))
+}
+
+func (d *StreamD) streamPlayerOptions() sptypes.Options {
+	return sptypes.Options{
+		sptypes.OptionNotifierStart{
+			d.notifyStreamPlayerStart,
+		},
+	}
+}
+
+func (d *StreamD) notifyStreamPlayerStart(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+) {
+	logger.Debugf(ctx, "notifyStreamPlayerStart")
+	defer logger.Debugf(ctx, "/notifyStreamPlayerStart")
+
+	d.notifyAboutChange(ctx, events.StreamPlayersChange)
 }
 
 func (d *StreamD) readCache(ctx context.Context) error {
@@ -1257,6 +1276,7 @@ func (d *StreamD) AddStreamPlayer(
 		playerType,
 		disabled,
 		streamPlaybackConfig,
+		streamserverimpl.AddStreamPlayerOptionDefaultStreamPlayerOptions(d.streamPlayerOptions()),
 	))
 	result = multierror.Append(result, d.SaveConfig(ctx))
 	return result.ErrorOrNil()
@@ -1454,9 +1474,11 @@ func (d *StreamD) StreamPlayerClose(
 }
 
 func (d *StreamD) notifyAboutChange(
-	_ context.Context,
+	ctx context.Context,
 	topic events.Event,
 ) {
+	logger.Debugf(ctx, "notifyAboutChange(ctx, '%s')", topic)
+	defer logger.Debugf(ctx, "/notifyAboutChange(ctx, '%s')", topic)
 	d.EventBus.Publish(topic)
 }
 

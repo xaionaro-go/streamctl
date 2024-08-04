@@ -53,7 +53,36 @@ func New(
 	return s
 }
 
-func (s *StreamServer) Init(ctx context.Context) error {
+type InitConfig struct {
+	DefaultStreamPlayerOptions streamplayer.Options
+}
+
+type InitOption interface {
+	apply(*InitConfig)
+}
+
+type InitOptions []InitOption
+
+func (s InitOptions) Config() InitConfig {
+	cfg := InitConfig{}
+	for _, opt := range s {
+		opt.apply(&cfg)
+	}
+	return cfg
+}
+
+type InitOptionDefaultStreamPlayerOptions streamplayer.Options
+
+func (opt InitOptionDefaultStreamPlayerOptions) apply(cfg *InitConfig) {
+	cfg.DefaultStreamPlayerOptions = (streamplayer.Options)(opt)
+}
+
+func (s *StreamServer) Init(
+	ctx context.Context,
+	opts ...InitOption,
+) error {
+	initCfg := InitOptions(opts).Config()
+
 	ctx = belt.WithField(ctx, "module", "StreamServer")
 	s.Lock()
 	defer s.Unlock()
@@ -92,7 +121,11 @@ func (s *StreamServer) Init(ctx context.Context) error {
 	}
 
 	go func() {
-		err := s.setupStreamPlayers(ctx)
+		var opts setupStreamPlayersOptions
+		if initCfg.DefaultStreamPlayerOptions != nil {
+			opts = append(opts, setupStreamPlayersOptionDefaultStreamPlayerOptions(initCfg.DefaultStreamPlayerOptions))
+		}
+		err := s.setupStreamPlayers(ctx, opts...)
 		if err != nil {
 			logger.Error(ctx, err)
 		}
