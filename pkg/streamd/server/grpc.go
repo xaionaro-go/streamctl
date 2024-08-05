@@ -1129,7 +1129,8 @@ func (grpc *GRPCServer) StreamPlayerEndChan(
 	req *streamd_grpc.StreamPlayerEndChanRequest,
 	srv streamd_grpc.StreamD_StreamPlayerEndChanServer,
 ) error {
-	ctx := srv.Context()
+	ctx, cancelFn := context.WithCancel(srv.Context())
+	defer cancelFn()
 	ch, err := grpc.StreamD.StreamPlayerEndChan(ctx, streamtypes.StreamID(req.GetStreamID()))
 	if err != nil {
 		return err
