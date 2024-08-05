@@ -341,7 +341,7 @@ func (p *Panel) startOAuthListenerForRemoteStreamD(
 		return fmt.Errorf("unable to start listener for OAuth responses: %w", err)
 	}
 
-	oauthURLChan, err := streamD.SubscriberToOAuthURLs(ctx, listenPort)
+	oauthURLChan, err := streamD.SubscribeToOAuthURLs(ctx, listenPort)
 	if err != nil {
 		cancelFn()
 		return fmt.Errorf("unable to subscribe to OAuth requests of streamd: %w", err)
@@ -446,8 +446,9 @@ func (p *Panel) SetLoggingLevel(ctx context.Context, level logger.Level) {
 }
 
 func (p *Panel) initRemoteStreamD(context.Context) error {
-	p.StreamD = client.New(p.Config.RemoteStreamDAddr)
-	return nil
+	var err error
+	p.StreamD, err = client.New(p.Config.RemoteStreamDAddr)
+	return err
 }
 
 func removeNonDigits(input string) string {
@@ -1909,7 +1910,7 @@ func (p *Panel) setupStream(ctx context.Context) {
 
 	if p.youtubeCheck.Checked && backendEnabled[youtube.ID] {
 		if p.streamIsRunning(ctx, youtube.ID) {
-			logger.Infof(ctx, "updating the stream info at YouTube")
+			logger.Debugf(ctx, "updating the stream info at YouTube")
 			err := p.StreamD.UpdateStream(
 				ctx,
 				youtube.ID,
@@ -1917,11 +1918,12 @@ func (p *Panel) setupStream(ctx context.Context) {
 				p.streamDescriptionField.Text,
 				profile.PerPlatform[youtube.ID],
 			)
+			logger.Infof(ctx, "updated the stream info at YouTube")
 			if err != nil {
 				p.DisplayError(fmt.Errorf("unable to start the stream on YouTube: %w", err))
 			}
 		} else {
-			logger.Infof(ctx, "creating the stream at YouTube")
+			logger.Debugf(ctx, "creating the stream at YouTube")
 			err := p.StreamD.StartStream(
 				ctx,
 				youtube.ID,
@@ -1929,6 +1931,7 @@ func (p *Panel) setupStream(ctx context.Context) {
 				p.streamDescriptionField.Text,
 				profile.PerPlatform[youtube.ID],
 			)
+			logger.Infof(ctx, "created the stream at YouTube")
 			if err != nil {
 				p.DisplayError(fmt.Errorf("unable to start the stream on YouTube: %w", err))
 			}

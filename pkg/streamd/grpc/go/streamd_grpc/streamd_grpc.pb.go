@@ -22,6 +22,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type StreamDClient interface {
+	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingReply, error)
 	SetLoggingLevel(ctx context.Context, in *SetLoggingLevelRequest, opts ...grpc.CallOption) (*SetLoggingLevelReply, error)
 	GetLoggingLevel(ctx context.Context, in *GetLoggingLevelRequest, opts ...grpc.CallOption) (*GetLoggingLevelReply, error)
 	GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigReply, error)
@@ -95,6 +96,15 @@ type streamDClient struct {
 
 func NewStreamDClient(cc grpc.ClientConnInterface) StreamDClient {
 	return &streamDClient{cc}
+}
+
+func (c *streamDClient) Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingReply, error) {
+	out := new(PingReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/Ping", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *streamDClient) SetLoggingLevel(ctx context.Context, in *SetLoggingLevelRequest, opts ...grpc.CallOption) (*SetLoggingLevelReply, error) {
@@ -916,6 +926,7 @@ func (c *streamDClient) StreamPlayerClose(ctx context.Context, in *StreamPlayerC
 // All implementations must embed UnimplementedStreamDServer
 // for forward compatibility
 type StreamDServer interface {
+	Ping(context.Context, *PingRequest) (*PingReply, error)
 	SetLoggingLevel(context.Context, *SetLoggingLevelRequest) (*SetLoggingLevelReply, error)
 	GetLoggingLevel(context.Context, *GetLoggingLevelRequest) (*GetLoggingLevelReply, error)
 	GetConfig(context.Context, *GetConfigRequest) (*GetConfigReply, error)
@@ -988,6 +999,9 @@ type StreamDServer interface {
 type UnimplementedStreamDServer struct {
 }
 
+func (UnimplementedStreamDServer) Ping(context.Context, *PingRequest) (*PingReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
+}
 func (UnimplementedStreamDServer) SetLoggingLevel(context.Context, *SetLoggingLevelRequest) (*SetLoggingLevelReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetLoggingLevel not implemented")
 }
@@ -1194,6 +1208,24 @@ type UnsafeStreamDServer interface {
 
 func RegisterStreamDServer(s grpc.ServiceRegistrar, srv StreamDServer) {
 	s.RegisterService(&StreamD_ServiceDesc, srv)
+}
+
+func _StreamD_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).Ping(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/Ping",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).Ping(ctx, req.(*PingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _StreamD_SetLoggingLevel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -2403,6 +2435,10 @@ var StreamD_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "streamd.StreamD",
 	HandlerType: (*StreamDServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Ping",
+			Handler:    _StreamD_Ping_Handler,
+		},
 		{
 			MethodName: "SetLoggingLevel",
 			Handler:    _StreamD_SetLoggingLevel_Handler,

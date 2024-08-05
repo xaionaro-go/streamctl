@@ -6,6 +6,7 @@ import (
 	"crypto"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/andreykaipov/goobs/api/requests/scenes"
@@ -63,6 +64,23 @@ func NewGRPCServer(streamd api.StreamD) *GRPCServer {
 
 func (grpc *GRPCServer) MemoizeData() *memoize.MemoizeData {
 	return grpc.MemoizeDataValue
+}
+
+func (grpc *GRPCServer) Ping(
+	ctx context.Context,
+	req *streamd_grpc.PingRequest,
+) (*streamd_grpc.PingReply, error) {
+	var payload strings.Builder
+	extraSize := req.GetRequestExtraPayloadSize()
+	totalSize := len(req.GetPayloadToReturn()) + int(extraSize)
+	if totalSize > 65535 {
+		return nil, fmt.Errorf("requested a too big payload")
+	}
+	payload.WriteString(req.GetPayloadToReturn())
+	payload.WriteString(strings.Repeat("0", int(extraSize)))
+	return &streamd_grpc.PingReply{
+		Payload: payload.String(),
+	}, nil
 }
 
 func (grpc *GRPCServer) Close() error {

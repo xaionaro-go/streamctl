@@ -118,7 +118,8 @@ func streamSetup(cmd *cobra.Command, args []string) {
 
 	remoteAddr, err := cmd.Flags().GetString("remote-addr")
 	assertNoError(ctx, err)
-	streamD := client.New(remoteAddr)
+	streamD, err := client.New(remoteAddr)
+	assertNoError(ctx, err)
 	title, err := cmd.Flags().GetString("title")
 	assertNoError(ctx, err)
 	description, err := cmd.Flags().GetString("description")
@@ -160,7 +161,8 @@ func streamStatus(cmd *cobra.Command, args []string) {
 
 	remoteAddr, err := cmd.Flags().GetString("remote-addr")
 	assertNoError(ctx, err)
-	streamD := client.New(remoteAddr)
+	streamD, err := client.New(remoteAddr)
+	assertNoError(ctx, err)
 
 	for _, platID := range []streamcontrol.PlatformName{
 		obs.ID, twitch.ID, youtube.ID,
@@ -188,7 +190,8 @@ func variablesGet(cmd *cobra.Command, args []string) {
 
 	remoteAddr, err := cmd.Flags().GetString("remote-addr")
 	assertNoError(ctx, err)
-	streamD := client.New(remoteAddr)
+	streamD, err := client.New(remoteAddr)
+	assertNoError(ctx, err)
 
 	b, err := streamD.GetVariable(ctx, consts.VarKey(variableKey))
 	assertNoError(ctx, err)
@@ -203,7 +206,8 @@ func variablesGetHash(cmd *cobra.Command, args []string) {
 
 	remoteAddr, err := cmd.Flags().GetString("remote-addr")
 	assertNoError(ctx, err)
-	streamD := client.New(remoteAddr)
+	streamD, err := client.New(remoteAddr)
+	assertNoError(ctx, err)
 
 	b, err := streamD.GetVariableHash(ctx, consts.VarKey(variableKey), crypto.SHA1)
 	assertNoError(ctx, err)
@@ -217,7 +221,8 @@ func variablesSet(cmd *cobra.Command, args []string) {
 
 	remoteAddr, err := cmd.Flags().GetString("remote-addr")
 	assertNoError(ctx, err)
-	streamD := client.New(remoteAddr)
+	streamD, err := client.New(remoteAddr)
+	assertNoError(ctx, err)
 
 	value, err := io.ReadAll(os.Stdin)
 	assertNoError(ctx, err)
@@ -231,7 +236,8 @@ func configGet(cmd *cobra.Command, args []string) {
 
 	remoteAddr, err := cmd.Flags().GetString("remote-addr")
 	assertNoError(ctx, err)
-	streamD := client.New(remoteAddr)
+	streamD, err := client.New(remoteAddr)
+	assertNoError(ctx, err)
 
 	cfg, err := streamD.GetConfig(ctx)
 	assertNoError(ctx, err)
