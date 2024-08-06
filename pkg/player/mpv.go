@@ -28,10 +28,15 @@ const (
 	TimeoutMPVStart = 10 * time.Second
 )
 
+const (
+	restartMPV = true
+)
+
 var mpvCount uint64
 
 type MPV struct {
 	PlayerCommon
+	PathToMPV  string
 	SocketPath string
 	Cmd        *exec.Cmd
 	IPCClient  *mpv.IPCClient
@@ -41,6 +46,8 @@ type MPV struct {
 	EndChInitialized bool
 	EndChMutex       sync.Mutex
 	EndCh            chan struct{}
+
+	OpenLinkOnRerun string
 }
 
 var _ Player = (*MPV)(nil)
@@ -75,7 +82,21 @@ func NewMPV(
 			pathToMPV += ".exe"
 		}
 	}
+	p := &MPV{
+		PlayerCommon: PlayerCommon{
+			Title: title,
+		},
+		PathToMPV: pathToMPV,
+		EndCh:     make(chan struct{}),
+	}
+	err := p.execMPV(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
+}
 
+func (p *MPV) execMPV(ctx context.Context) (_ret error) {
 	myPid := os.Getpid()
 	mpvID := atomic.AddUint64(&mpvCount, 1)
 	var socketPath string
@@ -88,10 +109,10 @@ func NewMPV(
 	}
 	_ = os.Remove(socketPath)
 
-	logger.Tracef(ctx, "socket path: '%s'", socketPath)
+	logger.Debugf(ctx, "socket path: '%s'", socketPath)
 
-	args := []string{pathToMPV, "--idle", "--input-ipc-server=" + socketPath, fmt.Sprintf("--title=%s", title)}
-	logger.Tracef(ctx, "running command '%s %s'", args[0], strings.Join(args[1:], " "))
+	args := []string{p.PathToMPV, "--idle", "--keep-open=always", "--keep-open-pause=no", "--input-ipc-server=" + socketPath, fmt.Sprintf("--title=%s", p.Title)}
+	logger.Debugf(ctx, "running command '%s %s'", args[0], strings.Join(args[1:], " "))
 	cmd := exec.Command(args[0], args[1:]...)
 	if observability.LogLevelFilter.GetLevel() >= logger.LevelTrace {
 		cmd.Stdout = os.Stderr
@@ -101,42 +122,67 @@ func NewMPV(
 	errmon.ObserveErrorCtx(ctx, err)
 	err = cmd.Start()
 	if err != nil {
-		return nil, fmt.Errorf("unable to start mpv: %w", err)
+		return fmt.Errorf("unable to start mpv: %w", err)
 	}
 	err = child_process_manager.AddChildProcess(cmd.Process)
 	errmon.ObserveErrorCtx(ctx, err)
-	logger.Tracef(ctx, "started command '%s %s'", args[0], strings.Join(args[1:], " "))
+	logger.Debugf(ctx, "started command '%s %s'", args[0], strings.Join(args[1:], " "))
 
-	logger.Tracef(ctx, "waiting for the socket '%s' to get ready", socketPath)
+	logger.Debugf(ctx, "waiting for the socket '%s' to get ready", socketPath)
 
 	mpvConn := mpvipc.NewConnection(socketPath)
 	t := time.NewTicker(100 * time.Millisecond)
 	for {
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return ctx.Err()
 		case <-t.C:
 		}
 		if err := mpvConn.Open(); err == nil {
 			break
 		}
 	}
-	logger.Tracef(ctx, "socket '%s' is ready", socketPath)
-	return &MPV{
-		PlayerCommon: PlayerCommon{
-			Title: title,
-		},
-		SocketPath: socketPath,
-		Cmd:        cmd,
-		MPVConn:    mpvConn,
-		EndCh:      make(chan struct{}),
-	}, nil
+	logger.Debugf(ctx, "socket '%s' is ready", socketPath)
+	p.SocketPath = socketPath
+	p.Cmd = cmd
+	p.MPVConn = mpvConn
+
+	if restartMPV {
+		observability.Go(ctx, func() {
+			err := p.Cmd.Wait()
+			logger.Debugf(ctx, "player was closed: %v", err)
+			link := p.OpenLinkOnRerun
+			err = p.Close(ctx)
+			logger.Debugf(ctx, "cleanup result: %v", err)
+			select {
+			case <-ctx.Done():
+				logger.Debugf(ctx, "context is closed, not rerunning the player")
+				return
+			default:
+			}
+			logger.Debugf(ctx, "rerunning the player")
+			err = p.execMPV(ctx)
+			if err != nil {
+				logger.Error(ctx, "unable to rerun the player: %v", err)
+			}
+			logger.Debugf(ctx, "successfully reran the player")
+			if link != "" {
+				logger.Debugf(ctx, "reopen link '%s'")
+				err := p.OpenURL(ctx, link)
+				if err != nil {
+					logger.Errorf(ctx, "unable to reopen link '%v'", err)
+				}
+			}
+		})
+	}
+	return nil
 }
 
 func (p *MPV) OpenURL(
 	ctx context.Context,
 	link string,
 ) error {
+	p.OpenLinkOnRerun = link
 	_, err := p.MPVConn.Call("loadfile", link, "replace")
 	return err
 }
@@ -189,20 +235,29 @@ func (p *MPV) initEndCh(
 	if p.EndChInitialized {
 		return
 	}
-	t := time.NewTimer(time.Millisecond * 100)
-	defer t.Stop()
-	for {
-		<-t.C
-		isEnded, _ := p.IsEnded(ctx)
-		if !isEnded {
-			break
-		}
-	}
-	p.EndChMutex.Lock()
-	defer p.EndChMutex.Unlock()
-	var oldCh chan struct{}
-	oldCh, p.EndCh = p.EndCh, make(chan struct{})
-	close(oldCh)
+	observability.Go(ctx, func() {
+		func() {
+			t := time.NewTimer(time.Millisecond * 100)
+			defer t.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.C:
+				}
+				isEnded, _ := p.IsEnded(ctx)
+				if !isEnded {
+					return
+				}
+			}
+		}()
+		p.EndChMutex.Lock()
+		defer p.EndChMutex.Unlock()
+		var oldCh chan struct{}
+		oldCh, p.EndCh = p.EndCh, make(chan struct{})
+		close(oldCh)
+		p.EndChInitialized = false
+	})
 }
 
 func (p *MPV) IsEnded(
@@ -268,6 +323,7 @@ func (p *MPV) Stop(
 }
 
 func (p *MPV) Close(ctx context.Context) error {
+	p.OpenLinkOnRerun = ""
 	return multierror.Append(
 		p.Cmd.Process.Kill(),
 		os.Remove(p.SocketPath),

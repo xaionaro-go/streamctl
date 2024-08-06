@@ -376,7 +376,7 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 				logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: resetting the speed to 1", p.StreamID)
 				err := player.SetSpeed(ctx, 1)
 				if err != nil {
-					logger.Errorf(ctx, "unable to reset the speed to 1: %w", err)
+					logger.Errorf(ctx, "unable to reset the speed to 1: %v", err)
 					return
 				}
 				curSpeed = 1
@@ -388,10 +388,22 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 					(lag.Seconds()-p.Config.JitterBufDuration.Seconds())/
 					(p.Config.MaxCatchupAtLag.Seconds()-p.Config.JitterBufDuration.Seconds())
 
+			if speed > p.Config.CatchupMaxSpeedFactor {
+				logger.Warnf(
+					ctx,
+					"internal error: speed is calculated higher than the maximum: %v > %v: (%v-1)*(%v-%v)/(%v-%v)",
+					speed, p.Config.CatchupMaxSpeedFactor,
+					p.Config.CatchupMaxSpeedFactor,
+					lag.Seconds(), p.Config.JitterBufDuration.Seconds(),
+					p.Config.MaxCatchupAtLag.Seconds(), p.Config.JitterBufDuration.Seconds(),
+				)
+				speed = p.Config.CatchupMaxSpeedFactor
+			}
+
 			logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: setting the speed to %v", p.StreamID, speed)
 			err = player.SetSpeed(ctx, speed)
 			if err != nil {
-				logger.Errorf(ctx, "unable to set the speed to %v: %w", speed, err)
+				logger.Errorf(ctx, "unable to set the speed to %v: %v", speed, err)
 				return
 			}
 			curSpeed = speed
