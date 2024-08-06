@@ -171,13 +171,13 @@ func (p *StreamPlayer) startU(ctx context.Context) error {
 		return fmt.Errorf("unable to run a video player '%s': %w", playerType, err)
 	}
 	p.Player = player
-	logger.Tracef(ctx, "initialized player #%+v", player)
+	logger.Debugf(ctx, "initialized player #%+v", player)
 
 	if err := p.openStream(ctx); err != nil {
 		errmon.ObserveErrorCtx(ctx, p.Close())
 		return fmt.Errorf("unable to open the stream in the player: %w", err)
 	}
-	logger.Tracef(ctx, "the player #%+v opened the stream", player)
+	logger.Debugf(ctx, "the player #%+v opened the stream", player)
 
 	observability.Go(ctx, func() { p.controllerLoop(ctx) })
 	return nil
@@ -196,8 +196,8 @@ func (p *StreamPlayer) stopU(ctx context.Context) error {
 }
 
 func (p *StreamPlayer) restartU(ctx context.Context) error {
-	logger.Debugf(ctx, "StreamPlayers.restart(ctx): '%s'", p.StreamID)
-	defer logger.Debugf(ctx, "/StreamPlayers.restart(ctx): '%s'", p.StreamID)
+	logger.Debugf(ctx, "StreamPlayers.restartU(ctx): '%s'", p.StreamID)
+	defer logger.Debugf(ctx, "/StreamPlayers.restartU(ctx): '%s'", p.StreamID)
 
 	if err := p.stopU(ctx); err != nil {
 		return fmt.Errorf("unable to stop the stream player: %w", err)
@@ -242,6 +242,8 @@ func (p *StreamPlayer) openStream(ctx context.Context) error {
 	u, err := p.getURL(ctx)
 	logger.Debugf(ctx, "opening '%s'", u.String())
 	p.withPlayer(ctx, func(ctx context.Context, player types.Player) {
+		ctx, cancelFn := context.WithTimeout(ctx, time.Second)
+		defer cancelFn()
 		err = player.OpenURL(ctx, u.String())
 	})
 	logger.Debugf(ctx, "opened '%s': %v", u.String(), err)
@@ -308,21 +310,48 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 				err = p.openStream(ctx)
 				errmon.ObserveErrorCtx(ctx, err)
 			} else {
-				t := time.NewTimer(time.Second)
+				t := time.NewTicker(1 * time.Second)
+				defer t.Stop()
 				for {
 					select {
 					case <-ctx.Done():
 						return false
 					case <-t.C:
 					}
-					logger.Debugf(ctx, "opening the stream")
+					logger.Debugf(ctx, "opening the external stream")
 					err := p.openStream(ctx)
+					logger.Debugf(ctx, "opened the external stream: %v", err)
 					if err != nil {
 						logger.Debugf(ctx, "unable to open the stream: %v", err)
 						continue
 					}
-					break
+					deadline := time.Now().Add(30 * time.Second)
+					for {
+						select {
+						case <-ctx.Done():
+							return false
+						case <-t.C:
+						}
+						logger.Debugf(ctx, "checking if we get get the position")
+						p.withPlayer(ctx, func(ctx context.Context, player types.Player) {
+							var pos time.Duration
+							pos, err = player.GetPosition(ctx)
+							logger.Debugf(ctx, "result of getting the position: %v %v", pos, err)
+						})
+						if err == nil {
+							break
+						}
+						now := time.Now()
+						logger.Debugf(ctx, "checking if deadline reached: %v %v", now, deadline)
+						if now.After(deadline) {
+							break
+						}
+					}
+					if err == nil {
+						break
+					}
 				}
+				logger.Debugf(ctx, "we opened the external stream and the player started to play it")
 			}
 
 			startedWaitingForBuffering := time.Now()
@@ -398,6 +427,7 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 				prevPos = pos
 			} else {
 				if now.Sub(posUpdatedAt) > p.Config.ReadTimeout {
+					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: now == %v, posUpdatedAt == %v, len == %v; pos == %v; readTimeout == %v, restarting", p.StreamID, now, posUpdatedAt, l, pos, p.Config.ReadTimeout)
 					err := p.restartU(ctx)
 					errmon.ObserveErrorCtx(ctx, err)
 					if err != nil {
@@ -414,7 +444,7 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 				if curSpeed == 1 {
 					return
 				}
-				logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: resetting the speed to 1", p.StreamID)
+				logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: resetting the speed to 1", p.StreamID)
 				err := player.SetSpeed(ctx, 1)
 				if err != nil {
 					logger.Errorf(ctx, "unable to reset the speed to 1: %v", err)
@@ -441,13 +471,15 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 				speed = p.Config.CatchupMaxSpeedFactor
 			}
 
-			logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: setting the speed to %v", p.StreamID, speed)
-			err = player.SetSpeed(ctx, speed)
-			if err != nil {
-				logger.Errorf(ctx, "unable to set the speed to %v: %v", speed, err)
-				return
+			if speed != curSpeed {
+				logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: setting the speed to %v", p.StreamID, speed)
+				err = player.SetSpeed(ctx, speed)
+				if err != nil {
+					logger.Errorf(ctx, "unable to set the speed to %v: %v", speed, err)
+					return
+				}
+				curSpeed = speed
 			}
-			curSpeed = speed
 		})
 	}
 }

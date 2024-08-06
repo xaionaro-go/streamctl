@@ -152,6 +152,7 @@ func (p *MPV) execMPV(ctx context.Context) (_ret error) {
 			err := p.Cmd.Wait()
 			logger.Debugf(ctx, "player was closed: %v", err)
 			link := p.OpenLinkOnRerun
+			logger.Debugf(ctx, "going to open link '%s'", link)
 			err = p.Close(ctx)
 			logger.Debugf(ctx, "cleanup result: %v", err)
 			select {
@@ -182,6 +183,7 @@ func (p *MPV) OpenURL(
 	ctx context.Context,
 	link string,
 ) error {
+	logger.Debugf(ctx, "OpenURL(ctx, '%s')", link)
 	p.OpenLinkOnRerun = link
 	_, err := p.MPVConn.Call("loadfile", link, "replace")
 	return err
