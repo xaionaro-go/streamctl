@@ -1323,6 +1323,15 @@ func (d *StreamD) ListStreamPlayers(
 	ctx context.Context,
 ) ([]api.StreamPlayer, error) {
 	var result []api.StreamPlayer
+	if d.StreamServer == nil {
+		return nil, fmt.Errorf("d.StreamServer == nil")
+	}
+	if d.StreamServer.Config == nil {
+		return nil, fmt.Errorf("d.StreamServer.Config == nil")
+	}
+	if d.StreamServer.Config.Streams == nil {
+		return nil, fmt.Errorf("d.StreamServer.Config.Streams == nil")
+	}
 	for streamID, streamCfg := range d.StreamServer.Config.Streams {
 		playerCfg := streamCfg.Player
 		if playerCfg == nil {

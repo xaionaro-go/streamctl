@@ -16,6 +16,7 @@ type Config struct {
 	StartTimeout          time.Duration
 	ReadTimeout           time.Duration
 	NotifierStart         []FuncNotifyStart
+	OverrideURL           string
 }
 
 func (cfg Config) Options() Options {
@@ -37,6 +38,9 @@ func (cfg Config) Options() Options {
 	}
 	if cfg.NotifierStart != nil {
 		opts = append(opts, OptionNotifierStart(cfg.NotifierStart))
+	}
+	if cfg.OverrideURL != "" {
+		opts = append(opts, OptionOverrideURL(cfg.OverrideURL))
 	}
 	return opts
 }
@@ -103,4 +107,10 @@ type OptionNotifierStart []FuncNotifyStart
 
 func (s OptionNotifierStart) Apply(cfg *Config) {
 	cfg.NotifierStart = ([]FuncNotifyStart)(s)
+}
+
+type OptionOverrideURL string
+
+func (s OptionOverrideURL) Apply(cfg *Config) {
+	cfg.OverrideURL = string(s)
 }

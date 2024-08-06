@@ -397,6 +397,7 @@ message StreamPlaybackConfig {
 	double MaxCatchupAtLagSecs   = 3;
 	double StartTimeoutSecs      = 4;
 	double ReadTimeoutSecs       = 5;
+    string overriddenURL         = 6;
 }
 message StreamPlayerConfig {
     string streamID = 1;

@@ -208,13 +208,26 @@ func (p *StreamPlayer) restartU(ctx context.Context) error {
 	return nil
 }
 
-func (p *StreamPlayer) openStream(ctx context.Context) error {
+func (p *StreamPlayer) getURL(ctx context.Context) (*url.URL, error) {
+	logger.Debugf(ctx, "override URL is '%s'", p.Config.OverrideURL)
+	if p.Config.OverrideURL != "" {
+		return p.getOverriddenURL(ctx)
+	} else {
+		return p.getInternalURL(ctx)
+	}
+}
+
+func (p *StreamPlayer) getOverriddenURL(context.Context) (*url.URL, error) {
+	return url.Parse(p.Config.OverrideURL)
+}
+
+func (p *StreamPlayer) getInternalURL(ctx context.Context) (*url.URL, error) {
 	portSrvs, err := p.Parent.StreamServer.GetPortServers(ctx)
 	if err != nil {
-		return fmt.Errorf("unable to get the list of stream server ports: %w", err)
+		return nil, fmt.Errorf("unable to get the list of stream server ports: %w", err)
 	}
 	if len(portSrvs) == 0 {
-		return fmt.Errorf("there are no open server ports")
+		return nil, fmt.Errorf("there are no open server ports")
 	}
 	portSrv := portSrvs[0]
 
@@ -222,11 +235,16 @@ func (p *StreamPlayer) openStream(ctx context.Context) error {
 	u.Scheme = portSrv.Type.String()
 	u.Host = portSrv.Addr
 	u.Path = string(p.StreamID)
+	return &u, nil
+}
 
+func (p *StreamPlayer) openStream(ctx context.Context) error {
+	u, err := p.getURL(ctx)
 	logger.Debugf(ctx, "opening '%s'", u.String())
 	p.withPlayer(ctx, func(ctx context.Context, player types.Player) {
 		err = player.OpenURL(ctx, u.String())
 	})
+	logger.Debugf(ctx, "opened '%s': %v", u.String(), err)
 	if err != nil {
 		return fmt.Errorf("unable to open '%s' in the player: %w", u.String(), err)
 	}
@@ -270,25 +288,42 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 		ch = _ch
 
 		for func() bool {
-			waitPublisherCtx, waitPublisherCancel := context.WithCancel(ctx)
-			defer waitPublisherCancel()
+			if p.Config.OverrideURL == "" {
+				waitPublisherCtx, waitPublisherCancel := context.WithCancel(ctx)
+				defer waitPublisherCancel()
 
-			var err error
-			ch, err = p.Parent.StreamServer.WaitPublisher(waitPublisherCtx, p.StreamID)
-			logger.Debugf(ctx, "got a waiter from WaitPublisher for '%s'; %v", p.StreamID, err)
-			errmon.ObserveErrorCtx(ctx, err)
+				var err error
+				ch, err = p.Parent.StreamServer.WaitPublisher(waitPublisherCtx, p.StreamID)
+				logger.Debugf(ctx, "got a waiter from WaitPublisher for '%s'; %v", p.StreamID, err)
+				errmon.ObserveErrorCtx(ctx, err)
 
-			logger.Debugf(ctx, "waiting for stream '%s'", p.StreamID)
-			select {
-			case <-ctx.Done():
-				errmon.ObserveErrorCtx(ctx, p.Close())
-				return false
-			case <-ch:
+				logger.Debugf(ctx, "waiting for stream '%s'", p.StreamID)
+				select {
+				case <-ctx.Done():
+					errmon.ObserveErrorCtx(ctx, p.Close())
+					return false
+				case <-ch:
+				}
+				logger.Debugf(ctx, "opening the stream")
+				err = p.openStream(ctx)
+				errmon.ObserveErrorCtx(ctx, err)
+			} else {
+				t := time.NewTimer(time.Second)
+				for {
+					select {
+					case <-ctx.Done():
+						return false
+					case <-t.C:
+					}
+					logger.Debugf(ctx, "opening the stream")
+					err := p.openStream(ctx)
+					if err != nil {
+						logger.Debugf(ctx, "unable to open the stream: %v", err)
+						continue
+					}
+					break
+				}
 			}
-
-			logger.Tracef(ctx, "player has ended, reopening the stream")
-			err = p.openStream(ctx)
-			errmon.ObserveErrorCtx(ctx, err)
 
 			startedWaitingForBuffering := time.Now()
 			for time.Since(startedWaitingForBuffering) <= p.Config.StartTimeout {
@@ -313,6 +348,12 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 			return true
 		}() {
 		}
+	}
+
+	select {
+	case <-ctx.Done():
+		return
+	default:
 	}
 
 	observability.Go(ctx, func() {

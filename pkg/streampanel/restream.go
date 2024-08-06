@@ -557,10 +557,17 @@ func (p *Panel) openAddOrEditPlayerWindow(
 		inStreamsSelect.Disable()
 	}
 
+	overrideURL := widget.NewEntry()
+	overrideURL.SetText(cfg.OverrideURL)
+	overrideURL.SetPlaceHolder("rtmp://127.0.0.1/some/stream")
+	overrideURL.OnChanged = func(s string) {
+		cfg.OverrideURL = s
+	}
+
 	jitterBufDuration := xfyne.NewNumericalEntry()
 	jitterBufDuration.SetPlaceHolder("amount of seconds")
 	jitterBufDuration.SetText(fmt.Sprintf("%v", cfg.JitterBufDuration.Seconds()))
-	jitterBufDuration.OnSubmitted = func(s string) {
+	jitterBufDuration.OnChanged = func(s string) {
 		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
 			p.DisplayError(fmt.Errorf("unable to parse '%s' as float: %w", s, err))
@@ -573,7 +580,7 @@ func (p *Panel) openAddOrEditPlayerWindow(
 	maxCatchupAtLag := xfyne.NewNumericalEntry()
 	maxCatchupAtLag.SetPlaceHolder("amount of seconds")
 	maxCatchupAtLag.SetText(fmt.Sprintf("%v", cfg.MaxCatchupAtLag.Seconds()))
-	maxCatchupAtLag.OnSubmitted = func(s string) {
+	maxCatchupAtLag.OnChanged = func(s string) {
 		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
 			p.DisplayError(fmt.Errorf("unable to parse '%s' as float: %w", s, err))
@@ -586,7 +593,7 @@ func (p *Panel) openAddOrEditPlayerWindow(
 	startTimeout := xfyne.NewNumericalEntry()
 	startTimeout.SetPlaceHolder("amount of seconds")
 	startTimeout.SetText(fmt.Sprintf("%v", cfg.StartTimeout.Seconds()))
-	startTimeout.OnSubmitted = func(s string) {
+	startTimeout.OnChanged = func(s string) {
 		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
 			p.DisplayError(fmt.Errorf("unable to parse '%s' as float: %w", s, err))
@@ -599,7 +606,7 @@ func (p *Panel) openAddOrEditPlayerWindow(
 	readTimeout := xfyne.NewNumericalEntry()
 	readTimeout.SetPlaceHolder("amount of seconds")
 	readTimeout.SetText(fmt.Sprintf("%v", cfg.ReadTimeout.Seconds()))
-	readTimeout.OnSubmitted = func(s string) {
+	readTimeout.OnChanged = func(s string) {
 		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
 			p.DisplayError(fmt.Errorf("unable to parse '%s' as float: %w", s, err))
@@ -612,7 +619,7 @@ func (p *Panel) openAddOrEditPlayerWindow(
 	catchupMaxSpeedFactor := xfyne.NewNumericalEntry()
 	catchupMaxSpeedFactor.SetPlaceHolder("2.0")
 	catchupMaxSpeedFactor.SetText(fmt.Sprintf("%v", cfg.CatchupMaxSpeedFactor))
-	catchupMaxSpeedFactor.OnSubmitted = func(s string) {
+	catchupMaxSpeedFactor.OnChanged = func(s string) {
 		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
 			p.DisplayError(fmt.Errorf("unable to parse '%s' as float: %w", s, err))
@@ -651,6 +658,8 @@ func (p *Panel) openAddOrEditPlayerWindow(
 			playerSelect,
 			widget.NewLabel("Stream:"),
 			inStreamsSelect,
+			widget.NewLabel("Override URL:"),
+			overrideURL,
 			widget.NewSeparator(),
 			widget.NewSeparator(),
 			widget.NewLabel("Start timeout (seconds):"),

@@ -41,6 +41,7 @@ func StreamPlaybackConfigGo2GRPC(
 		MaxCatchupAtLagSecs:   cfg.MaxCatchupAtLag.Seconds(),
 		StartTimeoutSecs:      cfg.StartTimeout.Seconds(),
 		ReadTimeoutSecs:       cfg.ReadTimeout.Seconds(),
+		OverriddenURL:         cfg.OverrideURL,
 	}
 }
 
@@ -53,5 +54,6 @@ func StreamPlaybackConfigGRPC2Go(
 		MaxCatchupAtLag:       secsGRPC2Go(cfg.MaxCatchupAtLagSecs),
 		StartTimeout:          secsGRPC2Go(cfg.StartTimeoutSecs),
 		ReadTimeout:           secsGRPC2Go(cfg.ReadTimeoutSecs),
+		OverrideURL:           cfg.GetOverriddenURL(),
 	}
 }
