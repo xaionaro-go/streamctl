@@ -36,7 +36,9 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 type Client struct {
@@ -176,26 +178,45 @@ func callWrapper[REQ any, REPLY any](
 	req *REQ,
 	opts ...grpc.CallOption,
 ) (REPLY, error) {
-	wrapper := c.Config.CallWrapper
-	if wrapper == nil {
-		return fn(ctx, req, opts...)
-	}
 
 	var reply REPLY
-	err := wrapper(ctx, req, func(ctx context.Context, opts ...grpc.CallOption) error {
+	callFn := func(ctx context.Context, opts ...grpc.CallOption) error {
 		var err error
+		delay := c.Config.Reconnect.InitialInterval
 		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
 			reply, err = fn(ctx, req, opts...)
 			if err == nil {
 				return nil
 			}
 			err = c.processError(ctx, err)
-			if err == nil {
-				continue
+			if err != nil {
+				return err
 			}
-			return err
+			logger.Debugf(ctx, "retrying; sleeping %v for the retry", delay)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+			}
+			delay = time.Duration(float64(delay) * c.Config.Reconnect.IntervalMultiplier)
+			if delay > c.Config.Reconnect.MaximalInterval {
+				delay = c.Config.Reconnect.MaximalInterval
+			}
 		}
-	}, opts...)
+	}
+
+	wrapper := c.Config.CallWrapper
+	if wrapper == nil {
+		err := callFn(ctx, opts...)
+		return reply, err
+	}
+
+	err := wrapper(ctx, req, callFn, opts...)
 	return reply, err
 }
 
@@ -308,6 +329,15 @@ func (c *Client) processError(
 	ctx context.Context,
 	err error,
 ) error {
+	logger.Debugf(ctx, "processError(ctx, '%v'): %T", err, err)
+	if s, ok := status.FromError(err); ok {
+		logger.Debugf(ctx, "processError(ctx, '%v'): code == %#+v; msg == %#+v", err, s.Code(), s.Message())
+		switch s.Code() {
+		case codes.Unavailable:
+			logger.Debugf(ctx, "suppressed the error (forcing a retry)")
+			return nil
+		}
+	}
 	return err
 }
 
