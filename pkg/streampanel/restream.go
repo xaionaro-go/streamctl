@@ -185,14 +185,12 @@ func (p *Panel) openAddStreamServerWindow(ctx context.Context) {
 
 	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
 		listenHost := listenHostEntry.Text
-		p.waitForResponse(func() {
-			err := p.addStreamServer(ctx, currentProtocol, listenHost, listenPort)
-			if err != nil {
-				p.DisplayError(err)
-				return
-			}
-			w.Close()
-		})
+		err := p.addStreamServer(ctx, currentProtocol, listenHost, listenPort)
+		if err != nil {
+			p.DisplayError(err)
+			return
+		}
+		w.Close()
 	})
 
 	w.SetContent(container.NewBorder(
@@ -247,13 +245,11 @@ func (p *Panel) displayStreamServers(
 					}
 					logger.Debugf(ctx, "remove stream server")
 					defer logger.Debugf(ctx, "/remove stream server")
-					p.waitForResponse(func() {
-						err := p.StreamD.StopStreamServer(ctx, srv.ListenAddr)
-						if err != nil {
-							p.DisplayError(err)
-							return
-						}
-					})
+					err := p.StreamD.StopStreamServer(ctx, srv.ListenAddr)
+					if err != nil {
+						p.DisplayError(err)
+						return
+					}
 				},
 				p.mainWindow,
 			)
@@ -336,14 +332,12 @@ func (p *Panel) openAddStreamWindow(ctx context.Context) {
 	streamIDEntry.SetPlaceHolder("stream name")
 
 	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
-		p.waitForResponse(func() {
-			err := p.addIncomingStream(ctx, api.StreamID(streamIDEntry.Text))
-			if err != nil {
-				p.DisplayError(err)
-				return
-			}
-			w.Close()
-		})
+		err := p.addIncomingStream(ctx, api.StreamID(streamIDEntry.Text))
+		if err != nil {
+			p.DisplayError(err)
+			return
+		}
+		w.Close()
 	})
 
 	w.SetContent(container.NewBorder(
@@ -391,13 +385,11 @@ func (p *Panel) displayIncomingServers(
 					}
 					logger.Debugf(ctx, "remove incoming stream")
 					defer logger.Debugf(ctx, "/remove incoming stream")
-					p.waitForResponse(func() {
-						err := p.StreamD.RemoveIncomingStream(ctx, stream.StreamID)
-						if err != nil {
-							p.DisplayError(err)
-							return
-						}
-					})
+					err := p.StreamD.RemoveIncomingStream(ctx, stream.StreamID)
+					if err != nil {
+						p.DisplayError(err)
+						return
+					}
 				},
 				p.mainWindow,
 			)
@@ -424,14 +416,12 @@ func (p *Panel) openAddDestinationWindow(ctx context.Context) {
 	urlEntry.SetPlaceHolder("URL")
 
 	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
-		p.waitForResponse(func() {
-			err := p.addStreamDestination(ctx, api.DestinationID(destinationIDEntry.Text), urlEntry.Text)
-			if err != nil {
-				p.DisplayError(err)
-				return
-			}
-			w.Close()
-		})
+		err := p.addStreamDestination(ctx, api.DestinationID(destinationIDEntry.Text), urlEntry.Text)
+		if err != nil {
+			p.DisplayError(err)
+			return
+		}
+		w.Close()
 	})
 
 	w.SetContent(container.NewBorder(
@@ -477,13 +467,11 @@ func (p *Panel) displayStreamDestinations(
 					}
 					logger.Debugf(ctx, "remove destination")
 					defer logger.Debugf(ctx, "/remove destination")
-					p.waitForResponse(func() {
-						err := p.StreamD.RemoveStreamDestination(ctx, dst.ID)
-						if err != nil {
-							p.DisplayError(err)
-							return
-						}
-					})
+					err := p.StreamD.RemoveStreamDestination(ctx, dst.ID)
+					if err != nil {
+						p.DisplayError(err)
+						return
+					}
 				},
 				p.mainWindow,
 			)
@@ -639,20 +627,18 @@ func (p *Panel) openAddOrEditPlayerWindow(
 			p.DisplayError(fmt.Errorf("stream is not selected"))
 			return
 		}
-		p.waitForResponse(func() {
-			err := addOrEditStreamPlayer(
-				ctx,
-				api.StreamID(inStreamsSelect.Selected),
-				player.Backend(playerSelect.Selected),
-				!isEnabled,
-				cfg,
-			)
-			if err != nil {
-				p.DisplayError(err)
-				return
-			}
-			w.Close()
-		})
+		err := addOrEditStreamPlayer(
+			ctx,
+			api.StreamID(inStreamsSelect.Selected),
+			player.Backend(playerSelect.Selected),
+			!isEnabled,
+			cfg,
+		)
+		if err != nil {
+			p.DisplayError(err)
+			return
+		}
+		w.Close()
 	})
 
 	w.SetContent(container.NewBorder(
@@ -709,13 +695,11 @@ func (p *Panel) displayStreamPlayers(
 					}
 					logger.Debugf(ctx, "remove player '%s' (%s)", player.StreamID, player.PlayerType)
 					defer logger.Debugf(ctx, "/remove player '%s' (%s)", player.StreamID, player.PlayerType)
-					p.waitForResponse(func() {
-						err := p.StreamD.RemoveStreamPlayer(ctx, player.StreamID)
-						if err != nil {
-							p.DisplayError(err)
-							return
-						}
-					})
+					err := p.StreamD.RemoveStreamPlayer(ctx, player.StreamID)
+					if err != nil {
+						p.DisplayError(err)
+						return
+					}
 				},
 				p.mainWindow,
 			)
@@ -742,19 +726,17 @@ func (p *Panel) displayStreamPlayers(
 					}
 					logger.Debugf(ctx, "stop/start player %s on '%s': disabled:%v->%v", player.PlayerType, player.StreamID, player.Disabled, !player.Disabled)
 					defer logger.Debugf(ctx, "/stop/start player %s on '%s': disabled:%v->%v", player.PlayerType, player.StreamID, player.Disabled, !player.Disabled)
-					p.waitForResponse(func() {
-						err := p.StreamD.UpdateStreamPlayer(
-							ctx,
-							player.StreamID,
-							player.PlayerType,
-							!player.Disabled,
-							player.StreamPlaybackConfig,
-						)
-						if err != nil {
-							p.DisplayError(err)
-							return
-						}
-					})
+					err := p.StreamD.UpdateStreamPlayer(
+						ctx,
+						player.StreamID,
+						player.PlayerType,
+						!player.Disabled,
+						player.StreamPlaybackConfig,
+					)
+					if err != nil {
+						p.DisplayError(err)
+						return
+					}
 				},
 				p.mainWindow,
 			)
@@ -955,22 +937,20 @@ func (p *Panel) openAddOrEditRestreamWindow(
 	restartUntilYouTubeStarts.SetChecked(quirksYoutubeRestart.Enabled)
 
 	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
-		p.waitForResponse(func() {
-			err := addOrEditStreamForward(
-				ctx,
-				streamtypes.StreamID(inStreamsSelect.Selected),
-				dstMapCaption2ID[dstSelect.Selected],
-				enabledCheck.Checked,
-				sstypes.ForwardingQuirks{
-					RestartUntilYoutubeRecognizesStream: quirksYoutubeRestart,
-				},
-			)
-			if err != nil {
-				p.DisplayError(err)
-				return
-			}
-			w.Close()
-		})
+		err := addOrEditStreamForward(
+			ctx,
+			streamtypes.StreamID(inStreamsSelect.Selected),
+			dstMapCaption2ID[dstSelect.Selected],
+			enabledCheck.Checked,
+			sstypes.ForwardingQuirks{
+				RestartUntilYoutubeRecognizesStream: quirksYoutubeRestart,
+			},
+		)
+		if err != nil {
+			p.DisplayError(err)
+			return
+		}
+		w.Close()
 	})
 
 	w.SetContent(container.NewBorder(
@@ -1060,13 +1040,11 @@ func (p *Panel) displayStreamForwards(
 					}
 					logger.Debugf(ctx, "remove restreaming (stream forwarding)")
 					defer logger.Debugf(ctx, "/remove restreaming (stream forwarding)")
-					p.waitForResponse(func() {
-						err := p.StreamD.RemoveStreamForward(ctx, fwd.StreamID, fwd.DestinationID)
-						if err != nil {
-							p.DisplayError(err)
-							return
-						}
-					})
+					err := p.StreamD.RemoveStreamForward(ctx, fwd.StreamID, fwd.DestinationID)
+					if err != nil {
+						p.DisplayError(err)
+						return
+					}
 				},
 				p.mainWindow,
 			)
@@ -1093,19 +1071,17 @@ func (p *Panel) displayStreamForwards(
 					}
 					logger.Debugf(ctx, "pause/unpause restreaming (stream forwarding): enabled:%v->%v", fwd.Enabled, !fwd.Enabled)
 					defer logger.Debugf(ctx, "/pause/unpause restreaming (stream forwarding): enabled:%v->%v", !fwd.Enabled, fwd.Enabled)
-					p.waitForResponse(func() {
-						err := p.StreamD.UpdateStreamForward(
-							ctx,
-							fwd.StreamID,
-							fwd.DestinationID,
-							!fwd.Enabled,
-							fwd.Quirks,
-						)
-						if err != nil {
-							p.DisplayError(err)
-							return
-						}
-					})
+					err := p.StreamD.UpdateStreamForward(
+						ctx,
+						fwd.StreamID,
+						fwd.DestinationID,
+						!fwd.Enabled,
+						fwd.Quirks,
+					)
+					if err != nil {
+						p.DisplayError(err)
+						return
+					}
 				},
 				p.mainWindow,
 			)

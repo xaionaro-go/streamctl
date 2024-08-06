@@ -35,6 +35,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
@@ -50,60 +51,89 @@ type Client struct {
 var _ api.StreamD = (*Client)(nil)
 
 func New(
+	ctx context.Context,
 	target string,
 	opts ...Option,
 ) (*Client, error) {
 	c := &Client{
 		Target: target,
-		Config: Options(opts).Config(),
+		Config: Options(opts).Config(ctx),
 	}
-	if err := c.init(); err != nil {
+	if err := c.init(ctx); err != nil {
 		return nil, err
 	}
 	return c, nil
 }
 
-func (c *Client) init() error {
+func (c *Client) init(ctx context.Context) error {
 	var result *multierror.Error
 	if c.Config.UsePersistentConnection {
-		result = multierror.Append(result, c.initPersistentConnection())
+		result = multierror.Append(result, c.initPersistentConnection(ctx))
 	}
 	return result.ErrorOrNil()
 }
 
-func (c *Client) initPersistentConnection() error {
-	return c.connect(context.TODO())
+func (c *Client) initPersistentConnection(ctx context.Context) error {
+	conn, err := c.connect(ctx)
+	if err != nil {
+		return err
+	}
+	c.PersistentConnection = conn
+	c.PersistentClient = streamd_grpc.NewStreamDClient(conn)
+	return nil
 }
 
-func (c *Client) connect(ctx context.Context) error {
+func (c *Client) connect(ctx context.Context) (*grpc.ClientConn, error) {
+	opts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithConnectParams(grpc.ConnectParams{
+			Backoff: backoff.Config{
+				BaseDelay:  c.Config.Reconnect.InitialInterval,
+				Multiplier: c.Config.Reconnect.IntervalMultiplier,
+				Jitter:     0.2,
+				MaxDelay:   c.Config.Reconnect.MaximalInterval,
+			},
+			MinConnectTimeout: c.Config.Reconnect.InitialInterval,
+		}),
+	}
 	wrapper := c.Config.ConnectWrapper
 	if wrapper == nil {
-		return c.doConnect(ctx)
+		return c.doConnect(ctx, opts...)
 	}
 
-	return wrapper(ctx, func(ctx context.Context) error {
-		return c.doConnect(ctx)
-	})
+	return wrapper(
+		ctx,
+		func(ctx context.Context, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+			return c.doConnect(ctx, opts...)
+		},
+		opts...,
+	)
 }
 
-func (c *Client) doConnect(ctx context.Context) error {
+func (c *Client) doConnect(ctx context.Context, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+	logger.Debugf(ctx, "doConnect(ctx, %#+v): Config: %#+v", opts, c.Config)
 	delay := c.Config.Reconnect.InitialInterval
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil, ctx.Err()
 		default:
 		}
-		logger.Debugf(ctx, "trying to (re-)connect")
-		client, conn, err := c.grpcNewClient()
+		logger.Debugf(ctx, "trying to (re-)connect to %s", c.Target)
+
+		dialCtx, cancelFn := context.WithTimeout(ctx, time.Second)
+		conn, err := grpc.DialContext(dialCtx, c.Target, opts...)
+		cancelFn()
 		if err == nil {
-			logger.Debugf(ctx, "successfully (re-)connected")
-			c.PersistentClient = client
-			c.PersistentConnection = conn
-			return nil
+			logger.Debugf(ctx, "successfully (re-)connected to %s", c.Target)
+			return conn, nil
 		}
-		logger.Debugf(ctx, "(re-)connection failed: %v; sleeping %v before the next try", err, delay)
-		time.Sleep(delay)
+		logger.Debugf(ctx, "(re-)connection failed to %s: %v; sleeping %v before the next try", c.Target, err, delay)
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(delay):
+		}
 		delay = time.Duration(float64(delay) * c.Config.Reconnect.IntervalMultiplier)
 		if delay > c.Config.Reconnect.MaximalInterval {
 			delay = c.Config.Reconnect.MaximalInterval
@@ -111,19 +141,16 @@ func (c *Client) doConnect(ctx context.Context) error {
 	}
 }
 
-func (c *Client) grpcClient() (streamd_grpc.StreamDClient, io.Closer, error) {
+func (c *Client) grpcClient(ctx context.Context) (streamd_grpc.StreamDClient, io.Closer, error) {
 	if c.Config.UsePersistentConnection {
-		return c.grpcPersistentClient()
+		return c.grpcPersistentClient(ctx)
 	} else {
-		return c.grpcNewClient()
+		return c.grpcNewClient(ctx)
 	}
 }
 
-func (c *Client) grpcNewClient() (streamd_grpc.StreamDClient, *grpc.ClientConn, error) {
-	conn, err := grpc.NewClient(
-		c.Target,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
+func (c *Client) grpcNewClient(ctx context.Context) (streamd_grpc.StreamDClient, *grpc.ClientConn, error) {
+	conn, err := c.connect(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to initialize a gRPC client: %w", err)
 	}
@@ -132,7 +159,7 @@ func (c *Client) grpcNewClient() (streamd_grpc.StreamDClient, *grpc.ClientConn, 
 	return client, conn, nil
 }
 
-func (c *Client) grpcPersistentClient() (streamd_grpc.StreamDClient, dummyCloser, error) {
+func (c *Client) grpcPersistentClient(context.Context) (streamd_grpc.StreamDClient, dummyCloser, error) {
 	c.PersistentConnectionLocker.Lock()
 	defer c.PersistentConnectionLocker.Unlock()
 	return c.PersistentClient, dummyCloser{}, nil
@@ -145,41 +172,31 @@ func (c *Client) Run(ctx context.Context) error {
 func callWrapper[REQ any, REPLY any](
 	ctx context.Context,
 	c *Client,
-	fn func(context.Context, *REQ, ...grpc.CallOption) (*REPLY, error),
+	fn func(context.Context, *REQ, ...grpc.CallOption) (REPLY, error),
 	req *REQ,
 	opts ...grpc.CallOption,
-) (*REPLY, error) {
+) (REPLY, error) {
 	wrapper := c.Config.CallWrapper
 	if wrapper == nil {
 		return fn(ctx, req, opts...)
 	}
 
-	var reply *REPLY
+	var reply REPLY
 	err := wrapper(ctx, req, func(ctx context.Context, opts ...grpc.CallOption) error {
 		var err error
-		reply, err = fn(ctx, req, opts...)
-		return err
+		for {
+			reply, err = fn(ctx, req, opts...)
+			if err == nil {
+				return nil
+			}
+			err = c.processError(ctx, err)
+			if err == nil {
+				continue
+			}
+			return err
+		}
 	}, opts...)
 	return reply, err
-}
-
-func (c *Client) Ping(
-	ctx context.Context,
-	beforeSend func(context.Context, *streamd_grpc.PingRequest),
-) error {
-	client, conn, err := c.grpcClient()
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	req := &streamd_grpc.PingRequest{}
-	beforeSend(ctx, req)
-	_, err = callWrapper(ctx, c, client.Ping, req)
-	if err != nil {
-		return fmt.Errorf("ping error: %w", err)
-	}
-	return nil
 }
 
 func withClient[REPLY any](
@@ -191,7 +208,7 @@ func withClient[REPLY any](
 	caller := runtime.FuncForPC(pc)
 	ctx = belt.WithField(ctx, "caller_func", caller.Name())
 
-	client, conn, err := c.grpcClient()
+	client, conn, err := c.grpcClient(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -200,6 +217,114 @@ func withClient[REPLY any](
 		return nil, fmt.Errorf("internal error: client is nil")
 	}
 	return fn(ctx, client, conn)
+}
+
+type receiver[T any] interface {
+	grpc.ClientStream
+
+	Recv() (*T, error)
+}
+
+func unwrapChan[E any, R any, S receiver[R]](
+	ctx context.Context,
+	c *Client,
+	fn func(ctx context.Context, client streamd_grpc.StreamDClient) (S, error),
+	parse func(ctx context.Context, event *R) E,
+) (<-chan E, error) {
+
+	pc, _, _, _ := runtime.Caller(1)
+	caller := runtime.FuncForPC(pc)
+	ctx = belt.WithField(ctx, "caller_func", caller.Name())
+
+	ctx, cancelFn := context.WithCancel(ctx)
+	getSub := func() (S, io.Closer, error) {
+		client, closer, err := c.grpcClient(ctx)
+		if err != nil {
+			var emptyS S
+			return emptyS, nil, err
+		}
+		sub, err := fn(ctx, client)
+		if err != nil {
+			var emptyS S
+			return emptyS, nil, fmt.Errorf("unable to subscribe: %w", err)
+		}
+		return sub, closer, nil
+	}
+
+	sub, closer, err := getSub()
+	if err != nil {
+		cancelFn()
+		return nil, err
+	}
+
+	r := make(chan E)
+	observability.Go(ctx, func() {
+		defer closer.Close()
+		defer cancelFn()
+		for {
+			event, err := sub.Recv()
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			if err != nil {
+				switch {
+				case errors.Is(err, io.EOF):
+					logger.Debugf(ctx, "the receiver is closed: %v", err)
+					return
+				case strings.Contains(err.Error(), grpc.ErrClientConnClosing.Error()):
+					logger.Debugf(ctx, "apparently we are closing the client: %v", err)
+					return
+				case strings.Contains(err.Error(), context.Canceled.Error()):
+					logger.Debugf(ctx, "subscription was cancelled: %v", err)
+					return
+				default:
+					for {
+						err = c.processError(ctx, err)
+						if err != nil {
+							logger.Errorf(ctx, "unable to read data: %v", err)
+							return
+						}
+						closer.Close()
+						sub, closer, err = getSub()
+						if err != nil {
+							logger.Errorf(ctx, "unable to resubscribe: %v", err)
+							continue
+						}
+						break
+					}
+					continue
+				}
+			}
+
+			r <- parse(ctx, event)
+		}
+	})
+	return r, nil
+}
+
+func (c *Client) processError(
+	ctx context.Context,
+	err error,
+) error {
+	return err
+}
+
+func (c *Client) Ping(
+	ctx context.Context,
+	beforeSend func(context.Context, *streamd_grpc.PingRequest),
+) error {
+	_, err := withClient(ctx, c, func(
+		ctx context.Context,
+		client streamd_grpc.StreamDClient,
+		conn io.Closer,
+	) (*streamd_grpc.PingReply, error) {
+		req := &streamd_grpc.PingRequest{}
+		beforeSend(ctx, req)
+		return callWrapper(ctx, c, client.Ping, req)
+	})
+	return err
 }
 
 func (c *Client) FetchConfig(ctx context.Context) error {
@@ -565,8 +690,10 @@ func (c *Client) SubscribeToOAuthURLs(
 			ctx context.Context,
 			client streamd_grpc.StreamDClient,
 		) (streamd_grpc.StreamD_SubscribeToOAuthRequestsClient, error) {
-			return client.SubscribeToOAuthRequests(
+			return callWrapper(
 				ctx,
+				c,
+				client.SubscribeToOAuthRequests,
 				&streamd_grpc.SubscribeToOAuthRequestsRequest{
 					ListenPort: int32(listenPort),
 				},
@@ -1041,8 +1168,10 @@ func (c *Client) WaitForStreamPublisher(
 			ctx context.Context,
 			client streamd_grpc.StreamDClient,
 		) (streamd_grpc.StreamD_WaitForStreamPublisherClient, error) {
-			return client.WaitForStreamPublisher(
+			return callWrapper(
 				ctx,
+				c,
+				client.WaitForStreamPublisher,
 				&streamd_grpc.WaitForStreamPublisherRequest{
 					StreamID: ptr(string(streamID)),
 				},
@@ -1241,8 +1370,10 @@ func (c *Client) StreamPlayerEndChan(
 			ctx context.Context,
 			client streamd_grpc.StreamDClient,
 		) (streamd_grpc.StreamD_StreamPlayerEndChanClient, error) {
-			return client.StreamPlayerEndChan(
+			return callWrapper(
 				ctx,
+				c,
+				client.StreamPlayerEndChan,
 				&streamd_grpc.StreamPlayerEndChanRequest{
 					StreamID: string(streamID),
 					Request:  &player_grpc.EndChanRequest{},
@@ -1392,71 +1523,6 @@ func (c *Client) StreamPlayerClose(
 	return err
 }
 
-type receiver[T any] interface {
-	grpc.ClientStream
-
-	Recv() (*T, error)
-}
-
-func unwrapChan[E any, R any, S receiver[R]](
-	ctx context.Context,
-	c *Client,
-	fn func(ctx context.Context, client streamd_grpc.StreamDClient) (S, error),
-	parse func(ctx context.Context, event *R) E,
-) (<-chan E, error) {
-	client, conn, err := c.grpcClient()
-	if err != nil {
-		return nil, err
-	}
-	if client == nil {
-		return nil, fmt.Errorf("internal error: client is nil")
-	}
-
-	pc, _, _, _ := runtime.Caller(1)
-	caller := runtime.FuncForPC(pc)
-	ctx = belt.WithField(ctx, "caller_func", caller.Name())
-
-	ctx, cancelFn := context.WithCancel(ctx)
-	sub, err := fn(ctx, client)
-	if err != nil {
-		cancelFn()
-		return nil, fmt.Errorf("unable to subscribe: %w", err)
-	}
-
-	r := make(chan E)
-	observability.Go(ctx, func() {
-		defer conn.Close()
-		defer cancelFn()
-		for {
-			event, err := sub.Recv()
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-			if err != nil {
-				switch {
-				case errors.Is(err, io.EOF):
-					logger.Debugf(ctx, "the receiver is closed: %v", err)
-					return
-				case strings.Contains(err.Error(), grpc.ErrClientConnClosing.Error()):
-					logger.Debugf(ctx, "apparently we are closing the client: %v", err)
-					return
-				case strings.Contains(err.Error(), context.Canceled.Error()):
-					logger.Debugf(ctx, "subscription was cancelled: %v", err)
-					return
-				default:
-					logger.Errorf(ctx, "unable to read data: %v", err)
-					return
-				}
-			}
-
-			r <- parse(ctx, event)
-		}
-	})
-	return r, nil
-}
-
 func (c *Client) SubscribeToConfigChanges(
 	ctx context.Context,
 ) (<-chan api.DiffConfig, error) {
@@ -1467,8 +1533,10 @@ func (c *Client) SubscribeToConfigChanges(
 			ctx context.Context,
 			client streamd_grpc.StreamDClient,
 		) (streamd_grpc.StreamD_SubscribeToConfigChangesClient, error) {
-			return client.SubscribeToConfigChanges(
+			return callWrapper(
 				ctx,
+				c,
+				client.SubscribeToConfigChanges,
 				&streamd_grpc.SubscribeToConfigChangesRequest{},
 			)
 		},
@@ -1491,8 +1559,10 @@ func (c *Client) SubscribeToStreamsChanges(
 			ctx context.Context,
 			client streamd_grpc.StreamDClient,
 		) (streamd_grpc.StreamD_SubscribeToStreamsChangesClient, error) {
-			return client.SubscribeToStreamsChanges(
+			return callWrapper(
 				ctx,
+				c,
+				client.SubscribeToStreamsChanges,
 				&streamd_grpc.SubscribeToStreamsChangesRequest{},
 			)
 		},
@@ -1515,8 +1585,10 @@ func (c *Client) SubscribeToStreamServersChanges(
 			ctx context.Context,
 			client streamd_grpc.StreamDClient,
 		) (streamd_grpc.StreamD_SubscribeToStreamServersChangesClient, error) {
-			return client.SubscribeToStreamServersChanges(
+			return callWrapper(
 				ctx,
+				c,
+				client.SubscribeToStreamServersChanges,
 				&streamd_grpc.SubscribeToStreamServersChangesRequest{},
 			)
 		},
@@ -1539,8 +1611,10 @@ func (c *Client) SubscribeToStreamDestinationsChanges(
 			ctx context.Context,
 			client streamd_grpc.StreamDClient,
 		) (streamd_grpc.StreamD_SubscribeToStreamDestinationsChangesClient, error) {
-			return client.SubscribeToStreamDestinationsChanges(
+			return callWrapper(
 				ctx,
+				c,
+				client.SubscribeToStreamDestinationsChanges,
 				&streamd_grpc.SubscribeToStreamDestinationsChangesRequest{},
 			)
 		},
@@ -1563,8 +1637,10 @@ func (c *Client) SubscribeToIncomingStreamsChanges(
 			ctx context.Context,
 			client streamd_grpc.StreamDClient,
 		) (streamd_grpc.StreamD_SubscribeToIncomingStreamsChangesClient, error) {
-			return client.SubscribeToIncomingStreamsChanges(
+			return callWrapper(
 				ctx,
+				c,
+				client.SubscribeToIncomingStreamsChanges,
 				&streamd_grpc.SubscribeToIncomingStreamsChangesRequest{},
 			)
 		},
@@ -1587,8 +1663,10 @@ func (c *Client) SubscribeToStreamForwardsChanges(
 			ctx context.Context,
 			client streamd_grpc.StreamDClient,
 		) (streamd_grpc.StreamD_SubscribeToStreamForwardsChangesClient, error) {
-			return client.SubscribeToStreamForwardsChanges(
+			return callWrapper(
 				ctx,
+				c,
+				client.SubscribeToStreamForwardsChanges,
 				&streamd_grpc.SubscribeToStreamForwardsChangesRequest{},
 			)
 		},
@@ -1611,8 +1689,10 @@ func (c *Client) SubscribeToStreamPlayersChanges(
 			ctx context.Context,
 			client streamd_grpc.StreamDClient,
 		) (streamd_grpc.StreamD_SubscribeToStreamPlayersChangesClient, error) {
-			return client.SubscribeToStreamPlayersChanges(
+			return callWrapper(
 				ctx,
+				c,
+				client.SubscribeToStreamPlayersChanges,
 				&streamd_grpc.SubscribeToStreamPlayersChangesRequest{},
 			)
 		},

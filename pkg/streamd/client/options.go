@@ -22,8 +22,9 @@ type CallWrapperFunc func(
 
 type ConnectWrapperFunc func(
 	ctx context.Context,
-	connectFunc func(ctx context.Context) error,
-) error
+	connectFunc func(ctx context.Context, opts ...grpc.DialOption) (*grpc.ClientConn, error),
+	opts ...grpc.DialOption,
+) (*grpc.ClientConn, error)
 
 type Config struct {
 	UsePersistentConnection bool
@@ -32,16 +33,16 @@ type Config struct {
 	Reconnect               ReconnectConfig
 }
 
-var DefaultConfig = func() Config {
+var DefaultConfig = func(ctx context.Context) Config {
 	return Config{
-		UsePersistentConnection: false,
+		UsePersistentConnection: true,
 		Reconnect: ReconnectConfig{
-			InitialInterval:    10 * time.Millisecond,
+			InitialInterval:    200 * time.Millisecond,
 			MaximalInterval:    5 * time.Second,
 			IntervalMultiplier: 1.1,
 		},
 	}
-}()
+}
 
 type Option interface {
 	Apply(*Config)
@@ -55,8 +56,8 @@ func (s Options) Apply(cfg *Config) {
 	}
 }
 
-func (s Options) Config() Config {
-	cfg := Config{}
+func (s Options) Config(ctx context.Context) Config {
+	cfg := DefaultConfig(ctx)
 	s.Apply(&cfg)
 	return cfg
 }

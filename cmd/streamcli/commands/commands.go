@@ -118,7 +118,7 @@ func streamSetup(cmd *cobra.Command, args []string) {
 
 	remoteAddr, err := cmd.Flags().GetString("remote-addr")
 	assertNoError(ctx, err)
-	streamD, err := client.New(remoteAddr)
+	streamD, err := client.New(ctx, remoteAddr)
 	assertNoError(ctx, err)
 	title, err := cmd.Flags().GetString("title")
 	assertNoError(ctx, err)
@@ -161,7 +161,7 @@ func streamStatus(cmd *cobra.Command, args []string) {
 
 	remoteAddr, err := cmd.Flags().GetString("remote-addr")
 	assertNoError(ctx, err)
-	streamD, err := client.New(remoteAddr)
+	streamD, err := client.New(ctx, remoteAddr)
 	assertNoError(ctx, err)
 
 	for _, platID := range []streamcontrol.PlatformName{
@@ -190,7 +190,7 @@ func variablesGet(cmd *cobra.Command, args []string) {
 
 	remoteAddr, err := cmd.Flags().GetString("remote-addr")
 	assertNoError(ctx, err)
-	streamD, err := client.New(remoteAddr)
+	streamD, err := client.New(ctx, remoteAddr)
 	assertNoError(ctx, err)
 
 	b, err := streamD.GetVariable(ctx, consts.VarKey(variableKey))
@@ -206,7 +206,7 @@ func variablesGetHash(cmd *cobra.Command, args []string) {
 
 	remoteAddr, err := cmd.Flags().GetString("remote-addr")
 	assertNoError(ctx, err)
-	streamD, err := client.New(remoteAddr)
+	streamD, err := client.New(ctx, remoteAddr)
 	assertNoError(ctx, err)
 
 	b, err := streamD.GetVariableHash(ctx, consts.VarKey(variableKey), crypto.SHA1)
@@ -221,7 +221,7 @@ func variablesSet(cmd *cobra.Command, args []string) {
 
 	remoteAddr, err := cmd.Flags().GetString("remote-addr")
 	assertNoError(ctx, err)
-	streamD, err := client.New(remoteAddr)
+	streamD, err := client.New(ctx, remoteAddr)
 	assertNoError(ctx, err)
 
 	value, err := io.ReadAll(os.Stdin)
@@ -236,7 +236,7 @@ func configGet(cmd *cobra.Command, args []string) {
 
 	remoteAddr, err := cmd.Flags().GetString("remote-addr")
 	assertNoError(ctx, err)
-	streamD, err := client.New(remoteAddr)
+	streamD, err := client.New(ctx, remoteAddr)
 	assertNoError(ctx, err)
 
 	cfg, err := streamD.GetConfig(ctx)

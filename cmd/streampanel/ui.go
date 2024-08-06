@@ -28,6 +28,11 @@ func forkUI(preCtx context.Context, mainProcessAddr, password string) {
 	logger.Debugf(ctx, "flags == %#+v", flags)
 	ctx, cancelFunc := initRuntime(ctx, flags, procName)
 	defer cancelFunc()
+	observability.Go(ctx, func() {
+		<-ctx.Done()
+		logger.Debugf(ctx, "context is cancelled")
+	})
+
 	defer func() { observability.PanicIfNotNil(ctx, recover()) }()
 
 	childProcessSignalHandler(ctx, cancelFunc)

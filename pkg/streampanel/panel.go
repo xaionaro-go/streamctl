@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -46,6 +47,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/config"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
+	"google.golang.org/grpc"
 )
 
 const AppName = "StreamPanel"
@@ -106,8 +108,12 @@ type Panel struct {
 	displayErrorLocker sync.Mutex
 	displayErrorWindow fyne.Window
 
-	waitWindowLocker sync.Mutex
-	waitWindow       fyne.Window
+	waitStreamDConnectWindowLocker  sync.Mutex
+	waitStreamDConnectWindow        fyne.Window
+	waitStreamDConnectWindowCounter int32
+	waitStreamDCallWindowLocker     sync.Mutex
+	waitStreamDCallWindow           fyne.Window
+	waitStreamDCallWindowCounter    int32
 
 	imageLocker         sync.Mutex
 	imageLastDownloaded map[consts.ImageID][]byte
@@ -445,10 +451,38 @@ func (p *Panel) SetLoggingLevel(ctx context.Context, level logger.Level) {
 	observability.LogLevelFilter.SetLevel(level)
 }
 
-func (p *Panel) initRemoteStreamD(context.Context) error {
+func (p *Panel) initRemoteStreamD(ctx context.Context) error {
 	var err error
-	p.StreamD, err = client.New(p.Config.RemoteStreamDAddr)
+	p.StreamD, err = client.New(
+		ctx,
+		p.Config.RemoteStreamDAddr,
+		client.OptionConnectWrapper(p.streamDConnectWrapper),
+		client.OptionCallWrapper(p.streamDCallWrapper),
+	)
 	return err
+}
+
+func (p *Panel) streamDCallWrapper(
+	ctx context.Context,
+	req any,
+	callFunc func(ctx context.Context, opts ...grpc.CallOption) error,
+	opts ...grpc.CallOption,
+) error {
+	windowCtx, cancelFunc := context.WithCancel(ctx)
+	defer cancelFunc()
+	p.showWaitStreamDCallWindow(windowCtx)
+	return callFunc(ctx, opts...)
+}
+
+func (p *Panel) streamDConnectWrapper(
+	ctx context.Context,
+	connectFunc func(ctx context.Context, opts ...grpc.DialOption) (*grpc.ClientConn, error),
+	opts ...grpc.DialOption,
+) (*grpc.ClientConn, error) {
+	windowCtx, cancelFunc := context.WithCancel(ctx)
+	defer cancelFunc()
+	p.showWaitStreamDConnectWindow(windowCtx)
+	return connectFunc(ctx, opts...)
 }
 
 func removeNonDigits(input string) string {
@@ -1006,13 +1040,7 @@ func (p *Panel) setFilter(ctx context.Context, filter string) {
 }
 
 func (p *Panel) openSettingsWindow(ctx context.Context) error {
-	var (
-		cfg *streamdconfig.Config
-		err error
-	)
-	p.waitForResponse(func() {
-		cfg, err = p.StreamD.GetConfig(ctx)
-	})
+	cfg, err := p.StreamD.GetConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to get config: %w", err)
 	}
@@ -1315,13 +1343,11 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 }
 
 func (p *Panel) resetCache(ctx context.Context) {
-	p.waitForResponse(func() {
-		p.StreamD.ResetCache(ctx)
-		err := p.StreamD.InitCache(ctx)
-		if err != nil {
-			p.DisplayError(fmt.Errorf("unable to re-initialize the cache: %w", err))
-		}
-	})
+	p.StreamD.ResetCache(ctx)
+	err := p.StreamD.InitCache(ctx)
+	if err != nil {
+		p.DisplayError(fmt.Errorf("unable to re-initialize the cache: %w", err))
+	}
 }
 
 func (p *Panel) openMenuWindow(ctx context.Context) {
@@ -2050,7 +2076,7 @@ func (p *Panel) stopStream(ctx context.Context) {
 }
 
 func (p *Panel) onSetupStreamButton(ctx context.Context) {
-	p.waitForResponse(func() { p.setupStream(ctx) })
+	p.setupStream(ctx)
 }
 
 func (p *Panel) onStartStopButton(ctx context.Context) {
@@ -2064,7 +2090,7 @@ func (p *Panel) onStartStopButton(ctx context.Context) {
 			"Are you sure you want to end the stream?",
 			func(b bool) {
 				if b {
-					p.waitForResponse(func() { p.stopStream(ctx) })
+					p.stopStream(ctx)
 				}
 			},
 			p.mainWindow,
@@ -2076,7 +2102,7 @@ func (p *Panel) onStartStopButton(ctx context.Context) {
 			"Are you ready to start the stream?",
 			func(b bool) {
 				if b {
-					p.waitForResponse(func() { p.startStream(ctx) })
+					p.startStream(ctx)
 				}
 			},
 			p.mainWindow,
@@ -2095,49 +2121,43 @@ func cleanYoutubeRecordingName(in string) string {
 
 func (p *Panel) editProfileWindow(ctx context.Context) fyne.Window {
 	oldProfile := getProfile(p.configCache, *p.selectedProfileName)
-	var w fyne.Window
-	p.waitForResponse(func() {
-		w = p.profileWindow(
-			ctx,
-			fmt.Sprintf("Edit the profile '%s'", oldProfile.Name),
-			oldProfile,
-			func(ctx context.Context, profile Profile) error {
-				if err := p.profileCreateOrUpdate(ctx, profile); err != nil {
-					return fmt.Errorf("unable to create profile '%s': %w", profile.Name, err)
+	w := p.profileWindow(
+		ctx,
+		fmt.Sprintf("Edit the profile '%s'", oldProfile.Name),
+		oldProfile,
+		func(ctx context.Context, profile Profile) error {
+			if err := p.profileCreateOrUpdate(ctx, profile); err != nil {
+				return fmt.Errorf("unable to create profile '%s': %w", profile.Name, err)
+			}
+			if profile.Name != oldProfile.Name {
+				if err := p.profileDelete(ctx, oldProfile.Name); err != nil {
+					return fmt.Errorf("unable to delete profile '%s': %w", oldProfile.Name, err)
 				}
-				if profile.Name != oldProfile.Name {
-					if err := p.profileDelete(ctx, oldProfile.Name); err != nil {
-						return fmt.Errorf("unable to delete profile '%s': %w", oldProfile.Name, err)
-					}
-				}
-				p.profilesListWidget.UnselectAll()
-				return nil
-			},
-		)
-	})
+			}
+			p.profilesListWidget.UnselectAll()
+			return nil
+		},
+	)
 	return w
 }
 
 func (p *Panel) cloneProfileWindow(ctx context.Context) fyne.Window {
 	oldProfile := getProfile(p.configCache, *p.selectedProfileName)
-	var w fyne.Window
-	p.waitForResponse(func() {
-		w = p.profileWindow(
-			ctx,
-			"Create a profile",
-			oldProfile,
-			func(ctx context.Context, profile Profile) error {
-				if oldProfile.Name == profile.Name {
-					return fmt.Errorf("profile with name '%s' already exists", profile.Name)
-				}
-				if err := p.profileCreateOrUpdate(ctx, profile); err != nil {
-					return err
-				}
-				p.profilesListWidget.UnselectAll()
-				return nil
-			},
-		)
-	})
+	w := p.profileWindow(
+		ctx,
+		"Create a profile",
+		oldProfile,
+		func(ctx context.Context, profile Profile) error {
+			if oldProfile.Name == profile.Name {
+				return fmt.Errorf("profile with name '%s' already exists", profile.Name)
+			}
+			if err := p.profileCreateOrUpdate(ctx, profile); err != nil {
+				return err
+			}
+			p.profilesListWidget.UnselectAll()
+			return nil
+		},
+	)
 	return w
 }
 
@@ -2171,32 +2191,29 @@ func (p *Panel) deleteProfileWindow(ctx context.Context) fyne.Window {
 }
 
 func (p *Panel) newProfileWindow(ctx context.Context) fyne.Window {
-	var w fyne.Window
-	p.waitForResponse(func() {
-		w = p.profileWindow(
-			ctx,
-			"Create a profile",
-			Profile{},
-			func(ctx context.Context, profile Profile) error {
-				found := false
-				for _, platCfg := range p.configCache.Backends {
-					_, ok := platCfg.GetStreamProfile(profile.Name)
-					if ok {
-						found = true
-						break
-					}
+	w := p.profileWindow(
+		ctx,
+		"Create a profile",
+		Profile{},
+		func(ctx context.Context, profile Profile) error {
+			found := false
+			for _, platCfg := range p.configCache.Backends {
+				_, ok := platCfg.GetStreamProfile(profile.Name)
+				if ok {
+					found = true
+					break
 				}
-				if found {
-					return fmt.Errorf("profile with name '%s' already exists", profile.Name)
-				}
-				if err := p.profileCreateOrUpdate(ctx, profile); err != nil {
-					return err
-				}
-				p.profilesListWidget.UnselectAll()
-				return nil
-			},
-		)
-	})
+			}
+			if found {
+				return fmt.Errorf("profile with name '%s' already exists", profile.Name)
+			}
+			if err := p.profileCreateOrUpdate(ctx, profile); err != nil {
+				return err
+			}
+			p.profilesListWidget.UnselectAll()
+			return nil
+		},
+	)
 	return w
 }
 
@@ -2623,10 +2640,7 @@ func (p *Panel) profileWindow(
 				youtubeProfile.Tags = _tags
 				profile.PerPlatform[youtube.ID] = youtubeProfile
 			}
-			var err error
-			p.waitForResponse(func() {
-				err = commitFn(ctx, profile)
-			})
+			err := commitFn(ctx, profile)
 			if err != nil {
 				p.DisplayError(err)
 				return
@@ -2701,35 +2715,85 @@ func (p *Panel) DisplayError(err error) {
 	p.displayErrorWindow = w
 }
 
-func (p *Panel) waitForResponse(callback func()) {
-	p.showWaitWindow()
-	defer func() {
-		p.hideWaitWindow()
-	}()
-	callback()
+func (p *Panel) showWaitStreamDCallWindow(ctx context.Context) {
+	atomic.AddInt32(&p.waitStreamDCallWindowCounter, 1)
+	observability.Go(ctx, func() {
+		defer func() {
+			<-ctx.Done()
+			p.waitStreamDCallWindowLocker.Lock()
+			defer p.waitStreamDCallWindowLocker.Unlock()
+			if atomic.AddInt32(&p.waitStreamDCallWindowCounter, -1) != 0 {
+				return
+			}
+			if p.waitStreamDCallWindow == nil {
+				return
+			}
+			p.waitStreamDCallWindow.Hide()
+			time.Sleep(100 * time.Millisecond)
+			p.waitStreamDCallWindow.Close()
+			p.waitStreamDCallWindow = nil
+		}()
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(time.Second):
+		}
+
+		p.waitStreamDCallWindowLocker.Lock()
+		defer p.waitStreamDCallWindowLocker.Unlock()
+		logger.Debugf(ctx, "making a 'network operation is in progress' window")
+		defer logger.Debugf(ctx, "made a 'network operation is in progress' window")
+		if p.waitStreamDCallWindow != nil {
+			return
+		}
+		waitStreamDCallWindow := p.app.NewWindow(AppName + ": Please wait...")
+		textWidget := widget.NewRichTextFromMarkdown("Network operation is in process, please wait...")
+		waitStreamDCallWindow.SetContent(textWidget)
+		waitStreamDCallWindow.Show()
+		p.waitStreamDCallWindow = waitStreamDCallWindow
+	})
 }
 
-func (p *Panel) showWaitWindow() {
-	p.waitWindowLocker.Lock()
-	defer p.waitWindowLocker.Unlock()
-	if p.waitWindow != nil {
-		return
-	}
+func (p *Panel) showWaitStreamDConnectWindow(ctx context.Context) {
+	atomic.AddInt32(&p.waitStreamDConnectWindowCounter, 1)
+	observability.Go(ctx, func() {
+		defer func() {
+			<-ctx.Done()
+			p.waitStreamDConnectWindowLocker.Lock()
+			defer p.waitStreamDConnectWindowLocker.Unlock()
+			if atomic.AddInt32(&p.waitStreamDConnectWindowCounter, -1) != 0 {
+				return
+			}
+			if p.waitStreamDConnectWindow == nil {
+				return
+			}
+			p.waitStreamDConnectWindow.Hide()
+			time.Sleep(100 * time.Millisecond)
+			p.waitStreamDConnectWindow.Close()
+			p.waitStreamDConnectWindow = nil
+		}()
 
-	waitWindow := p.app.NewWindow(AppName + ": Please wait...")
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(time.Second):
+		}
 
-	textWidget := widget.NewRichTextFromMarkdown("A long operation is in process, please wait...")
-	waitWindow.SetContent(textWidget)
-	waitWindow.Show()
-
-	p.waitWindow = waitWindow
-}
-
-func (p *Panel) hideWaitWindow() {
-	p.waitWindowLocker.Lock()
-	defer p.waitWindowLocker.Unlock()
-	p.waitWindow.Hide()
-	time.Sleep(100 * time.Millisecond)
-	p.waitWindow.Close()
-	p.waitWindow = nil
+		p.waitStreamDConnectWindowLocker.Lock()
+		defer p.waitStreamDConnectWindowLocker.Unlock()
+		logger.Debugf(ctx, "making a 'network operation is in progress' window")
+		defer logger.Debugf(ctx, "made a 'network operation is in progress' window")
+		if p.waitStreamDConnectWindow != nil {
+			return
+		}
+		if p.app == nil {
+			return
+		}
+		waitStreamDConnectWindow := p.app.NewWindow(AppName + ": Please wait...")
+		textWidget := widget.NewRichTextFromMarkdown("Network operation is in process, please wait...")
+		waitStreamDConnectWindow.SetContent(textWidget)
+		waitStreamDConnectWindow.Show()
+		p.waitStreamDConnectWindow = waitStreamDConnectWindow
+	})
 }
