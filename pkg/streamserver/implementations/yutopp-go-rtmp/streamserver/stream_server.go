@@ -512,18 +512,36 @@ func (s *StreamServer) restartUntilYoutubeRecognizesStream(
 		logger.Debugf(ctx, "waited %v, checking if the remote platform accepted the stream", cfg.StartTimeout)
 
 		for {
-			started, err := s.PlatformsController.CheckStreamStartedByPlatformID(
+			streamOK, err := s.PlatformsController.CheckStreamStartedByPlatformID(
 				memoize.SetNoCache(ctx, true),
 				youtube.ID,
 			)
-			logger.Debugf(ctx, "the result of checking the stream on the remote platform: %v %v", started, err)
+			logger.Debugf(ctx, "the result of checking the stream on the remote platform: %v %v", streamOK, err)
 			if err != nil {
 				logger.Errorf(ctx, "unable to check if the stream with URL '%s' is started: %v", fwd.ActiveForwarding.URL, err)
 				time.Sleep(time.Second)
 				continue
 			}
-			if started {
-				return
+			if streamOK {
+				logger.Debugf(ctx, "waiting %v to recheck if the stream will be still OK", cfg.StopStartDelay)
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(cfg.StopStartDelay):
+				}
+				streamOK, err := s.PlatformsController.CheckStreamStartedByPlatformID(
+					memoize.SetNoCache(ctx, true),
+					youtube.ID,
+				)
+				logger.Debugf(ctx, "the result of checking the stream on the remote platform: %v %v", streamOK, err)
+				if err != nil {
+					logger.Errorf(ctx, "unable to check if the stream with URL '%s' is started: %v", fwd.ActiveForwarding.URL, err)
+					time.Sleep(time.Second)
+					continue
+				}
+				if streamOK {
+					return
+				}
 			}
 			break
 		}

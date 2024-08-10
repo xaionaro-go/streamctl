@@ -36,6 +36,9 @@ func (pb *Pubsub) Name() string {
 }
 
 func (pb *Pubsub) Deregister() error {
+	logger.Default().Debugf("Pub.Deregister")
+	defer logger.Default().Debugf("/Pub.Deregister")
+
 	pb.m.Lock()
 	defer pb.m.Unlock()
 
@@ -199,6 +202,9 @@ func (s *Sub) Close() error {
 	if s == nil {
 		return nil
 	}
+	logger.Default().Debugf("Sub.Close")
+	defer logger.Default().Debugf("/Sub.Close")
+
 	s.closedChanOnce.Do(func() { close(s.closedChan) })
 	if s.closed {
 		return nil

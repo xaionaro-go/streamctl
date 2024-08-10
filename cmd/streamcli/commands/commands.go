@@ -106,6 +106,7 @@ func init() {
 	StreamSetup.PersistentFlags().String("title", "", "stream title")
 	StreamSetup.PersistentFlags().String("description", "", "stream description")
 	StreamSetup.PersistentFlags().String("profile", "", "profile")
+	StreamStatus.PersistentFlags().Bool("json", false, "use JSON output format")
 }
 func assertNoError(ctx context.Context, err error) {
 	if err != nil {
@@ -159,11 +160,16 @@ func streamSetup(cmd *cobra.Command, args []string) {
 func streamStatus(cmd *cobra.Command, args []string) {
 	ctx := cmd.Context()
 
+	isJSON, err := cmd.Flags().GetBool("json")
+	assertNoError(ctx, err)
+
 	remoteAddr, err := cmd.Flags().GetString("remote-addr")
 	assertNoError(ctx, err)
+
 	streamD, err := client.New(ctx, remoteAddr)
 	assertNoError(ctx, err)
 
+	result := map[streamcontrol.PlatformName]*streamcontrol.StreamStatus{}
 	for _, platID := range []streamcontrol.PlatformName{
 		obs.ID, twitch.ID, youtube.ID,
 	} {
@@ -177,10 +183,22 @@ func streamStatus(cmd *cobra.Command, args []string) {
 		status, err := streamD.GetStreamStatus(ctx, platID)
 		assertNoError(ctx, err)
 
-		statusJSON, err := json.Marshal(status)
-		assertNoError(ctx, err)
+		result[platID] = status
+	}
 
-		fmt.Printf("%10s: %s\n", platID, statusJSON)
+	if isJSON {
+		b, err := json.Marshal(result)
+		assertNoError(ctx, err)
+		fmt.Printf("%s\n", b)
+	} else {
+		for _, platID := range []streamcontrol.PlatformName{
+			obs.ID, twitch.ID, youtube.ID,
+		} {
+			statusJSON, err := json.Marshal(result[platID])
+			assertNoError(ctx, err)
+
+			fmt.Printf("%10s: %s\n", platID, statusJSON)
+		}
 	}
 }
 

@@ -160,6 +160,8 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 		}
 		logger.Errorf(ctx, "%v", _ret)
 	}()
+	fwd.Locker.Lock()
+	defer fwd.Locker.Unlock()
 
 	pubSub, err := fwd.WaitForPublisher(ctx)
 	if err != nil {
@@ -316,9 +318,12 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 	})
 
 	logger.Debugf(ctx, "started publishing to '%s'", urlParsed.String())
+	fwd.Locker.Unlock()
 	<-fwd.Sub.ClosedChan()
+	fwd.Locker.Lock()
+	fwd.Client.Close()
+	fwd.Client = nil
 	logger.Debugf(ctx, "the source stopped, so stopped also publishing to '%s'", urlParsed.String())
-	go fwd.waitForPublisherAndStart(ctx)
 	return nil
 }
 

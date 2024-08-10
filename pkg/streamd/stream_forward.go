@@ -10,17 +10,18 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	twitch "github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/types"
 	youtube "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 )
 
 type platformsControllerAdapter struct {
-	PlatformsController StreamControllers
+	StreamD api.StreamD
 }
 
 func newPlatformsControllerAdapter(
-	platformsController StreamControllers,
+	streamD api.StreamD,
 ) *platformsControllerAdapter {
 	return &platformsControllerAdapter{
-		PlatformsController: platformsController,
+		StreamD: streamD,
 	}
 }
 
@@ -44,17 +45,7 @@ func (a *platformsControllerAdapter) CheckStreamStartedByPlatformID(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
 ) (bool, error) {
-	var c streamcontrol.AbstractStreamController
-	switch platID {
-	case youtube.ID:
-		c = streamcontrol.ToAbstract(a.PlatformsController.YouTube)
-	case twitch.ID:
-		c = streamcontrol.ToAbstract(a.PlatformsController.Twitch)
-	default:
-		return false, fmt.Errorf("unknown platform '%s'", platID)
-	}
-
-	s, err := c.GetStreamStatus(ctx)
+	s, err := a.StreamD.GetStreamStatus(ctx, platID)
 	if err != nil {
 		return false, fmt.Errorf("unable to get the stream status: %w", err)
 	}
