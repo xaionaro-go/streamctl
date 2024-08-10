@@ -6,6 +6,7 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -893,6 +894,22 @@ func (p *Panel) openAddOrEditRestreamWindow(
 		dstSelect.Disable()
 	}
 
+	var restartUntilYouTubeStarts *widget.Check
+
+	quirksStartAfterYoutube := fwd.Quirks.StartAfterYoutubeRecognizedStream
+	startAfterYoutubeCheckbox := widget.NewCheck(
+		"Start this stream only after YouTube recognized a stream",
+		func(b bool) {
+			quirksStartAfterYoutube.Enabled = b
+			if b {
+				restartUntilYouTubeStarts.SetChecked(false)
+				restartUntilYouTubeStarts.Disable()
+			} else {
+				restartUntilYouTubeStarts.Enable()
+			}
+		},
+	)
+
 	quirksYoutubeRestart := fwd.Quirks.RestartUntilYoutubeRecognizesStream
 
 	if !quirksYoutubeRestart.Enabled {
@@ -932,17 +949,21 @@ func (p *Panel) openAddOrEditRestreamWindow(
 	)
 	restartUntilYouTubeStartsParams.Hide()
 
-	restartUntilYouTubeStarts := widget.NewCheck(
+	restartUntilYouTubeStarts = widget.NewCheck(
 		"Restart until YouTube recognizes the stream",
 		func(b bool) {
+			quirksYoutubeRestart.Enabled = b
 			if b {
 				restartUntilYouTubeStartsParams.Show()
+				startAfterYoutubeCheckbox.SetChecked(false)
+				startAfterYoutubeCheckbox.Disable()
 			} else {
 				restartUntilYouTubeStartsParams.Hide()
+				startAfterYoutubeCheckbox.Enable()
 			}
-			quirksYoutubeRestart.Enabled = b
 		},
 	)
+	startAfterYoutubeCheckbox.SetChecked(quirksStartAfterYoutube.Enabled)
 	restartUntilYouTubeStarts.SetChecked(quirksYoutubeRestart.Enabled)
 
 	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
@@ -953,6 +974,7 @@ func (p *Panel) openAddOrEditRestreamWindow(
 			enabledCheck.Checked,
 			sstypes.ForwardingQuirks{
 				RestartUntilYoutubeRecognizesStream: quirksYoutubeRestart,
+				StartAfterYoutubeRecognizedStream:   quirksStartAfterYoutube,
 			},
 		)
 		if err != nil {
@@ -975,6 +997,7 @@ func (p *Panel) openAddOrEditRestreamWindow(
 			widget.NewSeparator(),
 			widget.NewSeparator(),
 			widget.NewRichTextFromMarkdown("## Quirks"),
+			startAfterYoutubeCheckbox,
 			restartUntilYouTubeStarts,
 			restartUntilYouTubeStartsParams,
 		),
@@ -1097,8 +1120,15 @@ func (p *Panel) displayStreamForwards(
 			w.Show()
 		})
 		captionStr := string(fwd.StreamID) + " -> " + string(fwd.DestinationID)
+		var quirksStrings []string
 		if fwd.Quirks.RestartUntilYoutubeRecognizesStream.Enabled {
-			captionStr += " (Quirks:YT)"
+			quirksStrings = append(quirksStrings, "YT-restart")
+		}
+		if fwd.Quirks.StartAfterYoutubeRecognizedStream.Enabled {
+			quirksStrings = append(quirksStrings, "after-YT")
+		}
+		if len(quirksStrings) != 0 {
+			captionStr += fmt.Sprintf(" (%s)", strings.Join(quirksStrings, ","))
 		}
 		caption := widget.NewLabel(captionStr)
 		c.RemoveAll()

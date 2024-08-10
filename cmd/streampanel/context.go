@@ -28,6 +28,7 @@ func getContext(
 	ctx := context.Background()
 
 	ll := xlogrus.DefaultLogrusLogger()
+	ll.Formatter.(*logrus.TextFormatter).ForceColors = true
 	l := xlogrus.New(ll).WithLevel(logger.LevelTrace).WithPreHooks(&observability.LogLevelFilter)
 
 	if flags.LogFile != "" {

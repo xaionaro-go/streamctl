@@ -242,9 +242,18 @@ func (p *StreamPlayer) openStream(ctx context.Context) error {
 	u, err := p.getURL(ctx)
 	logger.Debugf(ctx, "opening '%s'", u.String())
 	p.withPlayer(ctx, func(ctx context.Context, player types.Player) {
-		ctx, cancelFn := context.WithTimeout(ctx, time.Second)
+		ctx, cancelFn := context.WithTimeout(ctx, 1*time.Second)
 		defer cancelFn()
+		var once sync.Once
+		observability.Go(ctx, func() {
+			<-ctx.Done()
+			once.Do(func() {
+				err := player.Close(ctx)
+				logger.Debugf(ctx, "closing player error: %v", err)
+			})
+		})
 		err = player.OpenURL(ctx, u.String())
+		once.Do(func() {})
 	})
 	logger.Debugf(ctx, "opened '%s': %v", u.String(), err)
 	if err != nil {
@@ -421,7 +430,7 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 				time.Sleep(time.Second)
 				return
 			}
-			logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: now == %v, len == %v; pos == %v", p.StreamID, now, l, pos)
+			logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: now == %v, posUpdatedAt == %v, len == %v; pos == %v; readTimeout == %v", p.StreamID, now, posUpdatedAt, l, pos, p.Config.ReadTimeout)
 			if pos != prevPos {
 				posUpdatedAt = now
 				prevPos = pos

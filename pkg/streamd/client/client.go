@@ -1100,6 +1100,9 @@ func (c *Client) ListStreamForwards(
 					StartTimeout:   time.Duration(float64(time.Second) * restartUntilYoutubeRecognizesStream.StartTimeout),
 					StopStartDelay: time.Duration(float64(time.Second) * restartUntilYoutubeRecognizesStream.StopStartDelay),
 				},
+				StartAfterYoutubeRecognizedStream: types.StartAfterYoutubeRecognizedStream{
+					Enabled: forward.Config.Quirks.StartAfterYoutubeRecognizedStream.Enabled,
+				},
 			}
 		}
 		result = append(result, item)
@@ -1130,6 +1133,9 @@ func (c *Client) AddStreamForward(
 						StartTimeout:   quirks.RestartUntilYoutubeRecognizesStream.StartTimeout.Seconds(),
 						StopStartDelay: quirks.RestartUntilYoutubeRecognizesStream.StopStartDelay.Seconds(),
 					},
+					StartAfterYoutubeRecognizedStream: &streamd_grpc.StartAfterYoutubeRecognizedStream{
+						Enabled: quirks.StartAfterYoutubeRecognizedStream.Enabled,
+					},
 				},
 			},
 		})
@@ -1159,6 +1165,9 @@ func (c *Client) UpdateStreamForward(
 						Enabled:        quirks.RestartUntilYoutubeRecognizesStream.Enabled,
 						StartTimeout:   quirks.RestartUntilYoutubeRecognizesStream.StartTimeout.Seconds(),
 						StopStartDelay: quirks.RestartUntilYoutubeRecognizesStream.StopStartDelay.Seconds(),
+					},
+					StartAfterYoutubeRecognizedStream: &streamd_grpc.StartAfterYoutubeRecognizedStream{
+						Enabled: quirks.StartAfterYoutubeRecognizedStream.Enabled,
 					},
 				},
 			},

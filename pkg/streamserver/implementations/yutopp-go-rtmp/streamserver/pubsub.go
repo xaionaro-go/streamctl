@@ -65,6 +65,7 @@ func (pb *Pubsub) Sub(eventCallback func(ft *flvtag.FlvTag) error) *Sub {
 		pubSub:        pb,
 		subID:         subID,
 		eventCallback: eventCallback,
+		closedChan:    make(chan struct{}),
 	}
 
 	pb.nextSubID++
@@ -172,8 +173,10 @@ type Sub struct {
 	pubSub *Pubsub
 	subID  uint64
 
-	closed      bool
-	initialized bool
+	closed         bool
+	initialized    bool
+	closedChanOnce sync.Once
+	closedChan     chan struct{}
 
 	lastTimestamp uint32
 	eventCallback func(*flvtag.FlvTag) error
@@ -196,12 +199,21 @@ func (s *Sub) Close() error {
 	if s == nil {
 		return nil
 	}
+	s.closedChanOnce.Do(func() { close(s.closedChan) })
 	if s.closed {
 		return nil
 	}
 	s.closed = true
 	s.pubSub.RemoveSub(s)
 	return nil
+}
+
+func (s *Sub) ClosedChan() <-chan struct{} {
+	return s.closedChan
+}
+
+func (s *Sub) Wait() {
+	<-s.ClosedChan()
 }
 
 func cloneView(flv *flvtag.FlvTag) *flvtag.FlvTag {

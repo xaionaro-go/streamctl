@@ -187,7 +187,7 @@ func runFork(
 	args := []string{execPath, "--sentry-dsn=" + flags.SentryDSN, "--log-level=" + logger.Level(flags.LoggerLevel).String(), "--subprocess=" + string(procName) + ":" + addr}
 	logger.Infof(ctx, "running '%s %s'", args[0], strings.Join(args[1:], " "))
 	cmd := exec.Command(args[0], args[1:]...)
-	cmd.Stderr = os.Stderr
+	cmd.Stderr = NewForkLogWriter(ctx, logger.FromCtx(ctx))
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
 	setFork(procName, cmd)

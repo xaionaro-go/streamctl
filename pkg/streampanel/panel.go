@@ -88,10 +88,12 @@ type Panel struct {
 	streamTitleField       *widget.Entry
 	streamDescriptionField *widget.Entry
 
-	monitorPage         *fyne.Container
-	monitorLastWinSize  fyne.Size
-	screenshotContainer *fyne.Container
-	chatContainer       *fyne.Container
+	monitorLocker          sync.Mutex
+	monitorPage            *fyne.Container
+	monitorLastWinSize     fyne.Size
+	monitorLastOrientation fyne.DeviceOrientation
+	screenshotContainer    *fyne.Container
+	chatContainer          *fyne.Container
 
 	streamStatus map[streamcontrol.PlatformName]*widget.Label
 
@@ -1359,7 +1361,31 @@ func (p *Panel) openMenuWindow(ctx context.Context) {
 			}
 		}),
 		fyne.NewMenuItem("Reset cache", func() {
-			p.resetCache(ctx)
+			w := dialog.NewConfirm(
+				"Resetting the cache",
+				"Are you sure you want to drop the cache and re-download the data (it might take a while)?",
+				func(b bool) {
+					if b {
+						p.resetCache(ctx)
+					}
+				},
+				p.mainWindow,
+			)
+			w.Show()
+		}),
+		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem("Panic", func() {
+			w := dialog.NewConfirm(
+				"Panic?",
+				"Are you sure you want the app to panic?",
+				func(b bool) {
+					if b {
+						panic("They said I should panic!")
+					}
+				},
+				p.mainWindow,
+			)
+			w.Show()
 		}),
 		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem("Quit", func() {
@@ -1716,7 +1742,7 @@ func (p *Panel) initMainWindow(
 		p.playersWidget.Hide()
 		addPlayer.Hide()
 	}
-	restreamPage := container.NewBorder(
+	restreamPage := container.NewVScroll(container.NewBorder(
 		nil,
 		nil,
 		nil,
@@ -1738,7 +1764,7 @@ func (p *Panel) initMainWindow(
 			p.playersWidget,
 			addPlayer,
 		),
-	)
+	))
 
 	var cancelPage context.CancelFunc
 	setPage := func(page consts.Page) {
@@ -1846,6 +1872,9 @@ func (p *Panel) subscribeUpdateControlPage(ctx context.Context) {
 }
 
 func (p *Panel) getSelectedProfile() Profile {
+	if p.selectedProfileName == nil {
+		return Profile{}
+	}
 	return getProfile(p.configCache, *p.selectedProfileName)
 }
 
@@ -2260,6 +2289,7 @@ func (p *Panel) profileWindow(
 	tagsContainer := container.NewGridWrap(fyne.NewSize(300, 30))
 
 	addTag := func(tag string) {
+		tag = strings.Trim(tag, " ")
 		if tag == "" {
 			return
 		}
@@ -2360,7 +2390,9 @@ func (p *Panel) profileWindow(
 		tagsContainer.Add(tagContainer)
 	}
 	tagsEntryField.OnSubmitted = func(text string) {
-		addTag(text)
+		for _, tag := range strings.Split(text, ",") {
+			addTag(tag)
+		}
 		tagsEntryField.SetText("")
 	}
 

@@ -232,6 +232,7 @@ type DestinationID = streamtypes.DestinationID
 
 type StreamForwardingQuirks = sstypes.ForwardingQuirks
 type RestartUntilYoutubeRecognizesStream = sstypes.RestartUntilYoutubeRecognizesStream
+type StartAfterYoutubeRecognizedStream = sstypes.StartAfterYoutubeRecognizedStream
 
 type DiffConfig struct{}
 type DiffStreams struct{}

@@ -168,7 +168,7 @@ func (p *MPV) execMPV(ctx context.Context) (_ret error) {
 			}
 			logger.Debugf(ctx, "successfully reran the player")
 			if link != "" {
-				logger.Debugf(ctx, "reopen link '%s'")
+				logger.Debugf(ctx, "reopen link '%s'", link)
 				err := p.OpenURL(ctx, link)
 				if err != nil {
 					logger.Errorf(ctx, "unable to reopen link '%v'", err)

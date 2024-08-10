@@ -37,6 +37,7 @@ type ActiveStreamForwarding struct {
 	CancelFunc    context.CancelFunc
 	ReadCount     atomic.Uint64
 	WriteCount    atomic.Uint64
+	PauseFunc     func(ctx context.Context, fwd *ActiveStreamForwarding)
 	eventChan     chan *flvtag.FlvTag
 }
 
@@ -46,6 +47,7 @@ func NewActiveStreamForward(
 	dstID types.DestinationID,
 	urlString string,
 	relayService *RelayService,
+	pauseFunc func(ctx context.Context, fwd *ActiveStreamForwarding),
 ) (*ActiveStreamForwarding, error) {
 	urlParsed, err := url.Parse(urlString)
 	if err != nil {
@@ -56,6 +58,7 @@ func NewActiveStreamForward(
 		DestinationID: dstID,
 		URL:           urlParsed,
 		RelayService:  relayService,
+		PauseFunc:     pauseFunc,
 		eventChan:     make(chan *flvtag.FlvTag),
 	}
 	if err := fwd.Start(ctx); err != nil {
@@ -95,6 +98,48 @@ func (fwd *ActiveStreamForwarding) Stop() error {
 	return fwd.Close()
 }
 
+func (fwd *ActiveStreamForwarding) getAppNameAndKey() (string, string, string) {
+	remoteAppName := "live"
+	pathParts := strings.SplitN(fwd.URL.Path, "/", -2)
+	apiKey := pathParts[len(pathParts)-1]
+	if len(pathParts) >= 2 {
+		remoteAppName = strings.Trim(strings.Join(pathParts[:len(pathParts)-1], "/"), "/")
+	}
+	streamID := fwd.StreamID
+	streamIDParts := strings.Split(string(streamID), "/")
+	localAppName := string(streamID)
+	if len(streamIDParts) == 2 {
+		localAppName = streamIDParts[1]
+	}
+
+	return localAppName, remoteAppName, apiKey
+}
+
+func (fwd *ActiveStreamForwarding) WaitForPublisher(
+	ctx context.Context,
+) (*Pubsub, error) {
+	localAppName, _, apiKey := fwd.getAppNameAndKey()
+
+	ctx = belt.WithField(belt.WithField(ctx, "appNameLocal", localAppName), "appNameRemote", apiKey)
+
+	logger.Debugf(ctx, "checking if we need to pause")
+	fwd.PauseFunc(ctx, fwd)
+	logger.Debugf(ctx, "no pauses or pauses ended")
+
+	logger.Debugf(ctx, "wait for stream '%s'", fwd.StreamID)
+	pubSub := fwd.RelayService.WaitPubsub(ctx, localAppName)
+	logger.Debugf(ctx, "wait for stream '%s' result: %#+v", fwd.StreamID, pubSub)
+	if pubSub == nil {
+		return nil, fmt.Errorf(
+			"unable to find stream ID '%s', available stream IDs: %s",
+			fwd.StreamID,
+			strings.Join(fwd.RelayService.PubsubNames(), ", "),
+		)
+	}
+
+	return pubSub, nil
+}
+
 func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 	ctx context.Context,
 ) (_ret error) {
@@ -108,34 +153,14 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 		logger.Errorf(ctx, "%v", _ret)
 	}()
 
-	pathParts := strings.SplitN(fwd.URL.Path, "/", -2)
-	remoteAppName := "live"
-	apiKey := pathParts[len(pathParts)-1]
-	if len(pathParts) >= 2 {
-		remoteAppName = strings.Trim(strings.Join(pathParts[:len(pathParts)-1], "/"), "/")
+	pubSub, err := fwd.WaitForPublisher(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to get publisher: %w", err)
 	}
-	streamID := fwd.StreamID
-	streamIDParts := strings.Split(string(streamID), "/")
-	localAppName := string(streamID)
-	if len(streamIDParts) == 2 {
-		localAppName = streamIDParts[1]
-	}
-
-	ctx = belt.WithField(belt.WithField(ctx, "appNameLocal", localAppName), "appNameRemote", apiKey)
-
-	logger.Tracef(ctx, "wait for stream '%s'", streamID)
-	pubSub := fwd.RelayService.WaitPubsub(ctx, localAppName)
-	logger.Tracef(ctx, "wait for stream '%s' result: %#+v", streamID, pubSub)
-	if pubSub == nil {
-		return fmt.Errorf(
-			"unable to find stream ID '%s', available stream IDs: %s",
-			streamID,
-			strings.Join(fwd.RelayService.PubsubNames(), ", "),
-		)
-	}
+	_, remoteAppName, apiKey := fwd.getAppNameAndKey()
 
 	urlParsed := ptr(*fwd.URL)
-	logger.Tracef(ctx, "connecting to '%s'", fwd.URL.String())
+	logger.Debugf(ctx, "connecting to '%s'", fwd.URL.String())
 	if fwd.URL.Port() == "" {
 		switch urlParsed.Scheme {
 		case "rtmp":
@@ -165,7 +190,7 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 	}
 	fwd.Client = client
 
-	logger.Tracef(ctx, "connected to '%s'", urlParsed.String())
+	logger.Debugf(ctx, "connected to '%s'", urlParsed.String())
 
 	tcURL := *urlParsed
 	tcURL.Path = "/" + remoteAppName
@@ -183,14 +208,14 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 	}); err != nil {
 		return fmt.Errorf("unable to connect the stream to '%s': %w", urlParsed.String(), err)
 	}
-	logger.Tracef(ctx, "connected the stream to '%s'", urlParsed.String())
+	logger.Debugf(ctx, "connected the stream to '%s'", urlParsed.String())
 
 	fwd.OutStream, err = client.CreateStream(&rtmpmsg.NetConnectionCreateStream{}, chunkSize)
 	if err != nil {
 		return fmt.Errorf("unable to create a stream to '%s': %w", urlParsed.String(), err)
 	}
 
-	logger.Tracef(ctx, "calling Publish at '%s'", urlParsed.String())
+	logger.Debugf(ctx, "calling Publish at '%s'", urlParsed.String())
 	if err := fwd.OutStream.Publish(&rtmpmsg.NetStreamPublish{
 		PublishingName: apiKey,
 		PublishingType: "live",
@@ -198,7 +223,7 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 		return fmt.Errorf("unable to send the Publish message to '%s': %w", urlParsed.String(), err)
 	}
 
-	logger.Tracef(ctx, "starting publishing to '%s'", urlParsed.String())
+	logger.Debugf(ctx, "starting publishing to '%s'", urlParsed.String())
 	fwd.Sub = pubSub.Sub(func(flv *flvtag.FlvTag) error {
 		logger.Tracef(ctx, "flvtag == %#+v", *flv)
 		var buf bytes.Buffer
@@ -277,13 +302,15 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 			}
 
 		default:
-			panic("unreachable")
+			logger.Errorf(ctx, "unexpected data type: %T", flv.Data)
 		}
 		return nil
 	})
 
-	logger.Tracef(ctx, "started publishing to '%s'", urlParsed.String())
-	<-ctx.Done()
+	logger.Debugf(ctx, "started publishing to '%s'", urlParsed.String())
+	<-fwd.Sub.ClosedChan()
+	logger.Debugf(ctx, "the source stopped, so stopped also publishing to '%s'", urlParsed.String())
+	go fwd.waitForPublisherAndStart(ctx)
 	return nil
 }
 

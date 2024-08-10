@@ -65,13 +65,20 @@ func (p *Panel) updateMonitorPageImages(
 	logger.Tracef(ctx, "updateMonitorPageImages")
 	defer logger.Tracef(ctx, "/updateMonitorPageImages")
 
+	p.monitorLocker.Lock()
+	defer p.monitorLocker.Unlock()
+
 	var winSize fyne.Size
+	var orientation fyne.DeviceOrientation
 	switch runtime.GOOS {
 	default:
 		winSize = p.monitorPage.Size()
+		orientation = p.app.Driver().Device().Orientation()
 	}
 	lastWinSize := p.monitorLastWinSize
+	lastOrientation := p.monitorLastOrientation
 	p.monitorLastWinSize = winSize
+	p.monitorLastOrientation = orientation
 
 	if lastWinSize != winSize {
 		logger.Debugf(ctx, "window size changed %#+v -> %#+v", lastWinSize, winSize)
@@ -87,7 +94,7 @@ func (p *Panel) updateMonitorPageImages(
 		if err != nil {
 			logger.Error(ctx, err)
 		} else {
-			if !changed && lastWinSize == winSize {
+			if !changed && lastWinSize == winSize && lastOrientation == orientation {
 				return
 			}
 			logger.Tracef(ctx, "updating the screenshot image: %v %#+v %#+v", changed, lastWinSize, winSize)
@@ -111,7 +118,7 @@ func (p *Panel) updateMonitorPageImages(
 		if err != nil {
 			logger.Error(ctx, err)
 		} else {
-			if !changed && lastWinSize == winSize {
+			if !changed && lastWinSize == winSize && lastOrientation == orientation {
 				return
 			}
 			logger.Tracef(ctx, "updating the chat image: %v %#+v %#+v", changed, lastWinSize, winSize)

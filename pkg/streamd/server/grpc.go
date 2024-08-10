@@ -883,6 +883,9 @@ func (grpc *GRPCServer) ListStreamForwards(
 				StartTimeout:   s.Quirks.RestartUntilYoutubeRecognizesStream.StartTimeout.Seconds(),
 				StopStartDelay: s.Quirks.RestartUntilYoutubeRecognizesStream.StopStartDelay.Seconds(),
 			},
+			StartAfterYoutubeRecognizedStream: &streamd_grpc.StartAfterYoutubeRecognizedStream{
+				Enabled: s.Quirks.StartAfterYoutubeRecognizedStream.Enabled,
+			},
 		}
 		result = append(result, item)
 	}
@@ -907,6 +910,9 @@ func (grpc *GRPCServer) AddStreamForward(
 				StartTimeout:   sec2dur(cfg.Quirks.RestartUntilYoutubeRecognizesStream.StartTimeout),
 				StopStartDelay: sec2dur(cfg.Quirks.RestartUntilYoutubeRecognizesStream.StopStartDelay),
 			},
+			StartAfterYoutubeRecognizedStream: api.StartAfterYoutubeRecognizedStream{
+				Enabled: cfg.Quirks.StartAfterYoutubeRecognizedStream.Enabled,
+			},
 		},
 	)
 	if err != nil {
@@ -930,6 +936,9 @@ func (grpc *GRPCServer) UpdateStreamForward(
 				Enabled:        cfg.Quirks.RestartUntilYoutubeRecognizesStream.Enabled,
 				StartTimeout:   sec2dur(cfg.Quirks.RestartUntilYoutubeRecognizesStream.StartTimeout),
 				StopStartDelay: sec2dur(cfg.Quirks.RestartUntilYoutubeRecognizesStream.StopStartDelay),
+			},
+			StartAfterYoutubeRecognizedStream: api.StartAfterYoutubeRecognizedStream{
+				Enabled: cfg.Quirks.StartAfterYoutubeRecognizedStream.Enabled,
 			},
 		},
 	)

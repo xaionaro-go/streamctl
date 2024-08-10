@@ -14,6 +14,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	playertypes "github.com/xaionaro-go/streamctl/pkg/player/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/memoize"
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
@@ -409,7 +410,36 @@ func (s *StreamServer) addStreamForward(
 		urlParsed.Host = portSrv.ListenAddr()
 	}
 
-	fwd, err := NewActiveStreamForward(ctx, streamID, destinationID, urlParsed.String(), s.RelayServer)
+	fwd, err := NewActiveStreamForward(
+		ctx,
+		streamID,
+		destinationID,
+		urlParsed.String(),
+		s.RelayServer,
+		func(ctx context.Context, fwd *ActiveStreamForwarding) {
+			if !quirks.StartAfterYoutubeRecognizedStream.Enabled {
+				return
+			}
+
+			logger.Debugf(ctx, "fwd %s->%s is waiting for YouTube to recognize the stream", streamID, destinationID)
+			t := time.NewTicker(time.Second)
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.C:
+				}
+				started, err := s.PlatformsController.CheckStreamStarted(
+					ctx,
+					fwd.URL,
+				)
+				logger.Debugf(ctx, "youtube status check: %v %v", started, err)
+				if started {
+					return
+				}
+			}
+		},
+	)
 	if err != nil {
 		return nil, fmt.Errorf("unable to run the stream forwarding: %w", err)
 	}
@@ -460,6 +490,12 @@ func (s *StreamServer) restartUntilYoutubeRecognizesStream(
 		return
 	}
 
+	_, err := fwd.ActiveForwarding.WaitForPublisher(ctx)
+	if err != nil {
+		logger.Error(ctx, err)
+		return
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -470,7 +506,7 @@ func (s *StreamServer) restartUntilYoutubeRecognizesStream(
 
 		for {
 			started, err := s.PlatformsController.CheckStreamStarted(
-				ctx,
+				memoize.SetNoCache(ctx, true),
 				fwd.ActiveForwarding.URL,
 			)
 			logger.Debugf(ctx, "the result of checking the stream on the remote platform: %v %v", started, err)

@@ -339,8 +339,13 @@ message RestartUntilYoutubeRecognizesStream {
     double stopStartDelay = 3;
 }
 
+message StartAfterYoutubeRecognizedStream {
+    bool enabled = 1;
+}
+
 message StreamForwardQuirks {
     RestartUntilYoutubeRecognizesStream restartUntilYoutubeRecognizesStream = 1;
+    StartAfterYoutubeRecognizedStream startAfterYoutubeRecognizedStream = 2;
 }
 
 message StreamForward {

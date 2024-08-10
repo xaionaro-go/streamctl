@@ -27,8 +27,19 @@ func DefaultRestartUntilYoutubeRecognizesStreamConfig() RestartUntilYoutubeRecog
 	}
 }
 
+type StartAfterYoutubeRecognizedStream struct {
+	Enabled bool `yaml:"enabled,omitempty"`
+}
+
+func DefaultStartAfterYoutubeRecognizedStreamConfig() StartAfterYoutubeRecognizedStream {
+	return StartAfterYoutubeRecognizedStream{
+		Enabled: false,
+	}
+}
+
 type ForwardingQuirks struct {
 	RestartUntilYoutubeRecognizesStream RestartUntilYoutubeRecognizesStream `yaml:"restart_until_youtube_recognizes_stream,omitempty"`
+	StartAfterYoutubeRecognizedStream   StartAfterYoutubeRecognizedStream   `yaml:"start_after_youtube_recognizes_stream"`
 }
 
 type ForwardingConfig struct {
