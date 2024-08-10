@@ -1467,7 +1467,9 @@ func (p *Panel) getUpdatedStatus_backends(ctx context.Context) {
 			for _, scene := range sceneList.Scenes {
 				p.obsSelectScene.Options = append(p.obsSelectScene.Options, scene.SceneName)
 			}
-			p.obsSelectScene.SetSelected(sceneList.CurrentProgramSceneName)
+			if sceneList.CurrentProgramSceneName != p.obsSelectScene.Selected {
+				p.obsSelectScene.SetSelected(sceneList.CurrentProgramSceneName)
+			}
 		}
 	} else {
 		if p.updateTimerHandler != nil {
@@ -1708,6 +1710,7 @@ func (p *Panel) initMainWindow(
 	)
 
 	p.obsSelectScene = widget.NewSelect(nil, func(s string) {
+		logger.Debugf(ctx, "OBS scene is changed to '%s'", s)
 		p.StreamD.OBSSetCurrentProgramScene(
 			ctx,
 			&scenes.SetCurrentProgramSceneParams{
@@ -2008,7 +2011,12 @@ func (p *Panel) setupStream(ctx context.Context) {
 
 func (p *Panel) startStream(ctx context.Context) {
 	p.streamMutex.Lock()
-	defer p.streamMutex.Unlock()
+	defer func() {
+		observability.Go(ctx, func() {
+			time.Sleep(10 * time.Second) // TODO: remove this
+			p.streamMutex.Unlock()
+		})
+	}()
 
 	if p.startStopButton.Disabled() {
 		return

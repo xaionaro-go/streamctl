@@ -227,9 +227,7 @@ func (t *Twitch) ApplyProfile(
 	if tags != nil {
 		logger.Debugf(ctx, "has tags")
 		if len(tags) == 0 {
-			// Unfortunately, there is a bug in the helix lib, which
-			// does not allow to set zero tags, so we will set
-			// some dummy tag:
+			logger.Warnf(ctx, "unfortunately, there is a bug in the helix lib, which does not allow to set zero tags, so adding tag 'stream' to the list of tags as a placeholder")
 			params.Tags = []string{"stream"}
 		} else {
 			params.Tags = tags

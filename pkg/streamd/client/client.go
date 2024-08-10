@@ -484,7 +484,7 @@ func (c *Client) StartStream(
 	if err != nil {
 		return fmt.Errorf("unable to serialize the profile: %w", err)
 	}
-	logger.Debugf(ctx, "serialized profile: '%s'", profile)
+	logger.Debugf(ctx, "serialized profile: '%#+v'", profile)
 	_, err = withClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
@@ -666,7 +666,7 @@ func (c *Client) ApplyProfile(
 	if err != nil {
 		return fmt.Errorf("unable to serialize the profile: %w", err)
 	}
-	logger.Debugf(ctx, "serialized profile: '%s'", profile)
+	logger.Debugf(ctx, "serialized profile: '%#+v'", profile)
 
 	_, err = withClient(ctx, c, func(
 		ctx context.Context,
@@ -692,7 +692,7 @@ func (c *Client) UpdateStream(
 	if err != nil {
 		return fmt.Errorf("unable to serialize the profile: %w", err)
 	}
-	logger.Debugf(ctx, "serialized profile: '%s'", profile)
+	logger.Debugf(ctx, "serialized profile: '%#+v'", profile)
 
 	_, err = withClient(ctx, c, func(
 		ctx context.Context,

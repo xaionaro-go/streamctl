@@ -14,6 +14,8 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	playertypes "github.com/xaionaro-go/streamctl/pkg/player/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/memoize"
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
@@ -23,7 +25,8 @@ import (
 )
 
 type PlatformsController interface {
-	CheckStreamStarted(ctx context.Context, destination *url.URL) (bool, error)
+	CheckStreamStartedByURL(ctx context.Context, destination *url.URL) (bool, error)
+	CheckStreamStartedByPlatformID(ctx context.Context, platID streamcontrol.PlatformName) (bool, error)
 }
 
 type StreamServer struct {
@@ -429,9 +432,9 @@ func (s *StreamServer) addStreamForward(
 					return
 				case <-t.C:
 				}
-				started, err := s.PlatformsController.CheckStreamStarted(
+				started, err := s.PlatformsController.CheckStreamStartedByPlatformID(
 					ctx,
-					fwd.URL,
+					youtube.ID,
 				)
 				logger.Debugf(ctx, "youtube status check: %v %v", started, err)
 				if started {
@@ -475,6 +478,10 @@ func (s *StreamServer) restartUntilYoutubeRecognizesStream(
 ) {
 	ctx = belt.WithField(ctx, "module", "restartUntilYoutubeRecognizesStream")
 	ctx = belt.WithField(ctx, "stream_forward", fmt.Sprintf("%s->%s", fwd.StreamID, fwd.DestinationID))
+
+	logger.Debugf(ctx, "restartUntilYoutubeRecognizesStream(ctx, %#+v, %#+v)", fwd, cfg)
+	defer func() { logger.Debugf(ctx, "restartUntilYoutubeRecognizesStream(ctx, %#+v, %#+v)", fwd, cfg) }()
+
 	if !cfg.Enabled {
 		logger.Errorf(ctx, "an attempt to start restartUntilYoutubeRecognizesStream when the hack is disabled for this stream forwarder: %#+v", cfg)
 		return
@@ -505,9 +512,9 @@ func (s *StreamServer) restartUntilYoutubeRecognizesStream(
 		logger.Debugf(ctx, "waited %v, checking if the remote platform accepted the stream", cfg.StartTimeout)
 
 		for {
-			started, err := s.PlatformsController.CheckStreamStarted(
+			started, err := s.PlatformsController.CheckStreamStartedByPlatformID(
 				memoize.SetNoCache(ctx, true),
-				fwd.ActiveForwarding.URL,
+				youtube.ID,
 			)
 			logger.Debugf(ctx, "the result of checking the stream on the remote platform: %v %v", started, err)
 			if err != nil {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
-	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
@@ -155,7 +155,23 @@ func (s *StreamServer) setupStreamPlayers(
 }
 
 func detachDone(ctx context.Context) context.Context {
-	return belt.CtxWithBelt(context.Background(), belt.CtxBelt(ctx))
+	return ctxDetached{
+		Context: ctx,
+	}
+}
+
+type ctxDetached struct {
+	context.Context
+}
+
+func (ctx ctxDetached) Deadline() (time.Time, bool) {
+	return context.Background().Deadline()
+}
+func (ctx ctxDetached) Done() <-chan struct{} {
+	return context.Background().Done()
+}
+func (ctx ctxDetached) Err() error {
+	return context.Background().Err()
 }
 
 type AddStreamPlayerConfig struct {

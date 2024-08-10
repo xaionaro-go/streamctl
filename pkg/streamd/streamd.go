@@ -777,6 +777,9 @@ func (d *StreamD) OBSSetCurrentProgramScene(
 	ctx context.Context,
 	req *scenes.SetCurrentProgramSceneParams,
 ) error {
+	logger.Debugf(ctx, "OBSSetCurrentProgramScene(ctx, %#+v)", req)
+	defer func() { logger.Debugf(ctx, "/OBSSetCurrentProgramScene(ctx, %#+v)", req) }()
+
 	defer d.notifyAboutChange(ctx, events.OBSCurrentProgramScene)
 
 	d.ControllersLocker.RLock()

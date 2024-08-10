@@ -48,7 +48,12 @@ func NewActiveStreamForward(
 	urlString string,
 	relayService *RelayService,
 	pauseFunc func(ctx context.Context, fwd *ActiveStreamForwarding),
-) (*ActiveStreamForwarding, error) {
+) (_ret *ActiveStreamForwarding, _err error) {
+	logger.Debugf(ctx, "NewActiveStreamForward(ctx, '%s', '%s', '%s', relayService, pauseFunc)", streamID, dstID, urlString)
+	defer func() {
+		logger.Debugf(ctx, "/NewActiveStreamForward(ctx, '%s', '%s', '%s', relayService, pauseFunc): %#+v %v", streamID, dstID, urlString, _ret, _err)
+	}()
+
 	urlParsed, err := url.Parse(urlString)
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse URL '%s': %w", urlString, err)
@@ -67,7 +72,10 @@ func NewActiveStreamForward(
 	return fwd, nil
 }
 
-func (fwd *ActiveStreamForwarding) Start(ctx context.Context) error {
+func (fwd *ActiveStreamForwarding) Start(ctx context.Context) (_err error) {
+	logger.Debugf(ctx, "Start")
+	defer func() { logger.Debugf(ctx, "/Start: %v", _err) }()
+
 	fwd.Locker.Lock()
 	defer fwd.Locker.Unlock()
 	if fwd.CancelFunc != nil {

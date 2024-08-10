@@ -30,8 +30,6 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 type GRPCServer struct {
@@ -384,7 +382,7 @@ func (grpc *GRPCServer) UpdateStream(
 	if err != nil {
 		return nil, fmt.Errorf("unable to update stream details: %w", err)
 	}
-	return nil, status.Errorf(codes.Unimplemented, "method UpdateStream not implemented")
+	return &streamd_grpc.UpdateStreamReply{}, nil
 }
 
 func (grpc *GRPCServer) OBSOLETE_FetchConfig(
