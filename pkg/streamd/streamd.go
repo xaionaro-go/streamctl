@@ -794,10 +794,15 @@ func (d *StreamD) SubmitOAuthCode(
 	ctx context.Context,
 	req *streamd_grpc.SubmitOAuthCodeRequest,
 ) (*streamd_grpc.SubmitOAuthCodeReply, error) {
+	code := req.GetCode()
+	if code == "" {
+		return nil, fmt.Errorf("code is empty")
+	}
+
 	err := d.UI.OnSubmittedOAuthCode(
 		ctx,
 		streamcontrol.PlatformName(req.GetPlatID()),
-		req.GetCode(),
+		code,
 	)
 	if err != nil {
 		return nil, err

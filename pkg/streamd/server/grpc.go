@@ -542,8 +542,10 @@ func (grpc *GRPCServer) OpenOAuthURL(
 	platID streamcontrol.PlatformName,
 	authURL string,
 ) (_ret error) {
-	logger.Tracef(ctx, "OpenOAuthURL()")
-	defer func() { logger.Tracef(ctx, "/OpenOAuthURL(): %v", _ret) }()
+	logger.Tracef(ctx, "OpenOAuthURL(ctx, %d, '%s', '%s')", listenPort, platID, authURL)
+	defer func() {
+		logger.Tracef(ctx, "/OpenOAuthURL(ctx, %d, '%s', '%s'): %v", listenPort, platID, authURL, _ret)
+	}()
 
 	grpc.OAuthURLHandlerLocker.Lock()
 	logger.Tracef(ctx, "grpc.OAuthURLHandlerLocker.Lock()-ed")

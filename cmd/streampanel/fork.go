@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	child_process_manager "github.com/AgustinSRG/go-child-process-manager"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
@@ -190,10 +191,18 @@ func runFork(
 	cmd.Stderr = NewForkLogWriter(ctx, logger.FromCtx(ctx))
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
+	err = child_process_manager.ConfigureCommand(cmd)
+	if err != nil {
+		logger.Errorf(ctx, "unable to configure the command %v to be auto-killed", err)
+	}
 	setFork(procName, cmd)
 	err = cmd.Start()
 	if err != nil {
 		return fmt.Errorf("unable to start '%s %s': %w", args[0], strings.Join(args[1:], " "), err)
+	}
+	err = child_process_manager.AddChildProcess(cmd.Process)
+	if err != nil {
+		logger.Errorf(ctx, "unable to register the command %v to be auto-killed", err)
 	}
 	observability.Go(ctx, func() {
 		err := cmd.Wait()

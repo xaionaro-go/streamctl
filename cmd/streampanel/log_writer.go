@@ -84,5 +84,4 @@ func (l *forkLogWriter) Write(b []byte) (int, error) {
 		return os.Stderr.Write(b)
 	}
 	return l.write(b)
-	return len(b), nil
 }

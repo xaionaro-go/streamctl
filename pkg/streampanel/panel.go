@@ -343,7 +343,7 @@ func (p *Panel) startOAuthListenerForRemoteStreamD(
 	streamD *client.Client,
 ) error {
 	ctx, cancelFn := context.WithCancel(ctx)
-	receiver, listenPort, err := oauthhandler.NewCodeReceiver(ctx, 0)
+	receiver, listenPort, err := oauthhandler.NewCodeReceiver(ctx, 8091) // TODO: remove the hard-code of port 8091, currently it is needed because the port is hardcoded in Twitch
 	if err != nil {
 		cancelFn()
 		return fmt.Errorf("unable to start listener for OAuth responses: %w", err)
@@ -380,7 +380,15 @@ func (p *Panel) startOAuthListenerForRemoteStreamD(
 					continue
 				}
 
-				code := <-receiver
+				code, ok := <-receiver
+				if !ok {
+					p.DisplayError(fmt.Errorf("auth code receiver channel is closed"))
+					continue
+				}
+				if code == "" {
+					p.DisplayError(fmt.Errorf("received auth code is empty"))
+					continue
+				}
 				logger.Debugf(ctx, "received oauth code: %s", code)
 				_, err := p.StreamD.SubmitOAuthCode(ctx, &streamd_grpc.SubmitOAuthCodeRequest{
 					PlatID: req.GetPlatID(),
@@ -601,11 +609,14 @@ func (p *Panel) oauthHandler(
 	platID streamcontrol.PlatformName,
 	arg oauthhandler.OAuthHandlerArgument,
 ) error {
+	logger.Debugf(ctx, "oauthHandler(ctx, '%s', %#+v)", platID, arg)
+	defer logger.Debugf(ctx, "/oauthHandler(ctx, '%s', %#+v)", platID, arg)
+
 	ctx, cancelFn := context.WithCancel(ctx)
 	defer cancelFn()
 	codeCh, _, err := oauthhandler.NewCodeReceiver(ctx, arg.ListenPort)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to make a code receiver: %w", err)
 	}
 
 	if err := p.openBrowser(arg.AuthURL); err != nil {

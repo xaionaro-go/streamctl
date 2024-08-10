@@ -101,8 +101,14 @@ func (ui *UI) oauth2Handler(
 	platID streamcontrol.PlatformName,
 	arg oauthhandler.OAuthHandlerArgument,
 ) error {
+	logger.Debugf(ctx, "oauth2Handler(ctx, '%s', %#+v)", platID, arg)
+	defer logger.Debugf(ctx, "/oauth2Handler(ctx, '%s', %#+v)", platID, arg)
+
 	ctx, cancelFn := context.WithCancel(ctx)
-	defer cancelFn()
+	defer func() {
+		logger.Debugf(ctx, "cancelling the context")
+		cancelFn()
+	}()
 
 	codeCh, removeReceiver := ui.newOAuthCodeReceiver(ctx, platID)
 	if codeCh == nil {
@@ -112,7 +118,7 @@ func (ui *UI) oauth2Handler(
 		defer removeReceiver()
 	}
 
-	logger.Debugf(ctx, "asking to open the URL: %s", arg.AuthURL)
+	logger.Debugf(ctx, "asking to open the URL '%s' using listen port %d for platform '%s'", arg.AuthURL, arg.ListenPort, platID)
 	ui.OAuthURLOpenFn(arg.ListenPort, platID, arg.AuthURL)
 
 	t := time.NewTicker(time.Hour)
@@ -121,9 +127,19 @@ func (ui *UI) oauth2Handler(
 		logger.Debugf(ctx, "waiting for an auth code")
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
-		case code := <-codeCh:
-			return arg.ExchangeFn(code)
+			return fmt.Errorf("oauth2Handler is cancelled: %w", ctx.Err())
+		case code, ok := <-codeCh:
+			if !ok {
+				return fmt.Errorf("internal error: codeCh is closed in oauth2Handler")
+			}
+			if code == "" {
+				return fmt.Errorf("internal error: code is empty in oauth2Handler")
+			}
+			err := arg.ExchangeFn(code)
+			if err != nil {
+				return fmt.Errorf("ExchangeFn returned an error: %w", err)
+			}
+			return nil
 		case <-t.C:
 			logger.Debugf(ctx, "re-asking to open the URL: %s", arg.AuthURL)
 			ui.OAuthURLOpenFn(arg.ListenPort, platID, arg.AuthURL)
@@ -136,6 +152,10 @@ func (ui *UI) OnSubmittedOAuthCode(
 	platID streamcontrol.PlatformName,
 	code string,
 ) error {
+	if code == "" {
+		return fmt.Errorf("code is empty")
+	}
+
 	codeCh := ui.getOAuthCodeReceiver(ctx, platID)
 	if codeCh == nil {
 		logger.Debugf(ctx, "no code receiver for '%s'", platID)
