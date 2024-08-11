@@ -155,7 +155,11 @@ func (d *StreamD) InitStreamServer(ctx context.Context) error {
 }
 
 func (d *StreamD) initStreamServer(ctx context.Context) error {
-	d.StreamServer = streamserver.New(&d.Config.StreamServer, newPlatformsControllerAdapter(d))
+	d.StreamServer = streamserver.New(
+		&d.Config.StreamServer,
+		newPlatformsControllerAdapter(d),
+		newBrowserOpenerAdapter(d),
+	)
 	assert(d.StreamServer != nil)
 	defer d.notifyAboutChange(ctx, events.StreamServersChange)
 	return d.StreamServer.Init(ctx, streamserverimpl.InitOptionDefaultStreamPlayerOptions(d.streamPlayerOptions()))

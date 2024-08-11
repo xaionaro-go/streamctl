@@ -98,13 +98,23 @@ func runStreamd(
 	var streamdGRPC *server.GRPCServer
 	ui := ui.NewUI(
 		ctx,
+		func(ctx context.Context, url string) error {
+			streamdGRPCLocker.Lock()
+			logger.Debugf(ctx, "streamdGRPCLocker.Lock()-ed")
+			defer logger.Debugf(ctx, "streamdGRPCLocker.Lock()-ed")
+			defer streamdGRPCLocker.Unlock()
+
+			err := streamdGRPC.OpenBrowser(ctx, url)
+			errmon.ObserveErrorCtx(ctx, err)
+			return err
+		},
 		func(listenPort uint16, platID streamcontrol.PlatformName, authURL string) bool {
-			logger.Tracef(ctx, "streamd.UI.OpenOAuthURL(%d, %s, '%s')", listenPort, platID, authURL)
-			defer logger.Tracef(ctx, "/streamd.UI.OpenOAuthURL(%d, %s, '%s')", listenPort, platID, authURL)
+			logger.Debugf(ctx, "streamd.UI.OpenOAuthURL(%d, %s, '%s')", listenPort, platID, authURL)
+			defer logger.Debugf(ctx, "/streamd.UI.OpenOAuthURL(%d, %s, '%s')", listenPort, platID, authURL)
 
 			streamdGRPCLocker.Lock()
-			logger.Tracef(ctx, "streamdGRPCLocker.Lock()-ed")
-			defer logger.Tracef(ctx, "streamdGRPCLocker.Lock()-ed")
+			logger.Debugf(ctx, "streamdGRPCLocker.Lock()-ed")
+			defer logger.Debugf(ctx, "streamdGRPCLocker.Lock()-ed")
 			defer streamdGRPCLocker.Unlock()
 
 			err := streamdGRPC.OpenOAuthURL(ctx, listenPort, platID, authURL)

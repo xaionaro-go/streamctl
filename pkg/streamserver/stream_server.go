@@ -6,10 +6,13 @@ import (
 )
 
 type StreamServer = streamserver.StreamServer
+type PlatformsController = streamserver.PlatformsController
+type BrowserOpener = streamserver.BrowserOpener
 
 func New(
 	cfg *types.Config,
 	platformsController streamserver.PlatformsController,
+	browserOpener BrowserOpener,
 ) *StreamServer {
-	return streamserver.New(cfg, platformsController)
+	return streamserver.New(cfg, platformsController, browserOpener)
 }

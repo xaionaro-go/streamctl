@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
 	fyneapp "fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
@@ -68,6 +67,7 @@ func main() {
 			},
 		},
 		dummyPlatformsController{},
+		dummyBrowserOpener{},
 	)
 	err := ss.Init(ctx)
 	assertNoError(ctx, err)
@@ -216,14 +216,4 @@ func (s *StreamPlayerStreamServer) WaitPublisher(
 		close(ch)
 	})
 	return ch, nil
-}
-
-func removeNonDigitsAndDots(input string) string {
-	var result []rune
-	for _, r := range input {
-		if unicode.IsDigit(r) && r != '.' {
-			result = append(result, r)
-		}
-	}
-	return string(result)
 }

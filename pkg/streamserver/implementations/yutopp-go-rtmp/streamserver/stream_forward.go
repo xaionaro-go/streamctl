@@ -130,10 +130,6 @@ func (fwd *ActiveStreamForwarding) WaitForPublisher(
 
 	ctx = belt.WithField(belt.WithField(ctx, "appNameLocal", localAppName), "appNameRemote", apiKey)
 
-	logger.Debugf(ctx, "checking if we need to pause")
-	fwd.PauseFunc(ctx, fwd)
-	logger.Debugf(ctx, "no pauses or pauses ended")
-
 	logger.Debugf(ctx, "wait for stream '%s'", fwd.StreamID)
 	pubSub := fwd.RelayService.WaitPubsub(ctx, localAppName)
 	logger.Debugf(ctx, "wait for stream '%s' result: %#+v", fwd.StreamID, pubSub)
@@ -144,6 +140,10 @@ func (fwd *ActiveStreamForwarding) WaitForPublisher(
 			strings.Join(fwd.RelayService.PubsubNames(), ", "),
 		)
 	}
+
+	logger.Debugf(ctx, "checking if we need to pause")
+	fwd.PauseFunc(ctx, fwd)
+	logger.Debugf(ctx, "no pauses or pauses ended")
 
 	return pubSub, nil
 }

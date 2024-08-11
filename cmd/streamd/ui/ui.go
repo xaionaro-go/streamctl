@@ -18,6 +18,7 @@ import (
 )
 
 type UI struct {
+	OpenBrowserFn     func(context.Context, string) error
 	OAuthURLOpenFn    func(listenPort uint16, platID streamcontrol.PlatformName, authURL string) bool
 	Belt              *belt.Belt
 	RestartFn         func(context.Context, string)
@@ -30,17 +31,25 @@ var _ ui.UI = (*UI)(nil)
 
 func NewUI(
 	ctx context.Context,
+	openBrowserFn func(context.Context, string) error,
 	oauthURLOpener func(listenPort uint16, platID streamcontrol.PlatformName, authURL string) bool,
 	restartFn func(context.Context, string),
 	setLoggingLevel func(context.Context, logger.Level),
 ) *UI {
 	return &UI{
+		OpenBrowserFn:     openBrowserFn,
 		OAuthURLOpenFn:    oauthURLOpener,
 		Belt:              belt.CtxBelt(ctx),
 		RestartFn:         restartFn,
 		CodeChMap:         map[streamcontrol.PlatformName]chan string{},
 		SetLoggingLevelFn: setLoggingLevel,
 	}
+}
+
+func (ui *UI) OpenBrowser(ctx context.Context, url string) error {
+	logger.Debugf(ctx, "UI.OpenBrowser(ctx, '%s')", url)
+	defer logger.Debugf(ctx, "/UI.OpenBrowser(ctx, '%s')", url)
+	return ui.OpenBrowserFn(ctx, url)
 }
 
 func (ui *UI) SetLoggingLevel(ctx context.Context, level logger.Level) {

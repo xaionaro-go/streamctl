@@ -20,6 +20,7 @@ type UI interface {
 	) (bool, string, []byte, error)
 	OAuthHandlerTwitch(ctx context.Context, arg oauthhandler.OAuthHandlerArgument) error
 	OAuthHandlerYouTube(ctx context.Context, arg oauthhandler.OAuthHandlerArgument) error
+	OpenBrowser(ctx context.Context, url string) error
 	InputTwitchUserInfo(
 		ctx context.Context,
 		cfg *streamcontrol.PlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile],

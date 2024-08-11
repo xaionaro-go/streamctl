@@ -29,6 +29,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/andreykaipov/goobs/api/requests/scenes"
 	"github.com/facebookincubator/go-belt"
+	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/go-ng/xmath"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
@@ -44,6 +45,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/client"
 	streamdconfig "github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/memoize"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/config"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
@@ -375,7 +377,7 @@ func (p *Panel) startOAuthListenerForRemoteStreamD(
 					continue
 				}
 
-				if err := p.openBrowser(req.GetAuthURL()); err != nil {
+				if err := p.openBrowser(ctx, req.GetAuthURL(), "It is required to confirm access in Twitch/YouTube using browser"); err != nil {
 					p.DisplayError(fmt.Errorf("unable to open browser with URL '%s': %w", req.GetAuthURL(), err))
 					continue
 				}
@@ -437,6 +439,10 @@ func (p *Panel) SaveConfig(
 	}
 
 	return nil
+}
+
+func (p *Panel) OpenBrowser(ctx context.Context, url string) error {
+	return p.openBrowser(ctx, url, "")
 }
 
 func (p *Panel) initBuiltinStreamD(ctx context.Context) error {
@@ -619,7 +625,7 @@ func (p *Panel) oauthHandler(
 		return fmt.Errorf("unable to make a code receiver: %w", err)
 	}
 
-	if err := p.openBrowser(arg.AuthURL); err != nil {
+	if err := p.openBrowser(ctx, arg.AuthURL, "It is required to confirm access in Twitch/YouTube using browser"); err != nil {
 		return fmt.Errorf("unable to open browser with URL '%s': %w", arg.AuthURL, err)
 	}
 
@@ -641,7 +647,16 @@ func (p *Panel) oauthHandler(
 	return nil
 }
 
-func (p *Panel) openBrowser(authURL string) error {
+func (p *Panel) openBrowser(
+	ctx context.Context,
+	url string,
+	reason string,
+) error {
+	if p.Config.Browser.Command != "" {
+		logger.Debugf(ctx, "the browser command is configured to be : '%s'", p.Config.Browser.Command)
+		return exec.Command(p.Config.Browser.Command, url).Start()
+	}
+
 	var browserCmd string
 	switch runtime.GOOS {
 	case "darwin":
@@ -653,16 +668,20 @@ func (p *Panel) openBrowser(authURL string) error {
 			browserCmd = "xdg-open"
 		}
 	default:
-		return oauthhandler.LaunchBrowser(authURL)
+		return oauthhandler.LaunchBrowser(url)
 	}
 
 	waitCh := make(chan struct{})
 
 	w := p.app.NewWindow(AppName + ": Browser selection window")
 	resizeWindow(w, fyne.NewSize(600, 400))
-	promptText := widget.NewRichTextWithText("It is required to confirm access in Twitch/YouTube using browser. Select a browser for that (or leave the field empty for auto-selection):")
+	if reason != "" {
+		reason += ". "
+	}
+	promptText := widget.NewRichTextWithText(reason + "Select a browser for that:")
 	promptText.Wrapping = fyne.TextWrapWord
 	browserField := widget.NewEntry()
+	browserField.SetText(browserCmd)
 	browserField.PlaceHolder = "command to execute the browser"
 	browserField.OnSubmitted = func(s string) {
 		close(waitCh)
@@ -685,11 +704,16 @@ func (p *Panel) openBrowser(authURL string) error {
 	<-waitCh
 	w.Hide()
 
-	if browserField.Text != "" {
-		browserCmd = browserField.Text
+	browserCmd = browserField.Text
+	logger.Debugf(ctx, "chosen browser command is: '%s'", browserCmd)
+	if browserCmd != p.Config.Browser.Command {
+		logger.Debugf(ctx, "updating the browser command in the config")
+		p.Config.Browser.Command = browserCmd
+		err := p.SaveConfig(ctx)
+		errmon.ObserveErrorCtx(ctx, err)
 	}
 
-	return exec.Command(browserCmd, authURL).Start()
+	return exec.Command(browserCmd, url).Start()
 }
 
 var twitchAppsCreateLink, _ = url.Parse("https://dev.twitch.tv/console/apps/create")
@@ -2005,8 +2029,58 @@ func (p *Panel) setupStream(ctx context.Context) {
 				p.DisplayError(fmt.Errorf("unable to start the stream on YouTube: %w", err))
 			}
 		}
-	}
 
+		// I don't know why, but if we don't open the livestream control page on YouTube
+		// in the browser, then the stream does not want to start.
+		status, err := p.StreamD.GetStreamStatus(memoize.SetNoCache(ctx, true), youtube.ID)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to get YouTube stream status: %w", err))
+		} else {
+			d := youtube.GetStreamStatusCustomData(status)
+			bcID := getYTBroadcastID(d)
+			if bcID == "" {
+				p.DisplayError(fmt.Errorf("unable to get the broadcast ID from YouTube"))
+			} else {
+				url := fmt.Sprintf("https://studio.youtube.com/video/%s/livestreaming", bcID)
+				err := p.OpenBrowser(ctx, url)
+				if err != nil {
+					p.DisplayError(fmt.Errorf("unable to open '%s' in browser: %w", url, err))
+				}
+				observability.Go(ctx, func() {
+					waitFor := 10 * time.Second
+					deadline := time.Now().Add(waitFor)
+
+					p.streamMutex.Lock()
+					defer p.streamMutex.Unlock()
+
+					p.startStopButton.Disable()
+					p.startStopButton.Icon = theme.ViewRefreshIcon()
+					p.startStopButton.Importance = widget.DangerImportance
+
+					t := time.NewTicker(100 * time.Millisecond)
+					defer t.Stop()
+					for {
+						<-t.C
+						timeDiff := time.Until(deadline).Truncate(100 * time.Millisecond)
+						if timeDiff < 0 {
+							return
+						}
+						p.startStopButton.SetText(timeDiff.String())
+					}
+				})
+			}
+		}
+	}
+}
+
+func getYTBroadcastID(d youtube.StreamStatusCustomData) string {
+	for _, bc := range d.ActiveBroadcasts {
+		return bc.Id
+	}
+	for _, bc := range d.UpcomingBroadcasts {
+		return bc.Id
+	}
+	return ""
 }
 
 func (p *Panel) startStream(ctx context.Context) {

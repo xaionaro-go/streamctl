@@ -29,6 +29,10 @@ type PlatformsController interface {
 	CheckStreamStartedByPlatformID(ctx context.Context, platID streamcontrol.PlatformName) (bool, error)
 }
 
+type BrowserOpener interface {
+	OpenURL(ctx context.Context, url string) error
+}
+
 type StreamServer struct {
 	sync.Mutex
 	Config                  *types.Config
@@ -37,12 +41,14 @@ type StreamServer struct {
 	StreamDestinations      []types.StreamDestination
 	ActiveStreamForwardings map[types.DestinationID]*ActiveStreamForwarding
 	PlatformsController     PlatformsController
+	BrowserOpener           BrowserOpener
 	StreamPlayers           *streamplayer.StreamPlayers
 }
 
 func New(
 	cfg *types.Config,
 	platformsController PlatformsController,
+	browserOpener BrowserOpener,
 ) *StreamServer {
 	s := &StreamServer{
 		RelayServer: NewRelayService(),
@@ -50,6 +56,7 @@ func New(
 
 		ActiveStreamForwardings: map[types.DestinationID]*ActiveStreamForwarding{},
 		PlatformsController:     platformsController,
+		BrowserOpener:           browserOpener,
 	}
 	s.StreamPlayers = streamplayer.New(
 		NewStreamPlayerStreamServer(s),
@@ -413,6 +420,15 @@ func (s *StreamServer) addStreamForward(
 		urlParsed.Host = portSrv.ListenAddr()
 	}
 
+	result := &StreamForward{
+		StreamID:      streamID,
+		DestinationID: destinationID,
+		Enabled:       true,
+		Quirks:        quirks,
+		NumBytesWrote: 0,
+		NumBytesRead:  0,
+	}
+
 	fwd, err := NewActiveStreamForward(
 		ctx,
 		streamID,
@@ -420,25 +436,27 @@ func (s *StreamServer) addStreamForward(
 		urlParsed.String(),
 		s.RelayServer,
 		func(ctx context.Context, fwd *ActiveStreamForwarding) {
-			if !quirks.StartAfterYoutubeRecognizedStream.Enabled {
-				return
-			}
-
-			logger.Debugf(ctx, "fwd %s->%s is waiting for YouTube to recognize the stream", streamID, destinationID)
-			t := time.NewTicker(time.Second)
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case <-t.C:
-				}
-				started, err := s.PlatformsController.CheckStreamStartedByPlatformID(
-					ctx,
-					youtube.ID,
-				)
-				logger.Debugf(ctx, "youtube status check: %v %v", started, err)
-				if started {
-					return
+			if quirks.StartAfterYoutubeRecognizedStream.Enabled {
+				if quirks.RestartUntilYoutubeRecognizesStream.Enabled {
+					logger.Errorf(ctx, "StartAfterYoutubeRecognizedStream should not be used together with RestartUntilYoutubeRecognizesStream")
+				} else {
+					logger.Debugf(ctx, "fwd %s->%s is waiting for YouTube to recognize the stream", streamID, destinationID)
+					t := time.NewTicker(time.Second)
+					for {
+						select {
+						case <-ctx.Done():
+							return
+						case <-t.C:
+						}
+						started, err := s.PlatformsController.CheckStreamStartedByPlatformID(
+							ctx,
+							youtube.ID,
+						)
+						logger.Debugf(ctx, "youtube status check: %v %v", started, err)
+						if started {
+							return
+						}
+					}
 				}
 			}
 		},
@@ -447,16 +465,7 @@ func (s *StreamServer) addStreamForward(
 		return nil, fmt.Errorf("unable to run the stream forwarding: %w", err)
 	}
 	s.ActiveStreamForwardings[destinationID] = fwd
-
-	result := &StreamForward{
-		StreamID:         streamID,
-		DestinationID:    destinationID,
-		Enabled:          true,
-		Quirks:           quirks,
-		ActiveForwarding: fwd,
-		NumBytesWrote:    0,
-		NumBytesRead:     0,
-	}
+	result.ActiveForwarding = fwd
 
 	if quirks.RestartUntilYoutubeRecognizesStream.Enabled {
 		observability.Go(ctx, func() {

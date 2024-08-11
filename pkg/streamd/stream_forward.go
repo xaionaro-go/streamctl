@@ -74,3 +74,17 @@ func (a *platformsControllerAdapter) CheckStreamStartedByPlatformID(
 
 	return true, nil
 }
+
+type browserOpenerAdapter struct {
+	StreamD *StreamD
+}
+
+func newBrowserOpenerAdapter(streamD *StreamD) *browserOpenerAdapter {
+	return &browserOpenerAdapter{
+		StreamD: streamD,
+	}
+}
+
+func (a *browserOpenerAdapter) OpenURL(ctx context.Context, url string) error {
+	return a.StreamD.UI.OpenBrowser(ctx, url)
+}

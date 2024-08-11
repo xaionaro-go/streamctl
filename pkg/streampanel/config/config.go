@@ -16,10 +16,15 @@ type ScreenshotConfig struct {
 	screenshot.Config `yaml:"screenshot,inline"`
 }
 
+type BrowserConfig struct {
+	Command string `yaml:"command"`
+}
+
 type Config struct {
 	RemoteStreamDAddr string           `yaml:"streamd_remote"`
 	BuiltinStreamD    streamd.Config   `yaml:"streamd_builtin"`
 	Screenshot        ScreenshotConfig `yaml:"screenshot"`
+	Browser           BrowserConfig    `yaml:"browser"`
 }
 
 func DefaultConfig() Config {

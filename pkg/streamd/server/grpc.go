@@ -534,20 +534,62 @@ func (err ErrNoOAuthHandlerForPort) Error() string {
 	return fmt.Sprintf("no handler for port %d", err.Port)
 }
 
+func (grpc *GRPCServer) OpenBrowser(
+	ctx context.Context,
+	url string,
+) (_ret error) {
+	logger.Debugf(ctx, "OpenBrowser(ctx, '%s')", url)
+	defer func() {
+		logger.Debugf(ctx, "/OpenBrowser(ctx, '%s'): %v", url, _ret)
+	}()
+
+	// TODO: Stop abusing the function for OAuthURLs here! Implement a separate function, or
+	//       at least rename the old one.
+	logger.Warnf(ctx, "FIXME: Do not use OAuthURLs for 'OpenBrowser'!")
+
+	grpc.OAuthURLHandlerLocker.Lock()
+	logger.Debugf(ctx, "grpc.OAuthURLHandlerLocker.Lock()-ed")
+	defer logger.Debugf(ctx, "grpc.OAuthURLHandlerLocker.Unlock()-ed")
+	defer grpc.OAuthURLHandlerLocker.Unlock()
+
+	req := streamd_grpc.OAuthRequest{
+		PlatID:  string("<OpenBrowser>"),
+		AuthURL: url,
+	}
+
+	count := 0
+	for _, handlers := range grpc.OAuthURLHandlers {
+		logger.Debugf(ctx, "OpenOAuthURL() sending %#+v", req)
+		var resultErr *multierror.Error
+		for _, handler := range handlers {
+			count++
+			err := handler.Sender.Send(&req)
+			if err != nil {
+				err = multierror.Append(resultErr, fmt.Errorf("unable to send oauth request: %w", err))
+			}
+		}
+	}
+
+	if count == 0 {
+		return ErrNoOAuthHandlerForPort{}
+	}
+	return nil
+}
+
 func (grpc *GRPCServer) OpenOAuthURL(
 	ctx context.Context,
 	listenPort uint16,
 	platID streamcontrol.PlatformName,
 	authURL string,
 ) (_ret error) {
-	logger.Tracef(ctx, "OpenOAuthURL(ctx, %d, '%s', '%s')", listenPort, platID, authURL)
+	logger.Debugf(ctx, "OpenOAuthURL(ctx, %d, '%s', '%s')", listenPort, platID, authURL)
 	defer func() {
-		logger.Tracef(ctx, "/OpenOAuthURL(ctx, %d, '%s', '%s'): %v", listenPort, platID, authURL, _ret)
+		logger.Debugf(ctx, "/OpenOAuthURL(ctx, %d, '%s', '%s'): %v", listenPort, platID, authURL, _ret)
 	}()
 
 	grpc.OAuthURLHandlerLocker.Lock()
-	logger.Tracef(ctx, "grpc.OAuthURLHandlerLocker.Lock()-ed")
-	defer logger.Tracef(ctx, "grpc.OAuthURLHandlerLocker.Unlock()-ed")
+	logger.Debugf(ctx, "grpc.OAuthURLHandlerLocker.Lock()-ed")
+	defer logger.Debugf(ctx, "grpc.OAuthURLHandlerLocker.Unlock()-ed")
 	defer grpc.OAuthURLHandlerLocker.Unlock()
 
 	handlers := grpc.OAuthURLHandlers[listenPort]
@@ -566,7 +608,7 @@ func (grpc *GRPCServer) OpenOAuthURL(
 	}
 	grpc.UnansweredOAuthRequests[platID][listenPort] = &req
 	grpc.UnansweredOAuthRequestsLocker.Unlock()
-	logger.Tracef(ctx, "OpenOAuthURL() sending %#+v", req)
+	logger.Debugf(ctx, "OpenOAuthURL() sending %#+v", req)
 	var resultErr *multierror.Error
 	for _, handler := range handlers {
 		err := handler.Sender.Send(&req)
