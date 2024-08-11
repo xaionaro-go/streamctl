@@ -162,8 +162,6 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 		logger.FromCtx(ctx).
 			WithField("error_event_exception_stack_trace", string(debug.Stack())).Errorf("%v", _ret)
 	}()
-	fwd.Locker.Lock()
-	defer fwd.Locker.Unlock()
 
 	pubSub, err := fwd.WaitForPublisher(ctx)
 	if err != nil {
@@ -200,9 +198,27 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 	if err != nil {
 		return fmt.Errorf("unable to connect to '%s': %w", urlParsed.String(), err)
 	}
-	fwd.Client = client
 
 	logger.Debugf(ctx, "connected to '%s'", urlParsed.String())
+
+	fwd.Locker.Lock()
+	defer fwd.Locker.Unlock()
+	fwd.Client = client
+	defer func() {
+		if fwd.Client == nil {
+			return
+		}
+		err := fwd.Client.Close()
+		if err != nil {
+			logger.Warnf(ctx, "unable to close fwd.Client: %v", err)
+		}
+		fwd.Client = nil
+	}()
+	select {
+	case <-ctx.Done():
+		return
+	default:
+	}
 
 	tcURL := *urlParsed
 	tcURL.Path = "/" + remoteAppName
@@ -323,13 +339,6 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 	fwd.Locker.Unlock()
 	<-fwd.Sub.ClosedChan()
 	fwd.Locker.Lock()
-	if fwd.Client != nil {
-		err := fwd.Client.Close()
-		if err != nil {
-			logger.Warnf(ctx, "unable to close fwd.Client: %v", err)
-		}
-		fwd.Client = nil
-	}
 	logger.Debugf(ctx, "the source stopped, so stopped also publishing to '%s'", urlParsed.String())
 	return nil
 }
