@@ -3,6 +3,7 @@ package streamserver
 import (
 	"bytes"
 	"context"
+	"io"
 	"sync"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
@@ -49,17 +50,21 @@ func (pb *Pubsub) Deregister() error {
 }
 
 func (pb *Pubsub) deregister() error {
-	observability.GoSafe(context.TODO(), func() {
-		for _, sub := range pb.subs {
-			_ = sub.Close()
-		}
-	})
+	subs := pb.subs
+	if subs != nil {
+		pb.subs = nil
+		observability.GoSafe(context.TODO(), func() {
+			for _, sub := range subs {
+				_ = sub.Close()
+			}
+		})
+	}
 
 	var result *multierror.Error
 	result = multierror.Append(result, pb.srv.removePubsub(pb.name))
 	h := pb.publisherHandler
-	pb.publisherHandler = nil
 	if h != nil {
+		pb.publisherHandler = nil
 		result = multierror.Append(result, h.conn.Close())
 	}
 	return result.ErrorOrNil()
@@ -73,12 +78,13 @@ func (pb *Pubsub) Pub() *Pub {
 	return pub
 }
 
-func (pb *Pubsub) Sub(eventCallback func(ft *flvtag.FlvTag) error) *Sub {
+func (pb *Pubsub) Sub(connCloser io.Closer, eventCallback func(ft *flvtag.FlvTag) error) *Sub {
 	pb.m.Lock()
 	defer pb.m.Unlock()
 
 	subID := pb.nextSubID
 	sub := &Sub{
+		connCloser:    connCloser,
 		pubSub:        pb,
 		subID:         subID,
 		eventCallback: eventCallback,
@@ -187,8 +193,10 @@ func (p *Pub) Close() error {
 }
 
 type Sub struct {
-	pubSub *Pubsub
-	subID  uint64
+	locker     sync.Mutex
+	connCloser io.Closer
+	pubSub     *Pubsub
+	subID      uint64
 
 	closed         bool
 	initialized    bool
@@ -219,13 +227,24 @@ func (s *Sub) Close() error {
 	logger.Default().Debugf("Sub.Close")
 	defer logger.Default().Debugf("/Sub.Close")
 
+	s.locker.Lock()
+	defer s.locker.Unlock()
+
+	var result *multierror.Error
+
+	connCloser := s.connCloser
+	if connCloser != nil {
+		s.connCloser = nil
+		err := connCloser.Close()
+		result = multierror.Append(result, err)
+	}
 	s.closedChanOnce.Do(func() { close(s.closedChan) })
 	if s.closed {
-		return nil
+		return result.ErrorOrNil()
 	}
 	s.closed = true
 	s.pubSub.RemoveSub(s)
-	return nil
+	return result.ErrorOrNil()
 }
 
 func (s *Sub) ClosedChan() <-chan struct{} {

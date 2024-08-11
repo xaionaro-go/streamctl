@@ -78,7 +78,7 @@ func (h *Handler) OnPlay(ctx *rtmp.StreamContext, timestamp uint32, cmd *rtmpmsg
 		return fmt.Errorf("stream '%s' is not found", cmd.StreamName)
 	}
 
-	h.sub = pubsub.Sub(onEventCallback(h.conn, ctx.StreamID))
+	h.sub = pubsub.Sub(h.conn, onEventCallback(h.conn, ctx.StreamID))
 
 	return nil
 }

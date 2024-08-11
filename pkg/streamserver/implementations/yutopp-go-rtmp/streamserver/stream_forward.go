@@ -236,7 +236,7 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 	}
 
 	logger.Debugf(ctx, "starting publishing to '%s'", urlParsed.String())
-	fwd.Sub = pubSub.Sub(func(flv *flvtag.FlvTag) error {
+	fwd.Sub = pubSub.Sub(client, func(flv *flvtag.FlvTag) error {
 		logger.Tracef(ctx, "flvtag == %#+v", *flv)
 		var buf bytes.Buffer
 
@@ -324,7 +324,10 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 	<-fwd.Sub.ClosedChan()
 	fwd.Locker.Lock()
 	if fwd.Client != nil {
-		fwd.Client.Close()
+		err := fwd.Client.Close()
+		if err != nil {
+			logger.Warnf(ctx, "unable to close fwd.Client: %v", err)
+		}
 		fwd.Client = nil
 	}
 	logger.Debugf(ctx, "the source stopped, so stopped also publishing to '%s'", urlParsed.String())

@@ -33,7 +33,9 @@ func (s *RelayService) NewPubsub(key string, publisherHandler *Handler) (*Pubsub
 
 	if oldStream, ok := s.streams[key]; ok {
 		err := oldStream.deregister()
-		logger.Warnf(ctx, "unable to close the old stream: %v", err)
+		if err != nil {
+			logger.Warnf(ctx, "unable to close the old stream: %v", err)
+		}
 	}
 
 	pubsub := NewPubsub(s, key, publisherHandler)
