@@ -495,10 +495,37 @@ func (d *StreamD) StartStream(
 		if err != nil {
 			return fmt.Errorf("unable to start the stream on YouTube: %w", err)
 		}
+
+		// I don't know why, but if we don't open the livestream control page on YouTube
+		// in the browser, then the stream does not want to start.
+		status, err := d.GetStreamStatus(memoize.SetNoCache(ctx, true), youtube.ID)
+		if err != nil {
+			return fmt.Errorf("unable to get YouTube stream status: %w", err)
+		}
+		data := youtube.GetStreamStatusCustomData(status)
+		bcID := getYTBroadcastID(data)
+		if bcID == "" {
+			return fmt.Errorf("unable to get the broadcast ID from YouTube")
+		}
+		url := fmt.Sprintf("https://studio.youtube.com/video/%s/livestreaming", bcID)
+		err = d.UI.OpenBrowser(ctx, url)
+		if err != nil {
+			return fmt.Errorf("unable to open '%s' in browser: %w", url, err)
+		}
 		return nil
 	default:
 		return fmt.Errorf("unexpected platform ID '%s'", platID)
 	}
+}
+
+func getYTBroadcastID(d youtube.StreamStatusCustomData) string {
+	for _, bc := range d.ActiveBroadcasts {
+		return bc.Id
+	}
+	for _, bc := range d.UpcomingBroadcasts {
+		return bc.Id
+	}
+	return ""
 }
 
 func (d *StreamD) EndStream(ctx context.Context, platID streamcontrol.PlatformName) error {

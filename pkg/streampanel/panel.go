@@ -45,7 +45,6 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/client"
 	streamdconfig "github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
-	"github.com/xaionaro-go/streamctl/pkg/streamd/memoize"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/config"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
@@ -2032,55 +2031,31 @@ func (p *Panel) setupStream(ctx context.Context) {
 
 		// I don't know why, but if we don't open the livestream control page on YouTube
 		// in the browser, then the stream does not want to start.
-		status, err := p.StreamD.GetStreamStatus(memoize.SetNoCache(ctx, true), youtube.ID)
-		if err != nil {
-			p.DisplayError(fmt.Errorf("unable to get YouTube stream status: %w", err))
-		} else {
-			d := youtube.GetStreamStatusCustomData(status)
-			bcID := getYTBroadcastID(d)
-			if bcID == "" {
-				p.DisplayError(fmt.Errorf("unable to get the broadcast ID from YouTube"))
-			} else {
-				url := fmt.Sprintf("https://studio.youtube.com/video/%s/livestreaming", bcID)
-				err := p.OpenBrowser(ctx, url)
-				if err != nil {
-					p.DisplayError(fmt.Errorf("unable to open '%s' in browser: %w", url, err))
+		//
+		// And here we wait until the hack with opening the page will complete.
+		observability.Go(ctx, func() {
+			waitFor := 15 * time.Second
+			deadline := time.Now().Add(waitFor)
+
+			p.streamMutex.Lock()
+			defer p.streamMutex.Unlock()
+
+			p.startStopButton.Disable()
+			p.startStopButton.Icon = theme.ViewRefreshIcon()
+			p.startStopButton.Importance = widget.DangerImportance
+
+			t := time.NewTicker(100 * time.Millisecond)
+			defer t.Stop()
+			for {
+				<-t.C
+				timeDiff := time.Until(deadline).Truncate(100 * time.Millisecond)
+				if timeDiff < 0 {
+					return
 				}
-				observability.Go(ctx, func() {
-					waitFor := 10 * time.Second
-					deadline := time.Now().Add(waitFor)
-
-					p.streamMutex.Lock()
-					defer p.streamMutex.Unlock()
-
-					p.startStopButton.Disable()
-					p.startStopButton.Icon = theme.ViewRefreshIcon()
-					p.startStopButton.Importance = widget.DangerImportance
-
-					t := time.NewTicker(100 * time.Millisecond)
-					defer t.Stop()
-					for {
-						<-t.C
-						timeDiff := time.Until(deadline).Truncate(100 * time.Millisecond)
-						if timeDiff < 0 {
-							return
-						}
-						p.startStopButton.SetText(timeDiff.String())
-					}
-				})
+				p.startStopButton.SetText(timeDiff.String())
 			}
-		}
+		})
 	}
-}
-
-func getYTBroadcastID(d youtube.StreamStatusCustomData) string {
-	for _, bc := range d.ActiveBroadcasts {
-		return bc.Id
-	}
-	for _, bc := range d.UpcomingBroadcasts {
-		return bc.Id
-	}
-	return ""
 }
 
 func (p *Panel) startStream(ctx context.Context) {
