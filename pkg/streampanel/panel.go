@@ -14,7 +14,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 	"unicode"
@@ -32,6 +31,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/go-ng/xmath"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/screenshot"
@@ -71,11 +71,11 @@ type Panel struct {
 	) error
 
 	screenshoterClose  context.CancelFunc
-	screenshoterLocker sync.Mutex
+	screenshoterLocker deadlock.Mutex
 
 	app                   fyne.App
 	Config                Config
-	streamMutex           sync.Mutex
+	streamMutex           deadlock.Mutex
 	updateTimerHandler    *updateTimerHandler
 	profilesOrder         []streamcontrol.ProfileName
 	profilesOrderFiltered []streamcontrol.ProfileName
@@ -89,7 +89,7 @@ type Panel struct {
 	streamTitleField       *widget.Entry
 	streamDescriptionField *widget.Entry
 
-	monitorLocker          sync.Mutex
+	monitorLocker          deadlock.Mutex
 	monitorPage            *fyne.Container
 	monitorLastWinSize     fyne.Size
 	monitorLastOrientation fyne.DeviceOrientation
@@ -108,17 +108,17 @@ type Panel struct {
 
 	setStatusFunc func(string)
 
-	displayErrorLocker sync.Mutex
+	displayErrorLocker deadlock.Mutex
 	displayErrorWindow fyne.Window
 
-	waitStreamDConnectWindowLocker  sync.Mutex
+	waitStreamDConnectWindowLocker  deadlock.Mutex
 	waitStreamDConnectWindow        fyne.Window
 	waitStreamDConnectWindowCounter int32
-	waitStreamDCallWindowLocker     sync.Mutex
+	waitStreamDCallWindowLocker     deadlock.Mutex
 	waitStreamDCallWindow           fyne.Window
 	waitStreamDCallWindowCounter    int32
 
-	imageLocker         sync.Mutex
+	imageLocker         deadlock.Mutex
 	imageLastDownloaded map[consts.ImageID][]byte
 
 	lastDisplayedError error
@@ -129,15 +129,15 @@ type Panel struct {
 	restreamsWidget     *fyne.Container
 	playersWidget       *fyne.Container
 
-	previousNumBytesLocker sync.Mutex
+	previousNumBytesLocker deadlock.Mutex
 	previousNumBytes       map[any][4]uint64
 	previousNumBytesTS     map[any]time.Time
 
-	streamServersLocker              sync.Mutex
+	streamServersLocker              deadlock.Mutex
 	streamServersUpdaterCanceller    context.CancelFunc
-	streamForwardersLocker           sync.Mutex
+	streamForwardersLocker           deadlock.Mutex
 	streamForwardersUpdaterCanceller context.CancelFunc
-	streamPlayersLocker              sync.Mutex
+	streamPlayersLocker              deadlock.Mutex
 	streamPlayersUpdaterCanceller    context.CancelFunc
 
 	obsSelectScene *widget.Select

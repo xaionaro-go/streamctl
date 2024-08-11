@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/cmd/streamd/ui"
 	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
@@ -92,7 +92,7 @@ func runStreamd(
 		logger.Panicf(ctx, "unable to read the config from path '%s': %v", flags.ConfigPath, err)
 	}
 
-	var streamdGRPCLocker sync.Mutex
+	var streamdGRPCLocker deadlock.Mutex
 	streamdGRPCLocker.Lock()
 
 	var streamdGRPC *server.GRPCServer
@@ -157,7 +157,7 @@ func runStreamd(
 	listener, _, streamdGRPC = initGRPCServer(ctx, streamD, flags.ListenAddr)
 	streamdGRPCLocker.Unlock()
 
-	var configLocker sync.Mutex
+	var configLocker deadlock.Mutex
 	configLocker.Lock()
 	if mainProcess != nil {
 		logger.Debugf(ctx, "starting the IPC server")

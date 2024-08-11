@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"net"
 	"reflect"
-	"sync"
 
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/gwuhaolin/livego/configure"
 	"github.com/gwuhaolin/livego/protocol/rtmp"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/viper"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
@@ -20,7 +20,7 @@ import (
 )
 
 type StreamServer struct {
-	sync.Mutex
+	deadlock.Mutex
 	Config                  *types.Config
 	ServerHandlers          []types.PortServer
 	StreamIDs               map[types.StreamID]struct{}

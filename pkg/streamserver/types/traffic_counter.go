@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"sync"
 	"sync/atomic"
 	"unsafe"
+
+	"github.com/sasha-s/go-deadlock"
 )
 
 type NumBytesWroter interface {
@@ -27,7 +28,7 @@ type Counter interface {
 }
 
 type TrafficCounter struct {
-	sync.Mutex
+	deadlock.Mutex
 	ReaderCounter Counter
 	WriterCounter Counter
 }

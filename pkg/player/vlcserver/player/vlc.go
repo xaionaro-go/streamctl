@@ -7,19 +7,19 @@ import (
 	"fmt"
 	"log"
 	"net/url"
-	"sync"
 	"sync/atomic"
 	"time"
 
 	vlc "github.com/adrg/libvlc-go/v3"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
+	"github.com/sasha-s/go-deadlock"
 	"golang.org/x/net/context"
 )
 
 type VLC struct {
 	Title            string
-	StatusMutex      sync.Mutex
+	StatusMutex      deadlock.Mutex
 	Player           *vlc.Player
 	Media            *vlc.Media
 	EventManager     *vlc.EventManager

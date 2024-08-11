@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 )
 
@@ -35,7 +35,7 @@ type Producer struct {
 	senders   []*core.Receiver
 
 	state    state
-	mu       sync.Mutex
+	mu       deadlock.Mutex
 	workerID int
 
 	streamHandler *StreamHandler

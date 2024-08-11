@@ -2,20 +2,20 @@ package streampanel
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/unsafetools"
 )
 
 type HintWidget struct {
 	*widget.Label
-	Locker sync.Mutex
+	Locker deadlock.Mutex
 	Text   string
 	Hint   *widget.PopUp
 	Window fyne.Window

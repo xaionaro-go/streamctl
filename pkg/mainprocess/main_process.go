@@ -13,6 +13,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/immune-gmbh/attestation-sdk/pkg/lockmap"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/sethvargo/go-password/password"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 )
@@ -44,7 +45,7 @@ type Manager struct {
 	listener net.Listener
 	password string
 
-	connsLocker   sync.Mutex
+	connsLocker   deadlock.Mutex
 	conns         map[ProcessName]net.Conn
 	connLocker    *lockmap.LockMap
 	childReadyFor map[ProcessName]map[reflect.Type]struct{}

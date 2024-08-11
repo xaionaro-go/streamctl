@@ -10,7 +10,6 @@ import (
 	"io"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/andreykaipov/goobs/api/requests/scenes"
@@ -19,6 +18,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
 	"github.com/hashicorp/go-multierror"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/player/protobuf/go/player_grpc"
@@ -45,7 +45,7 @@ type Client struct {
 	Target string
 	Config Config
 
-	PersistentConnectionLocker sync.Mutex
+	PersistentConnectionLocker deadlock.Mutex
 	PersistentConnection       *grpc.ClientConn
 	PersistentClient           streamd_grpc.StreamDClient
 }

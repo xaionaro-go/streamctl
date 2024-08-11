@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
-	"sync"
+
+	"github.com/sasha-s/go-deadlock"
 )
 
 func (s *StreamHandler) Get(name string) *Stream {
@@ -80,7 +81,7 @@ func (s *StreamHandler) Delete(id string) {
 
 type StreamHandler struct {
 	streams          map[string]*Stream
-	streamsMu        sync.Mutex
+	streamsMu        deadlock.Mutex
 	consumerHandlers map[string]ConsumerHandler
 	handlers         map[string]Handler
 	redirects        map[string]Redirect
@@ -89,7 +90,7 @@ type StreamHandler struct {
 func NewStreamHandler() *StreamHandler {
 	return &StreamHandler{
 		streams:          map[string]*Stream{},
-		streamsMu:        sync.Mutex{},
+		streamsMu:        deadlock.Mutex{},
 		consumerHandlers: map[string]ConsumerHandler{},
 		handlers:         map[string]Handler{},
 		redirects:        map[string]Redirect{},

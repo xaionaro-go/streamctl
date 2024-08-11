@@ -3,15 +3,15 @@ package player
 import (
 	"context"
 	"fmt"
-	"sync"
 
+	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/player/types"
 )
 
 type Manager struct {
 	Config types.Config
 
-	PlayersLocker sync.Mutex
+	PlayersLocker deadlock.Mutex
 	Players       []Player
 }
 

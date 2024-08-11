@@ -5,14 +5,14 @@ import (
 	"encoding/gob"
 	"fmt"
 	"net"
-	"sync"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 )
 
 type Client struct {
-	WriteLocker sync.Mutex
+	WriteLocker deadlock.Mutex
 	Conn        net.Conn
 	Password    string
 }

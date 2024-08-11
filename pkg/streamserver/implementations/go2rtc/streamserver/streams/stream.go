@@ -2,11 +2,11 @@ package streams
 
 import (
 	"encoding/json"
-	"sync"
 	"sync/atomic"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/sasha-s/go-deadlock"
 )
 
 type Stream struct {
@@ -14,7 +14,7 @@ type Stream struct {
 
 	producers   []*Producer
 	consumers   []core.Consumer
-	mu          sync.Mutex
+	mu          deadlock.Mutex
 	pending     atomic.Int32
 	forwardings []*StreamForwarding
 }

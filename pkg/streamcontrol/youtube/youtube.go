@@ -19,6 +19,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/go-yaml/yaml"
 	"github.com/hashicorp/go-multierror"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -32,7 +33,7 @@ import (
 const copyThumbnail = false
 
 type YouTube struct {
-	locker         sync.Mutex
+	locker         deadlock.Mutex
 	Config         Config
 	YouTubeService *youtube.Service
 	CancelFunc     context.CancelFunc

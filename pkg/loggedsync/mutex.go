@@ -2,13 +2,13 @@ package loggedsync
 
 import (
 	"context"
-	"sync"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/sasha-s/go-deadlock"
 )
 
 type Mutex struct {
-	sync.Mutex
+	deadlock.Mutex
 }
 
 func (m *Mutex) LockCtx(ctx context.Context) {

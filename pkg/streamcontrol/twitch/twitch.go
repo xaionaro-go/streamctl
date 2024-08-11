@@ -13,6 +13,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/nicklaw5/helix/v2"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -24,8 +25,8 @@ type Twitch struct {
 	broadcasterID string
 	lazyInitOnce  sync.Once
 	saveCfgFn     func(Config) error
-	tokenLocker   sync.Mutex
-	prepareLocker sync.Mutex
+	tokenLocker   deadlock.Mutex
+	prepareLocker deadlock.Mutex
 }
 
 const twitchDebug = false

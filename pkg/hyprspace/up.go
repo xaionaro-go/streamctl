@@ -16,7 +16,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"sync"
 	"syscall"
 	"time"
 
@@ -33,13 +32,14 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/yl2chen/cidranger"
 )
 
 type MuxStream struct {
 	Stream *network.Stream
-	Lock   *sync.Mutex
+	Lock   *deadlock.Mutex
 }
 
 var (
@@ -320,7 +320,7 @@ func sendPacket(dst peer.ID, packet []byte, plen int) {
 	// we should reuse this stream by adding it active streams map.
 	activeStreams[dst] = MuxStream{
 		Stream: &stream,
-		Lock:   &sync.Mutex{},
+		Lock:   &deadlock.Mutex{},
 	}
 }
 

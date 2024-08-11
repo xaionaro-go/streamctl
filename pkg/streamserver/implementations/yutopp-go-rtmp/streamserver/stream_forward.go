@@ -8,12 +8,12 @@ import (
 	"net/url"
 	"runtime/debug"
 	"strings"
-	"sync"
 	"sync/atomic"
 
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/xlogger"
@@ -27,7 +27,7 @@ const (
 )
 
 type ActiveStreamForwarding struct {
-	Locker        sync.Mutex
+	Locker        deadlock.Mutex
 	StreamID      types.StreamID
 	DestinationID types.DestinationID
 	URL           *url.URL

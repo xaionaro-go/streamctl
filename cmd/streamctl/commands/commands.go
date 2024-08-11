@@ -7,10 +7,10 @@ import (
 	"os"
 	"path"
 	"strings"
-	"sync"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/cobra"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
@@ -238,7 +238,7 @@ func readConfig(ctx context.Context) streamcontrol.Config {
 	return cfg
 }
 
-var saveConfigLock sync.Mutex
+var saveConfigLock deadlock.Mutex
 
 func getTwitchStreamController(
 	ctx context.Context,

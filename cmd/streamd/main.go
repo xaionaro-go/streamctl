@@ -17,6 +17,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
 	"github.com/getsentry/sentry-go"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 	"github.com/xaionaro-go/streamctl/cmd/streamd/ui"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
@@ -120,7 +121,7 @@ func main() {
 	var cancelFunc context.CancelFunc
 	var _ui uiiface.UI
 	var streamdGRPC *server.GRPCServer
-	var streamdGRPCLocker sync.Mutex
+	var streamdGRPCLocker deadlock.Mutex
 
 	restart := func() {
 		l.Debugf("restart()")

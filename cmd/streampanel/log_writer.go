@@ -7,25 +7,25 @@ import (
 	"io"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/sasha-s/go-deadlock"
 )
 
-type forkLogWriter struct {
+type logWriter struct {
 	Logger       logger.Logger
 	Buffer       bytes.Buffer
-	BufferLocker sync.Mutex
+	BufferLocker deadlock.Mutex
 }
 
-var _ io.Writer = (*forkLogWriter)(nil)
+var _ io.Writer = (*logWriter)(nil)
 
-func NewForkLogWriter(
+func NewLogWriter(
 	ctx context.Context,
 	logger logger.Logger,
-) *forkLogWriter {
-	l := &forkLogWriter{
+) *logWriter {
+	l := &logWriter{
 		Logger: logger,
 	}
 	go l.flusher(ctx)
@@ -38,7 +38,7 @@ func hexMustDecode(s string) []byte {
 	return b
 }
 
-func (l *forkLogWriter) flusher(ctx context.Context) {
+func (l *logWriter) flusher(ctx context.Context) {
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
 	for {
@@ -51,7 +51,7 @@ func (l *forkLogWriter) flusher(ctx context.Context) {
 	}
 }
 
-func (l *forkLogWriter) Flush() {
+func (l *logWriter) Flush() {
 	s := func() string {
 		l.BufferLocker.Lock()
 		defer l.BufferLocker.Unlock()
@@ -63,13 +63,13 @@ func (l *forkLogWriter) Flush() {
 	l.Logger.Logf(l.Logger.Level(), "%s", s)
 }
 
-func (l *forkLogWriter) write(b []byte) (int, error) {
+func (l *logWriter) write(b []byte) (int, error) {
 	l.BufferLocker.Lock()
 	defer l.BufferLocker.Unlock()
 	return l.Buffer.Write(b)
 }
 
-func (l *forkLogWriter) Write(b []byte) (int, error) {
+func (l *logWriter) Write(b []byte) (int, error) {
 	isALogRusLine := false
 	s := string(b)
 	if len(s) > 14 {

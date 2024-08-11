@@ -12,6 +12,7 @@ import (
 
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 )
 
@@ -102,6 +103,8 @@ func initRuntime(
 			belt.Flush(ctx)
 		}
 	})
+
+	deadlock.Opts.LogBuf = NewLogWriter(ctx, l)
 
 	ctx, cancelFn := context.WithCancel(ctx)
 	return ctx, func() {

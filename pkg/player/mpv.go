@@ -9,7 +9,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -19,6 +18,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 )
 
@@ -44,7 +44,7 @@ type MPV struct {
 	MPVConn    *mpvipc.Connection
 
 	EndChInitialized bool
-	EndChMutex       sync.Mutex
+	EndChMutex       deadlock.Mutex
 	EndCh            chan struct{}
 
 	OpenLinkOnRerun string

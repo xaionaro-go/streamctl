@@ -1,17 +1,16 @@
 package observability
 
 import (
-	"sync"
-
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/pkg/field"
 	logger "github.com/facebookincubator/go-belt/tool/logger/types"
+	"github.com/sasha-s/go-deadlock"
 )
 
 var LogLevelFilter LogLevelFilterT
 
 type LogLevelFilterT struct {
-	Locker sync.Mutex
+	Locker deadlock.Mutex
 	Level  logger.Level
 }
 

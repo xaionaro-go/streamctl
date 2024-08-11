@@ -6,11 +6,11 @@ import (
 	"io"
 	"net"
 	"net/url"
-	"sync"
 	"time"
 
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	playertypes "github.com/xaionaro-go/streamctl/pkg/player/types"
@@ -34,7 +34,7 @@ type BrowserOpener interface {
 }
 
 type StreamServer struct {
-	sync.Mutex
+	deadlock.Mutex
 	Config                  *types.Config
 	RelayServer             *RelayService
 	ServerHandlers          []types.PortServer

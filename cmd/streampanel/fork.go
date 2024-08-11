@@ -7,12 +7,12 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"sync"
 	"time"
 
 	child_process_manager "github.com/AgustinSRG/go-child-process-manager"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 )
@@ -25,7 +25,7 @@ const (
 	ProcessNameUI      = ProcessName("ui")
 )
 
-var forkLocker sync.Mutex
+var forkLocker deadlock.Mutex
 var forkMap = map[ProcessName]*exec.Cmd{}
 
 func getFork(procName ProcessName) *exec.Cmd {
@@ -188,7 +188,7 @@ func runFork(
 	args := []string{execPath, "--sentry-dsn=" + flags.SentryDSN, "--log-level=" + logger.Level(flags.LoggerLevel).String(), "--subprocess=" + string(procName) + ":" + addr}
 	logger.Infof(ctx, "running '%s %s'", args[0], strings.Join(args[1:], " "))
 	cmd := exec.Command(args[0], args[1:]...)
-	cmd.Stderr = NewForkLogWriter(ctx, logger.FromCtx(ctx))
+	cmd.Stderr = NewLogWriter(ctx, logger.FromCtx(ctx))
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
 	err = child_process_manager.ConfigureCommand(cmd)

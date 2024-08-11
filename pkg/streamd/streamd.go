@@ -15,6 +15,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/repository"
@@ -51,23 +52,23 @@ type StreamD struct {
 	UI ui.UI
 
 	SaveConfigFunc SaveConfigFunc
-	ConfigLock     sync.Mutex
+	ConfigLock     deadlock.Mutex
 	Config         config.Config
 
-	CacheLock sync.Mutex
+	CacheLock deadlock.Mutex
 	Cache     *cache.Cache
 
 	GitStorage *repository.GIT
 
 	CancelGitSyncer context.CancelFunc
-	GitSyncerMutex  sync.Mutex
+	GitSyncerMutex  deadlock.Mutex
 	GitInitialized  bool
 
 	StreamControllers StreamControllers
 
 	Variables sync.Map
 
-	OAuthListenPortsLocker sync.Mutex
+	OAuthListenPortsLocker deadlock.Mutex
 	OAuthListenPorts       map[uint16]struct{}
 
 	ControllersLocker sync.RWMutex

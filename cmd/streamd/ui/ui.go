@@ -3,11 +3,11 @@ package ui
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	obs "github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs/types"
@@ -23,7 +23,7 @@ type UI struct {
 	Belt              *belt.Belt
 	RestartFn         func(context.Context, string)
 	CodeChMap         map[streamcontrol.PlatformName]chan string
-	CodeChMapLocker   sync.Mutex
+	CodeChMapLocker   deadlock.Mutex
 	SetLoggingLevelFn func(context.Context, logger.Level)
 }
 

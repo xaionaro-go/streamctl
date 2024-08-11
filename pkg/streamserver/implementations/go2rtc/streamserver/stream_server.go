@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/sasha-s/go-deadlock"
 	rtmpserver "github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/go2rtc/streamserver/server/rtmp"
 	rtspserver "github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/go2rtc/streamserver/server/rtsp"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/go2rtc/streamserver/streams"
@@ -15,7 +15,7 @@ import (
 )
 
 type StreamServer struct {
-	sync.Mutex
+	deadlock.Mutex
 	Config             *types.Config
 	StreamHandler      *streams.StreamHandler
 	ServerHandlers     []types.PortServer

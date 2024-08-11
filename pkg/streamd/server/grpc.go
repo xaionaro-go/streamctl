@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/andreykaipov/goobs/api/requests/scenes"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
@@ -15,6 +14,7 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-multierror"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/player/protobuf/go/player_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
@@ -36,10 +36,10 @@ type GRPCServer struct {
 	streamd_grpc.UnimplementedStreamDServer
 	StreamD               api.StreamD
 	MemoizeDataValue      *memoize.MemoizeData
-	OAuthURLHandlerLocker sync.Mutex
+	OAuthURLHandlerLocker deadlock.Mutex
 	OAuthURLHandlers      map[uint16]map[uuid.UUID]*OAuthURLHandler
 
-	UnansweredOAuthRequestsLocker sync.Mutex
+	UnansweredOAuthRequestsLocker deadlock.Mutex
 	UnansweredOAuthRequests       map[streamcontrol.PlatformName]map[uint16]*streamd_grpc.OAuthRequest
 }
 

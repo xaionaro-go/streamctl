@@ -1,17 +1,17 @@
 package observability
 
 import (
-	"sync"
 	"time"
 
 	"github.com/facebookincubator/go-belt/pkg/field"
 	xlogrus "github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
 	logger "github.com/facebookincubator/go-belt/tool/logger/types"
+	"github.com/sasha-s/go-deadlock"
 	"github.com/sirupsen/logrus"
 )
 
 type HookAdapter struct {
-	Locker       sync.Mutex
+	Locker       deadlock.Mutex
 	LogrusLogger *logrus.Logger
 	LogrusHook   logrus.Hook
 }
