@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -158,7 +159,8 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 		if _ret == nil {
 			return
 		}
-		logger.Errorf(ctx, "%v", _ret)
+		logger.FromCtx(ctx).
+			WithField("error_event_exception_stack_trace", string(debug.Stack())).Errorf("%v", _ret)
 	}()
 	fwd.Locker.Lock()
 	defer fwd.Locker.Unlock()
@@ -321,8 +323,10 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 	fwd.Locker.Unlock()
 	<-fwd.Sub.ClosedChan()
 	fwd.Locker.Lock()
-	fwd.Client.Close()
-	fwd.Client = nil
+	if fwd.Client != nil {
+		fwd.Client.Close()
+		fwd.Client = nil
+	}
 	logger.Debugf(ctx, "the source stopped, so stopped also publishing to '%s'", urlParsed.String())
 	return nil
 }
@@ -335,8 +339,10 @@ func (fwd *ActiveStreamForwarding) Close() error {
 	}
 
 	var result *multierror.Error
-	fwd.CancelFunc()
-	fwd.CancelFunc = nil
+	if fwd.CancelFunc != nil {
+		fwd.CancelFunc()
+		fwd.CancelFunc = nil
+	}
 	if fwd.Sub != nil {
 		result = multierror.Append(result, fwd.Sub.Close())
 		fwd.Sub = nil

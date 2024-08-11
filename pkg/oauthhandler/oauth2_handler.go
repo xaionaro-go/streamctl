@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"os/exec"
 	"runtime"
+	"strings"
 
+	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 )
 
@@ -42,7 +44,7 @@ func OAuth2HandlerViaBrowser(ctx context.Context, arg OAuthHandlerArgument) erro
 		return err
 	}
 
-	err = LaunchBrowser(arg.AuthURL)
+	err = LaunchBrowser(ctx, arg.AuthURL)
 	if err != nil {
 		return err
 	}
@@ -91,14 +93,23 @@ func NewCodeReceiver(
 	return codeCh, uint16(listener.Addr().(*net.TCPAddr).Port), nil
 }
 
-func LaunchBrowser(url string) error {
+func LaunchBrowser(
+	ctx context.Context,
+	url string,
+) error {
+	var args []string
 	switch runtime.GOOS {
 	case "darwin":
-		return exec.Command("open", url).Start()
+		args = []string{"open"}
 	case "linux":
-		return exec.Command("xdg-open", url).Start()
+		args = []string{"xdg-open"}
 	case "windows":
-		return exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+		args = []string{"rundll32", "url.dll,FileProtocolHandler"}
+	default:
+		return fmt.Errorf("unsupported platform: <%s>", runtime.GOOS)
 	}
-	return fmt.Errorf("unsupported platform: <%s>", runtime.GOOS)
+
+	args = append(args, url)
+	logger.Debugf(ctx, "launching a browser using command '%s'", strings.Join(args, " "))
+	return exec.Command(args[0], args[1:]...).Start()
 }

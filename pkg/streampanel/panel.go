@@ -650,7 +650,10 @@ func (p *Panel) openBrowser(
 	ctx context.Context,
 	url string,
 	reason string,
-) error {
+) (_err error) {
+	logger.Debugf(ctx, "openBrowser(ctx, '%s', '%s')", url, reason)
+	defer func() { logger.Debugf(ctx, "/openBrowser(ctx, '%s', '%s'): %3", url, reason, _err) }()
+
 	if p.Config.Browser.Command != "" {
 		logger.Debugf(ctx, "the browser command is configured to be : '%s'", p.Config.Browser.Command)
 		return exec.Command(p.Config.Browser.Command, url).Start()
@@ -667,7 +670,7 @@ func (p *Panel) openBrowser(
 			browserCmd = "xdg-open"
 		}
 	default:
-		return oauthhandler.LaunchBrowser(url)
+		return oauthhandler.LaunchBrowser(ctx, url)
 	}
 
 	waitCh := make(chan struct{})
@@ -712,6 +715,7 @@ func (p *Panel) openBrowser(
 		errmon.ObserveErrorCtx(ctx, err)
 	}
 
+	logger.Debugf(ctx, "openBrowser(ctx, '%s', '%s'): resulting command '%s %s'", browserCmd, url)
 	return exec.Command(browserCmd, url).Start()
 }
 
@@ -2052,7 +2056,7 @@ func (p *Panel) setupStream(ctx context.Context) {
 				if timeDiff < 0 {
 					return
 				}
-				p.startStopButton.SetText(timeDiff.String())
+				p.startStopButton.SetText(fmt.Sprintf("%.1fs", timeDiff.Seconds()))
 			}
 		})
 	}
@@ -2832,6 +2836,7 @@ func (p *Panel) showWaitStreamDCallWindow(ctx context.Context) {
 			time.Sleep(100 * time.Millisecond)
 			p.waitStreamDCallWindow.Close()
 			p.waitStreamDCallWindow = nil
+			logger.Debugf(ctx, "closed the 'network operation is in progress' window")
 		}()
 
 		select {
@@ -2872,6 +2877,7 @@ func (p *Panel) showWaitStreamDConnectWindow(ctx context.Context) {
 			time.Sleep(100 * time.Millisecond)
 			p.waitStreamDConnectWindow.Close()
 			p.waitStreamDConnectWindow = nil
+			logger.Debugf(ctx, "closed the 'connecting is in progress' window")
 		}()
 
 		select {
@@ -2882,8 +2888,8 @@ func (p *Panel) showWaitStreamDConnectWindow(ctx context.Context) {
 
 		p.waitStreamDConnectWindowLocker.Lock()
 		defer p.waitStreamDConnectWindowLocker.Unlock()
-		logger.Debugf(ctx, "making a 'network operation is in progress' window")
-		defer logger.Debugf(ctx, "made a 'network operation is in progress' window")
+		logger.Debugf(ctx, "making a 'connecting is in progress' window")
+		defer logger.Debugf(ctx, "made a 'connecting is in progress' window")
 		if p.waitStreamDConnectWindow != nil {
 			return
 		}
@@ -2891,7 +2897,7 @@ func (p *Panel) showWaitStreamDConnectWindow(ctx context.Context) {
 			return
 		}
 		waitStreamDConnectWindow := p.app.NewWindow(AppName + ": Please wait...")
-		textWidget := widget.NewRichTextFromMarkdown("Network operation is in process, please wait...")
+		textWidget := widget.NewRichTextFromMarkdown("Connecting is in process, please wait...")
 		waitStreamDConnectWindow.SetContent(textWidget)
 		waitStreamDConnectWindow.Show()
 		p.waitStreamDConnectWindow = waitStreamDConnectWindow

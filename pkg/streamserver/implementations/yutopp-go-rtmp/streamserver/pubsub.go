@@ -6,13 +6,15 @@ import (
 	"sync"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	flvtag "github.com/yutopp/go-flv/tag"
 )
 
 type Pubsub struct {
-	srv  *RelayService
-	name string
+	srv              *RelayService
+	name             string
+	publisherHandler *Handler
 
 	pub *Pub
 
@@ -22,10 +24,11 @@ type Pubsub struct {
 	m sync.Mutex
 }
 
-func NewPubsub(srv *RelayService, name string) *Pubsub {
+func NewPubsub(srv *RelayService, name string, publisherHandler *Handler) *Pubsub {
 	return &Pubsub{
-		srv:  srv,
-		name: name,
+		publisherHandler: publisherHandler,
+		srv:              srv,
+		name:             name,
 
 		subs: map[uint64]*Sub{},
 	}
@@ -42,13 +45,24 @@ func (pb *Pubsub) Deregister() error {
 	pb.m.Lock()
 	defer pb.m.Unlock()
 
-	observability.Go(context.TODO(), func() {
+	return pb.deregister()
+}
+
+func (pb *Pubsub) deregister() error {
+	observability.GoSafe(context.TODO(), func() {
 		for _, sub := range pb.subs {
 			_ = sub.Close()
 		}
 	})
 
-	return pb.srv.removePubsub(pb.name)
+	var result *multierror.Error
+	result = multierror.Append(result, pb.srv.removePubsub(pb.name))
+	h := pb.publisherHandler
+	pb.publisherHandler = nil
+	if h != nil {
+		result = multierror.Append(result, h.conn.Close())
+	}
+	return result.ErrorOrNil()
 }
 
 func (pb *Pubsub) Pub() *Pub {

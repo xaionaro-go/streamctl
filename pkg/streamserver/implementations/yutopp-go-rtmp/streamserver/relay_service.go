@@ -25,17 +25,18 @@ func NewRelayService() *RelayService {
 	}
 }
 
-func (s *RelayService) NewPubsub(key string) (*Pubsub, error) {
+func (s *RelayService) NewPubsub(key string, publisherHandler *Handler) (*Pubsub, error) {
 	s.m.Lock()
 	defer s.m.Unlock()
+	ctx := context.TODO()
+	logger.Debugf(ctx, "NewPubsub(%s)", key)
 
-	logger.Default().Debugf("NewPubsub(%s)", key)
-
-	if _, ok := s.streams[key]; ok {
-		return nil, fmt.Errorf("already published: %s", key)
+	if oldStream, ok := s.streams[key]; ok {
+		err := oldStream.deregister()
+		logger.Warnf(ctx, "unable to close the old stream: %v", err)
 	}
 
-	pubsub := NewPubsub(s, key)
+	pubsub := NewPubsub(s, key, publisherHandler)
 
 	s.streams[key] = pubsub
 

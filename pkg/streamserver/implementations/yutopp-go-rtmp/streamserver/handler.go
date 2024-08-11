@@ -58,15 +58,13 @@ func (h *Handler) OnPublish(_ *rtmp.StreamContext, timestamp uint32, cmd *rtmpms
 		return errors.New("PublishingName is empty")
 	}
 
-	pubsub, err := h.relayService.NewPubsub(cmd.PublishingName)
+	pubsub, err := h.relayService.NewPubsub(cmd.PublishingName, h)
 	if err != nil {
 		return errors.Wrap(err, "Failed to create pubsub")
 	}
 
 	pub := pubsub.Pub()
-
 	h.pub = pub
-
 	return nil
 }
 

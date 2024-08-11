@@ -2,8 +2,6 @@ package observability
 
 import (
 	"context"
-
-	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 )
 
 func Go(ctx context.Context, fn func()) {
@@ -15,7 +13,7 @@ func Go(ctx context.Context, fn func()) {
 
 func GoSafe(ctx context.Context, fn func()) {
 	go func() {
-		defer func() { errmon.ObserveRecoverCtx(ctx, recover()) }()
+		defer func() { ReportPanicIfNotNil(ctx, recover()) }()
 		fn()
 	}()
 }
