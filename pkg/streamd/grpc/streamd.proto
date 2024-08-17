@@ -38,9 +38,6 @@ service StreamD {
     rpc SubscribeToOAuthRequests(SubscribeToOAuthRequestsRequest) returns (stream OAuthRequest) {}
     rpc SubmitOAuthCode(SubmitOAuthCodeRequest) returns (SubmitOAuthCodeReply) {}
 
-    rpc OBSGetSceneList(OBSGetSceneListRequest) returns (OBSGetSceneListReply) {}
-    rpc OBSSetCurrentProgramScene(OBSSetCurrentProgramSceneRequest) returns (OBSSetCurrentProgramSceneReply) {}
-
     rpc ListStreamServers(ListStreamServersRequest) returns (ListStreamServersReply) {}
 	rpc StartStreamServer(StartStreamServerRequest) returns (StartStreamServerReply) {}
 	rpc StopStreamServer(StopStreamServerRequest) returns (StopStreamServerReply) {}
@@ -229,27 +226,6 @@ message SetVariableReply {}
 enum HashType {
     HASH_SHA1 = 0;
 }
-
-message OBSGetSceneListRequest {}
-message OBSScene {
-    string uuid = 1;
-    int32 index = 2;
-    string name = 3;
-}
-message OBSGetSceneListReply {
-    string currentPreviewSceneName = 1;
-    string currentPreviewSceneUUID = 2;
-    string currentProgramSceneName = 3;
-    string currentProgramSceneUUID = 4;
-    repeated OBSScene scenes = 5;
-}
-message OBSSetCurrentProgramSceneRequest {
-    oneof OBSSceneID {
-        string sceneName = 1;
-        string sceneUUID = 2;
-    }
-}
-message OBSSetCurrentProgramSceneReply {}
 
 message SubmitOAuthCodeRequest {
     string platID = 1;

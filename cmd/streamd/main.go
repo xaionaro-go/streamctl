@@ -19,6 +19,7 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
+	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/streamctl/cmd/streamd/ui"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -121,7 +122,8 @@ func main() {
 	var cancelFunc context.CancelFunc
 	var _ui uiiface.UI
 	var streamdGRPC *server.GRPCServer
-	var streamdGRPCLocker deadlock.Mutex
+	var obsGRPC obs_grpc.OBSServer
+	var grpcLocker deadlock.Mutex
 
 	restart := func() {
 		l.Debugf("restart()")
@@ -134,8 +136,8 @@ func main() {
 		wg.Add(1)
 		defer wg.Done()
 		l.Infof("starting a server")
-		streamdGRPCLocker.Lock()
-		defer streamdGRPCLocker.Unlock()
+		grpcLocker.Lock()
+		defer grpcLocker.Unlock()
 
 		var cfg config.Config
 		err := config.ReadConfigFromPath(ctx, configPathExpanded, &cfg)
@@ -175,12 +177,18 @@ func main() {
 
 		grpcServer := grpc.NewServer()
 		streamdGRPC = server.NewGRPCServer(streamD)
+		var obsGRPCClose context.CancelFunc
+		obsGRPC, obsGRPCClose, err = streamD.OBS(ctx)
+		if obsGRPCClose != nil {
+			defer obsGRPCClose()
+		}
+		obs_grpc.RegisterOBSServer(grpcServer, obsGRPC)
 		streamd_grpc.RegisterStreamDServer(grpcServer, streamdGRPC)
 		l.Infof("started server at %s", *listenAddr)
 
-		streamdGRPCLocker.Unlock()
+		grpcLocker.Unlock()
 		err = grpcServer.Serve(listener)
-		streamdGRPCLocker.Lock()
+		grpcLocker.Lock()
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -189,10 +197,10 @@ func main() {
 	_ui = ui.NewUI(
 		ctx,
 		func(ctx context.Context, url string) error {
-			streamdGRPCLocker.Lock()
+			grpcLocker.Lock()
 			logger.Debugf(ctx, "streamdGRPCLocker.Lock()-ed")
 			defer logger.Debugf(ctx, "streamdGRPCLocker.Lock()-ed")
-			defer streamdGRPCLocker.Unlock()
+			defer grpcLocker.Unlock()
 
 			err := streamdGRPC.OpenBrowser(ctx, url)
 			errmon.ObserveErrorCtx(ctx, err)
@@ -202,10 +210,10 @@ func main() {
 			logger.Debugf(ctx, "streamd.UI.OpenOAuthURL(%d, %s, '%s')", listenPort, platID, authURL)
 			defer logger.Debugf(ctx, "/streamd.UI.OpenOAuthURL(%d, %s, '%s')", listenPort, platID, authURL)
 
-			streamdGRPCLocker.Lock()
+			grpcLocker.Lock()
 			logger.Debugf(ctx, "streamdGRPCLocker.Lock()-ed")
 			defer logger.Debugf(ctx, "streamdGRPCLocker.Lock()-ed")
-			defer streamdGRPCLocker.Unlock()
+			defer grpcLocker.Unlock()
 
 			err := streamdGRPC.OpenOAuthURL(ctx, listenPort, platID, authURL)
 			errmon.ObserveErrorCtx(ctx, err)

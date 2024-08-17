@@ -15,3 +15,12 @@ type PlatformSpecificConfig = youtube.PlatformSpecificConfig
 func InitConfig(cfg streamctl.Config) {
 	youtube.InitConfig(cfg)
 }
+
+type TemplateTags = youtube.TemplateTags
+
+const (
+	TemplateTagsUndefined       = youtube.TemplateTagsUndefined
+	TemplateTagsIgnore          = youtube.TemplateTagsIgnore
+	TemplateTagsUseAsPrimary    = youtube.TemplateTagsUseAsPrimary
+	TemplateTagsUseAsAdditional = youtube.TemplateTagsUseAsAdditional
+)

@@ -26,15 +26,19 @@ const (
 	chunkSize = 128
 )
 
+type Unlocker interface {
+	Unlock()
+}
+
 type ActiveStreamForwarding struct {
 	Locker        deadlock.Mutex
+	StreamServer  *StreamServer
 	StreamID      types.StreamID
 	DestinationID types.DestinationID
 	URL           *url.URL
 	Client        *rtmp.ClientConn
 	OutStream     *rtmp.Stream
 	Sub           *Sub
-	RelayService  *RelayService
 	CancelFunc    context.CancelFunc
 	ReadCount     atomic.Uint64
 	WriteCount    atomic.Uint64
@@ -44,10 +48,10 @@ type ActiveStreamForwarding struct {
 
 func NewActiveStreamForward(
 	ctx context.Context,
+	s *StreamServer,
 	streamID types.StreamID,
 	dstID types.DestinationID,
 	urlString string,
-	relayService *RelayService,
 	pauseFunc func(ctx context.Context, fwd *ActiveStreamForwarding),
 ) (_ret *ActiveStreamForwarding, _err error) {
 	logger.Debugf(ctx, "NewActiveStreamForward(ctx, '%s', '%s', '%s', relayService, pauseFunc)", streamID, dstID, urlString)
@@ -60,10 +64,10 @@ func NewActiveStreamForward(
 		return nil, fmt.Errorf("unable to parse URL '%s': %w", urlString, err)
 	}
 	fwd := &ActiveStreamForwarding{
+		StreamServer:  s,
 		StreamID:      streamID,
 		DestinationID: dstID,
 		URL:           urlParsed,
-		RelayService:  relayService,
 		PauseFunc:     pauseFunc,
 		eventChan:     make(chan *flvtag.FlvTag),
 	}
@@ -131,14 +135,19 @@ func (fwd *ActiveStreamForwarding) WaitForPublisher(
 
 	ctx = belt.WithField(belt.WithField(ctx, "appNameLocal", localAppName), "appNameRemote", apiKey)
 
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
 	logger.Debugf(ctx, "wait for stream '%s'", fwd.StreamID)
-	pubSub := fwd.RelayService.WaitPubsub(ctx, localAppName)
+	pubSub := fwd.StreamServer.RelayService.WaitPubsub(ctx, localAppName)
 	logger.Debugf(ctx, "wait for stream '%s' result: %#+v", fwd.StreamID, pubSub)
 	if pubSub == nil {
 		return nil, fmt.Errorf(
 			"unable to find stream ID '%s', available stream IDs: %s",
 			fwd.StreamID,
-			strings.Join(fwd.RelayService.PubsubNames(), ", "),
+			strings.Join(fwd.StreamServer.RelayService.PubsubNames(), ", "),
 		)
 	}
 
@@ -167,6 +176,15 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 	if err != nil {
 		return fmt.Errorf("unable to get publisher: %w", err)
 	}
+
+	logger.Debugf(ctx, "DestinationStreamingLocker.Lock(ctx, '%s')", fwd.DestinationID)
+	destinationUnlocker := fwd.StreamServer.DestinationStreamingLocker.Lock(ctx, fwd.DestinationID)
+	defer func() {
+		destinationUnlocker.Unlock()
+		logger.Debugf(ctx, "DestinationStreamingLocker.Unlock(ctx, '%s')", fwd.DestinationID)
+	}()
+	logger.Debugf(ctx, "/DestinationStreamingLocker.Lock(ctx, '%s')", fwd.DestinationID)
+
 	_, remoteAppName, apiKey := fwd.getAppNameAndKey()
 
 	urlParsed := ptr(*fwd.URL)
@@ -364,4 +382,8 @@ func (fwd *ActiveStreamForwarding) Close() error {
 		fwd.Client = nil
 	}
 	return result.ErrorOrNil()
+}
+
+func (fwd *ActiveStreamForwarding) String() string {
+	return fmt.Sprintf("%s->%s", fwd.StreamID, fwd.DestinationID)
 }

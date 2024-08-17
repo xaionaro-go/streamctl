@@ -11,6 +11,7 @@ import (
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/sasha-s/go-deadlock"
+	"github.com/xaionaro-go/lockmap"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	playertypes "github.com/xaionaro-go/streamctl/pkg/player/types"
@@ -21,6 +22,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/streamctl/pkg/xlogger"
+	"github.com/xaionaro-go/typing/ordered"
 	"github.com/yutopp/go-rtmp"
 )
 
@@ -33,16 +35,22 @@ type BrowserOpener interface {
 	OpenURL(ctx context.Context, url string) error
 }
 
+type ForwardingKey struct {
+	StreamID      types.StreamID
+	DestinationID types.DestinationID
+}
+
 type StreamServer struct {
 	deadlock.Mutex
-	Config                  *types.Config
-	RelayServer             *RelayService
-	ServerHandlers          []types.PortServer
-	StreamDestinations      []types.StreamDestination
-	ActiveStreamForwardings map[types.DestinationID]*ActiveStreamForwarding
-	PlatformsController     PlatformsController
-	BrowserOpener           BrowserOpener
-	StreamPlayers           *streamplayer.StreamPlayers
+	Config                     *types.Config
+	RelayService               *RelayService
+	ServerHandlers             []types.PortServer
+	StreamDestinations         []types.StreamDestination
+	ActiveStreamForwardings    map[ForwardingKey]*ActiveStreamForwarding
+	PlatformsController        PlatformsController
+	BrowserOpener              BrowserOpener
+	StreamPlayers              *streamplayer.StreamPlayers
+	DestinationStreamingLocker *lockmap.LockMap
 }
 
 func New(
@@ -51,12 +59,13 @@ func New(
 	browserOpener BrowserOpener,
 ) *StreamServer {
 	s := &StreamServer{
-		RelayServer: NewRelayService(),
-		Config:      cfg,
+		RelayService: NewRelayService(),
+		Config:       cfg,
 
-		ActiveStreamForwardings: map[types.DestinationID]*ActiveStreamForwarding{},
-		PlatformsController:     platformsController,
-		BrowserOpener:           browserOpener,
+		ActiveStreamForwardings:    map[ForwardingKey]*ActiveStreamForwarding{},
+		PlatformsController:        platformsController,
+		BrowserOpener:              browserOpener,
+		DestinationStreamingLocker: lockmap.NewLockMap(),
 	}
 	s.StreamPlayers = streamplayer.New(
 		NewStreamPlayerStreamServer(s),
@@ -202,7 +211,7 @@ func (s *StreamServer) startServer(
 			OnConnect: func(conn net.Conn) (io.ReadWriteCloser, *rtmp.ConnConfig) {
 				ctx := belt.WithField(ctx, "client", conn.RemoteAddr().String())
 				h := &Handler{
-					relayService: s.RelayServer,
+					relayService: s.RelayService,
 				}
 				wrcc := types.NewReaderWriterCloseCounter(conn, &portSrv.ReadCount, &portSrv.WriteCount)
 				return wrcc, &rtmp.ConnConfig{
@@ -400,7 +409,11 @@ func (s *StreamServer) addStreamForward(
 	quirks types.ForwardingQuirks,
 ) (*StreamForward, error) {
 	ctx = belt.WithField(ctx, "stream_forward", fmt.Sprintf("%s->%s", streamID, destinationID))
-	if _, ok := s.ActiveStreamForwardings[destinationID]; ok {
+	key := ForwardingKey{
+		StreamID:      streamID,
+		DestinationID: destinationID,
+	}
+	if _, ok := s.ActiveStreamForwardings[key]; ok {
 		return nil, fmt.Errorf("there is already an active stream forwarding to '%s'", destinationID)
 	}
 
@@ -431,16 +444,24 @@ func (s *StreamServer) addStreamForward(
 
 	fwd, err := NewActiveStreamForward(
 		ctx,
+		s,
 		streamID,
 		destinationID,
 		urlParsed.String(),
-		s.RelayServer,
 		func(ctx context.Context, fwd *ActiveStreamForwarding) {
 			if quirks.StartAfterYoutubeRecognizedStream.Enabled {
 				if quirks.RestartUntilYoutubeRecognizesStream.Enabled {
 					logger.Errorf(ctx, "StartAfterYoutubeRecognizedStream should not be used together with RestartUntilYoutubeRecognizesStream")
 				} else {
 					logger.Debugf(ctx, "fwd %s->%s is waiting for YouTube to recognize the stream", streamID, destinationID)
+					started, err := s.PlatformsController.CheckStreamStartedByPlatformID(
+						memoize.SetNoCache(ctx, true),
+						youtube.ID,
+					)
+					logger.Debugf(ctx, "youtube status check: %v %v", started, err)
+					if started {
+						return
+					}
 					t := time.NewTicker(time.Second)
 					for {
 						select {
@@ -464,7 +485,7 @@ func (s *StreamServer) addStreamForward(
 	if err != nil {
 		return nil, fmt.Errorf("unable to run the stream forwarding: %w", err)
 	}
-	s.ActiveStreamForwardings[destinationID] = fwd
+	s.ActiveStreamForwardings[key] = fwd
 	result.ActiveForwarding = fwd
 
 	if quirks.RestartUntilYoutubeRecognizesStream.Enabled {
@@ -636,7 +657,16 @@ func (s *StreamServer) ListStreamForwards(
 	s.Lock()
 	defer s.Unlock()
 
-	activeStreamForwards, err := s.listStreamForwards(ctx)
+	return s.getStreamForwards(ctx, func(si types.StreamID, di ordered.Optional[types.DestinationID]) bool {
+		return true
+	})
+}
+
+func (s *StreamServer) getStreamForwards(
+	ctx context.Context,
+	filterFunc func(types.StreamID, ordered.Optional[types.DestinationID]) bool,
+) (_ret []StreamForward, _err error) {
+	activeStreamForwards, err := s.listActiveStreamForwards(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get the list of active stream forwardings: %w", err)
 	}
@@ -649,6 +679,9 @@ func (s *StreamServer) ListStreamForwards(
 	m := map[fwdID]*StreamForward{}
 	for idx := range activeStreamForwards {
 		fwd := &activeStreamForwards[idx]
+		if !filterFunc(fwd.StreamID, ordered.Opt(fwd.DestinationID)) {
+			continue
+		}
 		m[fwdID{
 			StreamID: fwd.StreamID,
 			DestID:   fwd.DestinationID,
@@ -658,8 +691,14 @@ func (s *StreamServer) ListStreamForwards(
 	logger.Tracef(ctx, "len(s.Config.Streams) == %d", len(s.Config.Streams))
 	var result []StreamForward
 	for streamID, stream := range s.Config.Streams {
+		if !filterFunc(streamID, ordered.Optional[types.DestinationID]{}) {
+			continue
+		}
 		logger.Tracef(ctx, "len(s.Config.Streams[%s].Forwardings) == %d", streamID, len(stream.Forwardings))
 		for dstID, cfg := range stream.Forwardings {
+			if !filterFunc(streamID, ordered.Opt(dstID)) {
+				continue
+			}
 			item := StreamForward{
 				StreamID:      streamID,
 				DestinationID: dstID,
@@ -680,7 +719,7 @@ func (s *StreamServer) ListStreamForwards(
 	return result, nil
 }
 
-func (s *StreamServer) listStreamForwards(
+func (s *StreamServer) listActiveStreamForwards(
 	_ context.Context,
 ) ([]StreamForward, error) {
 	var result []StreamForward
@@ -714,21 +753,43 @@ func (s *StreamServer) RemoveStreamForward(
 
 func (s *StreamServer) removeStreamForward(
 	_ context.Context,
-	_ types.StreamID,
+	streamID types.StreamID,
 	dstID types.DestinationID,
 ) error {
-	fwd := s.ActiveStreamForwardings[dstID]
+	key := ForwardingKey{
+		StreamID:      streamID,
+		DestinationID: dstID,
+	}
+
+	fwd := s.ActiveStreamForwardings[key]
 	if fwd == nil {
 		return nil
 	}
 
-	delete(s.ActiveStreamForwardings, dstID)
+	delete(s.ActiveStreamForwardings, key)
 	err := fwd.Close()
 	if err != nil {
 		return fmt.Errorf("unable to close stream forwarding: %w", err)
 	}
 
 	return nil
+}
+
+func (s *StreamServer) GetStreamForwardsByDestination(
+	ctx context.Context,
+	destID types.DestinationID,
+) (_ret []StreamForward, _err error) {
+	ctx = belt.WithField(ctx, "module", "StreamServer")
+	logger.Debugf(ctx, "GetStreamForwardsByDestination()")
+	defer func() {
+		logger.Debugf(ctx, "/GetStreamForwardsByDestination(): %#+v %v", _ret, _err)
+	}()
+	s.Lock()
+	defer s.Unlock()
+
+	return s.getStreamForwards(ctx, func(streamID types.StreamID, dstID ordered.Optional[types.DestinationID]) bool {
+		return !dstID.IsSet() || dstID.Get() == destID
+	})
 }
 
 func (s *StreamServer) ListStreamDestinations(
@@ -794,7 +855,14 @@ func (s *StreamServer) removeStreamDestination(
 	ctx context.Context,
 	destinationID types.DestinationID,
 ) error {
-	streamForwards, err := s.listStreamForwards(ctx)
+	streamForwards, err := s.getStreamForwards(
+		ctx,
+		func(
+			streamID types.StreamID,
+			dstID ordered.Optional[types.DestinationID],
+		) bool {
+			return !dstID.IsSet() || dstID.Get() == destinationID
+		})
 	if err != nil {
 		return fmt.Errorf("unable to list stream forwardings: %w", err)
 	}

@@ -5,8 +5,8 @@ import (
 	"crypto"
 	"time"
 
-	"github.com/andreykaipov/goobs/api/requests/scenes"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/cache"
@@ -60,13 +60,7 @@ type StreamD interface {
 	GetVariableHash(ctx context.Context, key consts.VarKey, hashType crypto.Hash) ([]byte, error)
 	SetVariable(ctx context.Context, key consts.VarKey, value []byte) error
 
-	OBSGetSceneList(
-		ctx context.Context,
-	) (*scenes.GetSceneListResponse, error)
-	OBSSetCurrentProgramScene(
-		ctx context.Context,
-		req *scenes.SetCurrentProgramSceneParams,
-	) error
+	OBS(ctx context.Context) (obs_grpc.OBSServer, context.CancelFunc, error)
 
 	SubmitOAuthCode(
 		context.Context,
@@ -229,6 +223,7 @@ type IncomingStream struct {
 
 type StreamID = streamtypes.StreamID
 type DestinationID = streamtypes.DestinationID
+type OBSInstanceID = streamtypes.OBSInstanceID
 
 type StreamForwardingQuirks = sstypes.ForwardingQuirks
 type RestartUntilYoutubeRecognizesStream = sstypes.RestartUntilYoutubeRecognizesStream

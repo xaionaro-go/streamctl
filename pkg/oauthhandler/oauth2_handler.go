@@ -105,6 +105,8 @@ func LaunchBrowser(
 		args = []string{"xdg-open"}
 	case "windows":
 		args = []string{"rundll32", "url.dll,FileProtocolHandler"}
+	case "android":
+		args = []string{"am", "start", "-a", "android.intent.action.VIEW", "-d"}
 	default:
 		return fmt.Errorf("unsupported platform: <%s>", runtime.GOOS)
 	}

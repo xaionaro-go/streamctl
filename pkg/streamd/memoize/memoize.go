@@ -7,9 +7,9 @@ import (
 
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/immune-gmbh/attestation-sdk/pkg/lockmap"
 	"github.com/immune-gmbh/attestation-sdk/pkg/objhash"
 	"github.com/sasha-s/go-deadlock"
+	"github.com/xaionaro-go/lockmap"
 )
 
 type MemoizeData struct {
@@ -52,7 +52,7 @@ func Memoize[REQ any, REPLY any, T func(context.Context, REQ) (REPLY, error)](
 	logger.Tracef(ctx, "grpc.CacheMetaLock.Lock()-ed")
 	cache := d.Cache
 
-	h := d.CacheLockMap.Lock(key)
+	h := d.CacheLockMap.Lock(context.Background(), key)
 	logger.Tracef(ctx, "grpc.CacheLockMap.Lock(%X)-ed", key[:])
 
 	type cacheItem struct {

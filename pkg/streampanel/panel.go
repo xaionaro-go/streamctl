@@ -26,12 +26,12 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"github.com/andreykaipov/goobs/api/requests/scenes"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/go-ng/xmath"
 	"github.com/sasha-s/go-deadlock"
+	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/screenshot"
@@ -365,6 +365,7 @@ func (p *Panel) startOAuthListenerForRemoteStreamD(
 			case <-ctx.Done():
 				return
 			case req, ok := <-oauthURLChan:
+				logger.Debugf(ctx, "<-oauthURLChan")
 				if !ok {
 					logger.Errorf(ctx, "oauth request receiver is closed")
 					return
@@ -655,8 +656,9 @@ func (p *Panel) openBrowser(
 	defer func() { logger.Debugf(ctx, "/openBrowser(ctx, '%s', '%s'): %3", url, reason, _err) }()
 
 	if p.Config.Browser.Command != "" {
-		logger.Debugf(ctx, "the browser command is configured to be : '%s'", p.Config.Browser.Command)
-		return exec.Command(p.Config.Browser.Command, url).Start()
+		args := []string{p.Config.Browser.Command, url}
+		logger.Debugf(ctx, "the browser command is configured to be '%s', so running '%s'", p.Config.Browser.Command, strings.Join(args, " "))
+		return exec.Command(args[0], args[1:]...).Start()
 	}
 
 	var browserCmd string
@@ -1486,18 +1488,37 @@ func (p *Panel) getUpdatedStatus_backends(ctx context.Context) {
 	}
 
 	if backendEnabled[obs.ID] {
-		sceneList, err := p.StreamD.OBSGetSceneList(ctx)
-		if err != nil {
-			p.DisplayError(fmt.Errorf("unable to get the list of scene from OBS: %w", err))
-		} else {
+		observability.Call(ctx, func() {
+			obsServer, obsServerClose, err := p.StreamD.OBS(ctx)
+			if obsServerClose != nil {
+				defer obsServerClose()
+			}
+			if err != nil {
+				p.DisplayError(fmt.Errorf("unable to initialize a client to OBS: %w", err))
+				return
+			}
+
+			sceneList, err := obsServer.GetSceneList(ctx, &obs_grpc.GetSceneListRequest{})
+			if err != nil {
+				p.DisplayError(fmt.Errorf("unable to get the list of scene from OBS: %w", err))
+				return
+			}
+			logger.Debugf(ctx, "OBS SceneList response: %#+v", sceneList)
+
 			p.obsSelectScene.Options = p.obsSelectScene.Options[:0]
 			for _, scene := range sceneList.Scenes {
-				p.obsSelectScene.Options = append(p.obsSelectScene.Options, scene.SceneName)
+				sceneNameAny := scene.GetFields()["sceneName"]
+				sceneName := string(sceneNameAny.GetString_())
+				if sceneName == "" {
+					p.DisplayError(fmt.Errorf("unable to parse the scene name from %#+v", scene))
+					return
+				}
+				p.obsSelectScene.Options = append(p.obsSelectScene.Options, sceneName)
 			}
 			if sceneList.CurrentProgramSceneName != p.obsSelectScene.Selected {
 				p.obsSelectScene.SetSelected(sceneList.CurrentProgramSceneName)
 			}
-		}
+		})
 	} else {
 		if p.updateTimerHandler != nil {
 			p.updateTimerHandler.Close()
@@ -1738,12 +1759,20 @@ func (p *Panel) initMainWindow(
 
 	p.obsSelectScene = widget.NewSelect(nil, func(s string) {
 		logger.Debugf(ctx, "OBS scene is changed to '%s'", s)
-		p.StreamD.OBSSetCurrentProgramScene(
-			ctx,
-			&scenes.SetCurrentProgramSceneParams{
-				SceneName: &s,
-			},
-		)
+		obsServer, obsServerClose, err := p.StreamD.OBS(ctx)
+		if obsServerClose != nil {
+			defer obsServerClose()
+		}
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to initialize a client to OBS: %w", err))
+			return
+		}
+		_, err = obsServer.SetCurrentProgramScene(ctx, &obs_grpc.SetCurrentProgramSceneRequest{
+			SceneName: &s,
+		})
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to set the OBS scene: %w", err))
+		}
 	})
 	obsPage := container.NewBorder(
 		nil,
@@ -2694,6 +2723,33 @@ func (p *Panel) profileWindow(
 			}
 		}
 		bottomContent = append(bottomContent, youtubeTemplate)
+
+		templateTagsLabel := widget.NewLabel("Template tags:")
+		templateTags := widget.NewSelect([]string{"ignore", "use as primary", "use as additional"}, func(s string) {
+			switch s {
+			case "ignore":
+				youtubeProfile.TemplateTags = youtube.TemplateTagsIgnore
+			case "use as primary":
+				youtubeProfile.TemplateTags = youtube.TemplateTagsUseAsPrimary
+			case "use as additional":
+				youtubeProfile.TemplateTags = youtube.TemplateTagsUseAsAdditional
+			default:
+				p.DisplayError(fmt.Errorf("unexpected new value of 'template tags': '%s'", s))
+			}
+		})
+		switch youtubeProfile.TemplateTags {
+		case youtube.TemplateTagsUndefined, youtube.TemplateTagsIgnore:
+			templateTags.SetSelected("ignore")
+		case youtube.TemplateTagsUseAsPrimary:
+			templateTags.SetSelected("use as primary")
+		case youtube.TemplateTagsUseAsAdditional:
+			templateTags.SetSelected("use as additional")
+		default:
+			p.DisplayError(fmt.Errorf("unexpected current value of 'template tags': '%s'", youtubeProfile.TemplateTags))
+		}
+		templateTags.SetSelected(youtubeProfile.TemplateTags.String())
+		templateTagsHint := NewHintWidget(w, "'ignore' will ignore the tags set in the template; 'use as primary' will put the tags of the template first and then add the profile tags; 'use as additional' will put the tags of the profile first and then add the template tags")
+		bottomContent = append(bottomContent, container.NewHBox(templateTagsLabel, templateTags, templateTagsHint))
 	} else {
 		bottomContent = append(bottomContent, widget.NewLabel("YouTube is disabled"))
 	}

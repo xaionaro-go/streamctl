@@ -57,7 +57,6 @@ func main() {
 	}
 
 	runPanel(ctx, cancelFunc, flags, nil)
-	time.Sleep(5 * time.Second)
 }
 
 func runPanel(
@@ -84,7 +83,8 @@ func runPanel(
 	}
 
 	if !flags.SplitProcess && flags.ListenAddr != "" {
-		listener, grpcServer, streamdGRPC := initGRPCServer(ctx, panel.StreamD, flags.ListenAddr)
+		logger.Debugf(ctx, `!flags.SplitProcess && flags.ListenAddr != ""`)
+		listener, grpcServer, streamdGRPC, _ := initGRPCServers(ctx, panel.StreamD, flags.ListenAddr)
 
 		// to erase an oauth request answered locally from "UnansweredOAuthRequests" in the GRPC server:
 		panel.OnInternallySubmittedOAuthCode = func(

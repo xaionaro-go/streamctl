@@ -51,8 +51,6 @@ type StreamDClient interface {
 	OBSOLETE_GitRelogin(ctx context.Context, in *OBSOLETE_GitReloginRequest, opts ...grpc.CallOption) (*OBSOLETE_GitReloginReply, error)
 	SubscribeToOAuthRequests(ctx context.Context, in *SubscribeToOAuthRequestsRequest, opts ...grpc.CallOption) (StreamD_SubscribeToOAuthRequestsClient, error)
 	SubmitOAuthCode(ctx context.Context, in *SubmitOAuthCodeRequest, opts ...grpc.CallOption) (*SubmitOAuthCodeReply, error)
-	OBSGetSceneList(ctx context.Context, in *OBSGetSceneListRequest, opts ...grpc.CallOption) (*OBSGetSceneListReply, error)
-	OBSSetCurrentProgramScene(ctx context.Context, in *OBSSetCurrentProgramSceneRequest, opts ...grpc.CallOption) (*OBSSetCurrentProgramSceneReply, error)
 	ListStreamServers(ctx context.Context, in *ListStreamServersRequest, opts ...grpc.CallOption) (*ListStreamServersReply, error)
 	StartStreamServer(ctx context.Context, in *StartStreamServerRequest, opts ...grpc.CallOption) (*StartStreamServerReply, error)
 	StopStreamServer(ctx context.Context, in *StopStreamServerRequest, opts ...grpc.CallOption) (*StopStreamServerReply, error)
@@ -422,24 +420,6 @@ func (x *streamDSubscribeToOAuthRequestsClient) Recv() (*OAuthRequest, error) {
 func (c *streamDClient) SubmitOAuthCode(ctx context.Context, in *SubmitOAuthCodeRequest, opts ...grpc.CallOption) (*SubmitOAuthCodeReply, error) {
 	out := new(SubmitOAuthCodeReply)
 	err := c.cc.Invoke(ctx, "/streamd.StreamD/SubmitOAuthCode", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *streamDClient) OBSGetSceneList(ctx context.Context, in *OBSGetSceneListRequest, opts ...grpc.CallOption) (*OBSGetSceneListReply, error) {
-	out := new(OBSGetSceneListReply)
-	err := c.cc.Invoke(ctx, "/streamd.StreamD/OBSGetSceneList", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *streamDClient) OBSSetCurrentProgramScene(ctx context.Context, in *OBSSetCurrentProgramSceneRequest, opts ...grpc.CallOption) (*OBSSetCurrentProgramSceneReply, error) {
-	out := new(OBSSetCurrentProgramSceneReply)
-	err := c.cc.Invoke(ctx, "/streamd.StreamD/OBSSetCurrentProgramScene", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -955,8 +935,6 @@ type StreamDServer interface {
 	OBSOLETE_GitRelogin(context.Context, *OBSOLETE_GitReloginRequest) (*OBSOLETE_GitReloginReply, error)
 	SubscribeToOAuthRequests(*SubscribeToOAuthRequestsRequest, StreamD_SubscribeToOAuthRequestsServer) error
 	SubmitOAuthCode(context.Context, *SubmitOAuthCodeRequest) (*SubmitOAuthCodeReply, error)
-	OBSGetSceneList(context.Context, *OBSGetSceneListRequest) (*OBSGetSceneListReply, error)
-	OBSSetCurrentProgramScene(context.Context, *OBSSetCurrentProgramSceneRequest) (*OBSSetCurrentProgramSceneReply, error)
 	ListStreamServers(context.Context, *ListStreamServersRequest) (*ListStreamServersReply, error)
 	StartStreamServer(context.Context, *StartStreamServerRequest) (*StartStreamServerReply, error)
 	StopStreamServer(context.Context, *StopStreamServerRequest) (*StopStreamServerReply, error)
@@ -1085,12 +1063,6 @@ func (UnimplementedStreamDServer) SubscribeToOAuthRequests(*SubscribeToOAuthRequ
 }
 func (UnimplementedStreamDServer) SubmitOAuthCode(context.Context, *SubmitOAuthCodeRequest) (*SubmitOAuthCodeReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SubmitOAuthCode not implemented")
-}
-func (UnimplementedStreamDServer) OBSGetSceneList(context.Context, *OBSGetSceneListRequest) (*OBSGetSceneListReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method OBSGetSceneList not implemented")
-}
-func (UnimplementedStreamDServer) OBSSetCurrentProgramScene(context.Context, *OBSSetCurrentProgramSceneRequest) (*OBSSetCurrentProgramSceneReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method OBSSetCurrentProgramScene not implemented")
 }
 func (UnimplementedStreamDServer) ListStreamServers(context.Context, *ListStreamServersRequest) (*ListStreamServersReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListStreamServers not implemented")
@@ -1737,42 +1709,6 @@ func _StreamD_SubmitOAuthCode_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).SubmitOAuthCode(ctx, req.(*SubmitOAuthCodeRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _StreamD_OBSGetSceneList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(OBSGetSceneListRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(StreamDServer).OBSGetSceneList(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/streamd.StreamD/OBSGetSceneList",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(StreamDServer).OBSGetSceneList(ctx, req.(*OBSGetSceneListRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _StreamD_OBSSetCurrentProgramScene_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(OBSSetCurrentProgramSceneRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(StreamDServer).OBSSetCurrentProgramScene(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/streamd.StreamD/OBSSetCurrentProgramScene",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(StreamDServer).OBSSetCurrentProgramScene(ctx, req.(*OBSSetCurrentProgramSceneRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2538,14 +2474,6 @@ var StreamD_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SubmitOAuthCode",
 			Handler:    _StreamD_SubmitOAuthCode_Handler,
-		},
-		{
-			MethodName: "OBSGetSceneList",
-			Handler:    _StreamD_OBSGetSceneList_Handler,
-		},
-		{
-			MethodName: "OBSSetCurrentProgramScene",
-			Handler:    _StreamD_OBSSetCurrentProgramScene_Handler,
 		},
 		{
 			MethodName: "ListStreamServers",

@@ -41,7 +41,7 @@ func (s *StreamPlayerStreamServer) WaitPublisher(
 
 	ch := make(chan struct{})
 	observability.Go(ctx, func() {
-		s.RelayServer.WaitPubsub(ctx, localAppName)
+		s.RelayService.WaitPubsub(ctx, localAppName)
 		close(ch)
 	})
 	return ch, nil

@@ -13,6 +13,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/sasha-s/go-deadlock"
+	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/streamctl/cmd/streamd/ui"
 	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
@@ -154,7 +155,7 @@ func runStreamd(
 	}
 
 	var listener net.Listener
-	listener, _, streamdGRPC = initGRPCServer(ctx, streamD, flags.ListenAddr)
+	listener, _, streamdGRPC, _ = initGRPCServers(ctx, streamD, flags.ListenAddr)
 	streamdGRPCLocker.Unlock()
 
 	var configLocker deadlock.Mutex
@@ -218,23 +219,34 @@ type UpdateStreamDConfig struct {
 	Config string
 }
 
-func initGRPCServer(
+func initGRPCServers(
 	ctx context.Context,
 	streamD api.StreamD,
 	listenAddr string,
-) (net.Listener, *grpc.Server, *server.GRPCServer) {
+) (net.Listener, *grpc.Server, *server.GRPCServer, obs_grpc.OBSServer) {
+	logger.Debugf(ctx, "initGRPCServers")
+	defer logger.Debugf(ctx, "/initGRPCServers")
 	listener, err := net.Listen("tcp", listenAddr)
 	if err != nil {
 		logger.Panicf(ctx, "failed to listen: %v", err)
 	}
+
+	obsGRPC, obsGRPCClose, err := streamD.OBS(ctx)
 	observability.Go(ctx, func() {
 		<-ctx.Done()
 		listener.Close()
+		if obsGRPCClose != nil {
+			obsGRPCClose()
+		}
 	})
+	if err != nil {
+		logger.Panicf(ctx, "unable to initialize OBS client: %v", err)
+	}
 
 	grpcServer := grpc.NewServer()
 	streamdGRPC := server.NewGRPCServer(streamD)
 	streamd_grpc.RegisterStreamDServer(grpcServer, streamdGRPC)
+	obs_grpc.RegisterOBSServer(grpcServer, obsGRPC)
 
 	// start the server:
 	observability.Go(ctx, func() {
@@ -250,5 +262,5 @@ func initGRPCServer(
 		}
 	})
 
-	return listener, grpcServer, streamdGRPC
+	return listener, grpcServer, streamdGRPC, obsGRPC
 }

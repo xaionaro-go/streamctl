@@ -9,13 +9,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/andreykaipov/goobs/api/requests/scenes"
+	"github.com/andreykaipov/goobs"
 	eventbus "github.com/asaskevich/EventBus"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/sasha-s/go-deadlock"
+	"github.com/xaionaro-go/obs-grpc-proxy/pkg/obsgrpcproxy"
+	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/repository"
@@ -47,6 +49,8 @@ type StreamControllers struct {
 }
 
 type SaveConfigFunc func(context.Context, config.Config) error
+
+type OBSInstanceID = streamtypes.OBSInstanceID
 
 type StreamD struct {
 	UI ui.UI
@@ -791,38 +795,36 @@ func (d *StreamD) SetVariable(
 	return nil
 }
 
-func (d *StreamD) OBSGetSceneList(
+func (d *StreamD) OBS(
 	ctx context.Context,
-) (*scenes.GetSceneListResponse, error) {
-	d.ControllersLocker.RLock()
-	defer d.ControllersLocker.RUnlock()
+) (obs_grpc.OBSServer, context.CancelFunc, error) {
+	logger.Debugf(ctx, "OBS()")
+	defer logger.Debugf(ctx, "/OBS()")
 
-	obs := d.StreamControllers.OBS
-	if obs == nil {
-		return nil, fmt.Errorf("OBS is not initialized")
-	}
+	proxy := obsgrpcproxy.New(func() (*goobs.Client, context.CancelFunc, error) {
+		d.ControllersLocker.RLock()
+		obs := d.StreamControllers.OBS
+		d.ControllersLocker.RUnlock()
+		if obs == nil {
+			return nil, nil, fmt.Errorf("connection to OBS is not initialized")
+		}
 
-	return obs.GetSceneList(d.ctxForController(ctx))
-}
+		client, err := obs.GetClient()
+		logger.Debugf(ctx, "getting OBS client result: %v %v", client, err)
+		if err != nil {
+			return nil, nil, err
+		}
 
-func (d *StreamD) OBSSetCurrentProgramScene(
-	ctx context.Context,
-	req *scenes.SetCurrentProgramSceneParams,
-) error {
-	logger.Debugf(ctx, "OBSSetCurrentProgramScene(ctx, %#+v)", req)
-	defer func() { logger.Debugf(ctx, "/OBSSetCurrentProgramScene(ctx, %#+v)", req) }()
-
-	defer d.notifyAboutChange(ctx, events.OBSCurrentProgramScene)
-
-	d.ControllersLocker.RLock()
-	defer d.ControllersLocker.RUnlock()
-
-	obs := d.StreamControllers.OBS
-	if obs == nil {
-		return fmt.Errorf("OBS is not initialized")
-	}
-
-	return obs.SetCurrentProgramScene(d.ctxForController(ctx), req)
+		return client, func() {
+			err := client.Disconnect()
+			if err != nil {
+				logger.Errorf(ctx, "unable to disconnect from OBS: %w", err)
+			} else {
+				logger.Debugf(ctx, "disconnected from OBS")
+			}
+		}, nil
+	})
+	return proxy, func() {}, nil
 }
 
 func (d *StreamD) SubmitOAuthCode(

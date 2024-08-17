@@ -9,6 +9,7 @@ import (
 
 type StreamID string
 type DestinationID string
+type OBSInstanceID string
 
 type ServerType int
 

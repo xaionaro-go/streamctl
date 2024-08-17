@@ -17,13 +17,14 @@ require (
 	github.com/nicklaw5/helix/v2 v2.30.1-0.20240715193454-0151ccccf980
 	github.com/spf13/cobra v1.8.0
 	github.com/xaionaro-go/logrustash v0.0.0-20240804141650-d48034780a5f
-	golang.org/x/oauth2 v0.17.0
-	google.golang.org/api v0.169.0
+	golang.org/x/oauth2 v0.22.0
+	google.golang.org/api v0.192.0
 )
 
 require (
-	cloud.google.com/go/compute v1.24.0 // indirect
-	cloud.google.com/go/compute/metadata v0.2.3 // indirect
+	cloud.google.com/go/auth v0.8.1 // indirect
+	cloud.google.com/go/auth/oauth2adapt v0.2.3 // indirect
+	cloud.google.com/go/compute/metadata v0.5.0 // indirect
 	dario.cat/mergo v1.0.0 // indirect
 	fyne.io/systray v1.11.0 // indirect
 	github.com/BurntSushi/toml v1.4.0 // indirect
@@ -33,7 +34,7 @@ require (
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
-	github.com/cespare/xxhash/v2 v2.2.0 // indirect
+	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cloudflare/circl v1.3.7 // indirect
 	github.com/containerd/cgroups v1.1.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
@@ -57,7 +58,7 @@ require (
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-gl/gl v0.0.0-20231021071112-07e5d0ea2e71 // indirect
 	github.com/go-gl/glfw/v3.3/glfw v0.0.0-20240506104042-037f3cc74f2a // indirect
-	github.com/go-logr/logr v1.4.1 // indirect
+	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ng/slices v0.0.0-20230703171042-6195d35636a2 // indirect
 	github.com/go-ng/sort v0.0.0-20220617173827-2cc7cd04f7c7 // indirect
@@ -71,13 +72,12 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt/v4 v4.0.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
-	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/btree v1.1.2 // indirect
 	github.com/google/gopacket v1.1.19 // indirect
 	github.com/google/pprof v0.0.0-20240207164012-fb44976bdcd5 // indirect
-	github.com/google/s2a-go v0.1.7 // indirect
+	github.com/google/s2a-go v0.1.8 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.2 // indirect
-	github.com/googleapis/gax-go/v2 v2.12.2 // indirect
+	github.com/googleapis/gax-go/v2 v2.13.0 // indirect
 	github.com/gopherjs/gopherjs v1.17.2 // indirect
 	github.com/gorilla/websocket v1.5.2 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
@@ -199,18 +199,16 @@ require (
 	golang.org/x/image v0.18.0 // indirect
 	golang.org/x/mobile v0.0.0-20231127183840-76ac6878050a // indirect
 	golang.org/x/mod v0.18.0 // indirect
-	golang.org/x/sync v0.7.0 // indirect
-	golang.org/x/sys v0.21.0 // indirect
+	golang.org/x/sync v0.8.0 // indirect
+	golang.org/x/sys v0.22.0 // indirect
 	golang.org/x/text v0.16.0 // indirect
-	golang.org/x/time v0.5.0 // indirect
+	golang.org/x/time v0.6.0 // indirect
 	golang.org/x/tools v0.22.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
 	golang.zx2c4.com/wireguard v0.0.0-20231211153847-12269c276173 // indirect
 	gonum.org/v1/gonum v0.14.0 // indirect
-	google.golang.org/appengine v1.6.8 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20240415180920-8c6c420018be // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240415141817-7cd4c1c1f9ec // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240730163845-b1a4ccb954bf // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
@@ -254,14 +252,17 @@ require (
 	github.com/spf13/viper v1.8.1
 	github.com/stretchr/testify v1.9.0
 	github.com/xaionaro-go/datacounter v1.0.4
+	github.com/xaionaro-go/lockmap v0.0.0-20240813004618-7ab689a46dec
+	github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20240817204450-689427e2fdf5
+	github.com/xaionaro-go/typing v0.0.0-20221123235249-2229101d38ba
 	github.com/xaionaro-go/unsafetools v0.0.0-20210722164218-75ba48cf7b3c
 	github.com/yl2chen/cidranger v1.0.2
 	github.com/yutopp/go-flv v0.3.1
 	github.com/yutopp/go-rtmp v0.0.7
-	golang.org/x/crypto v0.24.0
-	golang.org/x/net v0.26.0
-	google.golang.org/grpc v1.63.2
-	google.golang.org/protobuf v1.33.1-0.20240408130810-98873a205002
+	golang.org/x/crypto v0.25.0
+	golang.org/x/net v0.27.0
+	google.golang.org/grpc v1.65.0
+	google.golang.org/protobuf v1.34.2
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
 )

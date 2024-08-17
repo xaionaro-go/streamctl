@@ -32,6 +32,10 @@ import (
 
 const copyThumbnail = false
 
+const (
+	LimitTagsLength = 500
+)
+
 type YouTube struct {
 	locker         deadlock.Mutex
 	Config         Config
@@ -117,7 +121,7 @@ func (yt *YouTube) checkTokenNoLock(ctx context.Context) (_err error) {
 			logger.Tracef(ctx, "the token have not changed")
 			return nil
 		}
-		logger.Tracef(ctx, "the token have changed")
+		logger.Debugf(ctx, "the token have changed")
 		yt.Config.Config.Token = token
 		return yt.SaveConfigFunc(yt.Config)
 	}
@@ -230,7 +234,7 @@ func getToken(ctx context.Context, cfg Config) (*oauth2.Token, error) {
 		if _, ok := alreadyListening[listenPort]; ok {
 			return
 		}
-		logger.Tracef(ctx, "starting the oauth handler at port %d", listenPort)
+		logger.Debugf(ctx, "starting the oauth handler at port %d", listenPort)
 		alreadyListening[listenPort] = struct{}{}
 		oauthCfg := getAuthCfgBase(cfg)
 		oauthCfg.RedirectURL = fmt.Sprintf("http://127.0.0.1:%d", listenPort)
@@ -257,9 +261,9 @@ func getToken(ctx context.Context, cfg Config) (*oauth2.Token, error) {
 				if oauthHandler == nil {
 					oauthHandler = oauthhandler.OAuth2HandlerViaCLI
 				}
-				logger.Tracef(ctx, "calling oauthHandler for %d", listenPort)
+				logger.Debugf(ctx, "calling oauthHandler for %d", listenPort)
 				err := oauthHandler(ctx, oauthHandlerArg)
-				logger.Tracef(ctx, "called oauthHandler for %d: %v", listenPort, err)
+				logger.Debugf(ctx, "called oauthHandler for %d: %v", listenPort, err)
 				if err != nil {
 					errCh <- err
 					return
@@ -308,7 +312,10 @@ func getToken(ctx context.Context, cfg Config) (*oauth2.Token, error) {
 	return tok, nil
 }
 
-func (yt *YouTube) Ping(ctx context.Context) error {
+func (yt *YouTube) Ping(ctx context.Context) (_err error) {
+	logger.Debugf(ctx, "YouTube.Ping")
+	defer func() { logger.Debugf(ctx, "/YouTube.Ping: %v", _err) }()
+
 	counter := 0
 	for {
 		if yt == nil {
@@ -482,6 +489,42 @@ func (yt *YouTube) DeleteActiveBroadcasts(
 	})
 }
 
+func deduplicate[T comparable](slice []T) []T {
+	deduped := make([]T, 0, len(slice))
+	m := map[T]struct{}{}
+	for _, item := range slice {
+		if _, ok := m[item]; ok {
+			continue
+		}
+		m[item] = struct{}{}
+		deduped = append(deduped, item)
+	}
+	return deduped
+}
+
+func CalculateTagsLength(tags []string) int {
+	length := 0
+	for _, tag := range tags {
+		length += len([]byte(tag))
+		if strings.Contains(tag, " ") {
+			length += 2
+		}
+	}
+	length += len(tags)
+	return length
+}
+
+func TruncateTags(tags []string) []string {
+	for {
+		curLength := CalculateTagsLength(tags)
+		if curLength <= LimitTagsLength {
+			break
+		}
+		tags = tags[:len(tags)-1]
+	}
+	return tags
+}
+
 type FlagBroadcastTemplateIDs []string
 
 var liveBroadcastParts = []string{
@@ -532,7 +575,10 @@ func (yt *YouTube) StartStream(
 	description string,
 	profile StreamProfile,
 	customArgs ...any,
-) error {
+) (_err error) {
+	logger.Debugf(ctx, "YouTube.StartStream")
+	defer func() { logger.Debugf(ctx, "/YouTube.StartStream: %v", _err) }()
+
 	if err := yt.Ping(ctx); err != nil {
 		return fmt.Errorf("connection to YouTube is broken: %w", err)
 	}
@@ -688,9 +734,9 @@ func (yt *YouTube) StartStream(
 
 		b, err := yaml.Marshal(broadcast)
 		if err == nil {
-			logger.Tracef(ctx, "creating broadcast %s", b)
+			logger.Debugf(ctx, "creating broadcast %s", b)
 		} else {
-			logger.Tracef(ctx, "creating broadcast %#+v", broadcast)
+			logger.Debugf(ctx, "creating broadcast %#+v", broadcast)
 		}
 
 		newBroadcast, err := yt.YouTubeService.LiveBroadcasts.Insert(
@@ -707,12 +753,31 @@ func (yt *YouTube) StartStream(
 		video.Snippet.Description = broadcast.Snippet.Description
 		video.Snippet.PublishedAt = ""
 		video.Status.PublishAt = ""
-		video.Snippet.Tags = append(video.Snippet.Tags, profile.Tags...)
+		switch profile.TemplateTags {
+		case TemplateTagsUndefined, TemplateTagsIgnore:
+			video.Snippet.Tags = profile.Tags
+		case TemplateTagsUseAsPrimary:
+			video.Snippet.Tags = append(video.Snippet.Tags, profile.Tags...)
+		case TemplateTagsUseAsAdditional:
+			templateTags := video.Snippet.Tags
+			video.Snippet.Tags = video.Snippet.Tags[:0]
+			video.Snippet.Tags = append(video.Snippet.Tags, profile.Tags...)
+			video.Snippet.Tags = append(video.Snippet.Tags, templateTags...)
+		default:
+			logger.Errorf(ctx, "unexpected value of the 'TemplateTags' setting: '%v'", profile.TemplateTags)
+			video.Snippet.Tags = profile.Tags
+		}
+		video.Snippet.Tags = deduplicate(video.Snippet.Tags)
+		tagsTruncated := TruncateTags(video.Snippet.Tags)
+		if len(tagsTruncated) != len(video.Snippet.Tags) {
+			logger.Infof(ctx, "YouTube tags were truncated, the amount was reduced from %d to %d to satisfy the 500 characters limit", len(video.Snippet.Tags), len(tagsTruncated))
+			video.Snippet.Tags = tagsTruncated
+		}
 		b, err = yaml.Marshal(video)
 		if err == nil {
-			logger.Tracef(ctx, "updating video data to %s", b)
+			logger.Debugf(ctx, "updating video data to %s", b)
 		} else {
-			logger.Tracef(ctx, "updating video data to %#+v", broadcast)
+			logger.Debugf(ctx, "updating video data to %#+v", broadcast)
 		}
 		_, err = yt.YouTubeService.Videos.Update(videoParts, video).Context(ctx).Do()
 		logger.Debugf(ctx, "YouTube.Update result: %v", err)
@@ -737,9 +802,9 @@ func (yt *YouTube) StartStream(
 			}
 			b, err := yaml.Marshal(newPlaylistItem)
 			if err == nil {
-				logger.Tracef(ctx, "adding the video to playlist %s", b)
+				logger.Debugf(ctx, "adding the video to playlist %s", b)
 			} else {
-				logger.Tracef(ctx, "adding the video to playlist %#+v", newPlaylistItem)
+				logger.Debugf(ctx, "adding the video to playlist %#+v", newPlaylistItem)
 			}
 
 			_, err = yt.YouTubeService.PlaylistItems.Insert(playlistItemParts, newPlaylistItem).Context(ctx).Do()

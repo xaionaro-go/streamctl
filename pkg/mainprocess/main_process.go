@@ -12,9 +12,9 @@ import (
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
-	"github.com/immune-gmbh/attestation-sdk/pkg/lockmap"
 	"github.com/sasha-s/go-deadlock"
 	"github.com/sethvargo/go-password/password"
+	"github.com/xaionaro-go/lockmap"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 )
 
@@ -371,7 +371,7 @@ func (m *Manager) sendMessage(
 			Content:     content,
 		}
 
-		h := m.connLocker.Lock(destination)
+		h := m.connLocker.Lock(context.Background(), destination)
 		defer h.Unlock()
 		defer time.Sleep(100 * time.Millisecond) // TODO: Delete this horrible hack (that is introduced to avoid erasing messages in the buffer)
 		err = gob.NewEncoder(conn).Encode(message)
@@ -549,7 +549,7 @@ func (m *Manager) SendMessagePreReady(
 		Destination: dst,
 		Content:     content,
 	}
-	h := m.connLocker.Lock(dst)
+	h := m.connLocker.Lock(context.Background(), dst)
 	defer h.Unlock()
 	defer time.Sleep(100 * time.Millisecond) // TODO: Delete this horrible hack (that is introduced to avoid erasing messages in the buffer)
 	err = encoder.Encode(msg)
@@ -579,7 +579,7 @@ func (m *Manager) SendMessage(
 		Destination: dst,
 		Content:     content,
 	}
-	h := m.connLocker.Lock(dst)
+	h := m.connLocker.Lock(context.Background(), dst)
 	defer h.Unlock()
 	err = encoder.Encode(msg)
 	logger.Tracef(ctx, "sending message %#+v: %v", msg, err)

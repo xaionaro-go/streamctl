@@ -12,13 +12,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/andreykaipov/goobs/api/requests/scenes"
-	"github.com/andreykaipov/goobs/api/typedefs"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
 	"github.com/hashicorp/go-multierror"
 	"github.com/sasha-s/go-deadlock"
+	"github.com/xaionaro-go/obs-grpc-proxy/pkg/obsgrpcproxy"
+	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/player/protobuf/go/player_grpc"
@@ -49,6 +49,8 @@ type Client struct {
 	PersistentConnection       *grpc.ClientConn
 	PersistentClient           streamd_grpc.StreamDClient
 }
+
+type OBSInstanceID = streamtypes.OBSInstanceID
 
 var _ api.StreamD = (*Client)(nil)
 
@@ -809,59 +811,24 @@ func (c *Client) SetVariable(
 	return err
 }
 
-func (c *Client) OBSGetSceneList(
+func (c *Client) OBS(
 	ctx context.Context,
-) (*scenes.GetSceneListResponse, error) {
-	resp, err := withClient(ctx, c, func(
-		ctx context.Context,
-		client streamd_grpc.StreamDClient,
-		conn io.Closer,
-	) (*streamd_grpc.OBSGetSceneListReply, error) {
-		return callWrapper(ctx, c, client.OBSGetSceneList, &streamd_grpc.OBSGetSceneListRequest{})
-	})
+) (obs_grpc.OBSServer, context.CancelFunc, error) {
+	logger.Debugf(ctx, "OBS()")
+	defer logger.Debugf(ctx, "/OBS()")
+
+	conn, err := c.connect(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("unable to get the list of OBS scenes: %w", err)
+		return nil, nil, fmt.Errorf("unable to initialize a gRPC client: %w", err)
 	}
 
-	result := &scenes.GetSceneListResponse{
-		CurrentPreviewSceneName: resp.CurrentPreviewSceneName,
-		CurrentPreviewSceneUuid: resp.CurrentPreviewSceneUUID,
-		CurrentProgramSceneName: resp.CurrentProgramSceneName,
-		CurrentProgramSceneUuid: resp.CurrentProgramSceneUUID,
-	}
-	for _, scene := range resp.Scenes {
-		result.Scenes = append(result.Scenes, &typedefs.Scene{
-			SceneUuid:  scene.Uuid,
-			SceneIndex: int(scene.Index),
-			SceneName:  scene.Name,
-		})
-	}
-
-	return result, nil
-}
-func (c *Client) OBSSetCurrentProgramScene(
-	ctx context.Context,
-	in *scenes.SetCurrentProgramSceneParams,
-) error {
-	req := &streamd_grpc.OBSSetCurrentProgramSceneRequest{}
-	switch {
-	case in.SceneUuid != nil:
-		req.OBSSceneID = &streamd_grpc.OBSSetCurrentProgramSceneRequest_SceneUUID{
-			SceneUUID: *in.SceneUuid,
+	client := obs_grpc.NewOBSClient(conn)
+	return &obsgrpcproxy.ClientAsServer{OBSClient: client}, func() {
+		err := conn.Close()
+		if err != nil {
+			logger.Errorf(ctx, "unable to close the connection: %w", err)
 		}
-	case in.SceneName != nil:
-		req.OBSSceneID = &streamd_grpc.OBSSetCurrentProgramSceneRequest_SceneName{
-			SceneName: *in.SceneName,
-		}
-	}
-	_, err := withClient(ctx, c, func(
-		ctx context.Context,
-		client streamd_grpc.StreamDClient,
-		conn io.Closer,
-	) (*streamd_grpc.OBSSetCurrentProgramSceneReply, error) {
-		return callWrapper(ctx, c, client.OBSSetCurrentProgramScene, req)
-	})
-	return err
+	}, nil
 }
 
 func ptr[T any](in T) *T {

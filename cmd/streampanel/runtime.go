@@ -105,6 +105,7 @@ func initRuntime(
 	})
 
 	deadlock.Opts.LogBuf = NewLogWriter(ctx, l)
+	deadlock.Opts.DeadlockTimeout = 2 * time.Minute
 
 	ctx, cancelFn := context.WithCancel(ctx)
 	return ctx, func() {
