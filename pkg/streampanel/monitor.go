@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"runtime"
 	"sort"
+	"strconv"
 	"sync"
 
 	"image"
@@ -13,6 +14,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/anthonynsimon/bild/adjust"
@@ -24,8 +26,10 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
+	streamdconfig "github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	streamdconsts "github.com/xaionaro-go/streamctl/pkg/streamd/consts"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
+	"github.com/xaionaro-go/streamctl/pkg/xfyne"
 )
 
 func (p *Panel) startMonitorPage(
@@ -220,12 +224,117 @@ func (p *Panel) updateMonitorPageStreamStatus(
 }
 
 func (p *Panel) newMonitorSettingsWindow(ctx context.Context) {
+	logger.Debugf(ctx, "newMonitorSettingsWindow")
+	defer logger.Debugf(ctx, "/newMonitorSettingsWindow")
 	w := p.app.NewWindow("Monitor settings")
 	resizeWindow(w, fyne.NewSize(1500, 1000))
+
+	content := container.NewVBox()
 
 	cfg, err := p.StreamD.GetConfig(ctx)
 	if err != nil {
 		p.DisplayError(fmt.Errorf("unable to get the current config: %w", err))
+	}
+
+	saveCfg := func(ctx context.Context) error {
+		err := p.StreamD.SetConfig(ctx, cfg)
+		if err != nil {
+			return fmt.Errorf("unable to set the config: %w", err)
+		}
+
+		err = p.StreamD.SaveConfig(ctx)
+		if err != nil {
+			return fmt.Errorf("unable to save the config: %w", err)
+		}
+
+		return nil
+	}
+
+	content.Add(widget.NewRichTextFromMarkdown("## Elements"))
+	for name, el := range cfg.Monitor.Elements {
+		editButton := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
+			p.editMonitorElementWindow(
+				ctx,
+				name,
+				el,
+				func(ctx context.Context, elementName string, newElement streamdconfig.OBSSource) error {
+					if _, ok := cfg.Monitor.Elements[elementName]; !ok {
+						return fmt.Errorf("element with name '%s' does not exist", elementName)
+					}
+					cfg.Monitor.Elements[elementName] = newElement
+					err := saveCfg(ctx)
+					if err != nil {
+						return err
+					}
+					return nil
+				},
+			)
+		})
+		deleteButton := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
+			w := dialog.NewConfirm(
+				fmt.Sprintf("Delete monitor element '%s'?", name),
+				fmt.Sprintf("Are you sure you want to delete the element '%s' from the Monitor page?", name),
+				func(b bool) {
+					if !b {
+						return
+					}
+
+					delete(cfg.Monitor.Elements, name)
+					err := saveCfg(ctx)
+					if err != nil {
+						p.DisplayError(err)
+					}
+				},
+				w,
+			)
+			w.Show()
+		})
+		content.Add(container.NewHBox(
+			editButton,
+			deleteButton,
+			widget.NewLabel(name),
+		))
+	}
+
+	addButton := widget.NewButtonWithIcon("Add", theme.ContentAddIcon(), func() {
+		p.editMonitorElementWindow(
+			ctx,
+			"",
+			streamdconfig.OBSSource{},
+			func(ctx context.Context, elementName string, newElement streamdconfig.OBSSource) error {
+				if _, ok := cfg.Monitor.Elements[elementName]; ok {
+					return fmt.Errorf("element with name '%s' already exists", elementName)
+				}
+				cfg.Monitor.Elements[elementName] = newElement
+				err := saveCfg(ctx)
+				if err != nil {
+					return err
+				}
+				return nil
+			},
+		)
+	})
+	content.Add(addButton)
+
+	w.SetContent(content)
+	w.Show()
+}
+
+func (p *Panel) editMonitorElementWindow(
+	ctx context.Context,
+	_elementNameValue string,
+	cfg streamdconfig.OBSSource,
+	saveFunc func(ctx context.Context, elementName string, cfg streamdconfig.OBSSource) error,
+) {
+	logger.Debugf(ctx, "editMonitorElementWindow")
+	defer logger.Debugf(ctx, "/editMonitorElementWindow")
+	w := p.app.NewWindow("Monitor element settings")
+	resizeWindow(w, fyne.NewSize(1500, 1000))
+
+	elementName := widget.NewEntry()
+	if _elementNameValue != "" {
+		elementName.SetText(_elementNameValue)
+		elementName.Disable()
 	}
 
 	obsServer, obsServerClose, err := p.StreamD.OBS(ctx)
@@ -283,28 +392,117 @@ func (p *Panel) newMonitorSettingsWindow(ctx context.Context) {
 	sort.Strings(sourceNames)
 
 	chatSourceSelect := widget.NewSelect(sourceNames, func(s string) {
-		cfg.Monitor.ChatOBSSourceName = s
+		cfg.SourceName = s
 	})
-	chatSourceSelect.SetSelected(cfg.Monitor.ChatOBSSourceName)
+	chatSourceSelect.SetSelected(cfg.SourceName)
 
-	countersSourceSelect := widget.NewSelect(sourceNames, func(s string) {
-		cfg.Monitor.CounterOBSSourceName = s
+	zIndex := xfyne.NewNumericalEntry()
+	zIndex.SetText(fmt.Sprintf("%v", cfg.ZIndex))
+	zIndex.OnChanged = func(s string) {
+		if s == "" {
+			s = "0"
+		}
+		v, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to parse '%s' as a float: %w", s, err))
+			return
+		}
+		cfg.ZIndex = v
+	}
+
+	if cfg.Width == 0 {
+		cfg.Width = 100
+	}
+	if cfg.Height == 0 {
+		cfg.Height = 100
+	}
+
+	chatWidth := xfyne.NewNumericalEntry()
+	chatWidth.SetText(fmt.Sprintf("%v", cfg.Width))
+	chatWidth.OnChanged = func(s string) {
+		if s == "" {
+			s = "0"
+		}
+		v, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to parse '%s' as a float: %w", s, err))
+			return
+		}
+		cfg.Width = v
+	}
+	chatHeight := xfyne.NewNumericalEntry()
+	chatHeight.SetText(fmt.Sprintf("%v", cfg.Height))
+	chatHeight.OnChanged = func(s string) {
+		if s == "" {
+			s = "0"
+		}
+		v, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to parse '%s' as a float: %w", s, err))
+			return
+		}
+		cfg.Height = v
+	}
+
+	if cfg.AlignX == "" {
+		cfg.AlignX = streamdconsts.AlignXMiddle
+	}
+
+	if cfg.AlignY == "" {
+		cfg.AlignY = streamdconsts.AlignYMiddle
+	}
+
+	chatAlignX := widget.NewSelect([]string{
+		string(streamdconsts.AlignXLeft),
+		string(streamdconsts.AlignXMiddle),
+		string(streamdconsts.AlignXRight),
+	}, func(s string) {
+		cfg.AlignX = streamdconsts.AlignX(s)
 	})
-	countersSourceSelect.SetSelected(cfg.Monitor.CounterOBSSourceName)
+	chatAlignX.SetSelected(string(cfg.AlignX))
+
+	chatAlignY := widget.NewSelect([]string{
+		string(streamdconsts.AlignYTop),
+		string(streamdconsts.AlignYMiddle),
+		string(streamdconsts.AlignYBottom),
+	}, func(s string) {
+		cfg.AlignY = streamdconsts.AlignY(s)
+	})
+	chatAlignY.SetSelected(string(cfg.AlignY))
+
+	chatOffsetX := xfyne.NewNumericalEntry()
+	chatOffsetX.SetText(fmt.Sprintf("%v", cfg.OffsetX))
+	chatOffsetX.OnChanged = func(s string) {
+		if s == "" {
+			s = "0"
+		}
+		v, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to parse '%s' as a float: %w", s, err))
+			return
+		}
+		cfg.OffsetX = v
+	}
+	chatOffsetY := xfyne.NewNumericalEntry()
+	chatOffsetY.SetText(fmt.Sprintf("%v", cfg.OffsetY))
+	chatOffsetY.OnChanged = func(s string) {
+		if s == "" {
+			s = "0"
+		}
+		v, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to parse '%s' as a float: %w", s, err))
+			return
+		}
+		cfg.OffsetY = v
+	}
 
 	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
-		err := p.StreamD.SetConfig(ctx, cfg)
+		err := saveFunc(ctx, elementName.Text, cfg)
 		if err != nil {
-			p.DisplayError(fmt.Errorf("unable to set the config: %w", err))
+			p.DisplayError(fmt.Errorf("unable to save the monitor element: %w", err))
 			return
 		}
-
-		err = p.StreamD.SaveConfig(ctx)
-		if err != nil {
-			p.DisplayError(fmt.Errorf("unable to save the config: %w", err))
-			return
-		}
-
 		w.Close()
 	})
 
@@ -314,12 +512,18 @@ func (p *Panel) newMonitorSettingsWindow(ctx context.Context) {
 		nil,
 		nil,
 		container.NewVBox(
-			widget.NewLabel("Chat source:"),
+			widget.NewLabel("Monitor element name:"),
+			elementName,
+			widget.NewLabel("Source:"),
 			chatSourceSelect,
-			widget.NewSeparator(),
-			widget.NewLabel("Counters source:"),
-			countersSourceSelect,
-			widget.NewSeparator(),
+			widget.NewLabel("Z-Index / layer:"),
+			zIndex,
+			widget.NewLabel("Size:"),
+			container.NewHBox(widget.NewLabel("X:"), chatWidth, widget.NewLabel(`%`), widget.NewSeparator(), widget.NewLabel("Y:"), chatHeight, widget.NewLabel(`%`)),
+			widget.NewLabel("Align:"),
+			container.NewHBox(widget.NewLabel("X:"), chatAlignX, widget.NewSeparator(), widget.NewLabel("Y:"), chatAlignY),
+			widget.NewLabel("Offset:"),
+			container.NewHBox(widget.NewLabel("X:"), chatOffsetX, widget.NewLabel(`%`), widget.NewSeparator(), widget.NewLabel("Y:"), chatOffsetY, widget.NewLabel(`%`)),
 		),
 	)
 	w.SetContent(content)

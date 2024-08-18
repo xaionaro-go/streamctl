@@ -10,12 +10,27 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/consts"
 	streamserver "github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 )
 
+type AlignX = consts.AlignX
+type AlignY = consts.AlignY
+
+type OBSSource struct {
+	SourceName string  `yaml:"source_name"`
+	ZIndex     float64 `yaml:"z_index"`
+	Width      float64
+	Height     float64
+	OffsetX    float64 `yaml:"offset_x"`
+	OffsetY    float64 `yaml:"offset_y"`
+	AlignX     AlignX  `yaml:"align_x"`
+	AlignY     AlignY  `yaml:"align_y"`
+	Rotate     float64
+}
+
 type MonitorConfig struct {
-	ChatOBSSourceName    string
-	CounterOBSSourceName string
+	Elements map[string]OBSSource
 }
 
 type ProfileMetadata struct {
@@ -44,6 +59,9 @@ func NewConfig() Config {
 		Backends:        cfg,
 		ProfileMetadata: map[streamcontrol.ProfileName]ProfileMetadata{},
 		CachePath:       ptr("~/.streamd.cache"),
+		Monitor: MonitorConfig{
+			Elements: map[string]OBSSource{},
+		},
 	}
 }
 

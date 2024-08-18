@@ -55,6 +55,9 @@ func (cfg *Config) UnmarshalYAML(b []byte) error {
 	if cfg.Backends == nil {
 		cfg.Backends = streamcontrol.Config{}
 	}
+	if cfg.Monitor.Elements == nil {
+		cfg.Monitor.Elements = make(map[string]OBSSource)
+	}
 
 	if cfg.Backends[obs.ID] != nil {
 		err = streamcontrol.ConvertStreamProfiles[obs.StreamProfile](context.Background(), cfg.Backends[obs.ID].StreamProfiles)
