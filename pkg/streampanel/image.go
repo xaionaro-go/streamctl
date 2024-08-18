@@ -18,6 +18,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/screenshot"
 	"github.com/xaionaro-go/streamctl/pkg/screenshoter"
+	streamdconsts "github.com/xaionaro-go/streamctl/pkg/streamd/consts"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 )
 
@@ -140,24 +141,19 @@ func imgFitTo(src image.Image, size image.Point) image.Image {
 	return resize.Resize(newWidth, newHeight, src, resize.Lanczos3)
 }
 
-type align int
-
-const (
-	alignCenter = align(iota)
-	alignStart
-	alignEnd
-)
-
 func imgFillTo(
 	ctx context.Context,
 	src image.Image,
-	size image.Point,
-	alignX align,
-	alignY align,
+	canvasSize image.Point,
+	outSize image.Point,
+	offset image.Point,
+	alignX streamdconsts.AlignX,
+	alignY streamdconsts.AlignY,
 ) image.Image {
+
 	sizeCur := src.Bounds().Size()
 	ratioCur := float64(sizeCur.X) / float64(sizeCur.Y)
-	ratioNew := float64(size.X) / float64(size.Y)
+	ratioNew := float64(canvasSize.X) / float64(canvasSize.Y)
 
 	if ratioCur == ratioNew {
 		return src
@@ -167,15 +163,16 @@ func imgFillTo(
 	}
 
 	var sizeNew image.Point
+	scale := float64(canvasSize.X) / float64(outSize.X)
 	if ratioCur < ratioNew {
 		sizeNew = image.Point{
-			X: int(float64(sizeCur.Y) * ratioNew),
-			Y: sizeCur.Y,
+			X: int(scale * float64(sizeCur.Y) * ratioNew),
+			Y: int(scale * float64(sizeCur.Y)),
 		}
 	} else {
 		sizeNew = image.Point{
-			X: sizeCur.X,
-			Y: int(float64(sizeCur.X) / ratioNew),
+			X: int(scale * float64(sizeCur.X)),
+			Y: int(scale * float64(sizeCur.X) / ratioNew),
 		}
 	}
 
@@ -188,24 +185,26 @@ func imgFillTo(
 	if ratioCur < ratioNew {
 		offsetX = sizeNew.X - sizeCur.X
 		switch alignX {
-		case alignStart:
+		case streamdconsts.AlignXLeft:
 			offsetX *= 0
-		case alignCenter:
+		case streamdconsts.AlignXMiddle:
 			offsetX /= 2
-		case alignEnd:
+		case streamdconsts.AlignXRight:
 			offsetX /= 1
 		}
 	} else {
 		offsetY = sizeNew.Y - sizeCur.Y
 		switch alignY {
-		case alignStart:
+		case streamdconsts.AlignYTop:
 			offsetY *= 0
-		case alignCenter:
+		case streamdconsts.AlignYMiddle:
 			offsetY /= 2
-		case alignEnd:
+		case streamdconsts.AlignYBottom:
 			offsetY /= 1
 		}
 	}
+	offsetX += offset.X
+	offsetY += offset.Y
 
 	for x := 0; x < sizeCur.X; x++ {
 		for y := 0; y < sizeCur.Y; y++ {
@@ -223,13 +222,15 @@ func imgRotateFillTo(
 	ctx context.Context,
 	src image.Image,
 	size image.Point,
-	alignX align,
-	alignY align,
+	alignX streamdconsts.AlignX,
+	alignY streamdconsts.AlignY,
 ) image.Image {
 	return imgFillTo(
 		ctx,
 		src,
 		size,
+		size,
+		image.Point{},
 		alignX, alignY,
 	)
 }

@@ -136,7 +136,23 @@ func (p *Panel) updateMonitorPageImages(
 					return
 				}
 				logger.Tracef(ctx, "updating the image '%s': %v %#+v %#+v", el.ElementName, changed, lastWinSize, winSize)
-				img = imgFillTo(ctx, img, image.Point{X: int(winSize.Width), Y: int(winSize.Height)}, alignStart, alignEnd)
+				imgSize := image.Point{
+					X: int(winSize.Width * float32(el.DisplayWidth) / 100),
+					Y: int(winSize.Height * float32(el.DisplayHeight) / 100),
+				}
+				offset := image.Point{
+					X: int(winSize.Width * float32(el.OffsetX) / 100),
+					Y: int(winSize.Height * float32(el.OffsetY) / 100),
+				}
+				img = imgFillTo(
+					ctx,
+					img,
+					image.Point{X: int(winSize.Width), Y: int(winSize.Height)},
+					imgSize,
+					offset,
+					el.AlignX,
+					el.AlignY,
+				)
 				imgFyne := canvas.NewImageFromImage(img)
 				imgFyne.FillMode = canvas.ImageFillContain
 				logger.Tracef(ctx, "image '%s' size: %#+v", el.ElementName, img.Bounds().Size())
@@ -157,7 +173,16 @@ func (p *Panel) updateMonitorPageImages(
 			return
 		}
 		logger.Tracef(ctx, "updating the screenshot image: %v %#+v %#+v", changed, lastWinSize, winSize)
-		img = imgFillTo(ctx, img, image.Point{X: int(winSize.Width), Y: int(winSize.Height)}, alignStart, alignStart)
+		winSize := image.Point{X: int(winSize.Width), Y: int(winSize.Height)}
+		img = imgFillTo(
+			ctx,
+			img,
+			winSize,
+			winSize,
+			image.Point{X: 0, Y: 0},
+			streamdconsts.AlignXLeft,
+			streamdconsts.AlignYTop,
+		)
 		img = adjust.Brightness(img, -0.5)
 		imgFyne := canvas.NewImageFromImage(img)
 		imgFyne.FillMode = canvas.ImageFillContain
@@ -471,10 +496,6 @@ func (p *Panel) editMonitorElementWindow(
 		cfg.ImageFormat = streamdconfig.ImageFormat(s)
 	})
 	imageFormatSelect.SetSelected(string(cfg.ImageFormat))
-
-	if cfg.ImageQuality == 0 {
-		cfg.ImageQuality = 2
-	}
 
 	imageQuality := xfyne.NewNumericalEntry()
 	imageQuality.SetText(fmt.Sprintf("%v", cfg.ImageQuality))
