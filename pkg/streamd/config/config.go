@@ -13,6 +13,11 @@ import (
 	streamserver "github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 )
 
+type MonitorConfig struct {
+	ChatOBSSourceName    string
+	CounterOBSSourceName string
+}
+
 type ProfileMetadata struct {
 	DefaultStreamTitle       string
 	DefaultStreamDescription string
@@ -25,6 +30,7 @@ type config struct {
 	Backends        streamcontrol.Config
 	ProfileMetadata map[streamcontrol.ProfileName]ProfileMetadata
 	StreamServer    streamserver.Config `yaml:"stream_server"`
+	Monitor         MonitorConfig
 }
 
 type Config config

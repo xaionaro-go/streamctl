@@ -856,8 +856,8 @@ github.com/xaionaro-go/lockmap v0.0.0-20240813004618-7ab689a46dec h1:whndJMZR1SZ
 github.com/xaionaro-go/lockmap v0.0.0-20240813004618-7ab689a46dec/go.mod h1:UO+SYZ5JAJGOnNkDycFrFwkaaPeSqAEQUM0TUp9Vb24=
 github.com/xaionaro-go/logrustash v0.0.0-20240804141650-d48034780a5f h1:mMrVrYtH9MyCUzBwPvuEntvqdCJ0zifCfqV6bHU6z1M=
 github.com/xaionaro-go/logrustash v0.0.0-20240804141650-d48034780a5f/go.mod h1:aszOZHoPPSgKwdbJUgonps3MSODqctkNhwQDDwlw0Eg=
-github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20240817204450-689427e2fdf5 h1:4Ecdn5raiGhr3U4RAyG6Lno4CUY+6ThZJTf9a/iu8hI=
-github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20240817204450-689427e2fdf5/go.mod h1:h+ADqgR1Ul59lqvmbjOxENC1ywMIZ4Vq3r6HIbLUnMo=
+github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20240818185613-7bffb53db215 h1:I95pMrWkwDguLUwDNOywVpUBEgkbv3WPPtIQwmT3034=
+github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20240818185613-7bffb53db215/go.mod h1:exSKIlCibB0ww+ABDwH+YG/iNdqVfdzXBBg5LYxkxGw=
 github.com/xaionaro-go/typing v0.0.0-20221123235249-2229101d38ba h1:wuSIPuGbTeFkv/KSllbIZ511LFam95Y2xpKOq2As6oU=
 github.com/xaionaro-go/typing v0.0.0-20221123235249-2229101d38ba/go.mod h1:6wJwFezlmN6Lk38K3eNzGUZ4MmHHzgTAIepvldyiprY=
 github.com/xaionaro-go/unsafetools v0.0.0-20210722164218-75ba48cf7b3c h1:WeiZrQbFImtlpYCHdxWpjm033Zm0n1ihx3bD/9b6rYI=

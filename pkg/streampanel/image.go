@@ -210,6 +210,21 @@ func imgFillTo(
 	return img
 }
 
+func imgRotateFillTo(
+	ctx context.Context,
+	src image.Image,
+	size image.Point,
+	alignX align,
+	alignY align,
+) image.Image {
+	return imgFillTo(
+		ctx,
+		src,
+		size,
+		alignX, alignY,
+	)
+}
+
 const (
 	ScreenshotMaxWidth  = 384
 	ScreenshotMaxHeight = 216

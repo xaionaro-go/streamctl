@@ -95,6 +95,7 @@ type Panel struct {
 	monitorLastOrientation fyne.DeviceOrientation
 	screenshotContainer    *fyne.Container
 	chatContainer          *fyne.Container
+	monitorFgHQContainer   *fyne.Container
 
 	streamStatus map[streamcontrol.PlatformName]*widget.Label
 
@@ -1636,9 +1637,18 @@ func (p *Panel) initMainWindow(
 		}),
 	)
 
+	monitorControl := container.NewHBox(
+		widget.NewSeparator(),
+		widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
+			p.newMonitorSettingsWindow(ctx)
+		}),
+	)
+	monitorControl.Hide()
+
 	topPanel := container.NewHBox(
 		menuButton,
 		profileControl,
+		monitorControl,
 	)
 
 	for _, button := range selectedProfileButtons {
@@ -1750,11 +1760,13 @@ func (p *Panel) initMainWindow(
 		),
 	)
 	p.chatContainer = container.NewStack()
+	p.monitorFgHQContainer = container.NewStack()
 	p.monitorPage = container.NewStack(
 		monitorBackgroundFyne,
 		p.screenshotContainer,
 		streamInfoContainer,
 		p.chatContainer,
+		p.monitorFgHQContainer,
 	)
 
 	p.obsSelectScene = widget.NewSelect(nil, func(s string) {
@@ -1854,6 +1866,7 @@ func (p *Panel) initMainWindow(
 			obsPage.Hide()
 			restreamPage.Hide()
 			profileControl.Show()
+			monitorControl.Hide()
 			controlPage.Show()
 		case consts.PageMonitor:
 			controlPage.Hide()
@@ -1861,17 +1874,20 @@ func (p *Panel) initMainWindow(
 			restreamPage.Hide()
 			obsPage.Hide()
 			p.monitorPage.Show()
+			monitorControl.Show()
 			p.startMonitorPage(pageCtx)
 		case consts.PageOBS:
 			controlPage.Hide()
 			profileControl.Hide()
 			p.monitorPage.Hide()
+			monitorControl.Hide()
 			restreamPage.Hide()
 			obsPage.Show()
 		case consts.PageRestream:
 			controlPage.Hide()
 			profileControl.Hide()
 			p.monitorPage.Hide()
+			monitorControl.Hide()
 			obsPage.Hide()
 			restreamPage.Show()
 			p.startRestreamPage(pageCtx)

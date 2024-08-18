@@ -1,22 +1,19 @@
 package consts
 
-type varKeyPrefix string
-
-const (
-	PrefixVarKeyImage = varKeyPrefix("image/")
+import (
+	"github.com/xaionaro-go/streamctl/pkg/streamd/consts"
 )
 
-type ImageID string
+type ImageID = consts.ImageID
 
 const (
 	ImageScreenshot = ImageID("screenshot")
-	ImageChat       = ImageID("chat")
 )
 
-type VarKey string
+type VarKey = consts.VarKey
 
 func VarKeyImage(imageID ImageID) VarKey {
-	return VarKey(PrefixVarKeyImage) + VarKey(imageID)
+	return consts.VarKeyImage(imageID)
 }
 
 type Page string
