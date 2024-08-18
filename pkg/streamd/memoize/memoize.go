@@ -34,8 +34,8 @@ func Memoize[REQ any, REPLY any, T func(context.Context, REQ) (REPLY, error)](
 	req REQ,
 	cacheDuration time.Duration,
 ) (_ret REPLY, _err error) {
-	logger.Debugf(ctx, "memoize %T", req)
-	defer logger.Debugf(ctx, "/memoize %T", req)
+	logger.Tracef(ctx, "memoize %T", req)
+	defer logger.Tracef(ctx, "/memoize %T", req)
 
 	if IsNoCache(ctx) {
 		cacheDuration = 0
@@ -46,7 +46,7 @@ func Memoize[REQ any, REPLY any, T func(context.Context, REQ) (REPLY, error)](
 	if err != nil {
 		return fn(ctx, req)
 	}
-	logger.Debugf(ctx, "cache key %X", key[:])
+	logger.Tracef(ctx, "cache key %X", key[:])
 
 	d.CacheMetaLock.Lock()
 	logger.Tracef(ctx, "grpc.CacheMetaLock.Lock()-ed")
@@ -67,7 +67,7 @@ func Memoize[REQ any, REPLY any, T func(context.Context, REQ) (REPLY, error)](
 			logger.Tracef(ctx, "grpc.CacheMetaLock.Unlock()-ed")
 			h.Unlock()
 			logger.Tracef(ctx, "grpc.CacheLockMap.Unlock(%X)-ed", key[:])
-			logger.Debugf(ctx, "re-using the value")
+			logger.Tracef(ctx, "re-using the value")
 			return v.Reply, v.Error
 		} else {
 			logger.Errorf(ctx, "cache-failure: expected type %T, but got %T", (*cacheItem)(nil), h.UserData)
@@ -85,10 +85,10 @@ func Memoize[REQ any, REPLY any, T func(context.Context, REQ) (REPLY, error)](
 				h.UserData = nil
 				h.Unlock()
 				logger.Tracef(ctx, "grpc.CacheLockMap.Unlock(%X)-ed", key[:])
-				logger.Debugf(ctx, "using the cached value")
+				logger.Tracef(ctx, "using the cached value")
 				return v.Reply, v.Error
 			}
-			logger.Debugf(ctx, "the cached value expired: %s < %s", v.SavedAt.Format(timeFormat), cutoffTS.Format(timeFormat))
+			logger.Tracef(ctx, "the cached value expired: %s < %s", v.SavedAt.Format(timeFormat), cutoffTS.Format(timeFormat))
 			delete(cache, key)
 		} else {
 			logger.Errorf(ctx, "cache-failure: expected type %T, but got %T", (*cacheItem)(nil), cachedResult)

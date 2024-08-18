@@ -38,8 +38,14 @@ func (p *Panel) startMonitorPage(
 	logger.Debugf(ctx, "startMonitorPage")
 	defer logger.Debugf(ctx, "/startMonitorPage")
 
+	cfg, err := p.StreamD.GetConfig(ctx)
+	if err != nil {
+		p.DisplayError(fmt.Errorf("unable to get the current config: %w", err))
+		return
+	}
+
 	observability.Go(ctx, func() {
-		p.updateMonitorPageImages(ctx)
+		p.updateMonitorPageImages(ctx, cfg.Monitor)
 		p.updateMonitorPageStreamStatus(ctx)
 
 		observability.Go(ctx, func() {
@@ -51,7 +57,7 @@ func (p *Panel) startMonitorPage(
 				case <-t.C:
 				}
 
-				p.updateMonitorPageImages(ctx)
+				p.updateMonitorPageImages(ctx, cfg.Monitor)
 			}
 		})
 
@@ -72,6 +78,7 @@ func (p *Panel) startMonitorPage(
 
 func (p *Panel) updateMonitorPageImages(
 	ctx context.Context,
+	monitorCfg streamdconfig.MonitorConfig,
 ) {
 	logger.Tracef(ctx, "updateMonitorPageImages")
 	defer logger.Tracef(ctx, "/updateMonitorPageImages")
@@ -95,7 +102,48 @@ func (p *Panel) updateMonitorPageImages(
 		logger.Debugf(ctx, "window size changed %#+v -> %#+v", lastWinSize, winSize)
 	}
 
+	type elementType struct {
+		ElementName string
+		streamdconfig.OBSSource
+		NewImage *canvas.Image
+	}
+
+	elements := make([]elementType, 0, len(monitorCfg.Elements))
+	for elName, el := range monitorCfg.Elements {
+		elements = append(elements, elementType{
+			ElementName: elName,
+			OBSSource:   el,
+		})
+	}
+	sort.Slice(elements, func(i, j int) bool {
+		return elements[i].ZIndex < elements[j].ZIndex
+	})
+
 	var wg sync.WaitGroup
+
+	for idx := range elements {
+		wg.Add(1)
+		{
+			el := &elements[idx]
+			observability.Go(ctx, func() {
+				defer wg.Done()
+				img, changed, err := p.getImage(ctx, streamdconsts.ImageID(el.ElementName))
+				if err != nil {
+					logger.Error(ctx, err)
+					return
+				}
+				if !changed && lastWinSize == winSize && lastOrientation == orientation {
+					return
+				}
+				logger.Tracef(ctx, "updating the image '%s': %v %#+v %#+v", el.ElementName, changed, lastWinSize, winSize)
+				img = imgFillTo(ctx, img, image.Point{X: int(winSize.Width), Y: int(winSize.Height)}, alignStart, alignEnd)
+				imgFyne := canvas.NewImageFromImage(img)
+				imgFyne.FillMode = canvas.ImageFillContain
+				logger.Tracef(ctx, "image '%s' size: %#+v", el.ElementName, img.Bounds().Size())
+				el.NewImage = imgFyne
+			})
+		}
+	}
 
 	wg.Add(1)
 	observability.Go(ctx, func() {
@@ -109,7 +157,6 @@ func (p *Panel) updateMonitorPageImages(
 			return
 		}
 		logger.Tracef(ctx, "updating the screenshot image: %v %#+v %#+v", changed, lastWinSize, winSize)
-		//img = imgFitTo(img, image.Point{X: int(winSize.Width), Y: int(winSize.Height)})
 		img = imgFillTo(ctx, img, image.Point{X: int(winSize.Width), Y: int(winSize.Height)}, alignStart, alignStart)
 		img = adjust.Brightness(img, -0.5)
 		imgFyne := canvas.NewImageFromImage(img)
@@ -120,51 +167,30 @@ func (p *Panel) updateMonitorPageImages(
 		p.screenshotContainer.Objects = append(p.screenshotContainer.Objects, imgFyne)
 		p.screenshotContainer.Refresh()
 	})
+	wg.Wait()
 
-	wg.Add(1)
-	observability.Go(ctx, func() {
-		defer wg.Done()
-		img, changed, err := p.getImage(ctx, streamdconsts.ImageChat)
-		if err != nil {
-			logger.Error(ctx, err)
-			return
+	if len(p.monitorLayersContainer.Objects) != len(elements) {
+		p.monitorLayersContainer.Objects = p.monitorLayersContainer.Objects[:0]
+		img := image.NewRGBA(image.Rectangle{
+			Max: image.Point{
+				X: 1,
+				Y: 1,
+			},
+		})
+		for len(p.monitorLayersContainer.Objects) < len(elements) {
+			p.monitorLayersContainer.Objects = append(
+				p.monitorLayersContainer.Objects,
+				canvas.NewImageFromImage(img),
+			)
 		}
-		if !changed && lastWinSize == winSize && lastOrientation == orientation {
-			return
+	}
+	for idx, el := range elements {
+		if el.NewImage == nil {
+			continue
 		}
-		logger.Tracef(ctx, "updating the chat image: %v %#+v %#+v", changed, lastWinSize, winSize)
-		//img = imgFitTo(img, image.Point{X: int(winSize.Width), Y: int(winSize.Height)})
-		img = imgFillTo(ctx, img, image.Point{X: int(winSize.Width), Y: int(winSize.Height)}, alignStart, alignEnd)
-		imgFyne := canvas.NewImageFromImage(img)
-		imgFyne.FillMode = canvas.ImageFillContain
-		logger.Tracef(ctx, "chat image size: %#+v", img.Bounds().Size())
-
-		p.chatContainer.Objects = p.chatContainer.Objects[:0]
-		p.chatContainer.Objects = append(p.chatContainer.Objects, imgFyne)
-		p.chatContainer.Refresh()
-	})
-
-	wg.Add(1)
-	observability.Go(ctx, func() {
-		defer wg.Done()
-		img, changed, err := p.getImage(ctx, streamdconsts.ImageMonitorScreenHighQualityForeground)
-		if err != nil {
-			logger.Error(ctx, err)
-			return
-		}
-		if !changed && lastWinSize == winSize && lastOrientation == orientation {
-			return
-		}
-		logger.Tracef(ctx, "updating the screen fg HQ image: %v %#+v %#+v", changed, lastWinSize, winSize)
-		img = imgRotateFillTo(ctx, img, image.Point{X: int(winSize.Width), Y: int(winSize.Height)}, alignStart, alignStart)
-		imgFyne := canvas.NewImageFromImage(img)
-		imgFyne.FillMode = canvas.ImageFillContain
-		logger.Tracef(ctx, "screen fg HQ image size: %#+v", img.Bounds().Size())
-
-		p.monitorFgHQContainer.Objects = p.monitorFgHQContainer.Objects[:0]
-		p.monitorFgHQContainer.Objects = append(p.monitorFgHQContainer.Objects, imgFyne)
-		p.monitorFgHQContainer.Refresh()
-	})
+		p.monitorLayersContainer.Objects[idx] = el.NewImage
+	}
+	p.monitorLayersContainer.Refresh()
 }
 
 func (p *Panel) updateMonitorPageStreamStatus(
@@ -231,91 +257,101 @@ func (p *Panel) newMonitorSettingsWindow(ctx context.Context) {
 
 	content := container.NewVBox()
 
-	cfg, err := p.StreamD.GetConfig(ctx)
-	if err != nil {
-		p.DisplayError(fmt.Errorf("unable to get the current config: %w", err))
-	}
+	var refreshContent func()
+	refreshContent = func() {
+		content.RemoveAll()
 
-	saveCfg := func(ctx context.Context) error {
-		err := p.StreamD.SetConfig(ctx, cfg)
+		cfg, err := p.StreamD.GetConfig(ctx)
 		if err != nil {
-			return fmt.Errorf("unable to set the config: %w", err)
+			p.DisplayError(fmt.Errorf("unable to get the current config: %w", err))
 		}
 
-		err = p.StreamD.SaveConfig(ctx)
-		if err != nil {
-			return fmt.Errorf("unable to save the config: %w", err)
+		saveCfg := func(ctx context.Context) error {
+			err := p.StreamD.SetConfig(ctx, cfg)
+			if err != nil {
+				return fmt.Errorf("unable to set the config: %w", err)
+			}
+
+			err = p.StreamD.SaveConfig(ctx)
+			if err != nil {
+				return fmt.Errorf("unable to save the config: %w", err)
+			}
+
+			return nil
 		}
 
-		return nil
-	}
+		content.Add(widget.NewRichTextFromMarkdown("## Elements"))
+		for name, el := range cfg.Monitor.Elements {
+			editButton := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
+				p.editMonitorElementWindow(
+					ctx,
+					name,
+					el,
+					func(ctx context.Context, elementName string, newElement streamdconfig.OBSSource) error {
+						if _, ok := cfg.Monitor.Elements[elementName]; !ok {
+							return fmt.Errorf("element with name '%s' does not exist", elementName)
+						}
+						cfg.Monitor.Elements[elementName] = newElement
+						err := saveCfg(ctx)
+						if err != nil {
+							return err
+						}
+						refreshContent()
+						return nil
+					},
+				)
+			})
+			deleteButton := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
+				w := dialog.NewConfirm(
+					fmt.Sprintf("Delete monitor element '%s'?", name),
+					fmt.Sprintf("Are you sure you want to delete the element '%s' from the Monitor page?", name),
+					func(b bool) {
+						if !b {
+							return
+						}
 
-	content.Add(widget.NewRichTextFromMarkdown("## Elements"))
-	for name, el := range cfg.Monitor.Elements {
-		editButton := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
+						delete(cfg.Monitor.Elements, name)
+						err := saveCfg(ctx)
+						if err != nil {
+							p.DisplayError(err)
+							return
+						}
+						refreshContent()
+					},
+					w,
+				)
+				w.Show()
+			})
+			content.Add(container.NewHBox(
+				editButton,
+				deleteButton,
+				widget.NewLabel(name),
+			))
+		}
+
+		addButton := widget.NewButtonWithIcon("Add", theme.ContentAddIcon(), func() {
 			p.editMonitorElementWindow(
 				ctx,
-				name,
-				el,
+				"",
+				streamdconfig.OBSSource{},
 				func(ctx context.Context, elementName string, newElement streamdconfig.OBSSource) error {
-					if _, ok := cfg.Monitor.Elements[elementName]; !ok {
-						return fmt.Errorf("element with name '%s' does not exist", elementName)
+					if _, ok := cfg.Monitor.Elements[elementName]; ok {
+						return fmt.Errorf("element with name '%s' already exists", elementName)
 					}
 					cfg.Monitor.Elements[elementName] = newElement
 					err := saveCfg(ctx)
 					if err != nil {
 						return err
 					}
+					refreshContent()
 					return nil
 				},
 			)
 		})
-		deleteButton := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
-			w := dialog.NewConfirm(
-				fmt.Sprintf("Delete monitor element '%s'?", name),
-				fmt.Sprintf("Are you sure you want to delete the element '%s' from the Monitor page?", name),
-				func(b bool) {
-					if !b {
-						return
-					}
-
-					delete(cfg.Monitor.Elements, name)
-					err := saveCfg(ctx)
-					if err != nil {
-						p.DisplayError(err)
-					}
-				},
-				w,
-			)
-			w.Show()
-		})
-		content.Add(container.NewHBox(
-			editButton,
-			deleteButton,
-			widget.NewLabel(name),
-		))
+		content.Add(addButton)
 	}
 
-	addButton := widget.NewButtonWithIcon("Add", theme.ContentAddIcon(), func() {
-		p.editMonitorElementWindow(
-			ctx,
-			"",
-			streamdconfig.OBSSource{},
-			func(ctx context.Context, elementName string, newElement streamdconfig.OBSSource) error {
-				if _, ok := cfg.Monitor.Elements[elementName]; ok {
-					return fmt.Errorf("element with name '%s' already exists", elementName)
-				}
-				cfg.Monitor.Elements[elementName] = newElement
-				err := saveCfg(ctx)
-				if err != nil {
-					return err
-				}
-				return nil
-			},
-		)
-	})
-	content.Add(addButton)
-
+	refreshContent()
 	w.SetContent(content)
 	w.Show()
 }
@@ -396,10 +432,86 @@ func (p *Panel) editMonitorElementWindow(
 	})
 	chatSourceSelect.SetSelected(cfg.SourceName)
 
+	sourceWidth := xfyne.NewNumericalEntry()
+	sourceWidth.SetText(fmt.Sprintf("%v", cfg.SourceWidth))
+	sourceWidth.OnChanged = func(s string) {
+		if s == "" || s == "-" {
+			s = "0"
+		}
+		v, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to parse '%s' as a float: %w", s, err))
+			return
+		}
+		cfg.SourceWidth = v
+	}
+	sourceHeight := xfyne.NewNumericalEntry()
+	sourceHeight.SetText(fmt.Sprintf("%v", cfg.SourceHeight))
+	sourceHeight.OnChanged = func(s string) {
+		if s == "" || s == "-" {
+			s = "0"
+		}
+		v, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to parse '%s' as a float: %w", s, err))
+			return
+		}
+		cfg.SourceHeight = v
+	}
+
+	if cfg.ImageFormat == streamdconfig.ImageFormatUndefined {
+		cfg.ImageFormat = streamdconfig.ImageFormatJPEG
+	}
+
+	imageFormatSelect := widget.NewSelect([]string{
+		string(streamdconfig.ImageFormatPNG),
+		string(streamdconfig.ImageFormatJPEG),
+		string(streamdconfig.ImageFormatWebP),
+	}, func(s string) {
+		cfg.ImageFormat = streamdconfig.ImageFormat(s)
+	})
+	imageFormatSelect.SetSelected(string(cfg.ImageFormat))
+
+	if cfg.ImageQuality == 0 {
+		cfg.ImageQuality = 2
+	}
+
+	imageQuality := xfyne.NewNumericalEntry()
+	imageQuality.SetText(fmt.Sprintf("%v", cfg.ImageQuality))
+	imageQuality.OnChanged = func(s string) {
+		if s == "" || s == "-" {
+			s = "0"
+		}
+		v, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to parse '%s' as a float: %w", s, err))
+			return
+		}
+		cfg.ImageQuality = v
+	}
+
+	if cfg.UpdateInterval == 0 {
+		cfg.UpdateInterval = 200 * time.Millisecond
+	}
+
+	updateInterval := xfyne.NewNumericalEntry()
+	updateInterval.SetText(fmt.Sprintf("%v", cfg.UpdateInterval.Seconds()))
+	updateInterval.OnChanged = func(s string) {
+		if s == "" || s == "-" {
+			s = "0.2"
+		}
+		v, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to parse '%s' as a float: %w", s, err))
+			return
+		}
+		cfg.UpdateInterval = time.Duration(float64(time.Second) * v)
+	}
+
 	zIndex := xfyne.NewNumericalEntry()
 	zIndex.SetText(fmt.Sprintf("%v", cfg.ZIndex))
 	zIndex.OnChanged = func(s string) {
-		if s == "" {
+		if s == "" || s == "-" {
 			s = "0"
 		}
 		v, err := strconv.ParseFloat(s, 64)
@@ -410,17 +522,17 @@ func (p *Panel) editMonitorElementWindow(
 		cfg.ZIndex = v
 	}
 
-	if cfg.Width == 0 {
-		cfg.Width = 100
+	if cfg.DisplayWidth == 0 {
+		cfg.DisplayWidth = 100
 	}
-	if cfg.Height == 0 {
-		cfg.Height = 100
+	if cfg.DisplayHeight == 0 {
+		cfg.DisplayHeight = 100
 	}
 
-	chatWidth := xfyne.NewNumericalEntry()
-	chatWidth.SetText(fmt.Sprintf("%v", cfg.Width))
-	chatWidth.OnChanged = func(s string) {
-		if s == "" {
+	displayWidth := xfyne.NewNumericalEntry()
+	displayWidth.SetText(fmt.Sprintf("%v", cfg.DisplayWidth))
+	displayWidth.OnChanged = func(s string) {
+		if s == "" || s == "-" {
 			s = "0"
 		}
 		v, err := strconv.ParseFloat(s, 64)
@@ -428,12 +540,12 @@ func (p *Panel) editMonitorElementWindow(
 			p.DisplayError(fmt.Errorf("unable to parse '%s' as a float: %w", s, err))
 			return
 		}
-		cfg.Width = v
+		cfg.DisplayWidth = v
 	}
-	chatHeight := xfyne.NewNumericalEntry()
-	chatHeight.SetText(fmt.Sprintf("%v", cfg.Height))
-	chatHeight.OnChanged = func(s string) {
-		if s == "" {
+	displayHeight := xfyne.NewNumericalEntry()
+	displayHeight.SetText(fmt.Sprintf("%v", cfg.DisplayHeight))
+	displayHeight.OnChanged = func(s string) {
+		if s == "" || s == "-" {
 			s = "0"
 		}
 		v, err := strconv.ParseFloat(s, 64)
@@ -441,7 +553,7 @@ func (p *Panel) editMonitorElementWindow(
 			p.DisplayError(fmt.Errorf("unable to parse '%s' as a float: %w", s, err))
 			return
 		}
-		cfg.Height = v
+		cfg.DisplayHeight = v
 	}
 
 	if cfg.AlignX == "" {
@@ -452,28 +564,28 @@ func (p *Panel) editMonitorElementWindow(
 		cfg.AlignY = streamdconsts.AlignYMiddle
 	}
 
-	chatAlignX := widget.NewSelect([]string{
+	alignX := widget.NewSelect([]string{
 		string(streamdconsts.AlignXLeft),
 		string(streamdconsts.AlignXMiddle),
 		string(streamdconsts.AlignXRight),
 	}, func(s string) {
 		cfg.AlignX = streamdconsts.AlignX(s)
 	})
-	chatAlignX.SetSelected(string(cfg.AlignX))
+	alignX.SetSelected(string(cfg.AlignX))
 
-	chatAlignY := widget.NewSelect([]string{
+	alignY := widget.NewSelect([]string{
 		string(streamdconsts.AlignYTop),
 		string(streamdconsts.AlignYMiddle),
 		string(streamdconsts.AlignYBottom),
 	}, func(s string) {
 		cfg.AlignY = streamdconsts.AlignY(s)
 	})
-	chatAlignY.SetSelected(string(cfg.AlignY))
+	alignY.SetSelected(string(cfg.AlignY))
 
-	chatOffsetX := xfyne.NewNumericalEntry()
-	chatOffsetX.SetText(fmt.Sprintf("%v", cfg.OffsetX))
-	chatOffsetX.OnChanged = func(s string) {
-		if s == "" {
+	offsetX := xfyne.NewNumericalEntry()
+	offsetX.SetText(fmt.Sprintf("%v", cfg.OffsetX))
+	offsetX.OnChanged = func(s string) {
+		if s == "" || s == "-" {
 			s = "0"
 		}
 		v, err := strconv.ParseFloat(s, 64)
@@ -483,10 +595,10 @@ func (p *Panel) editMonitorElementWindow(
 		}
 		cfg.OffsetX = v
 	}
-	chatOffsetY := xfyne.NewNumericalEntry()
-	chatOffsetY.SetText(fmt.Sprintf("%v", cfg.OffsetY))
-	chatOffsetY.OnChanged = func(s string) {
-		if s == "" {
+	offsetY := xfyne.NewNumericalEntry()
+	offsetY.SetText(fmt.Sprintf("%v", cfg.OffsetY))
+	offsetY.OnChanged = func(s string) {
+		if s == "" || s == "-" {
 			s = "0"
 		}
 		v, err := strconv.ParseFloat(s, 64)
@@ -516,14 +628,22 @@ func (p *Panel) editMonitorElementWindow(
 			elementName,
 			widget.NewLabel("Source:"),
 			chatSourceSelect,
+			widget.NewLabel("Source image size (use '0' for preserving the original size or ratio):"),
+			container.NewHBox(widget.NewLabel("X:"), sourceWidth, widget.NewLabel(`px`), widget.NewSeparator(), widget.NewLabel("Y:"), sourceHeight, widget.NewLabel(`px`)),
+			widget.NewLabel("Format:"),
+			imageFormatSelect,
+			widget.NewLabel("Quality:"),
+			imageQuality,
+			widget.NewLabel("Update interval:"),
+			container.NewHBox(updateInterval, widget.NewLabel("seconds")),
 			widget.NewLabel("Z-Index / layer:"),
 			zIndex,
-			widget.NewLabel("Size:"),
-			container.NewHBox(widget.NewLabel("X:"), chatWidth, widget.NewLabel(`%`), widget.NewSeparator(), widget.NewLabel("Y:"), chatHeight, widget.NewLabel(`%`)),
+			widget.NewLabel("Display size:"),
+			container.NewHBox(widget.NewLabel("X:"), displayWidth, widget.NewLabel(`%`), widget.NewSeparator(), widget.NewLabel("Y:"), displayHeight, widget.NewLabel(`%`)),
 			widget.NewLabel("Align:"),
-			container.NewHBox(widget.NewLabel("X:"), chatAlignX, widget.NewSeparator(), widget.NewLabel("Y:"), chatAlignY),
+			container.NewHBox(widget.NewLabel("X:"), alignX, widget.NewSeparator(), widget.NewLabel("Y:"), alignY),
 			widget.NewLabel("Offset:"),
-			container.NewHBox(widget.NewLabel("X:"), chatOffsetX, widget.NewLabel(`%`), widget.NewSeparator(), widget.NewLabel("Y:"), chatOffsetY, widget.NewLabel(`%`)),
+			container.NewHBox(widget.NewLabel("X:"), offsetX, widget.NewLabel(`%`), widget.NewSeparator(), widget.NewLabel("Y:"), offsetY, widget.NewLabel(`%`)),
 		),
 	)
 	w.SetContent(content)

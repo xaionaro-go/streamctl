@@ -6,6 +6,7 @@ import (
 	"crypto"
 	"fmt"
 	"image"
+	"image/jpeg"
 	"image/png"
 	"math"
 	"net/http"
@@ -111,6 +112,14 @@ func (p *Panel) getImage(
 		img, err = png.Decode(bytes.NewReader(b))
 	case "image/webp":
 		img, err = webp.Decode(bytes.NewReader(b))
+	case "image/jpeg":
+		img, err = jpeg.Decode(bytes.NewReader(b))
+	case "text/plain; charset=utf-8":
+		text := string(b)
+		if len(text) > 100 {
+			text = text[:100] + "..."
+		}
+		return nil, false, fmt.Errorf("unexpected to get a text (%s): %s", mimeType, text)
 	default:
 		return nil, false, fmt.Errorf("unexpected image type %s", mimeType)
 	}

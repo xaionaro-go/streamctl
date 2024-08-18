@@ -94,8 +94,7 @@ type Panel struct {
 	monitorLastWinSize     fyne.Size
 	monitorLastOrientation fyne.DeviceOrientation
 	screenshotContainer    *fyne.Container
-	chatContainer          *fyne.Container
-	monitorFgHQContainer   *fyne.Container
+	monitorLayersContainer *fyne.Container
 
 	streamStatus map[streamcontrol.PlatformName]*widget.Label
 
@@ -1617,7 +1616,7 @@ func (p *Panel) initMainWindow(
 		widget.NewButtonWithIcon("", theme.ContentCopyIcon(), func() {
 			p.cloneProfileWindow(ctx)
 		}),
-		widget.NewButtonWithIcon("", theme.DocumentIcon(), func() {
+		widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
 			p.editProfileWindow(ctx)
 		}),
 		widget.NewButtonWithIcon("", theme.ContentRemoveIcon(), func() {
@@ -1759,14 +1758,12 @@ func (p *Panel) initMainWindow(
 			container.NewHBox(layout.NewSpacer(), ytLabel, p.streamStatus[youtube.ID]),
 		),
 	)
-	p.chatContainer = container.NewStack()
-	p.monitorFgHQContainer = container.NewStack()
+	p.monitorLayersContainer = container.NewStack()
 	p.monitorPage = container.NewStack(
 		monitorBackgroundFyne,
 		p.screenshotContainer,
 		streamInfoContainer,
-		p.chatContainer,
-		p.monitorFgHQContainer,
+		p.monitorLayersContainer,
 	)
 
 	p.obsSelectScene = widget.NewSelect(nil, func(s string) {

@@ -253,7 +253,7 @@ require (
 	github.com/stretchr/testify v1.9.0
 	github.com/xaionaro-go/datacounter v1.0.4
 	github.com/xaionaro-go/lockmap v0.0.0-20240813004618-7ab689a46dec
-	github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20240818185613-7bffb53db215
+	github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20240818223724-74c08692314f
 	github.com/xaionaro-go/typing v0.0.0-20221123235249-2229101d38ba
 	github.com/xaionaro-go/unsafetools v0.0.0-20210722164218-75ba48cf7b3c
 	github.com/yl2chen/cidranger v1.0.2

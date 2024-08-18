@@ -115,7 +115,7 @@ func (c *Client) connect(ctx context.Context) (*grpc.ClientConn, error) {
 }
 
 func (c *Client) doConnect(ctx context.Context, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
-	logger.Debugf(ctx, "doConnect(ctx, %#+v): Config: %#+v", opts, c.Config)
+	logger.Tracef(ctx, "doConnect(ctx, %#+v): Config: %#+v", opts, c.Config)
 	delay := c.Config.Reconnect.InitialInterval
 	for {
 		select {
@@ -814,8 +814,8 @@ func (c *Client) SetVariable(
 func (c *Client) OBS(
 	ctx context.Context,
 ) (obs_grpc.OBSServer, context.CancelFunc, error) {
-	logger.Debugf(ctx, "OBS()")
-	defer logger.Debugf(ctx, "/OBS()")
+	logger.Tracef(ctx, "OBS()")
+	defer logger.Tracef(ctx, "/OBS()")
 
 	conn, err := c.connect(ctx)
 	if err != nil {

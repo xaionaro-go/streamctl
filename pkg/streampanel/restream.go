@@ -715,7 +715,7 @@ func (p *Panel) displayStreamPlayers(
 			)
 			w.Show()
 		})
-		editButton := widget.NewButtonWithIcon("", theme.ListIcon(), func() {
+		editButton := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
 			p.openEditPlayerWindow(ctx, player.StreamID)
 		})
 		icon := theme.MediaStopIcon()
@@ -1082,7 +1082,7 @@ func (p *Panel) displayStreamForwards(
 			)
 			w.Show()
 		})
-		editButton := widget.NewButtonWithIcon("", theme.ListIcon(), func() {
+		editButton := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
 			p.openEditRestreamWindow(ctx, fwd.StreamID, fwd.DestinationID)
 		})
 		icon := theme.MediaPauseIcon()

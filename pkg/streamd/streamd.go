@@ -1,9 +1,12 @@
 package streamd
 
 import (
+	"bytes"
 	"context"
 	"crypto"
+	"encoding/json"
 	"fmt"
+	"image/jpeg"
 	"os"
 	"sort"
 	"sync"
@@ -11,6 +14,7 @@ import (
 
 	"github.com/andreykaipov/goobs"
 	eventbus "github.com/asaskevich/EventBus"
+	"github.com/chai2010/webp"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
@@ -18,6 +22,7 @@ import (
 	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/obs-grpc-proxy/pkg/obsgrpcproxy"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
+	"github.com/xaionaro-go/streamctl/pkg/imgb64"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/repository"
@@ -149,7 +154,106 @@ func (d *StreamD) Run(ctx context.Context) (_ret error) { // TODO: delete the fe
 		d.UI.DisplayError(fmt.Errorf("unable to initialize the stream server: %w", err))
 	}
 
+	d.UI.SetStatus("Starting the image taker...")
+	if err := d.initImageTaker(ctx); err != nil {
+		d.UI.DisplayError(fmt.Errorf("unable to initialize the image taker: %w", err))
+	}
+
 	d.UI.SetStatus("Initializing UI...")
+	return nil
+}
+
+func (d *StreamD) initImageTaker(ctx context.Context) error {
+	for elName, el := range d.Config.Monitor.Elements {
+		{
+			elName, el := elName, el
+			observability.Go(ctx, func() {
+				logger.Debugf(ctx, "taker of image '%s'", elName)
+				defer logger.Debugf(ctx, "/taker of image '%s'", elName)
+				t := time.NewTicker(el.UpdateInterval)
+
+				obsServer, obsServerClose, err := d.OBS(ctx)
+				if obsServerClose != nil {
+					defer obsServerClose()
+				}
+				if err != nil {
+					logger.Errorf(ctx, "unable to init connection with OBS: %w", err)
+					return
+				}
+
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case <-t.C:
+					}
+
+					imageQuality := ptr(int64(el.ImageQuality))
+					if el.ImageFormat == config.ImageFormatJPEG && el.ImageQuality < 100 {
+						if el.ImageFormat == config.ImageFormatJPEG && el.ImageQuality < 50 {
+							imageQuality = ptr(int64(el.ImageQuality + 50))
+						} else {
+							imageQuality = ptr(int64(100))
+						}
+					}
+					/*if el.ImageFormat == config.ImageFormatJPEG {
+						imageQuality = ptr(int64(100))
+					}*/
+
+					req := &obs_grpc.GetSourceScreenshotRequest{
+						SourceName:              &el.SourceName,
+						ImageFormat:             []byte(el.ImageFormat),
+						ImageCompressionQuality: imageQuality,
+					}
+					if el.SourceWidth != 0 {
+						req.ImageWidth = ptr(int64(el.SourceWidth))
+					}
+					if el.SourceHeight != 0 {
+						req.ImageHeight = ptr(int64(el.SourceHeight))
+					}
+					if b, err := json.Marshal(req); err == nil {
+						logger.Tracef(ctx, "requesting a screenshot from OBS using %s", b)
+					}
+					resp, err := obsServer.GetSourceScreenshot(ctx, req)
+					if err != nil {
+						logger.Errorf(ctx, "unable to get a screenshot of '%s' ('%s'): %w", elName, el.SourceName, err)
+						continue
+					}
+
+					imgB64 := resp.GetImageData()
+					imgBytes, mimeType, err := imgb64.Decode(string(imgB64))
+					if err != nil {
+						logger.Errorf(ctx, "unable to decode the screenshot of '%s' ('%s'): %w", elName, el.SourceName, err)
+						continue
+					}
+
+					logger.Tracef(ctx, "the decoded image is of format '%s' (expected format: '%s') and size %d", mimeType, el.ImageFormat, len(imgBytes))
+
+					switch el.ImageFormat {
+					case config.ImageFormatJPEG:
+						img, err := jpeg.Decode(bytes.NewReader(imgBytes))
+						if err != nil {
+							logger.Errorf(ctx, "unable to parse the screenshot of '%s' ('%s'): %w", elName, el.SourceName, err)
+							continue
+						}
+						webpBytes, err := webp.EncodeRGBA(img, float32(el.ImageQuality))
+						if err != nil {
+							logger.Errorf(ctx, "unable to encode the screenshot of '%s' ('%s') as WebP: %w", elName, el.SourceName, err)
+							continue
+						}
+						logger.Tracef(ctx, "reduced the size of the image from %d to %d", len(imgBytes), len(webpBytes))
+						imgBytes = webpBytes
+					}
+
+					err = d.SetVariable(ctx, consts.VarKeyImage(consts.ImageID(elName)), imgBytes)
+					if err != nil {
+						logger.Errorf(ctx, "unable to save the screenshot of '%s' ('%s'): %w", elName, el.SourceName, err)
+						continue
+					}
+				}
+			})
+		}
+	}
 	return nil
 }
 
@@ -791,6 +895,8 @@ func (d *StreamD) SetVariable(
 	key consts.VarKey,
 	value []byte,
 ) error {
+	logger.Tracef(ctx, "SetVariable(ctx, '%s', value [len == %d])", key, len(value))
+	defer logger.Tracef(ctx, "/SetVariable(ctx, '%s', value [len == %d])", key, len(value))
 	d.Variables.Store(key, value)
 	return nil
 }
@@ -798,8 +904,8 @@ func (d *StreamD) SetVariable(
 func (d *StreamD) OBS(
 	ctx context.Context,
 ) (obs_grpc.OBSServer, context.CancelFunc, error) {
-	logger.Debugf(ctx, "OBS()")
-	defer logger.Debugf(ctx, "/OBS()")
+	logger.Tracef(ctx, "OBS()")
+	defer logger.Tracef(ctx, "/OBS()")
 
 	proxy := obsgrpcproxy.New(func() (*goobs.Client, context.CancelFunc, error) {
 		d.ControllersLocker.RLock()
@@ -810,7 +916,7 @@ func (d *StreamD) OBS(
 		}
 
 		client, err := obs.GetClient()
-		logger.Debugf(ctx, "getting OBS client result: %v %v", client, err)
+		logger.Tracef(ctx, "getting OBS client result: %v %v", client, err)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -820,7 +926,7 @@ func (d *StreamD) OBS(
 			if err != nil {
 				logger.Errorf(ctx, "unable to disconnect from OBS: %w", err)
 			} else {
-				logger.Debugf(ctx, "disconnected from OBS")
+				logger.Tracef(ctx, "disconnected from OBS")
 			}
 		}, nil
 	})
