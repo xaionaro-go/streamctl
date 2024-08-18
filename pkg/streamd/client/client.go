@@ -10,6 +10,7 @@ import (
 	"io"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/facebookincubator/go-belt"
@@ -38,10 +39,15 @@ import (
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 )
 
 type Client struct {
+	Stats struct {
+		BytesIn  uint64
+		BytesOut uint64
+	}
 	Target string
 	Config Config
 
@@ -87,6 +93,22 @@ func (c *Client) initPersistentConnection(ctx context.Context) error {
 	return nil
 }
 
+func (c *Client) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
+	return ctx
+}
+func (c *Client) HandleRPC(ctx context.Context, s stats.RPCStats) {
+	switch s := s.(type) {
+	case *stats.InPayload:
+		atomic.AddUint64(&c.Stats.BytesIn, uint64(s.WireLength))
+	case *stats.OutPayload:
+		atomic.AddUint64(&c.Stats.BytesOut, uint64(s.WireLength))
+	}
+}
+func (c *Client) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
+	return ctx
+}
+func (c *Client) HandleConn(context.Context, stats.ConnStats) {}
+
 func (c *Client) connect(ctx context.Context) (*grpc.ClientConn, error) {
 	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -99,6 +121,7 @@ func (c *Client) connect(ctx context.Context) (*grpc.ClientConn, error) {
 			},
 			MinConnectTimeout: c.Config.Reconnect.InitialInterval,
 		}),
+		grpc.WithStatsHandler(c),
 	}
 	wrapper := c.Config.ConnectWrapper
 	if wrapper == nil {

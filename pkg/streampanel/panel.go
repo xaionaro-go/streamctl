@@ -96,6 +96,12 @@ type Panel struct {
 	screenshotContainer    *fyne.Container
 	monitorLayersContainer *fyne.Container
 
+	appStatus     *widget.Label
+	appStatusData struct {
+		prevUpdateTS time.Time
+		prevBytesIn  uint64
+		prevBytesOut uint64
+	}
 	streamStatus map[streamcontrol.PlatformName]*widget.Label
 
 	filterValue string
@@ -1739,6 +1745,7 @@ func (p *Panel) initMainWindow(
 	monitorBackgroundFyne.FillMode = canvas.ImageFillStretch
 
 	p.screenshotContainer = container.NewStack()
+	p.appStatus = widget.NewLabel("")
 	obsLabel := widget.NewLabel("OBS:")
 	obsLabel.Importance = widget.HighImportance
 	p.streamStatus[obs.ID] = widget.NewLabel("")
@@ -1748,15 +1755,20 @@ func (p *Panel) initMainWindow(
 	ytLabel := widget.NewLabel("YT:")
 	ytLabel.Importance = widget.HighImportance
 	p.streamStatus[youtube.ID] = widget.NewLabel("")
+	streamInfoItems := container.NewVBox()
+	if _, ok := p.StreamD.(*client.Client); ok {
+		appLabel := widget.NewLabel("App:")
+		appLabel.Importance = widget.HighImportance
+		streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), appLabel, p.appStatus))
+	}
+	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), obsLabel, p.streamStatus[obs.ID]))
+	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), twLabel, p.streamStatus[twitch.ID]))
+	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), ytLabel, p.streamStatus[youtube.ID]))
 	streamInfoContainer := container.NewBorder(
 		nil,
 		nil,
 		nil,
-		container.NewVBox(
-			container.NewHBox(layout.NewSpacer(), obsLabel, p.streamStatus[obs.ID]),
-			container.NewHBox(layout.NewSpacer(), twLabel, p.streamStatus[twitch.ID]),
-			container.NewHBox(layout.NewSpacer(), ytLabel, p.streamStatus[youtube.ID]),
-		),
+		streamInfoItems,
 	)
 	p.monitorLayersContainer = container.NewStack()
 	p.monitorPage = container.NewStack(

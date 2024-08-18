@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"sync/atomic"
 
 	"image"
 	"time"
@@ -26,6 +27,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/client"
 	streamdconfig "github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	streamdconsts "github.com/xaionaro-go/streamctl/pkg/streamd/consts"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
@@ -223,6 +225,23 @@ func (p *Panel) updateMonitorPageStreamStatus(
 ) {
 	logger.Tracef(ctx, "updateMonitorPageStreamStatus")
 	defer logger.Tracef(ctx, "/updateMonitorPageStreamStatus")
+
+	if streamDClient, ok := p.StreamD.(*client.Client); ok {
+		now := time.Now()
+		appBytesIn := atomic.LoadUint64(&streamDClient.Stats.BytesIn)
+		appBytesOut := atomic.LoadUint64(&streamDClient.Stats.BytesOut)
+		if !p.appStatusData.prevUpdateTS.IsZero() {
+			tsDiff := now.Sub(p.appStatusData.prevUpdateTS)
+			bytesInDiff := appBytesIn - p.appStatusData.prevBytesIn
+			bytesOutDiff := appBytesOut - p.appStatusData.prevBytesOut
+			bwIn := float64(bytesInDiff) * 8 / tsDiff.Seconds() / 1000
+			bwOut := float64(bytesOutDiff) * 8 / tsDiff.Seconds() / 1000
+			p.appStatus.SetText(fmt.Sprintf("%4.0fKb/s | %4.0fKb/s", bwIn, bwOut))
+		}
+		p.appStatusData.prevUpdateTS = now
+		p.appStatusData.prevBytesIn = appBytesIn
+		p.appStatusData.prevBytesOut = appBytesOut
+	}
 
 	var wg sync.WaitGroup
 	for _, platID := range []streamcontrol.PlatformName{
