@@ -28,6 +28,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/client"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	streamdconfig "github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	streamdconsts "github.com/xaionaro-go/streamctl/pkg/streamd/consts"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
@@ -106,15 +107,15 @@ func (p *Panel) updateMonitorPageImages(
 
 	type elementType struct {
 		ElementName string
-		streamdconfig.OBSSource
+		streamdconfig.MonitorElementConfig
 		NewImage *canvas.Image
 	}
 
 	elements := make([]elementType, 0, len(monitorCfg.Elements))
 	for elName, el := range monitorCfg.Elements {
 		elements = append(elements, elementType{
-			ElementName: elName,
-			OBSSource:   el,
+			ElementName:          elName,
+			MonitorElementConfig: el,
 		})
 	}
 	sort.Slice(elements, func(i, j int) bool {
@@ -139,8 +140,8 @@ func (p *Panel) updateMonitorPageImages(
 				}
 				logger.Tracef(ctx, "updating the image '%s': %v %#+v %#+v", el.ElementName, changed, lastWinSize, winSize)
 				imgSize := image.Point{
-					X: int(winSize.Width * float32(el.DisplayWidth) / 100),
-					Y: int(winSize.Height * float32(el.DisplayHeight) / 100),
+					X: int(winSize.Width * float32(el.Width) / 100),
+					Y: int(winSize.Height * float32(el.Height) / 100),
 				}
 				offset := image.Point{
 					X: int(winSize.Width * float32(el.OffsetX) / 100),
@@ -168,7 +169,13 @@ func (p *Panel) updateMonitorPageImages(
 		defer wg.Done()
 		img, changed, err := p.getImage(ctx, consts.ImageScreenshot)
 		if err != nil {
-			logger.Error(ctx, err)
+			// we use local config, which is invalid, but we don't want to make a request
+			// to another instance just to know if this should be an error or a trace message
+			if p.Config.Screenshot.Enabled != nil && *p.Config.Screenshot.Enabled {
+				logger.Errorf(ctx, "unable to get the screenshot: %v", err)
+			} else {
+				logger.Tracef(ctx, "unable to get the screenshot: %v", err)
+			}
 			return
 		}
 		if !changed && lastWinSize == winSize && lastOrientation == orientation {
@@ -331,7 +338,7 @@ func (p *Panel) newMonitorSettingsWindow(ctx context.Context) {
 					ctx,
 					name,
 					el,
-					func(ctx context.Context, elementName string, newElement streamdconfig.OBSSource) error {
+					func(ctx context.Context, elementName string, newElement streamdconfig.MonitorElementConfig) error {
 						if _, ok := cfg.Monitor.Elements[elementName]; !ok {
 							return fmt.Errorf("element with name '%s' does not exist", elementName)
 						}
@@ -377,8 +384,8 @@ func (p *Panel) newMonitorSettingsWindow(ctx context.Context) {
 			p.editMonitorElementWindow(
 				ctx,
 				"",
-				streamdconfig.OBSSource{},
-				func(ctx context.Context, elementName string, newElement streamdconfig.OBSSource) error {
+				streamdconfig.MonitorElementConfig{},
+				func(ctx context.Context, elementName string, newElement streamdconfig.MonitorElementConfig) error {
 					if _, ok := cfg.Monitor.Elements[elementName]; ok {
 						return fmt.Errorf("element with name '%s' already exists", elementName)
 					}
@@ -403,13 +410,22 @@ func (p *Panel) newMonitorSettingsWindow(ctx context.Context) {
 func (p *Panel) editMonitorElementWindow(
 	ctx context.Context,
 	_elementNameValue string,
-	cfg streamdconfig.OBSSource,
-	saveFunc func(ctx context.Context, elementName string, cfg streamdconfig.OBSSource) error,
+	cfg streamdconfig.MonitorElementConfig,
+	saveFunc func(ctx context.Context, elementName string, cfg streamdconfig.MonitorElementConfig) error,
 ) {
 	logger.Debugf(ctx, "editMonitorElementWindow")
 	defer logger.Debugf(ctx, "/editMonitorElementWindow")
 	w := p.app.NewWindow("Monitor element settings")
 	resizeWindow(w, fyne.NewSize(1500, 1000))
+
+	obsVideoSource := &streamdconfig.MonitorSourceOBSVideo{}
+	dummy := &streamdconfig.MonitorSourceDummy{}
+	switch source := cfg.Source.(type) {
+	case *streamdconfig.MonitorSourceOBSVideo:
+		obsVideoSource = source
+	case *streamdconfig.MonitorSourceDummy:
+		dummy = source
+	}
 
 	elementName := widget.NewEntry()
 	if _elementNameValue != "" {
@@ -471,13 +487,13 @@ func (p *Panel) editMonitorElementWindow(
 	}
 	sort.Strings(sourceNames)
 
-	chatSourceSelect := widget.NewSelect(sourceNames, func(s string) {
-		cfg.SourceName = s
+	obsSourceSelect := widget.NewSelect(sourceNames, func(s string) {
+		obsVideoSource.Name = s
 	})
-	chatSourceSelect.SetSelected(cfg.SourceName)
+	obsSourceSelect.SetSelected(obsVideoSource.Name)
 
 	sourceWidth := xfyne.NewNumericalEntry()
-	sourceWidth.SetText(fmt.Sprintf("%v", cfg.SourceWidth))
+	sourceWidth.SetText(fmt.Sprintf("%v", obsVideoSource.Width))
 	sourceWidth.OnChanged = func(s string) {
 		if s == "" || s == "-" {
 			s = "0"
@@ -487,10 +503,10 @@ func (p *Panel) editMonitorElementWindow(
 			p.DisplayError(fmt.Errorf("unable to parse '%s' as a float: %w", s, err))
 			return
 		}
-		cfg.SourceWidth = v
+		obsVideoSource.Width = v
 	}
 	sourceHeight := xfyne.NewNumericalEntry()
-	sourceHeight.SetText(fmt.Sprintf("%v", cfg.SourceHeight))
+	sourceHeight.SetText(fmt.Sprintf("%v", obsVideoSource.Height))
 	sourceHeight.OnChanged = func(s string) {
 		if s == "" || s == "-" {
 			s = "0"
@@ -500,11 +516,11 @@ func (p *Panel) editMonitorElementWindow(
 			p.DisplayError(fmt.Errorf("unable to parse '%s' as a float: %w", s, err))
 			return
 		}
-		cfg.SourceHeight = v
+		obsVideoSource.Height = v
 	}
 
-	if cfg.ImageFormat == streamdconfig.ImageFormatUndefined {
-		cfg.ImageFormat = streamdconfig.ImageFormatJPEG
+	if obsVideoSource.ImageFormat == streamdconfig.ImageFormatUndefined {
+		obsVideoSource.ImageFormat = streamdconfig.ImageFormatJPEG
 	}
 
 	imageFormatSelect := widget.NewSelect([]string{
@@ -512,9 +528,9 @@ func (p *Panel) editMonitorElementWindow(
 		string(streamdconfig.ImageFormatJPEG),
 		string(streamdconfig.ImageFormatWebP),
 	}, func(s string) {
-		cfg.ImageFormat = streamdconfig.ImageFormat(s)
+		obsVideoSource.ImageFormat = streamdconfig.ImageFormat(s)
 	})
-	imageFormatSelect.SetSelected(string(cfg.ImageFormat))
+	imageFormatSelect.SetSelected(string(obsVideoSource.ImageFormat))
 
 	imageQuality := xfyne.NewNumericalEntry()
 	imageQuality.SetText(fmt.Sprintf("%v", cfg.ImageQuality))
@@ -530,12 +546,45 @@ func (p *Panel) editMonitorElementWindow(
 		cfg.ImageQuality = v
 	}
 
-	if cfg.UpdateInterval == 0 {
-		cfg.UpdateInterval = 200 * time.Millisecond
+	// we cannot use imageQuality twice, unfortunately, so duplicating it:
+	imageCompressionValue := xfyne.NewNumericalEntry()
+	imageCompressionValue.SetText(fmt.Sprintf("%v", cfg.ImageQuality))
+	imageCompressionValue.OnChanged = func(s string) {
+		if s == "" || s == "-" {
+			s = "0"
+		}
+		v, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to parse '%s' as a float: %w", s, err))
+			return
+		}
+		cfg.ImageQuality = v
+	}
+
+	imageCompression := container.NewVBox(
+		widget.NewLabel("Compression:"),
+		imageCompressionValue,
+	)
+
+	isLossless := widget.NewCheck("Is lossless:", func(b bool) {
+		cfg.ImageLossless = b
+		if b {
+			imageQuality.Hide()
+			imageCompression.Show()
+		} else {
+			imageCompression.Hide()
+			imageQuality.Show()
+		}
+	})
+	isLossless.SetChecked(cfg.ImageLossless)
+	isLossless.OnChanged(cfg.ImageLossless)
+
+	if obsVideoSource.UpdateInterval == 0 {
+		obsVideoSource.UpdateInterval = config.Duration(200 * time.Millisecond)
 	}
 
 	updateInterval := xfyne.NewNumericalEntry()
-	updateInterval.SetText(fmt.Sprintf("%v", cfg.UpdateInterval.Seconds()))
+	updateInterval.SetText(fmt.Sprintf("%v", time.Duration(obsVideoSource.UpdateInterval).Seconds()))
 	updateInterval.OnChanged = func(s string) {
 		if s == "" || s == "-" {
 			s = "0.2"
@@ -545,7 +594,7 @@ func (p *Panel) editMonitorElementWindow(
 			p.DisplayError(fmt.Errorf("unable to parse '%s' as a float: %w", s, err))
 			return
 		}
-		cfg.UpdateInterval = time.Duration(float64(time.Second) * v)
+		obsVideoSource.UpdateInterval = config.Duration(float64(time.Second) * v)
 	}
 
 	zIndex := xfyne.NewNumericalEntry()
@@ -562,15 +611,15 @@ func (p *Panel) editMonitorElementWindow(
 		cfg.ZIndex = v
 	}
 
-	if cfg.DisplayWidth == 0 {
-		cfg.DisplayWidth = 100
+	if cfg.Width == 0 {
+		cfg.Width = 100
 	}
-	if cfg.DisplayHeight == 0 {
-		cfg.DisplayHeight = 100
+	if cfg.Height == 0 {
+		cfg.Height = 100
 	}
 
 	displayWidth := xfyne.NewNumericalEntry()
-	displayWidth.SetText(fmt.Sprintf("%v", cfg.DisplayWidth))
+	displayWidth.SetText(fmt.Sprintf("%v", cfg.Width))
 	displayWidth.OnChanged = func(s string) {
 		if s == "" || s == "-" {
 			s = "0"
@@ -580,10 +629,10 @@ func (p *Panel) editMonitorElementWindow(
 			p.DisplayError(fmt.Errorf("unable to parse '%s' as a float: %w", s, err))
 			return
 		}
-		cfg.DisplayWidth = v
+		cfg.Width = v
 	}
 	displayHeight := xfyne.NewNumericalEntry()
-	displayHeight.SetText(fmt.Sprintf("%v", cfg.DisplayHeight))
+	displayHeight.SetText(fmt.Sprintf("%v", cfg.Height))
 	displayHeight.OnChanged = func(s string) {
 		if s == "" || s == "-" {
 			s = "0"
@@ -593,7 +642,7 @@ func (p *Panel) editMonitorElementWindow(
 			p.DisplayError(fmt.Errorf("unable to parse '%s' as a float: %w", s, err))
 			return
 		}
-		cfg.DisplayHeight = v
+		cfg.Height = v
 	}
 
 	if cfg.AlignX == "" {
@@ -649,7 +698,34 @@ func (p *Panel) editMonitorElementWindow(
 		cfg.OffsetY = v
 	}
 
+	obsSourceConfig := container.NewVBox(
+		widget.NewLabel("Source:"),
+		obsSourceSelect,
+		widget.NewLabel("Source image size (use '0' for preserving the original size or ratio):"),
+		container.NewHBox(widget.NewLabel("X:"), sourceWidth, widget.NewLabel(`px`), widget.NewSeparator(), widget.NewLabel("Y:"), sourceHeight, widget.NewLabel(`px`)),
+		widget.NewLabel("Format:"),
+		imageFormatSelect,
+		widget.NewLabel("Update interval:"),
+		container.NewHBox(updateInterval, widget.NewLabel("seconds")),
+	)
+
+	sourceTypeSelect := widget.NewSelect([]string{"OBS", "dummy"}, func(s string) {
+		switch s {
+		case "OBS":
+			obsSourceConfig.Show()
+		case "dummy":
+			obsSourceConfig.Hide()
+		}
+	})
+	sourceTypeSelect.SetSelected("OBS")
+
 	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
+		switch sourceTypeSelect.Selected {
+		case "OBS":
+			cfg.Source = obsVideoSource
+		case "dummy":
+			cfg.Source = dummy
+		}
 		err := saveFunc(ctx, elementName.Text, cfg)
 		if err != nil {
 			p.DisplayError(fmt.Errorf("unable to save the monitor element: %w", err))
@@ -666,16 +742,6 @@ func (p *Panel) editMonitorElementWindow(
 		container.NewVBox(
 			widget.NewLabel("Monitor element name:"),
 			elementName,
-			widget.NewLabel("Source:"),
-			chatSourceSelect,
-			widget.NewLabel("Source image size (use '0' for preserving the original size or ratio):"),
-			container.NewHBox(widget.NewLabel("X:"), sourceWidth, widget.NewLabel(`px`), widget.NewSeparator(), widget.NewLabel("Y:"), sourceHeight, widget.NewLabel(`px`)),
-			widget.NewLabel("Format:"),
-			imageFormatSelect,
-			widget.NewLabel("Quality:"),
-			imageQuality,
-			widget.NewLabel("Update interval:"),
-			container.NewHBox(updateInterval, widget.NewLabel("seconds")),
 			widget.NewLabel("Z-Index / layer:"),
 			zIndex,
 			widget.NewLabel("Display size:"),
@@ -684,6 +750,13 @@ func (p *Panel) editMonitorElementWindow(
 			container.NewHBox(widget.NewLabel("X:"), alignX, widget.NewSeparator(), widget.NewLabel("Y:"), alignY),
 			widget.NewLabel("Offset:"),
 			container.NewHBox(widget.NewLabel("X:"), offsetX, widget.NewLabel(`%`), widget.NewSeparator(), widget.NewLabel("Y:"), offsetY, widget.NewLabel(`%`)),
+			widget.NewLabel("Quality:"),
+			isLossless,
+			imageQuality,
+			imageCompression,
+			widget.NewLabel("Source type:"),
+			sourceTypeSelect,
+			obsSourceConfig,
 		),
 	)
 	w.SetContent(content)

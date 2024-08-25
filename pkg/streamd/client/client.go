@@ -354,9 +354,9 @@ func (c *Client) processError(
 	ctx context.Context,
 	err error,
 ) error {
-	logger.Debugf(ctx, "processError(ctx, '%v'): %T", err, err)
+	logger.Tracef(ctx, "processError(ctx, '%v'): %T", err, err)
 	if s, ok := status.FromError(err); ok {
-		logger.Debugf(ctx, "processError(ctx, '%v'): code == %#+v; msg == %#+v", err, s.Code(), s.Message())
+		logger.Tracef(ctx, "processError(ctx, '%v'): code == %#+v; msg == %#+v", err, s.Code(), s.Message())
 		switch s.Code() {
 		case codes.Unavailable:
 			logger.Debugf(ctx, "suppressed the error (forcing a retry)")

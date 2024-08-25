@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"runtime/debug"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
@@ -44,7 +45,12 @@ func (cfg *Config) traceDump() {
 	l.Tracef("streamd config == %#+v: %s", *cfg, buf.String())
 }
 
-func (cfg *Config) UnmarshalYAML(b []byte) error {
+func (cfg *Config) UnmarshalYAML(b []byte) (_err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			_err = fmt.Errorf("got a panic: %v\n%s", r, debug.Stack())
+		}
+	}()
 	logger.Default().Tracef("unparsed streamd config == %s", b)
 	err := yaml.Unmarshal(b, (*config)(cfg))
 	if err != nil {
@@ -56,7 +62,7 @@ func (cfg *Config) UnmarshalYAML(b []byte) error {
 		cfg.Backends = streamcontrol.Config{}
 	}
 	if cfg.Monitor.Elements == nil {
-		cfg.Monitor.Elements = make(map[string]OBSSource)
+		cfg.Monitor.Elements = make(map[string]MonitorElementConfig)
 	}
 
 	if cfg.Backends[obs.ID] != nil {

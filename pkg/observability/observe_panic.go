@@ -20,13 +20,14 @@ func PanicIfNotNil(ctx context.Context, r any) {
 	panic(fmt.Sprintf("%#+v", r))
 }
 
-func ReportPanicIfNotNil(ctx context.Context, r any) {
+func ReportPanicIfNotNil(ctx context.Context, r any) bool {
 	if r == nil {
-		return
+		return false
 	}
 	logger.FromCtx(ctx).
 		WithField("error_event_exception_stack_trace", string(debug.Stack())).
 		Errorf("got panic: %v", r)
 	errmon.ObserveRecoverCtx(ctx, r)
 	belt.Flush(ctx)
+	return true
 }

@@ -4,49 +4,14 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
-	"github.com/xaionaro-go/streamctl/pkg/streamd/consts"
 	streamserver "github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 )
-
-type AlignX = consts.AlignX
-type AlignY = consts.AlignY
-
-type ImageFormat string
-
-const (
-	ImageFormatUndefined = ImageFormat("")
-	ImageFormatPNG       = ImageFormat("png")
-	ImageFormatJPEG      = ImageFormat("jpeg")
-	ImageFormatWebP      = ImageFormat("webp")
-)
-
-type OBSSource struct {
-	SourceName     string      `yaml:"source_name"`
-	SourceWidth    float64     `yaml:"source_width"`
-	SourceHeight   float64     `yaml:"source_height"`
-	DisplayWidth   float64     `yaml:"display_width"`
-	DisplayHeight  float64     `yaml:"display_height"`
-	ZIndex         float64     `yaml:"z_index"`
-	OffsetX        float64     `yaml:"offset_x"`
-	OffsetY        float64     `yaml:"offset_y"`
-	AlignX         AlignX      `yaml:"align_x"`
-	AlignY         AlignY      `yaml:"align_y"`
-	ImageFormat    ImageFormat `yaml:"image_format"`
-	ImageQuality   float64     `yaml:"image_quality"`
-	Rotate         float64
-	UpdateInterval time.Duration `yaml:"update_interval"`
-}
-
-type MonitorConfig struct {
-	Elements map[string]OBSSource
-}
 
 type ProfileMetadata struct {
 	DefaultStreamTitle       string
@@ -75,7 +40,7 @@ func NewConfig() Config {
 		ProfileMetadata: map[streamcontrol.ProfileName]ProfileMetadata{},
 		CachePath:       ptr("~/.streamd.cache"),
 		Monitor: MonitorConfig{
-			Elements: map[string]OBSSource{},
+			Elements: map[string]MonitorElementConfig{},
 		},
 	}
 }

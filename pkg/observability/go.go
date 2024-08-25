@@ -7,7 +7,6 @@ import (
 func Call(ctx context.Context, fn func()) {
 	defer func() { PanicIfNotNil(ctx, recover()) }()
 	fn()
-
 }
 
 func CallSafe(ctx context.Context, fn func()) {

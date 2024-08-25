@@ -108,8 +108,8 @@ func getUserID(
 }
 
 func (t *Twitch) prepare(ctx context.Context) error {
-	logger.Debugf(ctx, "prepare")
-	defer logger.Debugf(ctx, "/prepare")
+	logger.Tracef(ctx, "prepare")
+	defer logger.Tracef(ctx, "/prepare")
 
 	t.prepareLocker.Lock()
 	defer t.prepareLocker.Unlock()

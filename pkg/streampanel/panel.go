@@ -1509,7 +1509,7 @@ func (p *Panel) getUpdatedStatus_backends(ctx context.Context) {
 				p.DisplayError(fmt.Errorf("unable to get the list of scene from OBS: %w", err))
 				return
 			}
-			logger.Debugf(ctx, "OBS SceneList response: %#+v", sceneList)
+			logger.Tracef(ctx, "OBS SceneList response: %#+v", sceneList)
 
 			p.obsSelectScene.Options = p.obsSelectScene.Options[:0]
 			for _, scene := range sceneList.Scenes {

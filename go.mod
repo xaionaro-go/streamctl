@@ -226,6 +226,7 @@ require (
 	github.com/andreykaipov/goobs v1.4.1
 	github.com/anthonynsimon/bild v0.14.0
 	github.com/asaskevich/EventBus v0.0.0-20200907212545-49d423059eef
+	github.com/bamiaux/rez v0.0.0-20170731184118-29f4463c688b
 	github.com/blang/mpv v0.0.0-20160810175505-d56d7352e068
 	github.com/chai2010/webp v1.1.1
 	github.com/dustin/go-humanize v1.0.1
@@ -241,7 +242,6 @@ require (
 	github.com/libp2p/go-libp2p v0.33.2
 	github.com/libp2p/go-libp2p-kad-dht v0.25.2
 	github.com/multiformats/go-multiaddr v0.12.3
-	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.18.0
 	github.com/rs/zerolog v1.33.0

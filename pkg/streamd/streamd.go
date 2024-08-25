@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto"
-	"encoding/json"
 	"fmt"
-	"image/jpeg"
 	"os"
 	"sort"
 	"sync"
@@ -22,7 +20,6 @@ import (
 	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/obs-grpc-proxy/pkg/obsgrpcproxy"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
-	"github.com/xaionaro-go/streamctl/pkg/imgb64"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/repository"
@@ -163,14 +160,43 @@ func (d *StreamD) Run(ctx context.Context) (_ret error) { // TODO: delete the fe
 	return nil
 }
 
+func getImageBytes(
+	ctx context.Context,
+	obsServer obs_grpc.OBSServer,
+	el config.MonitorElementConfig,
+) ([]byte, time.Time, error) {
+	img, nextUpdateAt, err := el.Source.GetImage(ctx, obsServer, el)
+	if err != nil {
+		return nil, time.Now().Add(time.Second), fmt.Errorf("unable to get the image from the source: %w", err)
+	}
+
+	var out bytes.Buffer
+	err = webp.Encode(&out, img, &webp.Options{
+		Lossless: el.ImageLossless,
+		Quality:  float32(el.ImageQuality),
+		Exact:    false,
+	})
+	if err != nil {
+		return nil, time.Now().Add(time.Second), fmt.Errorf("unable to encode the image: %w", err)
+	}
+
+	return out.Bytes(), nextUpdateAt, nil
+}
+
 func (d *StreamD) initImageTaker(ctx context.Context) error {
 	for elName, el := range d.Config.Monitor.Elements {
+		if el.Source == nil {
+			continue
+		}
+		if _, ok := el.Source.(*config.MonitorSourceDummy); ok {
+			continue
+		}
 		{
 			elName, el := elName, el
+			_ = el
 			observability.Go(ctx, func() {
 				logger.Debugf(ctx, "taker of image '%s'", elName)
 				defer logger.Debugf(ctx, "/taker of image '%s'", elName)
-				t := time.NewTicker(el.UpdateInterval)
 
 				obsServer, obsServerClose, err := d.OBS(ctx)
 				if obsServerClose != nil {
@@ -182,73 +208,44 @@ func (d *StreamD) initImageTaker(ctx context.Context) error {
 				}
 
 				for {
-					select {
-					case <-ctx.Done():
-						return
-					case <-t.C:
-					}
+					var (
+						imgBytes     []byte
+						nextUpdateAt time.Time
+						err          error
+					)
 
-					imageQuality := ptr(int64(el.ImageQuality))
-					if el.ImageFormat == config.ImageFormatJPEG && el.ImageQuality < 100 {
-						if el.ImageFormat == config.ImageFormatJPEG && el.ImageQuality < 50 {
-							imageQuality = ptr(int64(el.ImageQuality + 50))
-						} else {
-							imageQuality = ptr(int64(100))
+					waitUntilNextIteration := func() bool {
+						if nextUpdateAt.IsZero() {
+							return false
+						}
+						select {
+						case <-ctx.Done():
+							return false
+						case <-time.After(time.Until(nextUpdateAt)):
+							return true
 						}
 					}
-					/*if el.ImageFormat == config.ImageFormatJPEG {
-						imageQuality = ptr(int64(100))
-					}*/
 
-					req := &obs_grpc.GetSourceScreenshotRequest{
-						SourceName:              &el.SourceName,
-						ImageFormat:             []byte(el.ImageFormat),
-						ImageCompressionQuality: imageQuality,
-					}
-					if el.SourceWidth != 0 {
-						req.ImageWidth = ptr(int64(el.SourceWidth))
-					}
-					if el.SourceHeight != 0 {
-						req.ImageHeight = ptr(int64(el.SourceHeight))
-					}
-					if b, err := json.Marshal(req); err == nil {
-						logger.Tracef(ctx, "requesting a screenshot from OBS using %s", b)
-					}
-					resp, err := obsServer.GetSourceScreenshot(ctx, req)
+					imgBytes, nextUpdateAt, err = getImageBytes(ctx, obsServer, el)
 					if err != nil {
-						logger.Errorf(ctx, "unable to get a screenshot of '%s' ('%s'): %w", elName, el.SourceName, err)
-						continue
-					}
-
-					imgB64 := resp.GetImageData()
-					imgBytes, mimeType, err := imgb64.Decode(string(imgB64))
-					if err != nil {
-						logger.Errorf(ctx, "unable to decode the screenshot of '%s' ('%s'): %w", elName, el.SourceName, err)
-						continue
-					}
-
-					logger.Tracef(ctx, "the decoded image is of format '%s' (expected format: '%s') and size %d", mimeType, el.ImageFormat, len(imgBytes))
-
-					switch el.ImageFormat {
-					case config.ImageFormatJPEG:
-						img, err := jpeg.Decode(bytes.NewReader(imgBytes))
-						if err != nil {
-							logger.Errorf(ctx, "unable to parse the screenshot of '%s' ('%s'): %w", elName, el.SourceName, err)
-							continue
+						logger.Errorf(ctx, "unable to get the image of '%s': %w", elName, err)
+						if !waitUntilNextIteration() {
+							return
 						}
-						webpBytes, err := webp.EncodeRGBA(img, float32(el.ImageQuality))
-						if err != nil {
-							logger.Errorf(ctx, "unable to encode the screenshot of '%s' ('%s') as WebP: %w", elName, el.SourceName, err)
-							continue
-						}
-						logger.Tracef(ctx, "reduced the size of the image from %d to %d", len(imgBytes), len(webpBytes))
-						imgBytes = webpBytes
+						continue
 					}
 
 					err = d.SetVariable(ctx, consts.VarKeyImage(consts.ImageID(elName)), imgBytes)
 					if err != nil {
-						logger.Errorf(ctx, "unable to save the screenshot of '%s' ('%s'): %w", elName, el.SourceName, err)
+						logger.Errorf(ctx, "unable to save the image of '%s': %w", elName, err)
+						if !waitUntilNextIteration() {
+							return
+						}
 						continue
+					}
+
+					if !waitUntilNextIteration() {
+						return
 					}
 				}
 			})

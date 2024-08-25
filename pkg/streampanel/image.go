@@ -12,9 +12,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/bamiaux/rez"
 	"github.com/chai2010/webp"
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/nfnt/resize"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/screenshot"
 	"github.com/xaionaro-go/streamctl/pkg/screenshoter"
@@ -131,14 +131,22 @@ func (p *Panel) getImage(
 	return img, changed, nil
 }
 
-func imgFitTo(src image.Image, size image.Point) image.Image {
+func imgFitTo(src image.Image, size image.Point) (image.Image, error) {
 	sizeCur := src.Bounds().Size()
 	factor := math.MaxFloat64
 	factor = math.Min(factor, float64(size.X)/float64(sizeCur.X))
 	factor = math.Min(factor, float64(size.Y)/float64(sizeCur.Y))
-	newWidth := uint(float64(sizeCur.X) * factor)
-	newHeight := uint(float64(sizeCur.Y) * factor)
-	return resize.Resize(newWidth, newHeight, src, resize.Lanczos3)
+	newWidth := int(float64(sizeCur.X) * factor)
+	newHeight := int(float64(sizeCur.Y) * factor)
+	output := image.NewRGBA(image.Rectangle{Max: image.Point{
+		X: newWidth,
+		Y: newHeight,
+	}})
+	err := rez.Convert(output, src, rez.NewBicubicFilter())
+	if err != nil {
+		return nil, err
+	}
+	return output, nil
 }
 
 func imgFillTo(
@@ -257,10 +265,15 @@ func (p *Panel) setScreenshot(
 	}
 
 	if bounds.Max.X > ScreenshotMaxWidth || bounds.Max.Y > ScreenshotMaxHeight {
-		screenshot = imgFitTo(screenshot, image.Point{
+		var err error
+		screenshot, err = imgFitTo(screenshot, image.Point{
 			X: ScreenshotMaxWidth,
 			Y: ScreenshotMaxHeight,
 		})
+		if err != nil {
+			logger.Errorf(ctx, "unable to rescale the screenshot: %w", err)
+			return
+		}
 		logger.Tracef(ctx, "rescaled the screenshot from %#+v to %#+v", bounds, screenshot.Bounds())
 	}
 
