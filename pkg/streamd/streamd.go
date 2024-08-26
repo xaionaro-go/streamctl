@@ -54,6 +54,8 @@ type SaveConfigFunc func(context.Context, config.Config) error
 
 type OBSInstanceID = streamtypes.OBSInstanceID
 
+type OBSState = streamtypes.OBSState
+
 type StreamD struct {
 	UI ui.UI
 
@@ -83,6 +85,7 @@ type StreamD struct {
 	StreamServer       *streamserver.StreamServer
 
 	StreamStatusCache *memoize.MemoizeData
+	OBSState          OBSState
 
 	EventBus eventbus.Bus
 }
@@ -105,6 +108,9 @@ func New(
 		OAuthListenPorts:  map[uint16]struct{}{},
 		StreamStatusCache: memoize.NewMemoizeData(),
 		EventBus:          eventbus.New(),
+		OBSState: OBSState{
+			VolumeMeters: map[string][][3]float64{},
+		},
 	}
 
 	err := d.readCache(ctx)
@@ -160,14 +166,19 @@ func (d *StreamD) Run(ctx context.Context) (_ret error) { // TODO: delete the fe
 	return nil
 }
 
-func getImageBytes(
+func getOBSImageBytes(
 	ctx context.Context,
 	obsServer obs_grpc.OBSServer,
 	el config.MonitorElementConfig,
+	obsState *streamtypes.OBSState,
 ) ([]byte, time.Time, error) {
-	img, nextUpdateAt, err := el.Source.GetImage(ctx, obsServer, el)
+	img, nextUpdateAt, err := el.Source.GetImage(ctx, obsServer, el, obsState)
 	if err != nil {
 		return nil, time.Now().Add(time.Second), fmt.Errorf("unable to get the image from the source: %w", err)
+	}
+
+	for _, filter := range el.Filters {
+		img = filter.Filter(ctx, img)
 	}
 
 	var out bytes.Buffer
@@ -226,7 +237,7 @@ func (d *StreamD) initImageTaker(ctx context.Context) error {
 						}
 					}
 
-					imgBytes, nextUpdateAt, err = getImageBytes(ctx, obsServer, el)
+					imgBytes, nextUpdateAt, err = getOBSImageBytes(ctx, obsServer, el, &d.OBSState)
 					if err != nil {
 						logger.Errorf(ctx, "unable to get the image of '%s': %w", elName, err)
 						if !waitUntilNextIteration() {
@@ -904,29 +915,34 @@ func (d *StreamD) OBS(
 	logger.Tracef(ctx, "OBS()")
 	defer logger.Tracef(ctx, "/OBS()")
 
-	proxy := obsgrpcproxy.New(func() (*goobs.Client, context.CancelFunc, error) {
-		d.ControllersLocker.RLock()
-		obs := d.StreamControllers.OBS
-		d.ControllersLocker.RUnlock()
-		if obs == nil {
-			return nil, nil, fmt.Errorf("connection to OBS is not initialized")
-		}
-
-		client, err := obs.GetClient()
-		logger.Tracef(ctx, "getting OBS client result: %v %v", client, err)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		return client, func() {
-			err := client.Disconnect()
-			if err != nil {
-				logger.Errorf(ctx, "unable to disconnect from OBS: %w", err)
-			} else {
-				logger.Tracef(ctx, "disconnected from OBS")
+	proxy := obsgrpcproxy.New(
+		ctx,
+		func(ctx context.Context) (*goobs.Client, context.CancelFunc, error) {
+			logger.Tracef(ctx, "OBS proxy getting client")
+			defer logger.Tracef(ctx, "/OBS proxy getting client")
+			d.ControllersLocker.RLock()
+			obs := d.StreamControllers.OBS
+			d.ControllersLocker.RUnlock()
+			if obs == nil {
+				return nil, nil, fmt.Errorf("connection to OBS is not initialized")
 			}
-		}, nil
-	})
+
+			client, err := obs.GetClient()
+			logger.Tracef(ctx, "getting OBS client result: %v %v", client, err)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			return client, func() {
+				err := client.Disconnect()
+				if err != nil {
+					logger.Errorf(ctx, "unable to disconnect from OBS: %w", err)
+				} else {
+					logger.Tracef(ctx, "disconnected from OBS")
+				}
+			}, nil
+		},
+	)
 	return proxy, func() {}, nil
 }
 

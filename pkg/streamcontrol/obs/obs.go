@@ -17,6 +17,7 @@ type OBS struct {
 	CurrentStream struct {
 		EnableRecording bool
 	}
+	IsClosed bool
 }
 
 var _ streamcontrol.StreamController[StreamProfile] = (*OBS)(nil)
@@ -37,8 +38,16 @@ func New(
 	}, nil
 }
 
-func (obs *OBS) GetClient() (*goobs.Client, error) {
+type GetClientOption goobs.Option
+
+func (obs *OBS) GetClient(clientOpts ...GetClientOption) (*goobs.Client, error) {
+	if obs.IsClosed {
+		return nil, fmt.Errorf("closed")
+	}
 	var opts []goobs.Option
+	for _, opt := range clientOpts {
+		opts = append(opts, goobs.Option(opt))
+	}
 	if obs.Config.Config.Password != "" {
 		opts = append(opts, goobs.WithPassword(obs.Config.Config.Password))
 	}
@@ -49,6 +58,7 @@ func (obs *OBS) GetClient() (*goobs.Client, error) {
 }
 
 func (obs *OBS) Close() error {
+	obs.IsClosed = true
 	return nil
 }
 

@@ -3,6 +3,7 @@ package streampanel
 import (
 	"context"
 	"fmt"
+	"image/color"
 	"runtime"
 	"sort"
 	"strconv"
@@ -20,15 +21,16 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/anthonynsimon/bild/adjust"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/lusingander/colorpicker"
 	"github.com/xaionaro-go/obs-grpc-proxy/pkg/obsgrpcproxy"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
+	"github.com/xaionaro-go/streamctl/pkg/colorx"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/client"
-	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	streamdconfig "github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	streamdconsts "github.com/xaionaro-go/streamctl/pkg/streamd/consts"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
@@ -119,7 +121,10 @@ func (p *Panel) updateMonitorPageImages(
 		})
 	}
 	sort.Slice(elements, func(i, j int) bool {
-		return elements[i].ZIndex < elements[j].ZIndex
+		if elements[i].ZIndex != elements[j].ZIndex {
+			return elements[i].ZIndex < elements[j].ZIndex
+		}
+		return elements[i].ElementName < elements[j].ElementName
 	})
 
 	var wg sync.WaitGroup
@@ -418,11 +423,20 @@ func (p *Panel) editMonitorElementWindow(
 	w := p.app.NewWindow("Monitor element settings")
 	resizeWindow(w, fyne.NewSize(1500, 1000))
 
-	obsVideoSource := &streamdconfig.MonitorSourceOBSVideo{}
+	obsVideoSource := &streamdconfig.MonitorSourceOBSVideo{
+		UpdateInterval: streamdconfig.Duration(200 * time.Millisecond),
+	}
+	obsVolumeSource := &streamdconfig.MonitorSourceOBSVolume{
+		UpdateInterval: streamdconfig.Duration(200 * time.Millisecond),
+		ColorActive:    "00FF00FF",
+		ColorPassive:   "00000000",
+	}
 	dummy := &streamdconfig.MonitorSourceDummy{}
 	switch source := cfg.Source.(type) {
 	case *streamdconfig.MonitorSourceOBSVideo:
 		obsVideoSource = source
+	case *streamdconfig.MonitorSourceOBSVolume:
+		obsVolumeSource = source
 	case *streamdconfig.MonitorSourceDummy:
 		dummy = source
 	}
@@ -448,8 +462,10 @@ func (p *Panel) editMonitorElementWindow(
 		return
 	}
 
-	var sourceNames []string
-	sourceNameIsSet := map[string]struct{}{}
+	var videoSourceNames []string
+	var audioSourceNames []string
+	videoSourceNameIsSet := map[string]struct{}{}
+	audioSourceNameIsSet := map[string]struct{}{}
 	for _, _scene := range resp.Scenes {
 		scene, err := obsgrpcproxy.FromAbstractObject[map[string]any](_scene)
 		if err != nil {
@@ -473,24 +489,34 @@ func (p *Panel) editMonitorElementWindow(
 			}
 			logger.Debugf(ctx, "source info: %#+v", source)
 			sourceName, _ := source["sourceName"].(string)
-			if _, ok := sourceNameIsSet[sourceName]; ok {
-				continue
-			}
-			sceneItemTransform := source["sceneItemTransform"].(map[string]any)
-			sourceWidth, _ := sceneItemTransform["sourceWidth"].(float64)
-			if sourceWidth == 0 {
-				continue
-			}
-			sourceNameIsSet[sourceName] = struct{}{}
-			sourceNames = append(sourceNames, sourceName)
+			func() {
+				if _, ok := videoSourceNameIsSet[sourceName]; ok {
+					return
+				}
+				sceneItemTransform := source["sceneItemTransform"].(map[string]any)
+				sourceWidth, _ := sceneItemTransform["sourceWidth"].(float64)
+				if sourceWidth == 0 {
+					return
+				}
+				videoSourceNameIsSet[sourceName] = struct{}{}
+				videoSourceNames = append(videoSourceNames, sourceName)
+			}()
+			func() {
+				if _, ok := audioSourceNameIsSet[sourceName]; ok {
+					return
+				}
+				// TODO: filter only audio sources
+				audioSourceNameIsSet[sourceName] = struct{}{}
+				audioSourceNames = append(audioSourceNames, sourceName)
+			}()
 		}
 	}
-	sort.Strings(sourceNames)
+	sort.Strings(videoSourceNames)
 
-	obsSourceSelect := widget.NewSelect(sourceNames, func(s string) {
+	sourceOBSVideoSelect := widget.NewSelect(videoSourceNames, func(s string) {
 		obsVideoSource.Name = s
 	})
-	obsSourceSelect.SetSelected(obsVideoSource.Name)
+	sourceOBSVideoSelect.SetSelected(obsVideoSource.Name)
 
 	sourceWidth := xfyne.NewNumericalEntry()
 	sourceWidth.SetText(fmt.Sprintf("%v", obsVideoSource.Width))
@@ -579,13 +605,46 @@ func (p *Panel) editMonitorElementWindow(
 	isLossless.SetChecked(cfg.ImageLossless)
 	isLossless.OnChanged(cfg.ImageLossless)
 
-	if obsVideoSource.UpdateInterval == 0 {
-		obsVideoSource.UpdateInterval = config.Duration(200 * time.Millisecond)
+	brightnessValue := float64(0)
+	brightness := xfyne.NewNumericalEntry()
+	brightness.OnChanged = func(s string) {
+		if s == "" || s == "-" {
+			s = "0"
+		}
+		v, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to parse '%s' as a float: %w", s, err))
+			return
+		}
+		brightnessValue = v
 	}
 
-	updateInterval := xfyne.NewNumericalEntry()
-	updateInterval.SetText(fmt.Sprintf("%v", time.Duration(obsVideoSource.UpdateInterval).Seconds()))
-	updateInterval.OnChanged = func(s string) {
+	opacityValue := float64(0)
+	opacity := xfyne.NewNumericalEntry()
+	opacity.OnChanged = func(s string) {
+		if s == "" || s == "-" {
+			s = "0"
+		}
+		v, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to parse '%s' as a float: %w", s, err))
+			return
+		}
+		opacityValue = v
+	}
+
+	for _, filter := range cfg.Filters {
+		switch filter := filter.(type) {
+		case *streamdconfig.FilterColor:
+			brightnessValue += filter.Brightness
+			opacityValue += filter.Opacity
+		}
+	}
+	brightness.SetText(fmt.Sprintf("%f", brightnessValue))
+
+	obsVideoUpdateInterval := xfyne.NewNumericalEntry()
+	obsVideoUpdateInterval.SetText(fmt.Sprintf("%v", time.Duration(obsVideoSource.UpdateInterval).Seconds()))
+	obsVideoUpdateInterval.OnChanged = func(s string) {
 		if s == "" || s == "-" {
 			s = "0.2"
 		}
@@ -594,7 +653,7 @@ func (p *Panel) editMonitorElementWindow(
 			p.DisplayError(fmt.Errorf("unable to parse '%s' as a float: %w", s, err))
 			return
 		}
-		obsVideoSource.UpdateInterval = config.Duration(float64(time.Second) * v)
+		obsVideoSource.UpdateInterval = streamdconfig.Duration(float64(time.Second) * v)
 	}
 
 	zIndex := xfyne.NewNumericalEntry()
@@ -698,33 +757,107 @@ func (p *Panel) editMonitorElementWindow(
 		cfg.OffsetY = v
 	}
 
-	obsSourceConfig := container.NewVBox(
+	sourceOBSVideoConfig := container.NewVBox(
 		widget.NewLabel("Source:"),
-		obsSourceSelect,
+		sourceOBSVideoSelect,
 		widget.NewLabel("Source image size (use '0' for preserving the original size or ratio):"),
 		container.NewHBox(widget.NewLabel("X:"), sourceWidth, widget.NewLabel(`px`), widget.NewSeparator(), widget.NewLabel("Y:"), sourceHeight, widget.NewLabel(`px`)),
 		widget.NewLabel("Format:"),
 		imageFormatSelect,
 		widget.NewLabel("Update interval:"),
-		container.NewHBox(updateInterval, widget.NewLabel("seconds")),
+		container.NewHBox(obsVideoUpdateInterval, widget.NewLabel("seconds")),
 	)
 
-	sourceTypeSelect := widget.NewSelect([]string{"OBS", "dummy"}, func(s string) {
-		switch s {
-		case "OBS":
-			obsSourceConfig.Show()
-		case "dummy":
-			obsSourceConfig.Hide()
+	sourceOBSVolumeSelect := widget.NewSelect(audioSourceNames, func(s string) {
+		obsVolumeSource.Name = s
+	})
+
+	obsVolumeUpdateInterval := xfyne.NewNumericalEntry()
+	obsVolumeUpdateInterval.SetText(fmt.Sprintf("%v", time.Duration(obsVideoSource.UpdateInterval).Seconds()))
+	obsVolumeUpdateInterval.OnChanged = func(s string) {
+		if s == "" || s == "-" {
+			s = "0.2"
+		}
+		v, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to parse '%s' as a float: %w", s, err))
+			return
+		}
+		obsVolumeSource.UpdateInterval = streamdconfig.Duration(float64(time.Second) * v)
+	}
+
+	var volumeColorActiveParsed color.Color
+	if volumeColorActiveParsed, err = colorx.Parse(obsVolumeSource.ColorActive); err != nil {
+		volumeColorActiveParsed = color.RGBA{R: 0, G: 255, B: 0, A: 255}
+	}
+	volumeColorActive := colorpicker.NewColorSelectModalRect(w, fyne.NewSize(30, 20), volumeColorActiveParsed)
+	volumeColorActive.SetOnChange(func(c color.Color) {
+		r32, g32, b32, a32 := c.RGBA()
+		r8, g8, b8, a8 := uint8(r32>>8), uint8(g32>>8), uint8(b32>>8), uint8(a32>>8)
+		obsVolumeSource.ColorActive = fmt.Sprintf("%.2X%.2X%.2X%.2X", r8, g8, b8, a8)
+	})
+
+	var volumeColorPassiveParsed color.Color
+	if volumeColorPassiveParsed, err = colorx.Parse(obsVolumeSource.ColorPassive); err != nil {
+		volumeColorPassiveParsed = color.RGBA{R: 0, G: 0, B: 0, A: 0}
+	}
+	volumeColorPassive := colorpicker.NewColorSelectModalRect(w, fyne.NewSize(30, 20), volumeColorPassiveParsed)
+	volumeColorPassive.SetOnChange(func(c color.Color) {
+		r32, g32, b32, a32 := c.RGBA()
+		r8, g8, b8, a8 := uint8(r32>>8), uint8(g32>>8), uint8(b32>>8), uint8(a32>>8)
+		obsVolumeSource.ColorPassive = fmt.Sprintf("%.2X%.2X%.2X%.2X", r8, g8, b8, a8)
+	})
+
+	sourceOBSVideoSelect.SetSelected(obsVideoSource.Name)
+	sourceOBSVolumeConfig := container.NewVBox(
+		widget.NewLabel("Source:"),
+		sourceOBSVolumeSelect,
+		widget.NewLabel("Color active:"),
+		volumeColorActive,
+		widget.NewLabel("Color passive:"),
+		volumeColorPassive,
+		widget.NewLabel("Update interval:"),
+		container.NewHBox(obsVolumeUpdateInterval, widget.NewLabel("seconds")),
+	)
+
+	sourceTypeSelect := widget.NewSelect([]string{
+		string(streamdconfig.MonitorSourceTypeOBSVideo),
+		string(streamdconfig.MonitorSourceTypeOBSVolume),
+		string(streamdconfig.MonitorSourceTypeDummy),
+	}, func(s string) {
+		switch streamdconfig.MonitorSourceType(s) {
+		case streamdconfig.MonitorSourceTypeOBSVideo:
+			sourceOBSVolumeConfig.Hide()
+			sourceOBSVideoConfig.Show()
+		case streamdconfig.MonitorSourceTypeOBSVolume:
+			sourceOBSVideoConfig.Hide()
+			sourceOBSVolumeConfig.Show()
+		case streamdconfig.MonitorSourceTypeDummy:
+			sourceOBSVideoConfig.Hide()
+			sourceOBSVolumeConfig.Hide()
 		}
 	})
-	sourceTypeSelect.SetSelected("OBS")
+	sourceTypeSelect.SetSelected(string(streamdconfig.MonitorSourceTypeOBSVideo))
 
 	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
-		switch sourceTypeSelect.Selected {
-		case "OBS":
+		if elementName.Text == "" {
+			p.DisplayError(fmt.Errorf("element name is not set"))
+			return
+		}
+		switch streamdconfig.MonitorSourceType(sourceTypeSelect.Selected) {
+		case streamdconfig.MonitorSourceTypeOBSVideo:
 			cfg.Source = obsVideoSource
-		case "dummy":
+		case streamdconfig.MonitorSourceTypeOBSVolume:
+			cfg.Source = obsVolumeSource
+		case streamdconfig.MonitorSourceTypeDummy:
 			cfg.Source = dummy
+		}
+		cfg.Filters = cfg.Filters[:0]
+		if brightnessValue != 0 || opacityValue != 0 {
+			cfg.Filters = append(cfg.Filters, &streamdconfig.FilterColor{
+				Brightness: brightnessValue,
+				Opacity:    opacityValue,
+			})
 		}
 		err := saveFunc(ctx, elementName.Text, cfg)
 		if err != nil {
@@ -754,9 +887,14 @@ func (p *Panel) editMonitorElementWindow(
 			isLossless,
 			imageQuality,
 			imageCompression,
+			widget.NewLabel("Brightness adjustment (-1.0 .. 1.0):"),
+			brightness,
+			widget.NewLabel("Opacity multiplier:"),
+			opacity,
 			widget.NewLabel("Source type:"),
 			sourceTypeSelect,
-			obsSourceConfig,
+			sourceOBSVideoConfig,
+			sourceOBSVolumeConfig,
 		),
 	)
 	w.SetContent(content)

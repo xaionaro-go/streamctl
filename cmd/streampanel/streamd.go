@@ -231,6 +231,10 @@ func initGRPCServers(
 		logger.Panicf(ctx, "failed to listen: %v", err)
 	}
 
+	if streamD == nil {
+		logger.Panicf(ctx, "streamD is nil")
+	}
+
 	obsGRPC, obsGRPCClose, err := streamD.OBS(ctx)
 	observability.Go(ctx, func() {
 		<-ctx.Done()

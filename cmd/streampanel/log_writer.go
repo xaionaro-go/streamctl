@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"io"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
@@ -63,25 +62,8 @@ func (l *logWriter) Flush() {
 	l.Logger.Logf(l.Logger.Level(), "%s", s)
 }
 
-func (l *logWriter) write(b []byte) (int, error) {
+func (l *logWriter) Write(b []byte) (int, error) {
 	l.BufferLocker.Lock()
 	defer l.BufferLocker.Unlock()
-	return l.Buffer.Write(b)
-}
-
-func (l *logWriter) Write(b []byte) (int, error) {
-	isALogRusLine := false
-	s := string(b)
-	if len(s) > 14 {
-		switch {
-		case strings.HasPrefix(s, string(hexMustDecode("1b5b33"))):
-			isALogRusLine = true
-		case strings.HasPrefix(s, `time="`):
-			isALogRusLine = true
-		}
-	}
-	if isALogRusLine {
-		return os.Stderr.Write(b)
-	}
-	return l.write(b)
+	return io.MultiWriter(&l.Buffer, os.Stderr).Write(b)
 }

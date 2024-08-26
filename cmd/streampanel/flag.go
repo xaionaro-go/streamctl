@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/spf13/pflag"
@@ -25,21 +26,22 @@ func (l *loggerLevel) UnmarshalYAML(b []byte) error {
 }
 
 type Flags struct {
-	LoggerLevel         loggerLevel `yaml:"LoggerLevel,omitempty"`
-	ListenAddr          string      `yaml:"ListenAddr,omitempty"`
-	RemoteAddr          string      `yaml:"RemoteAddr,omitempty"`
-	ConfigPath          string      `yaml:"ConfigPath,omitempty"`
-	NetPprofAddrMain    string      `yaml:"NetPprofAddrMain,omitempty"`
-	NetPprofAddrUI      string      `yaml:"NetPprofAddrUI,omitempty"`
-	NetPprofAddrStreamD string      `yaml:"NetPprofAddrStreamD,omitempty"`
-	CPUProfile          string      `yaml:"CPUProfile,omitempty"`
-	HeapProfile         string      `yaml:"HeapProfile,omitempty"`
-	LogstashAddr        string      `yaml:"LogstashAddr,omitempty"`
-	SentryDSN           string      `yaml:"SentryDSN,omitempty"`
-	Page                string      `yaml:"Page,omitempty"`
-	LogFile             string      `yaml:"LogFile,omitempty"`
-	Subprocess          string      `yaml:"Subprocess,omitempty"`
-	SplitProcess        bool        `yaml:"SplitProcess,omitempty"`
+	LoggerLevel         loggerLevel   `yaml:"LoggerLevel,omitempty"`
+	ListenAddr          string        `yaml:"ListenAddr,omitempty"`
+	RemoteAddr          string        `yaml:"RemoteAddr,omitempty"`
+	ConfigPath          string        `yaml:"ConfigPath,omitempty"`
+	NetPprofAddrMain    string        `yaml:"NetPprofAddrMain,omitempty"`
+	NetPprofAddrUI      string        `yaml:"NetPprofAddrUI,omitempty"`
+	NetPprofAddrStreamD string        `yaml:"NetPprofAddrStreamD,omitempty"`
+	CPUProfile          string        `yaml:"CPUProfile,omitempty"`
+	HeapProfile         string        `yaml:"HeapProfile,omitempty"`
+	LogstashAddr        string        `yaml:"LogstashAddr,omitempty"`
+	SentryDSN           string        `yaml:"SentryDSN,omitempty"`
+	Page                string        `yaml:"Page,omitempty"`
+	LogFile             string        `yaml:"LogFile,omitempty"`
+	Subprocess          string        `yaml:"Subprocess,omitempty"`
+	SplitProcess        bool          `yaml:"SplitProcess,omitempty"`
+	LockTimeout         time.Duration `yaml:"LockTimeout,omitempty"`
 }
 
 var platformGetFlagsFuncs []func(*Flags)
@@ -72,6 +74,7 @@ func parseFlags() Flags {
 	logFile := pflag.String("log-file", defaultLogFile, "log file to write logs into")
 	subprocess := pflag.String("subprocess", "", "[internal use flag] run a specific sub-process (format: processName:addressToConnect)")
 	splitProcess := pflag.Bool("split-process", !isMobile(), "split the process into multiple processes for better stability")
+	lockTimeout := pflag.Duration("lock-timeout", 2*time.Minute, "[debug option] change the timeout for locking, before reporting it as a deadlock")
 	pflag.Parse()
 
 	flags := Flags{
@@ -90,6 +93,7 @@ func parseFlags() Flags {
 		LogFile:             *logFile,
 		Subprocess:          *subprocess,
 		SplitProcess:        *splitProcess,
+		LockTimeout:         *lockTimeout,
 	}
 
 	for _, platformGetFlagsFunc := range platformGetFlagsFuncs {

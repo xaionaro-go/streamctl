@@ -3,6 +3,7 @@ package streamtypes
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"gopkg.in/yaml.v2"
 )
@@ -71,4 +72,9 @@ func (t *ServerType) UnmarshalYAML(b []byte) error {
 
 	*t = ParseServerType(s)
 	return nil
+}
+
+type OBSState struct {
+	sync.Mutex
+	VolumeMeters map[string][][3]float64
 }

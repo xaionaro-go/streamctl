@@ -1774,8 +1774,8 @@ func (p *Panel) initMainWindow(
 	p.monitorPage = container.NewStack(
 		monitorBackgroundFyne,
 		p.screenshotContainer,
-		streamInfoContainer,
 		p.monitorLayersContainer,
+		streamInfoContainer,
 	)
 
 	p.obsSelectScene = widget.NewSelect(nil, func(s string) {

@@ -185,7 +185,7 @@ func runFork(
 	}
 
 	os.Setenv(EnvPassword, password)
-	args := []string{execPath, "--sentry-dsn=" + flags.SentryDSN, "--log-level=" + logger.Level(flags.LoggerLevel).String(), "--subprocess=" + string(procName) + ":" + addr}
+	args := []string{execPath, "--sentry-dsn=" + flags.SentryDSN, "--log-level=" + logger.Level(flags.LoggerLevel).String(), "--subprocess=" + string(procName) + ":" + addr, "--logstash-addr=" + flags.LogstashAddr}
 	logger.Infof(ctx, "running '%s %s'", args[0], strings.Join(args[1:], " "))
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Stderr = NewLogWriter(ctx, logger.FromCtx(ctx))
