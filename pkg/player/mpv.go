@@ -18,8 +18,8 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
-	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 const SupportedMPV = true
@@ -44,7 +44,7 @@ type MPV struct {
 	MPVConn    *mpvipc.Connection
 
 	EndChInitialized bool
-	EndChMutex       deadlock.Mutex
+	EndChMutex       xsync.Mutex
 	EndCh            chan struct{}
 
 	OpenLinkOnRerun string

@@ -13,13 +13,13 @@ import (
 	vlc "github.com/adrg/libvlc-go/v3"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
-	"github.com/sasha-s/go-deadlock"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 	"golang.org/x/net/context"
 )
 
 type VLC struct {
 	Title            string
-	StatusMutex      deadlock.Mutex
+	StatusMutex      xsync.Mutex
 	Player           *vlc.Player
 	Media            *vlc.Media
 	EventManager     *vlc.EventManager

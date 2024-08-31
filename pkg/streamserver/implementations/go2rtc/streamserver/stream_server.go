@@ -6,16 +6,16 @@ import (
 	"strings"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/sasha-s/go-deadlock"
 	rtmpserver "github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/go2rtc/streamserver/server/rtmp"
 	rtspserver "github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/go2rtc/streamserver/server/rtsp"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/go2rtc/streamserver/streams"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 type StreamServer struct {
-	deadlock.Mutex
+	xsync.Mutex
 	Config             *types.Config
 	StreamHandler      *streams.StreamHandler
 	ServerHandlers     []types.PortServer

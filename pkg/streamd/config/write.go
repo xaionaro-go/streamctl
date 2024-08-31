@@ -39,7 +39,7 @@ func (cfg Config) MarshalYAML() ([]byte, error) {
 	// Working this around...
 	b, err := yaml.Marshal((config)(cfg))
 	if err != nil {
-		return nil, fmt.Errorf("unable to serialize data %#+v: %w", cfg, err)
+		return nil, fmt.Errorf("(Config writing) unable to serialize data %#+v: %w", cfg, err)
 	}
 	// have to use another YAML encoder to avoid the random-indent bug,
 	// but also have to use the initial encoder to correctly map
@@ -47,12 +47,12 @@ func (cfg Config) MarshalYAML() ([]byte, error) {
 	m := map[string]any{}
 	err = goyaml.Unmarshal(b, &m)
 	if err != nil {
-		return nil, fmt.Errorf("unable to unserialize data %s: %w", b, err)
+		return nil, fmt.Errorf("(Config writing) unable to unserialize data %s: %w", b, err)
 	}
 
 	b, err = goyaml.Marshal(m)
 	if err != nil {
-		return nil, fmt.Errorf("unable to re-serialize data %#+v: %w", m, err)
+		return nil, fmt.Errorf("(Config writing) unable to re-serialize data %#+v: %w", m, err)
 	}
 
 	return b, nil

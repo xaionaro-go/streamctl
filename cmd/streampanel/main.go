@@ -117,18 +117,21 @@ func runPanel(
 						cancelFunc()
 						os.Exit(0)
 					case UpdateStreamDConfig:
+						logger.Debugf(ctx, "UpdateStreamDConfig: parsing the config")
 						_, err := panel.Config.BuiltinStreamD.ReadFrom(bytes.NewReader([]byte(msg.Config)))
 						if err != nil {
 							err := fmt.Errorf("unable to deserialize the updated streamd config: %w", err)
 							logger.Errorf(ctx, "%s", err)
 							return err
 						}
+						logger.Debugf(ctx, "UpdateStreamDConfig: saving the config")
 						err = panel.SaveConfig(ctx)
 						if err != nil {
 							err := fmt.Errorf("unable to save the updated streamd config: %w", err)
 							logger.Errorf(ctx, "%s", err)
 							return err
 						}
+						logger.Debugf(ctx, "UpdateStreamDConfig: saved the config")
 					}
 					return nil
 				},

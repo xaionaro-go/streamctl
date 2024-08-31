@@ -17,7 +17,6 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
-	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/obs-grpc-proxy/pkg/obsgrpcproxy"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
@@ -42,6 +41,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 type StreamControllers struct {
@@ -60,23 +60,23 @@ type StreamD struct {
 	UI ui.UI
 
 	SaveConfigFunc SaveConfigFunc
-	ConfigLock     deadlock.Mutex
+	ConfigLock     xsync.Mutex
 	Config         config.Config
 
-	CacheLock deadlock.Mutex
+	CacheLock xsync.Mutex
 	Cache     *cache.Cache
 
 	GitStorage *repository.GIT
 
 	CancelGitSyncer context.CancelFunc
-	GitSyncerMutex  deadlock.Mutex
+	GitSyncerMutex  xsync.Mutex
 	GitInitialized  bool
 
 	StreamControllers StreamControllers
 
 	Variables sync.Map
 
-	OAuthListenPortsLocker deadlock.Mutex
+	OAuthListenPortsLocker xsync.Mutex
 	OAuthListenPorts       map[uint16]struct{}
 
 	ControllersLocker sync.RWMutex
@@ -239,7 +239,7 @@ func (d *StreamD) initImageTaker(ctx context.Context) error {
 
 					imgBytes, nextUpdateAt, err = getOBSImageBytes(ctx, obsServer, el, &d.OBSState)
 					if err != nil {
-						logger.Errorf(ctx, "unable to get the image of '%s': %w", elName, err)
+						logger.Errorf(ctx, "unable to get the image of '%s': %v", elName, err)
 						if !waitUntilNextIteration() {
 							return
 						}

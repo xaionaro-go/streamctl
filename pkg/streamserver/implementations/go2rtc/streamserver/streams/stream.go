@@ -6,7 +6,7 @@ import (
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/sasha-s/go-deadlock"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 type Stream struct {
@@ -14,7 +14,7 @@ type Stream struct {
 
 	producers   []*Producer
 	consumers   []core.Consumer
-	mu          deadlock.Mutex
+	mu          xsync.Mutex
 	pending     atomic.Int32
 	forwardings []*StreamForwarding
 }

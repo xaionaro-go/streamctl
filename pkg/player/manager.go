@@ -4,14 +4,14 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/player/types"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 type Manager struct {
 	Config types.Config
 
-	PlayersLocker deadlock.Mutex
+	PlayersLocker xsync.Mutex
 	Players       []Player
 }
 

@@ -8,14 +8,14 @@ import (
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/widget"
 
-	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 	"github.com/xaionaro-go/unsafetools"
 )
 
 type HintWidget struct {
 	*widget.Label
-	Locker deadlock.Mutex
+	Locker xsync.Mutex
 	Text   string
 	Hint   *widget.PopUp
 	Window fyne.Window

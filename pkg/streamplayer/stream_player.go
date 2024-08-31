@@ -11,11 +11,11 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
-	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/player/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 type StreamPortServer struct {
@@ -59,7 +59,7 @@ func New(
 }
 
 type StreamPlayer struct {
-	PlayerLocker deadlock.Mutex
+	PlayerLocker xsync.Mutex
 	Parent       *StreamPlayers
 	Player       player.Player
 	StreamID     api.StreamID

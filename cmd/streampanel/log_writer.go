@@ -9,13 +9,13 @@ import (
 	"time"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/sasha-s/go-deadlock"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 type logWriter struct {
 	Logger       logger.Logger
 	Buffer       bytes.Buffer
-	BufferLocker deadlock.Mutex
+	BufferLocker xsync.Mutex
 }
 
 var _ io.Writer = (*logWriter)(nil)
@@ -43,6 +43,7 @@ func (l *logWriter) flusher(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			l.Flush()
 			return
 		case <-t.C:
 		}

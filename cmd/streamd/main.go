@@ -17,7 +17,6 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
 	"github.com/getsentry/sentry-go"
-	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/pflag"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/streamctl/cmd/streamd/ui"
@@ -29,6 +28,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/server"
 	uiiface "github.com/xaionaro-go/streamctl/pkg/streamd/ui"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 	"google.golang.org/grpc"
 )
 
@@ -123,7 +123,7 @@ func main() {
 	var _ui uiiface.UI
 	var streamdGRPC *server.GRPCServer
 	var obsGRPC obs_grpc.OBSServer
-	var grpcLocker deadlock.Mutex
+	var grpcLocker xsync.Mutex
 
 	restart := func() {
 		l.Debugf("restart()")

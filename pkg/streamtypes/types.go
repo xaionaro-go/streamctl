@@ -3,8 +3,8 @@ package streamtypes
 import (
 	"encoding/json"
 	"fmt"
-	"sync"
 
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 	"gopkg.in/yaml.v2"
 )
 
@@ -75,6 +75,6 @@ func (t *ServerType) UnmarshalYAML(b []byte) error {
 }
 
 type OBSState struct {
-	sync.Mutex
+	xsync.Mutex
 	VolumeMeters map[string][][3]float64
 }

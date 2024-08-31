@@ -19,10 +19,10 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/go-yaml/yaml"
 	"github.com/hashicorp/go-multierror"
-	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/googleapi"
@@ -37,7 +37,7 @@ const (
 )
 
 type YouTube struct {
-	locker         deadlock.Mutex
+	locker         xsync.Mutex
 	Config         Config
 	YouTubeService *youtube.Service
 	CancelFunc     context.CancelFunc
@@ -82,9 +82,12 @@ func New(
 			case <-ticker.C:
 				err := yt.checkToken(ctx)
 				errmon.ObserveErrorCtx(ctx, err)
-				if err != nil && strings.Contains(err.Error(), "expired or revoked") {
-					_, err := yt.getNewToken(ctx)
-					errmon.ObserveErrorCtx(ctx, err)
+				if err != nil {
+					logger.Debugf(ctx, "got an error from checkToken: %v", err)
+					if strings.Contains(fmt.Sprintf("%v", err), "expired or revoked") {
+						_, err := yt.getNewToken(ctx)
+						errmon.ObserveErrorCtx(ctx, err)
+					}
 				}
 			}
 		}
@@ -123,7 +126,9 @@ func (yt *YouTube) checkTokenNoLock(ctx context.Context) (_err error) {
 		}
 		logger.Debugf(ctx, "the token have changed")
 		yt.Config.Config.Token = token
-		return yt.SaveConfigFunc(yt.Config)
+		err = yt.SaveConfigFunc(yt.Config)
+		logger.Debugf(ctx, "saved the new token token; %v", err)
+		return err
 	}
 }
 

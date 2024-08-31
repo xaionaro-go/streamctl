@@ -4,11 +4,11 @@ import (
 	"context"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/sasha-s/go-deadlock"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 type Mutex struct {
-	deadlock.Mutex
+	xsync.Mutex
 }
 
 func (m *Mutex) LockCtx(ctx context.Context) {

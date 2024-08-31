@@ -12,9 +12,9 @@ import (
 	child_process_manager "github.com/AgustinSRG/go-child-process-manager"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 type ProcessName = mainprocess.ProcessName
@@ -25,7 +25,7 @@ const (
 	ProcessNameUI      = ProcessName("ui")
 )
 
-var forkLocker deadlock.Mutex
+var forkLocker xsync.Mutex
 var forkMap = map[ProcessName]*exec.Cmd{}
 
 func getFork(procName ProcessName) *exec.Cmd {
@@ -184,12 +184,13 @@ func runFork(
 		return fmt.Errorf("unable to get the path of the executable: %w", err)
 	}
 
+	ctx, cancelFn := context.WithCancel(ctx)
 	os.Setenv(EnvPassword, password)
 	args := []string{execPath, "--sentry-dsn=" + flags.SentryDSN, "--log-level=" + logger.Level(flags.LoggerLevel).String(), "--subprocess=" + string(procName) + ":" + addr, "--logstash-addr=" + flags.LogstashAddr}
 	logger.Infof(ctx, "running '%s %s'", args[0], strings.Join(args[1:], " "))
 	cmd := exec.Command(args[0], args[1:]...)
-	cmd.Stderr = NewLogWriter(ctx, logger.FromCtx(ctx))
-	cmd.Stdout = os.Stdout
+	cmd.Stderr = NewLogWriter(ctx, logger.FromCtx(ctx).WithField("output_type", "stderr"))
+	cmd.Stdout = NewLogWriter(ctx, logger.FromCtx(ctx).WithField("output_type", "stdout"))
 	cmd.Stdin = os.Stdin
 	err = child_process_manager.ConfigureCommand(cmd)
 	if err != nil {
@@ -198,6 +199,7 @@ func runFork(
 	setFork(procName, cmd)
 	err = cmd.Start()
 	if err != nil {
+		cancelFn()
 		return fmt.Errorf("unable to start '%s %s': %w", args[0], strings.Join(args[1:], " "), err)
 	}
 	err = child_process_manager.AddChildProcess(cmd.Process)
@@ -206,6 +208,7 @@ func runFork(
 	}
 	observability.Go(ctx, func() {
 		err := cmd.Wait()
+		cancelFn()
 		if err != nil {
 			logger.Errorf(ctx, "error running '%s %s': %v", args[0], strings.Join(args[1:], " "), err)
 		}

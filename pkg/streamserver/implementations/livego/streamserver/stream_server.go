@@ -12,15 +12,15 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/gwuhaolin/livego/configure"
 	"github.com/gwuhaolin/livego/protocol/rtmp"
-	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/viper"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 type StreamServer struct {
-	deadlock.Mutex
+	xsync.Mutex
 	Config                  *types.Config
 	ServerHandlers          []types.PortServer
 	StreamIDs               map[types.StreamID]struct{}

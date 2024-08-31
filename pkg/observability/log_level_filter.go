@@ -4,13 +4,13 @@ import (
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/pkg/field"
 	logger "github.com/facebookincubator/go-belt/tool/logger/types"
-	"github.com/sasha-s/go-deadlock"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 var LogLevelFilter LogLevelFilterT
 
 type LogLevelFilterT struct {
-	Locker deadlock.Mutex
+	Locker xsync.Mutex
 	Level  logger.Level
 }
 

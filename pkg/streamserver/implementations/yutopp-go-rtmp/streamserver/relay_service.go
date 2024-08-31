@@ -6,13 +6,13 @@ import (
 	"sort"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/sasha-s/go-deadlock"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 // TODO: Create this service per apps.
 // In this example, this instance is singleton.
 type RelayService struct {
-	m deadlock.Mutex
+	m xsync.Mutex
 
 	streams        map[string]*Pubsub
 	streamsChanged chan struct{}

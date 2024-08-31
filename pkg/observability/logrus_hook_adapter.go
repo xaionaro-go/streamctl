@@ -6,12 +6,12 @@ import (
 	"github.com/facebookincubator/go-belt/pkg/field"
 	xlogrus "github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
 	logger "github.com/facebookincubator/go-belt/tool/logger/types"
-	"github.com/sasha-s/go-deadlock"
 	"github.com/sirupsen/logrus"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 type HookAdapter struct {
-	Locker       deadlock.Mutex
+	Locker       xsync.Mutex
 	LogrusLogger *logrus.Logger
 	LogrusHook   logrus.Hook
 }

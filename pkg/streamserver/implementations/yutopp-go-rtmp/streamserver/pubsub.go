@@ -8,8 +8,8 @@ import (
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
-	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 	flvtag "github.com/yutopp/go-flv/tag"
 )
 
@@ -23,7 +23,7 @@ type Pubsub struct {
 	nextSubID uint64
 	subs      map[uint64]*Sub
 
-	m deadlock.Mutex
+	m xsync.Mutex
 }
 
 func NewPubsub(srv *RelayService, name string, publisherHandler *Handler) *Pubsub {
@@ -105,7 +105,7 @@ func (pb *Pubsub) RemoveSub(s *Sub) {
 }
 
 type Pub struct {
-	m  deadlock.Mutex
+	m  xsync.Mutex
 	pb *Pubsub
 
 	aacSeqHeader *flvtag.FlvTag
@@ -194,7 +194,7 @@ func (p *Pub) Close() error {
 }
 
 type Sub struct {
-	locker     deadlock.Mutex
+	locker     xsync.Mutex
 	connCloser io.Closer
 	pubSub     *Pubsub
 	subID      uint64

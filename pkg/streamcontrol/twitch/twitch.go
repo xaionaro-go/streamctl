@@ -13,10 +13,10 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/nicklaw5/helix/v2"
-	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 type Twitch struct {
@@ -25,8 +25,8 @@ type Twitch struct {
 	broadcasterID string
 	lazyInitOnce  sync.Once
 	saveCfgFn     func(Config) error
-	tokenLocker   deadlock.Mutex
-	prepareLocker deadlock.Mutex
+	tokenLocker   xsync.Mutex
+	prepareLocker xsync.Mutex
 }
 
 const twitchDebug = false
@@ -229,7 +229,7 @@ func (t *Twitch) ApplyProfile(
 		logger.Debugf(ctx, "has tags")
 		if len(tags) == 0 {
 			logger.Warnf(ctx, "unfortunately, there is a bug in the helix lib, which does not allow to set zero tags, so adding tag 'stream' to the list of tags as a placeholder")
-			params.Tags = []string{"stream"}
+			params.Tags = []string{"English"}
 		} else {
 			params.Tags = tags
 		}

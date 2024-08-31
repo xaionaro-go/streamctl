@@ -7,10 +7,10 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
-	"github.com/sasha-s/go-deadlock"
 	"github.com/spf13/cobra"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
@@ -179,7 +179,7 @@ func writeConfigToPath(
 	if err != nil {
 		return fmt.Errorf("cannot move '%s' to '%s': %w", pathNew, cfgPath, err)
 	}
-	logger.Infof(ctx, "wrote to '%s' config <%s>", cfgPath, b)
+	logger.Infof(ctx, "wrote to '%s' the streamctl config <%s>", cfgPath, b)
 	return nil
 }
 
@@ -238,7 +238,7 @@ func readConfig(ctx context.Context) streamcontrol.Config {
 	return cfg
 }
 
-var saveConfigLock deadlock.Mutex
+var saveConfigLock xsync.Mutex
 
 func getTwitchStreamController(
 	ctx context.Context,

@@ -17,7 +17,6 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
 	"github.com/hashicorp/go-multierror"
-	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/obs-grpc-proxy/pkg/obsgrpcproxy"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
@@ -35,6 +34,7 @@ import (
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/codes"
@@ -51,9 +51,10 @@ type Client struct {
 	Target string
 	Config Config
 
-	PersistentConnectionLocker deadlock.Mutex
+	PersistentConnectionLocker xsync.Mutex
 	PersistentConnection       *grpc.ClientConn
-	PersistentClient           streamd_grpc.StreamDClient
+	PersistentStreamDClient    streamd_grpc.StreamDClient
+	PersistentOBSClient        obs_grpc.OBSClient
 }
 
 type OBSInstanceID = streamtypes.OBSInstanceID
@@ -89,7 +90,8 @@ func (c *Client) initPersistentConnection(ctx context.Context) error {
 		return err
 	}
 	c.PersistentConnection = conn
-	c.PersistentClient = streamd_grpc.NewStreamDClient(conn)
+	c.PersistentStreamDClient = streamd_grpc.NewStreamDClient(conn)
+	c.PersistentOBSClient = obs_grpc.NewOBSClient(conn)
 	return nil
 }
 
@@ -168,7 +170,7 @@ func (c *Client) doConnect(ctx context.Context, opts ...grpc.DialOption) (*grpc.
 	}
 }
 
-func (c *Client) grpcClient(ctx context.Context) (streamd_grpc.StreamDClient, io.Closer, error) {
+func (c *Client) grpcClient(ctx context.Context) (streamd_grpc.StreamDClient, obs_grpc.OBSClient, io.Closer, error) {
 	if c.Config.UsePersistentConnection {
 		return c.grpcPersistentClient(ctx)
 	} else {
@@ -176,20 +178,21 @@ func (c *Client) grpcClient(ctx context.Context) (streamd_grpc.StreamDClient, io
 	}
 }
 
-func (c *Client) grpcNewClient(ctx context.Context) (streamd_grpc.StreamDClient, *grpc.ClientConn, error) {
+func (c *Client) grpcNewClient(ctx context.Context) (streamd_grpc.StreamDClient, obs_grpc.OBSClient, *grpc.ClientConn, error) {
 	conn, err := c.connect(ctx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("unable to initialize a gRPC client: %w", err)
+		return nil, nil, nil, fmt.Errorf("unable to initialize a gRPC client: %w", err)
 	}
 
-	client := streamd_grpc.NewStreamDClient(conn)
-	return client, conn, nil
+	streamDClient := streamd_grpc.NewStreamDClient(conn)
+	obsClient := obs_grpc.NewOBSClient(conn)
+	return streamDClient, obsClient, conn, nil
 }
 
-func (c *Client) grpcPersistentClient(context.Context) (streamd_grpc.StreamDClient, dummyCloser, error) {
+func (c *Client) grpcPersistentClient(context.Context) (streamd_grpc.StreamDClient, obs_grpc.OBSClient, dummyCloser, error) {
 	c.PersistentConnectionLocker.Lock()
 	defer c.PersistentConnectionLocker.Unlock()
-	return c.PersistentClient, dummyCloser{}, nil
+	return c.PersistentStreamDClient, c.PersistentOBSClient, dummyCloser{}, nil
 }
 
 func (c *Client) Run(ctx context.Context) error {
@@ -245,7 +248,7 @@ func callWrapper[REQ any, REPLY any](
 	return reply, err
 }
 
-func withClient[REPLY any](
+func withStreamDClient[REPLY any](
 	ctx context.Context,
 	c *Client,
 	fn func(context.Context, streamd_grpc.StreamDClient, io.Closer) (*REPLY, error),
@@ -254,7 +257,7 @@ func withClient[REPLY any](
 	caller := runtime.FuncForPC(pc)
 	ctx = belt.WithField(ctx, "caller_func", caller.Name())
 
-	client, conn, err := c.grpcClient(ctx)
+	client, _, conn, err := c.grpcClient(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -271,7 +274,7 @@ type receiver[T any] interface {
 	Recv() (*T, error)
 }
 
-func unwrapChan[E any, R any, S receiver[R]](
+func unwrapStreamDChan[E any, R any, S receiver[R]](
 	ctx context.Context,
 	c *Client,
 	fn func(ctx context.Context, client streamd_grpc.StreamDClient) (S, error),
@@ -284,7 +287,7 @@ func unwrapChan[E any, R any, S receiver[R]](
 
 	ctx, cancelFn := context.WithCancel(ctx)
 	getSub := func() (S, io.Closer, error) {
-		client, closer, err := c.grpcClient(ctx)
+		client, _, closer, err := c.grpcClient(ctx)
 		if err != nil {
 			var emptyS S
 			return emptyS, nil, err
@@ -370,7 +373,7 @@ func (c *Client) Ping(
 	ctx context.Context,
 	beforeSend func(context.Context, *streamd_grpc.PingRequest),
 ) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -383,7 +386,7 @@ func (c *Client) Ping(
 }
 
 func (c *Client) FetchConfig(ctx context.Context) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -394,7 +397,7 @@ func (c *Client) FetchConfig(ctx context.Context) error {
 }
 
 func (c *Client) InitCache(ctx context.Context) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -405,7 +408,7 @@ func (c *Client) InitCache(ctx context.Context) error {
 }
 
 func (c *Client) SaveConfig(ctx context.Context) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -416,7 +419,7 @@ func (c *Client) SaveConfig(ctx context.Context) error {
 }
 
 func (c *Client) ResetCache(ctx context.Context) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -427,7 +430,7 @@ func (c *Client) ResetCache(ctx context.Context) error {
 }
 
 func (c *Client) GetConfig(ctx context.Context) (*streamdconfig.Config, error) {
-	reply, err := withClient(ctx, c, func(
+	reply, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -453,7 +456,7 @@ func (c *Client) SetConfig(ctx context.Context, cfg *streamdconfig.Config) error
 		return fmt.Errorf("unable to serialize the config: %w", err)
 	}
 
-	_, err = withClient(ctx, c, func(
+	_, err = withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -469,7 +472,7 @@ func (c *Client) SetConfig(ctx context.Context, cfg *streamdconfig.Config) error
 }
 
 func (c *Client) IsBackendEnabled(ctx context.Context, id streamcontrol.PlatformName) (bool, error) {
-	reply, err := withClient(ctx, c, func(
+	reply, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -485,7 +488,7 @@ func (c *Client) IsBackendEnabled(ctx context.Context, id streamcontrol.Platform
 }
 
 func (c *Client) OBSOLETE_IsGITInitialized(ctx context.Context) (bool, error) {
-	reply, err := withClient(ctx, c, func(
+	reply, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -510,7 +513,7 @@ func (c *Client) StartStream(
 		return fmt.Errorf("unable to serialize the profile: %w", err)
 	}
 	logger.Debugf(ctx, "serialized profile: '%#+v'", profile)
-	_, err = withClient(ctx, c, func(
+	_, err = withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -525,7 +528,7 @@ func (c *Client) StartStream(
 	return err
 }
 func (c *Client) EndStream(ctx context.Context, platID streamcontrol.PlatformName) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -536,7 +539,7 @@ func (c *Client) EndStream(ctx context.Context, platID streamcontrol.PlatformNam
 }
 
 func (c *Client) OBSOLETE_GitRelogin(ctx context.Context) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -547,7 +550,7 @@ func (c *Client) OBSOLETE_GitRelogin(ctx context.Context) error {
 }
 
 func (c *Client) GetBackendData(ctx context.Context, platID streamcontrol.PlatformName) (any, error) {
-	reply, err := withClient(ctx, c, func(
+	reply, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -585,7 +588,7 @@ func (c *Client) GetBackendData(ctx context.Context, platID streamcontrol.Platfo
 }
 
 func (c *Client) Restart(ctx context.Context) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -596,7 +599,7 @@ func (c *Client) Restart(ctx context.Context) error {
 }
 
 func (c *Client) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -610,7 +613,7 @@ func (c *Client) GetStreamStatus(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
 ) (*streamcontrol.StreamStatus, error) {
-	streamStatus, err := withClient(ctx, c, func(
+	streamStatus, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -652,7 +655,7 @@ func (c *Client) SetTitle(
 	platID streamcontrol.PlatformName,
 	title string,
 ) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -669,7 +672,7 @@ func (c *Client) SetDescription(
 	platID streamcontrol.PlatformName,
 	description string,
 ) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -693,7 +696,7 @@ func (c *Client) ApplyProfile(
 	}
 	logger.Debugf(ctx, "serialized profile: '%#+v'", profile)
 
-	_, err = withClient(ctx, c, func(
+	_, err = withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -719,7 +722,7 @@ func (c *Client) UpdateStream(
 	}
 	logger.Debugf(ctx, "serialized profile: '%#+v'", profile)
 
-	_, err = withClient(ctx, c, func(
+	_, err = withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -738,7 +741,7 @@ func (c *Client) SubscribeToOAuthURLs(
 	ctx context.Context,
 	listenPort uint16,
 ) (<-chan *streamd_grpc.OAuthRequest, error) {
-	return unwrapChan(
+	return unwrapStreamDChan(
 		ctx,
 		c,
 		func(
@@ -767,7 +770,7 @@ func (c *Client) GetVariable(
 	ctx context.Context,
 	key consts.VarKey,
 ) ([]byte, error) {
-	reply, err := withClient(ctx, c, func(
+	reply, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -797,7 +800,7 @@ func (c *Client) GetVariableHash(
 		return nil, fmt.Errorf("unsupported hash type: %s", hashType)
 	}
 
-	reply, err := withClient(ctx, c, func(
+	reply, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -821,7 +824,7 @@ func (c *Client) SetVariable(
 	key consts.VarKey,
 	value []byte,
 ) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -840,14 +843,13 @@ func (c *Client) OBS(
 	logger.Tracef(ctx, "OBS()")
 	defer logger.Tracef(ctx, "/OBS()")
 
-	conn, err := c.connect(ctx)
+	_, obsClient, closer, err := c.grpcClient(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to initialize a gRPC client: %w", err)
 	}
 
-	client := obs_grpc.NewOBSClient(conn)
-	return &obsgrpcproxy.ClientAsServer{OBSClient: client}, func() {
-		err := conn.Close()
+	return &obsgrpcproxy.ClientAsServer{OBSClient: obsClient}, func() {
+		err := closer.Close()
 		if err != nil {
 			logger.Errorf(ctx, "unable to close the connection: %w", err)
 		}
@@ -862,7 +864,7 @@ func (c *Client) SubmitOAuthCode(
 	ctx context.Context,
 	req *streamd_grpc.SubmitOAuthCodeRequest,
 ) (*streamd_grpc.SubmitOAuthCodeReply, error) {
-	return withClient(ctx, c, func(
+	return withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -874,7 +876,7 @@ func (c *Client) SubmitOAuthCode(
 func (c *Client) ListStreamServers(
 	ctx context.Context,
 ) ([]api.StreamServer, error) {
-	reply, err := withClient(ctx, c, func(
+	reply, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -910,7 +912,7 @@ func (c *Client) StartStreamServer(
 		return fmt.Errorf("unable to convert the server type: %w", err)
 	}
 
-	_, err = withClient(ctx, c, func(
+	_, err = withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -932,7 +934,7 @@ func (c *Client) StopStreamServer(
 	ctx context.Context,
 	listenAddr string,
 ) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -948,7 +950,7 @@ func (c *Client) AddIncomingStream(
 	ctx context.Context,
 	streamID api.StreamID,
 ) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -964,7 +966,7 @@ func (c *Client) RemoveIncomingStream(
 	ctx context.Context,
 	streamID api.StreamID,
 ) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -979,7 +981,7 @@ func (c *Client) RemoveIncomingStream(
 func (c *Client) ListIncomingStreams(
 	ctx context.Context,
 ) ([]api.IncomingStream, error) {
-	reply, err := withClient(ctx, c, func(
+	reply, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -1002,7 +1004,7 @@ func (c *Client) ListIncomingStreams(
 func (c *Client) ListStreamDestinations(
 	ctx context.Context,
 ) ([]api.StreamDestination, error) {
-	reply, err := withClient(ctx, c, func(
+	reply, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -1028,7 +1030,7 @@ func (c *Client) AddStreamDestination(
 	destinationID api.DestinationID,
 	url string,
 ) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -1047,7 +1049,7 @@ func (c *Client) RemoveStreamDestination(
 	ctx context.Context,
 	destinationID api.DestinationID,
 ) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -1062,7 +1064,7 @@ func (c *Client) RemoveStreamDestination(
 func (c *Client) ListStreamForwards(
 	ctx context.Context,
 ) ([]api.StreamForward, error) {
-	reply, err := withClient(ctx, c, func(
+	reply, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -1107,7 +1109,7 @@ func (c *Client) AddStreamForward(
 	enabled bool,
 	quirks api.StreamForwardingQuirks,
 ) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -1140,7 +1142,7 @@ func (c *Client) UpdateStreamForward(
 	enabled bool,
 	quirks api.StreamForwardingQuirks,
 ) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -1171,7 +1173,7 @@ func (c *Client) RemoveStreamForward(
 	streamID api.StreamID,
 	destinationID api.DestinationID,
 ) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -1190,7 +1192,7 @@ func (c *Client) WaitForStreamPublisher(
 	ctx context.Context,
 	streamID api.StreamID,
 ) (<-chan struct{}, error) {
-	return unwrapChan(
+	return unwrapStreamDChan(
 		ctx,
 		c,
 		func(
@@ -1222,7 +1224,7 @@ func (c *Client) AddStreamPlayer(
 	disabled bool,
 	streamPlaybackConfig sptypes.Config,
 ) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -1246,7 +1248,7 @@ func (c *Client) UpdateStreamPlayer(
 	disabled bool,
 	streamPlaybackConfig sptypes.Config,
 ) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -1267,7 +1269,7 @@ func (c *Client) RemoveStreamPlayer(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 ) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -1282,7 +1284,7 @@ func (c *Client) RemoveStreamPlayer(
 func (c *Client) ListStreamPlayers(
 	ctx context.Context,
 ) ([]api.StreamPlayer, error) {
-	resp, err := withClient(ctx, c, func(
+	resp, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -1309,7 +1311,7 @@ func (c *Client) GetStreamPlayer(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 ) (*api.StreamPlayer, error) {
-	resp, err := withClient(ctx, c, func(
+	resp, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -1335,7 +1337,7 @@ func (c *Client) StreamPlayerProcessTitle(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 ) (string, error) {
-	resp, err := withClient(ctx, c, func(
+	resp, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -1355,7 +1357,7 @@ func (c *Client) StreamPlayerOpenURL(
 	streamID streamtypes.StreamID,
 	link string,
 ) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -1372,7 +1374,7 @@ func (c *Client) StreamPlayerGetLink(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 ) (string, error) {
-	resp, err := withClient(ctx, c, func(
+	resp, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -1392,7 +1394,7 @@ func (c *Client) StreamPlayerEndChan(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 ) (<-chan struct{}, error) {
-	return unwrapChan(
+	return unwrapStreamDChan(
 		ctx,
 		c,
 		func(
@@ -1422,7 +1424,7 @@ func (c *Client) StreamPlayerIsEnded(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 ) (bool, error) {
-	resp, err := withClient(ctx, c, func(
+	resp, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -1442,7 +1444,7 @@ func (c *Client) StreamPlayerGetPosition(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 ) (time.Duration, error) {
-	resp, err := withClient(ctx, c, func(
+	resp, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -1462,7 +1464,7 @@ func (c *Client) StreamPlayerGetLength(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 ) (time.Duration, error) {
-	resp, err := withClient(ctx, c, func(
+	resp, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -1483,7 +1485,7 @@ func (c *Client) StreamPlayerSetSpeed(
 	streamID streamtypes.StreamID,
 	speed float64,
 ) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -1503,7 +1505,7 @@ func (c *Client) StreamPlayerSetPause(
 	streamID streamtypes.StreamID,
 	pause bool,
 ) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -1522,7 +1524,7 @@ func (c *Client) StreamPlayerStop(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 ) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -1539,7 +1541,7 @@ func (c *Client) StreamPlayerClose(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 ) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -1555,7 +1557,7 @@ func (c *Client) StreamPlayerClose(
 func (c *Client) SubscribeToConfigChanges(
 	ctx context.Context,
 ) (<-chan api.DiffConfig, error) {
-	return unwrapChan(
+	return unwrapStreamDChan(
 		ctx,
 		c,
 		func(
@@ -1581,7 +1583,7 @@ func (c *Client) SubscribeToConfigChanges(
 func (c *Client) SubscribeToStreamsChanges(
 	ctx context.Context,
 ) (<-chan api.DiffStreams, error) {
-	return unwrapChan(
+	return unwrapStreamDChan(
 		ctx,
 		c,
 		func(
@@ -1607,7 +1609,7 @@ func (c *Client) SubscribeToStreamsChanges(
 func (c *Client) SubscribeToStreamServersChanges(
 	ctx context.Context,
 ) (<-chan api.DiffStreamServers, error) {
-	return unwrapChan(
+	return unwrapStreamDChan(
 		ctx,
 		c,
 		func(
@@ -1633,7 +1635,7 @@ func (c *Client) SubscribeToStreamServersChanges(
 func (c *Client) SubscribeToStreamDestinationsChanges(
 	ctx context.Context,
 ) (<-chan api.DiffStreamDestinations, error) {
-	return unwrapChan(
+	return unwrapStreamDChan(
 		ctx,
 		c,
 		func(
@@ -1659,7 +1661,7 @@ func (c *Client) SubscribeToStreamDestinationsChanges(
 func (c *Client) SubscribeToIncomingStreamsChanges(
 	ctx context.Context,
 ) (<-chan api.DiffIncomingStreams, error) {
-	return unwrapChan(
+	return unwrapStreamDChan(
 		ctx,
 		c,
 		func(
@@ -1685,7 +1687,7 @@ func (c *Client) SubscribeToIncomingStreamsChanges(
 func (c *Client) SubscribeToStreamForwardsChanges(
 	ctx context.Context,
 ) (<-chan api.DiffStreamForwards, error) {
-	return unwrapChan(
+	return unwrapStreamDChan(
 		ctx,
 		c,
 		func(
@@ -1711,7 +1713,7 @@ func (c *Client) SubscribeToStreamForwardsChanges(
 func (c *Client) SubscribeToStreamPlayersChanges(
 	ctx context.Context,
 ) (<-chan api.DiffStreamPlayers, error) {
-	return unwrapChan(
+	return unwrapStreamDChan(
 		ctx,
 		c,
 		func(
@@ -1735,7 +1737,7 @@ func (c *Client) SubscribeToStreamPlayersChanges(
 }
 
 func (c *Client) SetLoggingLevel(ctx context.Context, level logger.Level) error {
-	_, err := withClient(ctx, c, func(
+	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
@@ -1748,7 +1750,7 @@ func (c *Client) SetLoggingLevel(ctx context.Context, level logger.Level) error 
 }
 
 func (c *Client) GetLoggingLevel(ctx context.Context) (logger.Level, error) {
-	reply, err := withClient(ctx, c, func(
+	reply, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,

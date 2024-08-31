@@ -107,6 +107,8 @@ func initRuntime(
 	deadlock.Opts.LogBuf = NewLogWriter(ctx, l)
 	deadlock.Opts.DeadlockTimeout = flags.LockTimeout
 
+	seppukuIfMemHugeLeak(ctx)
+
 	ctx, cancelFn := context.WithCancel(ctx)
 	return ctx, func() {
 		defer belt.Flush(ctx)
@@ -115,4 +117,39 @@ func initRuntime(
 			closeFuncs[i]()
 		}
 	}
+}
+
+var seppukuIfMemHugeLeakCanceler context.CancelFunc
+
+func seppukuIfMemHugeLeak(
+	ctx context.Context,
+) {
+	if seppukuIfMemHugeLeakCanceler != nil {
+		seppukuIfMemHugeLeakCanceler()
+	}
+
+	ctx, cancelFn := context.WithCancel(ctx)
+	seppukuIfMemHugeLeakCanceler = cancelFn
+
+	go func() {
+		for {
+			t := time.NewTicker(time.Second)
+			defer t.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.C:
+				}
+
+				var m runtime.MemStats
+				runtime.ReadMemStats(&m)
+
+				logger.Debugf(ctx, "memory consumed (in heap): %v", m.HeapInuse)
+				if m.HeapInuse > 1000*1000*1000 {
+					logger.Panicf(ctx, "I consumed almost 1GiB! Seppuku!")
+				}
+			}
+		}
+	}()
 }

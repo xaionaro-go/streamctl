@@ -9,8 +9,8 @@ import (
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 type state byte
@@ -35,7 +35,7 @@ type Producer struct {
 	senders   []*core.Receiver
 
 	state    state
-	mu       deadlock.Mutex
+	mu       xsync.Mutex
 	workerID int
 
 	streamHandler *StreamHandler

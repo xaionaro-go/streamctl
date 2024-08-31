@@ -54,7 +54,7 @@ func (cfg *Config) UnmarshalYAML(b []byte) (_err error) {
 	logger.Default().Tracef("unparsed streamd config == %s", b)
 	err := yaml.Unmarshal(b, (*config)(cfg))
 	if err != nil {
-		return fmt.Errorf("unable to unserialize data: %w", err)
+		return fmt.Errorf("(Config reading) unable to unserialize data: %w", err)
 	}
 	cfg.traceDump()
 

@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"regexp"
 
-	"github.com/sasha-s/go-deadlock"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 func (s *StreamHandler) Get(name string) *Stream {
@@ -81,7 +81,7 @@ func (s *StreamHandler) Delete(id string) {
 
 type StreamHandler struct {
 	streams          map[string]*Stream
-	streamsMu        deadlock.Mutex
+	streamsMu        xsync.Mutex
 	consumerHandlers map[string]ConsumerHandler
 	handlers         map[string]Handler
 	redirects        map[string]Redirect
@@ -90,7 +90,7 @@ type StreamHandler struct {
 func NewStreamHandler() *StreamHandler {
 	return &StreamHandler{
 		streams:          map[string]*Stream{},
-		streamsMu:        deadlock.Mutex{},
+		streamsMu:        xsync.Mutex{},
 		consumerHandlers: map[string]ConsumerHandler{},
 		handlers:         map[string]Handler{},
 		redirects:        map[string]Redirect{},

@@ -78,6 +78,6 @@ func WriteConfigToPath(
 	if err != nil {
 		return fmt.Errorf("cannot move '%s' to '%s': %w", pathNew, cfgPath, err)
 	}
-	logger.Infof(ctx, "wrote to '%s' config %#+v", cfgPath, cfg)
+	logger.Infof(ctx, "wrote to '%s' the streampanel config %#+v", cfgPath, cfg)
 	return nil
 }

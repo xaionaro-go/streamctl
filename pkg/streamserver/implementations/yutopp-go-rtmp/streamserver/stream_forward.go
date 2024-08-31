@@ -13,10 +13,10 @@ import (
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
-	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/xlogger"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 	flvtag "github.com/yutopp/go-flv/tag"
 	"github.com/yutopp/go-rtmp"
 	rtmpmsg "github.com/yutopp/go-rtmp/message"
@@ -31,7 +31,7 @@ type Unlocker interface {
 }
 
 type ActiveStreamForwarding struct {
-	Locker        deadlock.Mutex
+	Locker        xsync.Mutex
 	StreamServer  *StreamServer
 	StreamID      types.StreamID
 	DestinationID types.DestinationID

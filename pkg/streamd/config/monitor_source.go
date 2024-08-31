@@ -145,6 +145,10 @@ func (s *MonitorSourceOBSVideo) GetImageBytes(
 		}
 	}
 
+	if s.Name == "" {
+		return nil, "", time.Time{}, fmt.Errorf("empty source name")
+	}
+
 	req := &obs_grpc.GetSourceScreenshotRequest{
 		SourceName:              &s.Name,
 		ImageFormat:             []byte(s.ImageFormat),

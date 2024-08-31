@@ -7,12 +7,12 @@ import (
 	"net"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 type Client struct {
-	WriteLocker deadlock.Mutex
+	WriteLocker xsync.Mutex
 	Conn        net.Conn
 	Password    string
 }

@@ -8,13 +8,13 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/immune-gmbh/attestation-sdk/pkg/objhash"
-	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/lockmap"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 type MemoizeData struct {
 	Cache         map[objhash.ObjHash]any
-	CacheMetaLock deadlock.Mutex
+	CacheMetaLock xsync.Mutex
 	CacheLockMap  *lockmap.LockMap
 }
 

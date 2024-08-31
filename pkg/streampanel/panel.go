@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
-	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -30,7 +29,6 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/go-ng/xmath"
-	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
@@ -48,6 +46,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/config"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 	"google.golang.org/grpc"
 )
 
@@ -71,11 +70,11 @@ type Panel struct {
 	) error
 
 	screenshoterClose  context.CancelFunc
-	screenshoterLocker deadlock.Mutex
+	screenshoterLocker xsync.Mutex
 
 	app                   fyne.App
 	Config                Config
-	streamMutex           deadlock.Mutex
+	streamMutex           xsync.Mutex
 	updateTimerHandler    *updateTimerHandler
 	profilesOrder         []streamcontrol.ProfileName
 	profilesOrderFiltered []streamcontrol.ProfileName
@@ -89,7 +88,7 @@ type Panel struct {
 	streamTitleField       *widget.Entry
 	streamDescriptionField *widget.Entry
 
-	monitorLocker          deadlock.Mutex
+	monitorLocker          xsync.Mutex
 	monitorPage            *fyne.Container
 	monitorLastWinSize     fyne.Size
 	monitorLastOrientation fyne.DeviceOrientation
@@ -114,17 +113,17 @@ type Panel struct {
 
 	setStatusFunc func(string)
 
-	displayErrorLocker deadlock.Mutex
+	displayErrorLocker xsync.Mutex
 	displayErrorWindow fyne.Window
 
-	waitStreamDConnectWindowLocker  deadlock.Mutex
-	waitStreamDConnectWindow        fyne.Window
+	waitStreamDConnectWindowLocker xsync.Mutex
+	//waitStreamDConnectWindow        fyne.Window
 	waitStreamDConnectWindowCounter int32
-	waitStreamDCallWindowLocker     deadlock.Mutex
-	waitStreamDCallWindow           fyne.Window
-	waitStreamDCallWindowCounter    int32
+	waitStreamDCallWindowLocker     xsync.Mutex
+	//waitStreamDCallWindow           fyne.Window
+	waitStreamDCallWindowCounter int32
 
-	imageLocker         deadlock.Mutex
+	imageLocker         xsync.Mutex
 	imageLastDownloaded map[consts.ImageID][]byte
 
 	lastDisplayedError error
@@ -135,18 +134,24 @@ type Panel struct {
 	restreamsWidget     *fyne.Container
 	playersWidget       *fyne.Container
 
-	previousNumBytesLocker deadlock.Mutex
+	previousNumBytesLocker xsync.Mutex
 	previousNumBytes       map[any][4]uint64
 	previousNumBytesTS     map[any]time.Time
 
-	streamServersLocker              deadlock.Mutex
+	streamServersLocker              xsync.Mutex
 	streamServersUpdaterCanceller    context.CancelFunc
-	streamForwardersLocker           deadlock.Mutex
+	streamForwardersLocker           xsync.Mutex
 	streamForwardersUpdaterCanceller context.CancelFunc
-	streamPlayersLocker              deadlock.Mutex
+	streamPlayersLocker              xsync.Mutex
 	streamPlayersUpdaterCanceller    context.CancelFunc
 
 	obsSelectScene *widget.Select
+
+	errorReportsLocker xsync.Mutex
+	errorReports       map[string]errorReport
+
+	statusPanelLocker xsync.Mutex
+	statusPanel       *widget.Label
 }
 
 func New(
@@ -172,11 +177,13 @@ func New(
 		streamStatus:        map[streamcontrol.PlatformName]*widget.Label{},
 		previousNumBytes:    map[any][4]uint64{},
 		previousNumBytesTS:  map[any]time.Time{},
+		errorReports:        map[string]errorReport{},
 	}
 	return p, nil
 }
 
 func (p *Panel) SetStatus(msg string) {
+	p.statusPanelSet(msg)
 	if p.setStatusFunc == nil {
 		return
 	}
@@ -853,6 +860,9 @@ func (p *Panel) profileCreateOrUpdate(ctx context.Context, profile Profile) erro
 
 	logger.Tracef(ctx, "profileCreateOrUpdate(%s)", profile.Name)
 	for platformName, platformProfile := range profile.PerPlatform {
+		if platformProfile == nil {
+			continue
+		}
 		cfg.Backends[platformName].StreamProfiles[profile.Name] = platformProfile
 		logger.Tracef(ctx, "profileCreateOrUpdate(%s): cfg.Backends[%s].StreamProfiles[%s] = %#+v", profile.Name, platformName, profile.Name, platformProfile)
 	}
@@ -1420,6 +1430,9 @@ func (p *Panel) openMenuWindow(ctx context.Context) {
 			w.Show()
 		}),
 		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem("Show errors", func() {
+			p.ShowErrorReports()
+		}),
 		fyne.NewMenuItem("Panic", func() {
 			w := dialog.NewConfirm(
 				"Panic?",
@@ -1482,7 +1495,7 @@ func (p *Panel) getUpdatedStatus_backends(ctx context.Context) {
 	} {
 		isEnabled, err := p.StreamD.IsBackendEnabled(ctx, backendID)
 		if err != nil {
-			p.DisplayError(fmt.Errorf("unable to get info if backend '%s' is enabled: %w", backendID, err))
+			p.ReportError(fmt.Errorf("unable to get info if backend '%s' is enabled: %w", backendID, err))
 		}
 		backendEnabled[backendID] = isEnabled
 	}
@@ -1500,13 +1513,13 @@ func (p *Panel) getUpdatedStatus_backends(ctx context.Context) {
 				defer obsServerClose()
 			}
 			if err != nil {
-				p.DisplayError(fmt.Errorf("unable to initialize a client to OBS: %w", err))
+				p.ReportError(fmt.Errorf("unable to initialize a client to OBS: %w", err))
 				return
 			}
 
 			sceneList, err := obsServer.GetSceneList(ctx, &obs_grpc.GetSceneListRequest{})
 			if err != nil {
-				p.DisplayError(fmt.Errorf("unable to get the list of scene from OBS: %w", err))
+				p.ReportError(fmt.Errorf("unable to get the list of scene from OBS: %w", err))
 				return
 			}
 			logger.Tracef(ctx, "OBS SceneList response: %#+v", sceneList)
@@ -1516,7 +1529,7 @@ func (p *Panel) getUpdatedStatus_backends(ctx context.Context) {
 				sceneNameAny := scene.GetFields()["sceneName"]
 				sceneName := string(sceneNameAny.GetString_())
 				if sceneName == "" {
-					p.DisplayError(fmt.Errorf("unable to parse the scene name from %#+v", scene))
+					p.ReportError(fmt.Errorf("unable to parse the scene name from %#+v", scene))
 					return
 				}
 				p.obsSelectScene.Options = append(p.obsSelectScene.Options, sceneName)
@@ -1918,9 +1931,18 @@ func (p *Panel) initMainWindow(
 	topPanel.Add(layout.NewSpacer())
 	topPanel.Add(pageSelector)
 
+	p.statusPanel = widget.NewLabel("")
+	p.statusPanel.Wrapping = fyne.TextWrapWord
+
 	w.SetContent(container.NewBorder(
-		topPanel,
-		nil,
+		container.NewVBox(
+			p.statusPanel,
+			widget.NewSeparator(),
+			topPanel,
+		),
+		container.NewVBox(
+			widget.NewSeparator(),
+		),
 		nil,
 		nil,
 		container.NewStack(controlPage, p.monitorPage, obsPage, restreamPage),
@@ -1932,6 +1954,7 @@ func (p *Panel) initMainWindow(
 	if _, ok := p.StreamD.(*client.Client); ok {
 		p.subscribeUpdateControlPage(ctx)
 	}
+	p.statusPanelSet("ready")
 }
 
 func (p *Panel) subscribeUpdateControlPage(ctx context.Context) {
@@ -2376,6 +2399,235 @@ func ptr[T any](in T) *T {
 	return &in
 }
 
+type tagEditButton struct {
+	Icon     fyne.Resource
+	Label    string
+	Callback func(*tagsEditorSection, []tagInfo)
+}
+
+type tagInfo struct {
+	Tag       string
+	Container fyne.CanvasObject
+}
+
+type tagsEditorSection struct {
+	fyne.CanvasObject
+	tagsContainer *fyne.Container
+	Tags          []tagInfo
+}
+
+func (t *tagsEditorSection) getTagInfo(tag string) tagInfo {
+	for _, tagCmp := range t.Tags {
+		if tagCmp.Tag == tag {
+			return tagCmp
+		}
+	}
+	return tagInfo{}
+}
+
+func (t *tagsEditorSection) getIdx(tag tagInfo) int {
+	for idx, tagCmp := range t.Tags {
+		if tagCmp.Tag == tag.Tag {
+			return idx
+		}
+	}
+
+	return -1
+}
+
+func (t *tagsEditorSection) move(srcIdx, dstIdx int) {
+	newTags := make([]tagInfo, 0, len(t.Tags))
+	newObjs := make([]fyne.CanvasObject, 0, len(t.Tags))
+
+	objs := t.tagsContainer.Objects
+	for i := 0; i < len(t.Tags); i++ {
+		if i == dstIdx {
+			newTags = append(newTags, t.Tags[srcIdx])
+			newObjs = append(newObjs, objs[srcIdx])
+		}
+		if i == srcIdx {
+			continue
+		}
+		newTags = append(newTags, t.Tags[i])
+		newObjs = append(newObjs, objs[i])
+	}
+	if dstIdx >= len(t.Tags) {
+		newTags = append(newTags, t.Tags[srcIdx])
+		newObjs = append(newObjs, objs[srcIdx])
+	}
+
+	t.Tags = newTags
+	t.tagsContainer.Objects = newObjs
+	t.tagsContainer.Refresh()
+}
+
+func (t *tagsEditorSection) GetTags() []string {
+	result := make([]string, 0, len(t.Tags))
+	for _, tag := range t.Tags {
+		result = append(result, tag.Tag)
+	}
+	return result
+}
+
+func newTagsEditor(
+	initialTags []string,
+	tagCountLimit uint,
+	additionalButtons ...tagEditButton,
+) *tagsEditorSection {
+	t := &tagsEditorSection{}
+	tagsEntryField := widget.NewEntry()
+	tagsEntryField.SetPlaceHolder("add a tag")
+	s := tagsEntryField.Size()
+	s.Width = 200
+	tagsMap := map[string]struct{}{}
+	tagsEntryField.Resize(s)
+	tagsControlsContainer := container.NewHBox()
+	t.tagsContainer = container.NewGridWrap(fyne.NewSize(200, 30))
+	selectedTags := map[string]struct{}{}
+	selectedTagsOrdered := func() []tagInfo {
+		var result []tagInfo
+		for _, tag := range t.Tags {
+			if _, ok := selectedTags[tag.Tag]; ok {
+				result = append(result, tag)
+			}
+		}
+		return result
+	}
+
+	tagContainerToFirstButton := widget.NewButtonWithIcon("", theme.MediaFastRewindIcon(), func() {
+		for _, tag := range selectedTagsOrdered() {
+			idx := t.getIdx(tag)
+			if idx < 1 {
+				return
+			}
+			t.move(idx, 0)
+		}
+	})
+	tagsControlsContainer.Add(tagContainerToFirstButton)
+
+	tagContainerToPrevButton := widget.NewButtonWithIcon("", theme.NavigateBackIcon(), func() {
+		for _, tag := range selectedTagsOrdered() {
+			idx := t.getIdx(tag)
+			if idx < 1 {
+				return
+			}
+			t.move(idx, idx-1)
+		}
+	})
+	tagsControlsContainer.Add(tagContainerToPrevButton)
+	tagContainerToNextButton := widget.NewButtonWithIcon("", theme.NavigateNextIcon(), func() {
+		for _, tag := range reverse(selectedTagsOrdered()) {
+			idx := t.getIdx(tag)
+			if idx >= len(t.Tags)-1 {
+				return
+			}
+			t.move(idx, idx+2)
+		}
+	})
+	tagsControlsContainer.Add(tagContainerToNextButton)
+	tagContainerToLastButton := widget.NewButtonWithIcon("", theme.MediaFastForwardIcon(), func() {
+		for _, tag := range reverse(selectedTagsOrdered()) {
+			idx := t.getIdx(tag)
+			if idx >= len(t.Tags)-1 {
+				return
+			}
+			t.move(idx, len(t.Tags))
+		}
+	})
+	tagsControlsContainer.Add(tagContainerToLastButton)
+
+	removeTag := func(tag string) {
+		tagInfo := t.getTagInfo(tag)
+		t.tagsContainer.Remove(tagInfo.Container)
+		delete(tagsMap, tag)
+		for idx, tagCmp := range t.Tags {
+			if tagCmp.Tag == tag {
+				t.Tags = append(t.Tags[:idx], t.Tags[idx+1:]...)
+				break
+			}
+		}
+	}
+
+	tagsControlsContainer.Add(widget.NewSeparator())
+	tagsControlsContainer.Add(widget.NewSeparator())
+	tagsControlsContainer.Add(widget.NewSeparator())
+	tagContainerRemoveButton := widget.NewButtonWithIcon("", theme.ContentClearIcon(), func() {
+		for tag := range selectedTags {
+			removeTag(tag)
+		}
+	})
+	tagsControlsContainer.Add(tagContainerRemoveButton)
+
+	tagsControlsContainer.Add(widget.NewSeparator())
+	tagsControlsContainer.Add(widget.NewSeparator())
+	tagsControlsContainer.Add(widget.NewSeparator())
+	for _, additionalButtonInfo := range additionalButtons {
+		button := widget.NewButtonWithIcon(additionalButtonInfo.Label, additionalButtonInfo.Icon, func() {
+			additionalButtonInfo.Callback(t, selectedTagsOrdered())
+		})
+		tagsControlsContainer.Add(button)
+	}
+
+	addTag := func(tagName string) {
+		if tagCountLimit > 0 && len(t.Tags) >= int(tagCountLimit) {
+			removeTag(t.Tags[tagCountLimit-1].Tag)
+		}
+		tagName = strings.Trim(tagName, " ")
+		if tagName == "" {
+			return
+		}
+		if _, ok := tagsMap[tagName]; ok {
+			return
+		}
+
+		tagsMap[tagName] = struct{}{}
+		tagContainer := container.NewHBox()
+		t.Tags = append(t.Tags, tagInfo{
+			Tag:       tagName,
+			Container: tagContainer,
+		})
+
+		tagLabel := tagName
+		overflown := false
+		for {
+			size := fyne.MeasureText(tagLabel, fyne.CurrentApp().Settings().Theme().Size("text"), fyne.TextStyle{})
+			if size.Width < 100 {
+				break
+			}
+			tagLabel = tagLabel[:len(tagLabel)-1]
+			overflown = true
+		}
+		if overflown {
+			tagLabel += "…"
+		}
+		tagSelector := widget.NewCheck(tagLabel, func(b bool) {
+			if b {
+				selectedTags[tagName] = struct{}{}
+			} else {
+				delete(selectedTags, tagName)
+			}
+		})
+		tagContainer.Add(tagSelector)
+		t.tagsContainer.Add(tagContainer)
+	}
+	tagsEntryField.OnSubmitted = func(text string) {
+		for _, tag := range strings.Split(text, ",") {
+			addTag(tag)
+		}
+		tagsEntryField.SetText("")
+	}
+
+	for _, tag := range initialTags {
+		addTag(tag)
+	}
+	t.CanvasObject = container.NewVBox(
+		t.tagsContainer,
+		tagsControlsContainer,
+		tagsEntryField,
+	)
+	return t
+}
+
 func (p *Panel) profileWindow(
 	ctx context.Context,
 	windowName string,
@@ -2404,123 +2656,6 @@ func (p *Panel) profileWindow(
 	defaultStreamDescription := widget.NewMultiLineEntry()
 	defaultStreamDescription.SetPlaceHolder("default stream description")
 	defaultStreamDescription.SetText(values.DefaultStreamDescription)
-
-	tagsEntryField := widget.NewEntry()
-	tagsEntryField.SetPlaceHolder("add a tag")
-	s := tagsEntryField.Size()
-	s.Width = 200
-	var tags []string
-	tagsMap := map[string]struct{}{}
-	tagsEntryField.Resize(s)
-	tagsContainer := container.NewGridWrap(fyne.NewSize(300, 30))
-
-	addTag := func(tag string) {
-		tag = strings.Trim(tag, " ")
-		if tag == "" {
-			return
-		}
-		if _, ok := tagsMap[tag]; ok {
-			return
-		}
-		tags = append(tags, tag)
-		tagsMap[tag] = struct{}{}
-		tagContainer := container.NewHBox()
-
-		getIdx := func() int {
-			for idx, tagCmp := range tags {
-				if tagCmp == tag {
-					return idx
-				}
-			}
-
-			return -1
-		}
-
-		move := func(srcIdx, dstIdx int) {
-			newTags := make([]string, 0, len(tags))
-			newObjs := make([]fyne.CanvasObject, 0, len(tags))
-
-			objs := tagsContainer.Objects
-			for i := 0; i < len(tags); i++ {
-				if i == dstIdx {
-					newTags = append(newTags, tags[srcIdx])
-					newObjs = append(newObjs, objs[srcIdx])
-				}
-				if i == srcIdx {
-					continue
-				}
-				newTags = append(newTags, tags[i])
-				newObjs = append(newObjs, objs[i])
-			}
-			if dstIdx >= len(tags) {
-				newTags = append(newTags, tags[srcIdx])
-				newObjs = append(newObjs, objs[srcIdx])
-			}
-
-			tags = newTags
-			tagsContainer.Objects = newObjs
-			tagsContainer.Refresh()
-		}
-
-		tagContainerToFirstButton := widget.NewButtonWithIcon("", theme.MediaFastRewindIcon(), func() {
-			idx := getIdx()
-			if idx < 1 {
-				return
-			}
-			move(idx, 0)
-		})
-		tagContainer.Add(tagContainerToFirstButton)
-		tagContainerToPrevButton := widget.NewButtonWithIcon("", theme.NavigateBackIcon(), func() {
-			idx := getIdx()
-			if idx < 1 {
-				return
-			}
-			move(idx, idx-1)
-		})
-		tagContainer.Add(tagContainerToPrevButton)
-		tagLabel := tag
-		overflown := false
-		for {
-			size := fyne.MeasureText(tagLabel, fyne.CurrentApp().Settings().Theme().Size("text"), fyne.TextStyle{})
-			if size.Width < 100 {
-				break
-			}
-			tagLabel = tagLabel[:len(tagLabel)-1]
-			overflown = true
-		}
-		if overflown {
-			tagLabel += "…"
-		}
-		label := widget.NewRichTextWithText(tagLabel)
-		label.Resize(fyne.NewSize(200, 30))
-		tagContainer.Add(label)
-		tagContainerRemoveButton := widget.NewButtonWithIcon("", theme.ContentClearIcon(), func() {
-			tagsContainer.Remove(tagContainer)
-			delete(tagsMap, tag)
-			for idx, tagCmp := range tags {
-				if tagCmp == tag {
-					tags = append(tags[:idx], tags[idx+1:]...)
-					break
-				}
-			}
-		})
-		tagContainer.Add(tagContainerRemoveButton)
-		tagContainerToLastButton := widget.NewButtonWithIcon("", theme.MediaFastForwardIcon(), func() {
-			idx := getIdx()
-			if idx >= len(tags)-1 {
-				return
-			}
-			move(idx, len(tags))
-		})
-		tagContainer.Add(tagContainerToLastButton)
-		tagsContainer.Add(tagContainer)
-	}
-	tagsEntryField.OnSubmitted = func(text string) {
-		for _, tag := range strings.Split(text, ",") {
-			addTag(tag)
-		}
-		tagsEntryField.SetText("")
-	}
 
 	backendEnabled := map[streamcontrol.PlatformName]bool{}
 	backendData := map[streamcontrol.PlatformName]any{}
@@ -2568,9 +2703,15 @@ func (p *Panel) profileWindow(
 		bottomContent = append(bottomContent, enableRecordingCheck)
 	}
 
+	var getTwitchTags func() []string
 	bottomContent = append(bottomContent, widget.NewSeparator())
 	bottomContent = append(bottomContent, widget.NewRichTextFromMarkdown("# Twitch:"))
 	if backendEnabled[twitch.ID] {
+		twitchTags := []string{}
+		addTag := func(tagName string) {
+			twitchTags = append(twitchTags, tagName)
+		}
+
 		if platProfile := values.PerPlatform[twitch.ID]; platProfile != nil {
 			twitchProfile = ptr(streamcontrol.GetPlatformSpecificConfig[twitch.StreamProfile](ctx, platProfile))
 			for _, tag := range twitchProfile.Tags {
@@ -2654,13 +2795,23 @@ func (p *Panel) profileWindow(
 			}
 		}
 		bottomContent = append(bottomContent, twitchCategory)
+
+		twitchTagsEditor := newTagsEditor(twitchTags, 10)
+		bottomContent = append(bottomContent, widget.NewLabel("Tags:"))
+		bottomContent = append(bottomContent, twitchTagsEditor.CanvasObject)
+		getTwitchTags = twitchTagsEditor.GetTags
 	} else {
 		bottomContent = append(bottomContent, widget.NewLabel("Twitch is disabled"))
 	}
 
+	var getYoutubeTags func() []string
 	bottomContent = append(bottomContent, widget.NewSeparator())
 	bottomContent = append(bottomContent, widget.NewRichTextFromMarkdown("# YouTube:"))
 	if backendEnabled[youtube.ID] {
+		youtubeTags := []string{}
+		addTag := func(tagName string) {
+			youtubeTags = append(youtubeTags, tagName)
+		}
 		if platProfile := values.PerPlatform[youtube.ID]; platProfile != nil {
 			youtubeProfile = ptr(streamcontrol.GetPlatformSpecificConfig[youtube.StreamProfile](ctx, platProfile))
 			for _, tag := range youtubeProfile.Tags {
@@ -2775,28 +2926,18 @@ func (p *Panel) profileWindow(
 		templateTags.SetSelected(youtubeProfile.TemplateTags.String())
 		templateTagsHint := NewHintWidget(w, "'ignore' will ignore the tags set in the template; 'use as primary' will put the tags of the template first and then add the profile tags; 'use as additional' will put the tags of the profile first and then add the template tags")
 		bottomContent = append(bottomContent, container.NewHBox(templateTagsLabel, templateTags, templateTagsHint))
+
+		youtubeTagsEditor := newTagsEditor(youtubeTags, 0)
+		bottomContent = append(bottomContent, widget.NewLabel("Tags:"))
+		bottomContent = append(bottomContent, youtubeTagsEditor.CanvasObject)
+		getYoutubeTags = youtubeTagsEditor.GetTags
 	} else {
 		bottomContent = append(bottomContent, widget.NewLabel("YouTube is disabled"))
 	}
 
 	bottomContent = append(bottomContent,
 		widget.NewSeparator(),
-		container.NewVBox(
-			widget.NewRichTextFromMarkdown("# common:"),
-			tagsContainer,
-			tagsEntryField,
-		),
 		widget.NewButton("Save", func() {
-			if tagsEntryField.Text != "" {
-				tagsEntryField.OnSubmitted(tagsEntryField.Text)
-			}
-			_tags := make([]string, 0, len(tags))
-			for _, k := range tags {
-				if k == "" {
-					continue
-				}
-				_tags = append(_tags, k)
-			}
 			profile := Profile{
 				Name:        streamcontrol.ProfileName(profileName.Text),
 				PerPlatform: map[streamcontrol.PlatformName]streamcontrol.AbstractStreamProfile{},
@@ -2809,20 +2950,36 @@ func (p *Panel) profileWindow(
 			if obsProfile != nil {
 				profile.PerPlatform[obs.ID] = obsProfile
 			}
-			if twitchProfile != nil {
-				for i := 0; i < len(twitchProfile.Tags); i++ {
-					var v string
-					if i < len(_tags) {
-						v = _tags[i]
-					} else {
-						v = ""
+
+			sanitizeTags := func(in []string) []string {
+				out := make([]string, 0, len(in))
+				for _, k := range in {
+					if k == "" {
+						continue
 					}
-					twitchProfile.Tags[i] = v
+					out = append(out, k)
+				}
+				return out
+			}
+			if twitchProfile != nil {
+				if getTwitchTags != nil {
+					twitchTags := sanitizeTags(getTwitchTags())
+					for i := 0; i < len(twitchProfile.Tags); i++ {
+						var v string
+						if i < len(twitchTags) {
+							v = twitchTags[i]
+						} else {
+							v = ""
+						}
+						twitchProfile.Tags[i] = v
+					}
 				}
 				profile.PerPlatform[twitch.ID] = twitchProfile
 			}
 			if youtubeProfile != nil {
-				youtubeProfile.Tags = _tags
+				if getYoutubeTags != nil {
+					youtubeProfile.Tags = sanitizeTags(getYoutubeTags())
+				}
 				profile.PerPlatform[youtube.ID] = youtubeProfile
 			}
 			err := commitFn(ctx, profile)
@@ -2850,55 +3007,8 @@ func (p *Panel) profileWindow(
 	return w
 }
 
-func (p *Panel) DisplayError(err error) {
-	logger.Debugf(p.defaultContext, "DisplayError('%v')", err)
-	defer logger.Debugf(p.defaultContext, "/DisplayError('%v')", err)
-
-	if err == nil {
-		return
-	}
-	if strings.Contains(err.Error(), "context canceled") {
-		return
-	}
-
-	errorMessage := fmt.Sprintf("Error: %v\n\nstack trace:\n%s", err, debug.Stack())
-	textWidget := widget.NewMultiLineEntry()
-	textWidget.SetText(errorMessage)
-	textWidget.Wrapping = fyne.TextWrapWord
-	textWidget.TextStyle = fyne.TextStyle{
-		Bold:      true,
-		Monospace: true,
-	}
-
-	p.displayErrorLocker.Lock()
-	defer p.displayErrorLocker.Unlock()
-
-	if p.lastDisplayedError != nil {
-		// protection against flood:
-		if err.Error() == p.lastDisplayedError.Error() {
-			return
-		}
-	}
-	p.lastDisplayedError = err
-
-	if p.displayErrorWindow != nil {
-		p.displayErrorWindow.SetContent(container.NewVSplit(p.displayErrorWindow.Content(), textWidget))
-		return
-	}
-	w := p.app.NewWindow(AppName + ": Got an error: " + err.Error())
-	resizeWindow(w, fyne.NewSize(400, 300))
-	w.SetContent(textWidget)
-
-	w.SetOnClosed(func() {
-		p.displayErrorLocker.Lock()
-		defer p.displayErrorLocker.Unlock()
-
-		p.displayErrorWindow = nil
-	})
-	w.Show()
-	logger.Tracef(p.defaultContext, "DisplayError(): w.Show()")
-	p.displayErrorWindow = w
-}
+const aggregationDelayBeforeNotificationStart = time.Second
+const aggregationDelayBeforeNotificationEnd = 100 * time.Millisecond
 
 func (p *Panel) showWaitStreamDCallWindow(ctx context.Context) {
 	atomic.AddInt32(&p.waitStreamDCallWindowCounter, 1)
@@ -2910,34 +3020,21 @@ func (p *Panel) showWaitStreamDCallWindow(ctx context.Context) {
 			if atomic.AddInt32(&p.waitStreamDCallWindowCounter, -1) != 0 {
 				return
 			}
-			if p.waitStreamDCallWindow == nil {
-				return
-			}
-			p.waitStreamDCallWindow.Hide()
-			time.Sleep(100 * time.Millisecond)
-			p.waitStreamDCallWindow.Close()
-			p.waitStreamDCallWindow = nil
-			logger.Debugf(ctx, "closed the 'network operation is in progress' window")
+			time.Sleep(aggregationDelayBeforeNotificationEnd)
+			p.statusPanelSet("ready")
+			logger.Debugf(ctx, "closed the 'network operation is in progress' notification")
 		}()
 
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(time.Second):
+		case <-time.After(aggregationDelayBeforeNotificationStart):
 		}
 
 		p.waitStreamDCallWindowLocker.Lock()
 		defer p.waitStreamDCallWindowLocker.Unlock()
-		logger.Debugf(ctx, "making a 'network operation is in progress' window")
-		defer logger.Debugf(ctx, "made a 'network operation is in progress' window")
-		if p.waitStreamDCallWindow != nil {
-			return
-		}
-		waitStreamDCallWindow := p.app.NewWindow(AppName + ": Please wait...")
-		textWidget := widget.NewRichTextFromMarkdown("Network operation is in process, please wait...")
-		waitStreamDCallWindow.SetContent(textWidget)
-		waitStreamDCallWindow.Show()
-		p.waitStreamDCallWindow = waitStreamDCallWindow
+		logger.Debugf(ctx, "making a 'network operation is in progress' notification")
+		p.statusPanelSet("Network operation is in process, please wait...")
 	})
 }
 
@@ -2951,36 +3048,21 @@ func (p *Panel) showWaitStreamDConnectWindow(ctx context.Context) {
 			if atomic.AddInt32(&p.waitStreamDConnectWindowCounter, -1) != 0 {
 				return
 			}
-			if p.waitStreamDConnectWindow == nil {
-				return
-			}
-			p.waitStreamDConnectWindow.Hide()
-			time.Sleep(100 * time.Millisecond)
-			p.waitStreamDConnectWindow.Close()
-			p.waitStreamDConnectWindow = nil
+			time.Sleep(aggregationDelayBeforeNotificationEnd)
+			p.statusPanelSet("(re-)connected")
 			logger.Debugf(ctx, "closed the 'connecting is in progress' window")
 		}()
 
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(time.Second):
+		case <-time.After(aggregationDelayBeforeNotificationStart):
 		}
 
 		p.waitStreamDConnectWindowLocker.Lock()
 		defer p.waitStreamDConnectWindowLocker.Unlock()
 		logger.Debugf(ctx, "making a 'connecting is in progress' window")
 		defer logger.Debugf(ctx, "made a 'connecting is in progress' window")
-		if p.waitStreamDConnectWindow != nil {
-			return
-		}
-		if p.app == nil {
-			return
-		}
-		waitStreamDConnectWindow := p.app.NewWindow(AppName + ": Please wait...")
-		textWidget := widget.NewRichTextFromMarkdown("Connecting is in process, please wait...")
-		waitStreamDConnectWindow.SetContent(textWidget)
-		waitStreamDConnectWindow.Show()
-		p.waitStreamDConnectWindow = waitStreamDConnectWindow
+		p.statusPanelSet("Connecting is in process, please wait...")
 	})
 }

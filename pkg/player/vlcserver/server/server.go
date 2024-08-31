@@ -11,9 +11,9 @@ import (
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
-	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/player/protobuf/go/player_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/player/vlcserver/player"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 	"google.golang.org/grpc"
 )
 
@@ -21,7 +21,7 @@ type GRPCServer struct {
 	player_grpc.UnimplementedPlayerServer
 	GRPCServer *grpc.Server
 
-	VLCLocker deadlock.Mutex
+	VLCLocker xsync.Mutex
 	VLC       *player.VLC
 	Belt      *belt.Belt
 }

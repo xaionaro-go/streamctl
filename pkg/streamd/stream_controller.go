@@ -225,6 +225,8 @@ func newYouTube(
 	cfg = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
 	yt, err := youtube.New(ctx, *platCfg,
 		func(c youtube.Config) error {
+			logger.Debugf(ctx, "saveCfgFunc")
+			defer logger.Debugf(ctx, "saveCfgFunc")
 			return saveCfgFunc(&streamcontrol.AbstractPlatformConfig{
 				Enable:         c.Enable,
 				Config:         c.Config,

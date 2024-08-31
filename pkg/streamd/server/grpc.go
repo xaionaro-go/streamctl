@@ -13,7 +13,6 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-multierror"
-	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/player/protobuf/go/player_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
@@ -28,6 +27,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/platcollection"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 	"google.golang.org/grpc"
 )
 
@@ -35,10 +35,10 @@ type GRPCServer struct {
 	streamd_grpc.UnimplementedStreamDServer
 	StreamD               api.StreamD
 	MemoizeDataValue      *memoize.MemoizeData
-	OAuthURLHandlerLocker deadlock.Mutex
+	OAuthURLHandlerLocker xsync.Mutex
 	OAuthURLHandlers      map[uint16]map[uuid.UUID]*OAuthURLHandler
 
-	UnansweredOAuthRequestsLocker deadlock.Mutex
+	UnansweredOAuthRequestsLocker xsync.Mutex
 	UnansweredOAuthRequests       map[streamcontrol.PlatformName]map[uint16]*streamd_grpc.OAuthRequest
 }
 

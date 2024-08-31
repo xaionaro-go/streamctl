@@ -10,13 +10,13 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
-	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 type StreamForwarding struct {
-	deadlock.Mutex
+	xsync.Mutex
 	Stream         *Stream
 	Consumer       core.Consumer
 	StreamHandler  *StreamHandler

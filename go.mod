@@ -9,6 +9,8 @@ replace github.com/goccy/go-yaml v1.11.3 => github.com/yoelsusanto/go-yaml v0.0.
 
 replace github.com/yutopp/go-rtmp v0.0.7 => ../go-rtmp/
 
+replace github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20240826003505-317c16ed8b69 => ../obs-grpc-proxy/
+
 require (
 	github.com/facebookincubator/go-belt v0.0.0-20240804203001-846c4409d41c
 	github.com/go-git/go-billy/v5 v5.5.0

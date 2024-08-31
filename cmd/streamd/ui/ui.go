@@ -7,7 +7,6 @@ import (
 
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	obs "github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs/types"
@@ -15,6 +14,7 @@ import (
 	youtube "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
 	streamd "github.com/xaionaro-go/streamctl/pkg/streamd/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/ui"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 type UI struct {
@@ -23,7 +23,7 @@ type UI struct {
 	Belt              *belt.Belt
 	RestartFn         func(context.Context, string)
 	CodeChMap         map[streamcontrol.PlatformName]chan string
-	CodeChMapLocker   deadlock.Mutex
+	CodeChMapLocker   xsync.Mutex
 	SetLoggingLevelFn func(context.Context, logger.Level)
 }
 

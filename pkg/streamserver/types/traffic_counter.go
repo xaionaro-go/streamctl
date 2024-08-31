@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"github.com/sasha-s/go-deadlock"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 type NumBytesWroter interface {
@@ -28,7 +28,7 @@ type Counter interface {
 }
 
 type TrafficCounter struct {
-	deadlock.Mutex
+	xsync.Mutex
 	ReaderCounter Counter
 	WriterCounter Counter
 }
