@@ -19,16 +19,25 @@ import (
 
 var _ rtmp.Handler = (*Handler)(nil)
 
-// Handler An RTMP connection handler
+// Handler is an RTMP connection handler
 type Handler struct {
-	isClosed atomic.Bool
 	xsync.Mutex
 	rtmp.DefaultHandler
 	relayService *RelayService
 
+	isClosed   atomic.Bool
+	closedChan chan struct{}
+
 	conn *rtmp.Conn
 	pub  *Pub
 	sub  *Sub
+}
+
+func NewHandler(relayService *RelayService) *Handler {
+	return &Handler{
+		relayService: relayService,
+		closedChan:   make(chan struct{}),
+	}
 }
 
 func (h *Handler) OnServe(conn *rtmp.Conn) {
@@ -192,6 +201,7 @@ func (h *Handler) OnClose() {
 			logger.Debugf(ctx, "OnClose on an already closed Handler")
 			return
 		}
+		close(h.closedChan)
 
 		pub, sub := h.pub, h.sub
 		observability.Go(ctx, func() {
@@ -205,4 +215,8 @@ func (h *Handler) OnClose() {
 
 		h.isClosed.Store(true)
 	})
+}
+
+func (h *Handler) ClosedChan() <-chan struct{} {
+	return h.closedChan
 }

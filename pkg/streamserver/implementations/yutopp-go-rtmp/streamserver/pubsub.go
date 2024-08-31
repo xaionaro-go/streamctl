@@ -36,6 +36,10 @@ func NewPubsub(srv *RelayService, name string, publisherHandler *Handler) *Pubsu
 	}
 }
 
+func (pb *Pubsub) PublisherHandler() *Handler {
+	return pb.publisherHandler
+}
+
 func (pb *Pubsub) Name() string {
 	return pb.name
 }

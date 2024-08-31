@@ -29,19 +29,25 @@ func NewStreamPlayerStreamServer(ss *StreamServer) *StreamPlayerStreamServer {
 	}
 }
 
-func (s *StreamPlayerStreamServer) WaitPublisher(
-	ctx context.Context,
+func streamID2LocalAppName(
 	streamID sstypes.StreamID,
-) (<-chan struct{}, error) {
+) string {
 	streamIDParts := strings.Split(string(streamID), "/")
 	localAppName := string(streamID)
 	if len(streamIDParts) == 2 {
 		localAppName = streamIDParts[1]
 	}
+	return localAppName
+}
+
+func (s *StreamPlayerStreamServer) WaitPublisher(
+	ctx context.Context,
+	streamID sstypes.StreamID,
+) (<-chan struct{}, error) {
 
 	ch := make(chan struct{})
 	observability.Go(ctx, func() {
-		s.RelayService.WaitPubsub(ctx, localAppName)
+		s.RelayService.WaitPubsub(ctx, streamID2LocalAppName(streamID))
 		close(ch)
 	})
 	return ch, nil
@@ -138,6 +144,13 @@ func (s *StreamServer) setupStreamPlayers(
 		if setupCfg.DefaultStreamPlayerOptions != nil {
 			ssOpts = append(ssOpts, setupCfg.DefaultStreamPlayerOptions...)
 		}
+		ssOpts = append(ssOpts, sptypes.OptionGetRestartChanFunc(func() <-chan struct{} {
+			pubSub := s.RelayService.GetPubsub(streamID2LocalAppName(streamID))
+			if pubSub == nil {
+				return nil
+			}
+			return pubSub.PublisherHandler().ClosedChan()
+		}))
 		_, err := s.StreamPlayers.Create(
 			xcontext.DetachDone(ctx),
 			streamID,
@@ -147,6 +160,7 @@ func (s *StreamServer) setupStreamPlayers(
 			err = fmt.Errorf("unable to create a stream player for stream '%s': %w", streamID, err)
 			logger.Warnf(ctx, "%s", err)
 			result = multierror.Append(result, err)
+			continue
 		} else {
 			logger.Infof(ctx, "started a player for stream '%s'", streamID)
 		}

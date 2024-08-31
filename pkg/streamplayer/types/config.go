@@ -8,6 +8,7 @@ import (
 )
 
 type FuncNotifyStart func(ctx context.Context, streamID streamtypes.StreamID)
+type GetRestartChanFunc func() <-chan struct{}
 
 type Config struct {
 	JitterBufDuration     time.Duration
@@ -15,8 +16,9 @@ type Config struct {
 	MaxCatchupAtLag       time.Duration
 	StartTimeout          time.Duration
 	ReadTimeout           time.Duration
-	NotifierStart         []FuncNotifyStart
+	NotifierStart         []FuncNotifyStart `yaml:"-"`
 	OverrideURL           string
+	GetRestartChanFunc    GetRestartChanFunc `yaml:"-"`
 }
 
 func (cfg Config) Options() Options {
@@ -113,4 +115,10 @@ type OptionOverrideURL string
 
 func (s OptionOverrideURL) Apply(cfg *Config) {
 	cfg.OverrideURL = string(s)
+}
+
+type OptionGetRestartChanFunc func() <-chan struct{}
+
+func (s OptionGetRestartChanFunc) Apply(cfg *Config) {
+	cfg.GetRestartChanFunc = GetRestartChanFunc(s)
 }

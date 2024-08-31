@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
 )
@@ -175,7 +176,19 @@ func ptr[T any](in T) *T {
 	return &in
 }
 
-func (cfg *Config) UnmarshalYAML(b []byte) error {
+func (cfg *Config) UnmarshalYAML(b []byte) (_err error) {
+	if cfg == nil {
+		return fmt.Errorf("cfg is nil")
+	}
+	ctx := context.TODO()
+	defer func() {
+		r := recover()
+		if r != nil {
+			_err = fmt.Errorf("got a panic: %v", r)
+			errmon.ObserveRecoverCtx(ctx, r)
+		}
+	}()
+
 	t := map[PlatformName]*unparsedPlatformConfig{}
 	err := yaml.Unmarshal(b, &t)
 	if err != nil {

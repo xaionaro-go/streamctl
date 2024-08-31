@@ -173,6 +173,7 @@ func (p *StreamPlayer) startU(ctx context.Context) error {
 	)
 	if err != nil {
 		errmon.ObserveErrorCtx(ctx, p.Close())
+		cancelFn()
 		return fmt.Errorf("unable to run a video player '%s': %w", playerType, err)
 	}
 	p.Player = player
@@ -180,6 +181,7 @@ func (p *StreamPlayer) startU(ctx context.Context) error {
 
 	if err := p.openStream(ctx); err != nil {
 		errmon.ObserveErrorCtx(ctx, p.Close())
+		cancelFn()
 		return fmt.Errorf("unable to open the stream in the player: %w", err)
 	}
 	logger.Debugf(ctx, "the player #%+v opened the stream", player)
@@ -431,6 +433,24 @@ func (p *StreamPlayer) controllerLoop(
 		p.notifyStart(context.WithValue(ctx, CtxKeyStreamPlayer, p))
 	})
 
+	isClosed := false
+	restart := func() {
+		isClosed = true
+		observability.Go(ctx, func() {
+			err := p.restartU(ctx)
+			errmon.ObserveErrorCtx(ctx, err)
+			if err != nil {
+				err := p.Parent.Remove(ctx, p.StreamID)
+				errmon.ObserveErrorCtx(ctx, err)
+			}
+		})
+	}
+
+	getRestartChan := context.Background().Done()
+	if fn := p.Config.GetRestartChanFunc; fn != nil {
+		getRestartChan = fn()
+	}
+
 	logger.Debugf(ctx, "finished waiting for a publisher at '%s'", p.StreamID)
 
 	t := time.NewTicker(100 * time.Millisecond)
@@ -438,25 +458,40 @@ func (p *StreamPlayer) controllerLoop(
 
 	// now monitoring if everything is OK:
 	var prevPos time.Duration
+	var prevLength time.Duration
 	posUpdatedAt := time.Now()
 	curSpeed := float64(1)
 	for {
+		if isClosed {
+			logger.Debug(ctx, "the player is closed, so closing the controllerLoop")
+			return
+		}
 		select {
 		case <-instanceCtx.Done():
 			errmon.ObserveErrorCtx(ctx, p.Close())
 			return
+		case <-getRestartChan:
+			logger.Debugf(ctx, "received a notification that the player should be restarted immediately")
+			restart()
+			return
 		case <-t.C:
 		}
 
-		isClosed := false
 		err := p.withPlayer(ctx, func(ctx context.Context, player types.Player) {
 			now := time.Now()
 			l, err := player.GetLength(ctx)
 			if err != nil {
 				logger.Errorf(ctx, "StreamPlayer[%s].controllerLoop: unable to get the current length: %v", p.StreamID, err)
+				if prevLength != 0 {
+					logger.Debugf(ctx, "previously GetLength worked, so it seems like the player died or something, restarting")
+					restart()
+					return
+				}
 				time.Sleep(time.Second)
 				return
 			}
+			prevLength = l
+
 			pos, err := player.GetPosition(ctx)
 			if err != nil {
 				logger.Errorf(ctx, "StreamPlayer[%s].controllerLoop: unable to get the current position: %v", p.StreamID, err)
@@ -470,15 +505,7 @@ func (p *StreamPlayer) controllerLoop(
 			} else {
 				if now.Sub(posUpdatedAt) > p.Config.ReadTimeout {
 					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: now == %v, posUpdatedAt == %v, len == %v; pos == %v; readTimeout == %v, restarting", p.StreamID, now, posUpdatedAt, l, pos, p.Config.ReadTimeout)
-					isClosed = true
-					observability.Go(ctx, func() {
-						err := p.restartU(ctx)
-						errmon.ObserveErrorCtx(ctx, err)
-						if err != nil {
-							err := p.Parent.Remove(ctx, p.StreamID)
-							errmon.ObserveErrorCtx(ctx, err)
-						}
-					})
+					restart()
 					return
 				}
 			}
@@ -527,10 +554,6 @@ func (p *StreamPlayer) controllerLoop(
 				curSpeed = speed
 			}
 		})
-		if isClosed {
-			logger.Debug(ctx, "the player is closed, so closing the controllerLoop")
-			return
-		}
 		if err != nil {
 			logger.Error(ctx, "unable to get the player: %v", err)
 			return

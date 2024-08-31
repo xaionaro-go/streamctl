@@ -217,9 +217,7 @@ func (s *StreamServer) startServer(
 		portSrv.Server = rtmp.NewServer(&rtmp.ServerConfig{
 			OnConnect: func(conn net.Conn) (io.ReadWriteCloser, *rtmp.ConnConfig) {
 				ctx := belt.WithField(ctx, "client", conn.RemoteAddr().String())
-				h := &Handler{
-					relayService: s.RelayService,
-				}
+				h := NewHandler(s.RelayService)
 				wrcc := types.NewReaderWriterCloseCounter(conn, &portSrv.ReadCount, &portSrv.WriteCount)
 				return wrcc, &rtmp.ConnConfig{
 					Handler: h,
