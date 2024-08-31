@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
@@ -15,6 +14,7 @@ import (
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	sstypes "github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
+	"github.com/xaionaro-go/streamctl/pkg/xcontext"
 )
 
 type StreamPlayerStreamServer struct {
@@ -90,27 +90,28 @@ func (opt setupStreamPlayersOptionDefaultStreamPlayerOptions) apply(cfg *setupSt
 func (s *StreamServer) setupStreamPlayers(
 	ctx context.Context,
 	opts ...setupStreamPlayersOption,
-) error {
+) (_err error) {
+	defer func() { logger.Debugf(ctx, "setupStreamPlayers result: %v", _err) }()
+
 	setupCfg := setupStreamPlayersOptions(opts).Config()
 
 	var streamIDsToDelete []api.StreamID
 
-	logger.Tracef(ctx, "p.StreamPlayers.StreamPlayersLocker.Lock()-ing")
-	s.StreamPlayers.StreamPlayersLocker.Lock()
-	logger.Tracef(ctx, "p.StreamPlayers.StreamPlayersLocker.Lock()-ed")
 	curPlayers := map[api.StreamID]*streamplayer.StreamPlayer{}
-	for _, player := range s.StreamPlayers.StreamPlayers {
-		streamCfg, ok := s.Config.Streams[sstypes.StreamID(player.StreamID)]
-		if !ok || streamCfg.Player == nil || streamCfg.Player.Disabled {
-			streamIDsToDelete = append(streamIDsToDelete, player.StreamID)
-			continue
+	s.StreamPlayers.StreamPlayersLocker.Do(ctx, func() {
+		for _, player := range s.StreamPlayers.StreamPlayers {
+			streamCfg, ok := s.Config.Streams[sstypes.StreamID(player.StreamID)]
+			if !ok || streamCfg.Player == nil || streamCfg.Player.Disabled {
+				streamIDsToDelete = append(streamIDsToDelete, player.StreamID)
+				continue
+			}
+			curPlayers[player.StreamID] = player
 		}
-		curPlayers[player.StreamID] = player
-	}
-	s.StreamPlayers.StreamPlayersLocker.Unlock()
-	logger.Tracef(ctx, "p.StreamPlayers.StreamPlayersLocker.Unlock()-ed")
+	})
 
 	var result *multierror.Error
+
+	logger.Debugf(ctx, "streamIDsToDelete == %#+v", streamIDsToDelete)
 
 	for _, streamID := range streamIDsToDelete {
 		err := s.StreamPlayers.Remove(ctx, streamID)
@@ -138,7 +139,7 @@ func (s *StreamServer) setupStreamPlayers(
 			ssOpts = append(ssOpts, setupCfg.DefaultStreamPlayerOptions...)
 		}
 		_, err := s.StreamPlayers.Create(
-			detachDone(ctx),
+			xcontext.DetachDone(ctx),
 			streamID,
 			ssOpts...,
 		)
@@ -154,47 +155,27 @@ func (s *StreamServer) setupStreamPlayers(
 	return result.ErrorOrNil()
 }
 
-func detachDone(ctx context.Context) context.Context {
-	return ctxDetached{
-		Context: ctx,
-	}
-}
-
-type ctxDetached struct {
-	context.Context
-}
-
-func (ctx ctxDetached) Deadline() (time.Time, bool) {
-	return context.Background().Deadline()
-}
-func (ctx ctxDetached) Done() <-chan struct{} {
-	return context.Background().Done()
-}
-func (ctx ctxDetached) Err() error {
-	return context.Background().Err()
-}
-
-type AddStreamPlayerConfig struct {
+type StreamPlayerConfig struct {
 	DefaultStreamPlayerOptions streamplayer.Options
 }
 
-type AddStreamPlayerOption interface {
-	apply(*AddStreamPlayerConfig)
+type StreamPlayerOption interface {
+	apply(*StreamPlayerConfig)
 }
 
-type AddStreamPlayerOptions []AddStreamPlayerOption
+type StreamPlayerOptions []StreamPlayerOption
 
-func (s AddStreamPlayerOptions) Config() AddStreamPlayerConfig {
-	cfg := AddStreamPlayerConfig{}
+func (s StreamPlayerOptions) Config() StreamPlayerConfig {
+	cfg := StreamPlayerConfig{}
 	for _, opt := range s {
 		opt.apply(&cfg)
 	}
 	return cfg
 }
 
-type AddStreamPlayerOptionDefaultStreamPlayerOptions streamplayer.Options
+type StreamPlayerOptionDefaultStreamPlayerOptions streamplayer.Options
 
-func (opt AddStreamPlayerOptionDefaultStreamPlayerOptions) apply(cfg *AddStreamPlayerConfig) {
+func (opt StreamPlayerOptionDefaultStreamPlayerOptions) apply(cfg *StreamPlayerConfig) {
 	cfg.DefaultStreamPlayerOptions = (streamplayer.Options)(opt)
 }
 
@@ -204,9 +185,29 @@ func (s *StreamServer) AddStreamPlayer(
 	playerType player.Backend,
 	disabled bool,
 	streamPlaybackConfig sptypes.Config,
-	opts ...AddStreamPlayerOption,
+	opts ...StreamPlayerOption,
 ) error {
-	cfg := AddStreamPlayerOptions(opts).Config()
+	return s.setStreamPlayer(
+		ctx,
+		streamID,
+		playerType,
+		disabled,
+		streamPlaybackConfig,
+		opts...,
+	)
+}
+
+func (s *StreamServer) setStreamPlayer(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+	playerType player.Backend,
+	disabled bool,
+	streamPlaybackConfig sptypes.Config,
+	opts ...StreamPlayerOption,
+) (_err error) {
+	defer func() { logger.Debugf(ctx, "setStreamPlayer result: %v", _err) }()
+
+	cfg := StreamPlayerOptions(opts).Config()
 
 	s.Config.Streams[streamID].Player = &sstypes.PlayerConfig{
 		Player:         playerType,
@@ -233,8 +234,16 @@ func (s *StreamServer) UpdateStreamPlayer(
 	playerType player.Backend,
 	disabled bool,
 	streamPlaybackConfig sptypes.Config,
+	opts ...StreamPlayerOption,
 ) error {
-	return s.AddStreamPlayer(ctx, streamID, playerType, disabled, streamPlaybackConfig)
+	return s.setStreamPlayer(
+		ctx,
+		streamID,
+		playerType,
+		disabled,
+		streamPlaybackConfig,
+		opts...,
+	)
 }
 
 func (s *StreamServer) RemoveStreamPlayer(

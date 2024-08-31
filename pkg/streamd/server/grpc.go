@@ -1039,9 +1039,9 @@ func (grpc *GRPCServer) UpdateStreamPlayer(
 	req *streamd_grpc.UpdateStreamPlayerRequest,
 ) (_req *streamd_grpc.UpdateStreamPlayerReply, _err error) {
 	cfg := req.GetConfig()
-	logger.Tracef(ctx, "UpdateStreamPlayer(): StreamID:%s", cfg.StreamID)
+	logger.Debugf(ctx, "UpdateStreamPlayer(): StreamID:%s", cfg.StreamID)
 	defer func() {
-		logger.Tracef(ctx, "/UpdateStreamPlayer(): StreamID:%s: %v", cfg.StreamID, _err)
+		logger.Debugf(ctx, "/UpdateStreamPlayer(): StreamID:%s: %v", cfg.StreamID, _err)
 	}()
 
 	err := grpc.StreamD.UpdateStreamPlayer(

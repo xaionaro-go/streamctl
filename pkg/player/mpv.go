@@ -42,6 +42,7 @@ type MPV struct {
 	IPCClient  *mpv.IPCClient
 	MPVClient  *mpv.Client
 	MPVConn    *mpvipc.Connection
+	CancelFunc context.CancelFunc
 
 	EndChInitialized bool
 	EndChMutex       xsync.Mutex
@@ -73,6 +74,7 @@ func NewMPV(
 	title string,
 	pathToMPV string,
 ) (_ret *MPV, _err error) {
+	ctx, cancelFn := context.WithCancel(ctx)
 	if pathToMPV == "" {
 		pathToMPV = "mpv"
 		switch runtime.GOOS {
@@ -84,8 +86,9 @@ func NewMPV(
 		PlayerCommon: PlayerCommon{
 			Title: title,
 		},
-		PathToMPV: pathToMPV,
-		EndCh:     make(chan struct{}),
+		PathToMPV:  pathToMPV,
+		EndCh:      make(chan struct{}),
+		CancelFunc: cancelFn,
 	}
 	err := p.execMPV(ctx)
 	if err != nil {
@@ -323,6 +326,7 @@ func (p *MPV) Stop(
 }
 
 func (p *MPV) Close(ctx context.Context) error {
+	p.CancelFunc()
 	p.OpenLinkOnRerun = ""
 	return multierror.Append(
 		p.Cmd.Process.Kill(),

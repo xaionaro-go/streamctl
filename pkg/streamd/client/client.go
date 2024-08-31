@@ -1249,7 +1249,12 @@ func (c *Client) UpdateStreamPlayer(
 	playerType player.Backend,
 	disabled bool,
 	streamPlaybackConfig sptypes.Config,
-) error {
+) (_err error) {
+	logger.Debugf(ctx, "UpdateStreamPlayer(ctx, '%s', '%s', %v, %#+v)", streamID, playerType, disabled, streamPlaybackConfig)
+	defer func() {
+		logger.Debugf(ctx, "/UpdateStreamPlayer(ctx, '%s', '%s', %v, %#+v): %v", streamID, playerType, disabled, streamPlaybackConfig, _err)
+	}()
+
 	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,

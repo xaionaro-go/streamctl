@@ -2,6 +2,7 @@ package streamplayer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -29,7 +30,7 @@ type StreamServer interface {
 }
 
 type StreamPlayers struct {
-	StreamPlayersLocker sync.RWMutex
+	StreamPlayersLocker xsync.RWMutex
 	StreamPlayers       map[api.StreamID]*StreamPlayer
 
 	StreamServer   StreamServer
@@ -102,10 +103,10 @@ func (sp *StreamPlayers) Create(
 		return nil, fmt.Errorf("unable to start the player: %w", err)
 	}
 
-	sp.StreamPlayersLocker.Lock()
-	defer sp.StreamPlayersLocker.Unlock()
-	sp.StreamPlayers[streamID] = p
-	return p, nil
+	return xsync.DoR2(ctx, &sp.StreamPlayersLocker, func() (*StreamPlayer, error) {
+		sp.StreamPlayers[streamID] = p
+		return p, nil
+	})
 }
 
 func (sp *StreamPlayers) Remove(
@@ -114,32 +115,33 @@ func (sp *StreamPlayers) Remove(
 ) error {
 	logger.Debugf(ctx, "StreamPlayers.Remove(ctx, '%s')", streamID)
 	defer logger.Debugf(ctx, "/StreamPlayers.Remove(ctx, '%s')", streamID)
-	sp.StreamPlayersLocker.Lock()
-	defer sp.StreamPlayersLocker.Unlock()
-	p, ok := sp.StreamPlayers[streamID]
-	if !ok {
+	return xsync.DoR1(ctx, &sp.StreamPlayersLocker, func() error {
+		p, ok := sp.StreamPlayers[streamID]
+		if !ok {
+			return nil
+		}
+		errmon.ObserveErrorCtx(ctx, p.Close())
+		delete(sp.StreamPlayers, streamID)
 		return nil
-	}
-	errmon.ObserveErrorCtx(ctx, p.Close())
-	delete(sp.StreamPlayers, streamID)
-	return nil
+	})
 }
 
 func (sp *StreamPlayers) Get(streamID api.StreamID) *StreamPlayer {
-	sp.StreamPlayersLocker.Lock()
-	defer sp.StreamPlayersLocker.Unlock()
-
-	return sp.StreamPlayers[streamID]
+	ctx := context.TODO()
+	return xsync.DoR1(ctx, &sp.StreamPlayersLocker, func() *StreamPlayer {
+		return sp.StreamPlayers[streamID]
+	})
 }
 
 func (sp *StreamPlayers) GetAll() map[api.StreamID]*StreamPlayer {
-	sp.StreamPlayersLocker.Lock()
-	defer sp.StreamPlayersLocker.Unlock()
-	r := map[api.StreamID]*StreamPlayer{}
-	for k, v := range sp.StreamPlayers {
-		r[k] = v
-	}
-	return r
+	ctx := context.TODO()
+	return xsync.DoR1(ctx, &sp.StreamPlayersLocker, func() map[api.StreamID]*StreamPlayer {
+		r := map[api.StreamID]*StreamPlayer{}
+		for k, v := range sp.StreamPlayers {
+			r[k] = v
+		}
+		return r
+	})
 }
 
 const (
@@ -161,9 +163,11 @@ func (p *StreamPlayer) startU(ctx context.Context) error {
 	logger.Debugf(ctx, "StreamPlayers.startU(ctx): '%s'", p.StreamID)
 	defer logger.Debugf(ctx, "/StreamPlayers.startU(ctx): '%s'", p.StreamID)
 
+	instanceCtx, cancelFn := context.WithCancel(ctx)
+
 	playerType := p.Parent.PlayerManager.SupportedBackends()[0]
 	player, err := p.Parent.PlayerManager.NewPlayer(
-		ctx,
+		instanceCtx,
 		StreamID2Title(p.StreamID),
 		playerType,
 	)
@@ -180,7 +184,7 @@ func (p *StreamPlayer) startU(ctx context.Context) error {
 	}
 	logger.Debugf(ctx, "the player #%+v opened the stream", player)
 
-	observability.Go(ctx, func() { p.controllerLoop(ctx) })
+	observability.Go(ctx, func() { p.controllerLoop(ctx, cancelFn) })
 	return nil
 }
 
@@ -239,10 +243,16 @@ func (p *StreamPlayer) getInternalURL(ctx context.Context) (*url.URL, error) {
 	return &u, nil
 }
 
-func (p *StreamPlayer) openStream(ctx context.Context) error {
+func (p *StreamPlayer) openStream(ctx context.Context) (_err error) {
+	logger.Debugf(ctx, "openStream")
+	defer func() { logger.Debugf(ctx, "/openStream: %v", _err) }()
+
 	u, err := p.getURL(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to get URL: %w", err)
+	}
 	logger.Debugf(ctx, "opening '%s'", u.String())
-	p.withPlayer(ctx, func(ctx context.Context, player types.Player) {
+	err = p.withPlayer(ctx, func(ctx context.Context, player types.Player) {
 		ctx, cancelFn := context.WithTimeout(ctx, 1*time.Second)
 		defer cancelFn()
 		var once sync.Once
@@ -255,6 +265,9 @@ func (p *StreamPlayer) openStream(ctx context.Context) error {
 		})
 		err = player.OpenURL(ctx, u.String())
 		once.Do(func() {})
+		if err != nil {
+			err = fmt.Errorf("unable to open the URL: %w", err)
+		}
 	})
 	logger.Debugf(ctx, "opened '%s': %v", u.String(), err)
 	if err != nil {
@@ -288,9 +301,16 @@ func (p *StreamPlayer) notifyStart(ctx context.Context) {
 	}
 }
 
-func (p *StreamPlayer) controllerLoop(ctx context.Context) {
+func (p *StreamPlayer) controllerLoop(
+	ctx context.Context,
+	cancelPlayerInstance context.CancelFunc,
+) {
+	defer cancelPlayerInstance() // this is not necessary, but exists, just in case to reduce risks of a bad cleanup
+
 	logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop", p.StreamID)
 	defer logger.Debugf(ctx, "/StreamPlayer[%s].controllerLoop", p.StreamID)
+
+	instanceCtx, cancelFn := context.WithCancel(ctx)
 
 	// wait for video to start:
 	{
@@ -311,7 +331,7 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 
 				logger.Debugf(ctx, "waiting for stream '%s'", p.StreamID)
 				select {
-				case <-ctx.Done():
+				case <-instanceCtx.Done():
 					errmon.ObserveErrorCtx(ctx, p.Close())
 					return false
 				case <-ch:
@@ -324,7 +344,7 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 				defer t.Stop()
 				for {
 					select {
-					case <-ctx.Done():
+					case <-instanceCtx.Done():
 						return false
 					case <-t.C:
 					}
@@ -338,16 +358,24 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 					deadline := time.Now().Add(30 * time.Second)
 					for {
 						select {
-						case <-ctx.Done():
+						case <-instanceCtx.Done():
 							return false
 						case <-t.C:
 						}
 						logger.Debugf(ctx, "checking if we get get the position")
-						p.withPlayer(ctx, func(ctx context.Context, player types.Player) {
+						err = p.withPlayer(ctx, func(ctx context.Context, player types.Player) {
 							var pos time.Duration
 							pos, err = player.GetPosition(ctx)
 							logger.Debugf(ctx, "result of getting the position: %v %v", pos, err)
+							if err != nil {
+								err = fmt.Errorf("unable to get the position: %w", err)
+							}
 						})
+						if errors.As(err, &ErrNilPlayer{}) {
+							logger.Debugf(ctx, "player is nil, finishing")
+							cancelFn()
+							return false
+						}
 						if err == nil {
 							break
 						}
@@ -370,8 +398,11 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 					pos time.Duration
 					err error
 				)
-				p.withPlayer(ctx, func(ctx context.Context, player types.Player) {
+				err = p.withPlayer(ctx, func(ctx context.Context, player types.Player) {
 					pos, err = player.GetPosition(ctx)
+					if err != nil {
+						err = fmt.Errorf("unable to get position: %w", err)
+					}
 				})
 				if err != nil {
 					logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: unable to get the current position: %v", p.StreamID, err)
@@ -390,7 +421,7 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 	}
 
 	select {
-	case <-ctx.Done():
+	case <-instanceCtx.Done():
 		return
 	default:
 	}
@@ -411,13 +442,14 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 	curSpeed := float64(1)
 	for {
 		select {
-		case <-ctx.Done():
+		case <-instanceCtx.Done():
 			errmon.ObserveErrorCtx(ctx, p.Close())
 			return
 		case <-t.C:
 		}
 
-		p.withPlayer(ctx, func(ctx context.Context, player types.Player) {
+		isClosed := false
+		err := p.withPlayer(ctx, func(ctx context.Context, player types.Player) {
 			now := time.Now()
 			l, err := player.GetLength(ctx)
 			if err != nil {
@@ -438,12 +470,15 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 			} else {
 				if now.Sub(posUpdatedAt) > p.Config.ReadTimeout {
 					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: now == %v, posUpdatedAt == %v, len == %v; pos == %v; readTimeout == %v, restarting", p.StreamID, now, posUpdatedAt, l, pos, p.Config.ReadTimeout)
-					err := p.restartU(ctx)
-					errmon.ObserveErrorCtx(ctx, err)
-					if err != nil {
-						err := p.Parent.Remove(ctx, p.StreamID)
+					isClosed = true
+					observability.Go(ctx, func() {
+						err := p.restartU(ctx)
 						errmon.ObserveErrorCtx(ctx, err)
-					}
+						if err != nil {
+							err := p.Parent.Remove(ctx, p.StreamID)
+							errmon.ObserveErrorCtx(ctx, err)
+						}
+					})
 					return
 				}
 			}
@@ -472,11 +507,12 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 			if speed > p.Config.CatchupMaxSpeedFactor {
 				logger.Warnf(
 					ctx,
-					"internal error: speed is calculated higher than the maximum: %v > %v: (%v-1)*(%v-%v)/(%v-%v)",
+					"speed is calculated higher than the maximum: %v > %v: (%v-1)*(%v-%v)/(%v-%v); lag calculation: %v - %v",
 					speed, p.Config.CatchupMaxSpeedFactor,
 					p.Config.CatchupMaxSpeedFactor,
 					lag.Seconds(), p.Config.JitterBufDuration.Seconds(),
 					p.Config.MaxCatchupAtLag.Seconds(), p.Config.JitterBufDuration.Seconds(),
+					l, pos,
 				)
 				speed = p.Config.CatchupMaxSpeedFactor
 			}
@@ -491,18 +527,33 @@ func (p *StreamPlayer) controllerLoop(ctx context.Context) {
 				curSpeed = speed
 			}
 		})
+		if isClosed {
+			logger.Debug(ctx, "the player is closed, so closing the controllerLoop")
+			return
+		}
+		if err != nil {
+			logger.Error(ctx, "unable to get the player: %v", err)
+			return
+		}
 	}
+}
+
+type ErrNilPlayer struct{}
+
+func (e ErrNilPlayer) Error() string {
+	return "p.Player is nil"
 }
 
 func (p *StreamPlayer) withPlayer(
 	ctx context.Context,
 	fn func(context.Context, types.Player),
-) {
-	p.PlayerLocker.Do(ctx, func() {
+) error {
+	return xsync.DoR1(ctx, &p.PlayerLocker, func() error {
 		if p.Player == nil {
-			panic("p.Player is nil")
+			return ErrNilPlayer{}
 		}
 		fn(ctx, p.Player)
+		return nil
 	})
 }
 
@@ -515,7 +566,7 @@ func (p *StreamPlayer) Close() error {
 		}
 
 		if p.Player != nil {
-			err = multierror.Append(err, p.Player.Close(context.TODO()))
+			err = multierror.Append(err, p.Player.Close(ctx))
 			p.Player = nil
 		}
 		return err.ErrorOrNil()

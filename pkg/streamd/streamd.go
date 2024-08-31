@@ -1444,7 +1444,7 @@ func (d *StreamD) AddStreamPlayer(
 		playerType,
 		disabled,
 		streamPlaybackConfig,
-		streamserverimpl.AddStreamPlayerOptionDefaultStreamPlayerOptions(d.streamPlayerOptions()),
+		streamserverimpl.StreamPlayerOptionDefaultStreamPlayerOptions(d.streamPlayerOptions()),
 	))
 	result = multierror.Append(result, d.SaveConfig(ctx))
 	return result.ErrorOrNil()
@@ -1456,7 +1456,11 @@ func (d *StreamD) UpdateStreamPlayer(
 	playerType player.Backend,
 	disabled bool,
 	streamPlaybackConfig sptypes.Config,
-) error {
+) (_err error) {
+	logger.Debugf(ctx, "UpdateStreamPlayer(ctx, '%s', '%s', %v, %#+v)", streamID, playerType, disabled, streamPlaybackConfig)
+	defer func() {
+		logger.Debugf(ctx, "/UpdateStreamPlayer(ctx, '%s', '%s', %v, %#+v): %v", streamID, playerType, disabled, streamPlaybackConfig, _err)
+	}()
 	defer d.notifyAboutChange(ctx, events.StreamPlayersChange)
 	var result *multierror.Error
 	result = multierror.Append(result, d.StreamServer.UpdateStreamPlayer(
@@ -1465,6 +1469,7 @@ func (d *StreamD) UpdateStreamPlayer(
 		playerType,
 		disabled,
 		streamPlaybackConfig,
+		streamserverimpl.StreamPlayerOptionDefaultStreamPlayerOptions(d.streamPlayerOptions()),
 	))
 	result = multierror.Append(result, d.SaveConfig(ctx))
 	return result.ErrorOrNil()

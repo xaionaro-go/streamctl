@@ -22,6 +22,7 @@ import (
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	sstypes "github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
+	"github.com/xaionaro-go/streamctl/pkg/xcontext"
 	"github.com/xaionaro-go/streamctl/pkg/xfyne"
 )
 
@@ -737,7 +738,7 @@ func (p *Panel) displayStreamPlayers(
 					logger.Debugf(ctx, "stop/start player %s on '%s': disabled:%v->%v", player.PlayerType, player.StreamID, player.Disabled, !player.Disabled)
 					defer logger.Debugf(ctx, "/stop/start player %s on '%s': disabled:%v->%v", player.PlayerType, player.StreamID, player.Disabled, !player.Disabled)
 					err := p.StreamD.UpdateStreamPlayer(
-						ctx,
+						xcontext.DetachDone(ctx),
 						player.StreamID,
 						player.PlayerType,
 						!player.Disabled,

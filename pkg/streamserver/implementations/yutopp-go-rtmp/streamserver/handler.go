@@ -2,12 +2,16 @@ package streamserver
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"log"
+	"sync/atomic"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/pkg/errors"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 	flvtag "github.com/yutopp/go-flv/tag"
 	"github.com/yutopp/go-rtmp"
 	rtmpmsg "github.com/yutopp/go-rtmp/message"
@@ -17,19 +21,25 @@ var _ rtmp.Handler = (*Handler)(nil)
 
 // Handler An RTMP connection handler
 type Handler struct {
+	isClosed atomic.Bool
+	xsync.Mutex
 	rtmp.DefaultHandler
 	relayService *RelayService
 
-	//
 	conn *rtmp.Conn
-
-	//
-	pub *Pub
-	sub *Sub
+	pub  *Pub
+	sub  *Sub
 }
 
 func (h *Handler) OnServe(conn *rtmp.Conn) {
-	h.conn = conn
+	ctx := context.TODO()
+	h.Mutex.Do(ctx, func() {
+		if h.isClosed.Load() {
+			logger.Errorf(ctx, "an attempt to call OnServe on a closed Handler")
+			return
+		}
+		h.conn = conn
+	})
 }
 
 func (h *Handler) OnConnect(timestamp uint32, cmd *rtmpmsg.NetConnectionConnect) error {
@@ -64,11 +74,17 @@ func (h *Handler) OnPublish(_ *rtmp.StreamContext, timestamp uint32, cmd *rtmpms
 	}
 
 	pub := pubsub.Pub()
-	h.pub = pub
-	return nil
+	ctx := context.TODO()
+	return xsync.DoR1(ctx, &h.Mutex, func() error {
+		if h.isClosed.Load() {
+			return fmt.Errorf("the handler is closed")
+		}
+		h.pub = pub
+		return nil
+	})
 }
 
-func (h *Handler) OnPlay(ctx *rtmp.StreamContext, timestamp uint32, cmd *rtmpmsg.NetStreamPlay) error {
+func (h *Handler) OnPlay(rtmpctx *rtmp.StreamContext, timestamp uint32, cmd *rtmpmsg.NetStreamPlay) error {
 	if h.sub != nil {
 		return errors.New("Cannot play on this stream")
 	}
@@ -78,9 +94,14 @@ func (h *Handler) OnPlay(ctx *rtmp.StreamContext, timestamp uint32, cmd *rtmpmsg
 		return fmt.Errorf("stream '%s' is not found", cmd.StreamName)
 	}
 
-	h.sub = pubsub.Sub(h.conn, onEventCallback(h.conn, ctx.StreamID))
-
-	return nil
+	ctx := context.TODO()
+	return xsync.DoR1(ctx, &h.Mutex, func() error {
+		if h.isClosed.Load() {
+			return fmt.Errorf("the handler is closed")
+		}
+		h.sub = pubsub.Sub(h.conn, onEventCallback(h.conn, rtmpctx.StreamID))
+		return nil
+	})
 }
 
 func (h *Handler) OnSetDataFrame(timestamp uint32, data *rtmpmsg.NetStreamSetDataFrame) error {
@@ -94,7 +115,12 @@ func (h *Handler) OnSetDataFrame(timestamp uint32, data *rtmpmsg.NetStreamSetDat
 
 	log.Printf("SetDataFrame: Script = %#v", script)
 
-	_ = h.pub.Publish(&flvtag.FlvTag{
+	pub := h.pub
+	if h.isClosed.Load() {
+		return fmt.Errorf("the handler is closed")
+	}
+
+	_ = pub.Publish(&flvtag.FlvTag{
 		TagType:   flvtag.TagTypeScriptData,
 		Timestamp: timestamp,
 		Data:      &script,
@@ -115,7 +141,12 @@ func (h *Handler) OnAudio(timestamp uint32, payload io.Reader) error {
 	}
 	audio.Data = flvBody
 
-	_ = h.pub.Publish(&flvtag.FlvTag{
+	pub := h.pub
+	if h.isClosed.Load() {
+		return fmt.Errorf("the handler is closed")
+	}
+
+	_ = pub.Publish(&flvtag.FlvTag{
 		TagType:   flvtag.TagTypeAudio,
 		Timestamp: timestamp,
 		Data:      &audio,
@@ -137,7 +168,12 @@ func (h *Handler) OnVideo(timestamp uint32, payload io.Reader) error {
 	}
 	video.Data = flvBody
 
-	_ = h.pub.Publish(&flvtag.FlvTag{
+	pub := h.pub
+	if h.isClosed.Load() {
+		return fmt.Errorf("the handler is closed")
+	}
+
+	_ = pub.Publish(&flvtag.FlvTag{
 		TagType:   flvtag.TagTypeVideo,
 		Timestamp: timestamp,
 		Data:      &video,
@@ -150,11 +186,23 @@ func (h *Handler) OnClose() {
 	logger.Default().Debugf("OnClose")
 	defer logger.Default().Debugf("/OnClose")
 
-	if h.pub != nil {
-		_ = h.pub.Close()
-	}
+	ctx := context.TODO()
+	h.Mutex.Do(ctx, func() {
+		if h.isClosed.Load() {
+			logger.Debugf(ctx, "OnClose on an already closed Handler")
+			return
+		}
 
-	if h.sub != nil {
-		_ = h.sub.Close()
-	}
+		pub, sub := h.pub, h.sub
+		observability.Go(ctx, func() {
+			if pub != nil {
+				_ = pub.Close()
+			}
+			if sub != nil {
+				_ = sub.Close()
+			}
+		})
+
+		h.isClosed.Store(true)
+	})
 }
