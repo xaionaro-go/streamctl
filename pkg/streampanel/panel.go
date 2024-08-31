@@ -1484,9 +1484,11 @@ func (p *Panel) getUpdatedStatus(ctx context.Context) {
 }
 
 func (p *Panel) getUpdatedStatus_backends(ctx context.Context) {
-	p.streamMutex.Lock()
-	defer p.streamMutex.Unlock()
-
+	p.streamMutex.Do(ctx, func() {
+		p.getUpdatedStatus_backends_noLock(ctx)
+	})
+}
+func (p *Panel) getUpdatedStatus_backends_noLock(ctx context.Context) {
 	backendEnabled := map[streamcontrol.PlatformName]bool{}
 	for _, backendID := range []streamcontrol.PlatformName{
 		obs.ID,
@@ -1551,9 +1553,12 @@ func (p *Panel) getUpdatedStatus_backends(ctx context.Context) {
 }
 
 func (p *Panel) getUpdatedStatus_startStopStreamButton(ctx context.Context) {
-	p.streamMutex.Lock()
-	defer p.streamMutex.Unlock()
+	p.streamMutex.Do(ctx, func() {
+		p.getUpdatedStatus_startStopStreamButton_noLock(ctx)
+	})
+}
 
+func (p *Panel) getUpdatedStatus_startStopStreamButton_noLock(ctx context.Context) {
 	obsIsEnabled, _ := p.StreamD.IsBackendEnabled(ctx, obs.ID)
 	if obsIsEnabled {
 		obsStreamStatus, err := p.StreamD.GetStreamStatus(ctx, obs.ID)
@@ -2036,9 +2041,12 @@ func (p *Panel) streamIsRunning(
 }
 
 func (p *Panel) setupStream(ctx context.Context) {
-	p.streamMutex.Lock()
-	defer p.streamMutex.Unlock()
+	p.streamMutex.Do(ctx, func() {
+		p.setupStreamNoLock(ctx)
+	})
+}
 
+func (p *Panel) setupStreamNoLock(ctx context.Context) {
 	if p.streamTitleField.Text == "" {
 		p.DisplayError(fmt.Errorf("title is not set"))
 		return
@@ -2118,33 +2126,32 @@ func (p *Panel) setupStream(ctx context.Context) {
 			waitFor := 15 * time.Second
 			deadline := time.Now().Add(waitFor)
 
-			p.streamMutex.Lock()
-			defer p.streamMutex.Unlock()
+			p.streamMutex.Do(ctx, func() {
+				p.startStopButton.Disable()
+				p.startStopButton.Icon = theme.ViewRefreshIcon()
+				p.startStopButton.Importance = widget.DangerImportance
 
-			p.startStopButton.Disable()
-			p.startStopButton.Icon = theme.ViewRefreshIcon()
-			p.startStopButton.Importance = widget.DangerImportance
-
-			t := time.NewTicker(100 * time.Millisecond)
-			defer t.Stop()
-			for {
-				<-t.C
-				timeDiff := time.Until(deadline).Truncate(100 * time.Millisecond)
-				if timeDiff < 0 {
-					return
+				t := time.NewTicker(100 * time.Millisecond)
+				defer t.Stop()
+				for {
+					<-t.C
+					timeDiff := time.Until(deadline).Truncate(100 * time.Millisecond)
+					if timeDiff < 0 {
+						return
+					}
+					p.startStopButton.SetText(fmt.Sprintf("%.1fs", timeDiff.Seconds()))
 				}
-				p.startStopButton.SetText(fmt.Sprintf("%.1fs", timeDiff.Seconds()))
-			}
+			})
 		})
 	}
 }
 
 func (p *Panel) startStream(ctx context.Context) {
-	p.streamMutex.Lock()
+	p.streamMutex.ManualLock(ctx)
 	defer func() {
 		observability.Go(ctx, func() {
 			time.Sleep(10 * time.Second) // TODO: remove this
-			p.streamMutex.Unlock()
+			p.streamMutex.ManualUnlock(ctx)
 		})
 	}()
 
@@ -2193,9 +2200,11 @@ func (p *Panel) startStream(ctx context.Context) {
 }
 
 func (p *Panel) stopStream(ctx context.Context) {
-	p.streamMutex.Lock()
-	defer p.streamMutex.Unlock()
-
+	p.streamMutex.Do(ctx, func() {
+		p.stopStreamNoLock(ctx)
+	})
+}
+func (p *Panel) stopStreamNoLock(ctx context.Context) {
 	backendEnabled := map[streamcontrol.PlatformName]bool{}
 	for _, backendID := range []streamcontrol.PlatformName{
 		obs.ID,
@@ -2258,9 +2267,10 @@ func (p *Panel) onSetupStreamButton(ctx context.Context) {
 }
 
 func (p *Panel) onStartStopButton(ctx context.Context) {
-	p.streamMutex.Lock()
-	shouldStop := p.updateTimerHandler != nil
-	p.streamMutex.Unlock()
+	var shouldStop bool
+	p.streamMutex.Do(ctx, func() {
+		shouldStop = p.updateTimerHandler != nil
+	})
 
 	if shouldStop {
 		w := dialog.NewConfirm(
@@ -3015,14 +3025,15 @@ func (p *Panel) showWaitStreamDCallWindow(ctx context.Context) {
 	observability.Go(ctx, func() {
 		defer func() {
 			<-ctx.Done()
-			p.waitStreamDCallWindowLocker.Lock()
-			defer p.waitStreamDCallWindowLocker.Unlock()
-			if atomic.AddInt32(&p.waitStreamDCallWindowCounter, -1) != 0 {
-				return
-			}
-			time.Sleep(aggregationDelayBeforeNotificationEnd)
-			p.statusPanelSet("ready")
-			logger.Debugf(ctx, "closed the 'network operation is in progress' notification")
+			p.waitStreamDCallWindowLocker.Do(ctx, func() {
+				if atomic.AddInt32(&p.waitStreamDCallWindowCounter, -1) != 0 {
+					return
+				}
+				time.Sleep(aggregationDelayBeforeNotificationEnd)
+				// TODO: set "ready" only if we have set "in process" before.
+				p.statusPanelSet("ready")
+				logger.Tracef(ctx, "closed the 'network operation is in progress' notification")
+			})
 		}()
 
 		select {
@@ -3031,10 +3042,10 @@ func (p *Panel) showWaitStreamDCallWindow(ctx context.Context) {
 		case <-time.After(aggregationDelayBeforeNotificationStart):
 		}
 
-		p.waitStreamDCallWindowLocker.Lock()
-		defer p.waitStreamDCallWindowLocker.Unlock()
-		logger.Debugf(ctx, "making a 'network operation is in progress' notification")
-		p.statusPanelSet("Network operation is in process, please wait...")
+		p.waitStreamDCallWindowLocker.Do(ctx, func() {
+			logger.Debugf(ctx, "making a 'network operation is in progress' notification")
+			p.statusPanelSet("Network operation is in process, please wait...")
+		})
 	})
 }
 
@@ -3043,14 +3054,14 @@ func (p *Panel) showWaitStreamDConnectWindow(ctx context.Context) {
 	observability.Go(ctx, func() {
 		defer func() {
 			<-ctx.Done()
-			p.waitStreamDConnectWindowLocker.Lock()
-			defer p.waitStreamDConnectWindowLocker.Unlock()
-			if atomic.AddInt32(&p.waitStreamDConnectWindowCounter, -1) != 0 {
-				return
-			}
-			time.Sleep(aggregationDelayBeforeNotificationEnd)
-			p.statusPanelSet("(re-)connected")
-			logger.Debugf(ctx, "closed the 'connecting is in progress' window")
+			p.waitStreamDConnectWindowLocker.Do(ctx, func() {
+				if atomic.AddInt32(&p.waitStreamDConnectWindowCounter, -1) != 0 {
+					return
+				}
+				time.Sleep(aggregationDelayBeforeNotificationEnd)
+				p.statusPanelSet("(re-)connected")
+				logger.Debugf(ctx, "closed the 'connecting is in progress' window")
+			})
 		}()
 
 		select {
@@ -3059,10 +3070,10 @@ func (p *Panel) showWaitStreamDConnectWindow(ctx context.Context) {
 		case <-time.After(aggregationDelayBeforeNotificationStart):
 		}
 
-		p.waitStreamDConnectWindowLocker.Lock()
-		defer p.waitStreamDConnectWindowLocker.Unlock()
-		logger.Debugf(ctx, "making a 'connecting is in progress' window")
-		defer logger.Debugf(ctx, "made a 'connecting is in progress' window")
-		p.statusPanelSet("Connecting is in process, please wait...")
+		p.waitStreamDConnectWindowLocker.Do(ctx, func() {
+			logger.Debugf(ctx, "making a 'connecting is in progress' window")
+			defer logger.Debugf(ctx, "made a 'connecting is in progress' window")
+			p.statusPanelSet("Connecting is in process, please wait...")
+		})
 	})
 }

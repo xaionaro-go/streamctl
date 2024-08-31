@@ -20,9 +20,9 @@ func (m *Manager) NewLibVLC(
 		return nil, err
 	}
 
-	m.PlayersLocker.Lock()
-	defer m.PlayersLocker.Unlock()
-	m.Players = append(m.Players, r)
+	m.PlayersLocker.Do(ctx, func() {
+		m.Players = append(m.Players, r)
+	})
 	return r, nil
 }
 

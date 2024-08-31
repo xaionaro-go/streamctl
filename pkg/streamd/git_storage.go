@@ -12,6 +12,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/repository"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 const gitRepoPanelConfigFileName = "streampanel.yaml"
@@ -23,12 +24,12 @@ func (d *StreamD) sendConfigViaGIT(
 ) error {
 	logger.Debugf(ctx, "sendConfigViaGIT")
 	defer logger.Debugf(ctx, "/sendConfigViaGIT")
+	return xsync.DoA1R1(ctx, &d.GitSyncerMutex, d.sendConfigViaGITNoLock, ctx)
+}
 
-	d.GitSyncerMutex.Lock()
-	defer d.GitSyncerMutex.Unlock()
-
-	logger.Debugf(ctx, "sendConfigViaGIT: Lock() success")
-
+func (d *StreamD) sendConfigViaGITNoLock(
+	ctx context.Context,
+) error {
 	var newBytes bytes.Buffer
 	latestSyncCommit := d.Config.GitRepo.LatestSyncCommit
 	d.Config.GitRepo.LatestSyncCommit = ""
@@ -59,10 +60,10 @@ func (d *StreamD) sendConfigViaGIT(
 func (d *StreamD) gitSync(ctx context.Context) {
 	logger.Debugf(ctx, "gitSync")
 	defer logger.Debugf(ctx, "/gitSync")
+	xsync.DoA1(ctx, &d.GitSyncerMutex, d.gitSyncNoLock, ctx)
+}
 
-	d.GitSyncerMutex.Lock()
-	defer d.GitSyncerMutex.Unlock()
-
+func (d *StreamD) gitSyncNoLock(ctx context.Context) {
 	logger.Debugf(ctx, "last_known_commit: %s", d.Config.GitRepo.LatestSyncCommit)
 	err := d.GitStorage.Pull(
 		ctx,
@@ -154,13 +155,13 @@ func (d *StreamD) initGitIfNeeded(ctx context.Context) {
 			return
 		}
 
-		d.GitSyncerMutex.Lock()
-		d.deinitGitStorage(ctx)
-		if gitStorage == nil {
-			panic("gitStorage == nil")
-		}
-		d.GitStorage = gitStorage
-		d.GitSyncerMutex.Unlock()
+		d.GitSyncerMutex.Do(ctx, func() {
+			d.deinitGitStorage(ctx)
+			if gitStorage == nil {
+				panic("gitStorage == nil")
+			}
+			d.GitStorage = gitStorage
+		})
 		break
 	}
 
@@ -188,17 +189,15 @@ func (d *StreamD) deinitGitStorage(_ context.Context) {
 func (d *StreamD) startPeriodicGitSyncer(ctx context.Context) {
 	logger.Debugf(ctx, "startPeriodicGitSyncer")
 	defer logger.Debugf(ctx, "/startPeriodicGitSyncer")
-	d.GitSyncerMutex.Lock()
 
-	if d.CancelGitSyncer != nil {
-		logger.Debugf(ctx, "git syncer is already started")
-		d.GitSyncerMutex.Unlock()
-		return
-	}
+	d.GitSyncerMutex.Do(ctx, func() {
+		if d.CancelGitSyncer != nil {
+			logger.Debugf(ctx, "git syncer is already started")
+			return
+		}
 
-	ctx, cancelFn := context.WithCancel(ctx)
-	d.CancelGitSyncer = cancelFn
-	d.GitSyncerMutex.Unlock()
+		ctx, d.CancelGitSyncer = context.WithCancel(ctx)
+	})
 
 	d.gitSync(ctx)
 	observability.Go(ctx, func() {
@@ -211,10 +210,9 @@ func (d *StreamD) startPeriodicGitSyncer(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				d.GitSyncerMutex.Lock()
-				defer d.GitSyncerMutex.Unlock()
-
-				d.CancelGitSyncer = nil
+				d.GitSyncerMutex.Do(ctx, func() {
+					d.CancelGitSyncer = nil
+				})
 				return
 			case <-ticker.C:
 			}

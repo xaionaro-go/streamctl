@@ -12,7 +12,6 @@ import (
 
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/sasha-s/go-deadlock"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 )
 
@@ -104,9 +103,6 @@ func initRuntime(
 		}
 	})
 
-	deadlock.Opts.LogBuf = NewLogWriter(ctx, l)
-	deadlock.Opts.DeadlockTimeout = flags.LockTimeout
-
 	seppukuIfMemHugeLeak(ctx)
 
 	ctx, cancelFn := context.WithCancel(ctx)
@@ -145,7 +141,7 @@ func seppukuIfMemHugeLeak(
 				var m runtime.MemStats
 				runtime.ReadMemStats(&m)
 
-				logger.Debugf(ctx, "memory consumed (in heap): %v", m.HeapInuse)
+				logger.Tracef(ctx, "memory consumed (in heap): %v", m.HeapInuse)
 				if m.HeapInuse > 1000*1000*1000 {
 					logger.Panicf(ctx, "I consumed almost 1GiB! Seppuku!")
 				}

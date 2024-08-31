@@ -20,6 +20,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/screenshoter"
 	streamdconsts "github.com/xaionaro-go/streamctl/pkg/streamd/consts"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 type Screenshoter interface {
@@ -56,12 +57,16 @@ func (p *Panel) setImage(
 }
 
 func (p *Panel) downloadImage(
-
 	ctx context.Context,
 	imageID consts.ImageID,
 ) ([]byte, bool, error) {
-	p.imageLocker.Lock()
-	defer p.imageLocker.Unlock()
+	return xsync.DoA2R3(ctx, &p.imageLocker, p.downloadImageNoLock, ctx, imageID)
+}
+
+func (p *Panel) downloadImageNoLock(
+	ctx context.Context,
+	imageID consts.ImageID,
+) ([]byte, bool, error) {
 	varKey := consts.VarKeyImage(imageID)
 
 	if oldImage, ok := p.imageLastDownloaded[imageID]; ok {
@@ -256,11 +261,11 @@ func (p *Panel) setScreenshot(
 	logger.Tracef(ctx, "screenshot bounds: %#+v", bounds)
 	if bounds.Max.X == 0 || bounds.Max.Y == 0 {
 		p.DisplayError(fmt.Errorf("received an empty screenshot"))
-		p.screenshoterLocker.Lock()
-		if p.screenshoterClose != nil {
-			p.screenshoterClose()
-		}
-		p.screenshoterLocker.Unlock()
+		p.screenshoterLocker.Do(ctx, func() {
+			if p.screenshoterClose != nil {
+				p.screenshoterClose()
+			}
+		})
 		return
 	}
 
@@ -284,25 +289,25 @@ func (p *Panel) reinitScreenshoter(ctx context.Context) {
 	logger.Debugf(ctx, "reinitScreenshoter")
 	defer logger.Debugf(ctx, "/reinitScreenshoter")
 
-	p.screenshoterLocker.Lock()
-	defer p.screenshoterLocker.Unlock()
-	if p.screenshoterClose != nil {
-		p.screenshoterClose()
-		p.screenshoterClose = nil
-	}
+	p.screenshoterLocker.Do(ctx, func() {
+		if p.screenshoterClose != nil {
+			p.screenshoterClose()
+			p.screenshoterClose = nil
+		}
 
-	if p.Config.Screenshot.Enabled == nil || !*p.Config.Screenshot.Enabled {
-		return
-	}
+		if p.Config.Screenshot.Enabled == nil || !*p.Config.Screenshot.Enabled {
+			return
+		}
 
-	ctx, cancelFunc := context.WithCancel(ctx)
-	p.screenshoterClose = cancelFunc
-	observability.Go(ctx, func() {
-		p.Screenshoter.Loop(
-			ctx,
-			200*time.Millisecond,
-			p.Config.Screenshot.Config,
-			func(ctx context.Context, img *image.RGBA) { p.setScreenshot(ctx, img) },
-		)
+		ctx, cancelFunc := context.WithCancel(ctx)
+		p.screenshoterClose = cancelFunc
+		observability.Go(ctx, func() {
+			p.Screenshoter.Loop(
+				ctx,
+				200*time.Millisecond,
+				p.Config.Screenshot.Config,
+				func(ctx context.Context, img *image.RGBA) { p.setScreenshot(ctx, img) },
+			)
+		})
 	})
 }

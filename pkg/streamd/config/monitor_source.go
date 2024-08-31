@@ -18,6 +18,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/colorx"
 	"github.com/xaionaro-go/streamctl/pkg/imgb64"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 type MonitorSourceType string
@@ -196,9 +197,9 @@ func (s *MonitorSourceOBSVolume) GetImage(
 	if obsState == nil {
 		return nil, time.Time{}, fmt.Errorf("obsState == nil")
 	}
-	obsState.Lock()
-	volumeMeters := obsState.VolumeMeters[s.Name]
-	obsState.Unlock()
+	volumeMeters := xsync.DoR1(ctx, &obsState.Mutex, func() [][3]float64 {
+		return obsState.VolumeMeters[s.Name]
+	})
 
 	if len(volumeMeters) == 0 {
 		return nil, time.Now().Add(time.Second), fmt.Errorf("no data for volume of '%s'", s.Name)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 func (s *Stream) Publish(
@@ -17,18 +18,18 @@ func (s *Stream) Publish(
 		return nil, fmt.Errorf("unable to start stream forwarding to '%s': %w", url, err)
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.cleanup()
-	s.forwardings = append(s.forwardings, streamFwd)
+	s.mu.Do(ctx, func() {
+		s.cleanup()
+		s.forwardings = append(s.forwardings, streamFwd)
+	})
 	return streamFwd, nil
 }
 
 func (s *Stream) Cleanup() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.cleanup()
+	ctx := context.TODO()
+	s.mu.Do(ctx, func() {
+		s.cleanup()
+	})
 }
 
 func (s *Stream) cleanup() {
@@ -43,12 +44,13 @@ func (s *Stream) cleanup() {
 }
 
 func (s *Stream) Forwardings() []*StreamForwarding {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.cleanup()
-	c := make([]*StreamForwarding, 0, len(s.forwardings))
-	c = append(c, s.forwardings...)
-	return c
+	ctx := context.TODO()
+	return xsync.DoR1(ctx, &s.mu, func() []*StreamForwarding {
+		s.cleanup()
+		c := make([]*StreamForwarding, 0, len(s.forwardings))
+		c = append(c, s.forwardings...)
+		return c
+	})
 }
 
 func (s *StreamHandler) Publish(

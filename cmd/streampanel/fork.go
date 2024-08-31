@@ -29,15 +29,17 @@ var forkLocker xsync.Mutex
 var forkMap = map[ProcessName]*exec.Cmd{}
 
 func getFork(procName ProcessName) *exec.Cmd {
-	forkLocker.Lock()
-	defer forkLocker.Unlock()
-	return forkMap[procName]
+	ctx := context.TODO()
+	return xsync.DoR1(ctx, &forkLocker, func() *exec.Cmd {
+		return forkMap[procName]
+	})
 }
 
 func setFork(procName ProcessName, f *exec.Cmd) {
-	forkLocker.Lock()
-	defer forkLocker.Unlock()
-	forkMap[procName] = f
+	ctx := context.TODO()
+	forkLocker.Do(ctx, func() {
+		forkMap[procName] = f
+	})
 }
 
 func init() {

@@ -20,40 +20,40 @@ func mainProcessSignalHandler(
 	observability.Go(ctx, func() {
 		for range c {
 			cancelFn()
-			forkLocker.Lock()
-			var wg sync.WaitGroup
-			for name, f := range forkMap {
-				wg.Add(1)
-				{
-					name, f := name, f
-					observability.Go(ctx, func() {
-						defer wg.Done()
-						logger.Debugf(ctx, "interrupting '%s'", name)
-						err := f.Process.Signal(os.Interrupt)
-						if err != nil {
-							logger.Errorf(ctx, "unable to send Interrupt to '%s': %v", name, err)
-							logger.Debugf(ctx, "killing '%s'", name)
-							f.Process.Kill()
-							return
-						}
-
+			forkLocker.Do(ctx, func() {
+				var wg sync.WaitGroup
+				for name, f := range forkMap {
+					wg.Add(1)
+					{
+						name, f := name, f
 						observability.Go(ctx, func() {
-							time.Sleep(5 * time.Second)
-							logger.Debugf(ctx, "killing '%s'", name)
-							err := f.Process.Kill()
+							defer wg.Done()
+							logger.Debugf(ctx, "interrupting '%s'", name)
+							err := f.Process.Signal(os.Interrupt)
 							if err != nil {
-								logger.Errorf(ctx, "unable to kill '%s': %v", name, err)
+								logger.Errorf(ctx, "unable to send Interrupt to '%s': %v", name, err)
+								logger.Debugf(ctx, "killing '%s'", name)
+								f.Process.Kill()
+								return
+							}
+
+							observability.Go(ctx, func() {
+								time.Sleep(5 * time.Second)
+								logger.Debugf(ctx, "killing '%s'", name)
+								err := f.Process.Kill()
+								if err != nil {
+									logger.Errorf(ctx, "unable to kill '%s': %v", name, err)
+								}
+							})
+							err = f.Wait()
+							if err != nil {
+								logger.Errorf(ctx, "unable to wait for '%s': %v", name, err)
 							}
 						})
-						err = f.Wait()
-						if err != nil {
-							logger.Errorf(ctx, "unable to wait for '%s': %v", name, err)
-						}
-					})
+					}
 				}
-			}
-			wg.Wait()
-			forkLocker.Unlock()
+				wg.Wait()
+			})
 			cancelFn()
 			os.Exit(0)
 		}

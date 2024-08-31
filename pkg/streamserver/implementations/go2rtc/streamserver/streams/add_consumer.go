@@ -1,6 +1,7 @@
 package streams
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -102,9 +103,10 @@ func (s *Stream) AddConsumer(cons core.Consumer) (err error) {
 		return formatError(consMedias, prodMedias, prodErrors)
 	}
 
-	s.mu.Lock()
-	s.consumers = append(s.consumers, cons)
-	s.mu.Unlock()
+	ctx := context.TODO()
+	s.mu.Do(ctx, func() {
+		s.consumers = append(s.consumers, cons)
+	})
 
 	// there may be duplicates, but that's not a problem
 	for _, prod := range prodStarts {

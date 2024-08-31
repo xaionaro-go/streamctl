@@ -5,10 +5,12 @@ import (
 	"io"
 	"os"
 	"os/user"
+	"runtime"
 	"strings"
 	"time"
 
 	"github.com/facebookincubator/go-belt"
+	xruntime "github.com/facebookincubator/go-belt/pkg/runtime"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	errmonsentry "github.com/facebookincubator/go-belt/tool/experimental/errmon/implementation/sentry"
 	"github.com/facebookincubator/go-belt/tool/logger"
@@ -20,12 +22,32 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
 )
 
+func setDefaultCallerPCFilter() {
+	oldPCFilter := xruntime.DefaultCallerPCFilter
+	xruntime.DefaultCallerPCFilter = func(pc uintptr) bool {
+		if !oldPCFilter(pc) {
+			return false
+		}
+		fn := runtime.FuncForPC(pc)
+		funcName := fn.Name()
+		switch {
+		case strings.Contains(funcName, "pkg/xsync"):
+			return false
+		case strings.HasSuffix(funcName, "/context.go"):
+			panic(funcName)
+			return false
+		}
+		return true
+	}
+}
+
 func getContext(
 	flags Flags,
 ) context.Context {
 	observability.LogLevelFilter.SetLevel(logger.Level(flags.LoggerLevel))
 
 	ctx := context.Background()
+	setDefaultCallerPCFilter()
 
 	ll := xlogrus.DefaultLogrusLogger()
 	ll.Formatter.(*logrus.TextFormatter).ForceColors = true

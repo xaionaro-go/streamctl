@@ -414,10 +414,10 @@ func (d *StreamD) setPlatformConfig(
 ) error {
 	logger.Debugf(ctx, "setPlatformConfig('%s', '%#+v')", platID, platCfg)
 	defer logger.Debugf(ctx, "endof setPlatformConfig('%s', '%#+v')", platID, platCfg)
-	d.ConfigLock.Lock()
-	defer d.ConfigLock.Unlock()
-	d.Config.Backends[platID] = platCfg
-	return d.SaveConfig(ctx)
+	return xsync.DoR1(ctx, &d.ConfigLock, func() error {
+		d.Config.Backends[platID] = platCfg
+		return d.SaveConfig(ctx)
+	})
 }
 
 func (d *StreamD) initTwitchData(ctx context.Context) bool {
@@ -444,9 +444,9 @@ func (d *StreamD) initTwitchData(ctx context.Context) bool {
 	logger.FromCtx(ctx).Debugf("got categories: %#+v", allCategories)
 
 	func() {
-		d.CacheLock.Lock()
-		defer d.CacheLock.Unlock()
-		d.Cache.Twitch.Categories = allCategories
+		d.CacheLock.Do(ctx, func() {
+			d.Cache.Twitch.Categories = allCategories
+		})
 	}()
 
 	err = d.SaveConfig(ctx)
@@ -485,9 +485,9 @@ func (d *StreamD) initYoutubeData(ctx context.Context) bool {
 	logger.FromCtx(ctx).Debugf("got broadcasts: %#+v", broadcasts)
 
 	func() {
-		d.CacheLock.Lock()
-		defer d.CacheLock.Unlock()
-		d.Cache.Youtube.Broadcasts = broadcasts
+		d.CacheLock.Do(ctx, func() {
+			d.Cache.Youtube.Broadcasts = broadcasts
+		})
 	}()
 
 	err = d.SaveConfig(ctx)
@@ -970,23 +970,27 @@ func (d *StreamD) SubmitOAuthCode(
 func (d *StreamD) AddOAuthListenPort(port uint16) {
 	logger.Default().Debugf("AddOAuthListenPort(%d)", port)
 	defer logger.Default().Debugf("/AddOAuthListenPort(%d)", port)
-	d.OAuthListenPortsLocker.Lock()
-	defer d.OAuthListenPortsLocker.Unlock()
-	d.OAuthListenPorts[port] = struct{}{}
+	ctx := context.TODO()
+	d.OAuthListenPortsLocker.Do(ctx, func() {
+		d.OAuthListenPorts[port] = struct{}{}
+	})
 }
 
 func (d *StreamD) RemoveOAuthListenPort(port uint16) {
 	logger.Default().Debugf("RemoveOAuthListenPort(%d)", port)
 	defer logger.Default().Debugf("/RemoveOAuthListenPort(%d)", port)
-	d.OAuthListenPortsLocker.Lock()
-	defer d.OAuthListenPortsLocker.Unlock()
-	delete(d.OAuthListenPorts, port)
+	ctx := context.TODO()
+	d.OAuthListenPortsLocker.Do(ctx, func() {
+		delete(d.OAuthListenPorts, port)
+	})
 }
 
 func (d *StreamD) GetOAuthListenPorts() []uint16 {
-	d.OAuthListenPortsLocker.Lock()
-	defer d.OAuthListenPortsLocker.Unlock()
+	ctx := context.TODO()
+	return xsync.DoR1(ctx, &d.OAuthListenPortsLocker, d.GetOAuthListenPorts)
+}
 
+func (d *StreamD) getOAuthListenPorts() []uint16 {
 	var ports []uint16
 	for k := range d.OAuthListenPorts {
 		ports = append(ports, k)

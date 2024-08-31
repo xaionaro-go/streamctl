@@ -1,6 +1,7 @@
 package types
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"math"
@@ -38,12 +39,13 @@ func (tc *TrafficCounter) NumBytesWrote() uint64 {
 		return math.MaxUint64
 	}
 
-	tc.Lock()
-	defer tc.Unlock()
-	if tc.WriterCounter == nil {
-		return math.MaxUint64
-	}
-	return tc.WriterCounter.Count()
+	ctx := context.TODO()
+	return xsync.DoR1(ctx, &tc.Mutex, func() uint64 {
+		if tc.WriterCounter == nil {
+			return math.MaxUint64
+		}
+		return tc.WriterCounter.Count()
+	})
 }
 
 func (tc *TrafficCounter) NumBytesRead() uint64 {
@@ -51,13 +53,14 @@ func (tc *TrafficCounter) NumBytesRead() uint64 {
 		return math.MaxUint64
 	}
 
-	tc.Lock()
-	defer tc.Unlock()
-	if tc.ReaderCounter == nil {
-		return math.MaxUint64
-	}
-	fmt.Println(tc.ReaderCounter.Count())
-	return tc.ReaderCounter.Count()
+	ctx := context.TODO()
+	return xsync.DoR1(ctx, &tc.Mutex, func() uint64 {
+		if tc.ReaderCounter == nil {
+			return math.MaxUint64
+		}
+		fmt.Println(tc.ReaderCounter.Count())
+		return tc.ReaderCounter.Count()
+	})
 }
 
 type IntPtrCounter struct {

@@ -266,35 +266,35 @@ func (p *Panel) displayStreamServers(
 			ID string
 		}
 		key := numBytesID{ID: srv.ListenAddr}
-		p.previousNumBytesLocker.Lock()
-		prevNumBytes := p.previousNumBytes[key]
-		now := time.Now()
-		bwStr := bwString(srv.NumBytesProducerRead, prevNumBytes[0], srv.NumBytesConsumerWrote, prevNumBytes[1], now, p.previousNumBytesTS[key])
-		bwText := widget.NewRichTextWithText(bwStr)
-		hasDynamicValue = hasDynamicValue || bwStr != ""
-		p.previousNumBytes[key] = [4]uint64{srv.NumBytesProducerRead, srv.NumBytesConsumerWrote}
-		p.previousNumBytesTS[key] = now
-		p.previousNumBytesLocker.Unlock()
+		p.previousNumBytesLocker.Do(ctx, func() {
+			prevNumBytes := p.previousNumBytes[key]
+			now := time.Now()
+			bwStr := bwString(srv.NumBytesProducerRead, prevNumBytes[0], srv.NumBytesConsumerWrote, prevNumBytes[1], now, p.previousNumBytesTS[key])
+			bwText := widget.NewRichTextWithText(bwStr)
+			hasDynamicValue = hasDynamicValue || bwStr != ""
+			p.previousNumBytes[key] = [4]uint64{srv.NumBytesProducerRead, srv.NumBytesConsumerWrote}
+			p.previousNumBytesTS[key] = now
+			c.Add(bwText)
+		})
 
-		c.Add(bwText)
 		objs = append(objs, c)
 	}
 	p.streamServersWidget.Objects = objs
 	p.streamServersWidget.Refresh()
 
-	p.streamServersLocker.Lock()
-	defer p.streamServersLocker.Unlock()
-	cancelFn := p.streamServersUpdaterCanceller
-	if hasDynamicValue {
-		if cancelFn == nil {
-			p.streamServersUpdaterCanceller = p.streamServersUpdater(ctx)
+	p.streamServersLocker.Do(ctx, func() {
+		cancelFn := p.streamServersUpdaterCanceller
+		if hasDynamicValue {
+			if cancelFn == nil {
+				p.streamServersUpdaterCanceller = p.streamServersUpdater(ctx)
+			}
+		} else {
+			if cancelFn != nil {
+				cancelFn()
+				p.streamServersUpdaterCanceller = nil
+			}
 		}
-	} else {
-		if cancelFn != nil {
-			cancelFn()
-			p.streamServersUpdaterCanceller = nil
-		}
-	}
+	})
 }
 
 func bwString(
@@ -775,19 +775,19 @@ func (p *Panel) displayStreamPlayers(
 	p.playersWidget.Objects = objs
 	p.playersWidget.Refresh()
 
-	p.streamPlayersLocker.Lock()
-	defer p.streamPlayersLocker.Unlock()
-	cancelFn := p.streamPlayersUpdaterCanceller
-	if hasDynamicValue {
-		if cancelFn == nil {
-			p.streamPlayersUpdaterCanceller = p.startStreamPlayersUpdater(ctx)
+	p.streamPlayersLocker.Do(ctx, func() {
+		cancelFn := p.streamPlayersUpdaterCanceller
+		if hasDynamicValue {
+			if cancelFn == nil {
+				p.streamPlayersUpdaterCanceller = p.startStreamPlayersUpdater(ctx)
+			}
+		} else {
+			if cancelFn != nil {
+				cancelFn()
+				p.streamPlayersUpdaterCanceller = nil
+			}
 		}
-	} else {
-		if cancelFn != nil {
-			cancelFn()
-			p.streamPlayersUpdaterCanceller = nil
-		}
-	}
+	})
 }
 
 func (p *Panel) openEditRestreamWindow(
@@ -1145,35 +1145,34 @@ func (p *Panel) displayStreamForwards(
 			}
 			key := numBytesID{StrID: fwd.StreamID, DstID: fwd.DestinationID}
 			now := time.Now()
-			p.previousNumBytesLocker.Lock()
-			prevNumBytes := p.previousNumBytes[key]
-			bwStr := bwString(fwd.NumBytesRead, prevNumBytes[0], fwd.NumBytesWrote, prevNumBytes[1], now, p.previousNumBytesTS[key])
-			bwText := widget.NewRichTextWithText(bwStr)
-			hasDynamicValue = hasDynamicValue || bwStr != ""
-			p.previousNumBytes[key] = [4]uint64{fwd.NumBytesRead, fwd.NumBytesWrote}
-			p.previousNumBytesTS[key] = now
-			p.previousNumBytesLocker.Unlock()
-
-			c.Add(bwText)
+			p.previousNumBytesLocker.Do(ctx, func() {
+				prevNumBytes := p.previousNumBytes[key]
+				bwStr := bwString(fwd.NumBytesRead, prevNumBytes[0], fwd.NumBytesWrote, prevNumBytes[1], now, p.previousNumBytesTS[key])
+				bwText := widget.NewRichTextWithText(bwStr)
+				hasDynamicValue = hasDynamicValue || bwStr != ""
+				p.previousNumBytes[key] = [4]uint64{fwd.NumBytesRead, fwd.NumBytesWrote}
+				p.previousNumBytesTS[key] = now
+				c.Add(bwText)
+			})
 		}
 		objs = append(objs, c)
 	}
 	p.restreamsWidget.Objects = objs
 	p.restreamsWidget.Refresh()
 
-	p.streamForwardersLocker.Lock()
-	defer p.streamForwardersLocker.Unlock()
-	cancelFn := p.streamForwardersUpdaterCanceller
-	if hasDynamicValue {
-		if cancelFn == nil {
-			p.streamForwardersUpdaterCanceller = p.startStreamForwardersUpdater(ctx)
+	p.streamForwardersLocker.Do(ctx, func() {
+		cancelFn := p.streamForwardersUpdaterCanceller
+		if hasDynamicValue {
+			if cancelFn == nil {
+				p.streamForwardersUpdaterCanceller = p.startStreamForwardersUpdater(ctx)
+			}
+		} else {
+			if cancelFn != nil {
+				cancelFn()
+				p.streamForwardersUpdaterCanceller = nil
+			}
 		}
-	} else {
-		if cancelFn != nil {
-			cancelFn()
-			p.streamForwardersUpdaterCanceller = nil
-		}
-	}
+	})
 }
 
 func (p *Panel) streamServersUpdater(
@@ -1194,10 +1193,10 @@ func (p *Panel) streamServersUpdater(
 		}
 
 		defer func() {
-			p.streamServersLocker.Lock()
-			defer p.streamServersLocker.Unlock()
-			p.streamServersUpdaterCanceller = nil
-			observability.Go(ctx, updateData)
+			p.streamServersLocker.Do(ctx, func() {
+				p.streamServersUpdaterCanceller = nil
+				observability.Go(ctx, updateData)
+			})
 		}()
 
 		logger.Debugf(ctx, "streamServersUpdater")
@@ -1234,10 +1233,10 @@ func (p *Panel) startStreamPlayersUpdater(
 		}
 
 		defer func() {
-			p.streamPlayersLocker.Lock()
-			defer p.streamPlayersLocker.Unlock()
-			p.streamPlayersUpdaterCanceller = nil
-			observability.Go(ctx, updateData)
+			p.streamPlayersLocker.Do(ctx, func() {
+				p.streamPlayersUpdaterCanceller = nil
+				observability.Go(ctx, updateData)
+			})
 		}()
 
 		logger.Debugf(ctx, "streamPlayersUpdater")
@@ -1274,10 +1273,10 @@ func (p *Panel) startStreamForwardersUpdater(
 		}
 
 		defer func() {
-			p.streamForwardersLocker.Lock()
-			defer p.streamForwardersLocker.Unlock()
-			p.streamForwardersUpdaterCanceller = nil
-			observability.Go(ctx, updateData)
+			p.streamForwardersLocker.Do(ctx, func() {
+				p.streamForwardersUpdaterCanceller = nil
+				observability.Go(ctx, updateData)
+			})
 		}()
 
 		logger.Debugf(ctx, "streamForwardersUpdater")

@@ -42,9 +42,13 @@ func NewHintWidget(window fyne.Window, text string) *HintWidget {
 }
 
 func (w *HintWidget) MouseIn(ev *desktop.MouseEvent) {
-	w.Locker.Lock()
-	defer w.Locker.Unlock()
+	ctx := context.TODO()
+	w.Locker.Do(ctx, func() {
+		w.mouseIn(ev)
+	})
+}
 
+func (w *HintWidget) mouseIn(ev *desktop.MouseEvent) {
 	if !w.Hint.Hidden {
 		return
 	}
@@ -125,19 +129,19 @@ func (w *HintWidget) isHovering(mousePos fyne.Position) bool {
 }
 
 func (w *HintWidget) hideHint() {
-	w.Locker.Lock()
-	defer w.Locker.Unlock()
+	ctx := context.TODO()
+	w.Locker.Do(ctx, func() {
+		if w.Hint.Hidden {
+			return
+		}
 
-	if w.Hint.Hidden {
-		return
-	}
-
-	w.Hint.Hide()
-	if w.RecheckerCancelFn == nil {
-		panic("should not have happened")
-	}
-	w.RecheckerCancelFn()
-	w.RecheckerCancelFn = nil
+		w.Hint.Hide()
+		if w.RecheckerCancelFn == nil {
+			panic("should not have happened")
+		}
+		w.RecheckerCancelFn()
+		w.RecheckerCancelFn = nil
+	})
 }
 
 func (w *HintWidget) MouseOut() {

@@ -38,9 +38,10 @@ func New(cfg *types.Config) *StreamServer {
 }
 
 func (s *StreamServer) Init(ctx context.Context) error {
-	s.Lock()
-	defer s.Unlock()
+	return xsync.DoA1R1(ctx, &s.Mutex, s.init, ctx)
+}
 
+func (s *StreamServer) init(ctx context.Context) error {
 	cfg := s.Config
 	logger.Debugf(ctx, "config == %#+v", *cfg)
 
@@ -82,11 +83,11 @@ func (s *StreamServer) ListServers(
 ) (_ret []types.PortServer) {
 	logger.Tracef(ctx, "ListServers")
 	defer func() { logger.Tracef(ctx, "/ListServers: %d servers", len(_ret)) }()
-	s.Lock()
-	defer s.Unlock()
-	c := make([]types.PortServer, len(s.ServerHandlers))
-	copy(c, s.ServerHandlers)
-	return c
+	return xsync.DoR1(ctx, &s.Mutex, func() []types.PortServer {
+		c := make([]types.PortServer, len(s.ServerHandlers))
+		copy(c, s.ServerHandlers)
+		return c
+	})
 }
 
 func (s *StreamServer) StartServer(
@@ -94,17 +95,17 @@ func (s *StreamServer) StartServer(
 	serverType streamtypes.ServerType,
 	listenAddr string,
 ) error {
-	s.Lock()
-	defer s.Unlock()
-	err := s.startServer(ctx, serverType, listenAddr)
-	if err != nil {
-		return err
-	}
-	s.Config.Servers = append(s.Config.Servers, types.Server{
-		Type:   serverType,
-		Listen: listenAddr,
+	return xsync.DoR1(ctx, &s.Mutex, func() error {
+		err := s.startServer(ctx, serverType, listenAddr)
+		if err != nil {
+			return err
+		}
+		s.Config.Servers = append(s.Config.Servers, types.Server{
+			Type:   serverType,
+			Listen: listenAddr,
+		})
+		return nil
 	})
-	return nil
 }
 
 func (s *StreamServer) startServer(
@@ -166,15 +167,15 @@ func (s *StreamServer) StopServer(
 	ctx context.Context,
 	server types.PortServer,
 ) error {
-	s.Lock()
-	defer s.Unlock()
-	for idx, srv := range s.Config.Servers {
-		if srv.Listen == server.ListenAddr() {
-			s.Config.Servers = append(s.Config.Servers[:idx], s.Config.Servers[idx+1:]...)
-			break
+	return xsync.DoR1(ctx, &s.Mutex, func() error {
+		for idx, srv := range s.Config.Servers {
+			if srv.Listen == server.ListenAddr() {
+				s.Config.Servers = append(s.Config.Servers[:idx], s.Config.Servers[idx+1:]...)
+				break
+			}
 		}
-	}
-	return s.stopServer(ctx, server)
+		return s.stopServer(ctx, server)
+	})
 }
 
 func (s *StreamServer) stopServer(
@@ -194,14 +195,14 @@ func (s *StreamServer) AddIncomingStream(
 	ctx context.Context,
 	streamID types.StreamID,
 ) error {
-	s.Lock()
-	defer s.Unlock()
-	err := s.addIncomingStream(ctx, streamID)
-	if err != nil {
-		return err
-	}
-	s.Config.Streams[streamID] = &types.StreamConfig{}
-	return nil
+	return xsync.DoR1(ctx, &s.Mutex, func() error {
+		err := s.addIncomingStream(ctx, streamID)
+		if err != nil {
+			return err
+		}
+		s.Config.Streams[streamID] = &types.StreamConfig{}
+		return nil
+	})
 }
 
 func assertEqual(a, b any) {
@@ -269,9 +270,7 @@ type IncomingStream struct {
 func (s *StreamServer) ListIncomingStreams(
 	ctx context.Context,
 ) []IncomingStream {
-	s.Lock()
-	defer s.Unlock()
-	return s.listIncomingStreams(ctx)
+	return xsync.DoA1R1(ctx, &s.Mutex, s.listIncomingStreams, ctx)
 }
 
 func (s *StreamServer) listIncomingStreams(
@@ -293,10 +292,10 @@ func (s *StreamServer) RemoveIncomingStream(
 	ctx context.Context,
 	streamID types.StreamID,
 ) error {
-	s.Lock()
-	defer s.Unlock()
-	delete(s.Config.Streams, streamID)
-	return s.removeIncomingStream(ctx, streamID)
+	return xsync.DoR1(ctx, &s.Mutex, func() error {
+		delete(s.Config.Streams, streamID)
+		return s.removeIncomingStream(ctx, streamID)
+	})
 }
 
 func (s *StreamServer) removeIncomingStream(
@@ -329,27 +328,27 @@ func (s *StreamServer) AddStreamForward(
 	destinationID types.DestinationID,
 	enabled bool,
 ) error {
-	s.Lock()
-	defer s.Unlock()
-	streamConfig := s.Config.Streams[streamID]
-	if streamConfig.Forwardings == nil {
-		streamConfig.Forwardings = map[types.DestinationID]types.ForwardingConfig{}
-	}
-
-	if _, ok := streamConfig.Forwardings[destinationID]; ok {
-		return fmt.Errorf("the forwarding %s->%s already exists", streamID, destinationID)
-	}
-
-	if enabled {
-		err := s.addStreamForward(ctx, streamID, destinationID)
-		if err != nil {
-			return err
+	return xsync.DoR1(ctx, &s.Mutex, func() error {
+		streamConfig := s.Config.Streams[streamID]
+		if streamConfig.Forwardings == nil {
+			streamConfig.Forwardings = map[types.DestinationID]types.ForwardingConfig{}
 		}
-	}
-	streamConfig.Forwardings[destinationID] = types.ForwardingConfig{
-		Disabled: !enabled,
-	}
-	return nil
+
+		if _, ok := streamConfig.Forwardings[destinationID]; ok {
+			return fmt.Errorf("the forwarding %s->%s already exists", streamID, destinationID)
+		}
+
+		if enabled {
+			err := s.addStreamForward(ctx, streamID, destinationID)
+			if err != nil {
+				return err
+			}
+		}
+		streamConfig.Forwardings[destinationID] = types.ForwardingConfig{
+			Disabled: !enabled,
+		}
+		return nil
+	})
 }
 
 func (s *StreamServer) addStreamForward(
@@ -388,76 +387,75 @@ func (s *StreamServer) UpdateStreamForward(
 	destinationID types.DestinationID,
 	enabled bool,
 ) error {
-	s.Lock()
-	defer s.Unlock()
-	streamConfig := s.Config.Streams[streamID]
-	fwdCfg, ok := streamConfig.Forwardings[destinationID]
-	if !ok {
-		return fmt.Errorf("the forwarding %s->%s does not exist", streamID, destinationID)
-	}
+	return xsync.DoR1(ctx, &s.Mutex, func() error {
+		streamConfig := s.Config.Streams[streamID]
+		fwdCfg, ok := streamConfig.Forwardings[destinationID]
+		if !ok {
+			return fmt.Errorf("the forwarding %s->%s does not exist", streamID, destinationID)
+		}
 
-	if fwdCfg.Disabled && enabled {
-		err := s.addStreamForward(ctx, streamID, destinationID)
-		if err != nil {
-			return err
+		if fwdCfg.Disabled && enabled {
+			err := s.addStreamForward(ctx, streamID, destinationID)
+			if err != nil {
+				return err
+			}
 		}
-	}
-	if !fwdCfg.Disabled && !enabled {
-		err := s.removeStreamForward(ctx, streamID, destinationID)
-		if err != nil {
-			return err
+		if !fwdCfg.Disabled && !enabled {
+			err := s.removeStreamForward(ctx, streamID, destinationID)
+			if err != nil {
+				return err
+			}
 		}
-	}
-	streamConfig.Forwardings[destinationID] = types.ForwardingConfig{
-		Disabled: !enabled,
-	}
-	return nil
+		streamConfig.Forwardings[destinationID] = types.ForwardingConfig{
+			Disabled: !enabled,
+		}
+		return nil
+	})
 }
 
 func (s *StreamServer) ListStreamForwards(
 	ctx context.Context,
 ) ([]StreamForward, error) {
-	s.Lock()
-	defer s.Unlock()
-
-	activeStreamForwards, err := s.listStreamForwards(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get the list of active stream forwardings: %w", err)
-	}
-
-	type fwdID struct {
-		StreamID types.StreamID
-		DestID   types.DestinationID
-	}
-	m := map[fwdID]*StreamForward{}
-	for idx := range activeStreamForwards {
-		fwd := &activeStreamForwards[idx]
-		m[fwdID{
-			StreamID: fwd.StreamID,
-			DestID:   fwd.DestinationID,
-		}] = fwd
-	}
-
-	var result []StreamForward
-	for streamID, stream := range s.Config.Streams {
-		for dstID, cfg := range stream.Forwardings {
-			item := StreamForward{
-				StreamID:      streamID,
-				DestinationID: dstID,
-				Enabled:       !cfg.Disabled,
-			}
-			if activeFwd, ok := m[fwdID{
-				StreamID: streamID,
-				DestID:   dstID,
-			}]; ok {
-				item.NumBytesWrote = activeFwd.NumBytesWrote
-				item.NumBytesRead = activeFwd.NumBytesRead
-			}
-			logger.Tracef(ctx, "stream forwarding '%s->%s': %#+v", streamID, dstID, cfg)
-			result = append(result, item)
+	return xsync.DoR2(ctx, &s.Mutex, func() ([]StreamForward, error) {
+		activeStreamForwards, err := s.listStreamForwards(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get the list of active stream forwardings: %w", err)
 		}
-	}
-	return result, nil
+
+		type fwdID struct {
+			StreamID types.StreamID
+			DestID   types.DestinationID
+		}
+		m := map[fwdID]*StreamForward{}
+		for idx := range activeStreamForwards {
+			fwd := &activeStreamForwards[idx]
+			m[fwdID{
+				StreamID: fwd.StreamID,
+				DestID:   fwd.DestinationID,
+			}] = fwd
+		}
+
+		var result []StreamForward
+		for streamID, stream := range s.Config.Streams {
+			for dstID, cfg := range stream.Forwardings {
+				item := StreamForward{
+					StreamID:      streamID,
+					DestinationID: dstID,
+					Enabled:       !cfg.Disabled,
+				}
+				if activeFwd, ok := m[fwdID{
+					StreamID: streamID,
+					DestID:   dstID,
+				}]; ok {
+					item.NumBytesWrote = activeFwd.NumBytesWrote
+					item.NumBytesRead = activeFwd.NumBytesRead
+				}
+				logger.Tracef(ctx, "stream forwarding '%s->%s': %#+v", streamID, dstID, cfg)
+				result = append(result, item)
+			}
+		}
+		return result, nil
+	})
 }
 
 func (s *StreamServer) listStreamForwards(
@@ -481,14 +479,14 @@ func (s *StreamServer) RemoveStreamForward(
 	streamID types.StreamID,
 	dstID types.DestinationID,
 ) error {
-	s.Lock()
-	defer s.Unlock()
-	streamCfg := s.Config.Streams[streamID]
-	if _, ok := streamCfg.Forwardings[dstID]; !ok {
-		return fmt.Errorf("the forwarding %s->%s does not exist", streamID, dstID)
-	}
-	delete(streamCfg.Forwardings, dstID)
-	return s.removeStreamForward(ctx, streamID, dstID)
+	return xsync.DoR1(ctx, &s.Mutex, func() error {
+		streamCfg := s.Config.Streams[streamID]
+		if _, ok := streamCfg.Forwardings[dstID]; !ok {
+			return fmt.Errorf("the forwarding %s->%s does not exist", streamID, dstID)
+		}
+		delete(streamCfg.Forwardings, dstID)
+		return s.removeStreamForward(ctx, streamID, dstID)
+	})
 }
 
 func (s *StreamServer) removeStreamForward(
@@ -511,9 +509,7 @@ func (s *StreamServer) removeStreamForward(
 func (s *StreamServer) ListStreamDestinations(
 	ctx context.Context,
 ) ([]types.StreamDestination, error) {
-	s.Mutex.Lock()
-	defer s.Mutex.Unlock()
-	return s.listStreamDestinations(ctx)
+	return xsync.DoA1R2(ctx, &s.Mutex, s.listStreamDestinations, ctx)
 }
 
 func (s *StreamServer) listStreamDestinations(
@@ -529,14 +525,14 @@ func (s *StreamServer) AddStreamDestination(
 	destinationID types.DestinationID,
 	url string,
 ) error {
-	s.Mutex.Lock()
-	defer s.Mutex.Unlock()
-	err := s.addStreamDestination(ctx, destinationID, url)
-	if err != nil {
-		return err
-	}
-	s.Config.Destinations[destinationID] = &types.DestinationConfig{URL: url}
-	return nil
+	return xsync.DoR1(ctx, &s.Mutex, func() error {
+		err := s.addStreamDestination(ctx, destinationID, url)
+		if err != nil {
+			return err
+		}
+		s.Config.Destinations[destinationID] = &types.DestinationConfig{URL: url}
+		return nil
+	})
 }
 
 func (s *StreamServer) addStreamDestination(
@@ -555,13 +551,13 @@ func (s *StreamServer) RemoveStreamDestination(
 	ctx context.Context,
 	destinationID types.DestinationID,
 ) error {
-	s.Mutex.Lock()
-	defer s.Mutex.Unlock()
-	for _, streamCfg := range s.Config.Streams {
-		delete(streamCfg.Forwardings, destinationID)
-	}
-	delete(s.Config.Destinations, destinationID)
-	return s.removeStreamDestination(ctx, destinationID)
+	return xsync.DoR1(ctx, &s.Mutex, func() error {
+		for _, streamCfg := range s.Config.Streams {
+			delete(streamCfg.Forwardings, destinationID)
+		}
+		delete(s.Config.Destinations, destinationID)
+		return s.removeStreamDestination(ctx, destinationID)
+	})
 }
 
 func (s *StreamServer) removeStreamDestination(

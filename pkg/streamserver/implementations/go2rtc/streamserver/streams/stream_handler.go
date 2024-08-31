@@ -1,6 +1,7 @@
 package streams
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/url"
@@ -30,9 +31,11 @@ func (s *StreamHandler) New(name string, source any) (*Stream, error) {
 }
 
 func (s *StreamHandler) CreateOrUpdate(name string, source string) (*Stream, error) {
-	s.streamsMu.Lock()
-	defer s.streamsMu.Unlock()
+	ctx := context.TODO()
+	return xsync.DoA2R2(ctx, &s.streamsMu, s.createOrUpdate, name, source)
+}
 
+func (s *StreamHandler) createOrUpdate(name string, source string) (*Stream, error) {
 	// check if source links to some stream name from go2rtc
 	if u, err := url.Parse(source); err == nil && u.Scheme == "rtsp" && len(u.Path) > 1 {
 		rtspName := u.Path[1:]

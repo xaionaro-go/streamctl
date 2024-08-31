@@ -100,9 +100,7 @@ func (yt *YouTube) checkToken(ctx context.Context) (_err error) {
 	logger.Tracef(ctx, "YouTube.checkToken")
 	defer func() { logger.Tracef(ctx, "/YouTube.checkToken: %v", _err) }()
 
-	yt.locker.Lock()
-	defer yt.locker.Unlock()
-	return yt.checkTokenNoLock(ctx)
+	return xsync.DoA1R1(ctx, &yt.locker, yt.checkTokenNoLock, ctx)
 }
 
 func (yt *YouTube) checkTokenNoLock(ctx context.Context) (_err error) {
@@ -149,12 +147,10 @@ func (yt *YouTube) init(ctx context.Context) (_err error) {
 	logger.Debugf(ctx, "YouTube.init")
 	defer func() { logger.Debugf(ctx, "/YouTube.init: %v", _err) }()
 
-	yt.locker.Lock()
-	defer yt.locker.Unlock()
+	return xsync.DoA1R1(ctx, &yt.locker, yt.initNoLock, ctx)
+}
 
-	logger.Debugf(ctx, "YouTube.init: Lock()-ed")
-	defer func() { logger.Debugf(ctx, "/YouTube.init: UnLock()-ed") }()
-
+func (yt *YouTube) initNoLock(ctx context.Context) (_err error) {
 	isNewToken := false
 
 	if yt.Config.Config.Token == nil {

@@ -74,14 +74,14 @@ func New(
 		now := time.Now()
 		if now.Sub(prevTokenUpdate) < time.Second*30 {
 			logger.Errorf(ctx, "updating the token too often, most likely it won't help, so asking to re-authenticate")
-			t.prepareLocker.Lock()
-			defer t.prepareLocker.Unlock()
-			t.client.SetAppAccessToken("")
-			t.client.SetUserAccessToken("")
-			t.client.SetRefreshToken("")
-			prevTokenUpdate = time.Time{}
-			err := t.getNewToken(ctx)
-			errmon.ObserveErrorCtx(ctx, err)
+			t.prepareLocker.Do(ctx, func() {
+				t.client.SetAppAccessToken("")
+				t.client.SetUserAccessToken("")
+				t.client.SetRefreshToken("")
+				prevTokenUpdate = time.Time{}
+				err := t.getNewToken(ctx)
+				errmon.ObserveErrorCtx(ctx, err)
+			})
 			return
 		}
 		prevTokenUpdate = now
@@ -110,10 +110,10 @@ func getUserID(
 func (t *Twitch) prepare(ctx context.Context) error {
 	logger.Tracef(ctx, "prepare")
 	defer logger.Tracef(ctx, "/prepare")
+	return xsync.DoA1R1(ctx, &t.prepareLocker, t.prepareNoLock, ctx)
+}
 
-	t.prepareLocker.Lock()
-	defer t.prepareLocker.Unlock()
-
+func (t *Twitch) prepareNoLock(ctx context.Context) error {
 	err := t.getTokenIfNeeded(ctx)
 	if err != nil {
 		return err
@@ -390,21 +390,21 @@ func (t *Twitch) getTokenIfNeeded(
 ) error {
 	switch t.config.Config.AuthType {
 	case "user":
-		t.tokenLocker.Lock()
-		if t.client.GetUserAccessToken() == "" {
-			t.client.SetUserAccessToken(t.config.Config.UserAccessToken)
-		}
-		if t.client.GetRefreshToken() == "" {
-			t.client.SetRefreshToken(t.config.Config.RefreshToken)
-		}
-		t.tokenLocker.Unlock()
+		t.tokenLocker.Do(ctx, func() {
+			if t.client.GetUserAccessToken() == "" {
+				t.client.SetUserAccessToken(t.config.Config.UserAccessToken)
+			}
+			if t.client.GetRefreshToken() == "" {
+				t.client.SetRefreshToken(t.config.Config.RefreshToken)
+			}
+		})
 		if t.client.GetUserAccessToken() != "" {
 			return nil
 		}
 	case "app":
-		t.tokenLocker.Lock()
-		t.client.SetAppAccessToken(t.config.Config.AppAccessToken)
-		t.tokenLocker.Unlock()
+		t.tokenLocker.Do(ctx, func() {
+			t.client.SetAppAccessToken(t.config.Config.AppAccessToken)
+		})
 		if t.client.GetAppAccessToken() != "" {
 			logger.Debugf(ctx, "already have an app access token")
 			return nil
@@ -422,25 +422,24 @@ func (t *Twitch) getNewToken(
 	logger.Debugf(ctx, "getNewToken")
 	defer logger.Debugf(ctx, "/getNewToken")
 
-	t.tokenLocker.Lock()
-	defer t.tokenLocker.Unlock()
-
-	switch t.config.Config.AuthType {
-	case "user":
-		err := t.getNewTokenByUser(ctx)
-		if err != nil {
-			return fmt.Errorf("getting user-token error: %w", err)
+	return xsync.DoR1(ctx, &t.tokenLocker, func() error {
+		switch t.config.Config.AuthType {
+		case "user":
+			err := t.getNewTokenByUser(ctx)
+			if err != nil {
+				return fmt.Errorf("getting user-token error: %w", err)
+			}
+			return nil
+		case "app":
+			err := t.getNewTokenByApp(ctx)
+			if err != nil {
+				return fmt.Errorf("getting app-token error: %w", err)
+			}
+			return nil
+		default:
+			return fmt.Errorf("invalid AuthType: <%s>", t.config.Config.AuthType)
 		}
-		return nil
-	case "app":
-		err := t.getNewTokenByApp(ctx)
-		if err != nil {
-			return fmt.Errorf("getting app-token error: %w", err)
-		}
-		return nil
-	default:
-		return fmt.Errorf("invalid AuthType: <%s>", t.config.Config.AuthType)
-	}
+	})
 }
 
 func authRedirectURI(listenPort uint16) string {

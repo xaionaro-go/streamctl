@@ -272,25 +272,26 @@ func sendPacket(dst peer.ID, packet []byte, plen int) {
 	ms, ok := activeStreams[dst]
 	if ok {
 		if func() bool {
-			ms.Lock.Lock()
-			defer ms.Lock.Unlock()
-			// Write out the packet's length to the libp2p stream to ensure
-			// we know the full size of the packet at the other end.
-			err := binary.Write(*ms.Stream, binary.LittleEndian, uint16(plen))
-			if err == nil {
-				// Write the packet out to the libp2p stream.
-				// If everything succeeds continue on to the next packet.
-				_, err = (*ms.Stream).Write(packet[:plen])
+			ctx := context.TODO()
+			return xsync.DoR1(ctx, ms.Lock, func() bool {
+				// Write out the packet's length to the libp2p stream to ensure
+				// we know the full size of the packet at the other end.
+				err := binary.Write(*ms.Stream, binary.LittleEndian, uint16(plen))
 				if err == nil {
-					(*ms.Stream).SetWriteDeadline(time.Now().Add(25 * time.Second))
-					return true
+					// Write the packet out to the libp2p stream.
+					// If everything succeeds continue on to the next packet.
+					_, err = (*ms.Stream).Write(packet[:plen])
+					if err == nil {
+						(*ms.Stream).SetWriteDeadline(time.Now().Add(25 * time.Second))
+						return true
+					}
 				}
-			}
-			// If we encounter an error when writing to a stream we should
-			// close that stream and delete it from the active stream map.
-			(*ms.Stream).Close()
-			delete(activeStreams, dst)
-			return false
+				// If we encounter an error when writing to a stream we should
+				// close that stream and delete it from the active stream map.
+				(*ms.Stream).Close()
+				delete(activeStreams, dst)
+				return false
+			})
 		}() {
 			return
 		}

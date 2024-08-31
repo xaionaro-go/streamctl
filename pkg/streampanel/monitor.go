@@ -88,9 +88,15 @@ func (p *Panel) updateMonitorPageImages(
 	logger.Tracef(ctx, "updateMonitorPageImages")
 	defer logger.Tracef(ctx, "/updateMonitorPageImages")
 
-	p.monitorLocker.Lock()
-	defer p.monitorLocker.Unlock()
+	p.monitorLocker.Do(ctx, func() {
+		p.updateMonitorPageImagesNoLock(ctx, monitorCfg)
+	})
+}
 
+func (p *Panel) updateMonitorPageImagesNoLock(
+	ctx context.Context,
+	monitorCfg streamdconfig.MonitorConfig,
+) {
 	var winSize fyne.Size
 	var orientation fyne.DeviceOrientation
 	switch runtime.GOOS {

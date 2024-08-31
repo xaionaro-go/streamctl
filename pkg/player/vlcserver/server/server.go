@@ -69,24 +69,24 @@ func (srv *GRPCServer) Open(
 	ctx context.Context,
 	req *player_grpc.OpenRequest,
 ) (*player_grpc.OpenReply, error) {
-	srv.VLCLocker.Lock()
-	defer srv.VLCLocker.Unlock()
-	srv.close(ctx)
+	return xsync.DoR2(ctx, &srv.VLCLocker, func() (*player_grpc.OpenReply, error) {
+		srv.close(ctx)
 
-	var err error
-	srv.VLC, err = player.NewVLC(req.GetTitle())
-	if err != nil {
-		return nil, fmt.Errorf("unable to initialize the VLC player: %w", err)
-	}
+		var err error
+		srv.VLC, err = player.NewVLC(req.GetTitle())
+		if err != nil {
+			return nil, fmt.Errorf("unable to initialize the VLC player: %w", err)
+		}
 
-	if err := srv.VLC.OpenURL(req.Link); err != nil {
-		return nil, fmt.Errorf("unable to open link '%s': %w", req.Link, err)
-	}
+		if err := srv.VLC.OpenURL(req.Link); err != nil {
+			return nil, fmt.Errorf("unable to open link '%s': %w", req.Link, err)
+		}
 
-	l := logrus.Default().WithLevel(logLevelProtobuf2Go(req.LoggingLevel))
-	srv.Belt = logger.BeltWithLogger(belt.New(), l)
+		l := logrus.Default().WithLevel(logLevelProtobuf2Go(req.LoggingLevel))
+		srv.Belt = logger.BeltWithLogger(belt.New(), l)
 
-	return &player_grpc.OpenReply{}, nil
+		return &player_grpc.OpenReply{}, nil
+	})
 }
 
 func (srv *GRPCServer) ctx(ctx context.Context) context.Context {
@@ -94,12 +94,13 @@ func (srv *GRPCServer) ctx(ctx context.Context) context.Context {
 }
 
 func (srv *GRPCServer) isInited() error {
-	srv.VLCLocker.Lock()
-	defer srv.VLCLocker.Unlock()
-	if srv.VLC == nil {
-		return fmt.Errorf("call Open first")
-	}
-	return nil
+	ctx := context.TODO()
+	return xsync.DoR1(ctx, &srv.VLCLocker, func() error {
+		if srv.VLC == nil {
+			return fmt.Errorf("call Open first")
+		}
+		return nil
+	})
 }
 
 func (srv *GRPCServer) ProcessTitle(
@@ -233,12 +234,12 @@ func (srv *GRPCServer) Close(
 	if err := srv.isInited(); err != nil {
 		return nil, err
 	}
-	srv.VLCLocker.Lock()
-	defer srv.VLCLocker.Unlock()
-	if err := srv.close(ctx); err != nil {
-		return nil, err
-	}
-	return &player_grpc.CloseReply{}, nil
+	return xsync.DoR2(ctx, &srv.VLCLocker, func() (*player_grpc.CloseReply, error) {
+		if err := srv.close(ctx); err != nil {
+			return nil, err
+		}
+		return &player_grpc.CloseReply{}, nil
+	})
 }
 
 func (srv *GRPCServer) close(

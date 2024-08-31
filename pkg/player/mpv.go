@@ -62,11 +62,9 @@ func (m *Manager) NewMPV(
 	}
 
 	logger.Tracef(ctx, "m.PlayersLocker.Lock()-ing")
-	m.PlayersLocker.Lock()
-	logger.Tracef(ctx, "m.PlayersLocker.Lock()-ed")
-	defer logger.Tracef(ctx, "m.PlayersLocker.Unlock()-ed")
-	defer m.PlayersLocker.Unlock()
-	m.Players = append(m.Players, r)
+	m.PlayersLocker.Do(ctx, func() {
+		m.Players = append(m.Players, r)
+	})
 	return r, nil
 }
 
@@ -225,10 +223,10 @@ func (p *MPV) GetLink(
 func (p *MPV) EndChan(
 	ctx context.Context,
 ) (<-chan struct{}, error) {
-	p.EndChMutex.Lock()
-	defer p.EndChMutex.Unlock()
-	p.initEndCh(ctx)
-	return p.EndCh, nil
+	return xsync.DoR2(ctx, &p.EndChMutex, func() (<-chan struct{}, error) {
+		p.initEndCh(ctx)
+		return p.EndCh, nil
+	})
 }
 
 func (p *MPV) initEndCh(
@@ -253,12 +251,12 @@ func (p *MPV) initEndCh(
 				}
 			}
 		}()
-		p.EndChMutex.Lock()
-		defer p.EndChMutex.Unlock()
-		var oldCh chan struct{}
-		oldCh, p.EndCh = p.EndCh, make(chan struct{})
-		close(oldCh)
-		p.EndChInitialized = false
+		p.EndChMutex.Do(ctx, func() {
+			var oldCh chan struct{}
+			oldCh, p.EndCh = p.EndCh, make(chan struct{})
+			close(oldCh)
+			p.EndChInitialized = false
+		})
 	})
 }
 

@@ -44,10 +44,8 @@ func (pb *Pubsub) Deregister() error {
 	logger.Default().Debugf("Pub.Deregister")
 	defer logger.Default().Debugf("/Pub.Deregister")
 
-	pb.m.Lock()
-	defer pb.m.Unlock()
-
-	return pb.deregister()
+	ctx := context.TODO()
+	return xsync.DoR1(ctx, &pb.m, pb.deregister)
 }
 
 func (pb *Pubsub) deregister() error {
@@ -80,28 +78,28 @@ func (pb *Pubsub) Pub() *Pub {
 }
 
 func (pb *Pubsub) Sub(connCloser io.Closer, eventCallback func(ft *flvtag.FlvTag) error) *Sub {
-	pb.m.Lock()
-	defer pb.m.Unlock()
+	ctx := context.TODO()
+	return xsync.DoR1(ctx, &pb.m, func() *Sub {
+		subID := pb.nextSubID
+		sub := &Sub{
+			connCloser:    connCloser,
+			pubSub:        pb,
+			subID:         subID,
+			eventCallback: eventCallback,
+			closedChan:    make(chan struct{}),
+		}
 
-	subID := pb.nextSubID
-	sub := &Sub{
-		connCloser:    connCloser,
-		pubSub:        pb,
-		subID:         subID,
-		eventCallback: eventCallback,
-		closedChan:    make(chan struct{}),
-	}
-
-	pb.nextSubID++
-	pb.subs[subID] = sub
-	return sub
+		pb.nextSubID++
+		pb.subs[subID] = sub
+		return sub
+	})
 }
 
 func (pb *Pubsub) RemoveSub(s *Sub) {
-	pb.m.Lock()
-	defer pb.m.Unlock()
-
-	delete(pb.subs, s.subID)
+	ctx := context.TODO()
+	pb.m.Do(ctx, func() {
+		delete(pb.subs, s.subID)
+	})
 }
 
 type Pub struct {
@@ -114,22 +112,31 @@ type Pub struct {
 }
 
 func (p *Pub) InitSub(sub *Sub) {
-	p.m.Lock()
-	avcSeqHeader := p.avcSeqHeader
-	lastKeyFrame := p.lastKeyFrame
-	aacSeqHeader := p.aacSeqHeader
-	p.m.Unlock()
-	if avcSeqHeader != nil {
+	type keyTagsT struct {
+		AVCSeqHeader *flvtag.FlvTag
+		LastKeyFrame *flvtag.FlvTag
+		AACSeqHeader *flvtag.FlvTag
+	}
+	ctx := context.TODO()
+	keyTags := xsync.DoR1(ctx, &p.m, func() keyTagsT {
+		return keyTagsT{
+			AVCSeqHeader: p.avcSeqHeader,
+			LastKeyFrame: p.lastKeyFrame,
+			AACSeqHeader: p.aacSeqHeader,
+		}
+	})
+
+	if keyTags.AVCSeqHeader != nil {
 		logger.Default().Tracef("sending avcSeqHeader")
-		_ = sub.onEvent(cloneView(avcSeqHeader))
+		_ = sub.onEvent(cloneView(keyTags.AVCSeqHeader))
 	}
-	if lastKeyFrame != nil {
+	if keyTags.LastKeyFrame != nil {
 		logger.Default().Tracef("sending lastKeyFrame")
-		_ = sub.onEvent(cloneView(lastKeyFrame))
+		_ = sub.onEvent(cloneView(keyTags.LastKeyFrame))
 	}
-	if aacSeqHeader != nil {
+	if keyTags.AACSeqHeader != nil {
 		logger.Default().Tracef("sending aacSeqHeader")
-		_ = sub.onEvent(cloneView(aacSeqHeader))
+		_ = sub.onEvent(cloneView(keyTags.AACSeqHeader))
 	}
 
 	sub.initialized = true
@@ -138,9 +145,10 @@ func (p *Pub) InitSub(sub *Sub) {
 // TODO: Should check codec types and so on.
 // In this example, checks only sequence headers and assume that AAC and AVC.
 func (p *Pub) Publish(flv *flvtag.FlvTag) error {
-	p.pb.m.Lock()
-	subs := p.pb.subs
-	p.pb.m.Unlock()
+	ctx := context.TODO()
+	subs := xsync.DoR1(ctx, &p.pb.m, func() map[uint64]*Sub {
+		return p.pb.subs
+	})
 
 	switch d := flv.Data.(type) {
 	case *flvtag.ScriptData:
@@ -150,10 +158,10 @@ func (p *Pub) Publish(flv *flvtag.FlvTag) error {
 
 	case *flvtag.AudioData:
 		if d.AACPacketType == flvtag.AACPacketTypeSequenceHeader {
-			p.m.Lock()
-			p.aacSeqHeader = cloneView(flv)
-			p.aacSeqHeader.Timestamp = 0
-			p.m.Unlock()
+			p.m.Do(ctx, func() {
+				p.aacSeqHeader = cloneView(flv)
+				p.aacSeqHeader.Timestamp = 0
+			})
 		}
 
 		for _, sub := range subs {
@@ -162,16 +170,16 @@ func (p *Pub) Publish(flv *flvtag.FlvTag) error {
 
 	case *flvtag.VideoData:
 		if d.AVCPacketType == flvtag.AVCPacketTypeSequenceHeader {
-			p.m.Lock()
-			p.avcSeqHeader = cloneView(flv)
-			p.avcSeqHeader.Timestamp = 0
-			p.m.Unlock()
+			p.m.Do(ctx, func() {
+				p.avcSeqHeader = cloneView(flv)
+				p.avcSeqHeader.Timestamp = 0
+			})
 		} else {
 			if d.FrameType == flvtag.FrameTypeKeyFrame {
-				p.m.Lock()
-				p.lastKeyFrame = cloneView(flv)
-				p.lastKeyFrame.Timestamp = 0
-				p.m.Unlock()
+				p.m.Do(ctx, func() {
+					p.lastKeyFrame = cloneView(flv)
+					p.lastKeyFrame.Timestamp = 0
+				})
 			}
 		}
 
@@ -228,24 +236,24 @@ func (s *Sub) Close() error {
 	logger.Default().Debugf("Sub.Close")
 	defer logger.Default().Debugf("/Sub.Close")
 
-	s.locker.Lock()
-	defer s.locker.Unlock()
+	ctx := context.TODO()
+	return xsync.DoR1(ctx, &s.locker, func() error {
+		var result *multierror.Error
 
-	var result *multierror.Error
-
-	connCloser := s.connCloser
-	if connCloser != nil {
-		s.connCloser = nil
-		err := connCloser.Close()
-		result = multierror.Append(result, err)
-	}
-	s.closedChanOnce.Do(func() { close(s.closedChan) })
-	if s.closed {
+		connCloser := s.connCloser
+		if connCloser != nil {
+			s.connCloser = nil
+			err := connCloser.Close()
+			result = multierror.Append(result, err)
+		}
+		s.closedChanOnce.Do(func() { close(s.closedChan) })
+		if s.closed {
+			return result.ErrorOrNil()
+		}
+		s.closed = true
+		s.pubSub.RemoveSub(s)
 		return result.ErrorOrNil()
-	}
-	s.closed = true
-	s.pubSub.RemoveSub(s)
-	return result.ErrorOrNil()
+	})
 }
 
 func (s *Sub) ClosedChan() <-chan struct{} {

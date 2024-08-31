@@ -498,26 +498,26 @@ func (p *StreamPlayer) withPlayer(
 	ctx context.Context,
 	fn func(context.Context, types.Player),
 ) {
-	p.PlayerLocker.Lock()
-	defer p.PlayerLocker.Unlock()
-	if p.Player == nil {
-		panic("p.Player is nil")
-	}
-	fn(ctx, p.Player)
+	p.PlayerLocker.Do(ctx, func() {
+		if p.Player == nil {
+			panic("p.Player is nil")
+		}
+		fn(ctx, p.Player)
+	})
 }
 
 func (p *StreamPlayer) Close() error {
-	p.PlayerLocker.Lock()
-	defer p.PlayerLocker.Unlock()
+	ctx := context.TODO()
+	return xsync.DoR1(ctx, &p.PlayerLocker, func() error {
+		var err *multierror.Error
+		if p.Cancel != nil {
+			p.Cancel()
+		}
 
-	var err *multierror.Error
-	if p.Cancel != nil {
-		p.Cancel()
-	}
-
-	if p.Player != nil {
-		err = multierror.Append(err, p.Player.Close(context.TODO()))
-		p.Player = nil
-	}
-	return err.ErrorOrNil()
+		if p.Player != nil {
+			err = multierror.Append(err, p.Player.Close(context.TODO()))
+			p.Player = nil
+		}
+		return err.ErrorOrNil()
+	})
 }

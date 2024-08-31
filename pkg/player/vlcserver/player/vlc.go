@@ -58,14 +58,12 @@ func NewVLC(title string) (*VLC, error) {
 	}
 
 	eventID, err := manager.Attach(vlc.MediaPlayerEndReached, func(e vlc.Event, i interface{}) {
-		p.StatusMutex.Lock()
-		defer p.StatusMutex.Unlock()
-
-		p.IsStopped = true
-
-		var oldCh chan struct{}
-		oldCh, p.EndCh = p.EndCh, make(chan struct{})
-		close(oldCh)
+		p.StatusMutex.Do(context.TODO(), func() {
+			p.IsStopped = true
+			var oldCh chan struct{}
+			oldCh, p.EndCh = p.EndCh, make(chan struct{})
+			close(oldCh)
+		})
 	}, nil)
 	if err != nil {
 		return nil, fmt.Errorf("unable to attach the 'EndReached' event handler: %w", err)
@@ -82,9 +80,10 @@ func (p *VLC) ProcessTitle() string {
 }
 
 func (p *VLC) OpenURL(link string) error {
-	p.StatusMutex.Lock()
-	defer p.StatusMutex.Unlock()
+	return xsync.DoA1R1(context.TODO(), &p.StatusMutex, p.openURL, link)
+}
 
+func (p *VLC) openURL(link string) error {
 	if p.Media != nil {
 		return fmt.Errorf("some media is already opened in this player")
 	}
@@ -112,21 +111,24 @@ func (p *VLC) OpenURL(link string) error {
 }
 
 func (p *VLC) GetLink() string {
-	p.StatusMutex.Lock()
-	defer p.StatusMutex.Unlock()
-	return p.LastURL
+	ctx := context.TODO()
+	return xsync.DoR1(ctx, &p.StatusMutex, func() string {
+		return p.LastURL
+	})
 }
 
 func (p *VLC) EndChan() <-chan struct{} {
-	p.StatusMutex.Lock()
-	defer p.StatusMutex.Unlock()
-	return p.EndCh
+	ctx := context.TODO()
+	return xsync.DoR1(ctx, &p.StatusMutex, func() <-chan struct{} {
+		return p.EndCh
+	})
 }
 
 func (p *VLC) IsEnded() bool {
-	p.StatusMutex.Lock()
-	defer p.StatusMutex.Unlock()
-	return p.IsStopped
+	ctx := context.TODO()
+	return xsync.DoR1(ctx, &p.StatusMutex, func() bool {
+		return p.IsStopped
+	})
 }
 
 func (p *VLC) GetPosition() time.Duration {
@@ -152,9 +154,8 @@ func (p *VLC) SetSpeed(speed float64) error {
 }
 
 func (p *VLC) Play() error {
-	p.StatusMutex.Lock()
-	defer p.StatusMutex.Unlock()
-	return p.play()
+	ctx := context.TODO()
+	return xsync.DoR1(ctx, &p.StatusMutex, p.play)
 }
 
 func (p *VLC) play() error {
@@ -171,8 +172,11 @@ func (p *VLC) SetPause(pause bool) error {
 }
 
 func (p *VLC) Stop() error {
-	p.StatusMutex.Lock()
-	defer p.StatusMutex.Unlock()
+	ctx := context.TODO()
+	return xsync.DoR1(ctx, &p.StatusMutex, p.stop)
+}
+
+func (p *VLC) stop() error {
 	err := p.Player.Stop()
 	if err != nil {
 		return err
@@ -182,9 +186,11 @@ func (p *VLC) Stop() error {
 }
 
 func (p *VLC) Close() error {
-	p.StatusMutex.Lock()
-	defer p.StatusMutex.Unlock()
+	ctx := context.TODO()
+	return xsync.DoR1(ctx, &p.StatusMutex, p.close)
+}
 
+func (p *VLC) close() error {
 	if p.DetachEventsFunc != nil {
 		p.DetachEventsFunc()
 		p.DetachEventsFunc = nil

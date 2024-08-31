@@ -1,6 +1,7 @@
 package streams
 
 import (
+	"context"
 	"encoding/json"
 	"sync/atomic"
 
@@ -70,34 +71,37 @@ func (s *Stream) SetSource(source string) {
 func (s *Stream) RemoveConsumer(cons core.Consumer) {
 	_ = cons.Stop()
 
-	s.mu.Lock()
-	for i, consumer := range s.consumers {
-		if consumer == cons {
-			s.consumers = append(s.consumers[:i], s.consumers[i+1:]...)
-			break
+	ctx := context.TODO()
+	s.mu.Do(ctx, func() {
+		for i, consumer := range s.consumers {
+			if consumer == cons {
+				s.consumers = append(s.consumers[:i], s.consumers[i+1:]...)
+				break
+			}
 		}
-	}
-	s.mu.Unlock()
+	})
 
 	s.stopProducers()
 }
 
 func (s *Stream) AddProducer(prod core.Producer) {
 	producer := &Producer{conn: prod, state: stateExternal}
-	s.mu.Lock()
-	s.producers = append(s.producers, producer)
-	s.mu.Unlock()
+	ctx := context.TODO()
+	s.mu.Do(ctx, func() {
+		s.producers = append(s.producers, producer)
+	})
 }
 
 func (s *Stream) RemoveProducer(prod core.Producer) {
-	s.mu.Lock()
-	for i, producer := range s.producers {
-		if producer.conn == prod {
-			s.producers = append(s.producers[:i], s.producers[i+1:]...)
-			break
+	ctx := context.TODO()
+	s.mu.Do(ctx, func() {
+		for i, producer := range s.producers {
+			if producer.conn == prod {
+				s.producers = append(s.producers[:i], s.producers[i+1:]...)
+				break
+			}
 		}
-	}
-	s.mu.Unlock()
+	})
 }
 
 func (s *Stream) stopProducers() {
@@ -106,22 +110,23 @@ func (s *Stream) stopProducers() {
 		return
 	}
 
-	s.mu.Lock()
-producers:
-	for _, producer := range s.producers {
-		for _, track := range producer.receivers {
-			if len(track.Senders()) > 0 {
-				continue producers
+	ctx := context.TODO()
+	s.mu.Do(ctx, func() {
+	producers:
+		for _, producer := range s.producers {
+			for _, track := range producer.receivers {
+				if len(track.Senders()) > 0 {
+					continue producers
+				}
 			}
-		}
-		for _, track := range producer.senders {
-			if len(track.Senders()) > 0 {
-				continue producers
+			for _, track := range producer.senders {
+				if len(track.Senders()) > 0 {
+					continue producers
+				}
 			}
+			producer.stop()
 		}
-		producer.stop()
-	}
-	s.mu.Unlock()
+	})
 }
 
 func (s *Stream) MarshalJSON() ([]byte, error) {

@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"io"
 	"os"
 	"time"
@@ -31,12 +30,6 @@ func NewLogWriter(
 	return l
 }
 
-func hexMustDecode(s string) []byte {
-	b, err := hex.DecodeString(s)
-	assertNoError(err)
-	return b
-}
-
 func (l *logWriter) flusher(ctx context.Context) {
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
@@ -52,19 +45,25 @@ func (l *logWriter) flusher(ctx context.Context) {
 }
 
 func (l *logWriter) Flush() {
+	ctx := context.TODO()
+
 	s := func() string {
-		l.BufferLocker.Lock()
-		defer l.BufferLocker.Unlock()
-		s := l.Buffer.String()
-		l.Buffer.Reset()
-		return s
+		return xsync.DoR1(ctx, &l.BufferLocker, func() string {
+			s := l.Buffer.String()
+			l.Buffer.Reset()
+			return s
+		})
 	}()
 
 	l.Logger.Logf(l.Logger.Level(), "%s", s)
 }
 
 func (l *logWriter) Write(b []byte) (int, error) {
-	l.BufferLocker.Lock()
-	defer l.BufferLocker.Unlock()
-	return io.MultiWriter(&l.Buffer, os.Stderr).Write(b)
+	if len(b) == 0 {
+		return 0, nil
+	}
+	ctx := context.TODO()
+	return xsync.DoR2(xsync.WithNoLogging(ctx, true), &l.BufferLocker, func() (int, error) {
+		return io.MultiWriter(&l.Buffer, os.Stderr).Write(b)
+	})
 }

@@ -67,9 +67,9 @@ func (c *Client) SendMessage(
 		Destination: dst,
 		Content:     content,
 	}
-	c.WriteLocker.Lock()
-	defer c.WriteLocker.Unlock()
-	err := encoder.Encode(msg)
+	err := xsync.DoR1(ctx, &c.WriteLocker, func() error {
+		return encoder.Encode(msg)
+	})
 	logger.Tracef(ctx, "sending message %#+v: %v", msg, err)
 	if err != nil {
 		return fmt.Errorf("unable to encode&send message %#+v: %w", msg, err)

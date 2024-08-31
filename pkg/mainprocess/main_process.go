@@ -100,15 +100,14 @@ func (m *Manager) Close() error {
 func (m *Manager) VerifyEverybodyConnected(
 	ctx context.Context,
 ) error {
-	m.connsLocker.Lock()
-	defer m.connsLocker.Unlock()
-
-	for _, name := range m.allClientProcesses {
-		if _, ok := m.conns[name]; !ok {
-			return fmt.Errorf("client '%s' is not connected", name)
+	return xsync.DoR1(ctx, &m.connsLocker, func() error {
+		for _, name := range m.allClientProcesses {
+			if _, ok := m.conns[name]; !ok {
+				return fmt.Errorf("client '%s' is not connected", name)
+			}
 		}
-	}
-	return nil
+		return nil
+	})
 }
 
 func (m *Manager) Serve(
@@ -312,7 +311,7 @@ func (m *Manager) processMessage(
 			var result *multierror.Error
 			result = multierror.Append(result, m.SendMessagePreReady(ctx, source, MessageReadyConfirmed{}))
 			for _, sample := range content.ReadyForMessages {
-				result = multierror.Append(result, m.setReady(source, reflect.TypeOf(sample)))
+				result = multierror.Append(result, m.setReady(ctx, source, reflect.TypeOf(sample)))
 			}
 			return result.ErrorOrNil()
 		default:
@@ -385,6 +384,7 @@ func (m *Manager) sendMessage(
 }
 
 func (m *Manager) waitForProcess(
+	ctx context.Context,
 	name ProcessName,
 ) (net.Conn, error) {
 	if !m.isExpectedProcess(name) {
@@ -392,10 +392,9 @@ func (m *Manager) waitForProcess(
 	}
 
 	for {
-		m.connsLocker.Lock()
-		conn := m.conns[name]
-		ch := m.connsChanged
-		m.connsLocker.Unlock()
+		conn, ch := xsync.DoR2(ctx, &m.connsLocker, func() (net.Conn, chan struct{}) {
+			return m.conns[name], m.connsChanged
+		})
 
 		if conn != nil {
 			return conn, nil
@@ -420,17 +419,16 @@ func (m *Manager) waitForReadyProcess(
 	}
 
 	for {
-		m.connsLocker.Lock()
-		ch := m.connsChanged
-		conn := m.conns[name]
-		readyMap := m.childReadyFor[name]
-		isReady := false
-		if readyMap != nil {
-			if _, ok := readyMap[msgType]; ok {
-				isReady = true
+		conn, ch, isReady := xsync.DoR3(ctx, &m.connsLocker, func() (net.Conn, chan struct{}, bool) {
+			readyMap := m.childReadyFor[name]
+			isReady := false
+			if readyMap != nil {
+				if _, ok := readyMap[msgType]; ok {
+					isReady = true
+				}
 			}
-		}
-		m.connsLocker.Unlock()
+			return m.conns[name], m.connsChanged, isReady
+		})
 
 		if conn != nil && isReady {
 			logger.Debugf(ctx, "waitForReadyProcess(ctx, '%s', '%s'): waiting is complete", name, msgType)
@@ -459,20 +457,21 @@ func (m *Manager) registerConnection(
 		return fmt.Errorf("process '%s' is not ever expected", sourceName)
 	}
 
-	m.connsLocker.Lock()
-	defer m.connsLocker.Unlock()
-	if conn, ok := m.conns[sourceName]; ok {
-		conn.Close()
-		logger.Warnf(ctx, "closing the old registered connection")
-	}
-	m.conns[sourceName] = conn
-	var oldCh chan struct{}
-	oldCh, m.connsChanged = m.connsChanged, make(chan struct{})
-	close(oldCh)
+	m.connsLocker.Do(ctx, func() {
+		if conn, ok := m.conns[sourceName]; ok {
+			conn.Close()
+			logger.Warnf(ctx, "closing the old registered connection")
+		}
+		m.conns[sourceName] = conn
+		var oldCh chan struct{}
+		oldCh, m.connsChanged = m.connsChanged, make(chan struct{})
+		close(oldCh)
+	})
 	return nil
 }
 
 func (m *Manager) setReady(
+	ctx context.Context,
 	sourceName ProcessName,
 	msgType reflect.Type,
 ) error {
@@ -483,21 +482,21 @@ func (m *Manager) setReady(
 		msgType = msgType.Elem()
 	}
 
-	m.connsLocker.Lock()
-	defer m.connsLocker.Unlock()
-	readyMap := m.childReadyFor[sourceName]
-	if readyMap == nil {
-		m.childReadyFor[sourceName] = map[reflect.Type]struct{}{}
-		readyMap = m.childReadyFor[sourceName]
-	}
-	if _, ok := readyMap[msgType]; ok {
-		return fmt.Errorf("process '%s' is already ready for '%s'", sourceName, msgType)
-	}
-	readyMap[msgType] = struct{}{}
-	var oldCh chan struct{}
-	oldCh, m.connsChanged = m.connsChanged, make(chan struct{})
-	close(oldCh)
-	return nil
+	return xsync.DoR1(ctx, &m.connsLocker, func() error {
+		readyMap := m.childReadyFor[sourceName]
+		if readyMap == nil {
+			m.childReadyFor[sourceName] = map[reflect.Type]struct{}{}
+			readyMap = m.childReadyFor[sourceName]
+		}
+		if _, ok := readyMap[msgType]; ok {
+			return fmt.Errorf("process '%s' is already ready for '%s'", sourceName, msgType)
+		}
+		readyMap[msgType] = struct{}{}
+		var oldCh chan struct{}
+		oldCh, m.connsChanged = m.connsChanged, make(chan struct{})
+		close(oldCh)
+		return nil
+	})
 }
 
 func (m *Manager) unregisterConnection(
@@ -506,13 +505,13 @@ func (m *Manager) unregisterConnection(
 ) {
 	logger.Infof(ctx, "unregistering process '%s'", string(sourceName))
 	defer logger.Infof(ctx, "/unregistering process '%s'", string(sourceName))
-	m.connsLocker.Lock()
-	defer m.connsLocker.Unlock()
-	delete(m.conns, sourceName)
-	delete(m.childReadyFor, sourceName)
-	var oldCh chan struct{}
-	oldCh, m.connsChanged = m.connsChanged, make(chan struct{})
-	close(oldCh)
+	m.connsLocker.Do(ctx, func() {
+		delete(m.conns, sourceName)
+		delete(m.childReadyFor, sourceName)
+		var oldCh chan struct{}
+		oldCh, m.connsChanged = m.connsChanged, make(chan struct{})
+		close(oldCh)
+	})
 }
 
 type RegistrationMessage struct {
@@ -538,7 +537,7 @@ func (m *Manager) SendMessagePreReady(
 	logger.Debugf(ctx, "SendMessagePreReady(ctx, '%s', %T)", dst, content)
 	defer logger.Debugf(ctx, "/SendMessagePreReady(ctx, '%s', %T)", dst, content)
 
-	conn, err := m.waitForProcess(dst)
+	conn, err := m.waitForProcess(ctx, dst)
 	if err != nil {
 		return fmt.Errorf("unable to wait for process '%s': %w", dst, err)
 	}

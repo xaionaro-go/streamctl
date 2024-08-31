@@ -31,12 +31,14 @@ import (
 	"google.golang.org/grpc"
 )
 
+type oauthURLHandlers map[uint16]map[uuid.UUID]*OAuthURLHandler
+
 type GRPCServer struct {
 	streamd_grpc.UnimplementedStreamDServer
 	StreamD               api.StreamD
 	MemoizeDataValue      *memoize.MemoizeData
 	OAuthURLHandlerLocker xsync.Mutex
-	OAuthURLHandlers      map[uint16]map[uuid.UUID]*OAuthURLHandler
+	OAuthURLHandlers      oauthURLHandlers
 
 	UnansweredOAuthRequestsLocker xsync.Mutex
 	UnansweredOAuthRequests       map[streamcontrol.PlatformName]map[uint16]*streamd_grpc.OAuthRequest
@@ -54,7 +56,7 @@ func NewGRPCServer(streamd api.StreamD) *GRPCServer {
 		StreamD:          streamd,
 		MemoizeDataValue: memoize.NewMemoizeData(),
 
-		OAuthURLHandlers:        map[uint16]map[uuid.UUID]*OAuthURLHandler{},
+		OAuthURLHandlers:        oauthURLHandlers{},
 		UnansweredOAuthRequests: map[streamcontrol.PlatformName]map[uint16]*streamd_grpc.OAuthRequest{},
 	}
 }
@@ -82,9 +84,10 @@ func (grpc *GRPCServer) Ping(
 
 func (grpc *GRPCServer) Close() error {
 	err := &multierror.Error{}
-	grpc.OAuthURLHandlerLocker.Lock()
-	hs := grpc.OAuthURLHandlers
-	grpc.OAuthURLHandlerLocker.Unlock()
+	ctx := context.TODO()
+	hs := xsync.DoR1(ctx, &grpc.OAuthURLHandlerLocker, func() oauthURLHandlers {
+		return grpc.OAuthURLHandlers
+	})
 	for listenPort, sender := range hs {
 		_ = sender // TODO: invent sender.Close()
 		delete(grpc.OAuthURLHandlers, listenPort)
@@ -475,30 +478,28 @@ func (grpc *GRPCServer) SubscribeToOAuthRequests(
 	listenPort := uint16(req.ListenPort)
 	streamD, _ := grpc.StreamD.(*streamd.StreamD)
 
-	grpc.OAuthURLHandlerLocker.Lock()
-	logger.Tracef(sender.Context(), "grpc.OAuthURLHandlerLocker.Lock()-ed")
-	m := grpc.OAuthURLHandlers[listenPort]
-	if m == nil {
-		m = map[uuid.UUID]*OAuthURLHandler{}
-	}
-	m[_uuid] = &OAuthURLHandler{
-		Sender:   sender,
-		CancelFn: cancelFn,
-	}
-	grpc.OAuthURLHandlers[listenPort] = m // unnecessary, but feels safer
-	grpc.OAuthURLHandlerLocker.Unlock()
-	logger.Tracef(sender.Context(), "grpc.OAuthURLHandlerLocker.Unlock()-ed")
+	grpc.OAuthURLHandlerLocker.Do(ctx, func() {
+		m := grpc.OAuthURLHandlers[listenPort]
+		if m == nil {
+			m = map[uuid.UUID]*OAuthURLHandler{}
+		}
+		m[_uuid] = &OAuthURLHandler{
+			Sender:   sender,
+			CancelFn: cancelFn,
+		}
+		grpc.OAuthURLHandlers[listenPort] = m // unnecessary, but feels safer
+	})
 
 	var unansweredRequests []*streamd_grpc.OAuthRequest
-	grpc.UnansweredOAuthRequestsLocker.Lock()
-	for _, m := range grpc.UnansweredOAuthRequests {
-		req := m[listenPort]
-		if req == nil {
-			continue
+	grpc.UnansweredOAuthRequestsLocker.Do(ctx, func() {
+		for _, m := range grpc.UnansweredOAuthRequests {
+			req := m[listenPort]
+			if req == nil {
+				continue
+			}
+			unansweredRequests = append(unansweredRequests, req)
 		}
-		unansweredRequests = append(unansweredRequests, req)
-	}
-	grpc.UnansweredOAuthRequestsLocker.Unlock()
+	})
 
 	for _, req := range unansweredRequests {
 		logger.Tracef(ctx, "re-sending an unanswered request to a new client: %#+v", *req)
@@ -512,15 +513,15 @@ func (grpc *GRPCServer) SubscribeToOAuthRequests(
 
 	logger.Tracef(ctx, "waiting for the subscription to be cancelled")
 	<-ctx.Done()
-	grpc.OAuthURLHandlerLocker.Lock()
-	defer grpc.OAuthURLHandlerLocker.Unlock()
-	delete(grpc.OAuthURLHandlers[listenPort], _uuid)
-	if len(grpc.OAuthURLHandlers[listenPort]) == 0 {
-		delete(grpc.OAuthURLHandlers, listenPort)
-		if streamD != nil {
-			streamD.RemoveOAuthListenPort(listenPort)
+	grpc.OAuthURLHandlerLocker.Do(ctx, func() {
+		delete(grpc.OAuthURLHandlers[listenPort], _uuid)
+		if len(grpc.OAuthURLHandlers[listenPort]) == 0 {
+			delete(grpc.OAuthURLHandlers, listenPort)
+			if streamD != nil {
+				streamD.RemoveOAuthListenPort(listenPort)
+			}
 		}
-	}
+	})
 
 	return nil
 }
@@ -546,11 +547,13 @@ func (grpc *GRPCServer) OpenBrowser(
 	//       at least rename the old one.
 	logger.Warnf(ctx, "FIXME: Do not use OAuthURLs for 'OpenBrowser'!")
 
-	grpc.OAuthURLHandlerLocker.Lock()
-	logger.Debugf(ctx, "grpc.OAuthURLHandlerLocker.Lock()-ed")
-	defer logger.Debugf(ctx, "grpc.OAuthURLHandlerLocker.Unlock()-ed")
-	defer grpc.OAuthURLHandlerLocker.Unlock()
+	return xsync.DoA2R1(ctx, &grpc.OAuthURLHandlerLocker, grpc.openBrowser, ctx, url)
+}
 
+func (grpc *GRPCServer) openBrowser(
+	ctx context.Context,
+	url string,
+) (_ret error) {
 	req := streamd_grpc.OAuthRequest{
 		PlatID:  string("<OpenBrowser>"),
 		AuthURL: url,
@@ -586,11 +589,15 @@ func (grpc *GRPCServer) OpenOAuthURL(
 		logger.Debugf(ctx, "/OpenOAuthURL(ctx, %d, '%s', '%s'): %v", listenPort, platID, authURL, _ret)
 	}()
 
-	grpc.OAuthURLHandlerLocker.Lock()
-	logger.Debugf(ctx, "grpc.OAuthURLHandlerLocker.Lock()-ed")
-	defer logger.Debugf(ctx, "grpc.OAuthURLHandlerLocker.Unlock()-ed")
-	defer grpc.OAuthURLHandlerLocker.Unlock()
+	return xsync.DoA4R1(ctx, &grpc.OAuthURLHandlerLocker, grpc.openOAuthURL, ctx, listenPort, platID, authURL)
+}
 
+func (grpc *GRPCServer) openOAuthURL(
+	ctx context.Context,
+	listenPort uint16,
+	platID streamcontrol.PlatformName,
+	authURL string,
+) (_ret error) {
 	handlers := grpc.OAuthURLHandlers[listenPort]
 	if handlers == nil {
 		return ErrNoOAuthHandlerForPort{
@@ -601,12 +608,12 @@ func (grpc *GRPCServer) OpenOAuthURL(
 		PlatID:  string(platID),
 		AuthURL: authURL,
 	}
-	grpc.UnansweredOAuthRequestsLocker.Lock()
-	if grpc.UnansweredOAuthRequests[platID] == nil {
-		grpc.UnansweredOAuthRequests[platID] = map[uint16]*streamd_grpc.OAuthRequest{}
-	}
-	grpc.UnansweredOAuthRequests[platID][listenPort] = &req
-	grpc.UnansweredOAuthRequestsLocker.Unlock()
+	grpc.UnansweredOAuthRequestsLocker.Do(ctx, func() {
+		if grpc.UnansweredOAuthRequests[platID] == nil {
+			grpc.UnansweredOAuthRequests[platID] = map[uint16]*streamd_grpc.OAuthRequest{}
+		}
+		grpc.UnansweredOAuthRequests[platID][listenPort] = &req
+	})
 	logger.Debugf(ctx, "OpenOAuthURL() sending %#+v", req)
 	var resultErr *multierror.Error
 	for _, handler := range handlers {
@@ -677,9 +684,9 @@ func (grpc *GRPCServer) SubmitOAuthCode(
 	ctx context.Context,
 	req *streamd_grpc.SubmitOAuthCodeRequest,
 ) (*streamd_grpc.SubmitOAuthCodeReply, error) {
-	grpc.UnansweredOAuthRequestsLocker.Lock()
-	delete(grpc.UnansweredOAuthRequests, streamcontrol.PlatformName(req.PlatID))
-	grpc.UnansweredOAuthRequestsLocker.Unlock()
+	grpc.UnansweredOAuthRequestsLocker.Do(ctx, func() {
+		delete(grpc.UnansweredOAuthRequests, streamcontrol.PlatformName(req.PlatID))
+	})
 
 	_, err := grpc.StreamD.SubmitOAuthCode(ctx, req)
 	if err != nil {

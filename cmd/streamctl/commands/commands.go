@@ -7,7 +7,6 @@ import (
 	"os"
 	"path"
 	"strings"
-	"sync"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
@@ -15,6 +14,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 var (
@@ -253,13 +253,13 @@ func getTwitchStreamController(
 	logger.Debugf(ctx, "twitch config: %#+v", platCfg)
 	return twitch.New(ctx, *platCfg,
 		func(c twitch.Config) error {
-			saveConfigLock.Lock()
-			defer saveConfigLock.Unlock()
-			cfg[idTwitch] = &streamcontrol.AbstractPlatformConfig{
-				Config:         c.Config,
-				StreamProfiles: streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
-			}
-			return saveConfig(ctx, cfg)
+			return xsync.DoR1(ctx, &saveConfigLock, func() error {
+				cfg[idTwitch] = &streamcontrol.AbstractPlatformConfig{
+					Config:         c.Config,
+					StreamProfiles: streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
+				}
+				return saveConfig(ctx, cfg)
+			})
 		},
 	)
 }
@@ -277,13 +277,13 @@ func getYouTubeStreamController(
 	logger.Debugf(ctx, "youtube config: %#+v", platCfg)
 	return youtube.New(ctx, *platCfg,
 		func(c youtube.Config) error {
-			saveConfigLock.Lock()
-			defer saveConfigLock.Unlock()
-			cfg[idYoutube] = &streamcontrol.AbstractPlatformConfig{
-				Config:         c.Config,
-				StreamProfiles: streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
-			}
-			return saveConfig(ctx, cfg)
+			return xsync.DoR1(ctx, &saveConfigLock, func() error {
+				cfg[idYoutube] = &streamcontrol.AbstractPlatformConfig{
+					Config:         c.Config,
+					StreamProfiles: streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
+				}
+				return saveConfig(ctx, cfg)
+			})
 		},
 	)
 }

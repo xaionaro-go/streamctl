@@ -34,9 +34,14 @@ func (sf *StreamForwarding) Start(
 	s *Stream,
 	url string,
 ) error {
-	sf.Lock()
-	defer sf.Unlock()
+	return xsync.DoA3R1(ctx, &sf.Mutex, sf.startNoLock, ctx, s, url)
+}
 
+func (sf *StreamForwarding) startNoLock(
+	ctx context.Context,
+	s *Stream,
+	url string,
+) error {
 	cons, trafficCounter, run, err := sf.StreamHandler.GetConsumer(url)
 	if err != nil {
 		return fmt.Errorf("unable to initialize consumer of '%s': %w", url, err)
@@ -88,9 +93,8 @@ func (sf *StreamForwarding) Start(
 }
 
 func (sf *StreamForwarding) IsClosed() bool {
-	sf.Lock()
-	defer sf.Unlock()
-	return sf.isClosed()
+	ctx := context.TODO()
+	return xsync.DoR1(ctx, &sf.Mutex, sf.isClosed)
 }
 
 func (sf *StreamForwarding) isClosed() bool {
@@ -98,8 +102,11 @@ func (sf *StreamForwarding) isClosed() bool {
 }
 
 func (sf *StreamForwarding) Close() error {
-	sf.Lock()
-	defer sf.Unlock()
+	ctx := context.TODO()
+	return xsync.DoR1(ctx, &sf.Mutex, sf.close)
+}
+
+func (sf *StreamForwarding) close() error {
 	if sf.isClosed() {
 		return nil
 	}

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/facebookincubator/go-belt"
@@ -93,7 +94,7 @@ func runStreamd(
 		logger.Panicf(ctx, "unable to read the config from path '%s': %v", flags.ConfigPath, err)
 	}
 
-	var streamdGRPCLocker xsync.Mutex
+	var streamdGRPCLocker sync.Mutex
 	streamdGRPCLocker.Lock()
 
 	var streamdGRPC *server.GRPCServer
@@ -159,53 +160,54 @@ func runStreamd(
 	streamdGRPCLocker.Unlock()
 
 	var configLocker xsync.Mutex
-	configLocker.Lock()
-	if mainProcess != nil {
-		logger.Debugf(ctx, "starting the IPC server")
-		setReadyFor(ctx, mainProcess, GetStreamdAddress{}, RequestStreamDConfig{})
-		observability.Go(ctx, func() {
-			err := mainProcess.Serve(
-				ctx,
-				func(
-					ctx context.Context,
-					source mainprocess.ProcessName,
-					content any,
-				) error {
-					switch content.(type) {
-					case GetStreamdAddress:
-						return mainProcess.SendMessage(ctx, source, GetStreamdAddressResult{
-							Address: listener.Addr().String(),
-						})
-					case RequestStreamDConfig:
-						var buf bytes.Buffer
-						configLocker.Lock()
-						_, err := cfg.BuiltinStreamD.WriteTo(&buf)
-						configLocker.Unlock()
-						if err != nil {
-							return fmt.Errorf("unable to serialize the config: %w", err)
+	configLocker.Do(ctx, func() {
+		if mainProcess != nil {
+			logger.Debugf(ctx, "starting the IPC server")
+			setReadyFor(ctx, mainProcess, GetStreamdAddress{}, RequestStreamDConfig{})
+			observability.Go(ctx, func() {
+				err := mainProcess.Serve(
+					ctx,
+					func(
+						ctx context.Context,
+						source mainprocess.ProcessName,
+						content any,
+					) error {
+						switch content.(type) {
+						case GetStreamdAddress:
+							return mainProcess.SendMessage(ctx, source, GetStreamdAddressResult{
+								Address: listener.Addr().String(),
+							})
+						case RequestStreamDConfig:
+							var buf bytes.Buffer
+							err := xsync.DoR1(ctx, &configLocker, func() error {
+								_, err := cfg.BuiltinStreamD.WriteTo(&buf)
+								return err
+							})
+							if err != nil {
+								return fmt.Errorf("unable to serialize the config: %w", err)
+							}
+							return mainProcess.SendMessage(ctx, source, UpdateStreamDConfig{
+								Config: buf.String(),
+							})
+						default:
+							return fmt.Errorf("unexpected message of type %T: %#+v", content, content)
 						}
-						return mainProcess.SendMessage(ctx, source, UpdateStreamDConfig{
-							Config: buf.String(),
-						})
-					default:
-						return fmt.Errorf("unexpected message of type %T: %#+v", content, content)
-					}
-				},
-			)
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(10 * time.Millisecond): // TODO: here should be `default:` instead of this ugly racy hack
-			}
-			logger.Panicf(ctx, "communication (with the main process) error: %v", err)
-		})
-	}
+					},
+				)
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(10 * time.Millisecond): // TODO: here should be `default:` instead of this ugly racy hack
+				}
+				logger.Panicf(ctx, "communication (with the main process) error: %v", err)
+			})
+		}
 
-	err = streamD.Run(ctx)
-	if err != nil {
-		logger.Panicf(ctx, "unable to start streamd: %v", err)
-	}
-	configLocker.Unlock()
+		err = streamD.Run(ctx)
+		if err != nil {
+			logger.Panicf(ctx, "unable to start streamd: %v", err)
+		}
+	})
 
 	logger.Infof(ctx, "streamd is ready")
 	<-ctx.Done()

@@ -102,11 +102,17 @@ func (s *StreamServer) Init(
 	ctx context.Context,
 	opts ...InitOption,
 ) error {
-	initCfg := InitOptions(opts).Config()
-
 	ctx = belt.WithField(ctx, "module", "StreamServer")
-	s.Lock()
-	defer s.Unlock()
+	return xsync.DoR1(ctx, &s.Mutex, func() error {
+		return s.init(ctx, opts...)
+	})
+}
+
+func (s *StreamServer) init(
+	ctx context.Context,
+	opts ...InitOption,
+) error {
+	initCfg := InitOptions(opts).Config()
 
 	cfg := s.Config
 	logger.Debugf(ctx, "config == %#+v", *cfg)
@@ -161,11 +167,12 @@ func (s *StreamServer) ListServers(
 	ctx = belt.WithField(ctx, "module", "StreamServer")
 	logger.Tracef(ctx, "ListServers")
 	defer func() { logger.Tracef(ctx, "/ListServers: %d servers", len(_ret)) }()
-	s.Lock()
-	defer s.Unlock()
-	c := make([]types.PortServer, len(s.ServerHandlers))
-	copy(c, s.ServerHandlers)
-	return c
+
+	return xsync.DoR1(ctx, &s.Mutex, func() []types.PortServer {
+		c := make([]types.PortServer, len(s.ServerHandlers))
+		copy(c, s.ServerHandlers)
+		return c
+	})
 }
 
 func (s *StreamServer) StartServer(
@@ -174,17 +181,17 @@ func (s *StreamServer) StartServer(
 	listenAddr string,
 ) error {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
-	s.Lock()
-	defer s.Unlock()
-	err := s.startServer(ctx, serverType, listenAddr)
-	if err != nil {
-		return err
-	}
-	s.Config.Servers = append(s.Config.Servers, types.Server{
-		Type:   serverType,
-		Listen: listenAddr,
+	return xsync.DoR1(ctx, &s.Mutex, func() error {
+		err := s.startServer(ctx, serverType, listenAddr)
+		if err != nil {
+			return err
+		}
+		s.Config.Servers = append(s.Config.Servers, types.Server{
+			Type:   serverType,
+			Listen: listenAddr,
+		})
+		return nil
 	})
-	return nil
 }
 
 func (s *StreamServer) startServer(
@@ -261,15 +268,15 @@ func (s *StreamServer) StopServer(
 	server types.PortServer,
 ) error {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
-	s.Lock()
-	defer s.Unlock()
-	for idx, srv := range s.Config.Servers {
-		if srv.Listen == server.ListenAddr() {
-			s.Config.Servers = append(s.Config.Servers[:idx], s.Config.Servers[idx+1:]...)
-			break
+	return xsync.DoR1(ctx, &s.Mutex, func() error {
+		for idx, srv := range s.Config.Servers {
+			if srv.Listen == server.ListenAddr() {
+				s.Config.Servers = append(s.Config.Servers[:idx], s.Config.Servers[idx+1:]...)
+				break
+			}
 		}
-	}
-	return s.stopServer(ctx, server)
+		return s.stopServer(ctx, server)
+	})
 }
 
 func (s *StreamServer) stopServer(
@@ -290,13 +297,13 @@ func (s *StreamServer) AddIncomingStream(
 	streamID types.StreamID,
 ) error {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
-	s.Lock()
-	defer s.Unlock()
-	err := s.addIncomingStream(ctx, streamID)
-	if err != nil {
-		return err
-	}
-	return nil
+	return xsync.DoR1(ctx, &s.Mutex, func() error {
+		err := s.addIncomingStream(ctx, streamID)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
 func (s *StreamServer) addIncomingStream(
@@ -322,9 +329,7 @@ func (s *StreamServer) ListIncomingStreams(
 ) []IncomingStream {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
 	_ = ctx
-	s.Lock()
-	defer s.Unlock()
-	return s.listIncomingStreams(ctx)
+	return xsync.DoA1R1(ctx, &s.Mutex, s.listIncomingStreams, ctx)
 }
 
 func (s *StreamServer) listIncomingStreams(
@@ -344,9 +349,7 @@ func (s *StreamServer) RemoveIncomingStream(
 	streamID types.StreamID,
 ) error {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
-	s.Lock()
-	defer s.Unlock()
-	return s.removeIncomingStream(ctx, streamID)
+	return xsync.DoA2R1(ctx, &s.Mutex, s.removeIncomingStream, ctx, streamID)
 }
 
 func (s *StreamServer) removeIncomingStream(
@@ -375,31 +378,31 @@ func (s *StreamServer) AddStreamForward(
 	quirks types.ForwardingQuirks,
 ) (*StreamForward, error) {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
-	s.Lock()
-	defer s.Unlock()
-	streamConfig := s.Config.Streams[streamID]
-	if _, ok := streamConfig.Forwardings[destinationID]; ok {
-		return nil, fmt.Errorf("the forwarding %s->%s already exists", streamID, destinationID)
-	}
-
-	streamConfig.Forwardings[destinationID] = types.ForwardingConfig{
-		Disabled: !enabled,
-		Quirks:   quirks,
-	}
-
-	if enabled {
-		fwd, err := s.addStreamForward(ctx, streamID, destinationID, quirks)
-		if err != nil {
-			return nil, err
+	return xsync.DoR2(ctx, &s.Mutex, func() (*StreamForward, error) {
+		streamConfig := s.Config.Streams[streamID]
+		if _, ok := streamConfig.Forwardings[destinationID]; ok {
+			return nil, fmt.Errorf("the forwarding %s->%s already exists", streamID, destinationID)
 		}
-		return fwd, nil
-	}
-	return &StreamForward{
-		StreamID:      streamID,
-		DestinationID: destinationID,
-		Enabled:       enabled,
-		Quirks:        quirks,
-	}, nil
+
+		streamConfig.Forwardings[destinationID] = types.ForwardingConfig{
+			Disabled: !enabled,
+			Quirks:   quirks,
+		}
+
+		if enabled {
+			fwd, err := s.addStreamForward(ctx, streamID, destinationID, quirks)
+			if err != nil {
+				return nil, err
+			}
+			return fwd, nil
+		}
+		return &StreamForward{
+			StreamID:      streamID,
+			DestinationID: destinationID,
+			Enabled:       enabled,
+			Quirks:        quirks,
+		}, nil
+	})
 }
 
 func (s *StreamServer) addStreamForward(
@@ -606,45 +609,45 @@ func (s *StreamServer) UpdateStreamForward(
 	quirks types.ForwardingQuirks,
 ) (*StreamForward, error) {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
-	s.Lock()
-	defer s.Unlock()
-	streamConfig := s.Config.Streams[streamID]
-	fwdCfg, ok := streamConfig.Forwardings[destinationID]
-	if !ok {
-		return nil, fmt.Errorf("the forwarding %s->%s does not exist", streamID, destinationID)
-	}
-
-	var fwd *StreamForward
-	if fwdCfg.Disabled && enabled {
-		var err error
-		fwd, err = s.addStreamForward(ctx, streamID, destinationID, quirks)
-		if err != nil {
-			return nil, fmt.Errorf("unable to active the stream: %w", err)
+	return xsync.DoR2(ctx, &s.Mutex, func() (*StreamForward, error) {
+		streamConfig := s.Config.Streams[streamID]
+		fwdCfg, ok := streamConfig.Forwardings[destinationID]
+		if !ok {
+			return nil, fmt.Errorf("the forwarding %s->%s does not exist", streamID, destinationID)
 		}
-	}
-	if !fwdCfg.Disabled && !enabled {
-		err := s.removeStreamForward(ctx, streamID, destinationID)
-		if err != nil {
-			return nil, fmt.Errorf("unable to deactivate the stream: %w", err)
-		}
-	}
-	streamConfig.Forwardings[destinationID] = types.ForwardingConfig{
-		Disabled: !enabled,
-		Quirks:   quirks,
-	}
 
-	r := &StreamForward{
-		StreamID:      streamID,
-		DestinationID: destinationID,
-		Enabled:       enabled,
-		Quirks:        quirks,
-		NumBytesWrote: 0,
-		NumBytesRead:  0,
-	}
-	if fwd != nil {
-		r.ActiveForwarding = fwd.ActiveForwarding
-	}
-	return r, nil
+		var fwd *StreamForward
+		if fwdCfg.Disabled && enabled {
+			var err error
+			fwd, err = s.addStreamForward(ctx, streamID, destinationID, quirks)
+			if err != nil {
+				return nil, fmt.Errorf("unable to active the stream: %w", err)
+			}
+		}
+		if !fwdCfg.Disabled && !enabled {
+			err := s.removeStreamForward(ctx, streamID, destinationID)
+			if err != nil {
+				return nil, fmt.Errorf("unable to deactivate the stream: %w", err)
+			}
+		}
+		streamConfig.Forwardings[destinationID] = types.ForwardingConfig{
+			Disabled: !enabled,
+			Quirks:   quirks,
+		}
+
+		r := &StreamForward{
+			StreamID:      streamID,
+			DestinationID: destinationID,
+			Enabled:       enabled,
+			Quirks:        quirks,
+			NumBytesWrote: 0,
+			NumBytesRead:  0,
+		}
+		if fwd != nil {
+			r.ActiveForwarding = fwd.ActiveForwarding
+		}
+		return r, nil
+	})
 }
 
 func (s *StreamServer) ListStreamForwards(
@@ -654,11 +657,11 @@ func (s *StreamServer) ListStreamForwards(
 	defer func() {
 		logger.Tracef(ctx, "/ListStreamForwards(): %#+v %v", _ret, _err)
 	}()
-	s.Lock()
-	defer s.Unlock()
 
-	return s.getStreamForwards(ctx, func(si types.StreamID, di ordered.Optional[types.DestinationID]) bool {
-		return true
+	return xsync.DoR2(ctx, &s.Mutex, func() ([]StreamForward, error) {
+		return s.getStreamForwards(ctx, func(si types.StreamID, di ordered.Optional[types.DestinationID]) bool {
+			return true
+		})
 	})
 }
 
@@ -741,14 +744,14 @@ func (s *StreamServer) RemoveStreamForward(
 	dstID types.DestinationID,
 ) error {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
-	s.Lock()
-	defer s.Unlock()
-	streamCfg := s.Config.Streams[streamID]
-	if _, ok := streamCfg.Forwardings[dstID]; !ok {
-		return fmt.Errorf("the forwarding %s->%s does not exist", streamID, dstID)
-	}
-	delete(streamCfg.Forwardings, dstID)
-	return s.removeStreamForward(ctx, streamID, dstID)
+	return xsync.DoR1(ctx, &s.Mutex, func() error {
+		streamCfg := s.Config.Streams[streamID]
+		if _, ok := streamCfg.Forwardings[dstID]; !ok {
+			return fmt.Errorf("the forwarding %s->%s does not exist", streamID, dstID)
+		}
+		delete(streamCfg.Forwardings, dstID)
+		return s.removeStreamForward(ctx, streamID, dstID)
+	})
 }
 
 func (s *StreamServer) removeStreamForward(
@@ -784,11 +787,11 @@ func (s *StreamServer) GetStreamForwardsByDestination(
 	defer func() {
 		logger.Debugf(ctx, "/GetStreamForwardsByDestination(): %#+v %v", _ret, _err)
 	}()
-	s.Lock()
-	defer s.Unlock()
 
-	return s.getStreamForwards(ctx, func(streamID types.StreamID, dstID ordered.Optional[types.DestinationID]) bool {
-		return !dstID.IsSet() || dstID.Get() == destID
+	return xsync.DoR2(ctx, &s.Mutex, func() ([]StreamForward, error) {
+		return s.getStreamForwards(ctx, func(streamID types.StreamID, dstID ordered.Optional[types.DestinationID]) bool {
+			return !dstID.IsSet() || dstID.Get() == destID
+		})
 	})
 }
 
@@ -796,9 +799,7 @@ func (s *StreamServer) ListStreamDestinations(
 	ctx context.Context,
 ) ([]types.StreamDestination, error) {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
-	s.Mutex.Lock()
-	defer s.Mutex.Unlock()
-	return s.listStreamDestinations(ctx)
+	return xsync.DoA1R2(ctx, &s.Mutex, s.listStreamDestinations, ctx)
 }
 
 func (s *StreamServer) listStreamDestinations(
@@ -815,14 +816,14 @@ func (s *StreamServer) AddStreamDestination(
 	url string,
 ) error {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
-	s.Mutex.Lock()
-	defer s.Mutex.Unlock()
-	err := s.addStreamDestination(ctx, destinationID, url)
-	if err != nil {
-		return err
-	}
-	s.Config.Destinations[destinationID] = &types.DestinationConfig{URL: url}
-	return nil
+	return xsync.DoR1(ctx, &s.Mutex, func() error {
+		err := s.addStreamDestination(ctx, destinationID, url)
+		if err != nil {
+			return err
+		}
+		s.Config.Destinations[destinationID] = &types.DestinationConfig{URL: url}
+		return nil
+	})
 }
 
 func (s *StreamServer) addStreamDestination(
@@ -842,13 +843,13 @@ func (s *StreamServer) RemoveStreamDestination(
 	destinationID types.DestinationID,
 ) error {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
-	s.Mutex.Lock()
-	defer s.Mutex.Unlock()
-	for _, streamCfg := range s.Config.Streams {
-		delete(streamCfg.Forwardings, destinationID)
-	}
-	delete(s.Config.Destinations, destinationID)
-	return s.removeStreamDestination(ctx, destinationID)
+	return xsync.DoR1(ctx, &s.Mutex, func() error {
+		for _, streamCfg := range s.Config.Streams {
+			delete(streamCfg.Forwardings, destinationID)
+		}
+		delete(s.Config.Destinations, destinationID)
+		return s.removeStreamDestination(ctx, destinationID)
+	})
 }
 
 func (s *StreamServer) removeStreamDestination(

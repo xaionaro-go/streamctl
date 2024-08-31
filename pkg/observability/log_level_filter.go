@@ -1,6 +1,8 @@
 package observability
 
 import (
+	"context"
+
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/pkg/field"
 	logger "github.com/facebookincubator/go-belt/tool/logger/types"
@@ -17,17 +19,19 @@ type LogLevelFilterT struct {
 var _ logger.PreHook = (*LogLevelFilterT)(nil)
 
 func (h *LogLevelFilterT) GetLevel() logger.Level {
-	h.Locker.Lock()
-	defer h.Locker.Unlock()
-	return h.Level
+	ctx := xsync.WithNoLogging(context.TODO(), true)
+	return xsync.DoR1(ctx, &h.Locker, func() logger.Level {
+		return h.Level
+	})
 }
 
 func (h *LogLevelFilterT) SetLevel(
 	level logger.Level,
 ) {
-	h.Locker.Lock()
-	defer h.Locker.Unlock()
-	h.Level = level
+	ctx := xsync.WithNoLogging(context.TODO(), true)
+	h.Locker.Do(ctx, func() {
+		h.Level = level
+	})
 }
 
 func (h *LogLevelFilterT) ProcessInput(
@@ -35,12 +39,13 @@ func (h *LogLevelFilterT) ProcessInput(
 	level logger.Level,
 	args ...any,
 ) logger.PreHookResult {
-	h.Locker.Lock()
-	defer h.Locker.Unlock()
-	if level > h.Level {
-		return logger.PreHookResult{Skip: true}
-	}
-	return logger.PreHookResult{}
+	ctx := xsync.WithNoLogging(context.TODO(), true)
+	return xsync.DoR1(ctx, &h.Locker, func() logger.PreHookResult {
+		if level > h.Level {
+			return logger.PreHookResult{Skip: true}
+		}
+		return logger.PreHookResult{}
+	})
 }
 func (h *LogLevelFilterT) ProcessInputf(
 	traceIDs belt.TraceIDs,
@@ -48,12 +53,13 @@ func (h *LogLevelFilterT) ProcessInputf(
 	format string,
 	args ...any,
 ) logger.PreHookResult {
-	h.Locker.Lock()
-	defer h.Locker.Unlock()
-	if level > h.Level {
-		return logger.PreHookResult{Skip: true}
-	}
-	return logger.PreHookResult{}
+	ctx := xsync.WithNoLogging(context.TODO(), true)
+	return xsync.DoR1(ctx, &h.Locker, func() logger.PreHookResult {
+		if level > h.Level {
+			return logger.PreHookResult{Skip: true}
+		}
+		return logger.PreHookResult{}
+	})
 }
 func (h *LogLevelFilterT) ProcessInputFields(
 	traceIDs belt.TraceIDs,
@@ -61,10 +67,11 @@ func (h *LogLevelFilterT) ProcessInputFields(
 	message string,
 	fields field.AbstractFields,
 ) logger.PreHookResult {
-	h.Locker.Lock()
-	defer h.Locker.Unlock()
-	if level > h.Level {
-		return logger.PreHookResult{Skip: true}
-	}
-	return logger.PreHookResult{}
+	ctx := xsync.WithNoLogging(context.TODO(), true)
+	return xsync.DoR1(ctx, &h.Locker, func() logger.PreHookResult {
+		if level > h.Level {
+			return logger.PreHookResult{Skip: true}
+		}
+		return logger.PreHookResult{}
+	})
 }

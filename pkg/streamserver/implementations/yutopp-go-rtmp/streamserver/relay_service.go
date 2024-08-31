@@ -26,41 +26,42 @@ func NewRelayService() *RelayService {
 }
 
 func (s *RelayService) NewPubsub(key string, publisherHandler *Handler) (*Pubsub, error) {
-	s.m.Lock()
-	defer s.m.Unlock()
 	ctx := context.TODO()
-	logger.Debugf(ctx, "NewPubsub(%s)", key)
+	return xsync.DoR2(ctx, &s.m, func() (*Pubsub, error) {
+		logger.Debugf(ctx, "NewPubsub(%s)", key)
 
-	if oldStream, ok := s.streams[key]; ok {
-		err := oldStream.deregister()
-		if err != nil {
-			logger.Warnf(ctx, "unable to close the old stream: %v", err)
+		if oldStream, ok := s.streams[key]; ok {
+			err := oldStream.deregister()
+			if err != nil {
+				logger.Warnf(ctx, "unable to close the old stream: %v", err)
+			}
 		}
-	}
 
-	pubsub := NewPubsub(s, key, publisherHandler)
+		pubsub := NewPubsub(s, key, publisherHandler)
 
-	s.streams[key] = pubsub
+		s.streams[key] = pubsub
 
-	var oldCh chan struct{}
-	oldCh, s.streamsChanged = s.streamsChanged, make(chan struct{})
-	close(oldCh)
+		var oldCh chan struct{}
+		oldCh, s.streamsChanged = s.streamsChanged, make(chan struct{})
+		close(oldCh)
 
-	return pubsub, nil
+		return pubsub, nil
+	})
 }
 
 func (s *RelayService) GetPubsub(key string) *Pubsub {
-	s.m.Lock()
-	defer s.m.Unlock()
-	return s.streams[key]
+	ctx := context.TODO()
+	return xsync.DoR1(ctx, &s.m, func() *Pubsub {
+		return s.streams[key]
+	})
 }
 
 func (s *RelayService) WaitPubsub(ctx context.Context, key string) *Pubsub {
 	for {
-		s.m.Lock()
-		pubSub := s.streams[key]
-		waitCh := s.streamsChanged
-		s.m.Unlock()
+		ctx := context.TODO()
+		pubSub, waitCh := xsync.DoR2(ctx, &s.m, func() (*Pubsub, chan struct{}) {
+			return s.streams[key], s.streamsChanged
+		})
 
 		logger.Debugf(ctx, "WaitPubSub(%s): pubSub==%v", key, pubSub)
 		if pubSub != nil {
@@ -76,32 +77,33 @@ func (s *RelayService) WaitPubsub(ctx context.Context, key string) *Pubsub {
 }
 
 func (s *RelayService) Pubsubs() map[string]*Pubsub {
-	s.m.Lock()
-	defer s.m.Unlock()
-	m := make(map[string]*Pubsub, len(s.streams))
-	for k, v := range s.streams {
-		m[k] = v
-	}
-	return m
+	ctx := context.TODO()
+	return xsync.DoR1(ctx, &s.m, func() map[string]*Pubsub {
+		m := make(map[string]*Pubsub, len(s.streams))
+		for k, v := range s.streams {
+			m[k] = v
+		}
+		return m
+	})
 }
 
 func (s *RelayService) PubsubNames() []string {
-	s.m.Lock()
-	defer s.m.Unlock()
-	result := make([]string, 0, len(s.streams))
-	for k := range s.streams {
-		result = append(result, k)
-	}
-	sort.Strings(result)
-	return result
+	ctx := context.TODO()
+	return xsync.DoR1(ctx, &s.m, func() []string {
+		result := make([]string, 0, len(s.streams))
+		for k := range s.streams {
+			result = append(result, k)
+		}
+		sort.Strings(result)
+		return result
+	})
 }
 
 func (s *RelayService) RemovePubsub(key string) error {
-	s.m.Lock()
-	defer s.m.Unlock()
-
-	return s.removePubsub(key)
+	ctx := context.TODO()
+	return xsync.DoA1R1(ctx, &s.m, s.removePubsub, key)
 }
+
 func (s *RelayService) removePubsub(key string) error {
 	logger.Default().Debugf("removePubsub(%s)", key)
 

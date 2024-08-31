@@ -28,7 +28,6 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/server"
 	uiiface "github.com/xaionaro-go/streamctl/pkg/streamd/ui"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
 	"google.golang.org/grpc"
 )
 
@@ -123,7 +122,7 @@ func main() {
 	var _ui uiiface.UI
 	var streamdGRPC *server.GRPCServer
 	var obsGRPC obs_grpc.OBSServer
-	var grpcLocker xsync.Mutex
+	var grpcLocker sync.Mutex
 
 	restart := func() {
 		l.Debugf("restart()")

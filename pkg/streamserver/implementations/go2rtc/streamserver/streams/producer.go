@@ -59,37 +59,37 @@ func (p *Producer) SetSource(s string) {
 }
 
 func (p *Producer) Dial() error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	ctx := context.TODO()
+	return xsync.DoR1(ctx, &p.mu, func() error {
+		if p.state == stateNone {
+			conn, err := p.streamHandler.GetProducer(p.urlFunc())
+			if err != nil {
+				return err
+			}
 
-	if p.state == stateNone {
-		conn, err := p.streamHandler.GetProducer(p.urlFunc())
-		if err != nil {
-			return err
+			p.conn = conn
+			p.state = stateMedias
 		}
-
-		p.conn = conn
-		p.state = stateMedias
-	}
-
-	return nil
+		return nil
+	})
 }
 
 func (p *Producer) GetMedias() []*core.Media {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	if p.conn == nil {
-		return nil
-	}
-
-	return p.conn.GetMedias()
+	ctx := context.TODO()
+	return xsync.DoR1(ctx, &p.mu, func() []*core.Media {
+		if p.conn == nil {
+			return nil
+		}
+		return p.conn.GetMedias()
+	})
 }
 
 func (p *Producer) GetTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	ctx := context.TODO()
+	return xsync.DoA2R2(ctx, &p.mu, p.getTrack, media, codec)
+}
 
+func (p *Producer) getTrack(media *core.Media, codec *core.Codec) (*core.Receiver, error) {
 	if p.state == stateNone {
 		return nil, errors.New("get track from none state")
 	}
@@ -115,8 +115,11 @@ func (p *Producer) GetTrack(media *core.Media, codec *core.Codec) (*core.Receive
 }
 
 func (p *Producer) AddTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	ctx := context.TODO()
+	return xsync.DoA3R1(ctx, &p.mu, p.addTrack, media, codec, track)
+}
+
+func (p *Producer) addTrack(media *core.Media, codec *core.Codec, track *core.Receiver) error {
 
 	if p.state == stateNone {
 		return errors.New("add track from none state")
@@ -144,30 +147,31 @@ func (p *Producer) MarshalJSON() ([]byte, error) {
 }
 
 func (p *Producer) start() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	ctx := context.TODO()
+	p.mu.Do(ctx, func() {
+		if p.state != stateTracks {
+			return
+		}
 
-	if p.state != stateTracks {
-		return
-	}
+		logger.Default().Debugf("[streams] start producer url=%s", p.urlFunc)
 
-	logger.Default().Debugf("[streams] start producer url=%s", p.urlFunc)
+		p.state = stateStart
+		p.workerID++
 
-	p.state = stateStart
-	p.workerID++
-
-	{
-		conn, workerID := p.conn, p.workerID
-		observability.Go(context.TODO(), func() { p.worker(conn, workerID) })
-	}
+		{
+			conn, workerID := p.conn, p.workerID
+			observability.Go(context.TODO(), func() { p.worker(conn, workerID) })
+		}
+	})
 }
 
 func (p *Producer) worker(conn core.Producer, workerID int) {
 	if err := conn.Start(); err != nil {
-		p.mu.Lock()
-		closed := p.workerID != workerID
-		p.mu.Unlock()
-
+		var closed bool
+		ctx := context.TODO()
+		p.mu.Do(ctx, func() {
+			closed = p.workerID != workerID
+		})
 		if closed {
 			return
 		}
@@ -179,9 +183,11 @@ func (p *Producer) worker(conn core.Producer, workerID int) {
 }
 
 func (p *Producer) reconnect(workerID, retry int) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	ctx := context.TODO()
+	xsync.DoA2(ctx, &p.mu, p.reconnectNoLock, workerID, retry)
+}
 
+func (p *Producer) reconnectNoLock(workerID, retry int) {
 	if p.workerID != workerID {
 		logger.Default().Tracef("[streams] stop reconnect url=%s", p.urlFunc)
 		return
@@ -248,9 +254,12 @@ func (p *Producer) reconnect(workerID, retry int) {
 }
 
 func (p *Producer) stop() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
+	ctx := context.TODO()
+	p.mu.Do(ctx, func() {
+		p.stopNoLock()
+	})
+}
+func (p *Producer) stopNoLock() {
 	switch p.state {
 	case stateExternal:
 		logger.Default().Tracef("[streams] skip stop external producer")

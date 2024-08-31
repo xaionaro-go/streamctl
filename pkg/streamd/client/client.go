@@ -189,9 +189,11 @@ func (c *Client) grpcNewClient(ctx context.Context) (streamd_grpc.StreamDClient,
 	return streamDClient, obsClient, conn, nil
 }
 
-func (c *Client) grpcPersistentClient(context.Context) (streamd_grpc.StreamDClient, obs_grpc.OBSClient, dummyCloser, error) {
-	c.PersistentConnectionLocker.Lock()
-	defer c.PersistentConnectionLocker.Unlock()
+func (c *Client) grpcPersistentClient(ctx context.Context) (streamd_grpc.StreamDClient, obs_grpc.OBSClient, dummyCloser, error) {
+	return xsync.DoA1R4(ctx, &c.PersistentConnectionLocker, c.grpcPersistentClientNoLock, ctx)
+}
+
+func (c *Client) grpcPersistentClientNoLock(ctx context.Context) (streamd_grpc.StreamDClient, obs_grpc.OBSClient, dummyCloser, error) {
 	return c.PersistentStreamDClient, c.PersistentOBSClient, dummyCloser{}, nil
 }
 

@@ -11,13 +11,13 @@ import (
 
 func (s *Stream) Play(source string) error {
 	ctx := context.TODO()
-	s.mu.Lock()
-	for _, producer := range s.producers {
-		if producer.state == stateInternal && producer.conn != nil {
-			_ = producer.conn.Stop()
+	s.mu.Do(ctx, func() {
+		for _, producer := range s.producers {
+			if producer.state == stateInternal && producer.conn != nil {
+				_ = producer.conn.Stop()
+			}
 		}
-	}
-	s.mu.Unlock()
+	})
 
 	if source == "" {
 		return nil
@@ -107,26 +107,29 @@ func (s *Stream) Play(source string) error {
 
 func (s *Stream) AddInternalProducer(conn core.Producer) {
 	producer := &Producer{conn: conn, state: stateInternal}
-	s.mu.Lock()
-	s.producers = append(s.producers, producer)
-	s.mu.Unlock()
+	ctx := context.TODO()
+	s.mu.Do(ctx, func() {
+		s.producers = append(s.producers, producer)
+	})
 }
 
 func (s *Stream) AddInternalConsumer(conn core.Consumer) {
-	s.mu.Lock()
-	s.consumers = append(s.consumers, conn)
-	s.mu.Unlock()
+	ctx := context.TODO()
+	s.mu.Do(ctx, func() {
+		s.consumers = append(s.consumers, conn)
+	})
 }
 
 func (s *Stream) RemoveInternalConsumer(conn core.Consumer) {
-	s.mu.Lock()
-	for i, consumer := range s.consumers {
-		if consumer == conn {
-			s.consumers = append(s.consumers[:i], s.consumers[i+1:]...)
-			break
+	ctx := context.TODO()
+	s.mu.Do(ctx, func() {
+		for i, consumer := range s.consumers {
+			if consumer == conn {
+				s.consumers = append(s.consumers[:i], s.consumers[i+1:]...)
+				break
+			}
 		}
-	}
-	s.mu.Unlock()
+	})
 }
 
 func matchMedia(prod core.Producer, cons core.Consumer) bool {

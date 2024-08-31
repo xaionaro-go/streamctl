@@ -128,9 +128,10 @@ func (s *RTMPServer) tcpHandle(netConn net.Conn) error {
 		}
 
 		wc := datacounter.NewWriterCounter(rtmpConn)
-		s.TrafficCounter.Lock()
-		s.TrafficCounter.WriterCounter = wc
-		s.TrafficCounter.Unlock()
+		ctx := context.TODO()
+		s.TrafficCounter.Do(ctx, func() {
+			s.TrafficCounter.WriterCounter = wc
+		})
 
 		_, _ = cons.WriteTo(wc)
 
@@ -156,9 +157,10 @@ func (s *RTMPServer) tcpHandle(netConn net.Conn) error {
 		defer stream.RemoveProducer(prod)
 
 		rc := types.NewIntPtrCounter(&prod.Recv)
-		s.TrafficCounter.Lock()
-		s.TrafficCounter.ReaderCounter = rc
-		s.TrafficCounter.Unlock()
+		ctx := context.TODO()
+		s.TrafficCounter.Do(ctx, func() {
+			s.TrafficCounter.ReaderCounter = rc
+		})
 
 		err = prod.Start()
 		if err != nil {
@@ -192,9 +194,9 @@ func StreamsConsumerHandle(url string) (core.Consumer, types.NumBytesReaderWrote
 		}
 
 		wrc := datacounter.NewWriterCounter(wr)
-		trafficCounter.Lock()
-		trafficCounter.WriterCounter = wrc
-		trafficCounter.Unlock()
+		trafficCounter.Do(ctx, func() {
+			trafficCounter.WriterCounter = wrc
+		})
 
 		ctx, cancelFn := context.WithCancel(ctx)
 		defer cancelFn()

@@ -18,6 +18,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	streamd "github.com/xaionaro-go/streamctl/pkg/streamd/types"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 func (d *StreamD) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context) error {
@@ -314,11 +315,11 @@ func (d *StreamD) processOBSEvent(
 	logger.Tracef(ctx, "got an OBS event: %T", ev)
 	switch ev := ev.(type) {
 	case *events.InputVolumeMeters:
-		for _, v := range ev.Inputs {
-			d.OBSState.Lock()
-			d.OBSState.VolumeMeters[v.Name] = v.Levels
-			d.OBSState.Unlock()
-		}
+		d.OBSState.Do(xsync.WithNoLogging(ctx, true), func() {
+			for _, v := range ev.Inputs {
+				d.OBSState.VolumeMeters[v.Name] = v.Levels
+			}
+		})
 	}
 }
 

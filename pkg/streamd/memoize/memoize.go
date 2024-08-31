@@ -3,18 +3,18 @@ package memoize
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/immune-gmbh/attestation-sdk/pkg/objhash"
 	"github.com/xaionaro-go/lockmap"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 type MemoizeData struct {
 	Cache         map[objhash.ObjHash]any
-	CacheMetaLock xsync.Mutex
+	CacheMetaLock sync.Mutex
 	CacheLockMap  *lockmap.LockMap
 }
 

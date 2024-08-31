@@ -75,12 +75,18 @@ func (*UI) InputGitUserData(
 }
 
 func (ui *UI) newOAuthCodeReceiver(
-	_ context.Context,
+	ctx context.Context,
 	platID streamcontrol.PlatformName,
 ) (<-chan string, context.CancelFunc) {
-	ui.CodeChMapLocker.Lock()
-	defer ui.CodeChMapLocker.Unlock()
+	return xsync.DoR2(ctx, &ui.CodeChMapLocker, func() (<-chan string, context.CancelFunc) {
+		return ui.newOAuthCodeReceiverNoLock(ctx, platID)
+	})
+}
 
+func (ui *UI) newOAuthCodeReceiverNoLock(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+) (<-chan string, context.CancelFunc) {
 	if oldCh, ok := ui.CodeChMap[platID]; ok {
 		return oldCh, nil
 	}
@@ -89,20 +95,19 @@ func (ui *UI) newOAuthCodeReceiver(
 	ui.CodeChMap[platID] = ch
 
 	return ch, func() {
-		ui.CodeChMapLocker.Lock()
-		defer ui.CodeChMapLocker.Unlock()
-		delete(ui.CodeChMap, platID)
+		ui.CodeChMapLocker.Do(ctx, func() {
+			delete(ui.CodeChMap, platID)
+		})
 	}
 }
 
 func (ui *UI) getOAuthCodeReceiver(
-	_ context.Context,
+	ctx context.Context,
 	platID streamcontrol.PlatformName,
 ) chan<- string {
-	ui.CodeChMapLocker.Lock()
-	defer ui.CodeChMapLocker.Unlock()
-
-	return ui.CodeChMap[platID]
+	return xsync.DoR1(ctx, &ui.CodeChMapLocker, func() chan<- string {
+		return ui.CodeChMap[platID]
+	})
 }
 
 func (ui *UI) oauth2Handler(
