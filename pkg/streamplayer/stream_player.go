@@ -314,6 +314,19 @@ func (p *StreamPlayer) controllerLoop(
 
 	instanceCtx, cancelFn := context.WithCancel(ctx)
 
+	isClosed := false
+	restart := func() {
+		isClosed = true
+		observability.Go(ctx, func() {
+			err := p.restartU(ctx)
+			errmon.ObserveErrorCtx(ctx, err)
+			if err != nil {
+				err := p.Parent.Remove(ctx, p.StreamID)
+				errmon.ObserveErrorCtx(ctx, err)
+			}
+		})
+	}
+
 	// wait for video to start:
 	{
 		var ch <-chan struct{}
@@ -340,6 +353,7 @@ func (p *StreamPlayer) controllerLoop(
 				}
 				logger.Debugf(ctx, "opening the stream")
 				err = p.openStream(ctx)
+				logger.Debugf(ctx, "opened the stream: %v", err)
 				errmon.ObserveErrorCtx(ctx, err)
 			} else {
 				t := time.NewTicker(1 * time.Second)
@@ -412,6 +426,24 @@ func (p *StreamPlayer) controllerLoop(
 					continue
 				}
 				logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: pos == %v", p.StreamID, pos)
+				var l time.Duration
+				err = p.withPlayer(ctx, func(ctx context.Context, player types.Player) {
+					l, err = player.GetLength(ctx)
+					if err != nil {
+						err = fmt.Errorf("unable to get length: %w", err)
+					}
+				})
+				logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: length == %v", p.StreamID, l)
+				if l < 0 {
+					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: negative length, restarting", p.StreamID)
+					restart()
+					return false
+				}
+				if l > time.Hour {
+					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: the length is more than an hour (we expect only like a second, not an hour), restarting", p.StreamID)
+					restart()
+					return false
+				}
 				if pos != 0 {
 					return false
 				}
@@ -420,6 +452,10 @@ func (p *StreamPlayer) controllerLoop(
 			return true
 		}() {
 		}
+	}
+
+	if isClosed {
+		return
 	}
 
 	select {
@@ -432,19 +468,6 @@ func (p *StreamPlayer) controllerLoop(
 		time.Sleep(time.Second) // TODO: delete this ugly racy hack
 		p.notifyStart(context.WithValue(ctx, CtxKeyStreamPlayer, p))
 	})
-
-	isClosed := false
-	restart := func() {
-		isClosed = true
-		observability.Go(ctx, func() {
-			err := p.restartU(ctx)
-			errmon.ObserveErrorCtx(ctx, err)
-			if err != nil {
-				err := p.Parent.Remove(ctx, p.StreamID)
-				errmon.ObserveErrorCtx(ctx, err)
-			}
-		})
-	}
 
 	getRestartChan := context.Background().Done()
 	if fn := p.Config.GetRestartChanFunc; fn != nil {
@@ -499,6 +522,19 @@ func (p *StreamPlayer) controllerLoop(
 				return
 			}
 			logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: now == %v, posUpdatedAt == %v, len == %v; pos == %v; readTimeout == %v", p.StreamID, now, posUpdatedAt, l, pos, p.Config.ReadTimeout)
+
+			if pos < 0 {
+				logger.Debugf(ctx, "negative position: %v", pos)
+				restart()
+				return
+			}
+
+			if l < 0 {
+				logger.Debugf(ctx, "negative length: %v", l)
+				restart()
+				return
+			}
+
 			if pos != prevPos {
 				posUpdatedAt = now
 				prevPos = pos
