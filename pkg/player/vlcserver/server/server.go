@@ -195,6 +195,22 @@ func (srv *GRPCServer) GetLength(
 	}, nil
 }
 
+func (srv *GRPCServer) GetSpeed(
+	ctx context.Context,
+	req *player_grpc.GetSpeedRequest,
+) (*player_grpc.GetSpeedReply, error) {
+	if err := srv.isInited(); err != nil {
+		return nil, err
+	}
+	speed, err := srv.VLC.GetSpeed()
+	if err != nil {
+		return nil, fmt.Errorf("unable to set speed to '%v': %w", speed, err)
+	}
+	return &player_grpc.GetSpeedReply{
+		Speed: speed,
+	}, nil
+}
+
 func (srv *GRPCServer) SetSpeed(
 	ctx context.Context,
 	req *player_grpc.SetSpeedRequest,
@@ -208,6 +224,22 @@ func (srv *GRPCServer) SetSpeed(
 	return &player_grpc.SetSpeedReply{}, nil
 }
 
+func (srv *GRPCServer) GetPause(
+	ctx context.Context,
+	req *player_grpc.GetPauseRequest,
+) (*player_grpc.GetPauseReply, error) {
+	if err := srv.isInited(); err != nil {
+		return nil, err
+	}
+	isPaused, err := srv.VLC.GetPause()
+	if err != nil {
+		return nil, fmt.Errorf("unable to get the info if it is paused: %w", err)
+	}
+	return &player_grpc.GetPauseReply{
+		IsPaused: isPaused,
+	}, nil
+}
+
 func (srv *GRPCServer) SetPause(
 	ctx context.Context,
 	req *player_grpc.SetPauseRequest,
@@ -215,8 +247,8 @@ func (srv *GRPCServer) SetPause(
 	if err := srv.isInited(); err != nil {
 		return nil, err
 	}
-	if err := srv.VLC.SetPause(req.GetSetPaused()); err != nil {
-		return nil, fmt.Errorf("unable to set paused state to '%v': %w", req.GetSetPaused(), err)
+	if err := srv.VLC.SetPause(req.GetIsPaused()); err != nil {
+		return nil, fmt.Errorf("unable to set paused state to '%v': %w", req.GetIsPaused(), err)
 	}
 	return &player_grpc.SetPauseReply{}, nil
 }

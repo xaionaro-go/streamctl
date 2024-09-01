@@ -11,7 +11,9 @@ service Player {
 	rpc IsEnded(IsEndedRequest) returns (IsEndedReply) {}
 	rpc GetPosition(GetPositionRequest) returns (GetPositionReply) {}
 	rpc GetLength(GetLengthRequest) returns (GetLengthReply) {}
+	rpc GetSpeed(GetSpeedRequest) returns (GetSpeedReply) {}
 	rpc SetSpeed(SetSpeedRequest) returns (SetSpeedReply) {}
+	rpc GetPause(GetPauseRequest) returns (GetPauseReply) {}
 	rpc SetPause(SetPauseRequest) returns (SetPauseReply) {}
 	rpc Stop(StopRequest) returns (StopReply) {}
 	rpc Close(CloseRequest) returns (CloseReply) {}
@@ -59,12 +61,20 @@ message GetLengthRequest {}
 message GetLengthReply {
 	double lengthSecs = 1;
 }
+message GetSpeedRequest {}
+message GetSpeedReply {
+	double speed = 1;
+}
 message SetSpeedRequest {
     double speed = 1;
 }
 message SetSpeedReply {}
+message GetPauseRequest {}
+message GetPauseReply {
+	bool isPaused = 1;
+}
 message SetPauseRequest {
-    bool setPaused = 1;
+    bool isPaused = 1;
 }
 message SetPauseReply {}
 message StopRequest {}

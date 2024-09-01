@@ -1213,7 +1213,7 @@ func (grpc *GRPCServer) StreamPlayerSetPause(
 	ctx context.Context,
 	req *streamd_grpc.StreamPlayerSetPauseRequest,
 ) (*streamd_grpc.StreamPlayerSetPauseReply, error) {
-	err := grpc.StreamD.StreamPlayerSetPause(ctx, streamtypes.StreamID(req.GetStreamID()), req.GetRequest().SetPaused)
+	err := grpc.StreamD.StreamPlayerSetPause(ctx, streamtypes.StreamID(req.GetStreamID()), req.GetRequest().IsPaused)
 	if err != nil {
 		return nil, err
 	}

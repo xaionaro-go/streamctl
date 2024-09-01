@@ -351,6 +351,7 @@ func (p *StreamPlayer) controllerLoop(
 				err = p.openStream(ctx)
 				logger.Debugf(ctx, "opened the stream: %v", err)
 				errmon.ObserveErrorCtx(ctx, err)
+				time.Sleep(2 * time.Second)
 			} else {
 				t := time.NewTicker(1 * time.Second)
 				defer t.Stop()
@@ -404,7 +405,8 @@ func (p *StreamPlayer) controllerLoop(
 				logger.Debugf(ctx, "we opened the external stream and the player started to play it")
 			}
 
-			triedReopeningStream := false
+			triedToFixEmptyLinkViaReopen := false
+			triedToFixBadLengthViaReopen := false
 			startedWaitingForBuffering := time.Now()
 			for time.Since(startedWaitingForBuffering) <= p.Config.StartTimeout {
 				var (
@@ -412,8 +414,23 @@ func (p *StreamPlayer) controllerLoop(
 					err error
 				)
 				err = p.withPlayer(ctx, func(ctx context.Context, player types.Player) {
-					if err := player.SetPause(ctx, false); err != nil {
-						logger.Errorf(ctx, "unable to unpause: %v", err)
+					if !triedToFixEmptyLinkViaReopen {
+						if link, _ := player.GetLink(ctx); link == "" {
+							logger.Debugf(ctx, "the link is empty for some reason, reopening the link")
+							observability.Go(ctx, func() {
+								if err := p.openStream(ctx); err != nil {
+									logger.Errorf(ctx, "unable to open link '%s': %w", link, err)
+								}
+							})
+							triedToFixEmptyLinkViaReopen = true
+							return
+						}
+					}
+					if isPaused, _ := player.GetPause(ctx); isPaused {
+						logger.Debugf(ctx, "is paused for some reason, unpausing")
+						if err := player.SetPause(ctx, false); err != nil {
+							logger.Errorf(ctx, "unable to unpause: %v", err)
+						}
 					}
 					pos, err = player.GetPosition(ctx)
 					if err != nil {
@@ -441,21 +458,22 @@ func (p *StreamPlayer) controllerLoop(
 				}
 				if l > time.Hour {
 					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: the length is more than an hour: %v (we expect only like a second, not an hour)", l, p.StreamID)
-					if triedReopeningStream {
+					if triedToFixBadLengthViaReopen {
 						logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: already tried reopening the stream, did not help, so restarting")
 						restart()
 						return false
 					}
-					if err := p.openStream(ctx); err != nil {
-						logger.Error(ctx, "unable to re-open the stream: %v", err)
-						restart()
-						return false
-					}
-					triedReopeningStream = true
+					observability.Go(ctx, func() {
+						if err := p.openStream(ctx); err != nil {
+							logger.Error(ctx, "unable to re-open the stream: %v", err)
+							restart()
+						}
+					})
+					triedToFixBadLengthViaReopen = true
 					startedWaitingForBuffering = time.Now()
 					continue
 				}
-				if pos != 0 {
+				if l != 0 && pos != 0 {
 					return false
 				}
 				time.Sleep(100 * time.Millisecond)

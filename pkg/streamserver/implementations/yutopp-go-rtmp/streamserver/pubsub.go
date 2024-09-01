@@ -150,7 +150,7 @@ func (p *Pub) InitSub(sub *Sub) {
 // In this example, checks only sequence headers and assume that AAC and AVC.
 func (p *Pub) Publish(flv *flvtag.FlvTag) error {
 	ctx := context.TODO()
-	subs := xsync.DoR1(ctx, &p.pb.m, func() map[uint64]*Sub {
+	subs := xsync.DoR1(xsync.WithNoLogging(ctx, true), &p.pb.m, func() map[uint64]*Sub {
 		return p.pb.subs
 	})
 

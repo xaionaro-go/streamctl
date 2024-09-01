@@ -13,7 +13,9 @@ type Player interface {
 	IsEnded(ctx context.Context) (bool, error)
 	GetPosition(ctx context.Context) (time.Duration, error)
 	GetLength(ctx context.Context) (time.Duration, error)
+	GetSpeed(ctx context.Context) (float64, error)
 	SetSpeed(ctx context.Context, speed float64) error
+	GetPause(ctx context.Context) (bool, error)
 	SetPause(ctx context.Context, pause bool) error
 	Stop(ctx context.Context) error
 	Close(ctx context.Context) error

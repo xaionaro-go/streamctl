@@ -63,7 +63,6 @@ func (m *Manager) NewMPV(
 		return nil, err
 	}
 
-	logger.Tracef(ctx, "m.PlayersLocker.Lock()-ing")
 	m.PlayersLocker.Do(ctx, func() {
 		m.Players = append(m.Players, r)
 	})
@@ -121,13 +120,13 @@ func (p *MPV) execMPV(ctx context.Context) (_err error) {
 	logger.Debugf(ctx, "socket deletion result: '%s': %v", socketPath, err)
 
 	args := []string{p.PathToMPV, "--idle", "--keep-open=always", "--keep-open-pause=no", "--input-ipc-server=" + socketPath, fmt.Sprintf("--title=%s", p.Title)}
-	if observability.LogLevelFilter.GetLevel() >= logger.LevelTrace {
-		args = append(args, "--msg-level=debug")
+	if observability.LogLevelFilter.GetLevel() >= logger.LevelDebug {
+		args = append(args, "--msg-level=all=debug")
 	}
 	logger.Debugf(ctx, "running command '%s %s'", args[0], strings.Join(args[1:], " "))
 	cmd := exec.Command(args[0], args[1:]...)
 
-	if observability.LogLevelFilter.GetLevel() >= logger.LevelTrace {
+	if observability.LogLevelFilter.GetLevel() >= logger.LevelDebug {
 		cmd.Stdout = logwriter.NewLogWriter(ctx, logger.FromCtx(ctx).WithField("log_writer_target", "mpv").WithField("output_type", "stdout"))
 		cmd.Stderr = logwriter.NewLogWriter(ctx, logger.FromCtx(ctx).WithField("log_writer_target", "mpv").WithField("output_type", "stderr"))
 	}
@@ -211,12 +210,15 @@ func (p *MPV) OpenURL(
 ) error {
 	logger.Debugf(ctx, "OpenURL(ctx, '%s')", link)
 	p.OpenLinkOnRerun = link
-	_, err := p.MPVConn.Call("loadfile", link, "replace")
+	_, err := p.mpvCall(ctx, "loadfile", link, "replace")
 	return err
 }
 
-func (p *MPV) getString(key string) (string, error) {
-	r, err := p.MPVConn.Get(key)
+func (p *MPV) getString(
+	ctx context.Context,
+	key string,
+) (string, error) {
+	r, err := p.mpvGet(ctx, key)
 	if err != nil {
 		return "", fmt.Errorf("unable to get '%s' from the MPV: %w", key, err)
 	}
@@ -227,8 +229,74 @@ func (p *MPV) getString(key string) (string, error) {
 	return s, nil
 }
 
-func (p *MPV) getFloat64(key string) (float64, error) {
-	r, err := p.MPVConn.Get(key)
+const requestTimeout = time.Second
+
+func (p *MPV) timeboxedCall(
+	ctx context.Context,
+	fn func() error,
+) error {
+	ctx, cancelFn := context.WithTimeout(ctx, requestTimeout)
+	defer cancelFn()
+
+	endedCh := make(chan struct{})
+
+	var err error
+	observability.Go(ctx, func() {
+		err = fn()
+		close(endedCh)
+	})
+
+	select {
+	case <-ctx.Done():
+		logger.Errorf(ctx, "timed out on a request")
+		return ctx.Err()
+	case <-endedCh:
+	}
+
+	return err
+}
+
+func (p *MPV) mpvSet(
+	ctx context.Context,
+	key string,
+	value any,
+) error {
+	return p.timeboxedCall(ctx, func() error {
+		return p.MPVConn.Set(key, value)
+	})
+}
+
+func (p *MPV) mpvGet(
+	ctx context.Context,
+	key string,
+) (any, error) {
+	var result any
+	err := p.timeboxedCall(ctx, func() error {
+		var err error
+		result, err = p.MPVConn.Get(key)
+		return err
+	})
+	return result, err
+}
+
+func (p *MPV) mpvCall(
+	ctx context.Context,
+	args ...any,
+) (any, error) {
+	var result any
+	err := p.timeboxedCall(ctx, func() error {
+		var err error
+		result, err = p.MPVConn.Call(args...)
+		return err
+	})
+	return result, err
+}
+
+func (p *MPV) getFloat64(
+	ctx context.Context,
+	key string,
+) (float64, error) {
+	r, err := p.mpvGet(ctx, key)
 	if err != nil {
 		return 0, fmt.Errorf("unable to get '%s' from the MPV: %w", key, err)
 	}
@@ -242,10 +310,28 @@ func (p *MPV) getFloat64(key string) (float64, error) {
 	}
 }
 
+func (p *MPV) getBool(
+	ctx context.Context,
+	key string,
+) (bool, error) {
+	r, err := p.mpvGet(ctx, key)
+	if err != nil {
+		return false, fmt.Errorf("unable to get '%s' from the MPV: %w", key, err)
+	}
+	switch r := r.(type) {
+	case bool:
+		return r, nil
+	case string:
+		return strconv.ParseBool(r)
+	default:
+		return false, fmt.Errorf("unexpected type %T", r)
+	}
+}
+
 func (p *MPV) GetLink(
 	ctx context.Context,
 ) (string, error) {
-	return p.getString("filename")
+	return p.getString(ctx, "filename")
 }
 
 func (p *MPV) EndChan(
@@ -301,7 +387,7 @@ func (p *MPV) IsEnded(
 func (p *MPV) GetPosition(
 	ctx context.Context,
 ) (time.Duration, error) {
-	ts, err := p.getFloat64("time-pos")
+	ts, err := p.getFloat64(ctx, "time-pos")
 	if err != nil {
 		return 0, err
 	}
@@ -312,7 +398,7 @@ func (p *MPV) GetPosition(
 func (p *MPV) GetLength(
 	ctx context.Context,
 ) (time.Duration, error) {
-	ts, err := p.getFloat64("duration")
+	ts, err := p.getFloat64(ctx, "duration")
 	if err != nil {
 		return 0, err
 	}
@@ -324,26 +410,32 @@ func (p *MPV) SetSpeed(
 	ctx context.Context,
 	speed float64,
 ) error {
-	return p.MPVConn.Set("speed", speed)
+	return p.mpvSet(ctx, "speed", speed)
 }
 
 func (p *MPV) GetSpeed(
 	ctx context.Context,
 ) (float64, error) {
-	return p.getFloat64("speed")
+	return p.getFloat64(ctx, "speed")
+}
+
+func (p *MPV) GetPause(
+	ctx context.Context,
+) (bool, error) {
+	return p.getBool(ctx, "pause")
 }
 
 func (p *MPV) SetPause(
 	ctx context.Context,
 	pause bool,
 ) error {
-	return p.MPVConn.Set("pause", pause)
+	return p.mpvSet(ctx, "pause", pause)
 }
 
 func (p *MPV) Stop(
 	ctx context.Context,
 ) error {
-	_, err := p.MPVConn.Call("stop")
+	_, err := p.mpvCall(ctx, "stop")
 	if err != nil {
 		return fmt.Errorf("unable to request 'stop'-ing: %w", err)
 	}
@@ -351,7 +443,7 @@ func (p *MPV) Stop(
 }
 
 func (p *MPV) Quit(ctx context.Context, exitCode uint8) error {
-	_, err := p.MPVConn.Call("quit", exitCode)
+	_, err := p.mpvCall(ctx, "quit", exitCode)
 	if err != nil {
 		return fmt.Errorf("unable to request 'quit'-ing: %w", err)
 	}
@@ -359,7 +451,7 @@ func (p *MPV) Quit(ctx context.Context, exitCode uint8) error {
 }
 
 func (p *MPV) GetDisplayScale(ctx context.Context) (float64, error) {
-	scale, err := p.getFloat64("window-scale")
+	scale, err := p.getFloat64(ctx, "window-scale")
 	if err != nil {
 		return 0, err
 	}
@@ -368,7 +460,7 @@ func (p *MPV) GetDisplayScale(ctx context.Context) (float64, error) {
 }
 
 func (p *MPV) SetDisplayScale(ctx context.Context, scale float64) error {
-	return p.MPVConn.Set("window-scale", scale)
+	return p.mpvSet(ctx, "window-scale", scale)
 }
 
 const mpvQuitTimeout = time.Second

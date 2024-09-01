@@ -1520,7 +1520,7 @@ func (c *Client) StreamPlayerSetPause(
 		return callWrapper(ctx, c, client.StreamPlayerSetPause, &streamd_grpc.StreamPlayerSetPauseRequest{
 			StreamID: string(streamID),
 			Request: &player_grpc.SetPauseRequest{
-				SetPaused: pause,
+				IsPaused: pause,
 			},
 		})
 	})

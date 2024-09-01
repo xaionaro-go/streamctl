@@ -6,6 +6,7 @@ import (
 	"fmt"
 	_ "net/http/pprof"
 	"os"
+	"runtime"
 	"time"
 
 	child_process_manager "github.com/AgustinSRG/go-child-process-manager"
@@ -78,6 +79,15 @@ func runPanel(
 		logger.Panic(ctx, panelErr)
 	}
 
+	switch runtime.GOOS {
+	case "android":
+	default:
+		// TODO: remove this ugly hack:
+		if panel.Config.RemoteStreamDAddr != flags.RemoteAddr {
+			panel.Config.RemoteStreamDAddr = flags.RemoteAddr
+		}
+	}
+
 	if panel.Config.RemoteStreamDAddr != "" {
 		ctx = belt.WithField(ctx, "streamd_addr", panel.Config.RemoteStreamDAddr)
 	}
@@ -106,10 +116,12 @@ func runPanel(
 			return err
 		}
 
-		err = grpcServer.Serve(listener)
-		if err != nil {
-			logger.Panicf(ctx, "unable to server the gRPC server: %v", err)
-		}
+		observability.Go(ctx, func() {
+			err = grpcServer.Serve(listener)
+			if err != nil {
+				logger.Panicf(ctx, "unable to server the gRPC server: %v", err)
+			}
+		})
 	}
 
 	if mainProcess != nil {

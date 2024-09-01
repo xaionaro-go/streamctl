@@ -70,10 +70,22 @@ func (p *LibVLC) GetLink(
 	panic("compiled without LibVLC support")
 }
 
+func (*LibVLC) GetSpeed(
+	ctx context.Context,
+) (float64, error) {
+	panic("compiled without LibVLC support")
+}
+
 func (*LibVLC) SetSpeed(
 	ctx context.Context,
 	speed float64,
 ) error {
+	panic("compiled without LibVLC support")
+}
+
+func (*LibVLC) GetPause(
+	ctx context.Context,
+) (bool, error) {
 	panic("compiled without LibVLC support")
 }
 

@@ -69,7 +69,7 @@ func getContext(
 		}
 		logPath, err := xpath.Expand(logPathUnexpanded)
 		if err != nil {
-			l.Errorf("unable to expand path '%s': %w", flags.LogFile, err)
+			l.Errorf("unable to expand path '%s': %w", logPath, err)
 		} else {
 			var closeFile context.CancelFunc
 			rotateFunc := func() {
@@ -79,7 +79,7 @@ func getContext(
 				}
 				f, err := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0750)
 				if err != nil {
-					l.Errorf("failed to open log file '%s': %v", flags.LogFile, err)
+					l.Errorf("failed to open log file '%s': %v", logPath, err)
 					return
 				}
 				ll.SetOutput(io.MultiWriter(os.Stderr, f))

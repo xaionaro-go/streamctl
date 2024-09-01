@@ -50,11 +50,11 @@ func (c *Client) ProcessTitle(
 	}
 	defer conn.Close()
 
-	req, err := client.ProcessTitle(ctx, &player_grpc.ProcessTitleRequest{})
+	resp, err := client.ProcessTitle(ctx, &player_grpc.ProcessTitleRequest{})
 	if err != nil {
 		return "", fmt.Errorf("query error: %w", err)
 	}
-	return req.GetTitle(), nil
+	return resp.GetTitle(), nil
 }
 
 func logLevelGo2Protobuf(logLevel logger.Level) player_grpc.LoggingLevel {
@@ -124,11 +124,11 @@ func (c *Client) GetLink(
 	}
 	defer conn.Close()
 
-	req, err := client.GetLink(ctx, &player_grpc.GetLinkRequest{})
+	resp, err := client.GetLink(ctx, &player_grpc.GetLinkRequest{})
 	if err != nil {
 		return "", fmt.Errorf("query error: %w", err)
 	}
-	return req.GetLink(), nil
+	return resp.GetLink(), nil
 }
 
 func (c *Client) EndChan(ctx context.Context) (<-chan struct{}, error) {
@@ -173,11 +173,11 @@ func (c *Client) IsEnded(
 	}
 	defer conn.Close()
 
-	req, err := client.IsEnded(ctx, &player_grpc.IsEndedRequest{})
+	resp, err := client.IsEnded(ctx, &player_grpc.IsEndedRequest{})
 	if err != nil {
 		return false, fmt.Errorf("query error: %w", err)
 	}
-	return req.GetIsEnded(), nil
+	return resp.GetIsEnded(), nil
 }
 
 func (c *Client) GetPosition(
@@ -189,11 +189,11 @@ func (c *Client) GetPosition(
 	}
 	defer conn.Close()
 
-	req, err := client.GetPosition(ctx, &player_grpc.GetPositionRequest{})
+	resp, err := client.GetPosition(ctx, &player_grpc.GetPositionRequest{})
 	if err != nil {
 		return 0, fmt.Errorf("query error: %w", err)
 	}
-	return time.Duration(req.GetPositionSecs() * float64(time.Second)), nil
+	return time.Duration(resp.GetPositionSecs() * float64(time.Second)), nil
 }
 func (c *Client) GetLength(
 	ctx context.Context,
@@ -204,12 +204,29 @@ func (c *Client) GetLength(
 	}
 	defer conn.Close()
 
-	req, err := client.GetLength(ctx, &player_grpc.GetLengthRequest{})
+	resp, err := client.GetLength(ctx, &player_grpc.GetLengthRequest{})
 	if err != nil {
 		return 0, fmt.Errorf("query error: %w", err)
 	}
-	return time.Duration(req.GetLengthSecs() * float64(time.Second)), nil
+	return time.Duration(resp.GetLengthSecs() * float64(time.Second)), nil
 }
+
+func (c *Client) GetSpeed(
+	ctx context.Context,
+) (float64, error) {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Close()
+
+	resp, err := client.GetSpeed(ctx, &player_grpc.GetSpeedRequest{})
+	if err != nil {
+		return 0, fmt.Errorf("query error: %w", err)
+	}
+	return resp.GetSpeed(), nil
+}
+
 func (c *Client) SetSpeed(
 	ctx context.Context,
 	speed float64,
@@ -226,6 +243,23 @@ func (c *Client) SetSpeed(
 	}
 	return nil
 }
+
+func (c *Client) GetPause(
+	ctx context.Context,
+) (bool, error) {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return false, err
+	}
+	defer conn.Close()
+
+	resp, err := client.GetPause(ctx, &player_grpc.GetPauseRequest{})
+	if err != nil {
+		return false, fmt.Errorf("query error: %w", err)
+	}
+	return resp.IsPaused, nil
+}
+
 func (c *Client) SetPause(
 	ctx context.Context,
 	pause bool,
@@ -237,13 +271,14 @@ func (c *Client) SetPause(
 	defer conn.Close()
 
 	_, err = client.SetPause(ctx, &player_grpc.SetPauseRequest{
-		SetPaused: pause,
+		IsPaused: pause,
 	})
 	if err != nil {
 		return fmt.Errorf("query error: %w", err)
 	}
 	return nil
 }
+
 func (c *Client) Stop(
 	ctx context.Context,
 ) error {

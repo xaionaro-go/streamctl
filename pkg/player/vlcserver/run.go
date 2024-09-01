@@ -105,11 +105,23 @@ func (vlc *VLC) GetLength(
 	return vlc.Client.GetLength(ctx)
 }
 
+func (vlc *VLC) GetSpeed(
+	ctx context.Context,
+) (float64, error) {
+	return vlc.Client.GetSpeed(ctx)
+}
+
 func (vlc *VLC) SetSpeed(
 	ctx context.Context,
 	speed float64,
 ) error {
 	return vlc.Client.SetSpeed(ctx, speed)
+}
+
+func (vlc *VLC) GetPause(
+	ctx context.Context,
+) (bool, error) {
+	return vlc.Client.GetPause(ctx)
 }
 
 func (vlc *VLC) SetPause(

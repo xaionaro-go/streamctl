@@ -231,10 +231,17 @@ func (p *Panel) dumpConfig(ctx context.Context) {
 	logger.Tracef(ctx, "the current config is: %s", buf.String())
 }
 
-func (p *Panel) LazyInitStreamD(ctx context.Context) error {
+func (p *Panel) LazyInitStreamD(ctx context.Context) (_err error) {
 	if p.StreamD != nil {
 		return nil
 	}
+	logger.Debugf(ctx, "initializing StreamD")
+	defer func() {
+		if p.StreamD == nil {
+			_err = fmt.Errorf("somehow we initialized StreamD, but it is still nil")
+		}
+		logger.Debugf(ctx, "/initializing StreamD: %v", _err)
+	}()
 
 	if p.Config.RemoteStreamDAddr != "" {
 		if err := p.initRemoteStreamD(ctx); err != nil {
@@ -458,7 +465,10 @@ func (p *Panel) OpenBrowser(ctx context.Context, url string) error {
 	return p.openBrowser(ctx, url, "")
 }
 
-func (p *Panel) initBuiltinStreamD(ctx context.Context) error {
+func (p *Panel) initBuiltinStreamD(ctx context.Context) (_err error) {
+	logger.Debugf(ctx, "initBuiltinStreamD")
+	defer func() { logger.Debugf(ctx, "/initBuiltinStreamD: %v", _err) }()
+
 	var err error
 	p.StreamD, err = streamd.New(
 		p.Config.BuiltinStreamD,
@@ -480,7 +490,9 @@ func (p *Panel) SetLoggingLevel(ctx context.Context, level logger.Level) {
 	observability.LogLevelFilter.SetLevel(level)
 }
 
-func (p *Panel) initRemoteStreamD(ctx context.Context) error {
+func (p *Panel) initRemoteStreamD(ctx context.Context) (_err error) {
+	logger.Debugf(ctx, "initRemoteStreamD")
+	defer func() { logger.Debugf(ctx, "/initRemoteStreamD: %v", _err) }()
 	var err error
 	p.StreamD, err = client.New(
 		ctx,

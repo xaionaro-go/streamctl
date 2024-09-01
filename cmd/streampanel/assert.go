@@ -10,7 +10,7 @@ func assert(
 	ctx context.Context,
 	shouldBeTrue bool,
 ) {
-	if !shouldBeTrue {
+	if shouldBeTrue {
 		return
 	}
 

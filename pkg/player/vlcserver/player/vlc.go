@@ -149,6 +149,10 @@ func (p *VLC) GetLength() time.Duration {
 	return time.Duration(ts) * time.Millisecond
 }
 
+func (p *VLC) GetSpeed() (float64, error) {
+	return float64(p.Player.PlaybackRate()), nil
+}
+
 func (p *VLC) SetSpeed(speed float64) error {
 	return p.Player.SetPlaybackRate(float32(speed))
 }
@@ -165,6 +169,10 @@ func (p *VLC) play() error {
 	}
 	p.IsStopped = false
 	return nil
+}
+
+func (p *VLC) GetPause() (bool, error) {
+	return !p.Player.IsPlaying(), nil
 }
 
 func (p *VLC) SetPause(pause bool) error {

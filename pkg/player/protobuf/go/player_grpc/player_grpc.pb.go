@@ -30,7 +30,9 @@ type PlayerClient interface {
 	IsEnded(ctx context.Context, in *IsEndedRequest, opts ...grpc.CallOption) (*IsEndedReply, error)
 	GetPosition(ctx context.Context, in *GetPositionRequest, opts ...grpc.CallOption) (*GetPositionReply, error)
 	GetLength(ctx context.Context, in *GetLengthRequest, opts ...grpc.CallOption) (*GetLengthReply, error)
+	GetSpeed(ctx context.Context, in *GetSpeedRequest, opts ...grpc.CallOption) (*GetSpeedReply, error)
 	SetSpeed(ctx context.Context, in *SetSpeedRequest, opts ...grpc.CallOption) (*SetSpeedReply, error)
+	GetPause(ctx context.Context, in *GetPauseRequest, opts ...grpc.CallOption) (*GetPauseReply, error)
 	SetPause(ctx context.Context, in *SetPauseRequest, opts ...grpc.CallOption) (*SetPauseReply, error)
 	Stop(ctx context.Context, in *StopRequest, opts ...grpc.CallOption) (*StopReply, error)
 	Close(ctx context.Context, in *CloseRequest, opts ...grpc.CallOption) (*CloseReply, error)
@@ -139,9 +141,27 @@ func (c *playerClient) GetLength(ctx context.Context, in *GetLengthRequest, opts
 	return out, nil
 }
 
+func (c *playerClient) GetSpeed(ctx context.Context, in *GetSpeedRequest, opts ...grpc.CallOption) (*GetSpeedReply, error) {
+	out := new(GetSpeedReply)
+	err := c.cc.Invoke(ctx, "/player.Player/GetSpeed", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *playerClient) SetSpeed(ctx context.Context, in *SetSpeedRequest, opts ...grpc.CallOption) (*SetSpeedReply, error) {
 	out := new(SetSpeedReply)
 	err := c.cc.Invoke(ctx, "/player.Player/SetSpeed", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerClient) GetPause(ctx context.Context, in *GetPauseRequest, opts ...grpc.CallOption) (*GetPauseReply, error) {
+	out := new(GetPauseReply)
+	err := c.cc.Invoke(ctx, "/player.Player/GetPause", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +207,9 @@ type PlayerServer interface {
 	IsEnded(context.Context, *IsEndedRequest) (*IsEndedReply, error)
 	GetPosition(context.Context, *GetPositionRequest) (*GetPositionReply, error)
 	GetLength(context.Context, *GetLengthRequest) (*GetLengthReply, error)
+	GetSpeed(context.Context, *GetSpeedRequest) (*GetSpeedReply, error)
 	SetSpeed(context.Context, *SetSpeedRequest) (*SetSpeedReply, error)
+	GetPause(context.Context, *GetPauseRequest) (*GetPauseReply, error)
 	SetPause(context.Context, *SetPauseRequest) (*SetPauseReply, error)
 	Stop(context.Context, *StopRequest) (*StopReply, error)
 	Close(context.Context, *CloseRequest) (*CloseReply, error)
@@ -222,8 +244,14 @@ func (UnimplementedPlayerServer) GetPosition(context.Context, *GetPositionReques
 func (UnimplementedPlayerServer) GetLength(context.Context, *GetLengthRequest) (*GetLengthReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetLength not implemented")
 }
+func (UnimplementedPlayerServer) GetSpeed(context.Context, *GetSpeedRequest) (*GetSpeedReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSpeed not implemented")
+}
 func (UnimplementedPlayerServer) SetSpeed(context.Context, *SetSpeedRequest) (*SetSpeedReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetSpeed not implemented")
+}
+func (UnimplementedPlayerServer) GetPause(context.Context, *GetPauseRequest) (*GetPauseReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetPause not implemented")
 }
 func (UnimplementedPlayerServer) SetPause(context.Context, *SetPauseRequest) (*SetPauseReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetPause not implemented")
@@ -394,6 +422,24 @@ func _Player_GetLength_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Player_GetSpeed_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSpeedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerServer).GetSpeed(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/player.Player/GetSpeed",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerServer).GetSpeed(ctx, req.(*GetSpeedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Player_SetSpeed_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SetSpeedRequest)
 	if err := dec(in); err != nil {
@@ -408,6 +454,24 @@ func _Player_SetSpeed_Handler(srv interface{}, ctx context.Context, dec func(int
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlayerServer).SetSpeed(ctx, req.(*SetSpeedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Player_GetPause_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPauseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerServer).GetPause(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/player.Player/GetPause",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerServer).GetPause(ctx, req.(*GetPauseRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -502,8 +566,16 @@ var Player_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Player_GetLength_Handler,
 		},
 		{
+			MethodName: "GetSpeed",
+			Handler:    _Player_GetSpeed_Handler,
+		},
+		{
 			MethodName: "SetSpeed",
 			Handler:    _Player_SetSpeed_Handler,
+		},
+		{
+			MethodName: "GetPause",
+			Handler:    _Player_GetPause_Handler,
 		},
 		{
 			MethodName: "SetPause",
