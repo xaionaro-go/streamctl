@@ -21,6 +21,12 @@ func (*Manager) NewLibVLC(ctx context.Context, title string) (*LibVLC, error) {
 	return NewLibVLC(ctx, title)
 }
 
+func (*LibVLC) SetupForStreaming(
+	ctx context.Context,
+) error {
+	panic("compiled without LibVLC support")
+}
+
 func (*LibVLC) OpenURL(
 	ctx context.Context,
 	link string,

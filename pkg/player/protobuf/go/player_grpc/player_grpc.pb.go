@@ -23,6 +23,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PlayerClient interface {
 	Open(ctx context.Context, in *OpenRequest, opts ...grpc.CallOption) (*OpenReply, error)
+	SetupForStreaming(ctx context.Context, in *SetupForStreamingRequest, opts ...grpc.CallOption) (*SetupForStreamingReply, error)
 	ProcessTitle(ctx context.Context, in *ProcessTitleRequest, opts ...grpc.CallOption) (*ProcessTitleReply, error)
 	GetLink(ctx context.Context, in *GetLinkRequest, opts ...grpc.CallOption) (*GetLinkReply, error)
 	EndChan(ctx context.Context, in *EndChanRequest, opts ...grpc.CallOption) (Player_EndChanClient, error)
@@ -46,6 +47,15 @@ func NewPlayerClient(cc grpc.ClientConnInterface) PlayerClient {
 func (c *playerClient) Open(ctx context.Context, in *OpenRequest, opts ...grpc.CallOption) (*OpenReply, error) {
 	out := new(OpenReply)
 	err := c.cc.Invoke(ctx, "/player.Player/Open", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *playerClient) SetupForStreaming(ctx context.Context, in *SetupForStreamingRequest, opts ...grpc.CallOption) (*SetupForStreamingReply, error) {
+	out := new(SetupForStreamingReply)
+	err := c.cc.Invoke(ctx, "/player.Player/SetupForStreaming", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -170,6 +180,7 @@ func (c *playerClient) Close(ctx context.Context, in *CloseRequest, opts ...grpc
 // for forward compatibility
 type PlayerServer interface {
 	Open(context.Context, *OpenRequest) (*OpenReply, error)
+	SetupForStreaming(context.Context, *SetupForStreamingRequest) (*SetupForStreamingReply, error)
 	ProcessTitle(context.Context, *ProcessTitleRequest) (*ProcessTitleReply, error)
 	GetLink(context.Context, *GetLinkRequest) (*GetLinkReply, error)
 	EndChan(*EndChanRequest, Player_EndChanServer) error
@@ -189,6 +200,9 @@ type UnimplementedPlayerServer struct {
 
 func (UnimplementedPlayerServer) Open(context.Context, *OpenRequest) (*OpenReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Open not implemented")
+}
+func (UnimplementedPlayerServer) SetupForStreaming(context.Context, *SetupForStreamingRequest) (*SetupForStreamingReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetupForStreaming not implemented")
 }
 func (UnimplementedPlayerServer) ProcessTitle(context.Context, *ProcessTitleRequest) (*ProcessTitleReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ProcessTitle not implemented")
@@ -247,6 +261,24 @@ func _Player_Open_Handler(srv interface{}, ctx context.Context, dec func(interfa
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlayerServer).Open(ctx, req.(*OpenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Player_SetupForStreaming_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetupForStreamingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerServer).SetupForStreaming(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/player.Player/SetupForStreaming",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerServer).SetupForStreaming(ctx, req.(*SetupForStreamingRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -444,6 +476,10 @@ var Player_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Open",
 			Handler:    _Player_Open_Handler,
+		},
+		{
+			MethodName: "SetupForStreaming",
+			Handler:    _Player_SetupForStreaming_Handler,
 		},
 		{
 			MethodName: "ProcessTitle",

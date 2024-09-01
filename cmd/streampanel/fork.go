@@ -12,6 +12,7 @@ import (
 	child_process_manager "github.com/AgustinSRG/go-child-process-manager"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/logwriter"
 	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
@@ -191,8 +192,8 @@ func runFork(
 	args := []string{execPath, "--sentry-dsn=" + flags.SentryDSN, "--log-level=" + logger.Level(flags.LoggerLevel).String(), "--subprocess=" + string(procName) + ":" + addr, "--logstash-addr=" + flags.LogstashAddr}
 	logger.Infof(ctx, "running '%s %s'", args[0], strings.Join(args[1:], " "))
 	cmd := exec.Command(args[0], args[1:]...)
-	cmd.Stderr = NewLogWriter(ctx, logger.FromCtx(ctx).WithField("output_type", "stderr"))
-	cmd.Stdout = NewLogWriter(ctx, logger.FromCtx(ctx).WithField("output_type", "stdout"))
+	cmd.Stderr = logwriter.NewLogWriter(ctx, logger.FromCtx(ctx).WithField("log_writer_target", "split").WithField("output_type", "stderr"))
+	cmd.Stdout = logwriter.NewLogWriter(ctx, logger.FromCtx(ctx).WithField("log_writer_target", "split"))
 	cmd.Stdin = os.Stdin
 	err = child_process_manager.ConfigureCommand(cmd)
 	if err != nil {

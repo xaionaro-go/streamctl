@@ -4,6 +4,7 @@ option go_package = "github.com/xaionaro-go/streamctl/pkg/player/protobuf/go/pla
 
 service Player {
 	rpc Open(OpenRequest) returns (OpenReply) {}
+    rpc SetupForStreaming(SetupForStreamingRequest) returns (SetupForStreamingReply) {}
     rpc ProcessTitle(ProcessTitleRequest) returns (ProcessTitleReply) {}
 	rpc GetLink(GetLinkRequest) returns (GetLinkReply) {}
 	rpc EndChan(EndChanRequest) returns (stream EndChanReply) {}
@@ -26,6 +27,9 @@ enum LoggingLevel {
 	LoggingLevelDebug = 6;
 	LoggingLevelTrace = 7;
 }
+
+message SetupForStreamingRequest {}
+message SetupForStreamingReply {}
 
 message ProcessTitleRequest {}
 message ProcessTitleReply {

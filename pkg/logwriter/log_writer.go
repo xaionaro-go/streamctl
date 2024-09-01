@@ -1,4 +1,4 @@
-package main
+package logwriter
 
 import (
 	"bytes"
@@ -47,18 +47,20 @@ func (l *logWriter) flusher(ctx context.Context) {
 func (l *logWriter) Flush() {
 	ctx := context.TODO()
 
-	s := func() string {
-		return xsync.DoR1(ctx, &l.BufferLocker, func() string {
-			s := l.Buffer.String()
-			l.Buffer.Reset()
-			return s
-		})
-	}()
+	s := xsync.DoR1(ctx, &l.BufferLocker, func() string {
+		s := l.Buffer.String()
+		l.Buffer.Reset()
+		return s
+	})
+	if len(s) == 0 {
+		return
+	}
 
 	l.Logger.Logf(l.Logger.Level(), "%s", s)
 }
 
 func (l *logWriter) Write(b []byte) (int, error) {
+	b = bytes.Trim(b, " \n\t\r")
 	if len(b) == 0 {
 		return 0, nil
 	}

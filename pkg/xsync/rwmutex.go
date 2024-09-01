@@ -65,21 +65,7 @@ func (m *Mutex) manualLock(ctx context.Context, lockType lockType) {
 	switch lockType {
 	case lockTypeWrite:
 		m.mutex.Lock()
-
-		ctx, m.cancelFunc = context.WithCancel(ctx)
-		deadlockNotifier := time.NewTimer(time.Minute)
-		go func() {
-			select {
-			case <-ctx.Done():
-				return
-			case <-deadlockNotifier.C:
-			}
-			allStacks := make([]byte, 1024*1024)
-			n := runtime.Stack(allStacks, true)
-			allStacks = allStacks[:n]
-			logger.Panicf(ctx, "got a deadlock in:\n%s", allStacks)
-		}()
-		m.deadlockNotifier = deadlockNotifier
+		m.startDeadlockDetector(ctx)
 	case lockTypeRead:
 		m.mutex.RLock()
 	}
@@ -87,6 +73,56 @@ func (m *Mutex) manualLock(ctx context.Context, lockType lockType) {
 	if !noLogging {
 		l.Tracef("%sed", lockType)
 	}
+}
+
+func (m *Mutex) startDeadlockDetector(ctx context.Context) {
+	ctx, m.cancelFunc = context.WithCancel(ctx)
+	deadlockNotifier := time.NewTimer(time.Minute)
+	go func() {
+		select {
+		case <-ctx.Done():
+			return
+		case <-deadlockNotifier.C:
+		}
+		allStacks := make([]byte, 1024*1024)
+		n := runtime.Stack(allStacks, true)
+		allStacks = allStacks[:n]
+		logger.Panicf(ctx, "got a deadlock in:\n%s", allStacks)
+	}()
+	m.deadlockNotifier = deadlockNotifier
+}
+
+func (m *Mutex) ManualTryRLock(ctx context.Context) bool {
+	return m.manualTryLock(ctx, lockTypeRead)
+}
+
+func (m *Mutex) ManualTryLock(ctx context.Context) bool {
+	return m.manualTryLock(ctx, lockTypeWrite)
+}
+
+func (m *Mutex) manualTryLock(ctx context.Context, lockType lockType) bool {
+	ctx = fixCtx(ctx)
+	noLogging := IsNoLogging(ctx)
+	l := logger.FromCtx(ctx)
+	if !noLogging {
+		l.Tracef("Try%sing", lockType)
+	}
+
+	var result bool
+	switch lockType {
+	case lockTypeWrite:
+		result = m.mutex.TryLock()
+		if result {
+			m.startDeadlockDetector(ctx)
+		}
+	case lockTypeRead:
+		result = m.mutex.TryRLock()
+	}
+
+	if !noLogging {
+		l.Tracef("Try%sed, result: %v", lockType, result)
+	}
+	return result
 }
 
 func (m *Mutex) ManualRUnlock(ctx context.Context) {

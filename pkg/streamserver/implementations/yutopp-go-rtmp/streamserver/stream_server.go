@@ -101,7 +101,10 @@ func (opt InitOptionDefaultStreamPlayerOptions) apply(cfg *InitConfig) {
 func (s *StreamServer) Init(
 	ctx context.Context,
 	opts ...InitOption,
-) error {
+) (_err error) {
+	logger.Debugf(ctx, "Init")
+	defer func() { logger.Debugf(ctx, "/Init: %v", _err) }()
+
 	ctx = belt.WithField(ctx, "module", "StreamServer")
 	return xsync.DoR1(ctx, &s.Mutex, func() error {
 		return s.init(ctx, opts...)
@@ -111,16 +114,21 @@ func (s *StreamServer) Init(
 func (s *StreamServer) init(
 	ctx context.Context,
 	opts ...InitOption,
-) error {
+) (_err error) {
 	initCfg := InitOptions(opts).Config()
 
 	cfg := s.Config
 	logger.Debugf(ctx, "config == %#+v", *cfg)
 
 	for _, srv := range cfg.Servers {
-		err := s.startServer(ctx, srv.Type, srv.Listen)
-		if err != nil {
-			return fmt.Errorf("unable to initialize %s server at %s: %w", srv.Type, srv.Listen, err)
+		{
+			srv := srv
+			observability.Go(ctx, func() {
+				err := s.startServer(ctx, srv.Type, srv.Listen)
+				if err != nil {
+					logger.Errorf(ctx, "unable to initialize %s server at %s: %w", srv.Type, srv.Listen, err)
+				}
+			})
 		}
 	}
 

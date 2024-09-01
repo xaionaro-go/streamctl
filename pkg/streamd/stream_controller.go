@@ -287,7 +287,7 @@ func (d *StreamD) listenOBSEvents(
 
 		client, err := o.GetClient(obs.GetClientOption(goobs.WithEventSubscriptions(subscriptions.InputVolumeMeters)))
 		if err != nil {
-			logger.Error(ctx, "unable to get an OBS client: %v", err)
+			logger.Errorf(ctx, "unable to get an OBS client: %v", err)
 			time.Sleep(time.Second)
 			continue
 		}

@@ -231,7 +231,7 @@ func (p *Panel) dumpConfig(ctx context.Context) {
 	logger.Tracef(ctx, "the current config is: %s", buf.String())
 }
 
-func (p *Panel) lazyInitStreamD(ctx context.Context) error {
+func (p *Panel) LazyInitStreamD(ctx context.Context) error {
 	if p.StreamD != nil {
 		return nil
 	}
@@ -258,7 +258,7 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
 
 	p.defaultContext = ctx
 
-	if err := p.lazyInitStreamD(ctx); err != nil {
+	if err := p.LazyInitStreamD(ctx); err != nil {
 		return fmt.Errorf("unable to initialize stream controller: %w", err)
 	}
 

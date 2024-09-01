@@ -70,7 +70,7 @@ var DefaultConfig = func(ctx context.Context) Config {
 		JitterBufDuration:     3 * time.Second,
 		CatchupMaxSpeedFactor: 10,
 		MaxCatchupAtLag:       21 * time.Second,
-		StartTimeout:          60 * time.Second,
+		StartTimeout:          10 * time.Second,
 		ReadTimeout:           10 * time.Second,
 	}
 }

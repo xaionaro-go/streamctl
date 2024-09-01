@@ -89,6 +89,13 @@ func (srv *GRPCServer) Open(
 	})
 }
 
+func (srv *GRPCServer) SetupForStreaming(
+	ctx context.Context,
+	req *player_grpc.SetupForStreamingRequest,
+) (*player_grpc.SetupForStreamingReply, error) {
+	return &player_grpc.SetupForStreamingReply{}, nil
+}
+
 func (srv *GRPCServer) ctx(ctx context.Context) context.Context {
 	return belt.CtxWithBelt(ctx, srv.Belt)
 }

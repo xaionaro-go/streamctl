@@ -17,7 +17,7 @@ import (
 	"github.com/blang/mpv"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/hashicorp/go-multierror"
+	"github.com/xaionaro-go/streamctl/pkg/logwriter"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
@@ -43,6 +43,7 @@ type MPV struct {
 	MPVClient  *mpv.Client
 	MPVConn    *mpvipc.Connection
 	CancelFunc context.CancelFunc
+	isClosed   bool
 
 	EndChInitialized bool
 	EndChMutex       xsync.Mutex
@@ -74,6 +75,9 @@ func NewMPV(
 	title string,
 	pathToMPV string,
 ) (_ret *MPV, _err error) {
+	logger.Debugf(ctx, "NewMPV()")
+	defer func() { logger.Debugf(ctx, "/NewMPV(): %#+v %v", _ret, _err) }()
+
 	ctx, cancelFn := context.WithCancel(ctx)
 	if pathToMPV == "" {
 		pathToMPV = "mpv"
@@ -97,7 +101,10 @@ func NewMPV(
 	return p, nil
 }
 
-func (p *MPV) execMPV(ctx context.Context) (_ret error) {
+func (p *MPV) execMPV(ctx context.Context) (_err error) {
+	logger.Debugf(ctx, "execMPV()")
+	defer func() { logger.Debugf(ctx, "/execMPV(): %v", _err) }()
+
 	myPid := os.Getpid()
 	mpvID := atomic.AddUint64(&mpvCount, 1)
 	var socketPath string
@@ -108,18 +115,23 @@ func (p *MPV) execMPV(ctx context.Context) (_ret error) {
 		tempDir := os.TempDir()
 		socketPath = path.Join(tempDir, fmt.Sprintf("mpv-ipc-%d-%d.sock", myPid, mpvID))
 	}
-	_ = os.Remove(socketPath)
-
 	logger.Debugf(ctx, "socket path: '%s'", socketPath)
 
+	err := os.Remove(socketPath)
+	logger.Debugf(ctx, "socket deletion result: '%s': %v", socketPath, err)
+
 	args := []string{p.PathToMPV, "--idle", "--keep-open=always", "--keep-open-pause=no", "--input-ipc-server=" + socketPath, fmt.Sprintf("--title=%s", p.Title)}
+	if observability.LogLevelFilter.GetLevel() >= logger.LevelTrace {
+		args = append(args, "--msg-level=debug")
+	}
 	logger.Debugf(ctx, "running command '%s %s'", args[0], strings.Join(args[1:], " "))
 	cmd := exec.Command(args[0], args[1:]...)
+
 	if observability.LogLevelFilter.GetLevel() >= logger.LevelTrace {
-		cmd.Stdout = os.Stderr
-		cmd.Stderr = os.Stderr
+		cmd.Stdout = logwriter.NewLogWriter(ctx, logger.FromCtx(ctx).WithField("log_writer_target", "mpv").WithField("output_type", "stdout"))
+		cmd.Stderr = logwriter.NewLogWriter(ctx, logger.FromCtx(ctx).WithField("log_writer_target", "mpv").WithField("output_type", "stderr"))
 	}
-	err := child_process_manager.ConfigureCommand(cmd)
+	err = child_process_manager.ConfigureCommand(cmd)
 	errmon.ObserveErrorCtx(ctx, err)
 	err = cmd.Start()
 	if err != nil {
@@ -153,8 +165,12 @@ func (p *MPV) execMPV(ctx context.Context) (_ret error) {
 			err := p.Cmd.Wait()
 			logger.Debugf(ctx, "player was closed: %v", err)
 			link := p.OpenLinkOnRerun
-			logger.Debugf(ctx, "going to open link '%s'", link)
-			err = p.Close(ctx)
+			if link == "" {
+				logger.Debugf(ctx, "not going to open any links")
+			} else {
+				logger.Debugf(ctx, "going to open link '%s'", link)
+			}
+			err = p.cleanup(ctx)
 			logger.Debugf(ctx, "cleanup result: %v", err)
 			select {
 			case <-ctx.Done():
@@ -178,6 +194,15 @@ func (p *MPV) execMPV(ctx context.Context) (_ret error) {
 		})
 	}
 	return nil
+}
+
+func (p *MPV) SetupForStreaming(
+	ctx context.Context,
+) (_err error) {
+	logger.Debugf(ctx, "SetupForStreaming()")
+	defer func() { logger.Debugf(ctx, "/SetupForStreaming(): %v", _err) }()
+
+	return p.SetDisplayScale(ctx, 1)
 }
 
 func (p *MPV) OpenURL(
@@ -325,11 +350,75 @@ func (p *MPV) Stop(
 	return nil
 }
 
-func (p *MPV) Close(ctx context.Context) error {
+func (p *MPV) Quit(ctx context.Context, exitCode uint8) error {
+	_, err := p.MPVConn.Call("quit", exitCode)
+	if err != nil {
+		return fmt.Errorf("unable to request 'quit'-ing: %w", err)
+	}
+	return nil
+}
+
+func (p *MPV) GetDisplayScale(ctx context.Context) (float64, error) {
+	scale, err := p.getFloat64("window-scale")
+	if err != nil {
+		return 0, err
+	}
+
+	return scale, nil
+}
+
+func (p *MPV) SetDisplayScale(ctx context.Context, scale float64) error {
+	return p.MPVConn.Set("window-scale", scale)
+}
+
+const mpvQuitTimeout = time.Second
+
+func (p *MPV) Close(ctx context.Context) (_err error) {
+	logger.Debugf(ctx, "Close()")
+	defer func() { logger.Debugf(ctx, "/Close(): %v", _err) }()
+
+	if p.isClosed {
+		return nil
+	}
+	p.isClosed = true
 	p.CancelFunc()
 	p.OpenLinkOnRerun = ""
-	return multierror.Append(
-		p.Cmd.Process.Kill(),
-		os.Remove(p.SocketPath),
-	).ErrorOrNil()
+	return p.cleanup(ctx)
+}
+
+func (p *MPV) cleanup(ctx context.Context) (_err error) {
+	if p.MPVConn.IsClosed() {
+		if err := p.Cmd.Process.Kill(); err != nil {
+			logger.Debugf(ctx, "unable to kill the process: %v", err)
+		}
+		if err := os.Remove(p.SocketPath); err != nil {
+			logger.Tracef(ctx, "unable to remove the socket file: %v", err)
+		}
+		return
+	}
+
+	if err := p.Quit(ctx, 0); err != nil {
+		logger.Errorf(ctx, "unable to request the player to quit: %v", err)
+	}
+	quitCtx, quittedFn := context.WithCancel(ctx)
+	go func() {
+		p.Cmd.Process.Wait()
+		quittedFn()
+	}()
+	select {
+	case <-time.After(mpvQuitTimeout):
+		logger.Warnf(ctx, "timed out on waiting until MPV would die, so killing it forcefully")
+		if err := p.Cmd.Process.Kill(); err != nil {
+			logger.Errorf(ctx, "unable to kill the process: %v", err)
+		}
+	case <-quitCtx.Done():
+		logger.Debugf(ctx, "the process successfully quitted")
+	}
+	if err := p.MPVConn.Close(); err != nil {
+		logger.Errorf(ctx, "unable to close old socket: %v", err)
+	}
+	if err := os.Remove(p.SocketPath); err != nil {
+		logger.Tracef(ctx, "unable to remove the socket file: %v", err)
+	}
+	return nil
 }

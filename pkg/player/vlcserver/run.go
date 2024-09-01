@@ -56,6 +56,12 @@ func Run(
 	}, nil
 }
 
+func (vlc *VLC) SetupForStreaming(
+	ctx context.Context,
+) error {
+	return nil
+}
+
 func (vlc *VLC) ProcessTitle(
 	ctx context.Context,
 ) (string, error) {

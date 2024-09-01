@@ -17,6 +17,7 @@ type Player interface {
 	SetPause(ctx context.Context, pause bool) error
 	Stop(ctx context.Context) error
 	Close(ctx context.Context) error
+	SetupForStreaming(ctx context.Context) error
 }
 
 type PlayerCommon struct {

@@ -78,6 +78,22 @@ func logLevelGo2Protobuf(logLevel logger.Level) player_grpc.LoggingLevel {
 	}
 }
 
+func (c *Client) SetupForStreaming(
+	ctx context.Context,
+) error {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = client.SetupForStreaming(ctx, &player_grpc.SetupForStreamingRequest{})
+	if err != nil {
+		return fmt.Errorf("query error: %w", err)
+	}
+	return nil
+}
+
 func (c *Client) OpenURL(
 	ctx context.Context,
 	link string,

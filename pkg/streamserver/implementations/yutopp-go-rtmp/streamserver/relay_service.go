@@ -70,8 +70,10 @@ func (s *RelayService) WaitPubsub(ctx context.Context, key string) *Pubsub {
 		logger.Debugf(ctx, "WaitPubSub(%s): waiting...", key)
 		select {
 		case <-ctx.Done():
+			logger.Debugf(ctx, "WaitPubSub(%s): cancelled", key)
 			return nil
 		case <-waitCh:
+			logger.Debugf(ctx, "WaitPubSub(%s): an event happened, rechecking", key)
 		}
 	}
 }

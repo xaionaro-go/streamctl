@@ -84,6 +84,13 @@ func runPanel(
 
 	if !flags.SplitProcess && flags.ListenAddr != "" {
 		logger.Debugf(ctx, `!flags.SplitProcess && flags.ListenAddr != ""`)
+
+		err := panel.LazyInitStreamD(ctx)
+		if err != nil {
+			logger.Panic(ctx, err)
+		}
+
+		assert(ctx, panel.StreamD != nil)
 		listener, grpcServer, streamdGRPC, _ := initGRPCServers(ctx, panel.StreamD, flags.ListenAddr)
 
 		// to erase an oauth request answered locally from "UnansweredOAuthRequests" in the GRPC server:
@@ -99,7 +106,7 @@ func runPanel(
 			return err
 		}
 
-		err := grpcServer.Serve(listener)
+		err = grpcServer.Serve(listener)
 		if err != nil {
 			logger.Panicf(ctx, "unable to server the gRPC server: %v", err)
 		}

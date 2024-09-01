@@ -179,13 +179,6 @@ func (p *StreamPlayer) startU(ctx context.Context) error {
 	p.Player = player
 	logger.Debugf(ctx, "initialized player #%+v", player)
 
-	if err := p.openStream(ctx); err != nil {
-		errmon.ObserveErrorCtx(ctx, p.Close())
-		cancelFn()
-		return fmt.Errorf("unable to open the stream in the player: %w", err)
-	}
-	logger.Debugf(ctx, "the player #%+v opened the stream", player)
-
 	observability.Go(ctx, func() { p.controllerLoop(ctx, cancelFn) })
 	return nil
 }
@@ -216,10 +209,11 @@ func (p *StreamPlayer) restartU(ctx context.Context) error {
 }
 
 func (p *StreamPlayer) getURL(ctx context.Context) (*url.URL, error) {
-	logger.Debugf(ctx, "override URL is '%s'", p.Config.OverrideURL)
 	if p.Config.OverrideURL != "" {
+		logger.Debugf(ctx, "override URL is '%s'", p.Config.OverrideURL)
 		return p.getOverriddenURL(ctx)
 	} else {
+		logger.Debugf(ctx, "no override URL")
 		return p.getInternalURL(ctx)
 	}
 }
@@ -347,9 +341,11 @@ func (p *StreamPlayer) controllerLoop(
 				logger.Debugf(ctx, "waiting for stream '%s'", p.StreamID)
 				select {
 				case <-instanceCtx.Done():
+					logger.Debugf(ctx, "the instance was cancelled")
 					errmon.ObserveErrorCtx(ctx, p.Close())
 					return false
 				case <-ch:
+					logger.Debugf(ctx, "a stream started, let's open it in the player")
 				}
 				logger.Debugf(ctx, "opening the stream")
 				err = p.openStream(ctx)
@@ -408,6 +404,7 @@ func (p *StreamPlayer) controllerLoop(
 				logger.Debugf(ctx, "we opened the external stream and the player started to play it")
 			}
 
+			triedReopeningStream := false
 			startedWaitingForBuffering := time.Now()
 			for time.Since(startedWaitingForBuffering) <= p.Config.StartTimeout {
 				var (
@@ -415,6 +412,9 @@ func (p *StreamPlayer) controllerLoop(
 					err error
 				)
 				err = p.withPlayer(ctx, func(ctx context.Context, player types.Player) {
+					if err := player.SetPause(ctx, false); err != nil {
+						logger.Errorf(ctx, "unable to unpause: %v", err)
+					}
 					pos, err = player.GetPosition(ctx)
 					if err != nil {
 						err = fmt.Errorf("unable to get position: %w", err)
@@ -440,16 +440,30 @@ func (p *StreamPlayer) controllerLoop(
 					return false
 				}
 				if l > time.Hour {
-					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: the length is more than an hour (we expect only like a second, not an hour), restarting", p.StreamID)
-					restart()
-					return false
+					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: the length is more than an hour: %v (we expect only like a second, not an hour)", l, p.StreamID)
+					if triedReopeningStream {
+						logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: already tried reopening the stream, did not help, so restarting")
+						restart()
+						return false
+					}
+					if err := p.openStream(ctx); err != nil {
+						logger.Error(ctx, "unable to re-open the stream: %v", err)
+						restart()
+						return false
+					}
+					triedReopeningStream = true
+					startedWaitingForBuffering = time.Now()
+					continue
 				}
 				if pos != 0 {
 					return false
 				}
 				time.Sleep(100 * time.Millisecond)
 			}
-			return true
+
+			logger.Errorf(ctx, "StreamPlayer[%s].controllerLoop: timed out on waiting until the player would start up; restarting", p.StreamID)
+			restart()
+			return false
 		}() {
 		}
 	}
@@ -462,6 +476,16 @@ func (p *StreamPlayer) controllerLoop(
 	case <-instanceCtx.Done():
 		return
 	default:
+	}
+
+	err := p.withPlayer(ctx, func(ctx context.Context, player types.Player) {
+		err := player.SetupForStreaming(ctx)
+		if err != nil {
+			logger.Errorf(ctx, "unable to setup the player for streaming: %v", err)
+		}
+	})
+	if err != nil {
+		logger.Error(ctx, "unable to access the player for setting it up for streaming: %v", err)
 	}
 
 	observability.Go(ctx, func() {

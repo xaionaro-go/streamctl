@@ -22,10 +22,15 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
 )
 
+var originalPCFilter xruntime.PCFilter
+
+func init() {
+	originalPCFilter = xruntime.DefaultCallerPCFilter
+}
+
 func setDefaultCallerPCFilter() {
-	oldPCFilter := xruntime.DefaultCallerPCFilter
 	xruntime.DefaultCallerPCFilter = func(pc uintptr) bool {
-		if !oldPCFilter(pc) {
+		if !originalPCFilter(pc) {
 			return false
 		}
 		fn := runtime.FuncForPC(pc)
@@ -33,8 +38,12 @@ func setDefaultCallerPCFilter() {
 		switch {
 		case strings.Contains(funcName, "pkg/xsync"):
 			return false
-		case strings.HasSuffix(funcName, "/context.go"):
-			panic(funcName)
+		}
+		file, _ := fn.FileLine(pc)
+		switch {
+		case strings.Contains(file, "context.go"):
+			return false
+		case strings.Contains(file, "log_writer.go"):
 			return false
 		}
 		return true
