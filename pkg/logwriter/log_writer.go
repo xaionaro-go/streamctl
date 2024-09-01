@@ -60,12 +60,10 @@ func (l *logWriter) Flush() {
 }
 
 func (l *logWriter) Write(b []byte) (int, error) {
-	b = bytes.Trim(b, " \n\t\r")
-	if len(b) == 0 {
-		return 0, nil
-	}
+	bSanitized := bytes.Trim(b, " \n\t\r")
 	ctx := context.TODO()
 	return xsync.DoR2(xsync.WithNoLogging(ctx, true), &l.BufferLocker, func() (int, error) {
-		return io.MultiWriter(&l.Buffer, os.Stderr).Write(b)
+		l.Buffer.Write(append(bSanitized, []byte("\n")...))
+		return os.Stderr.Write(b)
 	})
 }

@@ -120,16 +120,23 @@ func (p *MPV) execMPV(ctx context.Context) (_err error) {
 	logger.Debugf(ctx, "socket deletion result: '%s': %v", socketPath, err)
 
 	args := []string{p.PathToMPV, "--idle", "--keep-open=always", "--keep-open-pause=no", "--input-ipc-server=" + socketPath, fmt.Sprintf("--title=%s", p.Title)}
-	if observability.LogLevelFilter.GetLevel() >= logger.LevelDebug {
+	switch observability.LogLevelFilter.GetLevel() {
+	case logger.LevelPanic, logger.LevelFatal:
+		args = append(args, "--msg-level=all=no")
+	case logger.LevelError:
+		args = append(args, "--msg-level=all=error")
+	case logger.LevelWarning:
+		args = append(args, "--msg-level=all=warn")
+	case logger.LevelInfo:
+		args = append(args, "--msg-level=all=info")
+	case logger.LevelDebug, logger.LevelTrace:
 		args = append(args, "--msg-level=all=debug")
 	}
 	logger.Debugf(ctx, "running command '%s %s'", args[0], strings.Join(args[1:], " "))
 	cmd := exec.Command(args[0], args[1:]...)
 
-	if observability.LogLevelFilter.GetLevel() >= logger.LevelDebug {
-		cmd.Stdout = logwriter.NewLogWriter(ctx, logger.FromCtx(ctx).WithField("log_writer_target", "mpv").WithField("output_type", "stdout"))
-		cmd.Stderr = logwriter.NewLogWriter(ctx, logger.FromCtx(ctx).WithField("log_writer_target", "mpv").WithField("output_type", "stderr"))
-	}
+	cmd.Stdout = logwriter.NewLogWriter(ctx, logger.FromCtx(ctx).WithField("log_writer_target", "mpv").WithField("output_type", "stdout"))
+	cmd.Stderr = logwriter.NewLogWriter(ctx, logger.FromCtx(ctx).WithField("log_writer_target", "mpv").WithField("output_type", "stderr"))
 	err = child_process_manager.ConfigureCommand(cmd)
 	errmon.ObserveErrorCtx(ctx, err)
 	err = cmd.Start()
@@ -150,9 +157,14 @@ func (p *MPV) execMPV(ctx context.Context) (_err error) {
 			return ctx.Err()
 		case <-t.C:
 		}
-		if err := mpvConn.Open(); err == nil {
+		if cmd.ProcessState != nil {
+			logger.Errorf(ctx, "mpv unexpectedly exited: exitcode: %d", cmd.ProcessState.ExitCode())
+		}
+		err := mpvConn.Open()
+		if err == nil {
 			break
 		}
+		logger.Tracef(ctx, "mpvConn.Open() err: %v", err)
 	}
 	logger.Debugf(ctx, "socket '%s' is ready", socketPath)
 	p.SocketPath = socketPath
