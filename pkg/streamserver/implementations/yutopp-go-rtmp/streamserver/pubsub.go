@@ -110,24 +110,31 @@ type Pub struct {
 	m  xsync.Mutex
 	pb *Pubsub
 
-	aacSeqHeader *flvtag.FlvTag
-	avcSeqHeader *flvtag.FlvTag
-	lastKeyFrame *flvtag.FlvTag
+	aacSeqHeaderBeforeKey *flvtag.FlvTag
+	avcSeqHeaderBeforeKey *flvtag.FlvTag
+	aacSeqHeaderAfterKey  *flvtag.FlvTag
+	avcSeqHeaderAfterKey  *flvtag.FlvTag
+	lastKeyFrame          *flvtag.FlvTag
+	sincePrevKeyFrame     []*flvtag.FlvTag
 }
 
 func (p *Pub) InitSub(sub *Sub) {
 	type keyTagsT struct {
-		AVCSeqHeader *flvtag.FlvTag
-		LastKeyFrame *flvtag.FlvTag
-		AACSeqHeader *flvtag.FlvTag
+		AVCSeqHeader      *flvtag.FlvTag
+		LastKeyFrame      *flvtag.FlvTag
+		AACSeqHeader      *flvtag.FlvTag
+		SincePrevKeyFrame []*flvtag.FlvTag
 	}
 	ctx := context.TODO()
 	keyTags := xsync.DoR1(ctx, &p.m, func() keyTagsT {
-		return keyTagsT{
-			AVCSeqHeader: p.avcSeqHeader,
-			LastKeyFrame: p.lastKeyFrame,
-			AACSeqHeader: p.aacSeqHeader,
+		result := keyTagsT{
+			AVCSeqHeader:      p.avcSeqHeaderBeforeKey,
+			LastKeyFrame:      p.lastKeyFrame,
+			AACSeqHeader:      p.aacSeqHeaderBeforeKey,
+			SincePrevKeyFrame: make([]*flvtag.FlvTag, len(p.sincePrevKeyFrame)),
 		}
+		copy(result.SincePrevKeyFrame, p.sincePrevKeyFrame)
+		return result
 	})
 
 	if keyTags.AVCSeqHeader != nil {
@@ -141,6 +148,10 @@ func (p *Pub) InitSub(sub *Sub) {
 	if keyTags.AACSeqHeader != nil {
 		logger.Default().Tracef("sending aacSeqHeader")
 		_ = sub.onEvent(cloneView(keyTags.AACSeqHeader))
+	}
+	for _, tag := range keyTags.SincePrevKeyFrame {
+		logger.Default().Tracef("sending a frame accumulated since the last key frame")
+		_ = sub.onEvent(cloneView(tag))
 	}
 
 	sub.initialized = true
@@ -161,10 +172,18 @@ func (p *Pub) Publish(flv *flvtag.FlvTag) error {
 		}
 
 	case *flvtag.AudioData:
-		if d.AACPacketType == flvtag.AACPacketTypeSequenceHeader {
+		switch {
+		case d.AACPacketType == flvtag.AACPacketTypeSequenceHeader:
 			p.m.Do(ctx, func() {
-				p.aacSeqHeader = cloneView(flv)
-				p.aacSeqHeader.Timestamp = 0
+				if p.lastKeyFrame == nil {
+					p.aacSeqHeaderBeforeKey = cloneView(flv)
+				} else {
+					p.aacSeqHeaderAfterKey = cloneView(flv)
+				}
+			})
+		default:
+			p.m.Do(ctx, func() {
+				p.sincePrevKeyFrame = append(p.sincePrevKeyFrame, cloneView(flv))
 			})
 		}
 
@@ -173,18 +192,30 @@ func (p *Pub) Publish(flv *flvtag.FlvTag) error {
 		}
 
 	case *flvtag.VideoData:
-		if d.AVCPacketType == flvtag.AVCPacketTypeSequenceHeader {
+		switch {
+		case d.AVCPacketType == flvtag.AVCPacketTypeSequenceHeader:
 			p.m.Do(ctx, func() {
-				p.avcSeqHeader = cloneView(flv)
-				p.avcSeqHeader.Timestamp = 0
+				if p.lastKeyFrame == nil {
+					p.avcSeqHeaderBeforeKey = cloneView(flv)
+				} else {
+					p.avcSeqHeaderAfterKey = cloneView(flv)
+				}
 			})
-		} else {
-			if d.FrameType == flvtag.FrameTypeKeyFrame {
-				p.m.Do(ctx, func() {
-					p.lastKeyFrame = cloneView(flv)
-					p.lastKeyFrame.Timestamp = 0
-				})
-			}
+		case d.FrameType == flvtag.FrameTypeKeyFrame:
+			p.m.Do(ctx, func() {
+				p.lastKeyFrame = cloneView(flv)
+				p.sincePrevKeyFrame = p.sincePrevKeyFrame[:0]
+				if p.avcSeqHeaderAfterKey != nil {
+					p.avcSeqHeaderBeforeKey = p.avcSeqHeaderAfterKey
+				}
+				if p.aacSeqHeaderAfterKey != nil {
+					p.aacSeqHeaderBeforeKey = p.aacSeqHeaderAfterKey
+				}
+			})
+		default:
+			p.m.Do(ctx, func() {
+				p.sincePrevKeyFrame = append(p.sincePrevKeyFrame, cloneView(flv))
+			})
 		}
 
 		for _, sub := range subs {
@@ -228,7 +259,7 @@ func (s *Sub) onEvent(flv *flvtag.FlvTag) error {
 	if flv.Timestamp != 0 && s.lastTimestamp == 0 {
 		s.lastTimestamp = flv.Timestamp
 	}
-	flv.Timestamp -= s.lastTimestamp
+	//flv.Timestamp -= s.lastTimestamp
 
 	return s.eventCallback(flv)
 }
