@@ -221,9 +221,12 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 
 	logger.Debugf(ctx, "connected to '%s'", urlParsed.String())
 
-	err = xsync.DoR1(ctx, &fwd.Locker, func() error {
+	fwd.Locker.Do(ctx, func() {
 		fwd.Client = client
-		defer func() {
+	})
+
+	defer func() {
+		fwd.Locker.Do(ctx, func() {
 			if fwd.Client == nil {
 				return
 			}
@@ -232,19 +235,22 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 				logger.Warnf(ctx, "unable to close fwd.Client: %v", err)
 			}
 			fwd.Client = nil
-		}()
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
+		})
+	}()
 
-		tcURL := *urlParsed
-		tcURL.Path = "/" + remoteAppName
-		if tcURL.Port() == "1935" {
-			tcURL.Host = tcURL.Hostname()
-		}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
 
+	tcURL := *urlParsed
+	tcURL.Path = "/" + remoteAppName
+	if tcURL.Port() == "1935" {
+		tcURL.Host = tcURL.Hostname()
+	}
+
+	err = xsync.DoR1(ctx, &fwd.Locker, func() error {
 		if err := client.Connect(&rtmpmsg.NetConnectionConnect{
 			Command: rtmpmsg.NetConnectionConnectCommand{
 				App:      remoteAppName,
