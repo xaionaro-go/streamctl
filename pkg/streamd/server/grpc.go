@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
@@ -15,9 +16,6 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/streamctl/pkg/player/protobuf/go/player_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
-	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
-	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
-	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	"github.com/xaionaro-go/streamctl/pkg/streamd"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
@@ -204,25 +202,12 @@ func (grpc *GRPCServer) StartStream(
 	req *streamd_grpc.StartStreamRequest,
 ) (*streamd_grpc.StartStreamReply, error) {
 	logger.Debugf(ctx, "grpc:StartStream: raw profile: %#+v", req.Profile)
-
-	var profile streamcontrol.AbstractStreamProfile
-	var err error
 	platID := streamcontrol.PlatformName(req.GetPlatID())
-	switch platID {
-	case obs.ID:
-		profile = &obs.StreamProfile{}
-	case twitch.ID:
-		profile = &twitch.StreamProfile{}
-	case youtube.ID:
-		profile = &youtube.StreamProfile{}
-	default:
-		return nil, fmt.Errorf("unexpected platform ID: '%s'", platID)
-	}
-	err = yaml.Unmarshal([]byte(req.GetProfile()), profile)
-	if err != nil {
-		return nil, fmt.Errorf("unable to unserialize the profile: %w", err)
-	}
 
+	profile, err := goconv.ProfileGRPC2Go(platID, req.GetProfile())
+	if err != nil {
+		return nil, err
+	}
 	logger.Debugf(ctx, "grpc:StartStream: parsed: %#+v", profile)
 
 	err = grpc.StreamD.StartStream(
@@ -1340,4 +1325,61 @@ func (grpc *GRPCServer) SubscribeToStreamPlayersChanges(
 		grpc.StreamD.SubscribeToStreamPlayersChanges,
 		srv,
 	)
+}
+
+func (grpc *GRPCServer) AddTimer(
+	ctx context.Context,
+	req *streamd_grpc.AddTimerRequest,
+) (*streamd_grpc.AddTimerReply, error) {
+	triggerAtUnixNano := req.GetTriggerAtUnixNano()
+	triggerAt := time.Unix(triggerAtUnixNano/1000000000, triggerAtUnixNano%1000000000)
+
+	action, err := goconv.ActionGRPC2Go(req.Action)
+	if err != nil {
+		return nil, fmt.Errorf("unable to convert the action: %w", err)
+	}
+
+	timerID, err := grpc.StreamD.AddTimer(ctx, triggerAt, action)
+	if err != nil {
+		return nil, fmt.Errorf("unable to add timer: %w", err)
+	}
+
+	return &streamd_grpc.AddTimerReply{
+		TimerID: int64(timerID),
+	}, nil
+}
+func (grpc *GRPCServer) RemoveTimer(
+	ctx context.Context,
+	req *streamd_grpc.RemoveTimerRequest,
+) (*streamd_grpc.RemoveTimerReply, error) {
+	err := grpc.StreamD.RemoveTimer(ctx, api.TimerID(req.GetTimerID()))
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.RemoveTimerReply{}, nil
+}
+func (grpc *GRPCServer) ListTimers(
+	ctx context.Context,
+	req *streamd_grpc.ListTimersRequest,
+) (*streamd_grpc.ListTimersReply, error) {
+	timers, err := grpc.StreamD.ListTimers(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []*streamd_grpc.Timer
+	for _, timer := range timers {
+		resultAction, err := goconv.ActionGo2GRPC(timer.Action)
+		if err != nil {
+			return nil, fmt.Errorf("unable to convert the action: %w", err)
+		}
+		result = append(result, &streamd_grpc.Timer{
+			TimerID:           int64(timer.ID),
+			TriggerAtUnixNano: timer.TriggerAt.UnixNano(),
+			Action:            resultAction,
+		})
+	}
+	return &streamd_grpc.ListTimersReply{
+		Timers: result,
+	}, nil
 }

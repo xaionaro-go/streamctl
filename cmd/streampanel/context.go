@@ -13,6 +13,8 @@ import (
 	xruntime "github.com/facebookincubator/go-belt/pkg/runtime"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	errmonsentry "github.com/facebookincubator/go-belt/tool/experimental/errmon/implementation/sentry"
+	"github.com/facebookincubator/go-belt/tool/experimental/metrics"
+	prometheusadapter "github.com/facebookincubator/go-belt/tool/experimental/metrics/implementation/prometheus"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	xlogrus "github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
 	"github.com/getsentry/sentry-go"
@@ -57,6 +59,8 @@ func getContext(
 
 	ctx := context.Background()
 	setDefaultCallerPCFilter()
+
+	ctx = metrics.CtxWithMetrics(ctx, prometheusadapter.Default())
 
 	ll := xlogrus.DefaultLogrusLogger()
 	ll.Formatter.(*logrus.TextFormatter).ForceColors = true

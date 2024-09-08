@@ -81,7 +81,6 @@ func New(
 				return
 			case <-ticker.C:
 				err := yt.checkToken(ctx)
-				errmon.ObserveErrorCtx(ctx, err)
 				if err != nil {
 					logger.Debugf(ctx, "got an error from checkToken: %v", err)
 					if strings.Contains(fmt.Sprintf("%v", err), "expired or revoked") {

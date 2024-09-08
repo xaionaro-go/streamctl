@@ -14,15 +14,15 @@ type Conn interface {
 	Write(ctx context.Context, chunkStreamID int, timestamp uint32, cmsg *rtmp.ChunkMessage) error
 }
 
-func onEventCallback(conn Conn, streamID uint32) func(flv *flvtag.FlvTag) error {
-	return func(flv *flvtag.FlvTag) error {
-		logger.Default().Tracef("flvtag == %#+v", *flv)
+func onEventCallback(conn Conn, streamID uint32) func(context.Context, *flvtag.FlvTag) error {
+	return func(ctx context.Context, flv *flvtag.FlvTag) error {
+		logger.Tracef(ctx, "flvtag == %#+v", *flv)
 		buf := new(bytes.Buffer)
 
 		switch flv.Data.(type) {
 		case *flvtag.AudioData:
 			d := flv.Data.(*flvtag.AudioData)
-			logger.Default().Tracef("flvtag.Data == %#+v", *d)
+			logger.Tracef(ctx, "flvtag.Data == %#+v", *d)
 
 			// Consume flv payloads (d)
 			if err := flvtag.EncodeAudioData(buf, d); err != nil {
@@ -30,7 +30,6 @@ func onEventCallback(conn Conn, streamID uint32) func(flv *flvtag.FlvTag) error 
 			}
 
 			// TODO: Fix these values
-			ctx := context.Background()
 			chunkStreamID := 5
 			return conn.Write(ctx, chunkStreamID, flv.Timestamp, &rtmp.ChunkMessage{
 				StreamID: streamID,
@@ -41,7 +40,7 @@ func onEventCallback(conn Conn, streamID uint32) func(flv *flvtag.FlvTag) error 
 
 		case *flvtag.VideoData:
 			d := flv.Data.(*flvtag.VideoData)
-			logger.Default().Tracef("flvtag.Data == %#+v", *d)
+			logger.Tracef(ctx, "flvtag.Data == %#+v", *d)
 
 			// Consume flv payloads (d)
 			if err := flvtag.EncodeVideoData(buf, d); err != nil {
@@ -49,7 +48,6 @@ func onEventCallback(conn Conn, streamID uint32) func(flv *flvtag.FlvTag) error 
 			}
 
 			// TODO: Fix these values
-			ctx := context.Background()
 			chunkStreamID := 6
 			return conn.Write(ctx, chunkStreamID, flv.Timestamp, &rtmp.ChunkMessage{
 				StreamID: streamID,
@@ -77,7 +75,6 @@ func onEventCallback(conn Conn, streamID uint32) func(flv *flvtag.FlvTag) error 
 			}
 
 			// TODO: Fix these values
-			ctx := context.Background()
 			chunkStreamID := 8
 			return conn.Write(ctx, chunkStreamID, flv.Timestamp, &rtmp.ChunkMessage{
 				StreamID: streamID,

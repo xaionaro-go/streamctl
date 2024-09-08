@@ -8,6 +8,7 @@ import (
 	"os"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/andreykaipov/goobs"
@@ -40,6 +41,7 @@ import (
 	streamserverimpl "github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/yutopp-go-rtmp/streamserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
+	"github.com/xaionaro-go/streamctl/pkg/xcontext"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
@@ -88,6 +90,10 @@ type StreamD struct {
 	OBSState          OBSState
 
 	EventBus eventbus.Bus
+
+	TimersLocker xsync.Mutex
+	NextTimerID  uint64
+	Timers       map[api.TimerID]*Timer
 }
 
 var _ api.StreamD = (*StreamD)(nil)
@@ -114,6 +120,7 @@ func New(
 		OBSState: OBSState{
 			VolumeMeters: map[string][][3]float64{},
 		},
+		Timers: map[api.TimerID]*Timer{},
 	}
 
 	err := d.readCache(ctx)
@@ -653,20 +660,29 @@ func getYTBroadcastID(d youtube.StreamStatusCustomData) string {
 }
 
 func (d *StreamD) EndStream(ctx context.Context, platID streamcontrol.PlatformName) error {
+	logger.Debugf(ctx, "EndStream(ctx, '%s')", platID)
+	defer logger.Debugf(ctx, "/EndStream(ctx, '%s')", platID)
+
 	defer d.notifyAboutChange(ctx, events.StreamsChange)
 
 	return xsync.RDoR1(ctx, &d.ControllersLocker, func() error {
 		defer d.StreamStatusCache.InvalidateCache(ctx)
-		switch platID {
-		case obs.ID:
-			return d.StreamControllers.OBS.EndStream(d.ctxForController(ctx))
-		case twitch.ID:
-			return d.StreamControllers.Twitch.EndStream(d.ctxForController(ctx))
-		case youtube.ID:
-			return d.StreamControllers.YouTube.EndStream(d.ctxForController(ctx))
-		default:
-			return fmt.Errorf("unexpected platform ID '%s'", platID)
+
+		streamController, err := d.streamController(ctx, platID)
+		if err != nil {
+			return err
 		}
+
+		if streamController == nil {
+			return fmt.Errorf("'%s' is not initialized", platID)
+		}
+
+		err = streamController.EndStream(ctx)
+		if err != nil {
+			return err
+		}
+
+		return nil
 	})
 }
 
@@ -993,7 +1009,7 @@ func (d *StreamD) RemoveOAuthListenPort(port uint16) {
 
 func (d *StreamD) GetOAuthListenPorts() []uint16 {
 	ctx := context.TODO()
-	return xsync.DoR1(ctx, &d.OAuthListenPortsLocker, d.GetOAuthListenPorts)
+	return xsync.DoR1(ctx, &d.OAuthListenPortsLocker, d.getOAuthListenPorts)
 }
 
 func (d *StreamD) getOAuthListenPorts() []uint16 {
@@ -1695,4 +1711,69 @@ func (d *StreamD) SetLoggingLevel(ctx context.Context, level logger.Level) error
 
 func (d *StreamD) GetLoggingLevel(ctx context.Context) (logger.Level, error) {
 	return observability.LogLevelFilter.GetLevel(), nil
+}
+
+func (d *StreamD) AddTimer(
+	ctx context.Context,
+	triggerAt time.Time,
+	action api.TimerAction,
+) (api.TimerID, error) {
+	return xsync.DoA3R2(ctx, &d.TimersLocker, d.addTimer, ctx, triggerAt, action)
+}
+
+func (d *StreamD) addTimer(
+	ctx context.Context,
+	triggerAt time.Time,
+	action api.TimerAction,
+) (api.TimerID, error) {
+	logger.Debugf(ctx, "addTimer(ctx, %v, %v)", triggerAt, action)
+	defer logger.Debugf(ctx, "/addTimer(ctx, %v, %v)", triggerAt, action)
+	timerID := api.TimerID(atomic.AddUint64(&d.NextTimerID, 1))
+	timer := NewTimer(d, timerID, triggerAt, action)
+	timer.Start(xcontext.DetachDone(ctx))
+	d.Timers[timerID] = timer
+	return timerID, nil
+}
+
+func (d *StreamD) RemoveTimer(
+	ctx context.Context,
+	timerID api.TimerID,
+) error {
+	return xsync.DoA2R1(ctx, &d.TimersLocker, d.removeTimer, ctx, timerID)
+}
+
+func (d *StreamD) removeTimer(
+	ctx context.Context,
+	timerID api.TimerID,
+) error {
+	logger.Debugf(ctx, "removeTimer(ctx, %d)", timerID)
+	defer logger.Debugf(ctx, "/removeTimer(ctx, %d)", timerID)
+	timer, ok := d.Timers[timerID]
+	if !ok {
+		return fmt.Errorf("timer %d is not found", timerID)
+	}
+	delete(d.Timers, timerID)
+	timer.Stop(ctx)
+	return nil
+}
+
+func (d *StreamD) ListTimers(
+	ctx context.Context,
+) ([]api.Timer, error) {
+	return xsync.DoA1R2(ctx, &d.TimersLocker, d.listTimers, ctx)
+}
+
+func (d *StreamD) listTimers(
+	ctx context.Context,
+) (_ret []api.Timer, _err error) {
+	logger.Debugf(ctx, "listTimers")
+	defer func() { logger.Debugf(ctx, "/listTimers: len(ret) == %d, err == %v", len(_ret), _err) }()
+	result := make([]api.Timer, 0, len(d.Timers))
+	for _, timer := range d.Timers {
+		result = append(result, timer.Timer)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].ID < result[j].ID
+	})
+	return result, nil
 }

@@ -175,6 +175,24 @@ func (m *Mutex) RDo(
 	fn()
 }
 
+func (m *Mutex) UDo(
+	ctx context.Context,
+	fn func(),
+) {
+	m.ManualUnlock(ctx)
+	defer m.ManualLock(ctx)
+	fn()
+}
+
+func (m *Mutex) URDo(
+	ctx context.Context,
+	fn func(),
+) {
+	m.ManualRUnlock(ctx)
+	defer m.ManualRLock(ctx)
+	fn()
+}
+
 func DoA1[A0 any](
 	ctx context.Context,
 	m *Mutex,
@@ -244,6 +262,24 @@ func DoA3R1[A0, A1, A2, R0 any](
 		r0 = fn(a0, a1, a2)
 	})
 	return r0
+}
+
+func DoA3R2[A0, A1, A2, R0, R1 any](
+	ctx context.Context,
+	m *Mutex,
+	fn func(A0, A1, A2) (R0, R1),
+	a0 A0,
+	a1 A1,
+	a2 A2,
+) (R0, R1) {
+	var (
+		r0 R0
+		r1 R1
+	)
+	m.Do(ctx, func() {
+		r0, r1 = fn(a0, a1, a2)
+	})
+	return r0, r1
 }
 
 func DoA4R1[A0, A1, A2, A3, R0 any](

@@ -174,6 +174,10 @@ type StreamD interface {
 	SubscribeToIncomingStreamsChanges(ctx context.Context) (<-chan DiffIncomingStreams, error)
 	SubscribeToStreamForwardsChanges(ctx context.Context) (<-chan DiffStreamForwards, error)
 	SubscribeToStreamPlayersChanges(ctx context.Context) (<-chan DiffStreamPlayers, error)
+
+	AddTimer(ctx context.Context, triggerAt time.Time, action TimerAction) (TimerID, error)
+	RemoveTimer(ctx context.Context, timerID TimerID) error
+	ListTimers(ctx context.Context) ([]Timer, error)
 }
 
 type StreamPlayer struct {
@@ -236,3 +240,47 @@ type DiffStreamDestinations struct{}
 type DiffIncomingStreams struct{}
 type DiffStreamForwards struct{}
 type DiffStreamPlayers struct{}
+
+/*
+	AddTimer(ctx context.Context, triggerAt time.Time, action TimerAction) (TimerID, error)
+	RemoveTimer(ctx context.Context, timerID TimerID) error
+	ListTimers(ctx context.Context) ([]Timer, error)
+*/
+
+type TimerAction interface {
+	timerAction() // just to enable build-time type checks
+}
+
+type TimerID uint64
+
+type Timer struct {
+	ID        TimerID
+	TriggerAt time.Time
+	Action    TimerAction
+}
+
+type TimerActionNoop struct{}
+
+var _ TimerAction = (*TimerActionNoop)(nil)
+
+func (*TimerActionNoop) timerAction() {}
+
+type TimerActionStartStream struct {
+	PlatID      streamcontrol.PlatformName
+	Title       string
+	Description string
+	Profile     streamcontrol.AbstractStreamProfile
+	CustomArgs  []any
+}
+
+var _ TimerAction = (*TimerActionStartStream)(nil)
+
+func (*TimerActionStartStream) timerAction() {}
+
+type TimerActionEndStream struct {
+	PlatID streamcontrol.PlatformName
+}
+
+var _ TimerAction = (*TimerActionEndStream)(nil)
+
+func (*TimerActionEndStream) timerAction() {}

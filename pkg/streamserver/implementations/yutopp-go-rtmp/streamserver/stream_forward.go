@@ -182,10 +182,18 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 	logger.Debugf(ctx, "DestinationStreamingLocker.Lock(ctx, '%s')", fwd.DestinationID)
 	destinationUnlocker := fwd.StreamServer.DestinationStreamingLocker.Lock(ctx, fwd.DestinationID)
 	defer func() {
-		destinationUnlocker.Unlock()
+		if destinationUnlocker != nil { // if ctx was cancelled before we locked then the unlocker is nil
+			destinationUnlocker.Unlock()
+		}
 		logger.Debugf(ctx, "DestinationStreamingLocker.Unlock(ctx, '%s')", fwd.DestinationID)
 	}()
 	logger.Debugf(ctx, "/DestinationStreamingLocker.Lock(ctx, '%s')", fwd.DestinationID)
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
 
 	_, remoteAppName, apiKey := fwd.getAppNameAndKey()
 
@@ -251,7 +259,7 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 	}
 
 	err = xsync.DoR1(ctx, &fwd.Locker, func() error {
-		if err := client.Connect(&rtmpmsg.NetConnectionConnect{
+		if err := client.Connect(ctx, &rtmpmsg.NetConnectionConnect{
 			Command: rtmpmsg.NetConnectionConnectCommand{
 				App:      remoteAppName,
 				Type:     "nonprivate",
@@ -263,13 +271,13 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 		}
 		logger.Debugf(ctx, "connected the stream to '%s'", urlParsed.String())
 
-		fwd.OutStream, err = client.CreateStream(&rtmpmsg.NetConnectionCreateStream{}, chunkSize)
+		fwd.OutStream, err = client.CreateStream(ctx, &rtmpmsg.NetConnectionCreateStream{}, chunkSize)
 		if err != nil {
 			return fmt.Errorf("unable to create a stream to '%s': %w", urlParsed.String(), err)
 		}
 
 		logger.Debugf(ctx, "calling Publish at '%s'", urlParsed.String())
-		if err := fwd.OutStream.Publish(&rtmpmsg.NetStreamPublish{
+		if err := fwd.OutStream.Publish(ctx, &rtmpmsg.NetStreamPublish{
 			PublishingName: apiKey,
 			PublishingType: "live",
 		}); err != nil {
@@ -277,7 +285,7 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 		}
 
 		logger.Debugf(ctx, "starting publishing to '%s'", urlParsed.String())
-		fwd.Sub = pubSub.Sub(client, func(flv *flvtag.FlvTag) error {
+		fwd.Sub = pubSub.Sub(client, func(ctx context.Context, flv *flvtag.FlvTag) error {
 			logger.Tracef(ctx, "flvtag == %#+v", *flv)
 			var buf bytes.Buffer
 
@@ -295,7 +303,7 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 
 				// TODO: Fix these values
 				chunkStreamID := 5
-				if err := fwd.OutStream.Write(chunkStreamID, flv.Timestamp, &rtmpmsg.AudioMessage{
+				if err := fwd.OutStream.Write(ctx, chunkStreamID, flv.Timestamp, &rtmpmsg.AudioMessage{
 					Payload: &buf,
 				}); err != nil {
 					err = fmt.Errorf("fwd.OutStream.Write return an error: %w", err)
@@ -315,7 +323,7 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 
 				// TODO: Fix these values
 				chunkStreamID := 6
-				if err := fwd.OutStream.Write(chunkStreamID, flv.Timestamp, &rtmpmsg.VideoMessage{
+				if err := fwd.OutStream.Write(ctx, chunkStreamID, flv.Timestamp, &rtmpmsg.VideoMessage{
 					Payload: &buf,
 				}); err != nil {
 					err = fmt.Errorf("fwd.OutStream.Write return an error: %w", err)
@@ -345,7 +353,7 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 
 				// TODO: Fix these values
 				chunkStreamID := 8
-				if err := fwd.OutStream.Write(chunkStreamID, flv.Timestamp, &rtmpmsg.DataMessage{
+				if err := fwd.OutStream.Write(ctx, chunkStreamID, flv.Timestamp, &rtmpmsg.DataMessage{
 					Name:     "@setDataFrame", // TODO: fix
 					Encoding: rtmpmsg.EncodingTypeAMF0,
 					Body:     amdBuf,

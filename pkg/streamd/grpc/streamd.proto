@@ -74,6 +74,10 @@ service StreamD {
 	rpc StreamPlayerSetPause(StreamPlayerSetPauseRequest) returns (StreamPlayerSetPauseReply) {}
 	rpc StreamPlayerStop(StreamPlayerStopRequest) returns (StreamPlayerStopReply) {}
 	rpc StreamPlayerClose(StreamPlayerCloseRequest) returns (StreamPlayerCloseReply) {}
+
+    rpc AddTimer(AddTimerRequest) returns (AddTimerReply) {}
+    rpc RemoveTimer(RemoveTimerRequest) returns (RemoveTimerReply) {}
+    rpc ListTimers(ListTimersRequest) returns (ListTimersReply) {}
 }
 
 message PingRequest {
@@ -502,3 +506,37 @@ message SubscribeToStreamForwardsChangesRequest {}
 message StreamForwardsChange {}
 message SubscribeToStreamPlayersChangesRequest {}
 message StreamPlayersChange {}
+
+message NoopRequest {}
+
+message Action {
+    oneof ActionOneof {
+        NoopRequest noopRequest = 1;
+        StartStreamRequest startStreamRequest = 2;
+        EndStreamRequest endStreamRequest = 3;
+    }
+}
+
+message AddTimerRequest {
+    int64 triggerAtUnixNano = 1;
+    Action action = 2;
+}
+message AddTimerReply {
+    int64 timerID = 1;
+}
+
+message RemoveTimerRequest {
+    int64 timerID = 1;
+}
+message RemoveTimerReply {}
+
+message Timer {
+    int64 timerID = 1;
+    int64 triggerAtUnixNano = 2;
+    Action action = 3;
+}
+
+message ListTimersRequest {}
+message ListTimersReply {
+    repeated Timer timers = 1;
+}

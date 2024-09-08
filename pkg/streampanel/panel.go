@@ -1887,6 +1887,18 @@ func (p *Panel) initMainWindow(
 		),
 	))
 
+	timersUI := NewTimersUI(ctx, p)
+	moreControlPage := container.NewBorder(
+		nil,
+		nil,
+		nil,
+		nil,
+		container.NewVBox(
+			timersUI.CanvasObject,
+			widget.NewSeparator(),
+		),
+	)
+
 	var cancelPage context.CancelFunc
 	setPage := func(page consts.Page) {
 		logger.Debugf(ctx, "setPage(%s)", page)
@@ -1904,14 +1916,28 @@ func (p *Panel) initMainWindow(
 			p.monitorPage.Hide()
 			obsPage.Hide()
 			restreamPage.Hide()
+			moreControlPage.Hide()
 			profileControl.Show()
 			monitorControl.Hide()
+			timersUI.StopRefreshingFromRemote(ctx)
 			controlPage.Show()
+		case consts.PageMoreControl:
+			p.monitorPage.Hide()
+			obsPage.Hide()
+			restreamPage.Hide()
+			moreControlPage.Hide()
+			profileControl.Hide()
+			monitorControl.Hide()
+			controlPage.Hide()
+			moreControlPage.Show()
+			timersUI.StartRefreshingFromRemote(ctx)
 		case consts.PageMonitor:
 			controlPage.Hide()
 			profileControl.Hide()
 			restreamPage.Hide()
+			moreControlPage.Hide()
 			obsPage.Hide()
+			timersUI.StopRefreshingFromRemote(ctx)
 			p.monitorPage.Show()
 			monitorControl.Show()
 			p.startMonitorPage(pageCtx)
@@ -1921,13 +1947,17 @@ func (p *Panel) initMainWindow(
 			p.monitorPage.Hide()
 			monitorControl.Hide()
 			restreamPage.Hide()
+			moreControlPage.Hide()
+			timersUI.StopRefreshingFromRemote(ctx)
 			obsPage.Show()
 		case consts.PageRestream:
 			controlPage.Hide()
 			profileControl.Hide()
+			moreControlPage.Hide()
 			p.monitorPage.Hide()
 			monitorControl.Hide()
 			obsPage.Hide()
+			timersUI.StopRefreshingFromRemote(ctx)
 			restreamPage.Show()
 			p.startRestreamPage(pageCtx)
 		}
@@ -1936,6 +1966,7 @@ func (p *Panel) initMainWindow(
 	pageSelector := widget.NewSelect(
 		[]string{
 			string(consts.PageControl),
+			string(consts.PageMoreControl),
 			string(consts.PageMonitor),
 			string(consts.PageOBS),
 			string(consts.PageRestream),
@@ -1962,7 +1993,7 @@ func (p *Panel) initMainWindow(
 		),
 		nil,
 		nil,
-		container.NewStack(controlPage, p.monitorPage, obsPage, restreamPage),
+		container.NewStack(controlPage, moreControlPage, p.monitorPage, obsPage, restreamPage),
 	))
 
 	w.Show()

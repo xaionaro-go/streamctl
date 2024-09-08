@@ -6,6 +6,8 @@ import (
 	"io"
 	"sync"
 
+	"github.com/facebookincubator/go-belt"
+	"github.com/facebookincubator/go-belt/tool/experimental/metrics"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
@@ -55,7 +57,9 @@ func (pb *Pubsub) Deregister() error {
 func (pb *Pubsub) deregister() error {
 	subs := pb.subs
 	if subs != nil {
-		pb.subs = nil
+		for l := range pb.subs {
+			delete(pb.subs, l)
+		}
 		observability.GoSafe(context.TODO(), func() {
 			for _, sub := range subs {
 				_ = sub.Close()
@@ -81,17 +85,23 @@ func (pb *Pubsub) Pub() *Pub {
 	return pub
 }
 
-func (pb *Pubsub) Sub(connCloser io.Closer, eventCallback func(ft *flvtag.FlvTag) error) *Sub {
+const sendQueueLength = 2 * 60 * 10 // presumably it will give about 10 seconds of queue: 2 tracks * 60FPS * 30 seconds
+
+func (pb *Pubsub) Sub(connCloser io.Closer, eventCallback func(context.Context, *flvtag.FlvTag) error) *Sub {
 	ctx := context.TODO()
 	return xsync.DoR1(ctx, &pb.m, func() *Sub {
 		subID := pb.nextSubID
+		ctx, cancelFn := context.WithCancel(ctx)
 		sub := &Sub{
 			connCloser:    connCloser,
 			pubSub:        pb,
 			subID:         subID,
 			eventCallback: eventCallback,
 			closedChan:    make(chan struct{}),
+			sendQueue:     make(chan *flvtag.FlvTag, sendQueueLength),
+			cancelFunc:    cancelFn,
 		}
+		observability.Go(ctx, func() { sub.senderLoop(ctx) })
 
 		pb.nextSubID++
 		pb.subs[subID] = sub
@@ -160,7 +170,7 @@ func (p *Pub) InitSub(sub *Sub) bool {
 		}
 
 		for _, tag := range initTags {
-			_ = sub.onEvent(tag)
+			sub.Submit(ctx, tag)
 		}
 	})
 	return hasToInit
@@ -224,9 +234,15 @@ func (p *Pub) Publish(flv *flvtag.FlvTag) error {
 		panic("unexpected")
 	}
 
+	flv = cloneView(flv)
 	for _, sub := range subs {
-		if !p.InitSub(sub) {
-			_ = sub.onEvent(cloneView(flv))
+		{
+			sub := sub
+			observability.Go(ctx, func() {
+				if !p.InitSub(sub) {
+					sub.Submit(ctx, cloneView(flv))
+				}
+			})
 		}
 	}
 	return nil
@@ -242,16 +258,73 @@ type Sub struct {
 	pubSub     *Pubsub
 	subID      uint64
 
+	sendQueue chan *flvtag.FlvTag
+
 	closed         bool
 	initOnce       sync.Once
 	closedChanOnce sync.Once
 	closedChan     chan struct{}
+	cancelFunc     context.CancelFunc
 
 	//timestampOffset uint32
-	eventCallback func(*flvtag.FlvTag) error
+	eventCallback func(context.Context, *flvtag.FlvTag) error
 }
 
-func (s *Sub) onEvent(flv *flvtag.FlvTag) error {
+func (s *Sub) senderLoop(
+	ctx context.Context,
+) {
+	ctx = belt.WithField(ctx, "subscriber_id", s.subID, metrics.AllowInMetrics)
+
+	logger.Debugf(ctx, "Sub[%d].senderLoop", s.subID)
+	defer logger.Debugf(ctx, "/Sub[%d].senderLoop", s.subID)
+
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Debugf(ctx, "Sub[%d].senderLoop: the context is closed: %v", s.subID, ctx.Err())
+			return
+
+		case tag, ok := <-s.sendQueue:
+			if !ok {
+				logger.Debugf(ctx, "Sub[%d].senderLoop: the queue is closed; closing the client", s.subID)
+				s.Close()
+				return
+			}
+			metrics.FromCtx(ctx).Count("submit_pulled").Add(1)
+
+			logger.Tracef(ctx, "Sub[%d].senderLoop: received a tag, processing", s.subID)
+			err := s.onEvent(ctx, tag)
+			if err != nil {
+				metrics.FromCtx(ctx).Count("submit_process_error").Add(1)
+				logger.Errorf(ctx, "Sub[%d].senderLoop: unable to send an FLV tag: %v", s.subID, err)
+			} else {
+				metrics.FromCtx(ctx).Count("submit_process_success").Add(1)
+			}
+		}
+	}
+}
+
+func (s *Sub) Submit(
+	ctx context.Context,
+	flv *flvtag.FlvTag,
+) {
+	ctx = belt.WithField(ctx, "subscriber_id", s.subID, metrics.AllowInMetrics)
+	metrics.FromCtx(ctx).Count("submit_requests").Add(1)
+	select {
+	case s.sendQueue <- flv:
+		metrics.FromCtx(ctx).Count("submit_pushed").Add(1)
+	default:
+		logger.Errorf(ctx, "subscriber #%d queue is full, cannot send a tag; closing the connection, because cannot restore from this", s.subID)
+		observability.Go(ctx, func() {
+			s.CloseOrLog(ctx)
+		})
+	}
+}
+
+func (s *Sub) onEvent(
+	ctx context.Context,
+	flv *flvtag.FlvTag,
+) error {
 	if s.closed {
 		return nil
 	}
@@ -269,8 +342,16 @@ func (s *Sub) onEvent(flv *flvtag.FlvTag) error {
 		flv.Timestamp += s.timestampOffset
 	}()
 	*/
+	return s.eventCallback(ctx, flv)
+}
 
-	return s.eventCallback(flv)
+func (s *Sub) CloseOrLog(
+	ctx context.Context,
+) {
+	err := s.Close()
+	if err != nil {
+		logger.Error(ctx, "unable to close subscriber #%d: %v", s.subID, err)
+	}
 }
 
 func (s *Sub) Close() error {
@@ -279,6 +360,7 @@ func (s *Sub) Close() error {
 	}
 	logger.Default().Debugf("Sub.Close")
 	defer logger.Default().Debugf("/Sub.Close")
+	s.cancelFunc()
 
 	ctx := context.TODO()
 	return xsync.DoR1(ctx, &s.locker, func() error {

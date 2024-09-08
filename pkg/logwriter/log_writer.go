@@ -3,11 +3,13 @@ package logwriter
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"time"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
@@ -31,12 +33,16 @@ func NewLogWriter(
 }
 
 func (l *logWriter) flusher(ctx context.Context) {
+	logger.Debugf(ctx, "flusher()")
+	defer logger.Debugf(ctx, "/flusher()")
+
+	defer l.Flush()
+
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			l.Flush()
 			return
 		case <-t.C:
 		}
@@ -56,14 +62,26 @@ func (l *logWriter) Flush() {
 		return
 	}
 
-	l.Logger.Logf(l.Logger.Level(), "%s", s)
+	l.Logger.Logf(observability.LogLevelFilter.Level, "%s", s)
 }
 
+var logrusPrefix = []byte{0x1b, 0x5b}
+
 func (l *logWriter) Write(b []byte) (int, error) {
-	bSanitized := bytes.Trim(b, " \n\t\r")
 	ctx := context.TODO()
 	return xsync.DoR2(xsync.WithNoLogging(ctx, true), &l.BufferLocker, func() (int, error) {
-		l.Buffer.Write(append(bSanitized, []byte("\n")...))
-		return os.Stderr.Write(b)
+		switch {
+		case bytes.HasPrefix(b, logrusPrefix):
+			return os.Stderr.Write(b)
+		default:
+			if len(bytes.Trim(b, " \n\t\r")) == 0 {
+				return io.Discard.Write(b)
+			}
+			_, err := l.Buffer.Write(b)
+			if err != nil {
+				os.Stderr.WriteString(fmt.Sprintf("unable to write to the logger: %v", err))
+			}
+			return len(b), nil
+		}
 	})
 }

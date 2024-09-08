@@ -1770,3 +1770,80 @@ func (c *Client) GetLoggingLevel(ctx context.Context) (logger.Level, error) {
 
 	return goconv.LoggingLevelGRPC2Go(reply.GetLoggingLevel()), nil
 }
+
+func (c *Client) AddTimer(
+	ctx context.Context,
+	triggerAt time.Time,
+	action api.TimerAction,
+) (api.TimerID, error) {
+	actionGRPC, err := goconv.ActionGo2GRPC(action)
+	if err != nil {
+		return 0, fmt.Errorf("unable to convert the action: %w", err)
+	}
+	reply, err := withStreamDClient(ctx, c, func(
+		ctx context.Context,
+		client streamd_grpc.StreamDClient,
+		conn io.Closer,
+	) (*streamd_grpc.AddTimerReply, error) {
+		return callWrapper(ctx, c, client.AddTimer, &streamd_grpc.AddTimerRequest{
+			TriggerAtUnixNano: triggerAt.UnixNano(),
+			Action:            actionGRPC,
+		})
+	})
+	if err != nil {
+		return 0, fmt.Errorf("unable to add timer: %w", err)
+	}
+
+	return api.TimerID(reply.GetTimerID()), nil
+}
+
+func (c *Client) RemoveTimer(
+	ctx context.Context,
+	timerID api.TimerID,
+) error {
+	_, err := withStreamDClient(ctx, c, func(
+		ctx context.Context,
+		client streamd_grpc.StreamDClient,
+		conn io.Closer,
+	) (*streamd_grpc.RemoveTimerReply, error) {
+		return callWrapper(ctx, c, client.RemoveTimer, &streamd_grpc.RemoveTimerRequest{
+			TimerID: int64(timerID),
+		})
+	})
+	if err != nil {
+		return fmt.Errorf("unable to remove the timer %d: %w", timerID, err)
+	}
+	return nil
+}
+
+func (c *Client) ListTimers(
+	ctx context.Context,
+) ([]api.Timer, error) {
+	reply, err := withStreamDClient(ctx, c, func(
+		ctx context.Context,
+		client streamd_grpc.StreamDClient,
+		conn io.Closer,
+	) (*streamd_grpc.ListTimersReply, error) {
+		return callWrapper(ctx, c, client.ListTimers, &streamd_grpc.ListTimersRequest{})
+	})
+	if err != nil {
+		return nil, fmt.Errorf("unable to list timers: %w", err)
+	}
+
+	timers := reply.GetTimers()
+	result := make([]api.Timer, 0, len(timers))
+	for _, timer := range timers {
+		triggerAtUnixNano := timer.GetTriggerAtUnixNano()
+		triggerAt := time.Unix(triggerAtUnixNano/int64(time.Second), triggerAtUnixNano%int64(time.Second))
+		action, err := goconv.ActionGRPC2Go(timer.GetAction())
+		if err != nil {
+			return nil, fmt.Errorf("unable to convert the action: %w", err)
+		}
+		result = append(result, api.Timer{
+			ID:        api.TimerID(timer.GetTimerID()),
+			TriggerAt: triggerAt,
+			Action:    action,
+		})
+	}
+	return result, nil
+}

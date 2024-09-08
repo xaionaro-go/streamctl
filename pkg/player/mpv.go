@@ -119,7 +119,7 @@ func (p *MPV) execMPV(ctx context.Context) (_err error) {
 	err := os.Remove(socketPath)
 	logger.Debugf(ctx, "socket deletion result: '%s': %v", socketPath, err)
 
-	args := []string{p.PathToMPV, "--idle", "--keep-open=always", "--keep-open-pause=no", "--input-ipc-server=" + socketPath, fmt.Sprintf("--title=%s", p.Title)}
+	args := []string{p.PathToMPV, "--idle", "--keep-open=always", "--keep-open-pause=no", "--no-hidpi-window-scale", "--no-osc", "--no-osd-bar", "--window-scale=1", "--input-ipc-server=" + socketPath, fmt.Sprintf("--title=%s", p.Title)}
 	switch observability.LogLevelFilter.GetLevel() {
 	case logger.LevelPanic, logger.LevelFatal:
 		args = append(args, "--msg-level=all=no")

@@ -609,6 +609,8 @@ func (p *StreamPlayer) controllerLoop(
 					(lag.Seconds()-p.Config.JitterBufDuration.Seconds())/
 					(p.Config.MaxCatchupAtLag.Seconds()-p.Config.JitterBufDuration.Seconds())
 
+			speed = float64(uint(speed*10)) / 10 // to avoid flickering (for example between 1.0001 and 1.0)
+
 			if speed > p.Config.CatchupMaxSpeedFactor {
 				logger.Warnf(
 					ctx,

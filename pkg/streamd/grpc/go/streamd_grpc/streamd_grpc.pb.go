@@ -86,6 +86,9 @@ type StreamDClient interface {
 	StreamPlayerSetPause(ctx context.Context, in *StreamPlayerSetPauseRequest, opts ...grpc.CallOption) (*StreamPlayerSetPauseReply, error)
 	StreamPlayerStop(ctx context.Context, in *StreamPlayerStopRequest, opts ...grpc.CallOption) (*StreamPlayerStopReply, error)
 	StreamPlayerClose(ctx context.Context, in *StreamPlayerCloseRequest, opts ...grpc.CallOption) (*StreamPlayerCloseReply, error)
+	AddTimer(ctx context.Context, in *AddTimerRequest, opts ...grpc.CallOption) (*AddTimerReply, error)
+	RemoveTimer(ctx context.Context, in *RemoveTimerRequest, opts ...grpc.CallOption) (*RemoveTimerReply, error)
+	ListTimers(ctx context.Context, in *ListTimersRequest, opts ...grpc.CallOption) (*ListTimersReply, error)
 }
 
 type streamDClient struct {
@@ -902,6 +905,33 @@ func (c *streamDClient) StreamPlayerClose(ctx context.Context, in *StreamPlayerC
 	return out, nil
 }
 
+func (c *streamDClient) AddTimer(ctx context.Context, in *AddTimerRequest, opts ...grpc.CallOption) (*AddTimerReply, error) {
+	out := new(AddTimerReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/AddTimer", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) RemoveTimer(ctx context.Context, in *RemoveTimerRequest, opts ...grpc.CallOption) (*RemoveTimerReply, error) {
+	out := new(RemoveTimerReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/RemoveTimer", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) ListTimers(ctx context.Context, in *ListTimersRequest, opts ...grpc.CallOption) (*ListTimersReply, error) {
+	out := new(ListTimersReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/ListTimers", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // StreamDServer is the server API for StreamD service.
 // All implementations must embed UnimplementedStreamDServer
 // for forward compatibility
@@ -970,6 +1000,9 @@ type StreamDServer interface {
 	StreamPlayerSetPause(context.Context, *StreamPlayerSetPauseRequest) (*StreamPlayerSetPauseReply, error)
 	StreamPlayerStop(context.Context, *StreamPlayerStopRequest) (*StreamPlayerStopReply, error)
 	StreamPlayerClose(context.Context, *StreamPlayerCloseRequest) (*StreamPlayerCloseReply, error)
+	AddTimer(context.Context, *AddTimerRequest) (*AddTimerReply, error)
+	RemoveTimer(context.Context, *RemoveTimerRequest) (*RemoveTimerReply, error)
+	ListTimers(context.Context, *ListTimersRequest) (*ListTimersReply, error)
 	mustEmbedUnimplementedStreamDServer()
 }
 
@@ -1168,6 +1201,15 @@ func (UnimplementedStreamDServer) StreamPlayerStop(context.Context, *StreamPlaye
 }
 func (UnimplementedStreamDServer) StreamPlayerClose(context.Context, *StreamPlayerCloseRequest) (*StreamPlayerCloseReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StreamPlayerClose not implemented")
+}
+func (UnimplementedStreamDServer) AddTimer(context.Context, *AddTimerRequest) (*AddTimerReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddTimer not implemented")
+}
+func (UnimplementedStreamDServer) RemoveTimer(context.Context, *RemoveTimerRequest) (*RemoveTimerReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveTimer not implemented")
+}
+func (UnimplementedStreamDServer) ListTimers(context.Context, *ListTimersRequest) (*ListTimersReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListTimers not implemented")
 }
 func (UnimplementedStreamDServer) mustEmbedUnimplementedStreamDServer() {}
 
@@ -2364,6 +2406,60 @@ func _StreamD_StreamPlayerClose_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _StreamD_AddTimer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddTimerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).AddTimer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/AddTimer",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).AddTimer(ctx, req.(*AddTimerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_RemoveTimer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveTimerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).RemoveTimer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/RemoveTimer",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).RemoveTimer(ctx, req.(*RemoveTimerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_ListTimers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListTimersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).ListTimers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/ListTimers",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).ListTimers(ctx, req.(*ListTimersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // StreamD_ServiceDesc is the grpc.ServiceDesc for StreamD service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2586,6 +2682,18 @@ var StreamD_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StreamPlayerClose",
 			Handler:    _StreamD_StreamPlayerClose_Handler,
+		},
+		{
+			MethodName: "AddTimer",
+			Handler:    _StreamD_AddTimer_Handler,
+		},
+		{
+			MethodName: "RemoveTimer",
+			Handler:    _StreamD_RemoveTimer_Handler,
+		},
+		{
+			MethodName: "ListTimers",
+			Handler:    _StreamD_ListTimers_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
