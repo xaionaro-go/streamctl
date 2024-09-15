@@ -3,11 +3,12 @@ package goconv
 import (
 	"fmt"
 
+	"github.com/goccy/go-yaml"
+
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
-	"gopkg.in/yaml.v2"
 )
 
 func ProfileGRPC2Go(

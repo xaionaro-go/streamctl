@@ -178,6 +178,9 @@ func New(
 		previousNumBytes:    map[any][4]uint64{},
 		previousNumBytesTS:  map[any]time.Time{},
 		errorReports:        map[string]errorReport{},
+		streamMutex: xsync.Mutex{
+			PanicOnDeadlock: ptr(false),
+		},
 	}
 	return p, nil
 }

@@ -1638,8 +1638,18 @@ func eventSubToChan[T any](
 	d *StreamD,
 	topic events.Event,
 ) (<-chan T, error) {
+	var mutex sync.Mutex
 	r := make(chan T)
 	callback := func() {
+		mutex.Lock()
+		defer mutex.Unlock()
+
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
 		var zeroValue T
 		select {
 		case r <- zeroValue:
@@ -1647,6 +1657,7 @@ func eventSubToChan[T any](
 			logger.Errorf(ctx, "unable to notify about '%s': timeout", topic)
 		}
 	}
+
 	err := d.EventBus.SubscribeAsync(topic, callback, true)
 	if err != nil {
 		return nil, fmt.Errorf("unable to subscribe: %w", err)
@@ -1654,10 +1665,15 @@ func eventSubToChan[T any](
 
 	observability.Go(ctx, func() {
 		<-ctx.Done()
+
+		mutex.Lock()
+		defer mutex.Unlock()
+
 		d.EventBus.Unsubscribe(topic, callback)
 		d.EventBus.WaitAsync()
 		close(r)
 	})
+
 	return r, nil
 }
 

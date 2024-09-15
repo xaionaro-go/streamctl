@@ -43,6 +43,8 @@ type Mutex = RWMutex
 type RWMutex struct {
 	mutex sync.RWMutex
 
+	OverrideTimeout  time.Duration
+	PanicOnDeadlock  *bool
 	cancelFunc       context.CancelFunc
 	deadlockNotifier *time.Timer
 }
@@ -77,6 +79,14 @@ func (m *Mutex) manualLock(ctx context.Context, lockType lockType) {
 
 func (m *Mutex) startDeadlockDetector(ctx context.Context) {
 	ctx, m.cancelFunc = context.WithCancel(ctx)
+	timeout := time.Minute
+	if m.OverrideTimeout != 0 {
+		timeout = m.OverrideTimeout
+	}
+	if timeout <= 0 {
+		return
+	}
+
 	deadlockNotifier := time.NewTimer(time.Minute)
 	go func() {
 		select {
@@ -87,7 +97,11 @@ func (m *Mutex) startDeadlockDetector(ctx context.Context) {
 		allStacks := make([]byte, 1024*1024)
 		n := runtime.Stack(allStacks, true)
 		allStacks = allStacks[:n]
-		logger.Panicf(ctx, "got a deadlock in:\n%s", allStacks)
+		if m.PanicOnDeadlock == nil || *m.PanicOnDeadlock {
+			logger.Panicf(ctx, "got a deadlock in:\n%s", allStacks)
+		} else {
+			logger.Errorf(ctx, "got a deadlock in:\n%s", allStacks)
+		}
 	}()
 	m.deadlockNotifier = deadlockNotifier
 }
@@ -143,9 +157,11 @@ func (m *Mutex) manualUnlock(ctx context.Context, lockType lockType) {
 
 	switch lockType {
 	case lockTypeWrite:
-		m.deadlockNotifier.Stop()
-		m.cancelFunc()
-		m.deadlockNotifier, m.cancelFunc = nil, nil
+		if m.deadlockNotifier != nil {
+			m.deadlockNotifier.Stop()
+			m.cancelFunc()
+			m.deadlockNotifier, m.cancelFunc = nil, nil
+		}
 
 		m.mutex.Unlock()
 	case lockTypeRead:
