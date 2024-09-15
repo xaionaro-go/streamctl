@@ -23,6 +23,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/timeapiio"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/googleapi"
@@ -745,7 +746,31 @@ func (yt *YouTube) StartStream(
 		).Context(ctx).Do()
 		logger.Debugf(ctx, "YouTube.LiveBroadcasts result: %v", err)
 		if err != nil {
-			return fmt.Errorf("unable to create a broadcast: %w", err)
+			if strings.Contains(err.Error(), "invalidScheduledStartTime") {
+				logger.Debugf(ctx, "it seems the local system clock is off, trying to fix the schedule time")
+
+				now, err = timeapiio.Now()
+				if err != nil {
+					logger.Errorf(ctx, "unable to get the actual time: %v", err)
+					// guessing:
+					// may be the error happened because of the know winter/summer time issue
+					// on Windows?
+					now = time.Now().Add(time.Hour)
+				}
+				broadcast.Snippet.ScheduledStartTime = now.Format("2006-01-02T15:04:05") + ".00Z"
+				broadcast.Snippet.ScheduledEndTime = now.Add(time.Hour*12).Format("2006-01-02T15:04:05") + ".00Z"
+				newBroadcast, err = yt.YouTubeService.LiveBroadcasts.Insert(
+					[]string{"snippet", "contentDetails", "monetizationDetails", "status"},
+					broadcast,
+				).Context(ctx).Do()
+				logger.Debugf(ctx, "YouTube.LiveBroadcasts result: %v", err)
+				if err != nil {
+					err = fmt.Errorf("%w; is the system clock OK?", err)
+				}
+			}
+			if err != nil {
+				return fmt.Errorf("unable to create a broadcast: %w", err)
+			}
 		}
 
 		video.Id = newBroadcast.Id

@@ -255,6 +255,7 @@ require (
 	github.com/xaionaro-go/datacounter v1.0.4
 	github.com/xaionaro-go/lockmap v0.0.0-20240901172806-e17aea364748
 	github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20240826003505-317c16ed8b69
+	github.com/xaionaro-go/timeapiio v0.0.0-20240915203246-b907cf699af3
 	github.com/xaionaro-go/typing v0.0.0-20221123235249-2229101d38ba
 	github.com/xaionaro-go/unsafetools v0.0.0-20210722164218-75ba48cf7b3c
 	github.com/yl2chen/cidranger v1.0.2
