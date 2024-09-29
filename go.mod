@@ -11,6 +11,8 @@ replace github.com/yutopp/go-rtmp v0.0.7 => ../go-rtmp/
 
 replace github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20240826003505-317c16ed8b69 => ../obs-grpc-proxy/
 
+replace github.com/andreykaipov/goobs v1.4.1 => ../goobs/
+
 require (
 	github.com/facebookincubator/go-belt v0.0.0-20240804203001-846c4409d41c
 	github.com/go-git/go-billy/v5 v5.5.0
@@ -33,6 +35,7 @@ require (
 	github.com/Jorropo/jsync v1.0.1 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/ProtonMail/go-crypto v1.0.0 // indirect
+	github.com/asticode/go-astikit v0.42.0 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
@@ -81,7 +84,7 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.3.2 // indirect
 	github.com/googleapis/gax-go/v2 v2.13.0 // indirect
 	github.com/gopherjs/gopherjs v1.17.2 // indirect
-	github.com/gorilla/websocket v1.5.2 // indirect
+	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/golang-lru v1.0.2 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.5 // indirect
@@ -227,6 +230,7 @@ require (
 	github.com/andreykaipov/goobs v1.4.1
 	github.com/anthonynsimon/bild v0.14.0
 	github.com/asaskevich/EventBus v0.0.0-20200907212545-49d423059eef
+	github.com/asticode/go-astiav v0.19.0
 	github.com/bamiaux/rez v0.0.0-20170731184118-29f4463c688b
 	github.com/blang/mpv v0.0.0-20160810175505-d56d7352e068
 	github.com/chai2010/webp v1.1.1

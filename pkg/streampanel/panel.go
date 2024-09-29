@@ -681,7 +681,7 @@ func (p *Panel) openBrowser(
 	reason string,
 ) (_err error) {
 	logger.Debugf(ctx, "openBrowser(ctx, '%s', '%s')", url, reason)
-	defer func() { logger.Debugf(ctx, "/openBrowser(ctx, '%s', '%s'): %3", url, reason, _err) }()
+	defer func() { logger.Debugf(ctx, "/openBrowser(ctx, '%s', '%s'): %v", url, reason, _err) }()
 
 	if p.Config.Browser.Command != "" {
 		args := []string{p.Config.Browser.Command, url}
@@ -2266,11 +2266,10 @@ func (p *Panel) stopStreamNoLock(ctx context.Context) {
 
 	p.startStopButton.Disable()
 
-	p.updateTimerHandler.Stop()
 	if p.updateTimerHandler != nil {
 		p.updateTimerHandler.Stop()
+		p.updateTimerHandler = nil
 	}
-	p.updateTimerHandler = nil
 
 	if backendEnabled[obs.ID] {
 		p.startStopButton.SetText("Stopping OBS...")

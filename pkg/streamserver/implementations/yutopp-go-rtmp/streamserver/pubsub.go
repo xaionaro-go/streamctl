@@ -11,6 +11,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/yutopp-go-rtmp/streamforward"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 	flvtag "github.com/yutopp/go-flv/tag"
 )
@@ -350,7 +351,7 @@ func (s *Sub) CloseOrLog(
 ) {
 	err := s.Close()
 	if err != nil {
-		logger.Error(ctx, "unable to close subscriber #%d: %v", s.subID, err)
+		logger.Errorf(ctx, "unable to close subscriber #%d: %v", s.subID, err)
 	}
 }
 
@@ -416,4 +417,17 @@ func cloneView(flv *flvtag.FlvTag) *flvtag.FlvTag {
 	}
 
 	return &v
+}
+
+type pubsubAdapter struct {
+	*Pubsub
+}
+
+var _ streamforward.Pubsub = (*pubsubAdapter)(nil)
+
+func (pubsub *pubsubAdapter) Sub(
+	conn io.Closer,
+	callback func(ctx context.Context, flv *flvtag.FlvTag) error,
+) streamforward.Sub {
+	return pubsub.Pubsub.Sub(conn, callback)
 }

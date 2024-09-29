@@ -42,9 +42,12 @@ type ForwardingQuirks struct {
 	StartAfterYoutubeRecognizedStream   StartAfterYoutubeRecognizedStream   `yaml:"start_after_youtube_recognizes_stream"`
 }
 
+type VideoConvertConfig = streamtypes.VideoConvertConfig
+
 type ForwardingConfig struct {
-	Disabled bool             `yaml:"disabled,omitempty"`
-	Quirks   ForwardingQuirks `yaml:"quirks,omitempty"`
+	Disabled bool               `yaml:"disabled,omitempty"`
+	Quirks   ForwardingQuirks   `yaml:"quirks,omitempty"`
+	Convert  VideoConvertConfig `yaml:"convert,omitempty"`
 }
 
 type PlayerConfig struct {

@@ -29,6 +29,10 @@ func newUpdateTimerHandler(startStopButton *widget.Button, startedAt time.Time) 
 }
 
 func (h *updateTimerHandler) GetStartTS() time.Time {
+	if h == nil {
+		return time.Time{}
+	}
+
 	return h.startTS
 }
 
@@ -47,6 +51,10 @@ func (h *updateTimerHandler) loop() {
 }
 
 func (h *updateTimerHandler) Stop() time.Duration {
+	if h == nil {
+		return 0
+	}
+
 	h.cancelFn()
 	return time.Since(h.GetStartTS())
 }

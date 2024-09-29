@@ -10,7 +10,6 @@ import (
 
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/xaionaro-go/lockmap"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	playertypes "github.com/xaionaro-go/streamctl/pkg/player/types"
@@ -18,6 +17,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/memoize"
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/yutopp-go-rtmp/streamforward"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/streamctl/pkg/xlogger"
@@ -42,16 +42,18 @@ type ForwardingKey struct {
 
 type StreamServer struct {
 	xsync.Mutex
-	Config                     *types.Config
-	RelayService               *RelayService
-	ServerHandlers             []types.PortServer
-	StreamDestinations         []types.StreamDestination
-	ActiveStreamForwardings    map[ForwardingKey]*ActiveStreamForwarding
-	PlatformsController        PlatformsController
-	BrowserOpener              BrowserOpener
-	StreamPlayers              *streamplayer.StreamPlayers
-	DestinationStreamingLocker *lockmap.LockMap
+	Config                  *types.Config
+	RelayService            *RelayService
+	ServerHandlers          []types.PortServer
+	StreamDestinations      []types.StreamDestination
+	ActiveStreamForwardings map[ForwardingKey]*streamforward.ActiveStreamForwarding
+	PlatformsController     PlatformsController
+	BrowserOpener           BrowserOpener
+	StreamPlayers           *streamplayer.StreamPlayers
+	StreamForwards          *streamforward.StreamForwards
 }
+
+var _ streamforward.StreamServer = (*StreamServer)(nil)
 
 func New(
 	cfg *types.Config,
@@ -62,10 +64,10 @@ func New(
 		RelayService: NewRelayService(),
 		Config:       cfg,
 
-		ActiveStreamForwardings:    map[ForwardingKey]*ActiveStreamForwarding{},
-		PlatformsController:        platformsController,
-		BrowserOpener:              browserOpener,
-		DestinationStreamingLocker: lockmap.NewLockMap(),
+		ActiveStreamForwardings: map[ForwardingKey]*streamforward.ActiveStreamForwarding{},
+		PlatformsController:     platformsController,
+		BrowserOpener:           browserOpener,
+		StreamForwards:          streamforward.NewStreamForwards(),
 	}
 	s.StreamPlayers = streamplayer.New(
 		NewStreamPlayerStreamServer(s),
@@ -167,6 +169,17 @@ func (s *StreamServer) init(
 	})
 
 	return nil
+}
+
+func (s *StreamServer) WaitPubsub(
+	ctx context.Context,
+	appKey string,
+) streamforward.Pubsub {
+	return &pubsubAdapter{s.RelayService.WaitPubsub(ctx, appKey)}
+}
+
+func (s *StreamServer) PubsubNames() []string {
+	return s.RelayService.PubsubNames()
 }
 
 func (s *StreamServer) ListServers(
@@ -371,7 +384,7 @@ type StreamForward struct {
 	DestinationID    types.DestinationID
 	Enabled          bool
 	Quirks           types.ForwardingQuirks
-	ActiveForwarding *ActiveStreamForwarding
+	ActiveForwarding *streamforward.ActiveStreamForwarding
 	NumBytesWrote    uint64
 	NumBytesRead     uint64
 }
@@ -451,13 +464,13 @@ func (s *StreamServer) addStreamForward(
 		NumBytesRead:  0,
 	}
 
-	fwd, err := NewActiveStreamForward(
+	fwd, err := s.StreamForwards.NewActiveStreamForward(
 		ctx,
 		s,
 		streamID,
 		destinationID,
 		urlParsed.String(),
-		func(ctx context.Context, fwd *ActiveStreamForwarding) {
+		func(ctx context.Context, fwd *streamforward.ActiveStreamForwarding) {
 			if quirks.StartAfterYoutubeRecognizedStream.Enabled {
 				if quirks.RestartUntilYoutubeRecognizesStream.Enabled {
 					logger.Errorf(ctx, "StartAfterYoutubeRecognizedStream should not be used together with RestartUntilYoutubeRecognizesStream")

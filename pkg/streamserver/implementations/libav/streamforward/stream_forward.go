@@ -1,4 +1,4 @@
-package streamserver
+package streamforward
 
 import (
 	"bytes"
@@ -13,46 +13,55 @@ import (
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
+	"github.com/xaionaro-go/lockmap"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	commontypes "github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/streamctl/pkg/xlogger"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
-	flvtag "github.com/yutopp/go-flv/tag"
-	"github.com/yutopp/go-rtmp"
-	rtmpmsg "github.com/yutopp/go-rtmp/message"
 )
 
 const (
 	chunkSize = 128
 )
 
+type StreamForwards struct {
+	DestinationStreamingLocker *lockmap.LockMap
+}
+
+func NewStreamForwards() *StreamForwards {
+	return &StreamForwards{
+		DestinationStreamingLocker: lockmap.NewLockMap(),
+	}
+}
+
 type Unlocker interface {
 	Unlock()
 }
 
 type ActiveStreamForwarding struct {
+	*StreamForwards
+	Recoding      commontypes.VideoConvertConfig
 	Locker        xsync.Mutex
-	StreamServer  *StreamServer
+	StreamServer  StreamServer
 	StreamID      types.StreamID
 	DestinationID types.DestinationID
 	URL           *url.URL
-	Client        *rtmp.ClientConn
-	OutStream     *rtmp.Stream
-	Sub           *Sub
+	Sub           Sub
 	CancelFunc    context.CancelFunc
 	ReadCount     atomic.Uint64
 	WriteCount    atomic.Uint64
 	PauseFunc     func(ctx context.Context, fwd *ActiveStreamForwarding)
-	eventChan     chan *flvtag.FlvTag
 }
 
-func NewActiveStreamForward(
+func (fwds *StreamForwards) NewActiveStreamForward(
 	ctx context.Context,
-	s *StreamServer,
+	s StreamServer,
 	streamID types.StreamID,
 	dstID types.DestinationID,
 	urlString string,
 	pauseFunc func(ctx context.Context, fwd *ActiveStreamForwarding),
+	opts ...Option,
 ) (_ret *ActiveStreamForwarding, _err error) {
 	logger.Debugf(ctx, "NewActiveStreamForward(ctx, '%s', '%s', '%s', relayService, pauseFunc)", streamID, dstID, urlString)
 	defer func() {
@@ -64,12 +73,15 @@ func NewActiveStreamForward(
 		return nil, fmt.Errorf("unable to parse URL '%s': %w", urlString, err)
 	}
 	fwd := &ActiveStreamForwarding{
-		StreamServer:  s,
-		StreamID:      streamID,
-		DestinationID: dstID,
-		URL:           urlParsed,
-		PauseFunc:     pauseFunc,
-		eventChan:     make(chan *flvtag.FlvTag),
+		StreamForwards: fwds,
+		StreamServer:   s,
+		StreamID:       streamID,
+		DestinationID:  dstID,
+		URL:            urlParsed,
+		PauseFunc:      pauseFunc,
+	}
+	for _, opt := range opts {
+		opt.apply(fwd)
 	}
 	if err := fwd.Start(ctx); err != nil {
 		return nil, fmt.Errorf("unable to start the forwarder: %w", err)
@@ -132,7 +144,7 @@ func (fwd *ActiveStreamForwarding) getAppNameAndKey() (string, string, string) {
 
 func (fwd *ActiveStreamForwarding) WaitForPublisher(
 	ctx context.Context,
-) (*Pubsub, error) {
+) (Pubsub, error) {
 	localAppName, _, apiKey := fwd.getAppNameAndKey()
 
 	ctx = belt.WithField(belt.WithField(ctx, "appNameLocal", localAppName), "appNameRemote", apiKey)
@@ -143,13 +155,13 @@ func (fwd *ActiveStreamForwarding) WaitForPublisher(
 	default:
 	}
 	logger.Debugf(ctx, "wait for stream '%s'", fwd.StreamID)
-	pubSub := fwd.StreamServer.RelayService.WaitPubsub(ctx, localAppName)
+	pubSub := fwd.StreamServer.WaitPubsub(ctx, localAppName)
 	logger.Debugf(ctx, "wait for stream '%s' result: %#+v", fwd.StreamID, pubSub)
 	if pubSub == nil {
 		return nil, fmt.Errorf(
 			"unable to find stream ID '%s', available stream IDs: %s",
 			fwd.StreamID,
-			strings.Join(fwd.StreamServer.RelayService.PubsubNames(), ", "),
+			strings.Join(fwd.StreamServer.PubsubNames(), ", "),
 		)
 	}
 
@@ -180,7 +192,7 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 	}
 
 	logger.Debugf(ctx, "DestinationStreamingLocker.Lock(ctx, '%s')", fwd.DestinationID)
-	destinationUnlocker := fwd.StreamServer.DestinationStreamingLocker.Lock(ctx, fwd.DestinationID)
+	destinationUnlocker := fwd.StreamForwards.DestinationStreamingLocker.Lock(ctx, fwd.DestinationID)
 	defer func() {
 		if destinationUnlocker != nil { // if ctx was cancelled before we locked then the unlocker is nil
 			destinationUnlocker.Unlock()
@@ -259,114 +271,7 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 	}
 
 	err = xsync.DoR1(ctx, &fwd.Locker, func() error {
-		if err := client.Connect(ctx, &rtmpmsg.NetConnectionConnect{
-			Command: rtmpmsg.NetConnectionConnectCommand{
-				App:      remoteAppName,
-				Type:     "nonprivate",
-				FlashVer: "StreamPanel",
-				TCURL:    tcURL.String(),
-			},
-		}); err != nil {
-			return fmt.Errorf("unable to connect the stream to '%s': %w", urlParsed.String(), err)
-		}
-		logger.Debugf(ctx, "connected the stream to '%s'", urlParsed.String())
-
-		fwd.OutStream, err = client.CreateStream(ctx, &rtmpmsg.NetConnectionCreateStream{}, chunkSize)
-		if err != nil {
-			return fmt.Errorf("unable to create a stream to '%s': %w", urlParsed.String(), err)
-		}
-
-		logger.Debugf(ctx, "calling Publish at '%s'", urlParsed.String())
-		if err := fwd.OutStream.Publish(ctx, &rtmpmsg.NetStreamPublish{
-			PublishingName: apiKey,
-			PublishingType: "live",
-		}); err != nil {
-			return fmt.Errorf("unable to send the Publish message to '%s': %w", urlParsed.String(), err)
-		}
-
-		logger.Debugf(ctx, "starting publishing to '%s'", urlParsed.String())
-		fwd.Sub = pubSub.Sub(client, func(ctx context.Context, flv *flvtag.FlvTag) error {
-			logger.Tracef(ctx, "flvtag == %#+v", *flv)
-			var buf bytes.Buffer
-
-			switch d := flv.Data.(type) {
-			case *flvtag.AudioData:
-				// Consume flv payloads (d)
-				if err := flvtag.EncodeAudioData(&buf, d); err != nil {
-					err = fmt.Errorf("flvtag.Data == %#+v; err == %w", *d, err)
-					return err
-				}
-
-				payloadLen := uint64(buf.Len())
-				fwd.WriteCount.Add(payloadLen)
-				logger.Tracef(ctx, "flvtag.Data == %#+v; payload len == %d", *d, payloadLen)
-
-				// TODO: Fix these values
-				chunkStreamID := 5
-				if err := fwd.OutStream.Write(ctx, chunkStreamID, flv.Timestamp, &rtmpmsg.AudioMessage{
-					Payload: &buf,
-				}); err != nil {
-					err = fmt.Errorf("fwd.OutStream.Write return an error: %w", err)
-					return err
-				}
-
-			case *flvtag.VideoData:
-				// Consume flv payloads (d)
-				if err := flvtag.EncodeVideoData(&buf, d); err != nil {
-					err = fmt.Errorf("flvtag.Data == %#+v; err == %w", *d, err)
-					return err
-				}
-
-				payloadLen := uint64(buf.Len())
-				fwd.WriteCount.Add(payloadLen)
-				logger.Tracef(ctx, "flvtag.Data == %#+v; payload len == %d", *d, payloadLen)
-
-				// TODO: Fix these values
-				chunkStreamID := 6
-				if err := fwd.OutStream.Write(ctx, chunkStreamID, flv.Timestamp, &rtmpmsg.VideoMessage{
-					Payload: &buf,
-				}); err != nil {
-					err = fmt.Errorf("fwd.OutStream.Write return an error: %w", err)
-					return err
-				}
-
-			case *flvtag.ScriptData:
-				// Consume flv payloads (d)
-				if err := flvtag.EncodeScriptData(&buf, d); err != nil {
-					err = fmt.Errorf("flvtag.Data == %#+v; err == %v", *d, err)
-					return err
-				}
-
-				payloadLen := uint64(buf.Len())
-				fwd.WriteCount.Add(payloadLen)
-				logger.Tracef(ctx, "flvtag.Data == %#+v; payload len == %d", *d, payloadLen)
-
-				// TODO: hide these implementation
-				amdBuf := new(bytes.Buffer)
-				amfEnc := rtmpmsg.NewAMFEncoder(amdBuf, rtmpmsg.EncodingTypeAMF0)
-				if err := rtmpmsg.EncodeBodyAnyValues(amfEnc, &rtmpmsg.NetStreamSetDataFrame{
-					Payload: buf.Bytes(),
-				}); err != nil {
-					err = fmt.Errorf("flvtag.Data == %#+v; payload len == %d; err == %v", *d, payloadLen, err)
-					return err
-				}
-
-				// TODO: Fix these values
-				chunkStreamID := 8
-				if err := fwd.OutStream.Write(ctx, chunkStreamID, flv.Timestamp, &rtmpmsg.DataMessage{
-					Name:     "@setDataFrame", // TODO: fix
-					Encoding: rtmpmsg.EncodingTypeAMF0,
-					Body:     amdBuf,
-				}); err != nil {
-					err = fmt.Errorf("fwd.OutStream.Write return an error: %v", err)
-					return err
-				}
-
-			default:
-				logger.Errorf(ctx, "unexpected data type: %T", flv.Data)
-			}
-			return nil
-		})
+		STARTPUBLISHING
 
 		logger.Debugf(ctx, "started publishing to '%s'", urlParsed.String())
 		return nil
@@ -396,10 +301,7 @@ func (fwd *ActiveStreamForwarding) Close() error {
 			result = multierror.Append(result, fwd.Sub.Close())
 			fwd.Sub = nil
 		}
-		if fwd.Client != nil {
-			result = multierror.Append(result, fwd.Client.Close())
-			fwd.Client = nil
-		}
+		CLOSECLIENT
 		return result.ErrorOrNil()
 	})
 }

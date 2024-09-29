@@ -628,21 +628,36 @@ func (d *StreamD) StartStream(
 
 			// I don't know why, but if we don't open the livestream control page on YouTube
 			// in the browser, then the stream does not want to start.
-			status, err := d.GetStreamStatus(memoize.SetNoCache(ctx, true), youtube.ID)
-			if err != nil {
-				return fmt.Errorf("unable to get YouTube stream status: %w", err)
+			//
+			// And this bug is exacerbated by the fact that sometimes even if you just created
+			// a stream, YouTube may report that you don't have this stream (some kind of
+			// race condition on their side), so sometimes we need to wait and retry. Right
+			// now we assume that the race condition cannot take more than ~25 seconds.
+			deadline := time.Now().Add(30 * time.Second)
+			for {
+				status, err := d.GetStreamStatus(memoize.SetNoCache(ctx, true), youtube.ID)
+				if err != nil {
+					return fmt.Errorf("unable to get YouTube stream status: %w", err)
+				}
+				data := youtube.GetStreamStatusCustomData(status)
+				bcID := getYTBroadcastID(data)
+				if bcID == "" {
+					err = fmt.Errorf("unable to get the broadcast ID from YouTube")
+					if time.Now().Before(deadline) {
+						delay := time.Second * 5
+						logger.Warnf(ctx, "%v... waiting %v and trying again", err)
+						time.Sleep(delay)
+						continue
+					}
+					return err
+				}
+				url := fmt.Sprintf("https://studio.youtube.com/video/%s/livestreaming", bcID)
+				err = d.UI.OpenBrowser(ctx, url)
+				if err != nil {
+					return fmt.Errorf("unable to open '%s' in browser: %w", url, err)
+				}
+				return nil
 			}
-			data := youtube.GetStreamStatusCustomData(status)
-			bcID := getYTBroadcastID(data)
-			if bcID == "" {
-				return fmt.Errorf("unable to get the broadcast ID from YouTube")
-			}
-			url := fmt.Sprintf("https://studio.youtube.com/video/%s/livestreaming", bcID)
-			err = d.UI.OpenBrowser(ctx, url)
-			if err != nil {
-				return fmt.Errorf("unable to open '%s' in browser: %w", url, err)
-			}
-			return nil
 		default:
 			return fmt.Errorf("unexpected platform ID '%s'", platID)
 		}
