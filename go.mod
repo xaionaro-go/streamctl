@@ -35,7 +35,6 @@ require (
 	github.com/Jorropo/jsync v1.0.1 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/ProtonMail/go-crypto v1.0.0 // indirect
-	github.com/asticode/go-astikit v0.42.0 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
@@ -231,6 +230,7 @@ require (
 	github.com/anthonynsimon/bild v0.14.0
 	github.com/asaskevich/EventBus v0.0.0-20200907212545-49d423059eef
 	github.com/asticode/go-astiav v0.19.0
+	github.com/asticode/go-astikit v0.42.0
 	github.com/bamiaux/rez v0.0.0-20170731184118-29f4463c688b
 	github.com/blang/mpv v0.0.0-20160810175505-d56d7352e068
 	github.com/chai2010/webp v1.1.1

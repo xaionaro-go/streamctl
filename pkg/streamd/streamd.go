@@ -38,8 +38,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver"
-	streamserverimpl "github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/yutopp-go-rtmp/streamserver"
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	sstypes "github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/streamctl/pkg/xcontext"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
@@ -84,7 +83,7 @@ type StreamD struct {
 	ControllersLocker xsync.RWMutex
 
 	StreamServerLocker xsync.RWMutex
-	StreamServer       *streamserver.StreamServer
+	StreamServer       streamserver.StreamServer
 
 	StreamStatusCache *memoize.MemoizeData
 	OBSState          OBSState
@@ -293,7 +292,7 @@ func (d *StreamD) initStreamServer(ctx context.Context) (_err error) {
 	)
 	assert(d.StreamServer != nil)
 	defer d.notifyAboutChange(ctx, events.StreamServersChange)
-	return d.StreamServer.Init(ctx, streamserverimpl.InitOptionDefaultStreamPlayerOptions(d.streamPlayerOptions()))
+	return d.StreamServer.Init(ctx, sstypes.InitOptionDefaultStreamPlayerOptions(d.streamPlayerOptions()))
 }
 
 func (d *StreamD) streamPlayerOptions() sptypes.Options {
@@ -1100,7 +1099,7 @@ func (d *StreamD) StartStreamServer(
 func (d *StreamD) getStreamServerByListenAddr(
 	ctx context.Context,
 	listenAddr string,
-) *types.PortServer {
+) *sstypes.PortServer {
 	for _, server := range d.StreamServer.ListServers(ctx) {
 		if server.ListenAddr() == listenAddr {
 			return &server
@@ -1146,7 +1145,7 @@ func (d *StreamD) AddIncomingStream(
 	defer d.notifyAboutChange(ctx, events.IncomingStreamsChange)
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
-		err := d.StreamServer.AddIncomingStream(ctx, types.StreamID(streamID))
+		err := d.StreamServer.AddIncomingStream(ctx, sstypes.StreamID(streamID))
 		if err != nil {
 			return fmt.Errorf("unable to add an incoming stream: %w", err)
 		}
@@ -1169,7 +1168,7 @@ func (d *StreamD) RemoveIncomingStream(
 	defer d.notifyAboutChange(ctx, events.IncomingStreamsChange)
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
-		err := d.StreamServer.RemoveIncomingStream(ctx, types.StreamID(streamID))
+		err := d.StreamServer.RemoveIncomingStream(ctx, sstypes.StreamID(streamID))
 		if err != nil {
 			return fmt.Errorf("unable to remove an incoming stream: %w", err)
 		}
@@ -1234,7 +1233,7 @@ func (d *StreamD) AddStreamDestination(
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		err := d.StreamServer.AddStreamDestination(
 			resetContextCancellers(ctx),
-			types.DestinationID(destinationID),
+			sstypes.DestinationID(destinationID),
 			url,
 		)
 		if err != nil {
@@ -1259,7 +1258,7 @@ func (d *StreamD) RemoveStreamDestination(
 	defer d.notifyAboutChange(ctx, events.StreamDestinationsChange)
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
-		err := d.StreamServer.RemoveStreamDestination(ctx, types.DestinationID(destinationID))
+		err := d.StreamServer.RemoveStreamDestination(ctx, sstypes.DestinationID(destinationID))
 		if err != nil {
 			return fmt.Errorf("unable to remove stream destination server: %w", err)
 		}
@@ -1318,8 +1317,8 @@ func (d *StreamD) AddStreamForward(
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		_, err := d.StreamServer.AddStreamForward(
 			resetContextCancellers(ctx),
-			types.StreamID(streamID),
-			types.DestinationID(destinationID),
+			sstypes.StreamID(streamID),
+			sstypes.DestinationID(destinationID),
 			enabled,
 			quirks,
 		)
@@ -1350,8 +1349,8 @@ func (d *StreamD) UpdateStreamForward(
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		_, err := d.StreamServer.UpdateStreamForward(
 			resetContextCancellers(ctx),
-			types.StreamID(streamID),
-			types.DestinationID(destinationID),
+			sstypes.StreamID(streamID),
+			sstypes.DestinationID(destinationID),
 			enabled,
 			quirks,
 		)
@@ -1380,8 +1379,8 @@ func (d *StreamD) RemoveStreamForward(
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		err := d.StreamServer.RemoveStreamForward(
 			ctx,
-			types.StreamID(streamID),
-			types.DestinationID(destinationID),
+			sstypes.StreamID(streamID),
+			sstypes.DestinationID(destinationID),
 		)
 		if err != nil {
 			return fmt.Errorf("unable to remove the stream forwarding: %w", err)
@@ -1404,13 +1403,17 @@ func (d *StreamD) WaitForStreamPublisher(
 	ctx context.Context,
 	streamID api.StreamID,
 ) (<-chan struct{}, error) {
-	return streamserver.NewStreamPlayerStreamServer(d.StreamServer).WaitPublisher(ctx, streamID)
+	return streamserver.NewStreamPlayerStreamServer(
+		d.StreamServer,
+	).WaitPublisherChan(ctx, streamID)
 }
 
 func (d *StreamD) GetStreamPortServers(
 	ctx context.Context,
 ) ([]streamplayer.StreamPortServer, error) {
-	return streamserver.NewStreamPlayerStreamServer(d.StreamServer).GetPortServers(ctx)
+	return streamserver.NewStreamPlayerStreamServer(
+		d.StreamServer,
+	).GetPortServers(ctx)
 }
 
 func (d *StreamD) AddStreamPlayer(
@@ -1428,7 +1431,7 @@ func (d *StreamD) AddStreamPlayer(
 		playerType,
 		disabled,
 		streamPlaybackConfig,
-		streamserverimpl.StreamPlayerOptionDefaultStreamPlayerOptions(d.streamPlayerOptions()),
+		sstypes.StreamPlayerOptionDefaultOptions(d.streamPlayerOptions()),
 	))
 	result = multierror.Append(result, d.SaveConfig(ctx))
 	return result.ErrorOrNil()
@@ -1453,7 +1456,7 @@ func (d *StreamD) UpdateStreamPlayer(
 		playerType,
 		disabled,
 		streamPlaybackConfig,
-		streamserverimpl.StreamPlayerOptionDefaultStreamPlayerOptions(d.streamPlayerOptions()),
+		sstypes.StreamPlayerOptionDefaultOptions(d.streamPlayerOptions()),
 	))
 	result = multierror.Append(result, d.SaveConfig(ctx))
 	return result.ErrorOrNil()
@@ -1476,28 +1479,9 @@ func (d *StreamD) RemoveStreamPlayer(
 func (d *StreamD) ListStreamPlayers(
 	ctx context.Context,
 ) ([]api.StreamPlayer, error) {
-	var result []api.StreamPlayer
-	if d.StreamServer == nil {
-		return nil, fmt.Errorf("d.StreamServer == nil")
-	}
-	if d.StreamServer.Config == nil {
-		return nil, fmt.Errorf("d.StreamServer.Config == nil")
-	}
-	if d.StreamServer.Config.Streams == nil {
-		return nil, fmt.Errorf("d.StreamServer.Config.Streams == nil")
-	}
-	for streamID, streamCfg := range d.StreamServer.Config.Streams {
-		playerCfg := streamCfg.Player
-		if playerCfg == nil {
-			continue
-		}
-
-		result = append(result, api.StreamPlayer{
-			StreamID:             streamID,
-			PlayerType:           playerCfg.Player,
-			Disabled:             playerCfg.Disabled,
-			StreamPlaybackConfig: playerCfg.StreamPlayback,
-		})
+	result, err := d.StreamServer.ListStreamPlayers(ctx)
+	if err != nil {
+		return nil, err
 	}
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].StreamID < result[j].StreamID
@@ -1509,134 +1493,128 @@ func (d *StreamD) GetStreamPlayer(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 ) (*api.StreamPlayer, error) {
-	streamCfg, ok := d.StreamServer.Config.Streams[streamID]
-	if !ok {
-		return nil, fmt.Errorf("no stream '%s'", streamID)
-	}
-	playerCfg := streamCfg.Player
-	if playerCfg == nil {
-		return nil, fmt.Errorf("no stream player defined for '%s'", streamID)
-	}
-	return &api.StreamPlayer{
-		StreamID:             streamID,
-		PlayerType:           playerCfg.Player,
-		Disabled:             playerCfg.Disabled,
-		StreamPlaybackConfig: playerCfg.StreamPlayback,
-	}, nil
+	return d.StreamServer.GetStreamPlayer(ctx, streamID)
+}
+
+func (d *StreamD) getActiveStreamPlayer(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+) (player.Player, error) {
+	return d.StreamServer.GetActiveStreamPlayer(ctx, streamID)
 }
 
 func (d *StreamD) StreamPlayerProcessTitle(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 ) (string, error) {
-	streamPlayer := d.StreamServer.StreamPlayers.Get(streamID)
-	if streamPlayer == nil || streamPlayer.Player == nil {
-		return "", fmt.Errorf("there is no active player '%s'", streamID)
+	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamID)
+	if err != nil {
+		return "", err
 	}
-	return streamPlayer.Player.ProcessTitle(ctx)
+	return streamPlayer.ProcessTitle(ctx)
 }
 func (d *StreamD) StreamPlayerOpenURL(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 	link string,
 ) error {
-	streamPlayer := d.StreamServer.StreamPlayers.Get(streamID)
-	if streamPlayer == nil || streamPlayer.Player == nil {
-		return fmt.Errorf("there is no active player '%s'", streamID)
+	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamID)
+	if err != nil {
+		return err
 	}
-	return streamPlayer.Player.OpenURL(ctx, link)
+	return streamPlayer.OpenURL(ctx, link)
 }
 func (d *StreamD) StreamPlayerGetLink(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 ) (string, error) {
-	streamPlayer := d.StreamServer.StreamPlayers.Get(streamID)
-	if streamPlayer == nil || streamPlayer.Player == nil {
-		return "", fmt.Errorf("there is no active player '%s'", streamID)
+	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamID)
+	if err != nil {
+		return "", err
 	}
-	return streamPlayer.Player.GetLink(ctx)
+	return streamPlayer.GetLink(ctx)
 }
 func (d *StreamD) StreamPlayerEndChan(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 ) (<-chan struct{}, error) {
-	streamPlayer := d.StreamServer.StreamPlayers.Get(streamID)
-	if streamPlayer == nil || streamPlayer.Player == nil {
-		return nil, fmt.Errorf("there is no active player '%s'", streamID)
+	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamID)
+	if err != nil {
+		return nil, err
 	}
-	return streamPlayer.Player.EndChan(ctx)
+	return streamPlayer.EndChan(ctx)
 }
 func (d *StreamD) StreamPlayerIsEnded(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 ) (bool, error) {
-	streamPlayer := d.StreamServer.StreamPlayers.Get(streamID)
-	if streamPlayer == nil || streamPlayer.Player == nil {
-		return false, fmt.Errorf("there is no active player '%s'", streamID)
+	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamID)
+	if err != nil {
+		return false, err
 	}
-	return streamPlayer.Player.IsEnded(ctx)
+	return streamPlayer.IsEnded(ctx)
 }
 func (d *StreamD) StreamPlayerGetPosition(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 ) (time.Duration, error) {
-	streamPlayer := d.StreamServer.StreamPlayers.Get(streamID)
-	if streamPlayer == nil || streamPlayer.Player == nil {
-		return 0, fmt.Errorf("there is no active player '%s'", streamID)
+	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamID)
+	if err != nil {
+		return 0, err
 	}
-	return streamPlayer.Player.GetPosition(ctx)
+	return streamPlayer.GetPosition(ctx)
 }
 func (d *StreamD) StreamPlayerGetLength(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 ) (time.Duration, error) {
-	streamPlayer := d.StreamServer.StreamPlayers.Get(streamID)
-	if streamPlayer == nil || streamPlayer.Player == nil {
-		return 0, fmt.Errorf("there is no active player '%s'", streamID)
+	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamID)
+	if err != nil {
+		return 0, err
 	}
-	return streamPlayer.Player.GetLength(ctx)
+	return streamPlayer.GetLength(ctx)
 }
 func (d *StreamD) StreamPlayerSetSpeed(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 	speed float64,
 ) error {
-	streamPlayer := d.StreamServer.StreamPlayers.Get(streamID)
-	if streamPlayer == nil || streamPlayer.Player == nil {
-		return fmt.Errorf("there is no active player '%s'", streamID)
+	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamID)
+	if err != nil {
+		return err
 	}
-	return streamPlayer.Player.SetSpeed(ctx, speed)
+	return streamPlayer.SetSpeed(ctx, speed)
 }
 func (d *StreamD) StreamPlayerSetPause(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 	pause bool,
 ) error {
-	streamPlayer := d.StreamServer.StreamPlayers.Get(streamID)
-	if streamPlayer == nil || streamPlayer.Player == nil {
-		return fmt.Errorf("there is no active player '%s'", streamID)
+	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamID)
+	if err != nil {
+		return err
 	}
-	return streamPlayer.Player.SetPause(ctx, pause)
+	return streamPlayer.SetPause(ctx, pause)
 }
 func (d *StreamD) StreamPlayerStop(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 ) error {
-	streamPlayer := d.StreamServer.StreamPlayers.Get(streamID)
-	if streamPlayer == nil || streamPlayer.Player == nil {
-		return fmt.Errorf("there is no active player '%s'", streamID)
+	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamID)
+	if err != nil {
+		return err
 	}
-	return streamPlayer.Player.Stop(ctx)
+	return streamPlayer.Stop(ctx)
 }
 func (d *StreamD) StreamPlayerClose(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 ) error {
-	streamPlayer := d.StreamServer.StreamPlayers.Get(streamID)
-	if streamPlayer == nil || streamPlayer.Player == nil {
-		return fmt.Errorf("there is no active player '%s'", streamID)
+	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamID)
+	if err != nil {
+		return err
 	}
-	return streamPlayer.Player.Close(ctx)
+	return streamPlayer.Close(ctx)
 }
 
 func (d *StreamD) notifyAboutChange(

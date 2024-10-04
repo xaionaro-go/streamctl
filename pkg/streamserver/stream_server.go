@@ -5,14 +5,16 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 )
 
-type StreamServer = streamserver.StreamServer
-type PlatformsController = streamserver.PlatformsController
-type BrowserOpener = streamserver.BrowserOpener
+type StreamServer interface {
+	types.StreamServer[ActiveStreamForwarding]
+}
+type PlatformsController = types.PlatformsController
+type BrowserOpener = types.BrowserOpener
 
 func New(
 	cfg *types.Config,
-	platformsController streamserver.PlatformsController,
+	platformsController types.PlatformsController,
 	browserOpener BrowserOpener,
-) *StreamServer {
+) StreamServer {
 	return streamserver.New(cfg, platformsController, browserOpener)
 }

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"strconv"
-	"strings"
 	"time"
 
 	fyneapp "fyne.io/fyne/v2/app"
@@ -17,7 +16,6 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
 	"github.com/spf13/pflag"
 
-	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	ptypes "github.com/xaionaro-go/streamctl/pkg/player/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
@@ -71,7 +69,7 @@ func main() {
 	)
 	err := ss.Init(ctx)
 	assertNoError(ctx, err)
-	sp := streamplayer.New(NewStreamPlayerStreamServer(ss), m)
+	sp := streamplayer.New(streamserver.NewStreamPlayerStreamServer(ss), m)
 	p, err := sp.Create(ctx, api.StreamID(*streamID))
 	assertNoError(ctx, err)
 
@@ -173,47 +171,4 @@ func main() {
 	))
 	w.Show()
 	app.Run()
-}
-
-type StreamPlayerStreamServer struct {
-	StreamServer *streamserver.StreamServer
-}
-
-var _ streamplayer.StreamServer = (*StreamPlayerStreamServer)(nil)
-
-func NewStreamPlayerStreamServer(ss *streamserver.StreamServer) *StreamPlayerStreamServer {
-	return &StreamPlayerStreamServer{
-		StreamServer: ss,
-	}
-}
-
-func (s *StreamPlayerStreamServer) GetPortServers(
-	ctx context.Context,
-) ([]streamplayer.StreamPortServer, error) {
-	result := make([]streamplayer.StreamPortServer, 0, len(s.StreamServer.ServerHandlers))
-	for _, srv := range s.StreamServer.ServerHandlers {
-		result = append(result, streamplayer.StreamPortServer{
-			Addr: srv.ListenAddr(),
-			Type: srv.Type(),
-		})
-	}
-	return result, nil
-}
-
-func (s *StreamPlayerStreamServer) WaitPublisher(
-	ctx context.Context,
-	streamID api.StreamID,
-) (<-chan struct{}, error) {
-	streamIDParts := strings.Split(string(streamID), "/")
-	localAppName := string(streamID)
-	if len(streamIDParts) == 2 {
-		localAppName = streamIDParts[1]
-	}
-
-	ch := make(chan struct{})
-	observability.Go(ctx, func() {
-		s.StreamServer.RelayService.WaitPubsub(ctx, localAppName)
-		close(ch)
-	})
-	return ch, nil
 }

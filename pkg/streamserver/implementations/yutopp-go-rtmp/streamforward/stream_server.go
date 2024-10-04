@@ -4,12 +4,13 @@ import (
 	"context"
 	"io"
 
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	flvtag "github.com/yutopp/go-flv/tag"
 )
 
 type StreamServer interface {
-	WaitPubsub(ctx context.Context, appKey string) Pubsub
-	PubsubNames() []string
+	WaitPubsub(ctx context.Context, appKey types.AppKey) Pubsub
+	PubsubNames() types.AppKeys
 }
 
 type Sub interface {

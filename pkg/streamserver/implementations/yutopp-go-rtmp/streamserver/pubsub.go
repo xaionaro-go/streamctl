@@ -12,13 +12,14 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/yutopp-go-rtmp/streamforward"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 	flvtag "github.com/yutopp/go-flv/tag"
 )
 
 type Pubsub struct {
 	srv              *RelayService
-	name             string
+	name             types.AppKey
 	publisherHandler *Handler
 
 	pub *Pub
@@ -29,7 +30,7 @@ type Pubsub struct {
 	m xsync.Mutex
 }
 
-func NewPubsub(srv *RelayService, name string, publisherHandler *Handler) *Pubsub {
+func NewPubsub(srv *RelayService, name types.AppKey, publisherHandler *Handler) *Pubsub {
 	return &Pubsub{
 		publisherHandler: publisherHandler,
 		srv:              srv,
@@ -43,7 +44,7 @@ func (pb *Pubsub) PublisherHandler() *Handler {
 	return pb.publisherHandler
 }
 
-func (pb *Pubsub) Name() string {
+func (pb *Pubsub) Name() types.AppKey {
 	return pb.name
 }
 
@@ -235,15 +236,9 @@ func (p *Pub) Publish(flv *flvtag.FlvTag) error {
 		panic("unexpected")
 	}
 
-	flv = cloneView(flv)
 	for _, sub := range subs {
-		{
-			sub := sub
-			observability.Go(ctx, func() {
-				if !p.InitSub(sub) {
-					sub.Submit(ctx, cloneView(flv))
-				}
-			})
+		if !p.InitSub(sub) {
+			sub.Submit(ctx, cloneView(flv))
 		}
 	}
 	return nil

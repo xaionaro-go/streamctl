@@ -1,3 +1,6 @@
+// This implementation does not stream more than 280 minutes, because of
+// some bug with implementing the extended timestamp of RTMP.
+
 package streamserver
 
 import (
@@ -6,20 +9,25 @@ import (
 	"io"
 	"net"
 	"net/url"
+	"sort"
 	"time"
 
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	playertypes "github.com/xaionaro-go/streamctl/pkg/player/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/memoize"
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
+	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/yutopp-go-rtmp/streamforward"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
+	"github.com/xaionaro-go/streamctl/pkg/xcontext"
 	"github.com/xaionaro-go/streamctl/pkg/xlogger"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 	"github.com/xaionaro-go/typing/ordered"
@@ -70,39 +78,15 @@ func New(
 		StreamForwards:          streamforward.NewStreamForwards(),
 	}
 	s.StreamPlayers = streamplayer.New(
-		NewStreamPlayerStreamServer(s),
+		s,
 		player.NewManager(playertypes.OptionPathToMPV(cfg.VideoPlayer.MPV.Path)),
 	)
 	return s
 }
 
-type InitConfig struct {
-	DefaultStreamPlayerOptions streamplayer.Options
-}
-
-type InitOption interface {
-	apply(*InitConfig)
-}
-
-type InitOptions []InitOption
-
-func (s InitOptions) Config() InitConfig {
-	cfg := InitConfig{}
-	for _, opt := range s {
-		opt.apply(&cfg)
-	}
-	return cfg
-}
-
-type InitOptionDefaultStreamPlayerOptions streamplayer.Options
-
-func (opt InitOptionDefaultStreamPlayerOptions) apply(cfg *InitConfig) {
-	cfg.DefaultStreamPlayerOptions = (streamplayer.Options)(opt)
-}
-
 func (s *StreamServer) Init(
 	ctx context.Context,
-	opts ...InitOption,
+	opts ...types.InitOption,
 ) (_err error) {
 	logger.Debugf(ctx, "Init")
 	defer func() { logger.Debugf(ctx, "/Init: %v", _err) }()
@@ -115,9 +99,9 @@ func (s *StreamServer) Init(
 
 func (s *StreamServer) init(
 	ctx context.Context,
-	opts ...InitOption,
+	opts ...types.InitOption,
 ) (_err error) {
-	initCfg := InitOptions(opts).Config()
+	initCfg := types.InitOptions(opts).Config()
 
 	cfg := s.Config
 	logger.Debugf(ctx, "config == %#+v", *cfg)
@@ -160,7 +144,12 @@ func (s *StreamServer) init(
 	observability.Go(ctx, func() {
 		var opts setupStreamPlayersOptions
 		if initCfg.DefaultStreamPlayerOptions != nil {
-			opts = append(opts, setupStreamPlayersOptionDefaultStreamPlayerOptions(initCfg.DefaultStreamPlayerOptions))
+			opts = append(
+				opts,
+				setupStreamPlayersOptionDefaultStreamPlayerOptions(
+					initCfg.DefaultStreamPlayerOptions,
+				),
+			)
 		}
 		err := s.setupStreamPlayers(ctx, opts...)
 		if err != nil {
@@ -171,14 +160,113 @@ func (s *StreamServer) init(
 	return nil
 }
 
+type setupStreamPlayersConfig struct {
+	DefaultStreamPlayerOptions streamplayer.Options
+}
+
+type setupStreamPlayersOption interface {
+	apply(*setupStreamPlayersConfig)
+}
+
+type setupStreamPlayersOptions []setupStreamPlayersOption
+
+func (s setupStreamPlayersOptions) Config() setupStreamPlayersConfig {
+	cfg := setupStreamPlayersConfig{}
+	for _, opt := range s {
+		opt.apply(&cfg)
+	}
+	return cfg
+}
+
+type setupStreamPlayersOptionDefaultStreamPlayerOptions streamplayer.Options
+
+func (opt setupStreamPlayersOptionDefaultStreamPlayerOptions) apply(cfg *setupStreamPlayersConfig) {
+	cfg.DefaultStreamPlayerOptions = (streamplayer.Options)(opt)
+}
+func (s *StreamServer) setupStreamPlayers(
+	ctx context.Context,
+	opts ...setupStreamPlayersOption,
+) (_err error) {
+	defer func() { logger.Debugf(ctx, "setupStreamPlayers result: %v", _err) }()
+
+	setupCfg := setupStreamPlayersOptions(opts).Config()
+
+	var streamIDsToDelete []api.StreamID
+
+	curPlayers := map[api.StreamID]*streamplayer.StreamPlayerHandler{}
+	s.StreamPlayers.StreamPlayersLocker.Do(ctx, func() {
+		for _, player := range s.StreamPlayers.StreamPlayers {
+			streamCfg, ok := s.Config.Streams[types.StreamID(player.StreamID)]
+			if !ok || streamCfg.Player == nil || streamCfg.Player.Disabled {
+				streamIDsToDelete = append(streamIDsToDelete, player.StreamID)
+				continue
+			}
+			curPlayers[player.StreamID] = player
+		}
+	})
+
+	var result *multierror.Error
+
+	logger.Debugf(ctx, "streamIDsToDelete == %#+v", streamIDsToDelete)
+
+	for _, streamID := range streamIDsToDelete {
+		err := s.StreamPlayers.Remove(ctx, streamID)
+		if err != nil {
+			err = fmt.Errorf("unable to remove stream '%s': %w", streamID, err)
+			logger.Warnf(ctx, "%s", err)
+			result = multierror.Append(result, err)
+		} else {
+			logger.Infof(ctx, "stopped the player for stream '%s'", streamID)
+		}
+	}
+
+	for streamID, streamCfg := range s.Config.Streams {
+		playerCfg := streamCfg.Player
+		if playerCfg == nil || playerCfg.Disabled {
+			continue
+		}
+
+		if _, ok := curPlayers[streamID]; ok {
+			continue
+		}
+
+		ssOpts := playerCfg.StreamPlayback.Options()
+		if setupCfg.DefaultStreamPlayerOptions != nil {
+			ssOpts = append(ssOpts, setupCfg.DefaultStreamPlayerOptions...)
+		}
+		ssOpts = append(ssOpts, sptypes.OptionGetRestartChanFunc(func() <-chan struct{} {
+			pubSub := s.RelayService.GetPubsub(types.StreamID2LocalAppName(streamID))
+			if pubSub == nil {
+				return nil
+			}
+			return pubSub.PublisherHandler().ClosedChan()
+		}))
+		_, err := s.StreamPlayers.Create(
+			xcontext.DetachDone(ctx),
+			streamID,
+			ssOpts...,
+		)
+		if err != nil {
+			err = fmt.Errorf("unable to create a stream player for stream '%s': %w", streamID, err)
+			logger.Warnf(ctx, "%s", err)
+			result = multierror.Append(result, err)
+			continue
+		} else {
+			logger.Infof(ctx, "started a player for stream '%s'", streamID)
+		}
+	}
+
+	return result.ErrorOrNil()
+}
+
 func (s *StreamServer) WaitPubsub(
 	ctx context.Context,
-	appKey string,
+	appKey types.AppKey,
 ) streamforward.Pubsub {
 	return &pubsubAdapter{s.RelayService.WaitPubsub(ctx, appKey)}
 }
 
-func (s *StreamServer) PubsubNames() []string {
+func (s *StreamServer) PubsubNames() types.AppKeys {
 	return s.RelayService.PubsubNames()
 }
 
@@ -336,12 +424,7 @@ func (s *StreamServer) addIncomingStream(
 	return nil
 }
 
-type IncomingStream struct {
-	StreamID types.StreamID
-
-	NumBytesWrote uint64
-	NumBytesRead  uint64
-}
+type IncomingStream = types.IncomingStream
 
 func (s *StreamServer) ListIncomingStreams(
 	ctx context.Context,
@@ -379,15 +462,7 @@ func (s *StreamServer) removeIncomingStream(
 	return nil
 }
 
-type StreamForward struct {
-	StreamID         types.StreamID
-	DestinationID    types.DestinationID
-	Enabled          bool
-	Quirks           types.ForwardingQuirks
-	ActiveForwarding *streamforward.ActiveStreamForwarding
-	NumBytesWrote    uint64
-	NumBytesRead     uint64
-}
+type StreamForward = types.StreamForward[*streamforward.ActiveStreamForwarding]
 
 func (s *StreamServer) AddStreamForward(
 	ctx context.Context,
@@ -912,4 +987,174 @@ func (s *StreamServer) findStreamDestinationByID(
 		}
 	}
 	return types.StreamDestination{}, fmt.Errorf("unable to find a stream destination by StreamID '%s'", destinationID)
+}
+
+func (s *StreamServer) WaitPublisherChan(
+	ctx context.Context,
+	streamID types.StreamID,
+) (<-chan struct{}, error) {
+
+	ch := make(chan struct{})
+	observability.Go(ctx, func() {
+		s.RelayService.WaitPubsub(ctx, types.StreamID2LocalAppName(streamID))
+		close(ch)
+	})
+	return ch, nil
+}
+
+func (s *StreamServer) GetPortServers(
+	ctx context.Context,
+) ([]streamplayer.StreamPortServer, error) {
+	srvs := s.ListServers(ctx)
+
+	result := make([]streamplayer.StreamPortServer, 0, len(srvs))
+	for _, srv := range srvs {
+		result = append(result, streamplayer.StreamPortServer{
+			Addr: srv.ListenAddr(),
+			Type: srv.Type(),
+		})
+	}
+
+	return result, nil
+}
+
+func (s *StreamServer) GetStreamPlayer(
+	ctx context.Context,
+	streamID types.StreamID,
+) (*types.StreamPlayer, error) {
+	streamCfg, ok := s.Config.Streams[streamID]
+	if !ok {
+		return nil, fmt.Errorf("no stream '%s'", streamID)
+	}
+	playerCfg := streamCfg.Player
+	if playerCfg == nil {
+		return nil, fmt.Errorf("no stream player defined for '%s'", streamID)
+	}
+	return &api.StreamPlayer{
+		StreamID:             streamID,
+		PlayerType:           playerCfg.Player,
+		Disabled:             playerCfg.Disabled,
+		StreamPlaybackConfig: playerCfg.StreamPlayback,
+	}, nil
+}
+
+func (s *StreamServer) ListStreamPlayers(
+	ctx context.Context,
+) ([]types.StreamPlayer, error) {
+	var result []api.StreamPlayer
+	if s == nil {
+		return nil, fmt.Errorf("StreamServer == nil")
+	}
+	if s.Config == nil {
+		return nil, fmt.Errorf("s.Config == nil")
+	}
+	if s.Config.Streams == nil {
+		return nil, fmt.Errorf("s.Config.Streams == nil")
+	}
+	for streamID, streamCfg := range s.Config.Streams {
+		playerCfg := streamCfg.Player
+		if playerCfg == nil {
+			continue
+		}
+
+		result = append(result, api.StreamPlayer{
+			StreamID:             streamID,
+			PlayerType:           playerCfg.Player,
+			Disabled:             playerCfg.Disabled,
+			StreamPlaybackConfig: playerCfg.StreamPlayback,
+		})
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].StreamID < result[j].StreamID
+	})
+	return result, nil
+}
+
+func (s *StreamServer) AddStreamPlayer(
+	ctx context.Context,
+	streamID types.StreamID,
+	playerType player.Backend,
+	disabled bool,
+	streamPlaybackConfig sptypes.Config,
+	opts ...types.StreamPlayerOption,
+) error {
+	return s.setStreamPlayer(
+		ctx,
+		streamID,
+		playerType,
+		disabled,
+		streamPlaybackConfig,
+		opts...,
+	)
+}
+
+func (s *StreamServer) GetActiveStreamPlayer(
+	ctx context.Context,
+	streamID types.StreamID,
+) (player.Player, error) {
+	p := s.StreamPlayers.Get(streamID)
+	if p == nil {
+		return nil, fmt.Errorf("there is no player setup for '%s'", streamID)
+	}
+	return p.Player, nil
+}
+
+func (s *StreamServer) RemoveStreamPlayer(
+	ctx context.Context,
+	streamID types.StreamID,
+) error {
+	if _, ok := s.Config.Streams[streamID]; !ok {
+		return nil
+	}
+	s.Config.Streams[streamID].Player = nil
+	return s.setupStreamPlayers(ctx)
+}
+
+func (s *StreamServer) UpdateStreamPlayer(
+	ctx context.Context,
+	streamID types.StreamID,
+	playerType player.Backend,
+	disabled bool,
+	streamPlaybackConfig sptypes.Config,
+	opts ...types.StreamPlayerOption,
+) error {
+	return s.setStreamPlayer(
+		ctx,
+		streamID,
+		playerType,
+		disabled,
+		streamPlaybackConfig,
+		opts...,
+	)
+}
+
+func (s *StreamServer) setStreamPlayer(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+	playerType player.Backend,
+	disabled bool,
+	streamPlaybackConfig sptypes.Config,
+	opts ...types.StreamPlayerOption,
+) (_err error) {
+	defer func() { logger.Debugf(ctx, "setStreamPlayer result: %v", _err) }()
+
+	cfg := types.StreamPlayerOptions(opts).Config()
+
+	s.Config.Streams[streamID].Player = &types.PlayerConfig{
+		Player:         playerType,
+		Disabled:       disabled,
+		StreamPlayback: streamPlaybackConfig,
+	}
+
+	{
+		var opts setupStreamPlayersOptions
+		if cfg.DefaultStreamPlayerOptions != nil {
+			opts = append(opts, setupStreamPlayersOptionDefaultStreamPlayerOptions(cfg.DefaultStreamPlayerOptions))
+		}
+		if err := s.setupStreamPlayers(ctx, opts...); err != nil {
+			return fmt.Errorf("unable to setup the stream players: %w", err)
+		}
+	}
+
+	return nil
 }

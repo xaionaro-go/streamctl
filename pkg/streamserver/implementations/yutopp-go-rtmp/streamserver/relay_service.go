@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
@@ -14,18 +15,18 @@ import (
 type RelayService struct {
 	m xsync.Mutex
 
-	streams        map[string]*Pubsub
+	streams        map[types.AppKey]*Pubsub
 	streamsChanged chan struct{}
 }
 
 func NewRelayService() *RelayService {
 	return &RelayService{
-		streams:        make(map[string]*Pubsub),
+		streams:        make(map[types.AppKey]*Pubsub),
 		streamsChanged: make(chan struct{}),
 	}
 }
 
-func (s *RelayService) NewPubsub(key string, publisherHandler *Handler) (*Pubsub, error) {
+func (s *RelayService) NewPubsub(key types.AppKey, publisherHandler *Handler) (*Pubsub, error) {
 	ctx := context.TODO()
 	return xsync.DoR2(ctx, &s.m, func() (*Pubsub, error) {
 		logger.Debugf(ctx, "NewPubsub(%s)", key)
@@ -49,14 +50,14 @@ func (s *RelayService) NewPubsub(key string, publisherHandler *Handler) (*Pubsub
 	})
 }
 
-func (s *RelayService) GetPubsub(key string) *Pubsub {
+func (s *RelayService) GetPubsub(key types.AppKey) *Pubsub {
 	ctx := context.TODO()
 	return xsync.DoR1(ctx, &s.m, func() *Pubsub {
 		return s.streams[key]
 	})
 }
 
-func (s *RelayService) WaitPubsub(ctx context.Context, key string) *Pubsub {
+func (s *RelayService) WaitPubsub(ctx context.Context, key types.AppKey) *Pubsub {
 	for {
 		ctx := context.TODO()
 		pubSub, waitCh := xsync.DoR2(ctx, &s.m, func() (*Pubsub, chan struct{}) {
@@ -78,10 +79,10 @@ func (s *RelayService) WaitPubsub(ctx context.Context, key string) *Pubsub {
 	}
 }
 
-func (s *RelayService) Pubsubs() map[string]*Pubsub {
+func (s *RelayService) Pubsubs() map[types.AppKey]*Pubsub {
 	ctx := context.TODO()
-	return xsync.DoR1(ctx, &s.m, func() map[string]*Pubsub {
-		m := make(map[string]*Pubsub, len(s.streams))
+	return xsync.DoR1(ctx, &s.m, func() map[types.AppKey]*Pubsub {
+		m := make(map[types.AppKey]*Pubsub, len(s.streams))
 		for k, v := range s.streams {
 			m[k] = v
 		}
@@ -89,24 +90,26 @@ func (s *RelayService) Pubsubs() map[string]*Pubsub {
 	})
 }
 
-func (s *RelayService) PubsubNames() []string {
+func (s *RelayService) PubsubNames() []types.AppKey {
 	ctx := context.TODO()
-	return xsync.DoR1(ctx, &s.m, func() []string {
-		result := make([]string, 0, len(s.streams))
+	return xsync.DoR1(ctx, &s.m, func() []types.AppKey {
+		result := make([]types.AppKey, 0, len(s.streams))
 		for k := range s.streams {
 			result = append(result, k)
 		}
-		sort.Strings(result)
+		sort.Slice(result, func(i, j int) bool {
+			return result[i] < result[j]
+		})
 		return result
 	})
 }
 
-func (s *RelayService) RemovePubsub(key string) error {
+func (s *RelayService) RemovePubsub(key types.AppKey) error {
 	ctx := context.TODO()
 	return xsync.DoA1R1(ctx, &s.m, s.removePubsub, key)
 }
 
-func (s *RelayService) removePubsub(key string) error {
+func (s *RelayService) removePubsub(key types.AppKey) error {
 	logger.Default().Debugf("removePubsub(%s)", key)
 
 	if _, ok := s.streams[key]; !ok {

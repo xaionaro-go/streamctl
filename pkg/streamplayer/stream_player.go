@@ -15,23 +15,23 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/player/types"
-	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
+	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 type StreamPortServer struct {
 	Addr string
-	Type api.StreamServerType
+	Type streamtypes.ServerType
 }
 
 type StreamServer interface {
 	GetPortServers(context.Context) ([]StreamPortServer, error)
-	WaitPublisher(context.Context, api.StreamID) (<-chan struct{}, error)
+	WaitPublisherChan(context.Context, streamtypes.StreamID) (<-chan struct{}, error)
 }
 
 type StreamPlayers struct {
 	StreamPlayersLocker xsync.RWMutex
-	StreamPlayers       map[api.StreamID]*StreamPlayer
+	StreamPlayers       map[streamtypes.StreamID]*StreamPlayerHandler
 
 	StreamServer   StreamServer
 	PlayerManager  *player.Manager
@@ -52,7 +52,7 @@ func New(
 	defaultOptions ...Option,
 ) *StreamPlayers {
 	return &StreamPlayers{
-		StreamPlayers:  map[api.StreamID]*StreamPlayer{},
+		StreamPlayers:  map[streamtypes.StreamID]*StreamPlayerHandler{},
 		StreamServer:   streamServer,
 		PlayerManager:  playerManager,
 		DefaultOptions: defaultOptions,
@@ -61,19 +61,22 @@ func New(
 
 type StreamPlayer struct {
 	PlayerLocker xsync.Mutex
-	Parent       *StreamPlayers
 	Player       player.Player
-	StreamID     api.StreamID
+	StreamID     streamtypes.StreamID
+	Config       Config
+}
 
+type StreamPlayerHandler struct {
+	StreamPlayer
+	Parent *StreamPlayers
 	Cancel context.CancelFunc
-	Config Config
 }
 
 func (sp *StreamPlayers) Create(
 	ctx context.Context,
-	streamID api.StreamID,
+	streamID streamtypes.StreamID,
 	opts ...Option,
-) (_ret *StreamPlayer, _err error) {
+) (_ret *StreamPlayerHandler, _err error) {
 	logger.Debugf(ctx, "StreamPlayers.Create(ctx, '%s', %#+v)", streamID, opts)
 	defer func() {
 		logger.Debugf(ctx, "/StreamPlayers.Create(ctx, '%s', %#+v): (%v, %v)", streamID, opts, _ret, _err)
@@ -84,11 +87,13 @@ func (sp *StreamPlayers) Create(
 	resultingOpts = append(resultingOpts, sp.DefaultOptions...)
 	resultingOpts = append(resultingOpts, opts...)
 
-	p := &StreamPlayer{
-		Parent:   sp,
-		Cancel:   cancel,
-		Config:   resultingOpts.Config(),
-		StreamID: streamID,
+	p := &StreamPlayerHandler{
+		Parent: sp,
+		Cancel: cancel,
+		StreamPlayer: StreamPlayer{
+			Config:   resultingOpts.Config(),
+			StreamID: streamID,
+		},
 	}
 
 	if p.Config.CatchupMaxSpeedFactor <= 1 {
@@ -103,7 +108,7 @@ func (sp *StreamPlayers) Create(
 		return nil, fmt.Errorf("unable to start the player: %w", err)
 	}
 
-	return xsync.DoR2(ctx, &sp.StreamPlayersLocker, func() (*StreamPlayer, error) {
+	return xsync.DoR2(ctx, &sp.StreamPlayersLocker, func() (*StreamPlayerHandler, error) {
 		sp.StreamPlayers[streamID] = p
 		return p, nil
 	})
@@ -111,7 +116,7 @@ func (sp *StreamPlayers) Create(
 
 func (sp *StreamPlayers) Remove(
 	ctx context.Context,
-	streamID api.StreamID,
+	streamID streamtypes.StreamID,
 ) error {
 	logger.Debugf(ctx, "StreamPlayers.Remove(ctx, '%s')", streamID)
 	defer logger.Debugf(ctx, "/StreamPlayers.Remove(ctx, '%s')", streamID)
@@ -126,17 +131,17 @@ func (sp *StreamPlayers) Remove(
 	})
 }
 
-func (sp *StreamPlayers) Get(streamID api.StreamID) *StreamPlayer {
+func (sp *StreamPlayers) Get(streamID streamtypes.StreamID) *StreamPlayerHandler {
 	ctx := context.TODO()
-	return xsync.DoR1(ctx, &sp.StreamPlayersLocker, func() *StreamPlayer {
+	return xsync.DoR1(ctx, &sp.StreamPlayersLocker, func() *StreamPlayerHandler {
 		return sp.StreamPlayers[streamID]
 	})
 }
 
-func (sp *StreamPlayers) GetAll() map[api.StreamID]*StreamPlayer {
+func (sp *StreamPlayers) GetAll() map[streamtypes.StreamID]*StreamPlayerHandler {
 	ctx := context.TODO()
-	return xsync.DoR1(ctx, &sp.StreamPlayersLocker, func() map[api.StreamID]*StreamPlayer {
-		r := map[api.StreamID]*StreamPlayer{}
+	return xsync.DoR1(ctx, &sp.StreamPlayersLocker, func() map[streamtypes.StreamID]*StreamPlayerHandler {
+		r := map[streamtypes.StreamID]*StreamPlayerHandler{}
 		for k, v := range sp.StreamPlayers {
 			r[k] = v
 		}
@@ -148,18 +153,18 @@ const (
 	processTitlePrefix = "streampanel-player-"
 )
 
-func StreamID2Title(streamID api.StreamID) string {
+func StreamID2Title(streamID streamtypes.StreamID) string {
 	return fmt.Sprintf("%s%s", processTitlePrefix, streamID)
 }
 
-func Title2StreamID(title string) api.StreamID {
+func Title2StreamID(title string) streamtypes.StreamID {
 	if !strings.HasPrefix(title, processTitlePrefix) {
 		return ""
 	}
-	return api.StreamID(title[len(processTitlePrefix):])
+	return streamtypes.StreamID(title[len(processTitlePrefix):])
 }
 
-func (p *StreamPlayer) startU(ctx context.Context) error {
+func (p *StreamPlayerHandler) startU(ctx context.Context) error {
 	logger.Debugf(ctx, "StreamPlayers.startU(ctx): '%s'", p.StreamID)
 	defer logger.Debugf(ctx, "/StreamPlayers.startU(ctx): '%s'", p.StreamID)
 
@@ -183,7 +188,7 @@ func (p *StreamPlayer) startU(ctx context.Context) error {
 	return nil
 }
 
-func (p *StreamPlayer) stopU(ctx context.Context) error {
+func (p *StreamPlayerHandler) stopU(ctx context.Context) error {
 	logger.Debugf(ctx, "StreamPlayers.stopU(ctx): '%s'", p.StreamID)
 	defer logger.Debugf(ctx, "/StreamPlayers.stopU(ctx): '%s'", p.StreamID)
 
@@ -195,7 +200,7 @@ func (p *StreamPlayer) stopU(ctx context.Context) error {
 	return nil
 }
 
-func (p *StreamPlayer) restartU(ctx context.Context) error {
+func (p *StreamPlayerHandler) restartU(ctx context.Context) error {
 	logger.Debugf(ctx, "StreamPlayers.restartU(ctx): '%s'", p.StreamID)
 	defer logger.Debugf(ctx, "/StreamPlayers.restartU(ctx): '%s'", p.StreamID)
 
@@ -208,7 +213,7 @@ func (p *StreamPlayer) restartU(ctx context.Context) error {
 	return nil
 }
 
-func (p *StreamPlayer) getURL(ctx context.Context) (*url.URL, error) {
+func (p *StreamPlayerHandler) getURL(ctx context.Context) (*url.URL, error) {
 	if p.Config.OverrideURL != "" {
 		logger.Debugf(ctx, "override URL is '%s'", p.Config.OverrideURL)
 		return p.getOverriddenURL(ctx)
@@ -218,11 +223,11 @@ func (p *StreamPlayer) getURL(ctx context.Context) (*url.URL, error) {
 	}
 }
 
-func (p *StreamPlayer) getOverriddenURL(context.Context) (*url.URL, error) {
+func (p *StreamPlayerHandler) getOverriddenURL(context.Context) (*url.URL, error) {
 	return url.Parse(p.Config.OverrideURL)
 }
 
-func (p *StreamPlayer) getInternalURL(ctx context.Context) (*url.URL, error) {
+func (p *StreamPlayerHandler) getInternalURL(ctx context.Context) (*url.URL, error) {
 	portSrvs, err := p.Parent.StreamServer.GetPortServers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get the list of stream server ports: %w", err)
@@ -239,7 +244,7 @@ func (p *StreamPlayer) getInternalURL(ctx context.Context) (*url.URL, error) {
 	return &u, nil
 }
 
-func (p *StreamPlayer) openStream(ctx context.Context) (_err error) {
+func (p *StreamPlayerHandler) openStream(ctx context.Context) (_err error) {
 	logger.Debugf(ctx, "openStream")
 	defer func() { logger.Debugf(ctx, "/openStream: %v", _err) }()
 
@@ -273,13 +278,13 @@ func (p *StreamPlayer) openStream(ctx context.Context) (_err error) {
 	return nil
 }
 
-func (p *StreamPlayer) Resetup(opts ...Option) {
+func (p *StreamPlayerHandler) Resetup(opts ...Option) {
 	for _, opt := range opts {
 		opt.Apply(&p.Config)
 	}
 }
 
-func (p *StreamPlayer) notifyStart(ctx context.Context) {
+func (p *StreamPlayerHandler) notifyStart(ctx context.Context) {
 	logger.Debugf(ctx, "notifyStart")
 	defer logger.Debugf(ctx, "/notifyStart")
 
@@ -297,7 +302,7 @@ func (p *StreamPlayer) notifyStart(ctx context.Context) {
 	}
 }
 
-func (p *StreamPlayer) controllerLoop(
+func (p *StreamPlayerHandler) controllerLoop(
 	ctx context.Context,
 	cancelPlayerInstance context.CancelFunc,
 ) {
@@ -334,7 +339,7 @@ func (p *StreamPlayer) controllerLoop(
 				defer waitPublisherCancel()
 
 				var err error
-				ch, err = p.Parent.StreamServer.WaitPublisher(waitPublisherCtx, p.StreamID)
+				ch, err = p.Parent.StreamServer.WaitPublisherChan(waitPublisherCtx, p.StreamID)
 				logger.Debugf(ctx, "got a waiter from WaitPublisher for '%s'; %v", p.StreamID, err)
 				errmon.ObserveErrorCtx(ctx, err)
 
@@ -647,7 +652,7 @@ func (e ErrNilPlayer) Error() string {
 	return "p.Player is nil"
 }
 
-func (p *StreamPlayer) withPlayer(
+func (p *StreamPlayerHandler) withPlayer(
 	ctx context.Context,
 	fn func(context.Context, types.Player),
 ) error {
@@ -660,7 +665,7 @@ func (p *StreamPlayer) withPlayer(
 	})
 }
 
-func (p *StreamPlayer) Close() error {
+func (p *StreamPlayerHandler) Close() error {
 	ctx := context.TODO()
 	return xsync.DoR1(ctx, &p.PlayerLocker, func() error {
 		var err *multierror.Error

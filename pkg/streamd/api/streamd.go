@@ -180,12 +180,7 @@ type StreamD interface {
 	ListTimers(ctx context.Context) ([]Timer, error)
 }
 
-type StreamPlayer struct {
-	StreamID             streamtypes.StreamID
-	PlayerType           player.Backend
-	Disabled             bool
-	StreamPlaybackConfig sptypes.Config
-}
+type StreamPlayer = sstypes.StreamPlayer
 
 type BackendDataOBS struct{}
 

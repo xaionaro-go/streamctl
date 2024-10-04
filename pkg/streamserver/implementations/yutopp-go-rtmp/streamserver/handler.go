@@ -11,6 +11,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/pkg/errors"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 	flvtag "github.com/yutopp/go-flv/tag"
 	"github.com/yutopp/go-rtmp"
@@ -77,7 +78,7 @@ func (h *Handler) OnPublish(_ *rtmp.StreamContext, timestamp uint32, cmd *rtmpms
 		return errors.New("PublishingName is empty")
 	}
 
-	pubsub, err := h.relayService.NewPubsub(cmd.PublishingName, h)
+	pubsub, err := h.relayService.NewPubsub(types.AppKey(cmd.PublishingName), h)
 	if err != nil {
 		return errors.Wrap(err, "Failed to create pubsub")
 	}
@@ -98,7 +99,7 @@ func (h *Handler) OnPlay(rtmpctx *rtmp.StreamContext, timestamp uint32, cmd *rtm
 		return errors.New("Cannot play on this stream")
 	}
 
-	pubsub := h.relayService.GetPubsub(cmd.StreamName)
+	pubsub := h.relayService.GetPubsub(types.AppKey(cmd.StreamName))
 	if pubsub == nil {
 		return fmt.Errorf("stream '%s' is not found", cmd.StreamName)
 	}

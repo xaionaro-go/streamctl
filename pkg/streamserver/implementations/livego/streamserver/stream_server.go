@@ -28,7 +28,11 @@ type StreamServer struct {
 	ActiveStreamForwardings map[types.DestinationID]*ActiveStreamForwarding
 }
 
-func New(cfg *types.Config) *StreamServer {
+func New(
+	cfg *types.Config,
+	platformsController types.PlatformsController,
+	browserOpener types.BrowserOpener,
+) *StreamServer {
 	return &StreamServer{
 		Config:    cfg,
 		StreamIDs: map[types.StreamID]struct{}{},
@@ -314,20 +318,15 @@ func (s *StreamServer) removeIncomingStream(
 	return nil
 }
 
-type StreamForward struct {
-	StreamID      types.StreamID
-	DestinationID types.DestinationID
-	Enabled       bool
-	NumBytesWrote uint64
-	NumBytesRead  uint64
-}
+type StreamForward = types.StreamForward[*ActiveStreamForwarding]
 
 func (s *StreamServer) AddStreamForward(
 	ctx context.Context,
 	streamID types.StreamID,
 	destinationID types.DestinationID,
 	enabled bool,
-) error {
+	quirks types.ForwardingQuirks,
+) (*types.StreamForward[*ActiveStreamForwarding], error) {
 	return xsync.DoR1(ctx, &s.Mutex, func() error {
 		streamConfig := s.Config.Streams[streamID]
 		if streamConfig.Forwardings == nil {
@@ -381,12 +380,23 @@ func (s *StreamServer) addStreamForward(
 	return nil
 }
 
+func (a *StreamServer) PubsubNames() []string {
+
+}
+
+func (a *StreamServer) WaitPublisherChan(
+	ctx context.Context,
+	streamID types.StreamID,
+) (<-chan struct{}, error) {
+}
+
 func (s *StreamServer) UpdateStreamForward(
 	ctx context.Context,
 	streamID types.StreamID,
 	destinationID types.DestinationID,
 	enabled bool,
-) error {
+	quirks types.ForwardingQuirks,
+) (*types.StreamForward[*ActiveStreamForwarding], error) {
 	return xsync.DoR1(ctx, &s.Mutex, func() error {
 		streamConfig := s.Config.Streams[streamID]
 		fwdCfg, ok := streamConfig.Forwardings[destinationID]

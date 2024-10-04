@@ -126,7 +126,7 @@ func (fwd *ActiveStreamForwarding) Stop() error {
 	return fwd.Close()
 }
 
-func (fwd *ActiveStreamForwarding) getAppNameAndKey() (string, string, string) {
+func (fwd *ActiveStreamForwarding) getAppNameAndKey() (types.AppKey, string, string) {
 	remoteAppName := "live"
 	pathParts := strings.SplitN(fwd.URL.Path, "/", -2)
 	apiKey := pathParts[len(pathParts)-1]
@@ -140,7 +140,7 @@ func (fwd *ActiveStreamForwarding) getAppNameAndKey() (string, string, string) {
 		localAppName = streamIDParts[1]
 	}
 
-	return localAppName, remoteAppName, apiKey
+	return types.AppKey(localAppName), remoteAppName, apiKey
 }
 
 func (fwd *ActiveStreamForwarding) WaitForPublisher(
@@ -162,7 +162,7 @@ func (fwd *ActiveStreamForwarding) WaitForPublisher(
 		return nil, fmt.Errorf(
 			"unable to find stream ID '%s', available stream IDs: %s",
 			fwd.StreamID,
-			strings.Join(fwd.StreamServer.PubsubNames(), ", "),
+			strings.Join(fwd.StreamServer.PubsubNames().Strings(), ", "),
 		)
 	}
 
