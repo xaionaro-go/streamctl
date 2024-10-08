@@ -9,8 +9,10 @@ import (
 )
 
 type StreamServer interface {
-	WaitPubsub(ctx context.Context, appKey types.AppKey) Pubsub
-	PubsubNames() types.AppKeys
+	types.WithConfiger
+	types.WaitPublisherChaner
+	types.PubsubNameser
+	types.GetPortServerser
 }
 
 type Sub interface {

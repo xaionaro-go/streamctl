@@ -9,6 +9,10 @@ replace github.com/goccy/go-yaml v1.11.3 => github.com/yoelsusanto/go-yaml v0.0.
 
 replace github.com/yutopp/go-rtmp v0.0.7 => ../go-rtmp/
 
+replace github.com/xaionaro-go/mediamtx v0.0.0-20241007163135-aa6b3d02fd68 => ../mediamtx/
+
+replace code.cloudfoundry.org/bytefmt => github.com/cloudfoundry/bytefmt v0.0.0-20211005130812-5bb3c17173e5
+
 replace github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20240826003505-317c16ed8b69 => ../obs-grpc-proxy/
 
 replace github.com/andreykaipov/goobs v1.4.1 => ../goobs/
@@ -29,14 +33,22 @@ require (
 	cloud.google.com/go/auth v0.8.1 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.3 // indirect
 	cloud.google.com/go/compute/metadata v0.5.0 // indirect
+	code.cloudfoundry.org/bytefmt v0.0.0 // indirect
 	dario.cat/mergo v1.0.0 // indirect
 	fyne.io/systray v1.11.0 // indirect
 	github.com/BurntSushi/toml v1.4.0 // indirect
 	github.com/Jorropo/jsync v1.0.1 // indirect
+	github.com/MicahParks/jwkset v0.5.20 // indirect
+	github.com/MicahParks/keyfunc/v3 v3.3.5 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/ProtonMail/go-crypto v1.0.0 // indirect
+	github.com/abema/go-mp4 v1.2.0 // indirect
+	github.com/asticode/go-astits v1.13.0 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/bluenviron/gohlslib/v2 v2.0.0-20241007134735-ed88408cd4de // indirect
+	github.com/bluenviron/gortsplib/v4 v4.10.7-0.20241007135843-2ca0bffa20a2 // indirect
+	github.com/bluenviron/mediacommon v1.12.5-0.20241007134151-8883ba897cfc // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cloudflare/circl v1.3.7 // indirect
@@ -75,6 +87,7 @@ require (
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt/v4 v4.0.0 // indirect
+	github.com/golang-jwt/jwt/v5 v5.2.1 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/google/btree v1.1.2 // indirect
 	github.com/google/gopacket v1.1.19 // indirect
@@ -82,6 +95,7 @@ require (
 	github.com/google/s2a-go v0.1.8 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.2 // indirect
 	github.com/googleapis/gax-go/v2 v2.13.0 // indirect
+	github.com/gookit/color v1.5.4 // indirect
 	github.com/gopherjs/gopherjs v1.17.2 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
@@ -89,6 +103,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.5 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/hashicorp/logutils v1.0.0 // indirect
+	github.com/huandu/go-tls v0.0.0-20200109070953-6f75fb441850 // indirect
 	github.com/huin/goupnp v1.3.0 // indirect
 	github.com/iguanesolutions/go-systemd/v5 v5.1.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
@@ -105,6 +120,7 @@ require (
 	github.com/jeandeaual/go-locale v0.0.0-20240223122105-ce5225dcaa49 // indirect
 	github.com/jezek/xgb v1.1.0 // indirect
 	github.com/jsummers/gobmp v0.0.0-20230614200233-a9de23ed2e25 // indirect
+	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
 	github.com/klauspost/compress v1.17.7 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.7 // indirect
@@ -126,6 +142,7 @@ require (
 	github.com/lxn/win v0.0.0-20210218163916-a377121e959e // indirect
 	github.com/magiconair/properties v1.8.5 // indirect
 	github.com/marten-seemann/tcp v0.0.0-20210406111302-dfbc87cc63fd // indirect
+	github.com/matthewhartstonge/argon2 v1.0.1 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/miekg/dns v1.1.59 // indirect
@@ -146,6 +163,7 @@ require (
 	github.com/multiformats/go-varint v0.0.7 // indirect
 	github.com/nicksnyder/go-i18n/v2 v2.4.0 // indirect
 	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d // indirect
+	github.com/onsi/ginkgo v1.16.5 // indirect
 	github.com/onsi/ginkgo/v2 v2.15.0 // indirect
 	github.com/opencontainers/runtime-spec v1.2.0 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
@@ -154,7 +172,7 @@ require (
 	github.com/pelletier/go-toml v1.9.3 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
 	github.com/pion/rtcp v1.2.14 // indirect
-	github.com/pion/rtp v1.8.6 // indirect
+	github.com/pion/rtp v1.8.9 // indirect
 	github.com/pion/sdp/v3 v3.0.9 // indirect
 	github.com/pjbgf/sha1cd v0.3.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
@@ -185,7 +203,9 @@ require (
 	github.com/vishvananda/netlink v1.1.1-0.20211118161826-650dca95af54 // indirect
 	github.com/vishvananda/netns v0.0.4 // indirect
 	github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1 // indirect
+	github.com/xaionaro-go/spinlock v0.0.0-20200518175509-30e6d1ce68a1 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
+	github.com/xo/terminfo v0.0.0-20210125001918-ca9a967f8778 // indirect
 	github.com/yuin/goldmark v1.7.1 // indirect
 	github.com/yutopp/go-amf0 v0.1.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
@@ -203,8 +223,9 @@ require (
 	golang.org/x/mobile v0.0.0-20240404231514-09dbf07665ed // indirect
 	golang.org/x/mod v0.18.0 // indirect
 	golang.org/x/sync v0.8.0 // indirect
-	golang.org/x/sys v0.22.0 // indirect
-	golang.org/x/text v0.16.0 // indirect
+	golang.org/x/sys v0.26.0 // indirect
+	golang.org/x/term v0.25.0 // indirect
+	golang.org/x/text v0.19.0 // indirect
 	golang.org/x/time v0.6.0 // indirect
 	golang.org/x/tools v0.22.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
@@ -257,7 +278,9 @@ require (
 	github.com/spf13/viper v1.8.1
 	github.com/stretchr/testify v1.9.0
 	github.com/xaionaro-go/datacounter v1.0.4
+	github.com/xaionaro-go/gorex v0.0.0-20200314172213-23bed04bc3e3
 	github.com/xaionaro-go/lockmap v0.0.0-20240901172806-e17aea364748
+	github.com/xaionaro-go/mediamtx v0.0.0-20241007163135-aa6b3d02fd68
 	github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20240826003505-317c16ed8b69
 	github.com/xaionaro-go/timeapiio v0.0.0-20240915203246-b907cf699af3
 	github.com/xaionaro-go/typing v0.0.0-20221123235249-2229101d38ba
@@ -265,8 +288,8 @@ require (
 	github.com/yl2chen/cidranger v1.0.2
 	github.com/yutopp/go-flv v0.3.1
 	github.com/yutopp/go-rtmp v0.0.7
-	golang.org/x/crypto v0.25.0
-	golang.org/x/net v0.27.0
+	golang.org/x/crypto v0.28.0
+	golang.org/x/net v0.30.0
 	google.golang.org/grpc v1.65.0
 	google.golang.org/protobuf v1.34.2
 	gopkg.in/yaml.v2 v2.4.0

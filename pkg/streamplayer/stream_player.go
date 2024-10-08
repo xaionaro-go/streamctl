@@ -24,9 +24,23 @@ type StreamPortServer struct {
 	Type streamtypes.ServerType
 }
 
-type StreamServer interface {
+type Publisher interface {
+}
+
+type WaitPublisherChaner interface {
+	WaitPublisherChan(
+		ctx context.Context,
+		streamID streamtypes.StreamID,
+	) (<-chan Publisher, error)
+}
+
+type GetPortServerser interface {
 	GetPortServers(context.Context) ([]StreamPortServer, error)
-	WaitPublisherChan(context.Context, streamtypes.StreamID) (<-chan struct{}, error)
+}
+
+type StreamServer interface {
+	WaitPublisherChaner
+	GetPortServerser
 }
 
 type StreamPlayers struct {
@@ -328,8 +342,8 @@ func (p *StreamPlayerHandler) controllerLoop(
 
 	// wait for video to start:
 	{
-		var ch <-chan struct{}
-		_ch := make(chan struct{})
+		var ch <-chan Publisher
+		_ch := make(chan Publisher)
 		close(_ch)
 		ch = _ch
 

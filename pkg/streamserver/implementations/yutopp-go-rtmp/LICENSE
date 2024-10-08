@@ -26,8 +26,7 @@ DEALINGS IN THE SOFTWARE.
 
 A remark by Dmitrii Okunev:
 
-The initial code of this package (package `streamserver`) except for
-files `stream_player.go`, `stream_server.go` and `stream_forward.go` was copied from repository
+The initial code of this package was copied from repository
 https://github.com/yutopp/go-rtmp of revision 553a888b1af61bc7274aab56e902c1368e26a253.
 
 The content of the LICENSE file is attached above. I had to modify

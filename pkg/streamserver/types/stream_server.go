@@ -11,8 +11,17 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
 
+type PubsubNameser interface {
+	PubsubNames() AppKeys
+}
+
+type Publisher = streamplayer.Publisher
+type WaitPublisherChaner = streamplayer.WaitPublisherChaner
+type GetPortServerser = streamplayer.GetPortServerser
+
 type StreamServer[AF any] interface {
 	streamplayer.StreamServer
+	PubsubNameser
 
 	Init(
 		ctx context.Context,
@@ -108,13 +117,6 @@ type StreamServer[AF any] interface {
 		ctx context.Context,
 		streamID StreamID,
 	) (player.Player, error)
-
-	WaitPublisherChan(
-		ctx context.Context,
-		streamID StreamID,
-	) (<-chan struct{}, error)
-
-	PubsubNames() AppKeys
 
 	ListServers(ctx context.Context) []PortServer
 }

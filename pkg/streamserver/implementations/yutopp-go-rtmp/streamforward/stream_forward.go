@@ -10,11 +10,10 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
-	"github.com/xaionaro-go/lockmap"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
+	yutoppgortmp "github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/yutopp-go-rtmp"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/xlogger"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
@@ -27,24 +26,15 @@ const (
 	chunkSize = 128
 )
 
-type StreamForwards struct {
-	DestinationStreamingLocker *lockmap.LockMap
-}
-
-func NewStreamForwards() *StreamForwards {
-	return &StreamForwards{
-		DestinationStreamingLocker: lockmap.NewLockMap(),
-	}
-}
-
 type Unlocker interface {
 	Unlock()
 }
 
+type StreamForward = types.StreamForward[*ActiveStreamForwarding]
+
 type ActiveStreamForwarding struct {
 	*StreamForwards
 	Locker        xsync.Mutex
-	StreamServer  StreamServer
 	StreamID      types.StreamID
 	DestinationID types.DestinationID
 	URL           *url.URL
@@ -60,7 +50,6 @@ type ActiveStreamForwarding struct {
 
 func (fwds *StreamForwards) NewActiveStreamForward(
 	ctx context.Context,
-	s StreamServer,
 	streamID types.StreamID,
 	dstID types.DestinationID,
 	urlString string,
@@ -77,7 +66,6 @@ func (fwds *StreamForwards) NewActiveStreamForward(
 	}
 	fwd := &ActiveStreamForwarding{
 		StreamForwards: fwds,
-		StreamServer:   s,
 		StreamID:       streamID,
 		DestinationID:  dstID,
 		URL:            urlParsed,
@@ -145,32 +133,21 @@ func (fwd *ActiveStreamForwarding) getAppNameAndKey() (types.AppKey, string, str
 
 func (fwd *ActiveStreamForwarding) WaitForPublisher(
 	ctx context.Context,
-) (Pubsub, error) {
-	localAppName, _, apiKey := fwd.getAppNameAndKey()
-
-	ctx = belt.WithField(belt.WithField(ctx, "appNameLocal", localAppName), "appNameRemote", apiKey)
-
+) (types.Publisher, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
 	}
 	logger.Debugf(ctx, "wait for stream '%s'", fwd.StreamID)
-	pubSub := fwd.StreamServer.WaitPubsub(ctx, localAppName)
-	logger.Debugf(ctx, "wait for stream '%s' result: %#+v", fwd.StreamID, pubSub)
-	if pubSub == nil {
-		return nil, fmt.Errorf(
-			"unable to find stream ID '%s', available stream IDs: %s",
-			fwd.StreamID,
-			strings.Join(fwd.StreamServer.PubsubNames().Strings(), ", "),
-		)
+	ch, err := fwd.StreamServer.WaitPublisherChan(ctx, fwd.StreamID)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get the publisher wait chan: %w", err)
 	}
-
-	logger.Debugf(ctx, "checking if we need to pause")
+	logger.Debugf(ctx, "wait for stream '%s' result: %#+v", fwd.StreamID, ch)
 	fwd.PauseFunc(ctx, fwd)
 	logger.Debugf(ctx, "no pauses or pauses ended")
-
-	return pubSub, nil
+	return <-ch, nil
 }
 
 func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
@@ -187,7 +164,7 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 			WithField("error_event_exception_stack_trace", string(debug.Stack())).Errorf("%v", _ret)
 	}()
 
-	pubSub, err := fwd.WaitForPublisher(ctx)
+	publisher, err := fwd.WaitForPublisher(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to get publisher: %w", err)
 	}
@@ -298,88 +275,12 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 		}
 
 		logger.Debugf(ctx, "starting publishing to '%s'", urlParsed.String())
-		fwd.Sub = pubSub.Sub(client, func(ctx context.Context, flv *flvtag.FlvTag) error {
-			logger.Tracef(ctx, "flvtag == %#+v", *flv)
-			var buf bytes.Buffer
-
-			switch d := flv.Data.(type) {
-			case *flvtag.AudioData:
-				// Consume flv payloads (d)
-				if err := flvtag.EncodeAudioData(&buf, d); err != nil {
-					err = fmt.Errorf("flvtag.Data == %#+v; err == %w", *d, err)
-					return err
-				}
-
-				payloadLen := uint64(buf.Len())
-				fwd.WriteCount.Add(payloadLen)
-				logger.Tracef(ctx, "flvtag.Data == %#+v; payload len == %d", *d, payloadLen)
-
-				// TODO: Fix these values
-				chunkStreamID := 5
-				if err := fwd.OutStream.Write(ctx, chunkStreamID, flv.Timestamp, &rtmpmsg.AudioMessage{
-					Payload: &buf,
-				}); err != nil {
-					err = fmt.Errorf("fwd.OutStream.Write (%T) return an error: %w", d, err)
-					return err
-				}
-
-			case *flvtag.VideoData:
-				// Consume flv payloads (d)
-				if err := flvtag.EncodeVideoData(&buf, d); err != nil {
-					err = fmt.Errorf("flvtag.Data == %#+v; err == %w", *d, err)
-					return err
-				}
-
-				payloadLen := uint64(buf.Len())
-				fwd.WriteCount.Add(payloadLen)
-				logger.Tracef(ctx, "flvtag.Data == %#+v; payload len == %d", *d, payloadLen)
-
-				// TODO: Fix these values
-				chunkStreamID := 6
-				if err := fwd.OutStream.Write(ctx, chunkStreamID, flv.Timestamp, &rtmpmsg.VideoMessage{
-					Payload: &buf,
-				}); err != nil {
-					err = fmt.Errorf("fwd.OutStream.Write (%T) return an error: %w", d, err)
-					return err
-				}
-
-			case *flvtag.ScriptData:
-				// Consume flv payloads (d)
-				if err := flvtag.EncodeScriptData(&buf, d); err != nil {
-					err = fmt.Errorf("flvtag.Data == %#+v; err == %v", *d, err)
-					return err
-				}
-
-				payloadLen := uint64(buf.Len())
-				fwd.WriteCount.Add(payloadLen)
-				logger.Tracef(ctx, "flvtag.Data == %#+v; payload len == %d", *d, payloadLen)
-
-				// TODO: hide these implementation
-				amdBuf := new(bytes.Buffer)
-				amfEnc := rtmpmsg.NewAMFEncoder(amdBuf, rtmpmsg.EncodingTypeAMF0)
-				if err := rtmpmsg.EncodeBodyAnyValues(amfEnc, &rtmpmsg.NetStreamSetDataFrame{
-					Payload: buf.Bytes(),
-				}); err != nil {
-					err = fmt.Errorf("flvtag.Data == %#+v; payload len == %d; err == %v", *d, payloadLen, err)
-					return err
-				}
-
-				// TODO: Fix these values
-				chunkStreamID := 8
-				if err := fwd.OutStream.Write(ctx, chunkStreamID, flv.Timestamp, &rtmpmsg.DataMessage{
-					Name:     "@setDataFrame", // TODO: fix
-					Encoding: rtmpmsg.EncodingTypeAMF0,
-					Body:     amdBuf,
-				}); err != nil {
-					err = fmt.Errorf("fwd.OutStream.Write (%T) return an error: %w", d, err)
-					return err
-				}
-
-			default:
-				logger.Errorf(ctx, "unexpected data type: %T", flv.Data)
-			}
-			return nil
-		})
+		pubSub, ok := publisher.(*yutoppgortmp.Pubsub)
+		if ok {
+			fwd.Sub = pubSub.Sub(client, fwd.subCallback)
+		} else {
+			panic(fmt.Errorf("not implemented, yet! %T", publisher))
+		}
 
 		logger.Debugf(ctx, "started publishing to '%s'", urlParsed.String())
 		return nil
@@ -390,6 +291,89 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 
 	<-fwd.Sub.ClosedChan()
 	logger.Debugf(ctx, "the source stopped, so stopped also publishing to '%s'", urlParsed.String())
+	return nil
+}
+
+func (fwd *ActiveStreamForwarding) subCallback(ctx context.Context, flv *flvtag.FlvTag) error {
+	logger.Tracef(ctx, "flvtag == %#+v", *flv)
+	var buf bytes.Buffer
+
+	switch d := flv.Data.(type) {
+	case *flvtag.AudioData:
+		// Consume flv payloads (d)
+		if err := flvtag.EncodeAudioData(&buf, d); err != nil {
+			err = fmt.Errorf("flvtag.Data == %#+v; err == %w", *d, err)
+			return err
+		}
+
+		payloadLen := uint64(buf.Len())
+		fwd.WriteCount.Add(payloadLen)
+		logger.Tracef(ctx, "flvtag.Data == %#+v; payload len == %d", *d, payloadLen)
+
+		// TODO: Fix these values
+		chunkStreamID := 5
+		if err := fwd.OutStream.Write(ctx, chunkStreamID, flv.Timestamp, &rtmpmsg.AudioMessage{
+			Payload: &buf,
+		}); err != nil {
+			err = fmt.Errorf("fwd.OutStream.Write (%T) return an error: %w", d, err)
+			return err
+		}
+
+	case *flvtag.VideoData:
+		// Consume flv payloads (d)
+		if err := flvtag.EncodeVideoData(&buf, d); err != nil {
+			err = fmt.Errorf("flvtag.Data == %#+v; err == %w", *d, err)
+			return err
+		}
+
+		payloadLen := uint64(buf.Len())
+		fwd.WriteCount.Add(payloadLen)
+		logger.Tracef(ctx, "flvtag.Data == %#+v; payload len == %d", *d, payloadLen)
+
+		// TODO: Fix these values
+		chunkStreamID := 6
+		if err := fwd.OutStream.Write(ctx, chunkStreamID, flv.Timestamp, &rtmpmsg.VideoMessage{
+			Payload: &buf,
+		}); err != nil {
+			err = fmt.Errorf("fwd.OutStream.Write (%T) return an error: %w", d, err)
+			return err
+		}
+
+	case *flvtag.ScriptData:
+		// Consume flv payloads (d)
+		if err := flvtag.EncodeScriptData(&buf, d); err != nil {
+			err = fmt.Errorf("flvtag.Data == %#+v; err == %v", *d, err)
+			return err
+		}
+
+		payloadLen := uint64(buf.Len())
+		fwd.WriteCount.Add(payloadLen)
+		logger.Tracef(ctx, "flvtag.Data == %#+v; payload len == %d", *d, payloadLen)
+
+		// TODO: hide these implementation
+		amdBuf := new(bytes.Buffer)
+		amfEnc := rtmpmsg.NewAMFEncoder(amdBuf, rtmpmsg.EncodingTypeAMF0)
+		if err := rtmpmsg.EncodeBodyAnyValues(amfEnc, &rtmpmsg.NetStreamSetDataFrame{
+			Payload: buf.Bytes(),
+		}); err != nil {
+			err = fmt.Errorf("flvtag.Data == %#+v; payload len == %d; err == %v", *d, payloadLen, err)
+			return err
+		}
+
+		// TODO: Fix these values
+		chunkStreamID := 8
+		if err := fwd.OutStream.Write(ctx, chunkStreamID, flv.Timestamp, &rtmpmsg.DataMessage{
+			Name:     "@setDataFrame", // TODO: fix
+			Encoding: rtmpmsg.EncodingTypeAMF0,
+			Body:     amdBuf,
+		}); err != nil {
+			err = fmt.Errorf("fwd.OutStream.Write (%T) return an error: %w", d, err)
+			return err
+		}
+
+	default:
+		logger.Errorf(ctx, "unexpected data type: %T", flv.Data)
+	}
 	return nil
 }
 

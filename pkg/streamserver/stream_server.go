@@ -1,6 +1,7 @@
 package streamserver
 
 import (
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/yutopp-go-rtmp/streamforward"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/yutopp-go-rtmp/streamserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 )
@@ -8,13 +9,13 @@ import (
 type StreamServer interface {
 	types.StreamServer[ActiveStreamForwarding]
 }
+type ActiveStreamForwarding = *streamforward.ActiveStreamForwarding
 type PlatformsController = types.PlatformsController
 type BrowserOpener = types.BrowserOpener
 
 func New(
 	cfg *types.Config,
 	platformsController types.PlatformsController,
-	browserOpener BrowserOpener,
 ) StreamServer {
-	return streamserver.New(cfg, platformsController, browserOpener)
+	return streamserver.New(cfg, platformsController)
 }

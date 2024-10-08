@@ -5,12 +5,12 @@ import (
 	"net/url"
 
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/yutopp-go-rtmp/streamserver"
+	streamservertypes "github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 )
 
 type dummyPlatformsController struct{}
 
-var _ streamserver.PlatformsController = (*dummyPlatformsController)(nil)
+var _ streamservertypes.PlatformsController = (*dummyPlatformsController)(nil)
 
 func (dummyPlatformsController) CheckStreamStartedByURL(ctx context.Context, destination *url.URL) (bool, error) {
 	return true, nil

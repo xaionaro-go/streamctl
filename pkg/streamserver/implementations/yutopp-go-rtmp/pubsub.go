@@ -1,4 +1,4 @@
-package streamserver
+package yutoppgortmp
 
 import (
 	"bytes"
@@ -11,7 +11,6 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/yutopp-go-rtmp/streamforward"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 	flvtag "github.com/yutopp/go-flv/tag"
@@ -412,17 +411,4 @@ func cloneView(flv *flvtag.FlvTag) *flvtag.FlvTag {
 	}
 
 	return &v
-}
-
-type pubsubAdapter struct {
-	*Pubsub
-}
-
-var _ streamforward.Pubsub = (*pubsubAdapter)(nil)
-
-func (pubsub *pubsubAdapter) Sub(
-	conn io.Closer,
-	callback func(ctx context.Context, flv *flvtag.FlvTag) error,
-) streamforward.Sub {
-	return pubsub.Pubsub.Sub(conn, callback)
 }

@@ -288,7 +288,7 @@ func (d *StreamD) initStreamServer(ctx context.Context) (_err error) {
 	d.StreamServer = streamserver.New(
 		&d.Config.StreamServer,
 		newPlatformsControllerAdapter(d),
-		newBrowserOpenerAdapter(d),
+		//newBrowserOpenerAdapter(d),
 	)
 	assert(d.StreamServer != nil)
 	defer d.notifyAboutChange(ctx, events.StreamServersChange)
@@ -1403,17 +1403,26 @@ func (d *StreamD) WaitForStreamPublisher(
 	ctx context.Context,
 	streamID api.StreamID,
 ) (<-chan struct{}, error) {
-	return streamserver.NewStreamPlayerStreamServer(
-		d.StreamServer,
-	).WaitPublisherChan(ctx, streamID)
+	pubCh, err := d.StreamServer.WaitPublisherChan(ctx, streamID)
+	if err != nil {
+		return nil, err
+	}
+
+	ch := make(chan struct{})
+	observability.Go(ctx, func() {
+		select {
+		case <-pubCh:
+			close(ch)
+		case <-ctx.Done():
+		}
+	})
+	return ch, nil
 }
 
 func (d *StreamD) GetStreamPortServers(
 	ctx context.Context,
 ) ([]streamplayer.StreamPortServer, error) {
-	return streamserver.NewStreamPlayerStreamServer(
-		d.StreamServer,
-	).GetPortServers(ctx)
+	return d.StreamServer.GetPortServers(ctx)
 }
 
 func (d *StreamD) AddStreamPlayer(

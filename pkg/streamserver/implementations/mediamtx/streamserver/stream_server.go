@@ -6,24 +6,20 @@ package streamserver
 import (
 	"context"
 	"fmt"
-	"io"
 	"net"
 
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/mediamtx/pkg/servers/rtmp"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	playertypes "github.com/xaionaro-go/streamctl/pkg/player/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
-	yutoppgortmp "github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/yutopp-go-rtmp"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/yutopp-go-rtmp/streamforward"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/streamplayers"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
-	"github.com/xaionaro-go/streamctl/pkg/xlogger"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
-	flvtag "github.com/yutopp/go-flv/tag"
-	"github.com/yutopp/go-rtmp"
 )
 
 type BrowserOpener interface {
@@ -35,7 +31,6 @@ type StreamServer struct {
 	*streamplayers.StreamPlayers
 	*streamforward.StreamForwards
 	Config         *types.Config
-	RelayService   *yutoppgortmp.RelayService
 	ServerHandlers []types.PortServer
 }
 
@@ -46,8 +41,7 @@ func New(
 	platformsController types.PlatformsController,
 ) *StreamServer {
 	s := &StreamServer{
-		RelayService: yutoppgortmp.NewRelayService(),
-		Config:       cfg,
+		Config: cfg,
 	}
 	s.StreamForwards = streamforward.NewStreamForwards(s, platformsController)
 	s.StreamPlayers = streamplayers.NewStreamPlayers(
@@ -127,19 +121,6 @@ func (s *StreamServer) WaitPubsub(
 	return &pubsubAdapter{s.RelayService.WaitPubsub(ctx, appKey)}
 }
 
-type pubsubAdapter struct {
-	*yutoppgortmp.Pubsub
-}
-
-var _ streamforward.Pubsub = (*pubsubAdapter)(nil)
-
-func (pubsub *pubsubAdapter) Sub(
-	conn io.Closer,
-	callback func(ctx context.Context, flv *flvtag.FlvTag) error,
-) streamforward.Sub {
-	return pubsub.Pubsub.Sub(conn, callback)
-}
-
 func (s *StreamServer) PubsubNames() types.AppKeys {
 	return s.RelayService.PubsubNames()
 }
@@ -188,37 +169,12 @@ func (s *StreamServer) startServer(
 	var err error
 	switch serverType {
 	case streamtypes.ServerTypeRTMP:
-		var listener net.Listener
-		listener, err = net.Listen("tcp", listenAddr)
+		_, err = net.Listen("tcp", listenAddr)
 		if err != nil {
 			err = fmt.Errorf("unable to start listening '%s': %w", listenAddr, err)
 			break
 		}
-		portSrv := &yutoppgortmp.PortServer{
-			Listener: listener,
-		}
-		portSrv.Server = rtmp.NewServer(&rtmp.ServerConfig{
-			OnConnect: func(conn net.Conn) (io.ReadWriteCloser, *rtmp.ConnConfig) {
-				ctx := belt.WithField(ctx, "client", conn.RemoteAddr().String())
-				h := yutoppgortmp.NewHandler(s.RelayService)
-				wrcc := types.NewReaderWriterCloseCounter(conn, &portSrv.ReadCount, &portSrv.WriteCount)
-				return wrcc, &rtmp.ConnConfig{
-					Handler: h,
-					ControlState: rtmp.StreamControlStateConfig{
-						DefaultBandwidthWindowSize: 20 * 1024 * 1024 / 8,
-					},
-					Logger: xlogger.LogrusFieldLoggerFromCtx(ctx),
-				}
-			},
-		})
-		observability.Go(ctx, func() {
-			err = portSrv.Serve(listener)
-			if err != nil {
-				err = fmt.Errorf("unable to start serving RTMP at '%s': %w", listener.Addr().String(), err)
-				logger.Error(ctx, err)
-			}
-		})
-		srv = portSrv
+		panic("not implemented")
 	case streamtypes.ServerTypeRTSP:
 		return fmt.Errorf("RTSP is not supported, yet")
 	default:
@@ -363,4 +319,31 @@ func (s *StreamServer) GetPortServers(
 	}
 
 	return result, nil
+}
+
+func (s *StreamServer) startServer(
+	ctx context.Context,
+	serverType streamtypes.ServerType,
+	listenAddr string,
+) (_ret error) {
+	logger.Tracef(ctx, "startServer(%s, '%s')", serverType, listenAddr)
+	defer func() { logger.Tracef(ctx, "/startServer(%s, '%s'): %v", serverType, listenAddr, _ret) }()
+
+	s.BackendServer.Initialize()
+
+	_ = &rtmp.Server{
+		Address:             p.conf.RTMPAddress,
+		ReadTimeout:         p.conf.ReadTimeout,
+		WriteTimeout:        p.conf.WriteTimeout,
+		IsTLS:               false,
+		ServerCert:          "",
+		ServerKey:           "",
+		RTSPAddress:         p.conf.RTSPAddress,
+		RunOnConnect:        p.conf.RunOnConnect,
+		RunOnConnectRestart: p.conf.RunOnConnectRestart,
+		RunOnDisconnect:     p.conf.RunOnDisconnect,
+		ExternalCmdPool:     p.externalCmdPool,
+		PathManager:         p.pathManager,
+		Parent:              p,
+	}
 }

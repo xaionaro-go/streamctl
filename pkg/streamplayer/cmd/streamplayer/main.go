@@ -65,11 +65,10 @@ func main() {
 			},
 		},
 		dummyPlatformsController{},
-		dummyBrowserOpener{},
 	)
 	err := ss.Init(ctx)
 	assertNoError(ctx, err)
-	sp := streamplayer.New(streamserver.NewStreamPlayerStreamServer(ss), m)
+	sp := streamplayer.New(ss, m)
 	p, err := sp.Create(ctx, api.StreamID(*streamID))
 	assertNoError(ctx, err)
 
