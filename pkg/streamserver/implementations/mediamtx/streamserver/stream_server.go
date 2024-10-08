@@ -8,11 +8,10 @@ import (
 	"fmt"
 	"time"
 
-	rtspauth "github.com/bluenviron/gortsplib/v4/pkg/auth"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/xaionaro-go/mediamtx/pkg/auth"
 	"github.com/xaionaro-go/mediamtx/pkg/conf"
+	"github.com/xaionaro-go/mediamtx/pkg/defs"
 	"github.com/xaionaro-go/mediamtx/pkg/externalcmd"
 	"github.com/xaionaro-go/mediamtx/pkg/pathmanager"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
@@ -31,14 +30,18 @@ type BrowserOpener interface {
 }
 
 type StreamServer struct {
-	Mutex xsync.Gorex
 	*streamplayers.StreamPlayers
 	*streamforward.StreamForwards
-	Config         *types.Config
-	AuthManager    *auth.Manager
-	PathManager    *pathmanager.PathManager
-	ServerHandlers []types.PortServer
-	IsInitialized  bool
+
+	mutex          xsync.Gorex
+	config         *types.Config
+	pathManager    *pathmanager.PathManager
+	serverHandlers []types.PortServer
+	isInitialized  bool
+
+	streamsStatusLocker xsync.Mutex
+	streamReady         map[types.AppKey]bool
+	streamsChanged      chan struct{}
 }
 
 var _ streamforward.StreamServer = (*StreamServer)(nil)
@@ -49,7 +52,9 @@ func New(
 ) *StreamServer {
 
 	s := &StreamServer{
-		Config: cfg,
+		config:         cfg,
+		streamReady:    make(map[types.AppKey]bool),
+		streamsChanged: make(chan struct{}),
 	}
 	s.StreamForwards = streamforward.NewStreamForwards(s, platformsController)
 	s.StreamPlayers = streamplayers.NewStreamPlayers(
@@ -71,7 +76,7 @@ func (s *StreamServer) Init(
 	defer func() { logger.Debugf(ctx, "/Init: %v", _err) }()
 
 	ctx = belt.WithField(ctx, "module", "StreamServer")
-	return xsync.DoR1(ctx, &s.Mutex, func() error {
+	return xsync.DoR1(ctx, &s.mutex, func() error {
 		return s.init(ctx, opts...)
 	})
 }
@@ -80,56 +85,42 @@ func (s *StreamServer) init(
 	ctx context.Context,
 	_ ...types.InitOption,
 ) (_err error) {
-	if s.IsInitialized {
+	if s.isInitialized {
 		return fmt.Errorf("already initialized")
 	}
-	s.IsInitialized = true
+	s.isInitialized = true
 
-	cfg := s.Config
+	cfg := s.config
 	logger.Debugf(ctx, "config == %#+v", *cfg)
 
-	s.AuthManager = &auth.Manager{
-		Method:          0,
-		InternalUsers:   []conf.AuthInternalUser{},
-		HTTPAddress:     "",
-		HTTPExclude:     []conf.AuthInternalUserPermission{},
-		JWTJWKS:         "",
-		JWTClaimKey:     "",
-		ReadTimeout:     0,
-		RTSPAuthMethods: []rtspauth.ValidateMethod{},
-	}
-
-	s.PathManager = pathmanager.New(
+	s.pathManager = pathmanager.New(
 		toConfLoggerLevel(logger.Default().Level()),
-		s.AuthManager,
+		&dummyAuthManager{},
 		"",
 		conf.StringDuration(10*time.Second),
 		conf.StringDuration(10*time.Second),
-		10*60, // 10 seconds * 60 FPS
+		512, // a power of 2, that is close to 10 seconds * 60 FPS
 		1472,
 		make(map[string]*conf.Path),
 		externalcmd.NewPool(),
 		newMediamtxLogger(logger.FromCtx(ctx)),
 	)
+	s.pathManager.Initialize(ctx)
+	s.pathManager.SetHLSServer(s)
+
+	s.reloadPathConfs(ctx)
 
 	for _, srv := range cfg.Servers {
 		{
 			srv := srv
 			observability.Go(ctx, func() {
-				s.Mutex.Do(ctx, func() {
+				s.mutex.Do(ctx, func() {
 					_, err := s.startServer(ctx, srv.Type, srv.Listen)
 					if err != nil {
 						logger.Errorf(ctx, "unable to initialize %s server at %s: %w", srv.Type, srv.Listen, err)
 					}
 				})
 			})
-		}
-	}
-
-	for streamID := range cfg.Streams {
-		err := s.addIncomingStream(ctx, streamID)
-		if err != nil {
-			return fmt.Errorf("unable to initialize stream '%s': %w", streamID, err)
 		}
 	}
 
@@ -144,18 +135,52 @@ func (s *StreamServer) init(
 	return nil
 }
 
+func (s *StreamServer) PathReady(path defs.Path) {
+	appKey := types.AppKey(path.Name())
+
+	s.streamsStatusLocker.Do(context.Background(), func() {
+		s.streamReady[appKey] = true
+
+		var oldCh chan struct{}
+		oldCh, s.streamsChanged = s.streamsChanged, make(chan struct{})
+		close(oldCh)
+	})
+}
+func (s *StreamServer) PathNotReady(path defs.Path) {
+	appKey := types.AppKey(path.Name())
+
+	s.streamsStatusLocker.Do(context.Background(), func() {
+		delete(s.streamReady, appKey)
+
+		var oldCh chan struct{}
+		oldCh, s.streamsChanged = s.streamsChanged, make(chan struct{})
+		close(oldCh)
+	})
+}
+
 func (s *StreamServer) WithConfig(
 	ctx context.Context,
 	callback func(context.Context, *types.Config),
 ) {
-	s.Mutex.Do(ctx, func() {
-		callback(ctx, s.Config)
+	s.mutex.Do(ctx, func() {
+		callback(ctx, s.config)
 	})
 }
 
-func (s *StreamServer) PubsubNames() types.AppKeys {
-	panic("not implemented")
-	//return s.RelayService.PubsubNames()
+func (s *StreamServer) PubsubNames() (types.AppKeys, error) {
+	pathList, err := s.pathManager.APIPathsList()
+	if err != nil {
+		return nil, fmt.Errorf("unable to query the list of available pubsub names: %w", err)
+	}
+
+	var result types.AppKeys
+	for _, item := range pathList.Items {
+		if item.Ready {
+			result = append(result, types.AppKey(item.Name))
+		}
+	}
+
+	return result, nil
 }
 
 func (s *StreamServer) ListServers(
@@ -165,9 +190,9 @@ func (s *StreamServer) ListServers(
 	logger.Tracef(ctx, "ListServers")
 	defer func() { logger.Tracef(ctx, "/ListServers: %d servers", len(_ret)) }()
 
-	return xsync.DoR1(ctx, &s.Mutex, func() []types.PortServer {
-		c := make([]types.PortServer, len(s.ServerHandlers))
-		copy(c, s.ServerHandlers)
+	return xsync.DoR1(ctx, &s.mutex, func() []types.PortServer {
+		c := make([]types.PortServer, len(s.serverHandlers))
+		copy(c, s.serverHandlers)
 		return c
 	})
 }
@@ -179,12 +204,12 @@ func (s *StreamServer) StartServer(
 	opts ...types.ServerOption,
 ) (types.PortServer, error) {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
-	return xsync.DoR2(ctx, &s.Mutex, func() (types.PortServer, error) {
+	return xsync.DoR2(ctx, &s.mutex, func() (types.PortServer, error) {
 		portSrv, err := s.startServer(ctx, serverType, listenAddr, opts...)
 		if err != nil {
 			return nil, err
 		}
-		s.Config.Servers = append(s.Config.Servers, types.Server{
+		s.config.Servers = append(s.config.Servers, types.Server{
 			Type:   serverType,
 			Listen: listenAddr,
 		})
@@ -196,8 +221,8 @@ func (s *StreamServer) findServer(
 	_ context.Context,
 	server types.PortServer,
 ) (int, error) {
-	for i := range s.ServerHandlers {
-		if s.ServerHandlers[i] == server {
+	for i := range s.serverHandlers {
+		if s.serverHandlers[i] == server {
 			return i, nil
 		}
 	}
@@ -209,10 +234,10 @@ func (s *StreamServer) StopServer(
 	server types.PortServer,
 ) error {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
-	return xsync.DoR1(ctx, &s.Mutex, func() error {
-		for idx, srv := range s.Config.Servers {
+	return xsync.DoR1(ctx, &s.mutex, func() error {
+		for idx, srv := range s.config.Servers {
 			if srv.Listen == server.ListenAddr() {
-				s.Config.Servers = append(s.Config.Servers[:idx], s.Config.Servers[idx+1:]...)
+				s.config.Servers = append(s.config.Servers[:idx], s.config.Servers[idx+1:]...)
 				break
 			}
 		}
@@ -229,7 +254,7 @@ func (s *StreamServer) stopServer(
 		return err
 	}
 
-	s.ServerHandlers = append(s.ServerHandlers[:idx], s.ServerHandlers[idx+1:]...)
+	s.serverHandlers = append(s.serverHandlers[:idx], s.serverHandlers[idx+1:]...)
 	return server.Close()
 }
 
@@ -238,7 +263,7 @@ func (s *StreamServer) AddIncomingStream(
 	streamID types.StreamID,
 ) error {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
-	return xsync.DoR1(ctx, &s.Mutex, func() error {
+	return xsync.DoR1(ctx, &s.mutex, func() error {
 		err := s.addIncomingStream(ctx, streamID)
 		if err != nil {
 			return err
@@ -248,14 +273,33 @@ func (s *StreamServer) AddIncomingStream(
 }
 
 func (s *StreamServer) addIncomingStream(
-	_ context.Context,
+	ctx context.Context,
 	streamID types.StreamID,
 ) error {
-	if _, ok := s.Config.Streams[streamID]; ok {
+	if _, ok := s.config.Streams[streamID]; ok {
 		return nil
 	}
-	s.Config.Streams[streamID] = &types.StreamConfig{}
+	s.config.Streams[streamID] = &types.StreamConfig{}
+	s.reloadPathConfs(ctx)
 	return nil
+}
+
+func (s *StreamServer) reloadPathConfs(
+	ctx context.Context,
+) {
+	// TODO: fix race condition with a client connecting to a server
+	pathConfs := make(map[string]*conf.Path, len(s.config.Streams))
+
+	for streamID := range s.config.Streams {
+		pathConfs[string(streamID)] = &conf.Path{
+			Name:   string(types.StreamID2LocalAppName(streamID)),
+			Source: "publisher",
+		}
+	}
+
+	logger.Debugf(ctx, "new pathConfs is %#+v", pathConfs)
+
+	s.pathManager.ReloadPathConfs(pathConfs)
 }
 
 type IncomingStream = types.IncomingStream
@@ -265,14 +309,14 @@ func (s *StreamServer) ListIncomingStreams(
 ) []IncomingStream {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
 	_ = ctx
-	return xsync.DoA1R1(ctx, &s.Mutex, s.listIncomingStreams, ctx)
+	return xsync.DoA1R1(ctx, &s.mutex, s.listIncomingStreams, ctx)
 }
 
 func (s *StreamServer) listIncomingStreams(
 	_ context.Context,
 ) []IncomingStream {
 	var result []IncomingStream
-	for streamID := range s.Config.Streams {
+	for streamID := range s.config.Streams {
 		result = append(result, IncomingStream{
 			StreamID: streamID,
 		})
@@ -285,14 +329,15 @@ func (s *StreamServer) RemoveIncomingStream(
 	streamID types.StreamID,
 ) error {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
-	return xsync.DoA2R1(ctx, &s.Mutex, s.removeIncomingStream, ctx, streamID)
+	return xsync.DoA2R1(ctx, &s.mutex, s.removeIncomingStream, ctx, streamID)
 }
 
 func (s *StreamServer) removeIncomingStream(
-	_ context.Context,
+	ctx context.Context,
 	streamID types.StreamID,
 ) error {
-	delete(s.Config.Streams, streamID)
+	delete(s.config.Streams, streamID)
+	s.reloadPathConfs(ctx)
 	return nil
 }
 
@@ -300,12 +345,30 @@ func (s *StreamServer) WaitPublisherChan(
 	ctx context.Context,
 	streamID types.StreamID,
 ) (<-chan types.Publisher, error) {
+	appKey := types.StreamID2LocalAppName(streamID)
 
 	ch := make(chan types.Publisher, 1)
 	observability.Go(ctx, func() {
-		//ch <- s.RelayService.WaitPubsub(ctx, types.StreamID2LocalAppName(streamID))
-		panic("not implemented")
-		close(ch)
+		for {
+			isReady, waitCh := xsync.DoR2(ctx, &s.mutex, func() (bool, chan struct{}) {
+				return s.streamReady[appKey], s.streamsChanged
+			})
+
+			logger.Debugf(ctx, "WaitPublisherChan(%s): isReady==%v", appKey, isReady)
+			if isReady {
+				ch <- nil
+				close(ch)
+				return
+			}
+			logger.Debugf(ctx, "WaitPublisherChan(%s): waiting...", appKey)
+			select {
+			case <-ctx.Done():
+				logger.Debugf(ctx, "WaitPublisherChan(%s): cancelled", appKey)
+				return
+			case <-waitCh:
+				logger.Debugf(ctx, "WaitPublisherChan(%s): an event happened, rechecking", appKey)
+			}
+		}
 	})
 	return ch, nil
 }
@@ -335,7 +398,7 @@ func (s *StreamServer) startServer(
 	logger.Tracef(ctx, "startServer(%s, '%s')", serverType, listenAddr)
 	defer func() { logger.Tracef(ctx, "/startServer(%s, '%s'): %v", serverType, listenAddr, _ret) }()
 
-	for _, portSrv := range s.ServerHandlers {
+	for _, portSrv := range s.serverHandlers {
 		if portSrv.ListenAddr() == listenAddr {
 			return nil, fmt.Errorf("we already have an port server %#+v instance at '%s'", portSrv, listenAddr)
 		}
@@ -346,7 +409,7 @@ func (s *StreamServer) startServer(
 		return nil, fmt.Errorf("unable to initialize a new instance of a port server %s at %s with options %v: %w", serverType, listenAddr, opts, err)
 	}
 
-	s.ServerHandlers = append(s.ServerHandlers, portSrv)
+	s.serverHandlers = append(s.serverHandlers, portSrv)
 	return nil, err
 }
 
@@ -394,7 +457,7 @@ func (s *StreamServer) newServerRTMP(
 	opts ...types.ServerOption,
 ) (_ types.PortServer, _ret error) {
 	rtmpSrv := newRTMPServer(
-		s.PathManager,
+		s.pathManager,
 		listenAddr,
 		newMediamtxLogger(logger.FromCtx(ctx)),
 		opts...,
@@ -402,7 +465,6 @@ func (s *StreamServer) newServerRTMP(
 	if err := rtmpSrv.Initialize(); err != nil {
 		return nil, fmt.Errorf("unable to initialize the RTMP server %#+v: %w", rtmpSrv, err)
 	}
-	panic("not implemented")
 	return &portServerWrapperRTMP{Server: rtmpSrv}, nil
 }
 

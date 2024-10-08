@@ -990,8 +990,8 @@ github.com/xaionaro-go/lockmap v0.0.0-20240901172806-e17aea364748 h1:SlB3zLAuLgR
 github.com/xaionaro-go/lockmap v0.0.0-20240901172806-e17aea364748/go.mod h1:UO+SYZ5JAJGOnNkDycFrFwkaaPeSqAEQUM0TUp9Vb24=
 github.com/xaionaro-go/logrustash v0.0.0-20240804141650-d48034780a5f h1:mMrVrYtH9MyCUzBwPvuEntvqdCJ0zifCfqV6bHU6z1M=
 github.com/xaionaro-go/logrustash v0.0.0-20240804141650-d48034780a5f/go.mod h1:aszOZHoPPSgKwdbJUgonps3MSODqctkNhwQDDwlw0Eg=
-github.com/xaionaro-go/mediamtx v0.0.0-20241008201057-64595ef4f963 h1:L2JsGThyeHgW06355RhE7bxUH+CTVpsSXajUY5X4ynA=
-github.com/xaionaro-go/mediamtx v0.0.0-20241008201057-64595ef4f963/go.mod h1:3J9s+wGt6CV4MDnoXApKEdY3kdc5sd6AYEndLJSAIYI=
+github.com/xaionaro-go/mediamtx v0.0.0-20241008211946-7ad5c0ec2683 h1:cB2jvXGvyAqd1NAe5wHkDsASygg2FFJfll5QTrPRuQs=
+github.com/xaionaro-go/mediamtx v0.0.0-20241008211946-7ad5c0ec2683/go.mod h1:3J9s+wGt6CV4MDnoXApKEdY3kdc5sd6AYEndLJSAIYI=
 github.com/xaionaro-go/rand v0.0.0-20191005105903-aba1befc54a5/go.mod h1:7GUXx8dYHRMAYntgs4o1Vm1IPZ7EIpGbev68nKIKGMQ=
 github.com/xaionaro-go/spinlock v0.0.0-20190309154744-55278e21e817/go.mod h1:Nb/15eS0BMty6TMuWgRQM8WCDIUlyPZagcpchHT6c9Y=
 github.com/xaionaro-go/spinlock v0.0.0-20200518175509-30e6d1ce68a1 h1:1Kqw9dv2LnznIhJoMt3dNzc/ctSj6VHjyGh4YZHjpE4=

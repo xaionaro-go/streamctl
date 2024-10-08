@@ -140,8 +140,8 @@ func (pubsub *pubsubAdapter) Sub(
 	return pubsub.Pubsub.Sub(conn, callback)
 }
 
-func (s *StreamServer) PubsubNames() types.AppKeys {
-	return s.RelayService.PubsubNames()
+func (s *StreamServer) PubsubNames() (types.AppKeys, error) {
+	return s.RelayService.PubsubNames(), nil
 }
 
 func (s *StreamServer) ListServers(
@@ -182,7 +182,7 @@ func (s *StreamServer) startServer(
 	ctx context.Context,
 	serverType streamtypes.ServerType,
 	listenAddr string,
-	opts ...types.ServerOption,
+	_ ...types.ServerOption,
 ) (_ types.PortServer, _ret error) {
 	logger.Tracef(ctx, "startServer(%s, '%s')", serverType, listenAddr)
 	defer func() { logger.Tracef(ctx, "/startServer(%s, '%s'): %v", serverType, listenAddr, _ret) }()

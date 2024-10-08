@@ -300,7 +300,7 @@ require (
 	github.com/xaionaro-go/datacounter v1.0.4
 	github.com/xaionaro-go/gorex v0.0.0-20200314172213-23bed04bc3e3
 	github.com/xaionaro-go/lockmap v0.0.0-20240901172806-e17aea364748
-	github.com/xaionaro-go/mediamtx v0.0.0-20241008201057-64595ef4f963
+	github.com/xaionaro-go/mediamtx v0.0.0-20241008211946-7ad5c0ec2683
 	github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20240826003505-317c16ed8b69
 	github.com/xaionaro-go/timeapiio v0.0.0-20240915203246-b907cf699af3
 	github.com/xaionaro-go/typing v0.0.0-20221123235249-2229101d38ba

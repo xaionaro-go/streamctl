@@ -15,7 +15,7 @@ import (
 )
 
 type PubsubNameser interface {
-	PubsubNames() AppKeys
+	PubsubNames() (AppKeys, error)
 }
 
 type Publisher = streamplayer.Publisher

@@ -47,6 +47,8 @@ func setDefaultCallerPCFilter() {
 			return false
 		case strings.Contains(file, "log_writer.go"):
 			return false
+		case strings.Contains(file, "logger.go"):
+			return false
 		}
 		return true
 	}

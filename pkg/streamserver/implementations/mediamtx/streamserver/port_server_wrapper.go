@@ -23,10 +23,24 @@ func (w *portServerWrapperRTMP) ListenAddr() string {
 	return w.Server.Address
 }
 func (w *portServerWrapperRTMP) NumBytesConsumerWrote() uint64 {
-	panic("not implemented, yet")
-	return 0
+	result := uint64(0)
+	list, err := w.Server.APIConnsList()
+	for _, item := range list.Items {
+		result += item.BytesReceived
+	}
+	if err != nil {
+		panic(err)
+	}
+	return result
 }
 func (w *portServerWrapperRTMP) NumBytesProducerRead() uint64 {
-	panic("not implemented, yet")
-	return 0
+	result := uint64(0)
+	list, err := w.Server.APIConnsList()
+	for _, item := range list.Items {
+		result += item.BytesSent
+	}
+	if err != nil {
+		panic(err)
+	}
+	return result
 }
