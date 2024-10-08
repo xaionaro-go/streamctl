@@ -9,8 +9,9 @@ import (
 )
 
 type Server struct {
-	Type   streamtypes.ServerType `yaml:"protocol"`
-	Listen string                 `yaml:"listen"`
+	ServerConfig `yaml:"config"`
+	Type         streamtypes.ServerType `yaml:"protocol"`
+	Listen       string                 `yaml:"listen"`
 }
 
 type RestartUntilYoutubeRecognizesStream struct {

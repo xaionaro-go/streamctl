@@ -1071,16 +1071,18 @@ func (d *StreamD) StartStreamServer(
 	ctx context.Context,
 	serverType api.StreamServerType,
 	listenAddr string,
+	opts ...sstypes.ServerOption,
 ) error {
 	logger.Debugf(ctx, "StartStreamServer")
 	defer logger.Debugf(ctx, "/StartStreamServer")
 	defer d.notifyAboutChange(ctx, events.StreamServersChange)
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
-		err := d.StreamServer.StartServer(
+		_, err := d.StreamServer.StartServer(
 			resetContextCancellers(ctx),
 			serverType,
 			listenAddr,
+			opts...,
 		)
 		if err != nil {
 			return fmt.Errorf("unable to start stream server: %w", err)

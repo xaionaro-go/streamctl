@@ -17,7 +17,10 @@ type ServerType int
 const (
 	ServerTypeUndefined = ServerType(iota)
 	ServerTypeRTSP
+	ServerTypeSRT
 	ServerTypeRTMP
+	ServerTypeHLS
+	ServerTypeWebRTC
 	endOfServerType
 )
 
@@ -29,6 +32,12 @@ func (t ServerType) String() string {
 		return "rtmp"
 	case ServerTypeRTSP:
 		return "rtsp"
+	case ServerTypeSRT:
+		return "srt"
+	case ServerTypeHLS:
+		return "hls"
+	case ServerTypeWebRTC:
+		return "webrtc"
 	default:
 		return fmt.Sprintf("unknown_type_%d", t)
 	}

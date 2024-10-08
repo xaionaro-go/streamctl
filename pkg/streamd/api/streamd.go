@@ -74,6 +74,7 @@ type StreamD interface {
 		ctx context.Context,
 		serverType StreamServerType,
 		listenAddr string,
+		opts ...sstypes.ServerOption,
 	) error
 	StopStreamServer(
 		ctx context.Context,

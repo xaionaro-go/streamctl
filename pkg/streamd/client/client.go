@@ -908,10 +908,16 @@ func (c *Client) StartStreamServer(
 	ctx context.Context,
 	serverType api.StreamServerType,
 	listenAddr string,
+	opts ...types.ServerOption,
 ) error {
-	t, err := goconv.StreamServerTypeGo2GRPC(serverType)
+	cfg, err := goconv.StreamServerConfigGo2GRPC(
+		ctx,
+		serverType,
+		listenAddr,
+		opts...,
+	)
 	if err != nil {
-		return fmt.Errorf("unable to convert the server type: %w", err)
+		return fmt.Errorf("unable to convert the server config: %w", err)
 	}
 
 	_, err = withStreamDClient(ctx, c, func(
@@ -920,10 +926,7 @@ func (c *Client) StartStreamServer(
 		conn io.Closer,
 	) (*streamd_grpc.StartStreamServerReply, error) {
 		return callWrapper(ctx, c, client.StartStreamServer, &streamd_grpc.StartStreamServerRequest{
-			Config: &streamd_grpc.StreamServer{
-				ServerType: t,
-				ListenAddr: listenAddr,
-			},
+			Config: cfg,
 		})
 	})
 	if err != nil {

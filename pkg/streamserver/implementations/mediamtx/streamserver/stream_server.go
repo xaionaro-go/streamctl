@@ -6,11 +6,15 @@ package streamserver
 import (
 	"context"
 	"fmt"
-	"net"
+	"time"
 
+	rtspauth "github.com/bluenviron/gortsplib/v4/pkg/auth"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/xaionaro-go/mediamtx/pkg/servers/rtmp"
+	"github.com/xaionaro-go/mediamtx/pkg/auth"
+	"github.com/xaionaro-go/mediamtx/pkg/conf"
+	"github.com/xaionaro-go/mediamtx/pkg/externalcmd"
+	"github.com/xaionaro-go/mediamtx/pkg/pathmanager"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	playertypes "github.com/xaionaro-go/streamctl/pkg/player/types"
@@ -31,7 +35,10 @@ type StreamServer struct {
 	*streamplayers.StreamPlayers
 	*streamforward.StreamForwards
 	Config         *types.Config
+	AuthManager    *auth.Manager
+	PathManager    *pathmanager.PathManager
 	ServerHandlers []types.PortServer
+	IsInitialized  bool
 }
 
 var _ streamforward.StreamServer = (*StreamServer)(nil)
@@ -40,6 +47,7 @@ func New(
 	cfg *types.Config,
 	platformsController types.PlatformsController,
 ) *StreamServer {
+
 	s := &StreamServer{
 		Config: cfg,
 	}
@@ -72,17 +80,48 @@ func (s *StreamServer) init(
 	ctx context.Context,
 	_ ...types.InitOption,
 ) (_err error) {
+	if s.IsInitialized {
+		return fmt.Errorf("already initialized")
+	}
+	s.IsInitialized = true
+
 	cfg := s.Config
 	logger.Debugf(ctx, "config == %#+v", *cfg)
+
+	s.AuthManager = &auth.Manager{
+		Method:          0,
+		InternalUsers:   []conf.AuthInternalUser{},
+		HTTPAddress:     "",
+		HTTPExclude:     []conf.AuthInternalUserPermission{},
+		JWTJWKS:         "",
+		JWTClaimKey:     "",
+		ReadTimeout:     0,
+		RTSPAuthMethods: []rtspauth.ValidateMethod{},
+	}
+
+	s.PathManager = pathmanager.New(
+		toConfLoggerLevel(logger.Default().Level()),
+		s.AuthManager,
+		"",
+		conf.StringDuration(10*time.Second),
+		conf.StringDuration(10*time.Second),
+		10*60, // 10 seconds * 60 FPS
+		1472,
+		make(map[string]*conf.Path),
+		externalcmd.NewPool(),
+		newMediamtxLogger(logger.FromCtx(ctx)),
+	)
 
 	for _, srv := range cfg.Servers {
 		{
 			srv := srv
 			observability.Go(ctx, func() {
-				err := s.startServer(ctx, srv.Type, srv.Listen)
-				if err != nil {
-					logger.Errorf(ctx, "unable to initialize %s server at %s: %w", srv.Type, srv.Listen, err)
-				}
+				s.Mutex.Do(ctx, func() {
+					_, err := s.startServer(ctx, srv.Type, srv.Listen)
+					if err != nil {
+						logger.Errorf(ctx, "unable to initialize %s server at %s: %w", srv.Type, srv.Listen, err)
+					}
+				})
 			})
 		}
 	}
@@ -114,15 +153,9 @@ func (s *StreamServer) WithConfig(
 	})
 }
 
-func (s *StreamServer) WaitPubsub(
-	ctx context.Context,
-	appKey types.AppKey,
-) streamforward.Pubsub {
-	return &pubsubAdapter{s.RelayService.WaitPubsub(ctx, appKey)}
-}
-
 func (s *StreamServer) PubsubNames() types.AppKeys {
-	return s.RelayService.PubsubNames()
+	panic("not implemented")
+	//return s.RelayService.PubsubNames()
 }
 
 func (s *StreamServer) ListServers(
@@ -143,49 +176,20 @@ func (s *StreamServer) StartServer(
 	ctx context.Context,
 	serverType streamtypes.ServerType,
 	listenAddr string,
-) error {
+	opts ...types.ServerOption,
+) (types.PortServer, error) {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
-	return xsync.DoR1(ctx, &s.Mutex, func() error {
-		err := s.startServer(ctx, serverType, listenAddr)
+	return xsync.DoR2(ctx, &s.Mutex, func() (types.PortServer, error) {
+		portSrv, err := s.startServer(ctx, serverType, listenAddr, opts...)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		s.Config.Servers = append(s.Config.Servers, types.Server{
 			Type:   serverType,
 			Listen: listenAddr,
 		})
-		return nil
+		return portSrv, nil
 	})
-}
-
-func (s *StreamServer) startServer(
-	ctx context.Context,
-	serverType streamtypes.ServerType,
-	listenAddr string,
-) (_ret error) {
-	logger.Tracef(ctx, "startServer(%s, '%s')", serverType, listenAddr)
-	defer func() { logger.Tracef(ctx, "/startServer(%s, '%s'): %v", serverType, listenAddr, _ret) }()
-	var srv types.PortServer
-	var err error
-	switch serverType {
-	case streamtypes.ServerTypeRTMP:
-		_, err = net.Listen("tcp", listenAddr)
-		if err != nil {
-			err = fmt.Errorf("unable to start listening '%s': %w", listenAddr, err)
-			break
-		}
-		panic("not implemented")
-	case streamtypes.ServerTypeRTSP:
-		return fmt.Errorf("RTSP is not supported, yet")
-	default:
-		return fmt.Errorf("unexpected server type %v", serverType)
-	}
-	if err != nil {
-		return err
-	}
-
-	s.ServerHandlers = append(s.ServerHandlers, srv)
-	return nil
 }
 
 func (s *StreamServer) findServer(
@@ -299,7 +303,8 @@ func (s *StreamServer) WaitPublisherChan(
 
 	ch := make(chan types.Publisher, 1)
 	observability.Go(ctx, func() {
-		ch <- s.RelayService.WaitPubsub(ctx, types.StreamID2LocalAppName(streamID))
+		//ch <- s.RelayService.WaitPubsub(ctx, types.StreamID2LocalAppName(streamID))
+		panic("not implemented")
 		close(ch)
 	})
 	return ch, nil
@@ -325,25 +330,94 @@ func (s *StreamServer) startServer(
 	ctx context.Context,
 	serverType streamtypes.ServerType,
 	listenAddr string,
-) (_ret error) {
+	opts ...types.ServerOption,
+) (_ types.PortServer, _ret error) {
 	logger.Tracef(ctx, "startServer(%s, '%s')", serverType, listenAddr)
 	defer func() { logger.Tracef(ctx, "/startServer(%s, '%s'): %v", serverType, listenAddr, _ret) }()
 
-	s.BackendServer.Initialize()
-
-	_ = &rtmp.Server{
-		Address:             p.conf.RTMPAddress,
-		ReadTimeout:         p.conf.ReadTimeout,
-		WriteTimeout:        p.conf.WriteTimeout,
-		IsTLS:               false,
-		ServerCert:          "",
-		ServerKey:           "",
-		RTSPAddress:         p.conf.RTSPAddress,
-		RunOnConnect:        p.conf.RunOnConnect,
-		RunOnConnectRestart: p.conf.RunOnConnectRestart,
-		RunOnDisconnect:     p.conf.RunOnDisconnect,
-		ExternalCmdPool:     p.externalCmdPool,
-		PathManager:         p.pathManager,
-		Parent:              p,
+	for _, portSrv := range s.ServerHandlers {
+		if portSrv.ListenAddr() == listenAddr {
+			return nil, fmt.Errorf("we already have an port server %#+v instance at '%s'", portSrv, listenAddr)
+		}
 	}
+
+	portSrv, err := s.newServer(ctx, serverType, listenAddr, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("unable to initialize a new instance of a port server %s at %s with options %v: %w", serverType, listenAddr, opts, err)
+	}
+
+	s.ServerHandlers = append(s.ServerHandlers, portSrv)
+	return nil, err
+}
+
+func (s *StreamServer) newServer(
+	ctx context.Context,
+	serverType streamtypes.ServerType,
+	listenAddr string,
+	opts ...types.ServerOption,
+) (_ types.PortServer, _ret error) {
+	switch serverType {
+	case streamtypes.ServerTypeRTSP:
+		return s.newServerRTSP(ctx, listenAddr, opts...)
+	case streamtypes.ServerTypeSRT:
+		return s.newServerSRT(ctx, listenAddr, opts...)
+	case streamtypes.ServerTypeRTMP:
+		return s.newServerRTMP(ctx, listenAddr, opts...)
+	case streamtypes.ServerTypeHLS:
+		return s.newServerHLS(ctx, listenAddr, opts...)
+	case streamtypes.ServerTypeWebRTC:
+		return s.newServerWebRTC(ctx, listenAddr, opts...)
+	default:
+		return nil, fmt.Errorf("unsupported server type '%s'", serverType)
+	}
+}
+
+func (s *StreamServer) newServerRTSP(
+	ctx context.Context,
+	listenAddr string,
+	opts ...types.ServerOption,
+) (_ types.PortServer, _ret error) {
+	return nil, fmt.Errorf("support of RTSP is not implemented, yet")
+}
+
+func (s *StreamServer) newServerSRT(
+	ctx context.Context,
+	listenAddr string,
+	opts ...types.ServerOption,
+) (_ types.PortServer, _ret error) {
+	return nil, fmt.Errorf("support of SRT is not implemented, yet")
+}
+
+func (s *StreamServer) newServerRTMP(
+	ctx context.Context,
+	listenAddr string,
+	opts ...types.ServerOption,
+) (_ types.PortServer, _ret error) {
+	rtmpSrv := newRTMPServer(
+		s.PathManager,
+		listenAddr,
+		newMediamtxLogger(logger.FromCtx(ctx)),
+		opts...,
+	)
+	if err := rtmpSrv.Initialize(); err != nil {
+		return nil, fmt.Errorf("unable to initialize the RTMP server %#+v: %w", rtmpSrv, err)
+	}
+	panic("not implemented")
+	return &portServerWrapperRTMP{Server: rtmpSrv}, nil
+}
+
+func (s *StreamServer) newServerHLS(
+	ctx context.Context,
+	listenAddr string,
+	opts ...types.ServerOption,
+) (_ types.PortServer, _ret error) {
+	return nil, fmt.Errorf("support of HLS is not implemented, yet")
+}
+
+func (s *StreamServer) newServerWebRTC(
+	ctx context.Context,
+	listenAddr string,
+	opts ...types.ServerOption,
+) (_ types.PortServer, _ret error) {
+	return nil, fmt.Errorf("support of WebRTC is not implemented, yet")
 }

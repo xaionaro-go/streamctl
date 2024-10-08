@@ -85,7 +85,7 @@ func (s *StreamServer) init(
 		{
 			srv := srv
 			observability.Go(ctx, func() {
-				err := s.startServer(ctx, srv.Type, srv.Listen)
+				_, err := s.startServer(ctx, srv.Type, srv.Listen)
 				if err != nil {
 					logger.Errorf(ctx, "unable to initialize %s server at %s: %w", srv.Type, srv.Listen, err)
 				}
@@ -162,18 +162,19 @@ func (s *StreamServer) StartServer(
 	ctx context.Context,
 	serverType streamtypes.ServerType,
 	listenAddr string,
-) error {
+	opts ...types.ServerOption,
+) (types.PortServer, error) {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
-	return xsync.DoR1(ctx, &s.Mutex, func() error {
-		err := s.startServer(ctx, serverType, listenAddr)
+	return xsync.DoR2(ctx, &s.Mutex, func() (types.PortServer, error) {
+		srv, err := s.startServer(ctx, serverType, listenAddr, opts...)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		s.Config.Servers = append(s.Config.Servers, types.Server{
 			Type:   serverType,
 			Listen: listenAddr,
 		})
-		return nil
+		return srv, nil
 	})
 }
 
@@ -181,7 +182,8 @@ func (s *StreamServer) startServer(
 	ctx context.Context,
 	serverType streamtypes.ServerType,
 	listenAddr string,
-) (_ret error) {
+	opts ...types.ServerOption,
+) (_ types.PortServer, _ret error) {
 	logger.Tracef(ctx, "startServer(%s, '%s')", serverType, listenAddr)
 	defer func() { logger.Tracef(ctx, "/startServer(%s, '%s'): %v", serverType, listenAddr, _ret) }()
 	var srv types.PortServer
@@ -220,16 +222,16 @@ func (s *StreamServer) startServer(
 		})
 		srv = portSrv
 	case streamtypes.ServerTypeRTSP:
-		return fmt.Errorf("RTSP is not supported, yet")
+		return nil, fmt.Errorf("RTSP is not supported, yet")
 	default:
-		return fmt.Errorf("unexpected server type %v", serverType)
+		return nil, fmt.Errorf("unexpected server type %v", serverType)
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	s.ServerHandlers = append(s.ServerHandlers, srv)
-	return nil
+	return srv, nil
 }
 
 func (s *StreamServer) findServer(
