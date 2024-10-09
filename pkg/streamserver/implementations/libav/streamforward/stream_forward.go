@@ -3,41 +3,36 @@ package streamforward
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"net/url"
 	"runtime/debug"
-	"strings"
 	"sync/atomic"
 
-	"github.com/facebookincubator/go-belt"
+	"github.com/asticode/go-astiav"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
-	"github.com/xaionaro-go/go-rtmp"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/libav/recoder"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
-	commontypes "github.com/xaionaro-go/streamctl/pkg/streamtypes"
-	"github.com/xaionaro-go/streamctl/pkg/xlogger"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
-)
-
-const (
-	chunkSize = 128
 )
 
 type StreamForward = types.StreamForward[*ActiveStreamForwarding]
 
 type ActiveStreamForwarding struct {
 	*StreamForwards
-	Recoding      commontypes.VideoConvertConfig
-	Locker        xsync.Mutex
 	StreamID      types.StreamID
 	DestinationID types.DestinationID
 	URL           *url.URL
-	Sub           Sub
-	CancelFunc    context.CancelFunc
 	ReadCount     atomic.Uint64
 	WriteCount    atomic.Uint64
 	PauseFunc     func(ctx context.Context, fwd *ActiveStreamForwarding)
+
+	cancelFunc context.CancelFunc
+
+	locker             xsync.Mutex
+	input              *recoder.Input
+	output             *recoder.Output
+	recodingCancelFunc context.CancelFunc
 }
 
 func (fwds *StreamForwards) NewActiveStreamForward(
@@ -77,15 +72,15 @@ func (fwd *ActiveStreamForwarding) Start(ctx context.Context) (_err error) {
 	logger.Debugf(ctx, "Start")
 	defer func() { logger.Debugf(ctx, "/Start: %v", _err) }()
 
-	return xsync.DoA1R1(ctx, &fwd.Locker, fwd.start, ctx)
+	return xsync.DoA1R1(ctx, &fwd.locker, fwd.start, ctx)
 }
 
 func (fwd *ActiveStreamForwarding) start(ctx context.Context) (_err error) {
-	if fwd.CancelFunc != nil {
+	if fwd.cancelFunc != nil {
 		return fmt.Errorf("the stream forwarder is already running")
 	}
 	ctx, cancelFn := context.WithCancel(ctx)
-	fwd.CancelFunc = cancelFn
+	fwd.cancelFunc = cancelFn
 	observability.Go(ctx, func() {
 		for {
 			err := fwd.waitForPublisherAndStart(
@@ -109,51 +104,34 @@ func (fwd *ActiveStreamForwarding) Stop() error {
 	return fwd.Close()
 }
 
-func (fwd *ActiveStreamForwarding) getAppNameAndKey() (string, string, string) {
-	remoteAppName := "live"
-	pathParts := strings.SplitN(fwd.URL.Path, "/", -2)
-	apiKey := pathParts[len(pathParts)-1]
-	if len(pathParts) >= 2 {
-		remoteAppName = strings.Trim(strings.Join(pathParts[:len(pathParts)-1], "/"), "/")
-	}
-	streamID := fwd.StreamID
-	streamIDParts := strings.Split(string(streamID), "/")
-	localAppName := string(streamID)
-	if len(streamIDParts) == 2 {
-		localAppName = streamIDParts[1]
-	}
-
-	return localAppName, remoteAppName, apiKey
-}
-
 func (fwd *ActiveStreamForwarding) WaitForPublisher(
 	ctx context.Context,
-) (Pubsub, error) {
-	localAppName, _, apiKey := fwd.getAppNameAndKey()
+) (types.Publisher, error) {
+	var publisher types.Publisher
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
 
-	ctx = belt.WithField(belt.WithField(ctx, "appNameLocal", localAppName), "appNameRemote", apiKey)
-
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
+		logger.Debugf(ctx, "wait for stream '%s'", fwd.StreamID)
+		publisherChan, err := fwd.StreamServer.WaitPublisherChan(ctx, fwd.StreamID)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get a channel to wait for a publisher: %w", err)
+		}
+		publisher = <-publisherChan
+		if publisher != nil {
+			break
+		}
+		logger.Debugf(ctx, "received publisher is nil, retrying")
 	}
-	logger.Debugf(ctx, "wait for stream '%s'", fwd.StreamID)
-	pubSub := fwd.StreamServer.WaitPubsub(ctx, localAppName)
-	logger.Debugf(ctx, "wait for stream '%s' result: %#+v", fwd.StreamID, pubSub)
-	if pubSub == nil {
-		return nil, fmt.Errorf(
-			"unable to find stream ID '%s', available stream IDs: %s",
-			fwd.StreamID,
-			strings.Join(fwd.StreamServer.PubsubNames(), ", "),
-		)
-	}
+	logger.Debugf(ctx, "received a non-nil publisher: %#+v", publisher)
 
 	logger.Debugf(ctx, "checking if we need to pause")
 	fwd.PauseFunc(ctx, fwd)
 	logger.Debugf(ctx, "no pauses or pauses ended")
-
-	return pubSub, nil
+	return publisher, nil
 }
 
 func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
@@ -170,10 +148,22 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 			WithField("error_event_exception_stack_trace", string(debug.Stack())).Errorf("%v", _ret)
 	}()
 
-	pubSub, err := fwd.WaitForPublisher(ctx)
+	publisher, err := fwd.WaitForPublisher(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to get publisher: %w", err)
 	}
+
+	ctx, cancelFn := context.WithCancel(ctx)
+	defer cancelFn()
+	observability.Go(ctx, func() {
+		defer cancelFn()
+		select {
+		case <-ctx.Done():
+			return
+		case <-publisher.ClosedChan():
+			return
+		}
+	})
 
 	logger.Debugf(ctx, "DestinationStreamingLocker.Lock(ctx, '%s')", fwd.DestinationID)
 	destinationUnlocker := fwd.StreamForwards.DestinationStreamingLocker.Lock(ctx, fwd.DestinationID)
@@ -191,56 +181,53 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 	default:
 	}
 
-	_, remoteAppName, apiKey := fwd.getAppNameAndKey()
-
-	urlParsed := ptr(*fwd.URL)
-	logger.Debugf(ctx, "connecting to '%s'", fwd.URL.String())
-	if fwd.URL.Port() == "" {
-		switch urlParsed.Scheme {
-		case "rtmp":
-			urlParsed.Host += ":1935"
-		case "rtmps":
-			urlParsed.Host += ":443"
-		default:
-			return fmt.Errorf("unexpected scheme '%s' in URL '%s'", urlParsed.Scheme, urlParsed.String())
-		}
-	}
-	var dialFunc func(protocol, addr string, config *rtmp.ConnConfig) (*rtmp.ClientConn, error)
-	switch urlParsed.Scheme {
-	case "rtmp":
-		dialFunc = rtmp.Dial
-	case "rtmps":
-		dialFunc = func(protocol, addr string, config *rtmp.ConnConfig) (*rtmp.ClientConn, error) {
-			return rtmp.TLSDial(protocol, addr, config, http.DefaultTransport.(*http.Transport).TLSClientConfig)
-		}
-	default:
-		return fmt.Errorf("unexpected scheme '%s' in URL '%s'", urlParsed.Scheme, urlParsed.String())
-	}
-	client, err := dialFunc(urlParsed.Scheme, urlParsed.Host, &rtmp.ConnConfig{
-		Logger: xlogger.LogrusFieldLoggerFromCtx(ctx),
-	})
-	if err != nil {
-		return fmt.Errorf("unable to connect to '%s': %w", urlParsed.String(), err)
-	}
-
-	logger.Debugf(ctx, "connected to '%s'", urlParsed.String())
-
-	fwd.Locker.Do(ctx, func() {
-		fwd.Client = client
-	})
-
 	defer func() {
-		fwd.Locker.Do(ctx, func() {
-			if fwd.Client == nil {
-				return
-			}
-			err := fwd.Client.Close()
+		fwd.locker.Do(ctx, func() {
+			err := fwd.stopRecoding()
 			if err != nil {
-				logger.Warnf(ctx, "unable to close fwd.Client: %v", err)
+				logger.Warn(ctx, err)
 			}
-			fwd.Client = nil
 		})
 	}()
+
+	r := recoder.New(recoder.RecoderConfig{
+		OnPacketReceived: func(ctx context.Context, packet *astiav.Packet) error {
+			fwd.ReadCount.Add(uint64(packet.Size()))
+			return nil
+		},
+		OnPacketSending: func(ctx context.Context, packet *astiav.Packet) error {
+			fwd.WriteCount.Add(uint64(packet.Size()))
+			return nil
+		},
+	})
+
+	var (
+		input  *recoder.Input
+		output *recoder.Output
+	)
+	recodingFinished := make(chan struct{})
+	defer func() {
+		close(recodingFinished)
+	}()
+	err = xsync.DoR1(ctx, &fwd.locker, func() error {
+		if err := fwd.openInput(ctx); err != nil {
+			return fmt.Errorf("unable to open the input: %w", err)
+		}
+
+		if err := fwd.openOutput(ctx); err != nil {
+			return fmt.Errorf("unable to open the output: %w", err)
+		}
+
+		fwd.recodingCancelFunc = func() {
+			cancelFn()
+			<-recodingFinished
+		}
+		input, output = fwd.input, fwd.output
+		return nil
+	})
+	if err != nil {
+		return err
+	}
 
 	select {
 	case <-ctx.Done():
@@ -248,44 +235,90 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 	default:
 	}
 
-	tcURL := *urlParsed
-	tcURL.Path = "/" + remoteAppName
-	if tcURL.Port() == "1935" {
-		tcURL.Host = tcURL.Hostname()
-	}
-
-	err = xsync.DoR1(ctx, &fwd.Locker, func() error {
-		STARTPUBLISHING
-
-		logger.Debugf(ctx, "started publishing to '%s'", urlParsed.String())
-		return nil
-	})
+	err = r.Recode(ctx, input, output)
 	if err != nil {
-		return nil
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+		}
+		return fmt.Errorf("unable to Recode: %w", err)
 	}
 
-	<-fwd.Sub.ClosedChan()
-	logger.Debugf(ctx, "the source stopped, so stopped also publishing to '%s'", urlParsed.String())
 	return nil
+}
+
+func (fwd *ActiveStreamForwarding) openInput(ctx context.Context) error {
+	inputURL, err := fwd.getLocalhostEndpoint(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to get a localhost endpoint: %w", err)
+	}
+
+	inputURL.Path = "/" + string(fwd.StreamID)
+
+	input, err := recoder.NewInputFromURL(ctx, inputURL.String(), recoder.InputConfig{})
+	if err != nil {
+		return fmt.Errorf("unable to open '%s' as the input: %w", inputURL, err)
+	}
+	logger.Debugf(ctx, "opened '%s' as the input", inputURL)
+	fwd.input = input
+	return nil
+}
+
+func (fwd *ActiveStreamForwarding) openOutput(ctx context.Context) error {
+	output, err := recoder.NewOutputFromURL(ctx, fwd.URL.String(), recoder.OutputConfig{})
+	if err != nil {
+		return fmt.Errorf("unable to open '%s' as the output: %w", fwd.URL, err)
+	}
+	logger.Debugf(ctx, "opened '%s' as the output", fwd.URL)
+
+	fwd.output = output
+	return nil
+}
+
+func (fwd *ActiveStreamForwarding) stopRecoding() error {
+	var result *multierror.Error
+
+	if fwd.recodingCancelFunc != nil {
+		fwd.recodingCancelFunc()
+		fwd.recodingCancelFunc = nil
+	}
+
+	if fwd.input != nil {
+		err := fwd.input.Close()
+		if err != nil {
+			result = multierror.Append(result, fmt.Errorf("unable to close fwd.Client: %v", err))
+		}
+		fwd.input = nil
+	}
+
+	if fwd.output != nil {
+		err := fwd.output.Close()
+		if err != nil {
+			result = multierror.Append(result, fmt.Errorf("unable to close fwd.Client: %v", err))
+		}
+		fwd.output = nil
+	}
+
+	return result.ErrorOrNil()
 }
 
 func (fwd *ActiveStreamForwarding) Close() error {
 	ctx := context.TODO()
-	return xsync.DoR1(ctx, &fwd.Locker, func() error {
-		if fwd.CancelFunc == nil {
+	return xsync.DoR1(ctx, &fwd.locker, func() error {
+		if fwd.cancelFunc == nil {
 			return fmt.Errorf("the stream was not started yet")
 		}
 
 		var result *multierror.Error
-		if fwd.CancelFunc != nil {
-			fwd.CancelFunc()
-			fwd.CancelFunc = nil
+		if fwd.cancelFunc != nil {
+			fwd.cancelFunc()
+			fwd.cancelFunc = nil
 		}
-		if fwd.Sub != nil {
-			result = multierror.Append(result, fwd.Sub.Close())
-			fwd.Sub = nil
+
+		if err := fwd.stopRecoding(); err != nil {
+			result = multierror.Append(result, fmt.Errorf("unable to stop recoding: %w", err))
 		}
-		CLOSECLIENT
 		return result.ErrorOrNil()
 	})
 }

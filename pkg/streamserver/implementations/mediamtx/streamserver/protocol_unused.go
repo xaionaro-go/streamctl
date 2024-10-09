@@ -1,6 +1,8 @@
 package streamserver
 
 import (
+	"context"
+	"fmt"
 	"net"
 
 	"github.com/bluenviron/gortsplib/v4/pkg/auth"
@@ -9,6 +11,7 @@ import (
 	"github.com/xaionaro-go/mediamtx/pkg/servers/hls"
 	"github.com/xaionaro-go/mediamtx/pkg/servers/rtsp"
 	"github.com/xaionaro-go/mediamtx/pkg/servers/srt"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 )
 
 func newRTSPServer() *rtsp.Server {
@@ -78,4 +81,35 @@ func newHLSServer() *hls.Server {
 		PathManager:     nil,
 		Parent:          nil,
 	}
+}
+
+func (s *StreamServer) newServerRTSP(
+	ctx context.Context,
+	listenAddr string,
+	opts ...types.ServerOption,
+) (_ types.PortServer, _ret error) {
+	return nil, fmt.Errorf("support of RTSP is not implemented, yet")
+}
+
+func (s *StreamServer) newServerSRT(
+	ctx context.Context,
+	listenAddr string,
+	opts ...types.ServerOption,
+) (_ types.PortServer, _ret error) {
+	return nil, fmt.Errorf("support of SRT is not implemented, yet")
+}
+func (s *StreamServer) newServerHLS(
+	ctx context.Context,
+	listenAddr string,
+	opts ...types.ServerOption,
+) (_ types.PortServer, _ret error) {
+	return nil, fmt.Errorf("support of HLS is not implemented, yet")
+}
+
+func (s *StreamServer) newServerWebRTC(
+	ctx context.Context,
+	listenAddr string,
+	opts ...types.ServerOption,
+) (_ types.PortServer, _ret error) {
+	return nil, fmt.Errorf("support of WebRTC is not implemented, yet")
 }

@@ -32,7 +32,7 @@ type StreamServer interface {
 type StreamForwards struct {
 	StreamServer
 	types.PlatformsController
-	Mutex                      xsync.Gorex
+	Mutex                      xsync.Mutex
 	DestinationStreamingLocker *lockmap.LockMap
 	ActiveStreamForwardings    map[ForwardingKey]*ActiveStreamForwarding
 	StreamDestinations         []types.StreamDestination
@@ -688,4 +688,20 @@ func (s *StreamForwards) findStreamDestinationByID(
 		}
 	}
 	return types.StreamDestination{}, fmt.Errorf("unable to find a stream destination by StreamID '%s'", destinationID)
+}
+
+func (s *StreamForwards) getLocalhostEndpoint(ctx context.Context) (*url.URL, error) {
+	portSrvs, err := s.StreamServer.GetPortServers(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get port servers info: %w", err)
+	}
+	portSrv := portSrvs[0]
+
+	urlString := fmt.Sprintf("%s://%s", portSrv.Type, portSrv.Addr)
+	urlParsed, err := url.Parse(urlString)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse '%s': %w", urlString, err)
+	}
+
+	return urlParsed, nil
 }

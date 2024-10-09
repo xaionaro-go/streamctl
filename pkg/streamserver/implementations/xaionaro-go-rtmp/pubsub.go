@@ -80,10 +80,15 @@ func (pb *Pubsub) deregister() error {
 
 func (pb *Pubsub) Pub() *Pub {
 	pub := &Pub{
-		pb: pb,
+		pb:         pb,
+		closedChan: make(chan struct{}),
 	}
 	pb.pub = pub
 	return pub
+}
+
+func (pb *Pubsub) ClosedChan() <-chan struct{} {
+	return pb.Pub().ClosedChan()
 }
 
 const sendQueueLength = 2 * 60 * 10 // presumably it will give about 10 seconds of queue: 2 tracks * 60FPS * 30 seconds
@@ -121,6 +126,8 @@ type Pub struct {
 	m  xsync.Mutex
 	pb *Pubsub
 
+	closedChanLocker      xsync.Mutex
+	closedChan            chan struct{}
 	aacSeqHeaderBeforeKey *flvtag.FlvTag
 	avcSeqHeaderBeforeKey *flvtag.FlvTag
 	aacSeqHeaderAfterKey  *flvtag.FlvTag
@@ -244,7 +251,22 @@ func (p *Pub) Publish(flv *flvtag.FlvTag) error {
 }
 
 func (p *Pub) Close() error {
+	defer p.notifyClosedChan()
 	return p.pb.Deregister()
+}
+
+func (p *Pub) notifyClosedChan() {
+	p.closedChanLocker.Do(context.TODO(), func() {
+		oldChan := p.closedChan
+		p.closedChan = make(chan struct{})
+		close(oldChan)
+	})
+}
+
+func (p *Pub) ClosedChan() <-chan struct{} {
+	return xsync.DoR1(context.TODO(), &p.closedChanLocker, func() <-chan struct{} {
+		return p.closedChan
+	})
 }
 
 type Sub struct {

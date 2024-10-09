@@ -25,6 +25,7 @@ type StreamPortServer struct {
 }
 
 type Publisher interface {
+	ClosedChan() <-chan struct{}
 }
 
 type WaitPublisherChaner interface {

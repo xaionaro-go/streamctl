@@ -18,7 +18,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	playertypes "github.com/xaionaro-go/streamctl/pkg/player/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/xaionaro-go-rtmp/streamforward"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/libav/streamforward"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/streamplayers"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
@@ -33,14 +33,14 @@ type StreamServer struct {
 	*streamplayers.StreamPlayers
 	*streamforward.StreamForwards
 
-	mutex          xsync.Mutex
+	mutex          xsync.Gorex
 	config         *types.Config
 	pathManager    *pathmanager.PathManager
 	serverHandlers []types.PortServer
 	isInitialized  bool
 
 	streamsStatusLocker xsync.Mutex
-	streamReady         map[types.AppKey]bool
+	publishers          map[types.AppKey]*PublisherClosedNotifier
 	streamsChanged      chan struct{}
 }
 
@@ -53,7 +53,7 @@ func New(
 
 	s := &StreamServer{
 		config:         cfg,
-		streamReady:    make(map[types.AppKey]bool),
+		publishers:     make(map[types.AppKey]*PublisherClosedNotifier),
 		streamsChanged: make(chan struct{}),
 	}
 	s.StreamForwards = streamforward.NewStreamForwards(s, platformsController)
@@ -136,21 +136,35 @@ func (s *StreamServer) init(
 }
 
 func (s *StreamServer) PathReady(path defs.Path) {
+	ctx := context.TODO()
+	logger.Debugf(ctx, "PathReady(%s)", path.Name())
+	defer logger.Debugf(ctx, "/PathReady(%s)", path.Name())
+
 	appKey := types.AppKey(path.Name())
 
 	s.streamsStatusLocker.Do(context.Background(), func() {
-		s.streamReady[appKey] = true
+		s.publishers[appKey] = newPublisherClosedNotifier()
 
 		var oldCh chan struct{}
 		oldCh, s.streamsChanged = s.streamsChanged, make(chan struct{})
 		close(oldCh)
 	})
 }
+
 func (s *StreamServer) PathNotReady(path defs.Path) {
+	ctx := context.TODO()
+	logger.Debugf(ctx, "PathNotReady(%s)", path.Name())
+	defer logger.Debugf(ctx, "/PathNotReady(%s)", path.Name())
+
 	appKey := types.AppKey(path.Name())
 
 	s.streamsStatusLocker.Do(context.Background(), func() {
-		delete(s.streamReady, appKey)
+		publisher := s.publishers[appKey]
+		// TODO: add an assert
+		if publisher != nil {
+			publisher.Close()
+			delete(s.publishers, appKey)
+		}
 
 		var oldCh chan struct{}
 		oldCh, s.streamsChanged = s.streamsChanged, make(chan struct{})
@@ -345,18 +359,18 @@ func (s *StreamServer) WaitPublisherChan(
 	ctx context.Context,
 	streamID types.StreamID,
 ) (<-chan types.Publisher, error) {
-	appKey := types.StreamID2LocalAppName(streamID)
+	appKey := types.AppKey(streamID)
 
 	ch := make(chan types.Publisher, 1)
 	observability.Go(ctx, func() {
 		for {
-			isReady, waitCh := xsync.DoR2(ctx, &s.mutex, func() (bool, chan struct{}) {
-				return s.streamReady[appKey], s.streamsChanged
+			publisher, waitCh := xsync.DoR2(ctx, &s.mutex, func() (*PublisherClosedNotifier, chan struct{}) {
+				return s.publishers[appKey], s.streamsChanged
 			})
 
-			logger.Debugf(ctx, "WaitPublisherChan(%s): isReady==%v", appKey, isReady)
-			if isReady {
-				ch <- nil
+			logger.Debugf(ctx, "WaitPublisherChan(%s): publisher==%v", appKey, publisher)
+			if publisher != nil {
+				ch <- publisher
 				close(ch)
 				return
 			}
@@ -435,22 +449,6 @@ func (s *StreamServer) newServer(
 	}
 }
 
-func (s *StreamServer) newServerRTSP(
-	ctx context.Context,
-	listenAddr string,
-	opts ...types.ServerOption,
-) (_ types.PortServer, _ret error) {
-	return nil, fmt.Errorf("support of RTSP is not implemented, yet")
-}
-
-func (s *StreamServer) newServerSRT(
-	ctx context.Context,
-	listenAddr string,
-	opts ...types.ServerOption,
-) (_ types.PortServer, _ret error) {
-	return nil, fmt.Errorf("support of SRT is not implemented, yet")
-}
-
 func (s *StreamServer) newServerRTMP(
 	ctx context.Context,
 	listenAddr string,
@@ -466,20 +464,4 @@ func (s *StreamServer) newServerRTMP(
 		return nil, fmt.Errorf("unable to initialize the RTMP server %#+v: %w", rtmpSrv, err)
 	}
 	return &portServerWrapperRTMP{Server: rtmpSrv}, nil
-}
-
-func (s *StreamServer) newServerHLS(
-	ctx context.Context,
-	listenAddr string,
-	opts ...types.ServerOption,
-) (_ types.PortServer, _ret error) {
-	return nil, fmt.Errorf("support of HLS is not implemented, yet")
-}
-
-func (s *StreamServer) newServerWebRTC(
-	ctx context.Context,
-	listenAddr string,
-	opts ...types.ServerOption,
-) (_ types.PortServer, _ret error) {
-	return nil, fmt.Errorf("support of WebRTC is not implemented, yet")
 }

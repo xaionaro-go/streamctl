@@ -9,7 +9,10 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 )
 
-type RecoderConfig struct{}
+type RecoderConfig struct {
+	OnPacketReceived func(context.Context, *astiav.Packet) error
+	OnPacketSending  func(context.Context, *astiav.Packet) error
+}
 
 type Recorder struct {
 	RecoderConfig
@@ -58,6 +61,12 @@ func (r *Recorder) Recode(
 	}
 
 	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
 		// Read frame
 		if err := input.FormatContext.ReadFrame(packet); err != nil {
 			if errors.Is(err, astiav.ErrEof) {
@@ -79,10 +88,21 @@ func (r *Recorder) Recode(
 			continue
 		}
 
+		if r.OnPacketReceived != nil {
+			if err := r.OnPacketReceived(ctx, packet); err != nil {
+				return fmt.Errorf("received an error from OnPacketReceived: %w", err)
+			}
+		}
+
 		packet.SetStreamIndex(outputStream.Index())
 		packet.RescaleTs(inputStream.TimeBase(), outputStream.TimeBase())
 		packet.SetPos(-1)
 
+		if r.OnPacketSending != nil {
+			if err := r.OnPacketSending(ctx, packet); err != nil {
+				return fmt.Errorf("received an error from OnPacketSending: %w", err)
+			}
+		}
 		if err := output.FormatContext.WriteInterleavedFrame(packet); err != nil {
 			return fmt.Errorf("unable to write the frame: %w", err)
 		}

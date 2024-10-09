@@ -60,10 +60,6 @@ func toMediamtxLoggerLevel(level logger.Level) mediamtxlogger.Level {
 	}
 }
 
-func fromConfLoggerLevel(level conf.LogLevel) logger.Level {
-	return fromMediamtxLoggerLevel(mediamtxlogger.Level(level))
-}
-
 func toConfLoggerLevel(level logger.Level) conf.LogLevel {
 	return conf.LogLevel(toMediamtxLoggerLevel(level))
 }
