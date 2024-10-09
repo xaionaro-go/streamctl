@@ -23,7 +23,7 @@ ifneq ($(GOTAGS),)
 endif
 
 WINDOWS_CGO_FLAGS?=-I$(PWD)/3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/sdk/include
-WINDOWS_LINKER_FLAGS?=-L$(PWD)/3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/sdk/lib
+WINDOWS_LINKER_FLAGS?=-L$(PWD)/3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/sdk/lib -L$(PWD)/3rdparty/amd64/windows/ffmpeg-n7.0.2-19-g45ecf80f0e-win64-gpl-shared-7.0/lib
 WINDOWS_PKG_CONFIG_PATH?=$(PWD)/3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/sdk/lib/pkgconfig
 
 all: streampanel-linux-amd64 streampanel-linux-arm64 streampanel-android streampanel-windows
@@ -51,14 +51,12 @@ streampanel-android: builddir
 streampanel-ios: builddir
 	cd cmd/streampanel && fyne package $(GOBUILD_FLAGS) -release -os ios && mv streampanel.ipa ../../build/
 
-WINDOWS_LDFLAGS := $(foreach WORD,$(WINDOWS_LINKER_FLAGS),-extldflags=$(WORD))
-
 streampanel-windows: 3rdparty/amd64/windows builddir
-	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "$(WINDOWS_LDFLAGS) -H windowsgui" -o build/windows-amd64/streampanel.exe ./cmd/streampanel/
+	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "-H windowsgui '-extldflags=$(WINDOWS_LINKER_FLAGS)'" -o build/windows-amd64/streampanel.exe ./cmd/streampanel/
 	cp 3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/*.dll build/windows-amd64/
 
 streampanel-windows-debug: 3rdparty/amd64/windows builddir
-	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "$(WINDOWS_LDFLAGS)" -o build/windows-amd64/streampanel-debug.exe ./cmd/streampanel/
+	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "-a '-extldflags=$(WINDOWS_LINKER_FLAGS)'" -o build/windows-amd64/streampanel-debug.exe ./cmd/streampanel/
 	cp 3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/*.dll build/windows-amd64/
 
 streamd-linux-amd64: builddir
