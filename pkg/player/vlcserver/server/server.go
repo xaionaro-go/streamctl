@@ -27,13 +27,11 @@ type GRPCServer struct {
 }
 
 func NewServer() *GRPCServer {
-	srv := &GRPCServer{}
-	grpcServer := grpc.NewServer()
-	player_grpc.RegisterPlayerServer(grpcServer, srv)
-
-	return &GRPCServer{
-		GRPCServer: grpcServer,
+	srv := &GRPCServer{
+		GRPCServer: grpc.NewServer(),
 	}
+	player_grpc.RegisterPlayerServer(srv.GRPCServer, srv)
+	return srv
 }
 
 func (srv *GRPCServer) Serve(

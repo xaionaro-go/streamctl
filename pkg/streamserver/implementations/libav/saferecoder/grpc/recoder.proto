@@ -1,0 +1,94 @@
+syntax = "proto3";
+package recoder_grpc;
+option go_package = "go/recoder_grpc";
+
+service Recoder {
+    rpc SetLoggingLevel(SetLoggingLevelRequest) returns(SetLoggingLevelReply) {}
+    rpc NewInput(NewInputRequest) returns (NewInputReply) {}
+    rpc NewOutput(NewOutputRequest) returns (NewOutputReply) {}
+    rpc NewRecoder(NewRecoderRequest) returns (NewRecoderReply) {}
+    rpc GetRecoderStats(GetRecoderStatsRequest) returns (GetRecoderStatsReply) {}
+    rpc StartRecoding(StartRecodingRequest) returns (StartRecodingReply) {}
+	rpc RecodingEndedChan(RecodingEndedChanRequest) returns (stream RecodingEndedChanReply) {}
+}
+
+enum LoggingLevel {
+	LoggingLevelNone = 0;
+	LoggingLevelFatal = 1;
+	LoggingLevelPanic = 2;
+	LoggingLevelError = 3;
+	LoggingLevelWarn = 4;
+	LoggingLevelInfo = 5;
+	LoggingLevelDebug = 6;
+	LoggingLevelTrace = 7;
+}
+
+message SetLoggingLevelRequest {
+    LoggingLevel level = 1;
+}
+
+message SetLoggingLevelReply {}
+
+message Error {
+    uint64 code = 1;
+    string message = 2;
+}
+
+message ResourcePath {
+    oneof ResourcePath {
+        string url = 1;
+    }
+}
+
+message InputConfig {}
+
+message NewInputRequest {
+    ResourcePath path = 1;
+    InputConfig config = 2;
+}
+
+message NewInputReply {
+    uint64 id = 1;
+}
+
+message OutputConfig {}
+
+message NewOutputRequest {
+    ResourcePath path = 1;
+    OutputConfig config = 2;
+}
+
+message NewOutputReply {
+    uint64 id = 1;
+}
+
+message RecoderConfig {}
+
+message NewRecoderRequest {
+    RecoderConfig config = 1;
+}
+
+message NewRecoderReply {
+    uint64 id = 1;
+}
+
+message GetRecoderStatsRequest {
+    uint64 recoderID = 1;
+}
+
+message GetRecoderStatsReply {
+    uint64 bytesCountRead = 1;
+    uint64 bytesCountWrote = 2;
+}
+
+message StartRecodingRequest {
+    uint64 recoderID = 1;
+    uint64 inputID = 2;
+    uint64 outputID = 3;
+}
+message StartRecodingReply {}
+
+message RecodingEndedChanRequest {
+    uint64 recoderID = 1;
+}
+message RecodingEndedChanReply {}

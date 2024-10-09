@@ -6,12 +6,13 @@ import (
 	"net/url"
 	"runtime/debug"
 	"sync/atomic"
+	"time"
 
-	"github.com/asticode/go-astiav"
+	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/libav/recoder"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/libav/saferecoder"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
@@ -30,8 +31,7 @@ type ActiveStreamForwarding struct {
 	cancelFunc context.CancelFunc
 
 	locker             xsync.Mutex
-	input              *recoder.Input
-	output             *recoder.Output
+	recoderProcess     *saferecoder.Process
 	recodingCancelFunc context.CancelFunc
 }
 
@@ -183,100 +183,129 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 
 	defer func() {
 		fwd.locker.Do(ctx, func() {
-			err := fwd.stopRecoding()
+			err := fwd.killRecodingProcess()
 			if err != nil {
 				logger.Warn(ctx, err)
 			}
 		})
 	}()
 
-	r := recoder.New(recoder.RecoderConfig{
-		OnPacketReceived: func(ctx context.Context, packet *astiav.Packet) error {
-			fwd.ReadCount.Add(uint64(packet.Size()))
-			return nil
-		},
-		OnPacketSending: func(ctx context.Context, packet *astiav.Packet) error {
-			fwd.WriteCount.Add(uint64(packet.Size()))
-			return nil
-		},
-	})
+	recoderProcess, err := saferecoder.NewProcess(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to initialize a recoder: %w", err)
+	}
 
-	var (
-		input  *recoder.Input
-		output *recoder.Output
-	)
+	recoderInstance, err := recoderProcess.NewRecoder(saferecoder.RecoderConfig{})
+	if err != nil {
+		errmon.ObserveErrorCtx(ctx, recoderProcess.Kill())
+		return fmt.Errorf("unable to initialize a new recoder instance: %w", err)
+	}
+
+	input, err := fwd.openInputFor(ctx, recoderProcess)
+	if err != nil {
+		errmon.ObserveErrorCtx(ctx, recoderProcess.Kill())
+		return fmt.Errorf("unable to open the input: %w", err)
+	}
+
+	output, err := fwd.openOutputFor(ctx, recoderProcess)
+	if err != nil {
+		errmon.ObserveErrorCtx(ctx, recoderProcess.Kill())
+		return fmt.Errorf("unable to open the output: %w", err)
+	}
+
 	recodingFinished := make(chan struct{})
 	defer func() {
 		close(recodingFinished)
 	}()
 	err = xsync.DoR1(ctx, &fwd.locker, func() error {
-		if err := fwd.openInput(ctx); err != nil {
-			return fmt.Errorf("unable to open the input: %w", err)
+		if fwd.recoderProcess != nil {
+			return fmt.Errorf("recoder process is already initialized")
 		}
-
-		if err := fwd.openOutput(ctx); err != nil {
-			return fmt.Errorf("unable to open the output: %w", err)
-		}
+		fwd.recoderProcess = recoderProcess
 
 		fwd.recodingCancelFunc = func() {
 			cancelFn()
 			<-recodingFinished
 		}
-		input, output = fwd.input, fwd.output
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		err = recoderInstance.StartRecoding(ctx, input, output)
+		if err != nil {
+			select {
+			case <-ctx.Done():
+				return nil
+			default:
+			}
+			return fmt.Errorf("unable to Recode: %w", err)
+		}
 		return nil
 	})
 	if err != nil {
 		return err
 	}
 
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
+	observability.Go(ctx, func() {
+		t := time.NewTicker(time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
 
-	err = r.Recode(ctx, input, output)
-	if err != nil {
-		select {
-		case <-ctx.Done():
-			return nil
-		default:
+			stats, err := recoderInstance.GetStats(ctx)
+			if err != nil {
+				logger.Errorf(ctx, "unable to get stats: %v", err)
+				return
+			}
+
+			fwd.ReadCount.Store(stats.BytesCountRead)
+			fwd.WriteCount.Store(stats.BytesCountWrote)
 		}
-		return fmt.Errorf("unable to Recode: %w", err)
-	}
+	})
 
-	return nil
+	return recoderInstance.Wait(ctx)
 }
 
-func (fwd *ActiveStreamForwarding) openInput(ctx context.Context) error {
+func (fwd *ActiveStreamForwarding) openInputFor(
+	ctx context.Context,
+	recoderProcess *saferecoder.Process,
+) (*saferecoder.Input, error) {
 	inputURL, err := fwd.getLocalhostEndpoint(ctx)
 	if err != nil {
-		return fmt.Errorf("unable to get a localhost endpoint: %w", err)
+		return nil, fmt.Errorf("unable to get a localhost endpoint: %w", err)
 	}
 
 	inputURL.Path = "/" + string(fwd.StreamID)
 
-	input, err := recoder.NewInputFromURL(ctx, inputURL.String(), recoder.InputConfig{})
+	input, err := recoderProcess.NewInputFromURL(ctx, inputURL.String(), saferecoder.InputConfig{})
 	if err != nil {
-		return fmt.Errorf("unable to open '%s' as the input: %w", inputURL, err)
+		return nil, fmt.Errorf("unable to open '%s' as the input: %w", inputURL, err)
 	}
 	logger.Debugf(ctx, "opened '%s' as the input", inputURL)
-	fwd.input = input
-	return nil
+	return input, nil
 }
 
-func (fwd *ActiveStreamForwarding) openOutput(ctx context.Context) error {
-	output, err := recoder.NewOutputFromURL(ctx, fwd.URL.String(), recoder.OutputConfig{})
+func (fwd *ActiveStreamForwarding) openOutputFor(
+	ctx context.Context,
+	recoderProcess *saferecoder.Process,
+) (*saferecoder.Output, error) {
+	output, err := recoderProcess.NewOutputFromURL(ctx, fwd.URL.String(), saferecoder.OutputConfig{})
 	if err != nil {
-		return fmt.Errorf("unable to open '%s' as the output: %w", fwd.URL, err)
+		return nil, fmt.Errorf("unable to open '%s' as the output: %w", fwd.URL, err)
 	}
 	logger.Debugf(ctx, "opened '%s' as the output", fwd.URL)
 
-	fwd.output = output
-	return nil
+	return output, nil
 }
 
-func (fwd *ActiveStreamForwarding) stopRecoding() error {
+func (fwd *ActiveStreamForwarding) killRecodingProcess() error {
 	var result *multierror.Error
 
 	if fwd.recodingCancelFunc != nil {
@@ -284,20 +313,12 @@ func (fwd *ActiveStreamForwarding) stopRecoding() error {
 		fwd.recodingCancelFunc = nil
 	}
 
-	if fwd.input != nil {
-		err := fwd.input.Close()
+	if fwd.recoderProcess != nil {
+		err := fwd.recoderProcess.Kill()
 		if err != nil {
 			result = multierror.Append(result, fmt.Errorf("unable to close fwd.Client: %v", err))
 		}
-		fwd.input = nil
-	}
-
-	if fwd.output != nil {
-		err := fwd.output.Close()
-		if err != nil {
-			result = multierror.Append(result, fmt.Errorf("unable to close fwd.Client: %v", err))
-		}
-		fwd.output = nil
+		fwd.recoderProcess = nil
 	}
 
 	return result.ErrorOrNil()
@@ -316,7 +337,7 @@ func (fwd *ActiveStreamForwarding) Close() error {
 			fwd.cancelFunc = nil
 		}
 
-		if err := fwd.stopRecoding(); err != nil {
+		if err := fwd.killRecodingProcess(); err != nil {
 			result = multierror.Append(result, fmt.Errorf("unable to stop recoding: %w", err))
 		}
 		return result.ErrorOrNil()

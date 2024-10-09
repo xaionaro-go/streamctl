@@ -6,9 +6,10 @@ import (
 
 	"github.com/asticode/go-astiav"
 	"github.com/asticode/go-astikit"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 )
 
-type InputConfig struct{}
+type InputConfig = types.InitConfig
 
 type Input struct {
 	*astikit.Closer

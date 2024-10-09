@@ -9,9 +9,10 @@ import (
 	"github.com/asticode/go-astiav"
 	"github.com/asticode/go-astikit"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/libav/recoder/types"
 )
 
-type OutputConfig struct{}
+type OutputConfig = types.OutputConfig
 
 type Output struct {
 	*astikit.Closer
