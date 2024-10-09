@@ -9,7 +9,7 @@ import (
 	rtmpserver "github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/go2rtc/streamserver/server/rtmp"
 	rtspserver "github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/go2rtc/streamserver/server/rtsp"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/go2rtc/streamserver/streams"
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/yutopp-go-rtmp/streamforward"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/xaionaro-go-rtmp/streamforward"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"

@@ -25,7 +25,7 @@ type ForwardingKey struct {
 type StreamForwards struct {
 	StreamServer
 	types.PlatformsController
-	Mutex                      xsync.Gorex
+	Mutex                      xsync.RWMutex
 	ActiveStreamForwardings    map[ForwardingKey]*ActiveStreamForwarding
 	DestinationStreamingLocker *lockmap.LockMap
 	StreamDestinations         []types.StreamDestination
@@ -136,6 +136,22 @@ func (s *StreamForwards) addStreamForward(
 	}, nil
 }
 
+func (s *StreamForwards) getLocalhostRTMP(ctx context.Context) (*url.URL, error) {
+	portSrvs, err := s.StreamServer.GetPortServers(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get port servers info: %w", err)
+	}
+	portSrv := portSrvs[0]
+
+	urlString := fmt.Sprintf("%s://%s", portSrv.Type, portSrv.Addr)
+	urlParsed, err := url.Parse(urlString)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse '%s': %w", urlString, err)
+	}
+
+	return urlParsed, nil
+}
+
 func (s *StreamForwards) newActiveStreamForward(
 	ctx context.Context,
 	streamID types.StreamID,
@@ -162,13 +178,10 @@ func (s *StreamForwards) newActiveStreamForward(
 	}
 
 	if urlParsed.Host == "" {
-		portSrvs, err := s.StreamServer.GetPortServers(ctx)
+		urlParsed, err = s.getLocalhostRTMP(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("unable to get port servers info: %w", err)
+			return nil, fmt.Errorf("unable to get the URL of the output endpoint: %w", err)
 		}
-		portSrv := portSrvs[0]
-		urlParsed.Scheme = portSrv.Type.String()
-		urlParsed.Host = portSrv.Addr
 	}
 
 	result := &StreamForward{

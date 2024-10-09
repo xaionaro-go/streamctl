@@ -2,7 +2,7 @@ package streamserver
 
 import (
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/mediamtx/streamserver"
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/yutopp-go-rtmp/streamforward"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/xaionaro-go-rtmp/streamforward"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 )
 

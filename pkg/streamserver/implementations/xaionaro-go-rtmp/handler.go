@@ -10,12 +10,12 @@ import (
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/pkg/errors"
+	"github.com/xaionaro-go/go-rtmp"
+	rtmpmsg "github.com/xaionaro-go/go-rtmp/message"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 	flvtag "github.com/yutopp/go-flv/tag"
-	"github.com/yutopp/go-rtmp"
-	rtmpmsg "github.com/yutopp/go-rtmp/message"
 )
 
 var _ rtmp.Handler = (*Handler)(nil)

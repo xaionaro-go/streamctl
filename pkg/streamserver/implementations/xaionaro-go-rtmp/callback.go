@@ -5,9 +5,9 @@ import (
 	"context"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/go-rtmp"
+	rtmpmsg "github.com/xaionaro-go/go-rtmp/message"
 	flvtag "github.com/yutopp/go-flv/tag"
-	"github.com/yutopp/go-rtmp"
-	rtmpmsg "github.com/yutopp/go-rtmp/message"
 )
 
 type Conn interface {

@@ -18,7 +18,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	playertypes "github.com/xaionaro-go/streamctl/pkg/player/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/yutopp-go-rtmp/streamforward"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/xaionaro-go-rtmp/streamforward"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/streamplayers"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
@@ -33,7 +33,7 @@ type StreamServer struct {
 	*streamplayers.StreamPlayers
 	*streamforward.StreamForwards
 
-	mutex          xsync.Gorex
+	mutex          xsync.Mutex
 	config         *types.Config
 	pathManager    *pathmanager.PathManager
 	serverHandlers []types.PortServer

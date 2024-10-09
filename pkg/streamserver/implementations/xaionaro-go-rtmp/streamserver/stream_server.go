@@ -11,19 +11,19 @@ import (
 
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/go-rtmp"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	playertypes "github.com/xaionaro-go/streamctl/pkg/player/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
-	yutoppgortmp "github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/yutopp-go-rtmp"
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/yutopp-go-rtmp/streamforward"
+	yutoppgortmp "github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/xaionaro-go-rtmp"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/xaionaro-go-rtmp/streamforward"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/streamplayers"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/streamctl/pkg/xlogger"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 	flvtag "github.com/yutopp/go-flv/tag"
-	"github.com/yutopp/go-rtmp"
 )
 
 type BrowserOpener interface {

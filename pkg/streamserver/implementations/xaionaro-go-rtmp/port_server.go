@@ -4,9 +4,9 @@ import (
 	"net"
 	"sync/atomic"
 
+	"github.com/xaionaro-go/go-rtmp"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
-	"github.com/yutopp/go-rtmp"
 )
 
 type PortServer struct {

@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/yutopp-go-rtmp/streamserver"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/xaionaro-go-rtmp/streamserver"
 )
 
 type dummyBrowserOpener struct{}

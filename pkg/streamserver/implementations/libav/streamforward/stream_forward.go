@@ -1,7 +1,6 @@
 package streamforward
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"net/http"
@@ -13,7 +12,7 @@ import (
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
-	"github.com/xaionaro-go/lockmap"
+	"github.com/xaionaro-go/go-rtmp"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	commontypes "github.com/xaionaro-go/streamctl/pkg/streamtypes"
@@ -25,25 +24,12 @@ const (
 	chunkSize = 128
 )
 
-type StreamForwards struct {
-	DestinationStreamingLocker *lockmap.LockMap
-}
-
-func NewStreamForwards() *StreamForwards {
-	return &StreamForwards{
-		DestinationStreamingLocker: lockmap.NewLockMap(),
-	}
-}
-
-type Unlocker interface {
-	Unlock()
-}
+type StreamForward = types.StreamForward[*ActiveStreamForwarding]
 
 type ActiveStreamForwarding struct {
 	*StreamForwards
 	Recoding      commontypes.VideoConvertConfig
 	Locker        xsync.Mutex
-	StreamServer  StreamServer
 	StreamID      types.StreamID
 	DestinationID types.DestinationID
 	URL           *url.URL
@@ -56,7 +42,6 @@ type ActiveStreamForwarding struct {
 
 func (fwds *StreamForwards) NewActiveStreamForward(
 	ctx context.Context,
-	s StreamServer,
 	streamID types.StreamID,
 	dstID types.DestinationID,
 	urlString string,
@@ -74,7 +59,6 @@ func (fwds *StreamForwards) NewActiveStreamForward(
 	}
 	fwd := &ActiveStreamForwarding{
 		StreamForwards: fwds,
-		StreamServer:   s,
 		StreamID:       streamID,
 		DestinationID:  dstID,
 		URL:            urlParsed,

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"net/http"
 	"net/url"
 	"runtime/debug"
 	"strings"
@@ -12,14 +11,13 @@ import (
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
+	"github.com/xaionaro-go/go-rtmp"
+	rtmpmsg "github.com/xaionaro-go/go-rtmp/message"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
-	yutoppgortmp "github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/yutopp-go-rtmp"
+	yutoppgortmp "github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/xaionaro-go-rtmp"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
-	"github.com/xaionaro-go/streamctl/pkg/xlogger"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 	flvtag "github.com/yutopp/go-flv/tag"
-	"github.com/yutopp/go-rtmp"
-	rtmpmsg "github.com/yutopp/go-rtmp/message"
 )
 
 const (
@@ -38,7 +36,8 @@ type ActiveStreamForwarding struct {
 	StreamID      types.StreamID
 	DestinationID types.DestinationID
 	URL           *url.URL
-	Client        *rtmp.ClientConn
+	InClient      *rtmp.ClientConn
+	OutClient     *rtmp.ClientConn
 	OutStream     *rtmp.Stream
 	Sub           Sub
 	CancelFunc    context.CancelFunc
@@ -187,52 +186,27 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 
 	_, remoteAppName, apiKey := fwd.getAppNameAndKey()
 
-	urlParsed := ptr(*fwd.URL)
-	logger.Debugf(ctx, "connecting to '%s'", fwd.URL.String())
-	if fwd.URL.Port() == "" {
-		switch urlParsed.Scheme {
-		case "rtmp":
-			urlParsed.Host += ":1935"
-		case "rtmps":
-			urlParsed.Host += ":443"
-		default:
-			return fmt.Errorf("unexpected scheme '%s' in URL '%s'", urlParsed.Scheme, urlParsed.String())
-		}
-	}
-	var dialFunc func(protocol, addr string, config *rtmp.ConnConfig) (*rtmp.ClientConn, error)
-	switch urlParsed.Scheme {
-	case "rtmp":
-		dialFunc = rtmp.Dial
-	case "rtmps":
-		dialFunc = func(protocol, addr string, config *rtmp.ConnConfig) (*rtmp.ClientConn, error) {
-			return rtmp.TLSDial(protocol, addr, config, http.DefaultTransport.(*http.Transport).TLSClientConfig)
-		}
-	default:
-		return fmt.Errorf("unexpected scheme '%s' in URL '%s'", urlParsed.Scheme, urlParsed.String())
-	}
-	client, err := dialFunc(urlParsed.Scheme, urlParsed.Host, &rtmp.ConnConfig{
-		Logger: xlogger.LogrusFieldLoggerFromCtx(ctx),
-	})
+	outClient, err := newRTMPClient(ctx, *fwd.URL)
 	if err != nil {
-		return fmt.Errorf("unable to connect to '%s': %w", urlParsed.String(), err)
+		return fmt.Errorf("unable to connect to the output endpoint '%s': %w", fwd.URL, err)
 	}
 
-	logger.Debugf(ctx, "connected to '%s'", urlParsed.String())
+	logger.Debugf(ctx, "connected to '%s'", fwd.URL.String())
 
 	fwd.Locker.Do(ctx, func() {
-		fwd.Client = client
+		fwd.OutClient = outClient
 	})
 
 	defer func() {
 		fwd.Locker.Do(ctx, func() {
-			if fwd.Client == nil {
+			if fwd.OutClient == nil {
 				return
 			}
-			err := fwd.Client.Close()
+			err := fwd.OutClient.Close()
 			if err != nil {
 				logger.Warnf(ctx, "unable to close fwd.Client: %v", err)
 			}
-			fwd.Client = nil
+			fwd.OutClient = nil
 		})
 	}()
 
@@ -242,14 +216,15 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 	default:
 	}
 
-	tcURL := *urlParsed
+	tcURL := *fwd.URL
 	tcURL.Path = "/" + remoteAppName
 	if tcURL.Port() == "1935" {
 		tcURL.Host = tcURL.Hostname()
 	}
 
+	var closedChan <-chan struct{}
 	err = xsync.DoR1(ctx, &fwd.Locker, func() error {
-		if err := client.Connect(ctx, &rtmpmsg.NetConnectionConnect{
+		if err := outClient.Connect(ctx, &rtmpmsg.NetConnectionConnect{
 			Command: rtmpmsg.NetConnectionConnectCommand{
 				App:      remoteAppName,
 				Type:     "nonprivate",
@@ -257,41 +232,91 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 				TCURL:    tcURL.String(),
 			},
 		}); err != nil {
-			return fmt.Errorf("unable to connect the stream to '%s': %w", urlParsed.String(), err)
+			return fmt.Errorf("unable to connect the stream to '%s': %w", fwd.URL.String(), err)
 		}
-		logger.Debugf(ctx, "connected the stream to '%s'", urlParsed.String())
+		logger.Debugf(ctx, "connected the stream to '%s'", fwd.URL.String())
 
-		fwd.OutStream, err = client.CreateStream(ctx, &rtmpmsg.NetConnectionCreateStream{}, chunkSize)
+		fwd.OutStream, err = outClient.CreateStream(ctx, &rtmpmsg.NetConnectionCreateStream{}, chunkSize)
 		if err != nil {
-			return fmt.Errorf("unable to create a stream to '%s': %w", urlParsed.String(), err)
+			return fmt.Errorf("unable to create a stream to '%s': %w", fwd.URL.String(), err)
 		}
 
-		logger.Debugf(ctx, "calling Publish at '%s'", urlParsed.String())
+		logger.Debugf(ctx, "calling Publish at '%s'", fwd.URL.String())
 		if err := fwd.OutStream.Publish(ctx, &rtmpmsg.NetStreamPublish{
 			PublishingName: apiKey,
 			PublishingType: "live",
 		}); err != nil {
-			return fmt.Errorf("unable to send the Publish message to '%s': %w", urlParsed.String(), err)
+			return fmt.Errorf("unable to send the Publish message to '%s': %w", fwd.URL.String(), err)
 		}
 
-		logger.Debugf(ctx, "starting publishing to '%s'", urlParsed.String())
-		pubSub, ok := publisher.(*yutoppgortmp.Pubsub)
-		if ok {
-			fwd.Sub = pubSub.Sub(client, fwd.subCallback)
-		} else {
-			panic(fmt.Errorf("not implemented, yet! %T", publisher))
+		logger.Debugf(ctx, "starting publishing to '%s'", fwd.URL.String())
+		switch publisher := publisher.(type) {
+		case *yutoppgortmp.Pubsub:
+			fwd.Sub = publisher.Sub(outClient, fwd.subCallback)
+			closedChan = fwd.Sub.ClosedChan()
+		default:
+			closedChan, err = fwd.connectToLocalhostAndStartReadingStream(ctx)
+			if err != nil {
+				return fmt.Errorf("unable to connect to the input endpoint (publisher type: %T): %w", publisher, err)
+			}
 		}
 
-		logger.Debugf(ctx, "started publishing to '%s'", urlParsed.String())
+		logger.Debugf(ctx, "started publishing to '%s'", fwd.URL.String())
 		return nil
 	})
 	if err != nil {
 		return nil
 	}
 
-	<-fwd.Sub.ClosedChan()
-	logger.Debugf(ctx, "the source stopped, so stopped also publishing to '%s'", urlParsed.String())
+	<-closedChan
+	logger.Debugf(ctx, "the source stopped, so stopped also publishing to '%s'", fwd.URL.String())
 	return nil
+}
+
+func (fwd *ActiveStreamForwarding) connectToLocalhostAndStartReadingStream(
+	ctx context.Context,
+) (_ret <-chan struct{}, _err error) {
+	urlParsed, err := fwd.StreamForwards.getLocalhostRTMP(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get the input endpoint URL: %w", err)
+	}
+
+	inClient, err := newRTMPClient(ctx, *urlParsed)
+	if err != nil {
+		return nil, fmt.Errorf("unable to connect to the input endpoint '%s': %w", fwd.URL, err)
+	}
+	defer func() {
+		if _err == nil {
+			fwd.Locker.Do(ctx, func() {
+				fwd.InClient = inClient
+			})
+		} else {
+			err := inClient.Close()
+			if err != nil {
+				logger.Errorf(ctx, "unable to close the client for the input endpoint: %w", err)
+			}
+		}
+	}()
+
+	_, remoteAppName, _ := fwd.getAppNameAndKey()
+	tcURL := *urlParsed
+	tcURL.Path = "/" + remoteAppName
+	if tcURL.Port() == "1935" {
+		tcURL.Host = tcURL.Hostname()
+	}
+	err = inClient.Connect(ctx, &rtmpmsg.NetConnectionConnect{
+		Command: rtmpmsg.NetConnectionConnectCommand{
+			App:      remoteAppName,
+			Type:     "nonprivate",
+			FlashVer: "StreamPanel",
+			TCURL:    tcURL.String(),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("got an error on command 'Connect' to the input endpoint '%s': %w", urlParsed, err)
+	}
+
+	return nil, fmt.Errorf("not implemented, yet")
 }
 
 func (fwd *ActiveStreamForwarding) subCallback(ctx context.Context, flv *flvtag.FlvTag) error {
@@ -393,9 +418,13 @@ func (fwd *ActiveStreamForwarding) Close() error {
 			result = multierror.Append(result, fwd.Sub.Close())
 			fwd.Sub = nil
 		}
-		if fwd.Client != nil {
-			result = multierror.Append(result, fwd.Client.Close())
-			fwd.Client = nil
+		if fwd.OutClient != nil {
+			result = multierror.Append(result, fwd.OutClient.Close())
+			fwd.OutClient = nil
+		}
+		if fwd.InClient != nil {
+			result = multierror.Append(result, fwd.InClient.Close())
+			fwd.InClient = nil
 		}
 		return result.ErrorOrNil()
 	})
