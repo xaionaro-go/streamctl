@@ -213,7 +213,7 @@ require (
 	github.com/stretchr/testify v1.9.0
 	github.com/xaionaro-go/datacounter v1.0.4
 	github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42
-	github.com/xaionaro-go/gorex v0.0.0-20200314172213-23bed04bc3e3
+	github.com/xaionaro-go/gorex v0.0.0-20241010205749-bcd59d639c4d
 	github.com/xaionaro-go/lockmap v0.0.0-20240901172806-e17aea364748
 	github.com/xaionaro-go/mediamtx v0.0.0-20241009124606-94c22c603970
 	github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20241009130412-03d201da4f74
@@ -231,6 +231,7 @@ require (
 
 require (
 	github.com/onsi/gomega v1.30.0 // indirect
+	github.com/phuslu/goid v1.0.1 // indirect
 	github.com/pion/datachannel v1.5.6 // indirect
 	github.com/pion/dtls/v2 v2.2.11 // indirect
 	github.com/pion/mdns v0.0.12 // indirect
