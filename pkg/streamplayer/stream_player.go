@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -32,6 +33,7 @@ type WaitPublisherChaner interface {
 	WaitPublisherChan(
 		ctx context.Context,
 		streamID streamtypes.StreamID,
+		waitForNext bool,
 	) (<-chan Publisher, error)
 }
 
@@ -330,6 +332,13 @@ func (p *StreamPlayerHandler) controllerLoop(
 
 	isClosed := false
 	restart := func() {
+		logger.WithField(
+			ctx,
+			"stack_trace", string(debug.Stack()),
+		).Debugf("restart() was invoked")
+		if isClosed {
+			return
+		}
 		isClosed = true
 		observability.Go(ctx, func() {
 			err := p.restartU(ctx)
@@ -354,8 +363,8 @@ func (p *StreamPlayerHandler) controllerLoop(
 				defer waitPublisherCancel()
 
 				var err error
-				ch, err = p.Parent.StreamServer.WaitPublisherChan(waitPublisherCtx, p.StreamID)
-				logger.Debugf(ctx, "got a waiter from WaitPublisher for '%s'; %v", p.StreamID, err)
+				ch, err = p.Parent.StreamServer.WaitPublisherChan(waitPublisherCtx, p.StreamID, false)
+				logger.Debugf(ctx, "got a waiter from WaitPublisherChan for '%s'; %v", p.StreamID, err)
 				errmon.ObserveErrorCtx(ctx, err)
 
 				logger.Debugf(ctx, "waiting for stream '%s'", p.StreamID)
@@ -428,6 +437,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 			triedToFixEmptyLinkViaReopen := false
 			triedToFixBadLengthViaReopen := false
 			startedWaitingForBuffering := time.Now()
+			iterationNum := 0
 			for time.Since(startedWaitingForBuffering) <= p.Config.StartTimeout {
 				var (
 					pos time.Duration
@@ -493,9 +503,13 @@ func (p *StreamPlayerHandler) controllerLoop(
 					startedWaitingForBuffering = time.Now()
 					continue
 				}
-				if l != 0 && pos != 0 {
+				if pos != 0 {
 					return false
 				}
+				if iterationNum%10 == 0 {
+					logger.Debugf(ctx, "l == %v, pos == %v, iterationNum == %v", l, pos, iterationNum)
+				}
+				iterationNum++
 				time.Sleep(100 * time.Millisecond)
 			}
 

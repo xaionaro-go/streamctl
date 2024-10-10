@@ -167,7 +167,8 @@ func setupStreamPlayers(
 			ssOpts = append(ssOpts, setupCfg.DefaultStreamPlayerOptions...)
 		}
 		ssOpts = append(ssOpts, sptypes.OptionGetRestartChanFunc(func() <-chan struct{} {
-			pubCh, err := s.WaitPublisherChan(ctx, streamID)
+			logger.Debugf(ctx, "started to wait for a publisher (for a restart)")
+			pubCh, err := s.WaitPublisherChan(ctx, streamID, true)
 			if err != nil {
 				logger.Errorf(ctx, "unable to get a WaitPublisherChan: %v", err)
 				return nil
@@ -179,6 +180,7 @@ func setupStreamPlayers(
 				case <-ctx.Done():
 					return
 				case <-pubCh:
+					logger.Debugf(ctx, "got a publisher")
 					close(ch)
 				}
 			})

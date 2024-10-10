@@ -143,6 +143,11 @@ func (s *StreamServer) PathReady(path defs.Path) {
 	appKey := types.AppKey(path.Name())
 
 	s.streamsStatusLocker.Do(context.Background(), func() {
+		publisher := s.publishers[appKey]
+		if publisher != nil {
+			logger.Errorf(ctx, "double-registration of a publisher for '%s' (this is an internal error in the code): %w", appKey)
+			return
+		}
 		s.publishers[appKey] = newPublisherClosedNotifier()
 
 		var oldCh chan struct{}
@@ -160,12 +165,13 @@ func (s *StreamServer) PathNotReady(path defs.Path) {
 
 	s.streamsStatusLocker.Do(context.Background(), func() {
 		publisher := s.publishers[appKey]
-		// TODO: add an assert
-		if publisher != nil {
-			publisher.Close()
-			delete(s.publishers, appKey)
+		if publisher == nil {
+			logger.Error(ctx, "there was no registered publisher for '%s'", appKey)
+			return
 		}
 
+		publisher.Close()
+		delete(s.publishers, appKey)
 		var oldCh chan struct{}
 		oldCh, s.streamsChanged = s.streamsChanged, make(chan struct{})
 		close(oldCh)
@@ -358,29 +364,41 @@ func (s *StreamServer) removeIncomingStream(
 func (s *StreamServer) WaitPublisherChan(
 	ctx context.Context,
 	streamID types.StreamID,
+	waitForNext bool,
 ) (<-chan types.Publisher, error) {
 	appKey := types.AppKey(streamID)
 
 	ch := make(chan types.Publisher, 1)
 	observability.Go(ctx, func() {
+		var curPublisher *PublisherClosedNotifier
+		if waitForNext {
+			curPublisher = xsync.DoR1(
+				ctx, &s.mutex, func() *PublisherClosedNotifier {
+					return s.publishers[appKey]
+				},
+			)
+		}
 		for {
-			publisher, waitCh := xsync.DoR2(ctx, &s.mutex, func() (*PublisherClosedNotifier, chan struct{}) {
-				return s.publishers[appKey], s.streamsChanged
-			})
+			publisher, waitCh := xsync.DoR2(
+				ctx, &s.mutex, func() (*PublisherClosedNotifier, chan struct{}) {
+					return s.publishers[appKey], s.streamsChanged
+				},
+			)
 
-			logger.Debugf(ctx, "WaitPublisherChan(%s): publisher==%v", appKey, publisher)
-			if publisher != nil {
+			logger.Debugf(ctx, "WaitPublisherChan('%s', %v): publisher==%#+v", appKey, waitForNext, publisher)
+
+			if publisher != nil && publisher != curPublisher {
 				ch <- publisher
 				close(ch)
 				return
 			}
-			logger.Debugf(ctx, "WaitPublisherChan(%s): waiting...", appKey)
+			logger.Debugf(ctx, "WaitPublisherChan('%s', %v): waiting...", appKey, waitForNext)
 			select {
 			case <-ctx.Done():
-				logger.Debugf(ctx, "WaitPublisherChan(%s): cancelled", appKey)
+				logger.Debugf(ctx, "WaitPublisherChan('%s', %v): cancelled", appKey, waitForNext)
 				return
 			case <-waitCh:
-				logger.Debugf(ctx, "WaitPublisherChan(%s): an event happened, rechecking", appKey)
+				logger.Debugf(ctx, "WaitPublisherChan('%s', %v): an event happened, rechecking", appKey, waitForNext)
 			}
 		}
 	})

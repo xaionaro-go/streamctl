@@ -124,7 +124,7 @@ func (s *StreamServer) WaitPubsub(
 	ctx context.Context,
 	appKey types.AppKey,
 ) streamforward.Pubsub {
-	return &pubsubAdapter{s.RelayService.WaitPubsub(ctx, appKey)}
+	return &pubsubAdapter{s.RelayService.WaitPubsub(ctx, appKey, false)}
 }
 
 type pubsubAdapter struct {
@@ -341,11 +341,12 @@ func (s *StreamServer) removeIncomingStream(
 func (s *StreamServer) WaitPublisherChan(
 	ctx context.Context,
 	streamID types.StreamID,
+	waitForNext bool,
 ) (<-chan types.Publisher, error) {
 
 	ch := make(chan types.Publisher, 1)
 	observability.Go(ctx, func() {
-		ch <- s.RelayService.WaitPubsub(ctx, types.StreamID2LocalAppName(streamID))
+		ch <- s.RelayService.WaitPubsub(ctx, types.StreamID2LocalAppName(streamID), waitForNext)
 		close(ch)
 	})
 	return ch, nil

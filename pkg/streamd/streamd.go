@@ -1405,7 +1405,7 @@ func (d *StreamD) WaitForStreamPublisher(
 	ctx context.Context,
 	streamID api.StreamID,
 ) (<-chan struct{}, error) {
-	pubCh, err := d.StreamServer.WaitPublisherChan(ctx, streamID)
+	pubCh, err := d.StreamServer.WaitPublisherChan(ctx, streamID, false)
 	if err != nil {
 		return nil, err
 	}

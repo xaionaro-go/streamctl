@@ -116,7 +116,7 @@ func (fwd *ActiveStreamForwarding) WaitForPublisher(
 		}
 
 		logger.Debugf(ctx, "wait for stream '%s'", fwd.StreamID)
-		publisherChan, err := fwd.StreamServer.WaitPublisherChan(ctx, fwd.StreamID)
+		publisherChan, err := fwd.StreamServer.WaitPublisherChan(ctx, fwd.StreamID, false)
 		if err != nil {
 			return nil, fmt.Errorf("unable to get a channel to wait for a publisher: %w", err)
 		}

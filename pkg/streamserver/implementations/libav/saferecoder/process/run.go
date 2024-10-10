@@ -10,6 +10,7 @@ import (
 	child_process_manager "github.com/AgustinSRG/go-child-process-manager"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/libav/saferecoder/process/client"
 )
 
@@ -46,7 +47,7 @@ func Run(
 	}
 
 	c := client.New(d.ListenAddr)
-	level := logger.FromCtx(ctx).Level()
+	level := observability.LogLevelFilter.GetLevel()
 	if err := c.SetLoggingLevel(ctx, level); err != nil {
 		return nil, fmt.Errorf("unable to set the logging level to %s: %w", level, err)
 	}

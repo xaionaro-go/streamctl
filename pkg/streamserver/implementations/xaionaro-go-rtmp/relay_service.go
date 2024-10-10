@@ -57,7 +57,20 @@ func (s *RelayService) GetPubsub(key types.AppKey) *Pubsub {
 	})
 }
 
-func (s *RelayService) WaitPubsub(ctx context.Context, key types.AppKey) *Pubsub {
+func (s *RelayService) WaitPubsub(
+	ctx context.Context,
+	key types.AppKey,
+	waitForNext bool,
+) *Pubsub {
+	var curPubsub *Pubsub
+	if waitForNext {
+		curPubsub = xsync.DoR1(
+			ctx, &s.m, func() *Pubsub {
+				return s.streams[key]
+			},
+		)
+	}
+
 	for {
 		ctx := context.TODO()
 		pubSub, waitCh := xsync.DoR2(ctx, &s.m, func() (*Pubsub, chan struct{}) {
@@ -65,7 +78,7 @@ func (s *RelayService) WaitPubsub(ctx context.Context, key types.AppKey) *Pubsub
 		})
 
 		logger.Debugf(ctx, "WaitPubSub(%s): pubSub==%v", key, pubSub)
-		if pubSub != nil {
+		if pubSub != nil && pubSub != curPubsub {
 			return pubSub
 		}
 		logger.Debugf(ctx, "WaitPubSub(%s): waiting...", key)
