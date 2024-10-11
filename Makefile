@@ -4,6 +4,7 @@ ENABLE_LIBAV?=true
 FORCE_DEBUG?=false
 
 WINDOWS_VLC_VERSION?=3.0.21
+ANDROID_NDK_VERSION?=r27b
 
 GOTAGS:=
 ifeq ($(ENABLE_LIBAV), true)
@@ -28,6 +29,16 @@ WINDOWS_PKG_CONFIG_PATH?=$(PWD)/3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION
 
 all: streampanel-linux-amd64 streampanel-linux-arm64 streampanel-android streampanel-windows
 
+3rdparty/arm64/android-ndk-$(ANDROID_NDK_VERSION):
+	mkdir -p 3rdparty/arm64
+	cd 3rdparty/arm64 && wget https://dl.google.com/android/repository/android-ndk-$(ANDROID_NDK_VERSION)-linux.zip && unzip android-ndk-$(ANDROID_NDK_VERSION)-linux.zip && rm -f android-ndk-$(ANDROID_NDK_VERSION)-linux.zip
+
+3rdparty/arm64/termux:
+	mkdir -p 3rdparty/arm64/termux
+	cd 3rdparty/arm64/termux && wget https://packages.termux.dev/apt/termux-main/pool/main/v/vlc/vlc_3.0.21-1_aarch64.deb && ar x vlc_3.0.21-1_aarch64.deb && tar -xJvf data.tar.xz && rm -f data.tar.xz control.tar.xz debian-binary vlc_3.0.21-1_aarch64.deb
+	cd 3rdparty/arm64/termux && wget https://packages.termux.dev/apt/termux-main/pool/main/v/vlc-static/vlc-static_3.0.21-1_aarch64.deb && ar x vlc-static_3.0.21-1_aarch64.deb && tar -xJvf data.tar.xz && rm -f data.tar.xz control.tar.xz debian-binary vlc-static_3.0.21-1_aarch64.deb
+	cd 3rdparty/arm64/termux && wget https://packages.termux.dev/apt/termux-main/pool/main/f/ffmpeg/ffmpeg_6.1.2_aarch64.deb && ar x ffmpeg_6.1.2_aarch64.deb && tar -xJvf data.tar.xz && rm -f data.tar.xz control.tar.xz debian-binary ffmpeg_6.1.2_aarch64.deb
+
 3rdparty/amd64/windows:
 	mkdir -p 3rdparty/amd64/windows
 	sh -c 'cd 3rdparty/amd64/windows && wget https://get.videolan.org/vlc/$(WINDOWS_VLC_VERSION)/win64/vlc-$(WINDOWS_VLC_VERSION)-win64.7z && 7z x vlc-$(WINDOWS_VLC_VERSION)-win64.7z && rm -f vlc-$(WINDOWS_VLC_VERSION)-win64.7z'
@@ -45,7 +56,11 @@ streampanel-macos-amd64: builddir
 streampanel-macos-arm64: builddir
 	CGO_ENABLED=1 CGO_LDFLAGS="-static" GOOS=darwin GOARCH=arm64 go build $(GOBUILD_FLAGS) -o build/streampanel-macos-arm64 ./cmd/streampanel
 
-docker-termux-environment:
+3rdparty/arm64/termux-packages:
+	mkdir -p 3rdparty/arm64/
+	cd 3rdparty/arm64 && git clone https://github.com/termux/termux-packages
+
+3rdparty/arm64/termux-packages/environment-ready: 3rdparty/arm64/termux-packages
 	cd 3rdparty/arm64/termux-packages && \
 	./scripts/update-docker.sh || /bin/true
 
@@ -73,12 +88,17 @@ docker-termux-environment:
 	cd 3rdparty/arm64/termux-packages && \
 	./scripts/run-docker.sh go install fyne.io/fyne/v2/cmd/fyne@latest
 
-dockerbuild-streampanel-android:
-	cd 3rdparty/arm64/termux-packages && \
-	./scripts/run-docker.sh make ENABLE_VLC=$(ENABLE_VLC) ENABLE_LIBAV=$(ENABLE_LIBAV) FORCE_DEBUG=$(FORCE_DEBUG) -C /project streampanel-android
+	touch 3rdparty/arm64/termux-packages/environment-ready
 
-streampanel-android: builddir
-	cd cmd/streampanel && CGO_CFLAGS='-I /data/data/com.termux/files/usr/include/ -Wno-incompatible-function-pointer-types' PKG_CONFIG_PATH=/data/data/com.termux/files/usr/lib/pkgconfig/ ANDROID_NDK_HOME="$(shell ls -d /home/builder/lib/android-ndk-*)" PATH="${PATH}:${HOME}/go/bin" ANDROID_HOME="${HOME}"/Android/Sdk fyne package $(FYNEBUILD_FLAGS) -release -os android/arm64 && mv streampanel.apk ../../build/
+dockerbuild-streampanel-android: 3rdparty/arm64/termux-packages/environment-ready
+	cd 3rdparty/arm64/termux-packages && \
+	./scripts/run-docker.sh make ENABLE_VLC=$(ENABLE_VLC) ENABLE_LIBAV=$(ENABLE_LIBAV) FORCE_DEBUG=$(FORCE_DEBUG) -C /project streampanel-android-in-docker
+
+streampanel-android-in-docker: builddir
+	cd cmd/streampanel && CGO_CFLAGS='-I /data/data/com.termux/files/usr/include/ -Wno-incompatible-function-pointer-types' PKG_CONFIG_PATH=/data/data/com.termux/files/usr/lib/pkgconfig/ ANDROID_NDK_HOME="$(shell ls -d /home/builder/lib/android-ndk-*)" PATH="${PATH}:${HOME}/go/bin" fyne package $(FYNEBUILD_FLAGS) -release -os android/arm64 && mv streampanel.apk ../../build/
+
+streampanel-android: 3rdparty/arm64/android-ndk-$(ANDROID_NDK_VERSION) 3rdparty/arm64/termux
+	cd cmd/streampanel && PKG_CONFIG_PATH='$(PWD)/3rdparty/arm64/termux/data/data/com.termux/files/usr/lib/pkgconfig' CGO_CFLAGS='-I$(PWD)/3rdparty/arm64/termux/data/data/com.termux/files/usr/include -Wno-incompatible-function-pointer-types' CGO_LDFLAGS='-L$(PWD)/3rdparty/arm64/termux/data/data/com.termux/files/usr/lib' ANDROID_NDK_HOME=$(PWD)/3rdparty/arm64/android-ndk-$(ANDROID_NDK_VERSION) fyne package $(FYNEBUILD_FLAGS) -release -os android/arm64 && mv streampanel.apk ../../build/
 
 streampanel-ios: builddir
 	cd cmd/streampanel && fyne package $(GOBUILD_FLAGS) -release -os ios && mv streampanel.ipa ../../build/

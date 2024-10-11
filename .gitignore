@@ -1,4 +1,6 @@
 3rdparty/amd64
+3rdparty/arm64/termux
+3rdparty/arm64/android-ndk-*
 *.apk
 build
 qtbox
