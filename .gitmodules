@@ -1,0 +1,3 @@
+[submodule "3rdparty/arm64/termux-packages"]
+	path = 3rdparty/arm64/termux-packages
+	url = https://github.com/termux/termux-packages/

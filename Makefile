@@ -45,8 +45,40 @@ streampanel-macos-amd64: builddir
 streampanel-macos-arm64: builddir
 	CGO_ENABLED=1 CGO_LDFLAGS="-static" GOOS=darwin GOARCH=arm64 go build $(GOBUILD_FLAGS) -o build/streampanel-macos-arm64 ./cmd/streampanel
 
+docker-termux-environment:
+	cd 3rdparty/arm64/termux-packages && \
+	./scripts/update-docker.sh
+
+	cp 3rdparty/arm64/termux-patched-scripts/run-docker.sh \
+	   3rdparty/arm64/termux-packages/scripts/run-docker.sh
+	
+	cd 3rdparty/arm64/termux-packages && \
+	./scripts/run-docker.sh ./scripts/setup-android-sdk.sh
+
+	cd 3rdparty/arm64/termux-packages && \
+	./scripts/run-docker.sh ./build-package.sh -I ffmpeg
+
+	cd 3rdparty/arm64/termux-packages && \
+	./scripts/run-docker.sh ./build-package.sh -I libxxf86vm
+	
+	cd 3rdparty/arm64/termux-packages && \
+	./scripts/run-docker.sh ./build-package.sh -I vlc
+
+	cd 3rdparty/arm64/termux-packages && \
+	./scripts/run-docker.sh sudo apt update
+
+	cd 3rdparty/arm64/termux-packages && \
+	./scripts/run-docker.sh sudo apt install -y golang-go
+
+	cd 3rdparty/arm64/termux-packages && \
+	./scripts/run-docker.sh go install fyne.io/fyne/v2/cmd/fyne@latest
+
+dockerbuild-streampanel-android: docker-termux-environment
+	cd 3rdparty/arm64/termux-packages && \
+	./scripts/run-docker.sh sh -c 'cd /project && PKG_CONFIG_PATH=/data/data/com.termux/files/usr/lib/pkgconfig/ ANDROID_NDK_HOME="$(ls -d /home/builder/lib/android-ndk-*)" PATH="$PATH:$HOME/go/bin" make streampanel-android'
+
 streampanel-android: builddir
-	cd cmd/streampanel && ANDROID_HOME=${HOME}/Android/Sdk fyne package $(GOBUILD_FLAGS) -release -os android && mv streampanel.apk ../../build/
+	cd cmd/streampanel && CGO_CFLAGS='-I /data/data/com.termux/files/usr/include/ -Wno-incompatible-function-pointer-types' PKG_CONFIG_PATH=/data/data/com.termux/files/usr/lib/pkgconfig/ ANDROID_NDK_HOME="$(shell ls -d /home/builder/lib/android-ndk-*)" PATH="${PATH}:${HOME}/go/bin" ANDROID_HOME="${HOME}"/Android/Sdk fyne package $(FYNEBUILD_FLAGS) -release -os android/arm64 && mv streampanel.apk ../../build/)
 
 streampanel-ios: builddir
 	cd cmd/streampanel && fyne package $(GOBUILD_FLAGS) -release -os ios && mv streampanel.ipa ../../build/

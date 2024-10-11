@@ -1,4 +1,4 @@
-3rdparty
+3rdparty/amd64
 *.apk
 build
 qtbox
@@ -7,3 +7,4 @@ rcc*.go
 rcc*.cpp
 *.qrc
 .vscode
+termux-packages
