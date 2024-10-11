@@ -3,13 +3,12 @@ package saferecoder
 import (
 	"context"
 
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/libav/recoder/types"
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/libav/saferecoder/process/client"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/libav/saferecoder/process"
 )
 
-type OutputConfig = types.OutputConfig
+type OutputID = process.OutputID
+type OutputConfig = process.OutputConfig
 
-type OutputID = client.OutputID
 type Output struct {
 	Process *Process
 	ID      OutputID

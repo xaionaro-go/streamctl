@@ -1,3 +1,6 @@
+//go:build with_libav
+// +build with_libav
+
 package process
 
 import (
@@ -13,6 +16,17 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/libav/saferecoder/process/client"
 )
+
+type InputID = client.InputID
+type InputConfig = client.InputConfig
+
+type OutputID = client.OutputID
+type OutputConfig = client.OutputConfig
+
+type RecoderID = client.RecoderID
+type RecoderConfig = client.RecoderConfig
+
+type RecoderStats = client.RecoderStats
 
 type Recoder struct {
 	*client.Client

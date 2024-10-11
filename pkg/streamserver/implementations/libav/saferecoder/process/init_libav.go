@@ -1,3 +1,6 @@
+//go:build with_libav
+// +build with_libav
+
 package process
 
 import (

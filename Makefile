@@ -73,12 +73,12 @@ docker-termux-environment:
 	cd 3rdparty/arm64/termux-packages && \
 	./scripts/run-docker.sh go install fyne.io/fyne/v2/cmd/fyne@latest
 
-dockerbuild-streampanel-android: docker-termux-environment
+dockerbuild-streampanel-android:
 	cd 3rdparty/arm64/termux-packages && \
-	./scripts/run-docker.sh sh -c 'cd /project && PKG_CONFIG_PATH=/data/data/com.termux/files/usr/lib/pkgconfig/ ANDROID_NDK_HOME="$(ls -d /home/builder/lib/android-ndk-*)" PATH="$PATH:$HOME/go/bin" make streampanel-android'
+	./scripts/run-docker.sh make ENABLE_VLC=$(ENABLE_VLC) ENABLE_LIBAV=$(ENABLE_LIBAV) FORCE_DEBUG=$(FORCE_DEBUG) -C /project streampanel-android
 
 streampanel-android: builddir
-	cd cmd/streampanel && CGO_CFLAGS='-I /data/data/com.termux/files/usr/include/ -Wno-incompatible-function-pointer-types' PKG_CONFIG_PATH=/data/data/com.termux/files/usr/lib/pkgconfig/ ANDROID_NDK_HOME="$(shell ls -d /home/builder/lib/android-ndk-*)" PATH="${PATH}:${HOME}/go/bin" ANDROID_HOME="${HOME}"/Android/Sdk fyne package $(FYNEBUILD_FLAGS) -release -os android/arm64 && mv streampanel.apk ../../build/)
+	cd cmd/streampanel && CGO_CFLAGS='-I /data/data/com.termux/files/usr/include/ -Wno-incompatible-function-pointer-types' PKG_CONFIG_PATH=/data/data/com.termux/files/usr/lib/pkgconfig/ ANDROID_NDK_HOME="$(shell ls -d /home/builder/lib/android-ndk-*)" PATH="${PATH}:${HOME}/go/bin" ANDROID_HOME="${HOME}"/Android/Sdk fyne package $(FYNEBUILD_FLAGS) -release -os android/arm64 && mv streampanel.apk ../../build/
 
 streampanel-ios: builddir
 	cd cmd/streampanel && fyne package $(GOBUILD_FLAGS) -release -os ios && mv streampanel.ipa ../../build/
