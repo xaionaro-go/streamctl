@@ -47,7 +47,7 @@ streampanel-macos-arm64: builddir
 
 docker-termux-environment:
 	cd 3rdparty/arm64/termux-packages && \
-	./scripts/update-docker.sh
+	./scripts/update-docker.sh || /bin/true
 
 	cp 3rdparty/arm64/termux-patched-scripts/run-docker.sh \
 	   3rdparty/arm64/termux-packages/scripts/run-docker.sh
