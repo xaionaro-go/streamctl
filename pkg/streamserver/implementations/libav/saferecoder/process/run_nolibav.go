@@ -7,7 +7,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/libav/recoder/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/recoder"
 )
 
 type Recoder struct {
@@ -27,13 +27,13 @@ func Run(
 type Client struct{}
 
 type InputID uint64
-type InputConfig = types.InputConfig
+type InputConfig = recoder.InputConfig
 
 type OutputID uint64
-type OutputConfig = types.OutputConfig
+type OutputConfig = recoder.OutputConfig
 
 type RecoderID uint64
-type RecoderConfig = types.RecoderConfig
+type RecoderConfig = recoder.Config
 
 func (c *Client) NewInputFromURL(
 	ctx context.Context,
@@ -67,10 +67,7 @@ func (c *Client) NewRecoder(
 	return 0, fmt.Errorf("not compiled with libav support")
 }
 
-type RecoderStats struct {
-	BytesCountRead  uint64
-	BytesCountWrote uint64
-}
+type RecoderStats = recoder.Stats
 
 func (c *Client) GetRecoderStats(
 	ctx context.Context,

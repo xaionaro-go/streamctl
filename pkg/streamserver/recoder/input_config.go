@@ -1,3 +1,3 @@
-package types
+package recoder
 
 type InputConfig struct{}

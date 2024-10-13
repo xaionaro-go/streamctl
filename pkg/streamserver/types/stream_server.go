@@ -8,10 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
-	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
-	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
 
 type PubsubNameser interface {
@@ -21,109 +18,6 @@ type PubsubNameser interface {
 type Publisher = streamplayer.Publisher
 type WaitPublisherChaner = streamplayer.WaitPublisherChaner
 type GetPortServerser = streamplayer.GetPortServerser
-
-type StreamServer[AF any] interface {
-	streamplayer.StreamServer
-	PubsubNameser
-
-	Init(
-		ctx context.Context,
-		opts ...InitOption,
-	) error
-
-	StartServer(
-		ctx context.Context,
-		serverType streamtypes.ServerType,
-		listenAddr string,
-		opts ...ServerOption,
-	) (PortServer, error)
-	StopServer(
-		ctx context.Context,
-		server PortServer,
-	) error
-
-	AddIncomingStream(
-		ctx context.Context,
-		streamID StreamID,
-	) error
-	ListIncomingStreams(
-		ctx context.Context,
-	) []IncomingStream
-	RemoveIncomingStream(
-		ctx context.Context,
-		streamID StreamID,
-	) error
-
-	ListStreamDestinations(
-		ctx context.Context,
-	) ([]StreamDestination, error)
-	AddStreamDestination(
-		ctx context.Context,
-		destinationID DestinationID,
-		url string,
-	) error
-	RemoveStreamDestination(
-		ctx context.Context,
-		destinationID DestinationID,
-	) error
-
-	AddStreamForward(
-		ctx context.Context,
-		streamID StreamID,
-		destinationID DestinationID,
-		enabled bool,
-		quirks ForwardingQuirks,
-	) (*StreamForward[AF], error)
-	ListStreamForwards(
-		ctx context.Context,
-	) ([]StreamForward[AF], error)
-	UpdateStreamForward(
-		ctx context.Context,
-		streamID StreamID,
-		destinationID DestinationID,
-		enabled bool,
-		quirks ForwardingQuirks,
-	) (*StreamForward[AF], error)
-	RemoveStreamForward(
-		ctx context.Context,
-		streamID StreamID,
-		dstID DestinationID,
-	) error
-
-	AddStreamPlayer(
-		ctx context.Context,
-		streamID StreamID,
-		playerType player.Backend,
-		disabled bool,
-		streamPlaybackConfig sptypes.Config,
-		opts ...StreamPlayerOption,
-	) error
-	UpdateStreamPlayer(
-		ctx context.Context,
-		streamID StreamID,
-		playerType player.Backend,
-		disabled bool,
-		streamPlaybackConfig sptypes.Config,
-		opts ...StreamPlayerOption,
-	) error
-	RemoveStreamPlayer(
-		ctx context.Context,
-		streamID StreamID,
-	) error
-	ListStreamPlayers(
-		ctx context.Context,
-	) ([]StreamPlayer, error)
-	GetStreamPlayer(
-		ctx context.Context,
-		streamID StreamID,
-	) (*StreamPlayer, error)
-	GetActiveStreamPlayer(
-		ctx context.Context,
-		streamID StreamID,
-	) (player.Player, error)
-
-	ListServers(ctx context.Context) []PortServer
-}
 
 type InitConfig struct {
 	DefaultStreamPlayerOptions streamplayer.Options

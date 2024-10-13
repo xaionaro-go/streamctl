@@ -6,6 +6,7 @@ import (
 
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/libav/recoder/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/libav/saferecoder/process"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/recoder"
 )
 
 type Packet = types.Packet
@@ -61,7 +62,7 @@ func (r *Recoder) StartRecoding(
 	)
 }
 
-type RecoderStats = process.RecoderStats
+type RecoderStats = recoder.Stats
 
 func (r *Recoder) GetStats(ctx context.Context) (*RecoderStats, error) {
 	return r.Process.processBackend.Client.GetRecoderStats(ctx, r.ID)

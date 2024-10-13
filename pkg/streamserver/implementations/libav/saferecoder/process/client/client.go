@@ -9,6 +9,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/libav/recoder/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/libav/saferecoder/grpc/go/recoder_grpc"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/recoder"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -83,7 +84,7 @@ func (c *Client) NewInputFromURL(
 }
 
 type OutputID uint64
-type OutputConfig = types.OutputConfig
+type OutputConfig = recoder.OutputConfig
 
 func (c *Client) NewOutputFromURL(
 	ctx context.Context,
@@ -158,10 +159,7 @@ func (c *Client) StartRecoding(
 	return nil
 }
 
-type RecoderStats struct {
-	BytesCountRead  uint64
-	BytesCountWrote uint64
-}
+type RecoderStats = recoder.Stats
 
 func (c *Client) GetRecoderStats(
 	ctx context.Context,

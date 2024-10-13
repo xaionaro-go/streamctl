@@ -15,18 +15,19 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/libav/saferecoder/process/client"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/recoder"
 )
 
 type InputID = client.InputID
-type InputConfig = client.InputConfig
+type InputConfig = recoder.InputConfig
 
 type OutputID = client.OutputID
-type OutputConfig = client.OutputConfig
+type OutputConfig = recoder.OutputConfig
 
 type RecoderID = client.RecoderID
-type RecoderConfig = client.RecoderConfig
+type RecoderConfig = recoder.Config
 
-type RecoderStats = client.RecoderStats
+type RecoderStats = recoder.Stats
 
 type Recoder struct {
 	*client.Client
