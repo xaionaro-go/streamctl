@@ -14,6 +14,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/memoize"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 	"github.com/xaionaro-go/typing/ordered"
 )
@@ -118,6 +119,15 @@ func (s *StreamForwards) addStreamForward(
 	)
 	s.WithConfig(ctx, func(ctx context.Context, cfg *types.Config) {
 		streamConfig = cfg.Streams[streamID]
+		if streamConfig == nil {
+			err = fmt.Errorf("stream '%s' does not exist", streamID)
+			return
+		}
+
+		if streamConfig.Forwardings == nil {
+			streamConfig.Forwardings = make(map[streamtypes.DestinationID]types.ForwardingConfig)
+		}
+
 		if _, ok := streamConfig.Forwardings[destinationID]; ok {
 			err = fmt.Errorf("the forwarding %s->%s already exists", streamID, destinationID)
 			return

@@ -219,7 +219,7 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 	defer func() {
 		err := input.Close()
 		if err != nil {
-			logger.Errorf(ctx, "unable to close the input: %w", err)
+			logger.Errorf(ctx, "unable to close the input: %v", err)
 		}
 	}()
 

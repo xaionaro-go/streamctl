@@ -472,14 +472,14 @@ func (s *StreamServer) newServerRTMP(
 	listenAddr string,
 	opts ...types.ServerOption,
 ) (_ types.PortServer, _ret error) {
-	rtmpSrv := newRTMPServer(
+	rtmpSrv, err := newRTMPServer(
 		s.pathManager,
 		listenAddr,
 		newMediamtxLogger(logger.FromCtx(ctx)),
 		opts...,
 	)
-	if err := rtmpSrv.Initialize(); err != nil {
-		return nil, fmt.Errorf("unable to initialize the RTMP server %#+v: %w", rtmpSrv, err)
+	if err != nil {
+		return nil, fmt.Errorf("unable to construct the RTMP server: %w", err)
 	}
-	return &portServerWrapperRTMP{Server: rtmpSrv}, nil
+	return rtmpSrv, nil
 }
