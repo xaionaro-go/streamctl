@@ -29,10 +29,10 @@ WINDOWS_CGO_FLAGS?=-I$(PWD)/3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/sd
 WINDOWS_LINKER_FLAGS?=-L$(PWD)/3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/sdk/lib -L$(PWD)/3rdparty/amd64/windows/ffmpeg-n7.0.2-19-g45ecf80f0e-win64-gpl-shared-7.0/lib
 WINDOWS_PKG_CONFIG_PATH?=$(PWD)/3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/sdk/lib/pkgconfig
 
-all: streampanel-linux-amd64 streampanel-linux-arm64 streampanel-android streampanel-windows
+all: streampanel-linux-amd64 streampanel-linux-arm64 streampanel-android-arm64 streampanel-windows
 
 $(GOPATH)/bin/pkg-config-wrapper:
-	go install github.com/xaionaro-go/pkg-config-wrapper@4cf60a2b85ad0b917e217b13ebcf04b28cc24334
+	go install github.com/xaionaro-go/pkg-config-wrapper@5dd443e6c18336416c49047e2ba0002e26a85278
 
 3rdparty/arm64/android-ndk-$(ANDROID_NDK_VERSION):
 	mkdir -p 3rdparty/arm64
@@ -73,7 +73,7 @@ streampanel-macos-arm64: builddir
 
 3rdparty/arm64/termux-packages:
 	mkdir -p 3rdparty/arm64/
-	cd 3rdparty/arm64 && git clone https://github.com/termux/termux-packages
+	cd 3rdparty/arm64 && git clone --depth=1 -b feat/static_libav https://github.com/xaionaro/termux-packages
 
 3rdparty/arm64/termux-packages/environment-ready: 3rdparty/arm64/termux-packages
 	cd 3rdparty/arm64/termux-packages && \
@@ -85,11 +85,43 @@ streampanel-macos-arm64: builddir
 	cd 3rdparty/arm64/termux-packages && \
 	./scripts/run-docker.sh ./scripts/setup-android-sdk.sh
 
+	# downloading dependencies (e.g. we do not need ccls,
+	# but we need the most of the dependencies of ccls)
+
 	cd 3rdparty/arm64/termux-packages && \
 	./scripts/run-docker.sh ./build-package.sh -I gettext
 
 	cd 3rdparty/arm64/termux-packages && \
-	./scripts/run-docker.sh ./build-package.sh -I rust
+	./scripts/run-docker.sh ./build-package.sh -I ccls
+
+	cd 3rdparty/arm64/termux-packages && \
+	./scripts/run-docker.sh ./build-package.sh -I termux-api
+
+	cd 3rdparty/arm64/termux-packages && \
+	./scripts/run-docker.sh ./build-package.sh -I xdotool
+
+	cd 3rdparty/arm64/termux-packages && \
+	./scripts/run-docker.sh ./build-package.sh -I xdg-utils
+
+	cd 3rdparty/arm64/termux-packages && \
+	./scripts/run-docker.sh ./build-package.sh -I liblzma
+
+	if ! [ -f /data/data/com.termux/files/usr/lib/liblzma.a ]; then \
+		cd 3rdparty/arm64/termux-packages; \
+		./scripts/run-docker.sh rm -f /data/data/.built-packages/liblzma; \
+		./scripts/run-docker.sh ./build-package.sh -I liblzma; \
+	fi
+
+	if ! [ -f /data/data/com.termux/files/usr/lib/libiconv.a ]; then \
+		cd 3rdparty/arm64/termux-packages; \
+		./scripts/run-docker.sh rm -f /data/data/.built-packages/libiconv; \
+		./scripts/run-docker.sh ./build-package.sh -I libiconv; \
+	fi
+
+	cd 3rdparty/arm64/termux-packages && \
+	./scripts/run-docker.sh ./build-package.sh -I libx11
+
+	# building what we need
 
 	cd 3rdparty/arm64/termux-packages && \
 	./scripts/run-docker.sh ./build-package.sh ffmpeg
@@ -97,8 +129,10 @@ streampanel-macos-arm64: builddir
 	cd 3rdparty/arm64/termux-packages && \
 	./scripts/run-docker.sh ./build-package.sh libxxf86vm
 	
-	cd 3rdparty/arm64/termux-packages && \
-	./scripts/run-docker.sh ./build-package.sh vlc
+	#cd 3rdparty/arm64/termux-packages && \
+	#./scripts/run-docker.sh ./build-package.sh vlc
+
+	# installing fyne
 
 	cd 3rdparty/arm64/termux-packages && \
 	./scripts/run-docker.sh sudo apt update
@@ -109,39 +143,90 @@ streampanel-macos-arm64: builddir
 	cd 3rdparty/arm64/termux-packages && \
 	./scripts/run-docker.sh go install fyne.io/fyne/v2/cmd/fyne@latest
 
+	# avoiding fyne loading wrong GL libraries:
 	rm -f /data/data/com.termux/files/usr/lib/*lib*GL*
 
+	# marking to do not redo all the work above next time:
 	touch 3rdparty/arm64/termux-packages/environment-ready
 
-dockerbuild-streampanel-android: 3rdparty/arm64/termux-packages/environment-ready
+dockerbuild-streampanel-android-arm64: 3rdparty/arm64/termux-packages/environment-ready
 	cd 3rdparty/arm64/termux-packages && \
-	./scripts/run-docker.sh make ENABLE_VLC="$(ENABLE_VLC)" ENABLE_LIBAV="$(ENABLE_LIBAV)" FORCE_DEBUG="$(FORCE_DEBUG)" -C /project streampanel-android-in-docker
+	./scripts/run-docker.sh make ENABLE_VLC="$(ENABLE_VLC)" ENABLE_LIBAV="$(ENABLE_LIBAV)" FORCE_DEBUG="$(FORCE_DEBUG)" -C /project streampanel-android-arm64-in-docker
+
+checkconfig-android-in-docker:
+	@if [ "$(ENABLE_VLC)" != 'false' ]; then \
+		echo "VLC is not supported for Android builds, yet, please disable it with ENABLE_VLC=false."; \
+	    exit 1; \
+	fi
 
 checkconfig-android:
 	@if [ "$(ENABLE_VLC)" != 'false' ]; then \
 		echo "VLC is not supported for Android builds, yet, please disable it with ENABLE_VLC=false."; \
-		exit 1; \
+	    exit 1; \
 	fi
 	@if [ "$(ENABLE_LIBAV)" != 'false' ]; then \
-		echo "LibAV is not supported for Android builds, yet, please disable it with ENABLE_LIBAV=false."; \
+		echo "Building with LibAV support is not supported outside of the docker container yet. Please either disable LibAV with ENABLE_LIBAV=false or use `make dockerbuild-streampanel-android-arm64` instead."; \
 		exit 1; \
 	fi
 
-streampanel-android-in-docker: checkconfig-android builddir $(GOPATH)/bin/pkg-config-wrapper
+streampanel-android-arm64-in-docker: build-streampanel-android-arm64-in-docker check-streampanel-android-arm64-static-cgo
+
+build-streampanel-android-arm64-in-docker: checkconfig-android-in-docker builddir $(GOPATH)/bin/pkg-config-wrapper
+	go mod tidy
 	$(eval ANDROID_NDK_HOME=$(shell ls -d /home/builder/lib/android-ndk-*))
-	cd cmd/streampanel && PKG_CONFIG_LIBS_FORCE_STATIC='libav*,libvlc' PKG_CONFIG_ERASE="-fopenmp=*,-landroid" PKG_CONFIG='$(GOPATH)/bin/pkg-config-wrapper' PKG_CONFIG_PATH='/data/data/com.termux/files/usr/lib/pkgconfig' CGO_CFLAGS='-I$(ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/ -I/data/data/com.termux/files/usr/include -Wno-incompatible-function-pointer-types -Wno-unused-result -Wno-xor-used-as-pow' CGO_LDFLAGS='-L$(ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/ -L/data/data/com.termux/files/usr/lib' ANDROID_NDK_HOME="$(ANDROID_NDK_HOME)" PATH="${PATH}:${HOME}/go/bin" fyne package $(FYNEBUILD_FLAGS) -release -os android/arm64 && mv streampanel.apk ../../build/
+	cd cmd/streampanel && \
+		PKG_CONFIG_WRAPPER_LOG='/tmp/pkg_config_wrapper.log' \
+		PKG_CONFIG_WRAPPER_LOG_LEVEL='trace' \
+		PKG_CONFIG_LIBS_FORCE_STATIC='libav*,libvlc' \
+		PKG_CONFIG_ERASE="-fopenmp=*,-landroid" \
+		PKG_CONFIG='$(GOPATH)/bin/pkg-config-wrapper' \
+		PKG_CONFIG_PATH='/data/data/com.termux/files/usr/lib/pkgconfig' \
+		CGO_CFLAGS='-I$(ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/ -I/data/data/com.termux/files/usr/include -Wno-incompatible-function-pointer-types -Wno-unused-result -Wno-xor-used-as-pow' \
+		CGO_LDFLAGS='-ldl -lc -L$(ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/ -L/data/data/com.termux/files/usr/lib' \
+		ANDROID_NDK_HOME="$(ANDROID_NDK_HOME)" \
+		PATH="${PATH}:${HOME}/go/bin" \
+		fyne package $(FYNEBUILD_FLAGS) -release -os android/arm64 && mv streampanel.apk ../../build/streampanel-arm64.apk
 
-streampanel-android-static-cgo: checkconfig-android builddir $(GOPATH)/bin/pkg-config-wrapper 3rdparty/arm64/android-ndk-$(ANDROID_NDK_VERSION) 3rdparty/arm64/termux
+streampanel-android-arm64-static-cgo: build-streampanel-android-arm64-static-cgo check-streampanel-android-arm64-static-cgo
+
+build-streampanel-android-arm64-static-cgo: builddir $(GOPATH)/bin/pkg-config-wrapper 3rdparty/arm64/android-ndk-$(ANDROID_NDK_VERSION) 3rdparty/arm64/termux
 	$(eval ANDROID_NDK_HOME=$(PWD)/3rdparty/arm64/android-ndk-$(ANDROID_NDK_VERSION))
-	cd cmd/streampanel && PKG_CONFIG_LIBS_FORCE_STATIC='libav*,libvlc' PKG_CONFIG_ERASE="-fopenmp=*,-landroid" PKG_CONFIG='$(GOPATH)/bin/pkg-config-wrapper' PKG_CONFIG_PATH='$(PWD)/3rdparty/arm64/termux/data/data/com.termux/files/usr/lib/pkgconfig' CGO_CFLAGS='-I$(ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/ -I$(PWD)/3rdparty/arm64/termux/data/data/com.termux/files/usr/include -Wno-incompatible-function-pointer-types -Wno-unused-result -Wno-xor-used-as-pow' CGO_LDFLAGS='-L$(ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/ -L$(PWD)/3rdparty/arm64/termux/data/data/com.termux/files/usr/lib' ANDROID_NDK_HOME="$(ANDROID_NDK_HOME)" fyne package $(FYNEBUILD_FLAGS) -release -os android/arm64 && mv streampanel.apk ../../build/
+	cd cmd/streampanel && \
+		PKG_CONFIG_LIBS_FORCE_STATIC='libav*,libvlc' \
+		PKG_CONFIG_ERASE="-fopenmp=*,-landroid" \
+		PKG_CONFIG='$(GOPATH)/bin/pkg-config-wrapper' \
+		PKG_CONFIG_PATH='$(PWD)/3rdparty/arm64/termux/data/data/com.termux/files/usr/lib/pkgconfig' \
+		CGO_CFLAGS='-I$(ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/ -I$(PWD)/3rdparty/arm64/termux/data/data/com.termux/files/usr/include -Wno-incompatible-function-pointer-types -Wno-unused-result -Wno-xor-used-as-pow' \
+		CGO_LDFLAGS='-ldl -lc -L$(ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/ -L$(PWD)/3rdparty/arm64/termux/data/data/com.termux/files/usr/lib' \
+		ANDROID_NDK_HOME="$(ANDROID_NDK_HOME)" \
+		fyne package $(FYNEBUILD_FLAGS) -release -os android/arm64 && mv streampanel.apk ../../build/streampanel-arm64.apk
 
-streampanel-android: checkconfig-android builddir 3rdparty/arm64/android-ndk-$(ANDROID_NDK_VERSION)
+check-streampanel-android-arm64-static-cgo:
+	$(eval TEMP_DIR:=$(shell mktemp -d))
+	@echo "temp_dir:<$(TEMP_DIR)>"
+	@cp build/streampanel-arm64.apk "$(TEMP_DIR)/streampanel.zip"
+	@cd "$(TEMP_DIR)" && unzip streampanel.zip >/dev/null
+	@if readelf -d "$(TEMP_DIR)/lib/arm64-v8a/libstreampanel.so" | grep STATIC_TLS; then \
+		readelf -d "$(TEMP_DIR)/lib/arm64-v8a/libstreampanel.so"; \
+		echo "The resulting APK is linked in a wrong way, 'readlink -d' showed flag 'STATIC_TLS', so the application will crash when you will try to launch it."; \
+		rm -rf "$(TEMP_DIR)"; \
+		exit 1; \
+	fi
+	@if ! readelf -d "$(TEMP_DIR)/lib/arm64-v8a/libstreampanel.so" | grep libdl.so >/dev/null; then \
+		readelf -d "$(TEMP_DIR)/lib/arm64-v8a/libstreampanel.so"; \
+		echo "The resulting APK is linked in a wrong way, 'readlink -d' showed it does not use 'libdl.so', which likely means some wacky stuff happened and the application is not guaranteed to work."; \
+		rm -rf "$(TEMP_DIR)"; \
+		exit 1; \
+	fi
+	rm -rf "$(TEMP_DIR)"
+
+streampanel-android-arm64: checkconfig-android builddir 3rdparty/arm64/android-ndk-$(ANDROID_NDK_VERSION)
 	$(eval ANDROID_NDK_HOME=$(PWD)/3rdparty/arm64/android-ndk-$(ANDROID_NDK_VERSION))
-	cd cmd/streampanel && ANDROID_NDK_HOME="$(ANDROID_NDK_HOME)" fyne package $(FYNEBUILD_FLAGS) -release -os android/arm64 && mv streampanel.apk ../../build/
+	cd cmd/streampanel && ANDROID_NDK_HOME="$(ANDROID_NDK_HOME)" fyne package $(FYNEBUILD_FLAGS) -release -os android/arm64 && mv streampanel-arm64.apk ../../build/
 
-install-android:
+install-android-arm64:
 	adb shell pm uninstall center.dx.streampanel >/dev/null 2>&1 || /bin/true
-	adb install build/streampanel.apk
+	adb install build/streampanel-arm64.apk
 
 streampanel-ios: builddir
 	cd cmd/streampanel && fyne package $(GOBUILD_FLAGS) -release -os ios && mv streampanel.ipa ../../build/

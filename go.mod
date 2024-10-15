@@ -7,13 +7,17 @@ toolchain go1.22.3
 // The original go-yaml is very slow, using the improved version instead
 replace github.com/goccy/go-yaml v1.11.3 => github.com/yoelsusanto/go-yaml v0.0.0-20240324162521-2018c1ab915b
 
-replace code.cloudfoundry.org/bytefmt => github.com/cloudfoundry/bytefmt v0.0.0-20211005130812-5bb3c17173e5
-
 replace github.com/andreykaipov/goobs v1.4.1 => github.com/xaionaro-go/goobs v0.0.0-20241009130652-ffb0e76ad260
 
 replace github.com/adrg/libvlc-go/v3 v3.1.5 => github.com/xaionaro-go/libvlc-go/v3 v3.0.0-20241011194409-0fe4e2a9d901
 
 replace fyne.io/fyne/v2 v2.5.0 => github.com/xaionaro-go/fyne/v2 v2.0.0-20241012203222-61bfd3b898c0
+
+replace code.cloudfoundry.org/bytefmt => github.com/cloudfoundry/bytefmt v0.0.0-20211005130812-5bb3c17173e5
+
+replace github.com/pion/ice/v2 => github.com/aler9/ice/v2 v2.0.0-20241006110309-c973995af023
+
+replace github.com/pion/webrtc/v3 => github.com/aler9/webrtc/v3 v3.0.0-20240610104456-eaec24056d06
 
 require (
 	github.com/facebookincubator/go-belt v0.0.0-20240804203001-846c4409d41c

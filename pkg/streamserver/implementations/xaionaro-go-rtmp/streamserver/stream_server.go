@@ -15,6 +15,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	playertypes "github.com/xaionaro-go/streamctl/pkg/player/types"
+	xaionarogortmp "github.com/xaionaro-go/streamctl/pkg/recoder/xaionaro-go-rtmp"
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
 	yutoppgortmp "github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/xaionaro-go-rtmp"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/xaionaro-go-rtmp/streamforward"
@@ -123,7 +124,7 @@ func (s *StreamServer) WithConfig(
 func (s *StreamServer) WaitPubsub(
 	ctx context.Context,
 	appKey types.AppKey,
-) streamforward.Pubsub {
+) xaionarogortmp.Pubsub {
 	return &pubsubAdapter{s.RelayService.WaitPubsub(ctx, appKey, false)}
 }
 
@@ -131,12 +132,12 @@ type pubsubAdapter struct {
 	*yutoppgortmp.Pubsub
 }
 
-var _ streamforward.Pubsub = (*pubsubAdapter)(nil)
+var _ xaionarogortmp.Pubsub = (*pubsubAdapter)(nil)
 
 func (pubsub *pubsubAdapter) Sub(
 	conn io.Closer,
 	callback func(ctx context.Context, flv *flvtag.FlvTag) error,
-) streamforward.Sub {
+) xaionarogortmp.Sub {
 	return pubsub.Pubsub.Sub(conn, callback)
 }
 

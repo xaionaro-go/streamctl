@@ -12,7 +12,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/recoder"
+	"github.com/xaionaro-go/streamctl/pkg/recoder"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
@@ -205,16 +205,46 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 		return fmt.Errorf("unable to initialize a recoder: %w", err)
 	}
 
-	input, err := fwd.openInputFor(ctx, recoderInstance)
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	input, err := fwd.openInputFor(ctx, recoderInstance, publisher)
 	if err != nil {
 		errmon.ObserveErrorCtx(ctx, recoderInstance.Close())
 		return fmt.Errorf("unable to open the input: %w", err)
+	}
+	defer func() {
+		err := input.Close()
+		if err != nil {
+			logger.Errorf(ctx, "unable to close the input: %w", err)
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
 	}
 
 	output, err := fwd.openOutputFor(ctx, recoderInstance)
 	if err != nil {
 		errmon.ObserveErrorCtx(ctx, recoderInstance.Close())
 		return fmt.Errorf("unable to open the output: %w", err)
+	}
+	defer func() {
+		err := output.Close()
+		if err != nil {
+			logger.Errorf(ctx, "unable to close the output: %w", err)
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
 	}
 
 	recodingFinished := make(chan struct{})
@@ -280,6 +310,7 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 func (fwd *ActiveStreamForwarding) openInputFor(
 	ctx context.Context,
 	recoderInstance recoder.Recoder,
+	publisher types.Publisher,
 ) (recoder.Input, error) {
 	inputURL, err := fwd.getLocalhostEndpoint(ctx)
 	if err != nil {
@@ -288,7 +319,13 @@ func (fwd *ActiveStreamForwarding) openInputFor(
 
 	inputURL.Path = "/" + string(fwd.StreamID)
 
-	input, err := recoderInstance.NewInputFromURL(ctx, inputURL.String(), recoder.InputConfig{})
+	var input recoder.Input
+	inputCfg := recoder.InputConfig{}
+	if newInputFromStreamIDer, ok := recoderInstance.(recoder.NewInputFromPublisherer); ok {
+		input, err = newInputFromStreamIDer.NewInputFromPublisher(ctx, publisher, inputCfg)
+	} else {
+		input, err = recoderInstance.NewInputFromURL(ctx, inputURL.String(), inputCfg)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("unable to open '%s' as the input: %w", inputURL, err)
 	}
