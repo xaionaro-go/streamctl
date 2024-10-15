@@ -41,6 +41,7 @@ func (d *StreamD) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context) erro
 			err = d.initYouTubeBackend(ctx)
 		}
 		if errors.Is(err, ErrSkipBackend) {
+			logger.Debugf(ctx, "backend '%s' is skipped", platName)
 			continue
 		}
 		if err != nil {
@@ -58,10 +59,15 @@ func newOBS(
 	setConnectionInfo func(context.Context, *streamcontrol.PlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile]) (bool, error),
 	saveCfgFunc func(*streamcontrol.AbstractPlatformConfig) error,
 ) (
-	*obs.OBS,
-	error,
+	_ *obs.OBS,
+	_err error,
 ) {
-	platCfg := streamcontrol.ConvertPlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile](
+	logger.Debugf(ctx, "newOBS(ctx, %#+v, ...)", cfg)
+	defer func() { logger.Debugf(ctx, "/newOBS: %v", _err) }()
+
+	platCfg := streamcontrol.ConvertPlatformConfig[
+		obs.PlatformSpecificConfig, obs.StreamProfile,
+	](
 		ctx, cfg,
 	)
 	if platCfg == nil {
@@ -69,6 +75,7 @@ func newOBS(
 	}
 
 	if cfg.Enable != nil && !*cfg.Enable {
+		logger.Debugf(ctx, "skipping OBS, cfg.Enable == %#+v", cfg.Enable)
 		return nil, ErrSkipBackend
 	}
 
@@ -76,13 +83,14 @@ func newOBS(
 	if platCfg.Config.Host == "" || platCfg.Config.Port == 0 {
 		ok, err := setConnectionInfo(ctx, platCfg)
 		if !ok {
+			logger.Debugf(ctx, "setConnectionInfo commands to skip OBS")
 			err := saveCfgFunc(&streamcontrol.AbstractPlatformConfig{
 				Enable:         platCfg.Enable,
 				Config:         platCfg.Config,
 				StreamProfiles: streamcontrol.ToAbstractStreamProfiles(platCfg.StreamProfiles),
 			})
 			if err != nil {
-				logger.Error(ctx, err)
+				logger.Errorf(ctx, "unable to save the config: %v", err)
 			}
 			return nil, ErrSkipBackend
 		}
@@ -275,6 +283,8 @@ func (d *StreamD) listenOBSEvents(
 	ctx context.Context,
 	o *obs.OBS,
 ) {
+	logger.Debugf(ctx, "listenOBSEvents")
+	defer logger.Debugf(ctx, "/listenOBSEvents")
 	for {
 		if o.IsClosed {
 			return

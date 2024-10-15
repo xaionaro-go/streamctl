@@ -372,6 +372,18 @@ func (grpc *GRPCServer) UpdateStream(
 	return &streamd_grpc.UpdateStreamReply{}, nil
 }
 
+func (grpc *GRPCServer) EXPERIMENTAL_ReinitStreamControllers(
+	ctx context.Context,
+	in *streamd_grpc.EXPERIMENTAL_ReinitStreamControllersRequest,
+) (*streamd_grpc.EXPERIMENTAL_ReinitStreamControllersReply, error) {
+	err := grpc.StreamD.EXPERIMENTAL_ReinitStreamControllers(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("StreamD returned an error: %w", err)
+	}
+
+	return &streamd_grpc.EXPERIMENTAL_ReinitStreamControllersReply{}, nil
+}
+
 func (grpc *GRPCServer) OBSOLETE_FetchConfig(
 	ctx context.Context,
 	req *streamd_grpc.OBSOLETE_FetchConfigRequest,

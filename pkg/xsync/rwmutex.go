@@ -97,10 +97,12 @@ func (m *Mutex) startDeadlockDetector(ctx context.Context) {
 		allStacks := make([]byte, 1024*1024)
 		n := runtime.Stack(allStacks, true)
 		allStacks = allStacks[:n]
-		if m.PanicOnDeadlock == nil || *m.PanicOnDeadlock {
-			logger.Panicf(ctx, "got a deadlock in:\n%s", allStacks)
-		} else {
-			logger.Errorf(ctx, "got a deadlock in:\n%s", allStacks)
+		if IsEnableDeadlock(ctx) {
+			if m.PanicOnDeadlock == nil || *m.PanicOnDeadlock {
+				logger.Panicf(ctx, "got a deadlock in:\n%s", allStacks)
+			} else {
+				logger.Errorf(ctx, "got a deadlock in:\n%s", allStacks)
+			}
 		}
 	}()
 	m.deadlockNotifier = deadlockNotifier

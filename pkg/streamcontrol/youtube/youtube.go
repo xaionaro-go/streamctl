@@ -147,7 +147,7 @@ func (yt *YouTube) init(ctx context.Context) (_err error) {
 	logger.Debugf(ctx, "YouTube.init")
 	defer func() { logger.Debugf(ctx, "/YouTube.init: %v", _err) }()
 
-	return xsync.DoA1R1(ctx, &yt.locker, yt.initNoLock, ctx)
+	return xsync.DoA1R1(xsync.WithEnableDeadlock(ctx, false), &yt.locker, yt.initNoLock, ctx)
 }
 
 func (yt *YouTube) initNoLock(ctx context.Context) (_err error) {

@@ -12,19 +12,30 @@ import (
 	obs "github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs/types"
 	twitch "github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/types"
 	youtube "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
-	streamd "github.com/xaionaro-go/streamctl/pkg/streamd/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/ui"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 type UI struct {
-	OpenBrowserFn     func(context.Context, string) error
-	OAuthURLOpenFn    func(listenPort uint16, platID streamcontrol.PlatformName, authURL string) bool
-	Belt              *belt.Belt
-	RestartFn         func(context.Context, string)
-	CodeChMap         map[streamcontrol.PlatformName]chan string
-	CodeChMapLocker   xsync.Mutex
-	SetLoggingLevelFn func(context.Context, logger.Level)
+	OpenBrowserFn         func(context.Context, string) error
+	OAuthURLOpenFn        func(listenPort uint16, platID streamcontrol.PlatformName, authURL string) bool
+	Belt                  *belt.Belt
+	RestartFn             func(context.Context, string)
+	CodeChMap             map[streamcontrol.PlatformName]chan string
+	CodeChMapLocker       xsync.Mutex
+	SetLoggingLevelFn     func(context.Context, logger.Level)
+	InputTwitchUserInfoFn func(
+		ctx context.Context,
+		cfg *streamcontrol.PlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile],
+	) (bool, error)
+	InputYouTubeUserInfoFn func(
+		ctx context.Context,
+		cfg *streamcontrol.PlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile],
+	) (bool, error)
+	InputOBSConnectInfoFn func(
+		ctx context.Context,
+		cfg *streamcontrol.PlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile],
+	) (bool, error)
 }
 
 var _ ui.UI = (*UI)(nil)
@@ -35,14 +46,30 @@ func NewUI(
 	oauthURLOpener func(listenPort uint16, platID streamcontrol.PlatformName, authURL string) bool,
 	restartFn func(context.Context, string),
 	setLoggingLevel func(context.Context, logger.Level),
+	inputTwitchUserInfoFn func(
+		ctx context.Context,
+		cfg *streamcontrol.PlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile],
+	) (bool, error),
+	inputYouTubeUserInfoFn func(
+		ctx context.Context,
+		cfg *streamcontrol.PlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile],
+	) (bool, error),
+	inputOBSConnectInfoFn func(
+		ctx context.Context,
+		cfg *streamcontrol.PlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile],
+	) (bool, error),
 ) *UI {
 	return &UI{
-		OpenBrowserFn:     openBrowserFn,
-		OAuthURLOpenFn:    oauthURLOpener,
-		Belt:              belt.CtxBelt(ctx),
-		RestartFn:         restartFn,
-		CodeChMap:         map[streamcontrol.PlatformName]chan string{},
-		SetLoggingLevelFn: setLoggingLevel,
+		OpenBrowserFn:          openBrowserFn,
+		OAuthURLOpenFn:         oauthURLOpener,
+		Belt:                   belt.CtxBelt(ctx),
+		RestartFn:              restartFn,
+		CodeChMap:              map[streamcontrol.PlatformName]chan string{},
+		CodeChMapLocker:        xsync.RWMutex{},
+		SetLoggingLevelFn:      setLoggingLevel,
+		InputTwitchUserInfoFn:  inputTwitchUserInfoFn,
+		InputYouTubeUserInfoFn: inputYouTubeUserInfoFn,
+		InputOBSConnectInfoFn:  inputOBSConnectInfoFn,
 	}
 }
 
@@ -194,23 +221,23 @@ func (ui *UI) OAuthHandlerYouTube(
 	return ui.oauth2Handler(ctx, youtube.ID, arg)
 }
 
-func (*UI) InputTwitchUserInfo(
+func (ui *UI) InputTwitchUserInfo(
 	ctx context.Context,
 	cfg *streamcontrol.PlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile],
 ) (bool, error) {
-	return false, streamd.ErrSkipBackend
+	return ui.InputTwitchUserInfoFn(ctx, cfg)
 }
 
-func (*UI) InputYouTubeUserInfo(
+func (ui *UI) InputYouTubeUserInfo(
 	ctx context.Context,
 	cfg *streamcontrol.PlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile],
 ) (bool, error) {
-	return false, streamd.ErrSkipBackend
+	return ui.InputYouTubeUserInfoFn(ctx, cfg)
 }
 
-func (*UI) InputOBSConnectInfo(
+func (ui *UI) InputOBSConnectInfo(
 	ctx context.Context,
 	cfg *streamcontrol.PlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile],
 ) (bool, error) {
-	return false, streamd.ErrSkipBackend
+	return ui.InputOBSConnectInfoFn(ctx, cfg)
 }
