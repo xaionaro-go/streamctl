@@ -82,3 +82,17 @@ func (c *Client) RecodingEndedChan(
 ) (<-chan struct{}, error) {
 	return nil, fmt.Errorf("not compiled with libav support")
 }
+
+func (c *Client) CloseInput(
+	ctx context.Context,
+	inputID InputID,
+) error {
+	return fmt.Errorf("not compiled with libav support")
+}
+
+func (c *Client) CloseOutput(
+	ctx context.Context,
+	outputID OutputID,
+) error {
+	return fmt.Errorf("not compiled with libav support")
+}

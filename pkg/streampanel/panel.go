@@ -322,10 +322,10 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
 			// TODO: delete this hardcoding of the port
 			defer closeLoadingWindow()
 			streamD := p.StreamD.(*streamd.StreamD)
-			streamD.AddOAuthListenPort(8091)
+			streamD.AddOAuthListenPort(p.Config.OAuth.ListenPorts.Twitch)
 			observability.Go(ctx, func() {
 				<-ctx.Done()
-				streamD.RemoveOAuthListenPort(8091)
+				streamD.RemoveOAuthListenPort(p.Config.OAuth.ListenPorts.Twitch)
 			})
 			logger.Tracef(ctx, "started oauth listener for the local streamd")
 		}
@@ -367,7 +367,7 @@ func (p *Panel) startOAuthListenerForRemoteStreamD(
 	streamD *client.Client,
 ) error {
 	ctx, cancelFn := context.WithCancel(ctx)
-	receiver, listenPort, err := oauthhandler.NewCodeReceiver(ctx, 8091) // TODO: remove the hard-code of port 8091, currently it is needed because the port is hardcoded in Twitch
+	receiver, listenPort, err := oauthhandler.NewCodeReceiver(ctx, p.Config.OAuth.ListenPorts.Twitch)
 	if err != nil {
 		cancelFn()
 		return fmt.Errorf("unable to start listener for OAuth responses: %w", err)

@@ -18,3 +18,15 @@ type OptionRemoteStreamDAddr string
 func (o OptionRemoteStreamDAddr) Apply(cfg *Config) {
 	cfg.RemoteStreamDAddr = string(o)
 }
+
+type OptionOAuthListenPortTwitch uint16
+
+func (o OptionOAuthListenPortTwitch) Apply(cfg *Config) {
+	cfg.OAuth.ListenPorts.Twitch = uint16(o)
+}
+
+type OptionOAuthListenPortYouTube uint16
+
+func (o OptionOAuthListenPortYouTube) Apply(cfg *Config) {
+	cfg.OAuth.ListenPorts.YouTube = uint16(o)
+}

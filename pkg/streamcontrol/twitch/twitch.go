@@ -44,15 +44,26 @@ func New(
 	if cfg.Config.ClientID == "" || cfg.Config.ClientSecret == "" {
 		return nil, fmt.Errorf("'clientid' or/and 'clientsecret' is/are not set; go to https://dev.twitch.tv/console/apps/create and create an app if it not created, yet")
 	}
-	client, err := getClient(ctx, cfg)
-	if err != nil {
-		return nil, err
+
+	getPortsFn := cfg.Config.GetOAuthListenPorts
+	if getPortsFn == nil {
+		// TODO: find a way to adjust the OAuth ports dynamically without re-creating the Twitch client.
+		return nil, fmt.Errorf("the function GetOAuthListenPorts is not set")
 	}
+	oauthPorts := getPortsFn()
+	if len(oauthPorts) == 0 {
+		return nil, fmt.Errorf("the function GetOAuthListenPorts returned zero ports")
+	}
+
 	t := &Twitch{
-		client:    client,
 		config:    cfg,
 		saveCfgFn: saveCfgFn,
 	}
+	client, err := getClient(ctx, cfg, oauthPorts[0])
+	if err != nil {
+		return nil, err
+	}
+	t.client = client
 	var prevTokenUpdate time.Time
 	client.OnUserAccessTokenRefreshed(func(newAccessToken, newRefreshToken string) {
 		if twitchDebug == true {
@@ -451,10 +462,6 @@ func (t *Twitch) getNewClientCode(
 ) (_err error) {
 	logger.Debugf(ctx, "getNewClientCode")
 	defer func() { logger.Debugf(ctx, "/getNewClientCode: %v", _err) }()
-	getPortsFn := t.config.Config.GetOAuthListenPorts
-	if getPortsFn == nil {
-		return fmt.Errorf("the function GetOAuthListenPorts is not set")
-	}
 
 	oauthHandler := t.config.Config.CustomOAuthHandler
 	if oauthHandler == nil {
@@ -530,6 +537,13 @@ func (t *Twitch) getNewClientCode(
 				success = true
 			})
 		}
+	}
+
+	// TODO: either support only one port as in New, or support multiple
+	//       ports as we do below
+	getPortsFn := t.config.Config.GetOAuthListenPorts
+	if getPortsFn == nil {
+		return fmt.Errorf("the function GetOAuthListenPorts is not set")
 	}
 
 	for _, listenPort := range getPortsFn() {
@@ -628,14 +642,15 @@ func (t *Twitch) getNewTokenByApp(
 func getClient(
 	ctx context.Context,
 	cfg Config,
+	oauthListenPort uint16,
 ) (*helix.Client, error) {
-	logger.Debugf(ctx, "getClient")
+	logger.Debugf(ctx, "getClient(ctx, %#+v, %v)", cfg, oauthListenPort)
 	defer logger.Debugf(ctx, "/getClient")
 
 	options := &helix.Options{
 		ClientID:     cfg.Config.ClientID,
 		ClientSecret: cfg.Config.ClientSecret,
-		RedirectURI:  authRedirectURI(8091), // TODO: delete this hardcode
+		RedirectURI:  authRedirectURI(oauthListenPort), // TODO: delete this hardcode
 	}
 	client, err := helix.NewClient(options)
 	if err != nil {

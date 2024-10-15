@@ -69,7 +69,10 @@ func runPanel(
 	logger.Debugf(ctx, "runPanel: %#+v", flags)
 	defer logger.Debugf(ctx, "/runPanel")
 
-	var opts []streampanel.Option
+	opts := []streampanel.Option{
+		streampanel.OptionOAuthListenPortTwitch(flags.OAuthListenPortTwitch),
+		streampanel.OptionOAuthListenPortYouTube(flags.OAuthListenPortYouTube),
+	}
 	if flags.RemoteAddr != "" {
 		opts = append(opts, streampanel.OptionRemoteStreamDAddr(flags.RemoteAddr))
 	}

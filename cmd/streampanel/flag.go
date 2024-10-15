@@ -42,6 +42,9 @@ type Flags struct {
 	Subprocess          string        `yaml:"Subprocess,omitempty"`
 	SplitProcess        bool          `yaml:"SplitProcess,omitempty"`
 	LockTimeout         time.Duration `yaml:"LockTimeout,omitempty"`
+
+	OAuthListenPortTwitch  uint16 `yaml:"OAuthListenPortTwitch,omitempty"`
+	OAuthListenPortYouTube uint16 `yaml:"OAuthListenPortYouTube,omitempty"`
 }
 
 var platformGetFlagsFuncs []func(*Flags)
@@ -75,6 +78,9 @@ func parseFlags() Flags {
 	subprocess := pflag.String("subprocess", "", "[internal use flag] run a specific sub-process (format: processName:addressToConnect)")
 	splitProcess := pflag.Bool("split-process", !isMobile(), "split the process into multiple processes for better stability")
 	lockTimeout := pflag.Duration("lock-timeout", 2*time.Minute, "[debug option] change the timeout for locking, before reporting it as a deadlock")
+	oauthListenPortTwitch := pflag.Uint16("oauth-listen-port-twitch", 8091, "the port that is used for OAuth callbacks while authenticating in Twitch")
+	oauthListenPortYouTube := pflag.Uint16("oauth-listen-port-youtube", 8092, "the port that is used for OAuth callbacks while authenticating in YouTube")
+
 	pflag.Parse()
 
 	flags := Flags{
@@ -94,6 +100,9 @@ func parseFlags() Flags {
 		Subprocess:          *subprocess,
 		SplitProcess:        *splitProcess,
 		LockTimeout:         *lockTimeout,
+
+		OAuthListenPortTwitch:  *oauthListenPortTwitch,
+		OAuthListenPortYouTube: *oauthListenPortYouTube,
 	}
 
 	for _, platformGetFlagsFunc := range platformGetFlagsFuncs {

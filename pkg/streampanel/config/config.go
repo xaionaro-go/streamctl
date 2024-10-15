@@ -20,11 +20,19 @@ type BrowserConfig struct {
 	Command string `yaml:"command"`
 }
 
+type OAuthConfig struct {
+	ListenPorts struct {
+		Twitch  uint16 `yaml:"twitch"`
+		YouTube uint16 `yaml:"youtube"`
+	} `yaml:"listen_ports"`
+}
+
 type Config struct {
 	RemoteStreamDAddr string           `yaml:"streamd_remote"`
 	BuiltinStreamD    streamd.Config   `yaml:"streamd_builtin"`
 	Screenshot        ScreenshotConfig `yaml:"screenshot"`
 	Browser           BrowserConfig    `yaml:"browser"`
+	OAuth             OAuthConfig      `yaml:"oauth"`
 }
 
 func DefaultConfig() Config {
