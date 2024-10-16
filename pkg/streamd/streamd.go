@@ -1219,8 +1219,9 @@ func (d *StreamD) ListStreamDestinations(
 		c := make([]api.StreamDestination, 0, len(streamDestinations))
 		for _, dst := range streamDestinations {
 			c = append(c, api.StreamDestination{
-				ID:  api.DestinationID(dst.ID),
-				URL: dst.URL,
+				ID:        api.DestinationID(dst.ID),
+				URL:       dst.URL,
+				StreamKey: dst.StreamKey,
 			})
 		}
 		return c, nil
@@ -1231,6 +1232,7 @@ func (d *StreamD) AddStreamDestination(
 	ctx context.Context,
 	destinationID api.DestinationID,
 	url string,
+	streamKey string,
 ) error {
 	logger.Debugf(ctx, "AddStreamDestination")
 	defer logger.Debugf(ctx, "/AddStreamDestination")
@@ -1241,9 +1243,40 @@ func (d *StreamD) AddStreamDestination(
 			resetContextCancellers(ctx),
 			sstypes.DestinationID(destinationID),
 			url,
+			streamKey,
 		)
 		if err != nil {
-			return fmt.Errorf("unable to add stream destination server: %w", err)
+			return fmt.Errorf("unable to add stream destination: %w", err)
+		}
+
+		err = d.SaveConfig(ctx)
+		if err != nil {
+			return fmt.Errorf("unable to save the config: %w", err)
+		}
+
+		return nil
+	})
+}
+
+func (d *StreamD) UpdateStreamDestination(
+	ctx context.Context,
+	destinationID api.DestinationID,
+	url string,
+	streamKey string,
+) error {
+	logger.Debugf(ctx, "UpdateStreamDestination")
+	defer logger.Debugf(ctx, "/UpdateStreamDestination")
+	defer d.notifyAboutChange(ctx, events.StreamDestinationsChange)
+
+	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
+		err := d.StreamServer.UpdateStreamDestination(
+			resetContextCancellers(ctx),
+			sstypes.DestinationID(destinationID),
+			url,
+			streamKey,
+		)
+		if err != nil {
+			return fmt.Errorf("unable to update stream destination: %w", err)
 		}
 
 		err = d.SaveConfig(ctx)

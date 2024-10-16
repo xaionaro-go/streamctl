@@ -53,13 +53,13 @@ func main() {
 	})
 
 	l.Debugf("opening '%s' as the input...", fromURL)
-	input, err := recoder.NewInputFromURL(ctx, fromURL, recoder.InputConfig{})
+	input, err := recoder.NewInputFromURL(ctx, fromURL, "", recoder.InputConfig{})
 	if err != nil {
 		l.Fatal(err)
 	}
 
 	l.Debugf("opening '%s' as the output...", toURL)
-	output, err := recoder.NewOutputFromURL(ctx, toURL, recoder.OutputConfig{})
+	output, err := recoder.NewOutputFromURL(ctx, toURL, "", recoder.OutputConfig{})
 	if err != nil {
 		l.Fatal(err)
 	}

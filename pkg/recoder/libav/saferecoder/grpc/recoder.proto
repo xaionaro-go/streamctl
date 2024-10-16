@@ -36,9 +36,14 @@ message Error {
     string message = 2;
 }
 
+message ResourcePathURL {
+    string url = 1;
+    string authKey = 2;
+}
+
 message ResourcePath {
     oneof ResourcePath {
-        string url = 1;
+        ResourcePathURL url = 1;
     }
 }
 

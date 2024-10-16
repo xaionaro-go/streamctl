@@ -32,17 +32,19 @@ func (r *Recoder) StartRecoding(
 func (r *Recoder) NewInputFromURL(
 	ctx context.Context,
 	url string,
+	authKey string,
 	cfg recoder.InputConfig,
 ) (recoder.Input, error) {
-	return r.Process.NewInputFromURL(ctx, url, cfg)
+	return r.Process.NewInputFromURL(ctx, url, authKey, cfg)
 }
 
 func (r *Recoder) NewOutputFromURL(
 	ctx context.Context,
 	url string,
+	streamKey string,
 	cfg recoder.OutputConfig,
 ) (recoder.Output, error) {
-	return r.Process.NewOutputFromURL(ctx, url, cfg)
+	return r.Process.NewOutputFromURL(ctx, url, streamKey, cfg)
 }
 
 func (r *Recoder) WaitForRecordingEnd(ctx context.Context) error {

@@ -59,6 +59,7 @@ type InputID uint64
 func (c *Client) NewInputFromURL(
 	ctx context.Context,
 	url string,
+	authKey string,
 	config InputConfig,
 ) (InputID, error) {
 	client, conn, err := c.grpcClient()
@@ -70,7 +71,10 @@ func (c *Client) NewInputFromURL(
 	resp, err := client.NewInput(ctx, &recoder_grpc.NewInputRequest{
 		Path: &recoder_grpc.ResourcePath{
 			ResourcePath: &recoder_grpc.ResourcePath_Url{
-				Url: url,
+				Url: &recoder_grpc.ResourcePathURL{
+					Url:     url,
+					AuthKey: authKey,
+				},
 			},
 		},
 		Config: &recoder_grpc.InputConfig{},
@@ -108,6 +112,7 @@ type OutputConfig = recoder.OutputConfig
 func (c *Client) NewOutputFromURL(
 	ctx context.Context,
 	url string,
+	streamKey string,
 	config OutputConfig,
 ) (OutputID, error) {
 	client, conn, err := c.grpcClient()
@@ -119,7 +124,10 @@ func (c *Client) NewOutputFromURL(
 	resp, err := client.NewOutput(ctx, &recoder_grpc.NewOutputRequest{
 		Path: &recoder_grpc.ResourcePath{
 			ResourcePath: &recoder_grpc.ResourcePath_Url{
-				Url: url,
+				Url: &recoder_grpc.ResourcePathURL{
+					Url:     url,
+					AuthKey: streamKey,
+				},
 			},
 		},
 		Config: &recoder_grpc.OutputConfig{},

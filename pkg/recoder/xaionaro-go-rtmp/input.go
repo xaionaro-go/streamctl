@@ -52,6 +52,7 @@ func (r *Recoder) NewInputFromPublisher(
 func (r *Recoder) NewInputFromURL(
 	ctx context.Context,
 	urlString string,
+	authKey string,
 	cfg recoder.InputConfig,
 ) (_ recoder.Input, _err error) {
 	inClient, err := newRTMPClient(ctx, urlString)
@@ -72,18 +73,15 @@ func (r *Recoder) NewInputFromURL(
 		return nil, fmt.Errorf("unable to parse URL '%s': %w", urlString, err)
 	}
 
-	remoteAppName, _ := getAppNameAndKey(url.Path)
-	tcURL := *url
-	tcURL.Path = "/" + remoteAppName
-	if tcURL.Port() == "1935" {
-		tcURL.Host = tcURL.Hostname()
+	if url.Scheme == "rtmp" && url.Port() == "1935" {
+		url.Host = url.Hostname()
 	}
 	err = inClient.Connect(ctx, &rtmpmsg.NetConnectionConnect{
 		Command: rtmpmsg.NetConnectionConnectCommand{
-			App:      remoteAppName,
+			App:      strings.Trim(url.Path, "/"),
 			Type:     "nonprivate",
 			FlashVer: "StreamPanel",
-			TCURL:    tcURL.String(),
+			TCURL:    url.String(),
 		},
 	})
 	if err != nil {

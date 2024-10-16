@@ -19,8 +19,9 @@ type PortServer interface {
 }
 
 type StreamDestination struct {
-	ID  DestinationID
-	URL string
+	ID        DestinationID
+	URL       string
+	StreamKey string
 }
 
 type StreamID = streamtypes.StreamID

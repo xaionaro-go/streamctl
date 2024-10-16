@@ -70,7 +70,7 @@ func (s *StreamForwards) init(
 ) (_ret error) {
 	s.WithConfig(ctx, func(ctx context.Context, cfg *types.Config) {
 		for dstID, dstCfg := range cfg.Destinations {
-			err := s.addActiveStreamDestination(ctx, dstID, dstCfg.URL)
+			err := s.addActiveStreamDestination(ctx, dstID, dstCfg.URL, dstCfg.StreamKey)
 			if err != nil {
 				_ret = fmt.Errorf("unable to initialize stream destination '%s' to %#+v: %w", dstID, dstCfg, err)
 				return
@@ -79,12 +79,13 @@ func (s *StreamForwards) init(
 
 		for streamID, streamCfg := range cfg.Streams {
 			for dstID, fwd := range streamCfg.Forwardings {
-				if !fwd.Disabled {
-					_, err := s.newActiveStreamForward(ctx, streamID, dstID, fwd.Quirks)
-					if err != nil {
-						_ret = fmt.Errorf("unable to launch stream forward from '%s' to '%s': %w", streamID, dstID, err)
-						return
-					}
+				if fwd.Disabled {
+					continue
+				}
+				_, err := s.newActiveStreamForward(ctx, streamID, dstID, fwd.Quirks)
+				if err != nil {
+					_ret = fmt.Errorf("unable to launch stream forward from '%s' to '%s': %w", streamID, dstID, err)
+					return
 				}
 			}
 		}
@@ -218,8 +219,8 @@ func (s *StreamForwards) newActiveStreamForward(
 	fwd, err := s.NewActiveStreamForward(
 		ctx,
 		streamID,
-		destinationID,
 		urlParsed.String(),
+		dst.StreamKey,
 		func(
 			ctx context.Context,
 			fwd *ActiveStreamForwarding,
@@ -324,7 +325,7 @@ func (s *StreamForwards) restartUntilYoutubeRecognizesStream(
 			)
 			logger.Debugf(ctx, "the result of checking the stream on the remote platform: %v %v", streamOK, err)
 			if err != nil {
-				logger.Errorf(ctx, "unable to check if the stream with URL '%s' is started: %v", fwd.ActiveForwarding.URL, err)
+				logger.Errorf(ctx, "unable to check if the stream with URL '%s' is started: %v", fwd.ActiveForwarding.DestinationURL, err)
 				time.Sleep(time.Second)
 				continue
 			}
@@ -341,7 +342,7 @@ func (s *StreamForwards) restartUntilYoutubeRecognizesStream(
 				)
 				logger.Debugf(ctx, "the result of checking the stream on the remote platform: %v %v", streamOK, err)
 				if err != nil {
-					logger.Errorf(ctx, "unable to check if the stream with URL '%s' is started: %v", fwd.ActiveForwarding.URL, err)
+					logger.Errorf(ctx, "unable to check if the stream with URL '%s' is started: %v", fwd.ActiveForwarding.DestinationURL, err)
 					time.Sleep(time.Second)
 					continue
 				}
@@ -515,10 +516,10 @@ func (s *StreamForwards) listActiveStreamForwards(
 	_ context.Context,
 ) ([]StreamForward, error) {
 	var result []StreamForward
-	for _, fwd := range s.ActiveStreamForwardings {
+	for key, fwd := range s.ActiveStreamForwardings {
 		result = append(result, StreamForward{
-			StreamID:      fwd.StreamID,
-			DestinationID: fwd.DestinationID,
+			StreamID:      key.StreamID,
+			DestinationID: key.DestinationID,
 			Enabled:       true,
 			NumBytesWrote: fwd.WriteCount.Load(),
 			NumBytesRead:  fwd.ReadCount.Load(),
@@ -613,35 +614,87 @@ func (s *StreamForwards) AddStreamDestination(
 	ctx context.Context,
 	destinationID types.DestinationID,
 	url string,
+	streamKey string,
 ) error {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
-	return xsync.DoA3R1(ctx, &s.Mutex, s.addStreamDestination, ctx, destinationID, url)
+	return xsync.DoA4R1(ctx, &s.Mutex, s.addStreamDestination, ctx, destinationID, url, streamKey)
 }
 
 func (s *StreamForwards) addStreamDestination(
 	ctx context.Context,
 	destinationID types.DestinationID,
 	url string,
+	streamKey string,
 ) (_ret error) {
 	s.WithConfig(ctx, func(ctx context.Context, cfg *types.Config) {
-		err := s.addActiveStreamDestination(ctx, destinationID, url)
+		err := s.addActiveStreamDestination(ctx, destinationID, url, streamKey)
 		if err != nil {
 			_ret = fmt.Errorf("unable to add an active stream destination: %w", err)
 			return
 		}
-		cfg.Destinations[destinationID] = &types.DestinationConfig{URL: url}
+		cfg.Destinations[destinationID] = &types.DestinationConfig{
+			URL:       url,
+			StreamKey: streamKey,
+		}
 	})
 	return
 }
 
+func (s *StreamForwards) UpdateStreamDestination(
+	ctx context.Context,
+	destinationID types.DestinationID,
+	url string,
+	streamKey string,
+) error {
+	ctx = belt.WithField(ctx, "module", "StreamServer")
+	return xsync.DoA4R1(ctx, &s.Mutex, s.updateStreamDestination, ctx, destinationID, url, streamKey)
+}
+
+func (s *StreamForwards) updateStreamDestination(
+	ctx context.Context,
+	destinationID types.DestinationID,
+	url string,
+	streamKey string,
+) (_ret error) {
+	s.WithConfig(ctx, func(ctx context.Context, cfg *types.Config) {
+		for key := range s.ActiveStreamForwardings {
+			if key.DestinationID == destinationID {
+				_ret = fmt.Errorf("there is already an active stream forwarding to '%s'", destinationID)
+				return
+			}
+		}
+
+		err := s.removeActiveStreamDestination(ctx, destinationID)
+		if err != nil {
+			_ret = fmt.Errorf("unable to remove (to then re-add) the active stream destination: %w", err)
+			return
+		}
+
+		err = s.addActiveStreamDestination(ctx, destinationID, url, streamKey)
+		if err != nil {
+			_ret = fmt.Errorf("unable to re-add the active stream destination: %w", err)
+			return
+		}
+
+		cfg.Destinations[destinationID] = &types.DestinationConfig{
+			URL:       url,
+			StreamKey: streamKey,
+		}
+	})
+	return
+}
+
+// TODO: delete this function, we already store the exact same information in the config
 func (s *StreamForwards) addActiveStreamDestination(
 	_ context.Context,
 	destinationID types.DestinationID,
 	url string,
+	streamKey string,
 ) error {
 	s.StreamDestinations = append(s.StreamDestinations, types.StreamDestination{
-		ID:  destinationID,
-		URL: url,
+		ID:        destinationID,
+		URL:       url,
+		StreamKey: streamKey,
 	})
 	return nil
 }
@@ -672,13 +725,15 @@ func (s *StreamForwards) removeActiveStreamDestination(
 	ctx context.Context,
 	destinationID types.DestinationID,
 ) error {
-	streamForwards, err := s.ListStreamForwards(ctx)
+	streamForwards, err := s.getStreamForwards(ctx, func(si types.StreamID, di ordered.Optional[types.DestinationID]) bool {
+		return true
+	})
 	if err != nil {
 		return fmt.Errorf("unable to list stream forwardings: %w", err)
 	}
 	for _, fwd := range streamForwards {
 		if fwd.DestinationID == destinationID {
-			s.RemoveStreamForward(ctx, fwd.StreamID, fwd.DestinationID)
+			s.removeStreamForward(ctx, fwd.StreamID, fwd.DestinationID)
 		}
 	}
 

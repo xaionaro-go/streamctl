@@ -426,17 +426,62 @@ func (p *Panel) displayIncomingServers(
 }
 
 func (p *Panel) openAddDestinationWindow(ctx context.Context) {
-	w := p.app.NewWindow(AppName + ": Add stream destination")
+	p.openAddOrEditDestinationWindow(
+		ctx,
+		"Add stream destination",
+		api.StreamDestination{},
+		p.addStreamDestination,
+	)
+}
+
+func (p *Panel) openEditDestinationWindow(
+	ctx context.Context,
+	dst api.StreamDestination,
+) {
+	p.openAddOrEditDestinationWindow(
+		ctx,
+		fmt.Sprintf("Edit stream destination '%s'", dst.ID),
+		dst,
+		p.updateStreamDestination,
+	)
+}
+
+func (p *Panel) openAddOrEditDestinationWindow(
+	ctx context.Context,
+	title string,
+	destination api.StreamDestination,
+	commitFn func(
+		ctx context.Context,
+		destinationID api.DestinationID,
+		url string,
+		streamKey string,
+	) error,
+) {
+	w := p.app.NewWindow(AppName + ": " + title)
 	resizeWindow(w, fyne.NewSize(400, 300))
 
 	destinationIDEntry := widget.NewEntry()
 	destinationIDEntry.SetPlaceHolder("destination ID")
+	if destination.ID != "" {
+		destinationIDEntry.SetText(string(destination.ID))
+		destinationIDEntry.Disable()
+	}
 
 	urlEntry := widget.NewEntry()
 	urlEntry.SetPlaceHolder("URL")
+	urlEntry.SetText(destination.URL)
+
+	streamKeyEntry := widget.NewEntry()
+	streamKeyEntry.SetPlaceHolder("stream key")
+	streamKeyEntry.SetText(destination.StreamKey)
 
 	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
-		err := p.addStreamDestination(ctx, api.DestinationID(destinationIDEntry.Text), urlEntry.Text)
+		err := commitFn(
+			ctx,
+			api.DestinationID(destinationIDEntry.Text),
+			urlEntry.Text,
+			streamKeyEntry.Text,
+		)
 		if err != nil {
 			p.DisplayError(err)
 			return
@@ -452,6 +497,7 @@ func (p *Panel) openAddDestinationWindow(ctx context.Context) {
 		container.NewVBox(
 			destinationIDEntry,
 			urlEntry,
+			streamKeyEntry,
 		),
 	))
 	w.Show()
@@ -461,10 +507,22 @@ func (p *Panel) addStreamDestination(
 	ctx context.Context,
 	destinationID api.DestinationID,
 	url string,
+	streamKey string,
 ) error {
 	logger.Debugf(ctx, "addStreamDestination")
 	defer logger.Debugf(ctx, "/addStreamDestination")
-	return p.StreamD.AddStreamDestination(ctx, destinationID, url)
+	return p.StreamD.AddStreamDestination(ctx, destinationID, url, streamKey)
+}
+
+func (p *Panel) updateStreamDestination(
+	ctx context.Context,
+	destinationID api.DestinationID,
+	url string,
+	streamKey string,
+) error {
+	logger.Debugf(ctx, "updateStreamDestination")
+	defer logger.Debugf(ctx, "/updateStreamDestination")
+	return p.StreamD.UpdateStreamDestination(ctx, destinationID, url, streamKey)
 }
 
 func (p *Panel) displayStreamDestinations(
@@ -497,9 +555,14 @@ func (p *Panel) displayStreamDestinations(
 			)
 			w.Show()
 		})
+		editButton := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
+			p.openEditDestinationWindow(ctx, dst)
+		})
+
 		label := widget.NewLabel(string(dst.ID) + ": " + string(dst.URL))
 		objs = append(objs, container.NewHBox(
 			deleteButton,
+			editButton,
 			label,
 		))
 	}

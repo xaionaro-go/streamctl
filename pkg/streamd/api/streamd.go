@@ -98,6 +98,13 @@ type StreamD interface {
 		ctx context.Context,
 		destinationID DestinationID,
 		url string,
+		streamKey string,
+	) error
+	UpdateStreamDestination(
+		ctx context.Context,
+		destinationID DestinationID,
+		url string,
+		streamKey string,
 	) error
 	RemoveStreamDestination(
 		ctx context.Context,
@@ -206,8 +213,9 @@ type StreamServer struct {
 }
 
 type StreamDestination struct {
-	ID  DestinationID
-	URL string
+	ID        DestinationID
+	URL       string
+	StreamKey string
 }
 
 type StreamForward struct {

@@ -19,6 +19,7 @@ type Input struct {
 func NewInputFromURL(
 	ctx context.Context,
 	url string,
+	authKey string,
 	cfg InputConfig,
 ) (*Input, error) {
 	if url == "" {

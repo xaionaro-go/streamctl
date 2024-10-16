@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"runtime/debug"
-	"strings"
 	"sync/atomic"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
@@ -82,7 +81,7 @@ func (r *Recoder) StartRecoding(
 
 		logger.Debugf(ctx, "calling Publish")
 		if err := r.Stream.Publish(ctx, &rtmpmsg.NetStreamPublish{
-			PublishingName: output.AppKey,
+			PublishingName: output.StreamKey,
 			PublishingType: "live",
 		}); err != nil {
 			return fmt.Errorf("unable to send the Publish to the remote endpoint: %w", err)
@@ -160,17 +159,4 @@ func (r *Recoder) Close() (_err error) {
 		}
 		return result.ErrorOrNil()
 	})
-}
-
-func getAppNameAndKey(
-	remotePath string,
-) (string, string) {
-	remoteAppName := "live"
-	pathParts := strings.SplitN(remotePath, "/", -2)
-	apiKey := pathParts[len(pathParts)-1]
-	if len(pathParts) >= 2 {
-		remoteAppName = strings.Trim(strings.Join(pathParts[:len(pathParts)-1], "/"), "/")
-	}
-
-	return remoteAppName, apiKey
 }

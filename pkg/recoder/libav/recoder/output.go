@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"strings"
 
 	"github.com/asticode/go-astiav"
 	"github.com/asticode/go-astikit"
@@ -31,6 +32,7 @@ func formatFromScheme(scheme string) string {
 func NewOutputFromURL(
 	ctx context.Context,
 	urlString string,
+	streamKey string,
 	cfg OutputConfig,
 ) (*Output, error) {
 	if urlString == "" {
@@ -42,11 +44,18 @@ func NewOutputFromURL(
 		return nil, fmt.Errorf("unable to parse URL '%s': %w", url, err)
 	}
 
+	if streamKey != "" {
+		if !strings.HasSuffix(url.Path, "/") {
+			url.Path += "/"
+		}
+		url.Path += streamKey
+	}
+
 	output := &Output{
 		Closer: astikit.NewCloser(),
 	}
 
-	formatContext, err := astiav.AllocOutputFormatContext(nil, formatFromScheme(url.Scheme), urlString)
+	formatContext, err := astiav.AllocOutputFormatContext(nil, formatFromScheme(url.Scheme), url.String())
 	if err != nil {
 		return nil, fmt.Errorf("allocating output format context failed: %w", err)
 	}
@@ -59,8 +68,8 @@ func NewOutputFromURL(
 
 	// if output is a file:
 	if !output.FormatContext.OutputFormat().Flags().Has(astiav.IOFormatFlagNofile) {
-		logger.Tracef(ctx, "destination '%s' is a file", urlString)
-		ioContext, err := astiav.OpenIOContext(urlString, astiav.NewIOContextFlags(astiav.IOContextFlagWrite))
+		logger.Tracef(ctx, "destination '%s' is a file", url.String())
+		ioContext, err := astiav.OpenIOContext(url.String(), astiav.NewIOContextFlags(astiav.IOContextFlagWrite))
 		if err != nil {
 			log.Fatal(fmt.Errorf("main: opening io context failed: %w", err))
 		}

@@ -50,7 +50,15 @@ func New(
 		// TODO: find a way to adjust the OAuth ports dynamically without re-creating the Twitch client.
 		return nil, fmt.Errorf("the function GetOAuthListenPorts is not set")
 	}
-	oauthPorts := getPortsFn()
+	var oauthPorts []uint16
+	for {
+		oauthPorts = getPortsFn()
+		if len(oauthPorts) != 0 {
+			break
+		}
+		logger.Debugf(ctx, "waiting for somebody to provide an OAuthListenerPort")
+		time.Sleep(time.Second)
+	}
 	if len(oauthPorts) == 0 {
 		return nil, fmt.Errorf("the function GetOAuthListenPorts returned zero ports")
 	}

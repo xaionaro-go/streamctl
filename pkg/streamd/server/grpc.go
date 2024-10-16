@@ -772,6 +772,7 @@ func (grpc *GRPCServer) ListStreamDestinations(
 		result = append(result, &streamd_grpc.StreamDestination{
 			DestinationID: string(dst.ID),
 			Url:           dst.URL,
+			StreamKey:     dst.StreamKey,
 		})
 	}
 	return &streamd_grpc.ListStreamDestinationsReply{
@@ -787,11 +788,28 @@ func (grpc *GRPCServer) AddStreamDestination(
 		ctx,
 		api.DestinationID(req.GetConfig().GetDestinationID()),
 		req.GetConfig().GetUrl(),
+		req.GetConfig().GetStreamKey(),
 	)
 	if err != nil {
 		return nil, err
 	}
 	return &streamd_grpc.AddStreamDestinationReply{}, nil
+}
+
+func (grpc *GRPCServer) UpdateStreamDestination(
+	ctx context.Context,
+	req *streamd_grpc.UpdateStreamDestinationRequest,
+) (*streamd_grpc.UpdateStreamDestinationReply, error) {
+	err := grpc.StreamD.UpdateStreamDestination(
+		ctx,
+		api.DestinationID(req.GetConfig().GetDestinationID()),
+		req.GetConfig().GetUrl(),
+		req.GetConfig().GetStreamKey(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.UpdateStreamDestinationReply{}, nil
 }
 
 func (grpc *GRPCServer) RemoveStreamDestination(

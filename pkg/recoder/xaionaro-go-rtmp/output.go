@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"runtime/debug"
+	"strings"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
@@ -16,8 +17,8 @@ import (
 
 type Output struct {
 	xsync.Mutex
-	Client *rtmp.ClientConn
-	AppKey string
+	Client    *rtmp.ClientConn
+	StreamKey string
 }
 
 var _ recoder.Output = (*Output)(nil)
@@ -25,6 +26,7 @@ var _ recoder.Output = (*Output)(nil)
 func (r *Recoder) NewOutputFromURL(
 	ctx context.Context,
 	urlString string,
+	streamKey string,
 	cfg recoder.OutputConfig,
 ) (_ recoder.Output, _err error) {
 	var output *Output
@@ -51,20 +53,17 @@ func (r *Recoder) NewOutputFromURL(
 		return nil, fmt.Errorf("unable to parse URL '%s': %w", urlString, err)
 	}
 
-	tcURL := *url
-	remoteAppName, appKey := getAppNameAndKey(tcURL.Path)
-	tcURL.Path = "/" + remoteAppName
-	if tcURL.Port() == "1935" {
-		tcURL.Host = tcURL.Hostname()
+	if url.Scheme == "rtmp" && url.Port() == "1935" {
+		url.Host = url.Hostname()
 	}
-	output.AppKey = appKey
+	output.StreamKey = streamKey
 
 	if err := client.Connect(ctx, &rtmpmsg.NetConnectionConnect{
 		Command: rtmpmsg.NetConnectionConnectCommand{
-			App:      remoteAppName,
+			App:      strings.Trim(url.Path, "/"),
 			Type:     "nonprivate",
 			FlashVer: "StreamPanel",
-			TCURL:    tcURL.String(),
+			TCURL:    url.String(),
 		},
 	}); err != nil {
 		return nil, fmt.Errorf("unable to connect the endpoint '%s': %w", urlString, err)

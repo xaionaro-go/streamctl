@@ -107,7 +107,7 @@ func (srv *GRPCServer) newInputByURL(
 	_ *recoder_grpc.InputConfig,
 ) (*recoder_grpc.NewInputReply, error) {
 	config := recoder.InputConfig{}
-	input, err := recoder.NewInputFromURL(ctx, path.Url, config)
+	input, err := recoder.NewInputFromURL(ctx, path.Url.Url, path.Url.AuthKey, config)
 	if err != nil {
 		return nil, fmt.Errorf("unable to initialize an input using URL '%s' and config %#+v", path.Url, config)
 	}
@@ -161,7 +161,7 @@ func (srv *GRPCServer) newOutputByURL(
 	_ *recoder_grpc.OutputConfig,
 ) (*recoder_grpc.NewOutputReply, error) {
 	config := recoder.OutputConfig{}
-	output, err := recoder.NewOutputFromURL(ctx, path.Url, config)
+	output, err := recoder.NewOutputFromURL(ctx, path.Url.Url, path.Url.AuthKey, config)
 	if err != nil {
 		return nil, fmt.Errorf("unable to initialize an output using URL '%s' and config %#+v", path.Url, config)
 	}

@@ -17,9 +17,10 @@ type Input struct {
 func (p *Process) NewInputFromURL(
 	ctx context.Context,
 	url string,
+	streamKey string,
 	cfg InputConfig,
 ) (*Input, error) {
-	inputID, err := p.Client.NewInputFromURL(ctx, url, cfg)
+	inputID, err := p.Client.NewInputFromURL(ctx, url, streamKey, cfg)
 	if err != nil {
 		return nil, err
 	}

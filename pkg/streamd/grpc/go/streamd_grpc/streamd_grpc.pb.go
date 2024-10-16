@@ -57,6 +57,7 @@ type StreamDClient interface {
 	SubscribeToStreamServersChanges(ctx context.Context, in *SubscribeToStreamServersChangesRequest, opts ...grpc.CallOption) (StreamD_SubscribeToStreamServersChangesClient, error)
 	ListStreamDestinations(ctx context.Context, in *ListStreamDestinationsRequest, opts ...grpc.CallOption) (*ListStreamDestinationsReply, error)
 	AddStreamDestination(ctx context.Context, in *AddStreamDestinationRequest, opts ...grpc.CallOption) (*AddStreamDestinationReply, error)
+	UpdateStreamDestination(ctx context.Context, in *UpdateStreamDestinationRequest, opts ...grpc.CallOption) (*UpdateStreamDestinationReply, error)
 	RemoveStreamDestination(ctx context.Context, in *RemoveStreamDestinationRequest, opts ...grpc.CallOption) (*RemoveStreamDestinationReply, error)
 	SubscribeToStreamDestinationsChanges(ctx context.Context, in *SubscribeToStreamDestinationsChangesRequest, opts ...grpc.CallOption) (StreamD_SubscribeToStreamDestinationsChangesClient, error)
 	AddIncomingStream(ctx context.Context, in *AddIncomingStreamRequest, opts ...grpc.CallOption) (*AddIncomingStreamReply, error)
@@ -500,6 +501,15 @@ func (c *streamDClient) ListStreamDestinations(ctx context.Context, in *ListStre
 func (c *streamDClient) AddStreamDestination(ctx context.Context, in *AddStreamDestinationRequest, opts ...grpc.CallOption) (*AddStreamDestinationReply, error) {
 	out := new(AddStreamDestinationReply)
 	err := c.cc.Invoke(ctx, "/streamd.StreamD/AddStreamDestination", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) UpdateStreamDestination(ctx context.Context, in *UpdateStreamDestinationRequest, opts ...grpc.CallOption) (*UpdateStreamDestinationReply, error) {
+	out := new(UpdateStreamDestinationReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/UpdateStreamDestination", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -971,6 +981,7 @@ type StreamDServer interface {
 	SubscribeToStreamServersChanges(*SubscribeToStreamServersChangesRequest, StreamD_SubscribeToStreamServersChangesServer) error
 	ListStreamDestinations(context.Context, *ListStreamDestinationsRequest) (*ListStreamDestinationsReply, error)
 	AddStreamDestination(context.Context, *AddStreamDestinationRequest) (*AddStreamDestinationReply, error)
+	UpdateStreamDestination(context.Context, *UpdateStreamDestinationRequest) (*UpdateStreamDestinationReply, error)
 	RemoveStreamDestination(context.Context, *RemoveStreamDestinationRequest) (*RemoveStreamDestinationReply, error)
 	SubscribeToStreamDestinationsChanges(*SubscribeToStreamDestinationsChangesRequest, StreamD_SubscribeToStreamDestinationsChangesServer) error
 	AddIncomingStream(context.Context, *AddIncomingStreamRequest) (*AddIncomingStreamReply, error)
@@ -1114,6 +1125,9 @@ func (UnimplementedStreamDServer) ListStreamDestinations(context.Context, *ListS
 }
 func (UnimplementedStreamDServer) AddStreamDestination(context.Context, *AddStreamDestinationRequest) (*AddStreamDestinationReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddStreamDestination not implemented")
+}
+func (UnimplementedStreamDServer) UpdateStreamDestination(context.Context, *UpdateStreamDestinationRequest) (*UpdateStreamDestinationReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateStreamDestination not implemented")
 }
 func (UnimplementedStreamDServer) RemoveStreamDestination(context.Context, *RemoveStreamDestinationRequest) (*RemoveStreamDestinationReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RemoveStreamDestination not implemented")
@@ -1866,6 +1880,24 @@ func _StreamD_AddStreamDestination_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _StreamD_UpdateStreamDestination_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateStreamDestinationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).UpdateStreamDestination(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/UpdateStreamDestination",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).UpdateStreamDestination(ctx, req.(*UpdateStreamDestinationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _StreamD_RemoveStreamDestination_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RemoveStreamDestinationRequest)
 	if err := dec(in); err != nil {
@@ -2590,6 +2622,10 @@ var StreamD_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AddStreamDestination",
 			Handler:    _StreamD_AddStreamDestination_Handler,
+		},
+		{
+			MethodName: "UpdateStreamDestination",
+			Handler:    _StreamD_UpdateStreamDestination_Handler,
 		},
 		{
 			MethodName: "RemoveStreamDestination",

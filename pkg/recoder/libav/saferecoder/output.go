@@ -17,9 +17,10 @@ type Output struct {
 func (p *Process) NewOutputFromURL(
 	ctx context.Context,
 	url string,
+	streamKey string,
 	cfg OutputConfig,
 ) (*Output, error) {
-	outputID, err := p.Client.NewOutputFromURL(ctx, url, cfg)
+	outputID, err := p.Client.NewOutputFromURL(ctx, url, streamKey, cfg)
 	if err != nil {
 		return nil, err
 	}

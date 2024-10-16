@@ -38,6 +38,7 @@ type RecoderConfig = recoder.Config
 func (c *Client) NewInputFromURL(
 	ctx context.Context,
 	url string,
+	authKey string,
 	config InputConfig,
 ) (InputID, error) {
 	return 0, fmt.Errorf("not compiled with libav support")
@@ -46,6 +47,7 @@ func (c *Client) NewInputFromURL(
 func (c *Client) NewOutputFromURL(
 	ctx context.Context,
 	url string,
+	streamKey string,
 	config OutputConfig,
 ) (OutputID, error) {
 	return 0, fmt.Errorf("not compiled with libav support")

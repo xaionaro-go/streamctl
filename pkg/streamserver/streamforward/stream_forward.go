@@ -29,13 +29,13 @@ type StreamForward struct {
 
 type ActiveStreamForwarding struct {
 	*StreamForwards
-	StreamID       types.StreamID
-	DestinationID  types.DestinationID
-	URL            *url.URL
-	ReadCount      atomic.Uint64
-	WriteCount     atomic.Uint64
-	RecoderFactory recoder.Factory
-	PauseFunc      func(ctx context.Context, fwd *ActiveStreamForwarding)
+	StreamID             types.StreamID
+	DestinationURL       *url.URL
+	DestinationStreamKey string
+	ReadCount            atomic.Uint64
+	WriteCount           atomic.Uint64
+	RecoderFactory       recoder.Factory
+	PauseFunc            func(ctx context.Context, fwd *ActiveStreamForwarding)
 
 	cancelFunc context.CancelFunc
 
@@ -47,14 +47,14 @@ type ActiveStreamForwarding struct {
 func (fwds *StreamForwards) NewActiveStreamForward(
 	ctx context.Context,
 	streamID types.StreamID,
-	dstID types.DestinationID,
 	urlString string,
+	streamKey string,
 	pauseFunc func(ctx context.Context, fwd *ActiveStreamForwarding),
 	opts ...Option,
 ) (_ret *ActiveStreamForwarding, _err error) {
-	logger.Debugf(ctx, "NewActiveStreamForward(ctx, '%s', '%s', '%s', relayService, pauseFunc)", streamID, dstID, urlString)
+	logger.Debugf(ctx, "NewActiveStreamForward(ctx, '%s', '%s', relayService, pauseFunc)", streamID, urlString)
 	defer func() {
-		logger.Debugf(ctx, "/NewActiveStreamForward(ctx, '%s', '%s', '%s', relayService, pauseFunc): %#+v %v", streamID, dstID, urlString, _ret, _err)
+		logger.Debugf(ctx, "/NewActiveStreamForward(ctx, '%s', '%s', relayService, pauseFunc): %#+v %v", streamID, urlString, _ret, _err)
 	}()
 
 	urlParsed, err := url.Parse(urlString)
@@ -62,12 +62,12 @@ func (fwds *StreamForwards) NewActiveStreamForward(
 		return nil, fmt.Errorf("unable to parse URL '%s': %w", urlString, err)
 	}
 	fwd := &ActiveStreamForwarding{
-		RecoderFactory: fwds.RecoderFactory,
-		StreamForwards: fwds,
-		StreamID:       streamID,
-		DestinationID:  dstID,
-		URL:            urlParsed,
-		PauseFunc:      pauseFunc,
+		RecoderFactory:       fwds.RecoderFactory,
+		StreamForwards:       fwds,
+		StreamID:             streamID,
+		DestinationURL:       urlParsed,
+		DestinationStreamKey: streamKey,
+		PauseFunc:            pauseFunc,
 	}
 	for _, opt := range opts {
 		opt.apply(fwd)
@@ -175,15 +175,15 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 		}
 	})
 
-	logger.Debugf(ctx, "DestinationStreamingLocker.Lock(ctx, '%s')", fwd.DestinationID)
-	destinationUnlocker := fwd.StreamForwards.DestinationStreamingLocker.Lock(ctx, fwd.DestinationID)
+	logger.Debugf(ctx, "DestinationStreamingLocker.Lock(ctx, '%s')", fwd.DestinationURL)
+	destinationUnlocker := fwd.StreamForwards.DestinationStreamingLocker.Lock(ctx, fwd.DestinationURL)
 	defer func() {
 		if destinationUnlocker != nil { // if ctx was cancelled before we locked then the unlocker is nil
 			destinationUnlocker.Unlock()
 		}
-		logger.Debugf(ctx, "DestinationStreamingLocker.Unlock(ctx, '%s')", fwd.DestinationID)
+		logger.Debugf(ctx, "DestinationStreamingLocker.Unlock(ctx, '%s')", fwd.DestinationURL)
 	}()
-	logger.Debugf(ctx, "/DestinationStreamingLocker.Lock(ctx, '%s')", fwd.DestinationID)
+	logger.Debugf(ctx, "/DestinationStreamingLocker.Lock(ctx, '%s')", fwd.DestinationURL)
 
 	select {
 	case <-ctx.Done():
@@ -324,7 +324,7 @@ func (fwd *ActiveStreamForwarding) openInputFor(
 	if newInputFromStreamIDer, ok := recoderInstance.(recoder.NewInputFromPublisherer); ok {
 		input, err = newInputFromStreamIDer.NewInputFromPublisher(ctx, publisher, inputCfg)
 	} else {
-		input, err = recoderInstance.NewInputFromURL(ctx, inputURL.String(), inputCfg)
+		input, err = recoderInstance.NewInputFromURL(ctx, inputURL.String(), "", inputCfg)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("unable to open '%s' as the input: %w", inputURL, err)
@@ -337,11 +337,11 @@ func (fwd *ActiveStreamForwarding) openOutputFor(
 	ctx context.Context,
 	recoderInstance recoder.Recoder,
 ) (recoder.Output, error) {
-	output, err := recoderInstance.NewOutputFromURL(ctx, fwd.URL.String(), recoder.OutputConfig{})
+	output, err := recoderInstance.NewOutputFromURL(ctx, fwd.DestinationURL.String(), fwd.DestinationStreamKey, recoder.OutputConfig{})
 	if err != nil {
-		return nil, fmt.Errorf("unable to open '%s' as the output: %w", fwd.URL, err)
+		return nil, fmt.Errorf("unable to open '%s' as the output: %w", fwd.DestinationURL, err)
 	}
-	logger.Debugf(ctx, "opened '%s' as the output", fwd.URL)
+	logger.Debugf(ctx, "opened '%s' as the output", fwd.DestinationURL)
 
 	return output, nil
 }
@@ -386,5 +386,5 @@ func (fwd *ActiveStreamForwarding) Close() error {
 }
 
 func (fwd *ActiveStreamForwarding) String() string {
-	return fmt.Sprintf("%s->%s", fwd.StreamID, fwd.DestinationID)
+	return fmt.Sprintf("%s->%s", fwd.StreamID, fwd.DestinationURL)
 }

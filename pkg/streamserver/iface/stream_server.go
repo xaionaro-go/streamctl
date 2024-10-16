@@ -50,6 +50,13 @@ type StreamServer interface {
 		ctx context.Context,
 		destinationID types.DestinationID,
 		url string,
+		streamKey string,
+	) error
+	UpdateStreamDestination(
+		ctx context.Context,
+		destinationID types.DestinationID,
+		url string,
+		streamKey string,
 	) error
 	RemoveStreamDestination(
 		ctx context.Context,

@@ -1026,8 +1026,9 @@ func (c *Client) ListStreamDestinations(
 	var result []api.StreamDestination
 	for _, dst := range reply.GetStreamDestinations() {
 		result = append(result, api.StreamDestination{
-			ID:  api.DestinationID(dst.GetDestinationID()),
-			URL: dst.GetUrl(),
+			ID:        api.DestinationID(dst.GetDestinationID()),
+			URL:       dst.GetUrl(),
+			StreamKey: dst.GetStreamKey(),
 		})
 	}
 	return result, nil
@@ -1037,6 +1038,7 @@ func (c *Client) AddStreamDestination(
 	ctx context.Context,
 	destinationID api.DestinationID,
 	url string,
+	streamKey string,
 ) error {
 	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
@@ -1047,6 +1049,29 @@ func (c *Client) AddStreamDestination(
 			Config: &streamd_grpc.StreamDestination{
 				DestinationID: string(destinationID),
 				Url:           url,
+				StreamKey:     streamKey,
+			},
+		})
+	})
+	return err
+}
+
+func (c *Client) UpdateStreamDestination(
+	ctx context.Context,
+	destinationID api.DestinationID,
+	url string,
+	streamKey string,
+) error {
+	_, err := withStreamDClient(ctx, c, func(
+		ctx context.Context,
+		client streamd_grpc.StreamDClient,
+		conn io.Closer,
+	) (*streamd_grpc.UpdateStreamDestinationReply, error) {
+		return callWrapper(ctx, c, client.UpdateStreamDestination, &streamd_grpc.UpdateStreamDestinationRequest{
+			Config: &streamd_grpc.StreamDestination{
+				DestinationID: string(destinationID),
+				Url:           url,
+				StreamKey:     streamKey,
 			},
 		})
 	})

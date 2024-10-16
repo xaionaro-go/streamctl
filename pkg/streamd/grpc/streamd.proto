@@ -44,6 +44,7 @@ service StreamD {
     rpc SubscribeToStreamServersChanges(SubscribeToStreamServersChangesRequest) returns (stream StreamServersChange) {}
 	rpc ListStreamDestinations(ListStreamDestinationsRequest) returns (ListStreamDestinationsReply) {}
 	rpc AddStreamDestination(AddStreamDestinationRequest) returns (AddStreamDestinationReply) {}
+	rpc UpdateStreamDestination(UpdateStreamDestinationRequest) returns (UpdateStreamDestinationReply) {}
 	rpc RemoveStreamDestination(RemoveStreamDestinationRequest) returns (RemoveStreamDestinationReply) {}
     rpc SubscribeToStreamDestinationsChanges(SubscribeToStreamDestinationsChangesRequest) returns (stream StreamDestinationsChange) {}
     rpc AddIncomingStream(AddIncomingStreamRequest) returns (AddIncomingStreamReply) {}
@@ -295,6 +296,7 @@ message StopStreamServerReply {}
 message StreamDestination {
     string destinationID = 1;
     string url = 2;
+    string streamKey = 3;
 }
 
 message ListStreamDestinationsRequest {}
@@ -306,6 +308,11 @@ message AddStreamDestinationRequest {
     StreamDestination config = 1;
 }
 message AddStreamDestinationReply {}
+
+message UpdateStreamDestinationRequest {
+    StreamDestination config = 1;
+}
+message UpdateStreamDestinationReply {}
 
 message RemoveStreamDestinationRequest {
     string destinationID = 1;
