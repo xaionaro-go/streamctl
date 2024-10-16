@@ -1276,8 +1276,8 @@ func (p *Panel) streamServersUpdater(
 
 		defer func() {
 			p.streamServersLocker.Do(ctx, func() {
+				cancelFn()
 				p.streamServersUpdaterCanceller = nil
-				observability.Go(ctx, updateData)
 			})
 		}()
 
@@ -1285,6 +1285,7 @@ func (p *Panel) streamServersUpdater(
 		defer logger.Debugf(ctx, "/streamServersUpdater")
 
 		t := time.NewTicker(time.Second)
+		defer t.Stop()
 		for {
 			select {
 			case <-ctx.Done():
