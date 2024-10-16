@@ -190,6 +190,7 @@ require (
 	github.com/go-ng/xmath v0.0.0-20230704233441-028f5ea62335
 	github.com/go-yaml/yaml v2.1.0+incompatible
 	github.com/google/uuid v1.6.0
+	github.com/iancoleman/strcase v0.3.0
 	github.com/immune-gmbh/attestation-sdk v0.0.0-20230711173209-f44e4502aeca
 	github.com/kbinani/screenshot v0.0.0-20230812210009-b87d31814237
 	github.com/lusingander/colorpicker v0.7.3

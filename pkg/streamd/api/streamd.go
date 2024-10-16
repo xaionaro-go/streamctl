@@ -9,6 +9,7 @@ import (
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/cache"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
@@ -186,6 +187,11 @@ type StreamD interface {
 	AddTimer(ctx context.Context, triggerAt time.Time, action TimerAction) (TimerID, error)
 	RemoveTimer(ctx context.Context, timerID TimerID) error
 	ListTimers(ctx context.Context) ([]Timer, error)
+
+	AddOBSSceneRule(ctx context.Context, sceneName SceneName, sceneRule SceneRule) error
+	UpdateOBSSceneRule(ctx context.Context, sceneName SceneName, idx uint64, sceneRule SceneRule) error
+	RemoveOBSSceneRule(ctx context.Context, sceneName SceneName, idx uint64) error
+	ListOBSSceneRules(ctx context.Context, sceneName SceneName) (SceneRules, error)
 }
 
 type StreamPlayer = sstypes.StreamPlayer
@@ -290,3 +296,8 @@ type TimerActionEndStream struct {
 var _ TimerAction = (*TimerActionEndStream)(nil)
 
 func (*TimerActionEndStream) timerAction() {}
+
+type SceneName = obs.SceneName
+
+type SceneRule = obs.SceneRule
+type SceneRules = obs.SceneRules

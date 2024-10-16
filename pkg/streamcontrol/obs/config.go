@@ -2,15 +2,18 @@ package obs
 
 import (
 	streamctl "github.com/xaionaro-go/streamctl/pkg/streamcontrol"
-	obs "github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs/types"
 )
 
-const ID = obs.ID
+const ID = types.ID
 
-type Config = obs.Config
-type StreamProfile = obs.StreamProfile
-type PlatformSpecificConfig = obs.PlatformSpecificConfig
+type Config = types.Config
+type SceneName = types.SceneName
+type SceneRule = types.SceneRule
+type SceneRules = types.SceneRules
+type StreamProfile = types.StreamProfile
+type PlatformSpecificConfig = types.PlatformSpecificConfig
 
 func InitConfig(cfg streamctl.Config) {
-	obs.InitConfig(cfg)
+	types.InitConfig(cfg)
 }

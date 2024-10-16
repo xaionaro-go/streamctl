@@ -79,26 +79,40 @@ func New(
 func (c *Client) init(ctx context.Context) error {
 	var result *multierror.Error
 	if c.Config.UsePersistentConnection {
-		result = multierror.Append(result, c.initPersistentConnection(ctx))
+		result = multierror.Append(
+			result,
+			c.initPersistentConnection(ctx),
+		)
 	}
 	return result.ErrorOrNil()
 }
 
-func (c *Client) initPersistentConnection(ctx context.Context) error {
+func (c *Client) initPersistentConnection(
+	ctx context.Context,
+) error {
 	conn, err := c.connect(ctx)
 	if err != nil {
 		return err
 	}
 	c.PersistentConnection = conn
-	c.PersistentStreamDClient = streamd_grpc.NewStreamDClient(conn)
+	c.PersistentStreamDClient = streamd_grpc.NewStreamDClient(
+		conn,
+	)
 	c.PersistentOBSClient = obs_grpc.NewOBSClient(conn)
 	return nil
 }
 
-func (c *Client) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
+func (c *Client) TagRPC(
+	ctx context.Context,
+	_ *stats.RPCTagInfo,
+) context.Context {
 	return ctx
 }
-func (c *Client) HandleRPC(ctx context.Context, s stats.RPCStats) {
+
+func (c *Client) HandleRPC(
+	ctx context.Context,
+	s stats.RPCStats,
+) {
 	switch s := s.(type) {
 	case *stats.InPayload:
 		atomic.AddUint64(&c.Stats.BytesIn, uint64(s.WireLength))
@@ -106,14 +120,27 @@ func (c *Client) HandleRPC(ctx context.Context, s stats.RPCStats) {
 		atomic.AddUint64(&c.Stats.BytesOut, uint64(s.WireLength))
 	}
 }
-func (c *Client) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
+
+func (c *Client) TagConn(
+	ctx context.Context,
+	_ *stats.ConnTagInfo,
+) context.Context {
 	return ctx
 }
-func (c *Client) HandleConn(context.Context, stats.ConnStats) {}
 
-func (c *Client) connect(ctx context.Context) (*grpc.ClientConn, error) {
+func (c *Client) HandleConn(
+	context.Context,
+	stats.ConnStats,
+) {
+}
+
+func (c *Client) connect(
+	ctx context.Context,
+) (*grpc.ClientConn, error) {
 	opts := []grpc.DialOption{
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithTransportCredentials(
+			insecure.NewCredentials(),
+		),
 		grpc.WithConnectParams(grpc.ConnectParams{
 			Backoff: backoff.Config{
 				BaseDelay:  c.Config.Reconnect.InitialInterval,
@@ -139,8 +166,16 @@ func (c *Client) connect(ctx context.Context) (*grpc.ClientConn, error) {
 	)
 }
 
-func (c *Client) doConnect(ctx context.Context, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
-	logger.Tracef(ctx, "doConnect(ctx, %#+v): Config: %#+v", opts, c.Config)
+func (c *Client) doConnect(
+	ctx context.Context,
+	opts ...grpc.DialOption,
+) (*grpc.ClientConn, error) {
+	logger.Tracef(
+		ctx,
+		"doConnect(ctx, %#+v): Config: %#+v",
+		opts,
+		c.Config,
+	)
 	delay := c.Config.Reconnect.InitialInterval
 	for {
 		select {
@@ -148,29 +183,55 @@ func (c *Client) doConnect(ctx context.Context, opts ...grpc.DialOption) (*grpc.
 			return nil, ctx.Err()
 		default:
 		}
-		logger.Debugf(ctx, "trying to (re-)connect to %s", c.Target)
+		logger.Debugf(
+			ctx,
+			"trying to (re-)connect to %s",
+			c.Target,
+		)
 
-		dialCtx, cancelFn := context.WithTimeout(ctx, time.Second)
-		conn, err := grpc.DialContext(dialCtx, c.Target, opts...)
+		dialCtx, cancelFn := context.WithTimeout(
+			ctx,
+			time.Second,
+		)
+		conn, err := grpc.DialContext(
+			dialCtx,
+			c.Target,
+			opts...)
 		cancelFn()
 		if err == nil {
-			logger.Debugf(ctx, "successfully (re-)connected to %s", c.Target)
+			logger.Debugf(
+				ctx,
+				"successfully (re-)connected to %s",
+				c.Target,
+			)
 			return conn, nil
 		}
-		logger.Debugf(ctx, "(re-)connection failed to %s: %v; sleeping %v before the next try", c.Target, err, delay)
+		logger.Debugf(
+			ctx,
+			"(re-)connection failed to %s: %v; sleeping %v before the next try",
+			c.Target,
+			err,
+			delay,
+		)
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case <-time.After(delay):
 		}
-		delay = time.Duration(float64(delay) * c.Config.Reconnect.IntervalMultiplier)
+		delay = time.Duration(
+			float64(
+				delay,
+			) * c.Config.Reconnect.IntervalMultiplier,
+		)
 		if delay > c.Config.Reconnect.MaximalInterval {
 			delay = c.Config.Reconnect.MaximalInterval
 		}
 	}
 }
 
-func (c *Client) grpcClient(ctx context.Context) (streamd_grpc.StreamDClient, obs_grpc.OBSClient, io.Closer, error) {
+func (c *Client) grpcClient(
+	ctx context.Context,
+) (streamd_grpc.StreamDClient, obs_grpc.OBSClient, io.Closer, error) {
 	if c.Config.UsePersistentConnection {
 		return c.grpcPersistentClient(ctx)
 	} else {
@@ -178,10 +239,15 @@ func (c *Client) grpcClient(ctx context.Context) (streamd_grpc.StreamDClient, ob
 	}
 }
 
-func (c *Client) grpcNewClient(ctx context.Context) (streamd_grpc.StreamDClient, obs_grpc.OBSClient, *grpc.ClientConn, error) {
+func (c *Client) grpcNewClient(
+	ctx context.Context,
+) (streamd_grpc.StreamDClient, obs_grpc.OBSClient, *grpc.ClientConn, error) {
 	conn, err := c.connect(ctx)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("unable to initialize a gRPC client: %w", err)
+		return nil, nil, nil, fmt.Errorf(
+			"unable to initialize a gRPC client: %w",
+			err,
+		)
 	}
 
 	streamDClient := streamd_grpc.NewStreamDClient(conn)
@@ -189,11 +255,20 @@ func (c *Client) grpcNewClient(ctx context.Context) (streamd_grpc.StreamDClient,
 	return streamDClient, obsClient, conn, nil
 }
 
-func (c *Client) grpcPersistentClient(ctx context.Context) (streamd_grpc.StreamDClient, obs_grpc.OBSClient, dummyCloser, error) {
-	return xsync.DoA1R4(ctx, &c.PersistentConnectionLocker, c.grpcPersistentClientNoLock, ctx)
+func (c *Client) grpcPersistentClient(
+	ctx context.Context,
+) (streamd_grpc.StreamDClient, obs_grpc.OBSClient, dummyCloser, error) {
+	return xsync.DoA1R4(
+		ctx,
+		&c.PersistentConnectionLocker,
+		c.grpcPersistentClientNoLock,
+		ctx,
+	)
 }
 
-func (c *Client) grpcPersistentClientNoLock(ctx context.Context) (streamd_grpc.StreamDClient, obs_grpc.OBSClient, dummyCloser, error) {
+func (c *Client) grpcPersistentClientNoLock(
+	ctx context.Context,
+) (streamd_grpc.StreamDClient, obs_grpc.OBSClient, dummyCloser, error) {
 	return c.PersistentStreamDClient, c.PersistentOBSClient, dummyCloser{}, nil
 }
 
@@ -227,13 +302,21 @@ func callWrapper[REQ any, REPLY any](
 			if err != nil {
 				return err
 			}
-			logger.Debugf(ctx, "retrying; sleeping %v for the retry", delay)
+			logger.Debugf(
+				ctx,
+				"retrying; sleeping %v for the retry",
+				delay,
+			)
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
 			case <-time.After(delay):
 			}
-			delay = time.Duration(float64(delay) * c.Config.Reconnect.IntervalMultiplier)
+			delay = time.Duration(
+				float64(
+					delay,
+				) * c.Config.Reconnect.IntervalMultiplier,
+			)
 			if delay > c.Config.Reconnect.MaximalInterval {
 				delay = c.Config.Reconnect.MaximalInterval
 			}
@@ -265,7 +348,9 @@ func withStreamDClient[REPLY any](
 	}
 	defer conn.Close()
 	if client == nil {
-		return nil, fmt.Errorf("internal error: client is nil")
+		return nil, fmt.Errorf(
+			"internal error: client is nil",
+		)
 	}
 	return fn(ctx, client, conn)
 }
@@ -297,7 +382,10 @@ func unwrapStreamDChan[E any, R any, S receiver[R]](
 		sub, err := fn(ctx, client)
 		if err != nil {
 			var emptyS S
-			return emptyS, nil, fmt.Errorf("unable to subscribe: %w", err)
+			return emptyS, nil, fmt.Errorf(
+				"unable to subscribe: %w",
+				err,
+			)
 		}
 		return sub, closer, nil
 	}
@@ -322,25 +410,45 @@ func unwrapStreamDChan[E any, R any, S receiver[R]](
 			if err != nil {
 				switch {
 				case errors.Is(err, io.EOF):
-					logger.Debugf(ctx, "the receiver is closed: %v", err)
+					logger.Debugf(
+						ctx,
+						"the receiver is closed: %v",
+						err,
+					)
 					return
 				case strings.Contains(err.Error(), grpc.ErrClientConnClosing.Error()):
-					logger.Debugf(ctx, "apparently we are closing the client: %v", err)
+					logger.Debugf(
+						ctx,
+						"apparently we are closing the client: %v",
+						err,
+					)
 					return
 				case strings.Contains(err.Error(), context.Canceled.Error()):
-					logger.Debugf(ctx, "subscription was cancelled: %v", err)
+					logger.Debugf(
+						ctx,
+						"subscription was cancelled: %v",
+						err,
+					)
 					return
 				default:
 					for {
 						err = c.processError(ctx, err)
 						if err != nil {
-							logger.Errorf(ctx, "unable to read data: %v", err)
+							logger.Errorf(
+								ctx,
+								"unable to read data: %v",
+								err,
+							)
 							return
 						}
 						closer.Close()
 						sub, closer, err = getSub()
 						if err != nil {
-							logger.Errorf(ctx, "unable to resubscribe: %v", err)
+							logger.Errorf(
+								ctx,
+								"unable to resubscribe: %v",
+								err,
+							)
 							continue
 						}
 						break
@@ -359,12 +467,26 @@ func (c *Client) processError(
 	ctx context.Context,
 	err error,
 ) error {
-	logger.Tracef(ctx, "processError(ctx, '%v'): %T", err, err)
+	logger.Tracef(
+		ctx,
+		"processError(ctx, '%v'): %T",
+		err,
+		err,
+	)
 	if s, ok := status.FromError(err); ok {
-		logger.Tracef(ctx, "processError(ctx, '%v'): code == %#+v; msg == %#+v", err, s.Code(), s.Message())
+		logger.Tracef(
+			ctx,
+			"processError(ctx, '%v'): code == %#+v; msg == %#+v",
+			err,
+			s.Code(),
+			s.Message(),
+		)
 		switch s.Code() {
 		case codes.Unavailable:
-			logger.Debugf(ctx, "suppressed the error (forcing a retry)")
+			logger.Debugf(
+				ctx,
+				"suppressed the error (forcing a retry)",
+			)
 			return nil
 		}
 	}
@@ -393,7 +515,12 @@ func (c *Client) FetchConfig(ctx context.Context) error {
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.OBSOLETE_FetchConfigReply, error) {
-		return callWrapper(ctx, c, client.OBSOLETE_FetchConfig, &streamd_grpc.OBSOLETE_FetchConfigRequest{})
+		return callWrapper(
+			ctx,
+			c,
+			client.OBSOLETE_FetchConfig,
+			&streamd_grpc.OBSOLETE_FetchConfigRequest{},
+		)
 	})
 	return err
 }
@@ -404,7 +531,12 @@ func (c *Client) InitCache(ctx context.Context) error {
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.InitCacheReply, error) {
-		return callWrapper(ctx, c, client.InitCache, &streamd_grpc.InitCacheRequest{})
+		return callWrapper(
+			ctx,
+			c,
+			client.InitCache,
+			&streamd_grpc.InitCacheRequest{},
+		)
 	})
 	return err
 }
@@ -415,7 +547,12 @@ func (c *Client) SaveConfig(ctx context.Context) error {
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.SaveConfigReply, error) {
-		return callWrapper(ctx, c, client.SaveConfig, &streamd_grpc.SaveConfigRequest{})
+		return callWrapper(
+			ctx,
+			c,
+			client.SaveConfig,
+			&streamd_grpc.SaveConfigRequest{},
+		)
 	})
 	return err
 }
@@ -426,18 +563,30 @@ func (c *Client) ResetCache(ctx context.Context) error {
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.ResetCacheReply, error) {
-		return callWrapper(ctx, c, client.ResetCache, &streamd_grpc.ResetCacheRequest{})
+		return callWrapper(
+			ctx,
+			c,
+			client.ResetCache,
+			&streamd_grpc.ResetCacheRequest{},
+		)
 	})
 	return err
 }
 
-func (c *Client) GetConfig(ctx context.Context) (*streamdconfig.Config, error) {
+func (c *Client) GetConfig(
+	ctx context.Context,
+) (*streamdconfig.Config, error) {
 	reply, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.GetConfigReply, error) {
-		return callWrapper(ctx, c, client.GetConfig, &streamd_grpc.GetConfigRequest{})
+		return callWrapper(
+			ctx,
+			c,
+			client.GetConfig,
+			&streamd_grpc.GetConfigRequest{},
+		)
 	})
 	if err != nil {
 		return nil, err
@@ -446,16 +595,25 @@ func (c *Client) GetConfig(ctx context.Context) (*streamdconfig.Config, error) {
 	var result streamdconfig.Config
 	_, err = result.Read([]byte(reply.Config))
 	if err != nil {
-		return nil, fmt.Errorf("unable to unserialize the received config: %w", err)
+		return nil, fmt.Errorf(
+			"unable to unserialize the received config: %w",
+			err,
+		)
 	}
 	return &result, nil
 }
 
-func (c *Client) SetConfig(ctx context.Context, cfg *streamdconfig.Config) error {
+func (c *Client) SetConfig(
+	ctx context.Context,
+	cfg *streamdconfig.Config,
+) error {
 	var buf bytes.Buffer
 	_, err := cfg.WriteTo(&buf)
 	if err != nil {
-		return fmt.Errorf("unable to serialize the config: %w", err)
+		return fmt.Errorf(
+			"unable to serialize the config: %w",
+			err,
+		)
 	}
 
 	_, err = withStreamDClient(ctx, c, func(
@@ -463,9 +621,14 @@ func (c *Client) SetConfig(ctx context.Context, cfg *streamdconfig.Config) error
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.SetConfigReply, error) {
-		return callWrapper(ctx, c, client.SetConfig, &streamd_grpc.SetConfigRequest{
-			Config: buf.String(),
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.SetConfig,
+			&streamd_grpc.SetConfigRequest{
+				Config: buf.String(),
+			},
+		)
 	})
 	if err != nil {
 		return err
@@ -473,15 +636,23 @@ func (c *Client) SetConfig(ctx context.Context, cfg *streamdconfig.Config) error
 	return nil
 }
 
-func (c *Client) IsBackendEnabled(ctx context.Context, id streamcontrol.PlatformName) (bool, error) {
+func (c *Client) IsBackendEnabled(
+	ctx context.Context,
+	id streamcontrol.PlatformName,
+) (bool, error) {
 	reply, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.IsBackendEnabledReply, error) {
-		return callWrapper(ctx, c, client.IsBackendEnabled, &streamd_grpc.IsBackendEnabledRequest{
-			PlatID: string(id),
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.IsBackendEnabled,
+			&streamd_grpc.IsBackendEnabledRequest{
+				PlatID: string(id),
+			},
+		)
 	})
 	if err != nil {
 		return false, err
@@ -489,13 +660,20 @@ func (c *Client) IsBackendEnabled(ctx context.Context, id streamcontrol.Platform
 	return reply.IsInitialized, nil
 }
 
-func (c *Client) OBSOLETE_IsGITInitialized(ctx context.Context) (bool, error) {
+func (c *Client) OBSOLETE_IsGITInitialized(
+	ctx context.Context,
+) (bool, error) {
 	reply, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.OBSOLETE_GetGitInfoReply, error) {
-		return callWrapper(ctx, c, client.OBSOLETE_GitInfo, &streamd_grpc.OBSOLETE_GetGitInfoRequest{})
+		return callWrapper(
+			ctx,
+			c,
+			client.OBSOLETE_GitInfo,
+			&streamd_grpc.OBSOLETE_GetGitInfoRequest{},
+		)
 	})
 	if err != nil {
 		return false, err
@@ -512,79 +690,135 @@ func (c *Client) StartStream(
 ) error {
 	b, err := yaml.Marshal(profile)
 	if err != nil {
-		return fmt.Errorf("unable to serialize the profile: %w", err)
+		return fmt.Errorf(
+			"unable to serialize the profile: %w",
+			err,
+		)
 	}
-	logger.Debugf(ctx, "serialized profile: '%#+v'", profile)
+	logger.Debugf(
+		ctx,
+		"serialized profile: '%#+v'",
+		profile,
+	)
 	_, err = withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.StartStreamReply, error) {
-		return callWrapper(ctx, c, client.StartStream, &streamd_grpc.StartStreamRequest{
-			PlatID:      string(platID),
-			Title:       title,
-			Description: description,
-			Profile:     string(b),
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.StartStream,
+			&streamd_grpc.StartStreamRequest{
+				PlatID:      string(platID),
+				Title:       title,
+				Description: description,
+				Profile:     string(b),
+			},
+		)
 	})
 	return err
 }
-func (c *Client) EndStream(ctx context.Context, platID streamcontrol.PlatformName) error {
+
+func (c *Client) EndStream(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+) error {
 	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.EndStreamReply, error) {
-		return callWrapper(ctx, c, client.EndStream, &streamd_grpc.EndStreamRequest{PlatID: string(platID)})
+		return callWrapper(
+			ctx,
+			c,
+			client.EndStream,
+			&streamd_grpc.EndStreamRequest{
+				PlatID: string(platID),
+			},
+		)
 	})
 	return err
 }
 
-func (c *Client) OBSOLETE_GitRelogin(ctx context.Context) error {
+func (c *Client) OBSOLETE_GitRelogin(
+	ctx context.Context,
+) error {
 	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.OBSOLETE_GitReloginReply, error) {
-		return callWrapper(ctx, c, client.OBSOLETE_GitRelogin, &streamd_grpc.OBSOLETE_GitReloginRequest{})
+		return callWrapper(
+			ctx,
+			c,
+			client.OBSOLETE_GitRelogin,
+			&streamd_grpc.OBSOLETE_GitReloginRequest{},
+		)
 	})
 	return err
 }
 
-func (c *Client) GetBackendData(ctx context.Context, platID streamcontrol.PlatformName) (any, error) {
+func (c *Client) GetBackendData(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+) (any, error) {
 	reply, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.GetBackendInfoReply, error) {
-		return callWrapper(ctx, c, client.GetBackendInfo, &streamd_grpc.GetBackendInfoRequest{
-			PlatID: string(platID),
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.GetBackendInfo,
+			&streamd_grpc.GetBackendInfoRequest{
+				PlatID: string(platID),
+			},
+		)
 	})
 	if err != nil {
-		return nil, fmt.Errorf("unable to get backend info: %w", err)
+		return nil, fmt.Errorf(
+			"unable to get backend info: %w",
+			err,
+		)
 	}
 
 	var data any
 	switch platID {
 	case obs.ID:
 		_data := api.BackendDataOBS{}
-		err = json.Unmarshal([]byte(reply.GetData()), &_data)
+		err = json.Unmarshal(
+			[]byte(reply.GetData()),
+			&_data,
+		)
 		data = _data
 	case twitch.ID:
 		_data := api.BackendDataTwitch{}
-		err = json.Unmarshal([]byte(reply.GetData()), &_data)
+		err = json.Unmarshal(
+			[]byte(reply.GetData()),
+			&_data,
+		)
 		data = _data
 	case youtube.ID:
 		_data := api.BackendDataYouTube{}
-		err = json.Unmarshal([]byte(reply.GetData()), &_data)
+		err = json.Unmarshal(
+			[]byte(reply.GetData()),
+			&_data,
+		)
 		data = _data
 	default:
-		return nil, fmt.Errorf("unknown platform: '%s'", platID)
+		return nil, fmt.Errorf(
+			"unknown platform: '%s'",
+			platID,
+		)
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("unable to deserialize data: %w", err)
+		return nil, fmt.Errorf(
+			"unable to deserialize data: %w",
+			err,
+		)
 	}
 	return data, nil
 }
@@ -595,18 +829,30 @@ func (c *Client) Restart(ctx context.Context) error {
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.RestartReply, error) {
-		return callWrapper(ctx, c, client.Restart, &streamd_grpc.RestartRequest{})
+		return callWrapper(
+			ctx,
+			c,
+			client.Restart,
+			&streamd_grpc.RestartRequest{},
+		)
 	})
 	return err
 }
 
-func (c *Client) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context) error {
+func (c *Client) EXPERIMENTAL_ReinitStreamControllers(
+	ctx context.Context,
+) error {
 	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.EXPERIMENTAL_ReinitStreamControllersReply, error) {
-		return callWrapper(ctx, c, client.EXPERIMENTAL_ReinitStreamControllers, &streamd_grpc.EXPERIMENTAL_ReinitStreamControllersRequest{})
+		return callWrapper(
+			ctx,
+			c,
+			client.EXPERIMENTAL_ReinitStreamControllers,
+			&streamd_grpc.EXPERIMENTAL_ReinitStreamControllersRequest{},
+		)
 	})
 	return err
 }
@@ -620,27 +866,45 @@ func (c *Client) GetStreamStatus(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.GetStreamStatusReply, error) {
-		return callWrapper(ctx, c, client.GetStreamStatus, &streamd_grpc.GetStreamStatusRequest{
-			PlatID: string(platID),
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.GetStreamStatus,
+			&streamd_grpc.GetStreamStatusRequest{
+				PlatID: string(platID),
+			},
+		)
 	})
 	if err != nil {
-		return nil, fmt.Errorf("unable to get the stream status of '%s': %w", platID, err)
+		return nil, fmt.Errorf(
+			"unable to get the stream status of '%s': %w",
+			platID,
+			err,
+		)
 	}
 
 	var startedAt *time.Time
-	if streamStatus != nil && streamStatus.StartedAt != nil {
+	if streamStatus != nil &&
+		streamStatus.StartedAt != nil {
 		v := *streamStatus.StartedAt
-		startedAt = ptr(time.Unix(v/1000000000, v%1000000000))
+		startedAt = ptr(
+			time.Unix(v/1000000000, v%1000000000),
+		)
 	}
 
 	var customData any
 	switch platID {
 	case youtube.ID:
 		d := youtube.StreamStatusCustomData{}
-		err := json.Unmarshal([]byte(streamStatus.GetCustomData()), &d)
+		err := json.Unmarshal(
+			[]byte(streamStatus.GetCustomData()),
+			&d,
+		)
 		if err != nil {
-			return nil, fmt.Errorf("unable to unserialize the custom data: %w", err)
+			return nil, fmt.Errorf(
+				"unable to unserialize the custom data: %w",
+				err,
+			)
 		}
 		customData = d
 	}
@@ -662,10 +926,15 @@ func (c *Client) SetTitle(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.SetTitleReply, error) {
-		return callWrapper(ctx, c, client.SetTitle, &streamd_grpc.SetTitleRequest{
-			PlatID: string(platID),
-			Title:  title,
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.SetTitle,
+			&streamd_grpc.SetTitleRequest{
+				PlatID: string(platID),
+				Title:  title,
+			},
+		)
 	})
 	return err
 }
@@ -679,10 +948,15 @@ func (c *Client) SetDescription(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.SetDescriptionReply, error) {
-		return callWrapper(ctx, c, client.SetDescription, &streamd_grpc.SetDescriptionRequest{
-			PlatID:      string(platID),
-			Description: description,
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.SetDescription,
+			&streamd_grpc.SetDescriptionRequest{
+				PlatID:      string(platID),
+				Description: description,
+			},
+		)
 	})
 	return err
 }
@@ -694,19 +968,31 @@ func (c *Client) ApplyProfile(
 ) error {
 	b, err := yaml.Marshal(profile)
 	if err != nil {
-		return fmt.Errorf("unable to serialize the profile: %w", err)
+		return fmt.Errorf(
+			"unable to serialize the profile: %w",
+			err,
+		)
 	}
-	logger.Debugf(ctx, "serialized profile: '%#+v'", profile)
+	logger.Debugf(
+		ctx,
+		"serialized profile: '%#+v'",
+		profile,
+	)
 
 	_, err = withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.ApplyProfileReply, error) {
-		return callWrapper(ctx, c, client.ApplyProfile, &streamd_grpc.ApplyProfileRequest{
-			PlatID:  string(platID),
-			Profile: string(b),
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.ApplyProfile,
+			&streamd_grpc.ApplyProfileRequest{
+				PlatID:  string(platID),
+				Profile: string(b),
+			},
+		)
 	})
 	return err
 }
@@ -720,21 +1006,33 @@ func (c *Client) UpdateStream(
 ) error {
 	b, err := yaml.Marshal(profile)
 	if err != nil {
-		return fmt.Errorf("unable to serialize the profile: %w", err)
+		return fmt.Errorf(
+			"unable to serialize the profile: %w",
+			err,
+		)
 	}
-	logger.Debugf(ctx, "serialized profile: '%#+v'", profile)
+	logger.Debugf(
+		ctx,
+		"serialized profile: '%#+v'",
+		profile,
+	)
 
 	_, err = withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.UpdateStreamReply, error) {
-		return callWrapper(ctx, c, client.UpdateStream, &streamd_grpc.UpdateStreamRequest{
-			PlatID:      string(platID),
-			Title:       title,
-			Description: description,
-			Profile:     string(b),
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.UpdateStream,
+			&streamd_grpc.UpdateStreamRequest{
+				PlatID:      string(platID),
+				Title:       title,
+				Description: description,
+				Profile:     string(b),
+			},
+		)
 	})
 	return err
 }
@@ -777,15 +1075,30 @@ func (c *Client) GetVariable(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.GetVariableReply, error) {
-		return callWrapper(ctx, c, client.GetVariable, &streamd_grpc.GetVariableRequest{Key: string(key)})
+		return callWrapper(
+			ctx,
+			c,
+			client.GetVariable,
+			&streamd_grpc.GetVariableRequest{
+				Key: string(key),
+			},
+		)
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("unable to get the variable '%s' value: %w", key, err)
+		return nil, fmt.Errorf(
+			"unable to get the variable '%s' value: %w",
+			key,
+			err,
+		)
 	}
 
 	b := reply.GetValue()
-	logger.Tracef(ctx, "downloaded variable value of size %d", len(b))
+	logger.Tracef(
+		ctx,
+		"downloaded variable value of size %d",
+		len(b),
+	)
 	return b, nil
 }
 
@@ -799,7 +1112,10 @@ func (c *Client) GetVariableHash(
 	case crypto.SHA1:
 		hashTypeArg = streamd_grpc.HashType_HASH_SHA1
 	default:
-		return nil, fmt.Errorf("unsupported hash type: %s", hashType)
+		return nil, fmt.Errorf(
+			"unsupported hash type: %s",
+			hashType,
+		)
 	}
 
 	reply, err := withStreamDClient(ctx, c, func(
@@ -807,17 +1123,31 @@ func (c *Client) GetVariableHash(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.GetVariableHashReply, error) {
-		return callWrapper(ctx, c, client.GetVariableHash, &streamd_grpc.GetVariableHashRequest{
-			Key:      string(key),
-			HashType: hashTypeArg,
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.GetVariableHash,
+			&streamd_grpc.GetVariableHashRequest{
+				Key:      string(key),
+				HashType: hashTypeArg,
+			},
+		)
 	})
 	if err != nil {
-		return nil, fmt.Errorf("unable to get the variable '%s' hash: %w", key, err)
+		return nil, fmt.Errorf(
+			"unable to get the variable '%s' hash: %w",
+			key,
+			err,
+		)
 	}
 
 	b := reply.GetHash()
-	logger.Tracef(ctx, "the downloaded hash of the variable '%s' is %X", key, b)
+	logger.Tracef(
+		ctx,
+		"the downloaded hash of the variable '%s' is %X",
+		key,
+		b,
+	)
 	return b, nil
 }
 
@@ -831,10 +1161,15 @@ func (c *Client) SetVariable(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.SetVariableReply, error) {
-		return callWrapper(ctx, c, client.SetVariable, &streamd_grpc.SetVariableRequest{
-			Key:   string(key),
-			Value: value,
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.SetVariable,
+			&streamd_grpc.SetVariableRequest{
+				Key:   string(key),
+				Value: value,
+			},
+		)
 	})
 	return err
 }
@@ -847,15 +1182,24 @@ func (c *Client) OBS(
 
 	_, obsClient, closer, err := c.grpcClient(ctx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("unable to initialize a gRPC client: %w", err)
+		return nil, nil, fmt.Errorf(
+			"unable to initialize a gRPC client: %w",
+			err,
+		)
 	}
 
-	return &obsgrpcproxy.ClientAsServer{OBSClient: obsClient}, func() {
-		err := closer.Close()
-		if err != nil {
-			logger.Errorf(ctx, "unable to close the connection: %w", err)
-		}
-	}, nil
+	return &obsgrpcproxy.ClientAsServer{
+			OBSClient: obsClient,
+		}, func() {
+			err := closer.Close()
+			if err != nil {
+				logger.Errorf(
+					ctx,
+					"unable to close the connection: %w",
+					err,
+				)
+			}
+		}, nil
 }
 
 func ptr[T any](in T) *T {
@@ -871,7 +1215,12 @@ func (c *Client) SubmitOAuthCode(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.SubmitOAuthCodeReply, error) {
-		return callWrapper(ctx, c, client.SubmitOAuthCode, req)
+		return callWrapper(
+			ctx,
+			c,
+			client.SubmitOAuthCode,
+			req,
+		)
 	})
 }
 
@@ -883,23 +1232,43 @@ func (c *Client) ListStreamServers(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.ListStreamServersReply, error) {
-		return callWrapper(ctx, c, client.ListStreamServers, &streamd_grpc.ListStreamServersRequest{})
+		return callWrapper(
+			ctx,
+			c,
+			client.ListStreamServers,
+			&streamd_grpc.ListStreamServersRequest{},
+		)
 	})
 	if err != nil {
-		return nil, fmt.Errorf("unable to request to list of the stream servers: %w", err)
+		return nil, fmt.Errorf(
+			"unable to request to list of the stream servers: %w",
+			err,
+		)
 	}
 	var result []api.StreamServer
 	for _, server := range reply.GetStreamServers() {
-		srvType, listenAddr, opts, err := goconv.StreamServerConfigGRPC2Go(ctx, server.Config)
+		srvType, listenAddr, opts, err := goconv.StreamServerConfigGRPC2Go(
+			ctx,
+			server.Config,
+		)
 		if err != nil {
-			return nil, fmt.Errorf("unable to convert the server config: %w", err)
+			return nil, fmt.Errorf(
+				"unable to convert the server config: %w",
+				err,
+			)
 		}
 		result = append(result, api.StreamServer{
-			ServerConfig:          opts.Config(ctx),
-			Type:                  srvType,
-			ListenAddr:            listenAddr,
-			NumBytesConsumerWrote: uint64(server.GetStatistics().GetNumBytesConsumerWrote()),
-			NumBytesProducerRead:  uint64(server.GetStatistics().GetNumBytesProducerRead()),
+			ServerConfig: opts.Config(ctx),
+			Type:         srvType,
+			ListenAddr:   listenAddr,
+			NumBytesConsumerWrote: uint64(
+				server.GetStatistics().
+					GetNumBytesConsumerWrote(),
+			),
+			NumBytesProducerRead: uint64(
+				server.GetStatistics().
+					GetNumBytesProducerRead(),
+			),
 		})
 	}
 	return result, nil
@@ -918,22 +1287,37 @@ func (c *Client) StartStreamServer(
 		opts...,
 	)
 	if err != nil {
-		return fmt.Errorf("unable to convert the server config: %w", err)
+		return fmt.Errorf(
+			"unable to convert the server config: %w",
+			err,
+		)
 	}
 
-	logger.Debugf(ctx, "StartStreamServer with cfg: %#+v", cfg)
+	logger.Debugf(
+		ctx,
+		"StartStreamServer with cfg: %#+v",
+		cfg,
+	)
 
 	_, err = withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.StartStreamServerReply, error) {
-		return callWrapper(ctx, c, client.StartStreamServer, &streamd_grpc.StartStreamServerRequest{
-			Config: cfg,
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.StartStreamServer,
+			&streamd_grpc.StartStreamServerRequest{
+				Config: cfg,
+			},
+		)
 	})
 	if err != nil {
-		return fmt.Errorf("unable to request to start the stream server: %w", err)
+		return fmt.Errorf(
+			"unable to request to start the stream server: %w",
+			err,
+		)
 	}
 	return nil
 }
@@ -947,9 +1331,14 @@ func (c *Client) StopStreamServer(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.StopStreamServerReply, error) {
-		return callWrapper(ctx, c, client.StopStreamServer, &streamd_grpc.StopStreamServerRequest{
-			ListenAddr: listenAddr,
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.StopStreamServer,
+			&streamd_grpc.StopStreamServerRequest{
+				ListenAddr: listenAddr,
+			},
+		)
 	})
 	return err
 }
@@ -963,9 +1352,14 @@ func (c *Client) AddIncomingStream(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.AddIncomingStreamReply, error) {
-		return callWrapper(ctx, c, client.AddIncomingStream, &streamd_grpc.AddIncomingStreamRequest{
-			StreamID: string(streamID),
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.AddIncomingStream,
+			&streamd_grpc.AddIncomingStreamRequest{
+				StreamID: string(streamID),
+			},
+		)
 	})
 	return err
 }
@@ -979,9 +1373,14 @@ func (c *Client) RemoveIncomingStream(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.RemoveIncomingStreamReply, error) {
-		return callWrapper(ctx, c, client.RemoveIncomingStream, &streamd_grpc.RemoveIncomingStreamRequest{
-			StreamID: string(streamID),
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.RemoveIncomingStream,
+			&streamd_grpc.RemoveIncomingStreamRequest{
+				StreamID: string(streamID),
+			},
+		)
 	})
 	return err
 }
@@ -994,10 +1393,18 @@ func (c *Client) ListIncomingStreams(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.ListIncomingStreamsReply, error) {
-		return callWrapper(ctx, c, client.ListIncomingStreams, &streamd_grpc.ListIncomingStreamsRequest{})
+		return callWrapper(
+			ctx,
+			c,
+			client.ListIncomingStreams,
+			&streamd_grpc.ListIncomingStreamsRequest{},
+		)
 	})
 	if err != nil {
-		return nil, fmt.Errorf("unable to request to list the incoming streams: %w", err)
+		return nil, fmt.Errorf(
+			"unable to request to list the incoming streams: %w",
+			err,
+		)
 	}
 
 	var result []api.IncomingStream
@@ -1017,16 +1424,26 @@ func (c *Client) ListStreamDestinations(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.ListStreamDestinationsReply, error) {
-		return callWrapper(ctx, c, client.ListStreamDestinations, &streamd_grpc.ListStreamDestinationsRequest{})
+		return callWrapper(
+			ctx,
+			c,
+			client.ListStreamDestinations,
+			&streamd_grpc.ListStreamDestinationsRequest{},
+		)
 	})
 	if err != nil {
-		return nil, fmt.Errorf("unable to request to list the stream destinations: %w", err)
+		return nil, fmt.Errorf(
+			"unable to request to list the stream destinations: %w",
+			err,
+		)
 	}
 
 	var result []api.StreamDestination
 	for _, dst := range reply.GetStreamDestinations() {
 		result = append(result, api.StreamDestination{
-			ID:        api.DestinationID(dst.GetDestinationID()),
+			ID: api.DestinationID(
+				dst.GetDestinationID(),
+			),
 			URL:       dst.GetUrl(),
 			StreamKey: dst.GetStreamKey(),
 		})
@@ -1045,13 +1462,18 @@ func (c *Client) AddStreamDestination(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.AddStreamDestinationReply, error) {
-		return callWrapper(ctx, c, client.AddStreamDestination, &streamd_grpc.AddStreamDestinationRequest{
-			Config: &streamd_grpc.StreamDestination{
-				DestinationID: string(destinationID),
-				Url:           url,
-				StreamKey:     streamKey,
+		return callWrapper(
+			ctx,
+			c,
+			client.AddStreamDestination,
+			&streamd_grpc.AddStreamDestinationRequest{
+				Config: &streamd_grpc.StreamDestination{
+					DestinationID: string(destinationID),
+					Url:           url,
+					StreamKey:     streamKey,
+				},
 			},
-		})
+		)
 	})
 	return err
 }
@@ -1067,13 +1489,18 @@ func (c *Client) UpdateStreamDestination(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.UpdateStreamDestinationReply, error) {
-		return callWrapper(ctx, c, client.UpdateStreamDestination, &streamd_grpc.UpdateStreamDestinationRequest{
-			Config: &streamd_grpc.StreamDestination{
-				DestinationID: string(destinationID),
-				Url:           url,
-				StreamKey:     streamKey,
+		return callWrapper(
+			ctx,
+			c,
+			client.UpdateStreamDestination,
+			&streamd_grpc.UpdateStreamDestinationRequest{
+				Config: &streamd_grpc.StreamDestination{
+					DestinationID: string(destinationID),
+					Url:           url,
+					StreamKey:     streamKey,
+				},
 			},
-		})
+		)
 	})
 	return err
 }
@@ -1087,9 +1514,14 @@ func (c *Client) RemoveStreamDestination(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.RemoveStreamDestinationReply, error) {
-		return callWrapper(ctx, c, client.RemoveStreamDestination, &streamd_grpc.RemoveStreamDestinationRequest{
-			DestinationID: string(destinationID),
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.RemoveStreamDestination,
+			&streamd_grpc.RemoveStreamDestinationRequest{
+				DestinationID: string(destinationID),
+			},
+		)
 	})
 	return err
 }
@@ -1102,28 +1534,54 @@ func (c *Client) ListStreamForwards(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.ListStreamForwardsReply, error) {
-		return callWrapper(ctx, c, client.ListStreamForwards, &streamd_grpc.ListStreamForwardsRequest{})
+		return callWrapper(
+			ctx,
+			c,
+			client.ListStreamForwards,
+			&streamd_grpc.ListStreamForwardsRequest{},
+		)
 	})
 	if err != nil {
-		return nil, fmt.Errorf("unable to request to list the stream forwards: %w", err)
+		return nil, fmt.Errorf(
+			"unable to request to list the stream forwards: %w",
+			err,
+		)
 	}
 
 	var result []api.StreamForward
 	for _, forward := range reply.GetStreamForwards() {
 		item := api.StreamForward{
-			Enabled:       forward.Config.Enabled,
-			StreamID:      api.StreamID(forward.Config.GetStreamID()),
-			DestinationID: api.DestinationID(forward.Config.GetDestinationID()),
-			NumBytesWrote: uint64(forward.Statistics.NumBytesWrote),
-			NumBytesRead:  uint64(forward.Statistics.NumBytesRead),
+			Enabled: forward.Config.Enabled,
+			StreamID: api.StreamID(
+				forward.Config.GetStreamID(),
+			),
+			DestinationID: api.DestinationID(
+				forward.Config.GetDestinationID(),
+			),
+			NumBytesWrote: uint64(
+				forward.Statistics.NumBytesWrote,
+			),
+			NumBytesRead: uint64(
+				forward.Statistics.NumBytesRead,
+			),
 		}
-		restartUntilYoutubeRecognizesStream := forward.GetConfig().GetQuirks().GetRestartUntilYoutubeRecognizesStream()
+		restartUntilYoutubeRecognizesStream := forward.GetConfig().
+			GetQuirks().
+			GetRestartUntilYoutubeRecognizesStream()
 		if restartUntilYoutubeRecognizesStream != nil {
 			item.Quirks = api.StreamForwardingQuirks{
 				RestartUntilYoutubeRecognizesStream: types.RestartUntilYoutubeRecognizesStream{
-					Enabled:        restartUntilYoutubeRecognizesStream.Enabled,
-					StartTimeout:   time.Duration(float64(time.Second) * restartUntilYoutubeRecognizesStream.StartTimeout),
-					StopStartDelay: time.Duration(float64(time.Second) * restartUntilYoutubeRecognizesStream.StopStartDelay),
+					Enabled: restartUntilYoutubeRecognizesStream.Enabled,
+					StartTimeout: time.Duration(
+						float64(
+							time.Second,
+						) * restartUntilYoutubeRecognizesStream.StartTimeout,
+					),
+					StopStartDelay: time.Duration(
+						float64(
+							time.Second,
+						) * restartUntilYoutubeRecognizesStream.StopStartDelay,
+					),
 				},
 				StartAfterYoutubeRecognizedStream: types.StartAfterYoutubeRecognizedStream{
 					Enabled: forward.Config.Quirks.StartAfterYoutubeRecognizedStream.Enabled,
@@ -1147,23 +1605,28 @@ func (c *Client) AddStreamForward(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.AddStreamForwardReply, error) {
-		return callWrapper(ctx, c, client.AddStreamForward, &streamd_grpc.AddStreamForwardRequest{
-			Config: &streamd_grpc.StreamForward{
-				StreamID:      string(streamID),
-				DestinationID: string(destinationID),
-				Enabled:       enabled,
-				Quirks: &streamd_grpc.StreamForwardQuirks{
-					RestartUntilYoutubeRecognizesStream: &streamd_grpc.RestartUntilYoutubeRecognizesStream{
-						Enabled:        quirks.RestartUntilYoutubeRecognizesStream.Enabled,
-						StartTimeout:   quirks.RestartUntilYoutubeRecognizesStream.StartTimeout.Seconds(),
-						StopStartDelay: quirks.RestartUntilYoutubeRecognizesStream.StopStartDelay.Seconds(),
-					},
-					StartAfterYoutubeRecognizedStream: &streamd_grpc.StartAfterYoutubeRecognizedStream{
-						Enabled: quirks.StartAfterYoutubeRecognizedStream.Enabled,
+		return callWrapper(
+			ctx,
+			c,
+			client.AddStreamForward,
+			&streamd_grpc.AddStreamForwardRequest{
+				Config: &streamd_grpc.StreamForward{
+					StreamID:      string(streamID),
+					DestinationID: string(destinationID),
+					Enabled:       enabled,
+					Quirks: &streamd_grpc.StreamForwardQuirks{
+						RestartUntilYoutubeRecognizesStream: &streamd_grpc.RestartUntilYoutubeRecognizesStream{
+							Enabled:        quirks.RestartUntilYoutubeRecognizesStream.Enabled,
+							StartTimeout:   quirks.RestartUntilYoutubeRecognizesStream.StartTimeout.Seconds(),
+							StopStartDelay: quirks.RestartUntilYoutubeRecognizesStream.StopStartDelay.Seconds(),
+						},
+						StartAfterYoutubeRecognizedStream: &streamd_grpc.StartAfterYoutubeRecognizedStream{
+							Enabled: quirks.StartAfterYoutubeRecognizedStream.Enabled,
+						},
 					},
 				},
 			},
-		})
+		)
 	})
 	return err
 }
@@ -1180,23 +1643,28 @@ func (c *Client) UpdateStreamForward(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.UpdateStreamForwardReply, error) {
-		return callWrapper(ctx, c, client.UpdateStreamForward, &streamd_grpc.UpdateStreamForwardRequest{
-			Config: &streamd_grpc.StreamForward{
-				StreamID:      string(streamID),
-				DestinationID: string(destinationID),
-				Enabled:       enabled,
-				Quirks: &streamd_grpc.StreamForwardQuirks{
-					RestartUntilYoutubeRecognizesStream: &streamd_grpc.RestartUntilYoutubeRecognizesStream{
-						Enabled:        quirks.RestartUntilYoutubeRecognizesStream.Enabled,
-						StartTimeout:   quirks.RestartUntilYoutubeRecognizesStream.StartTimeout.Seconds(),
-						StopStartDelay: quirks.RestartUntilYoutubeRecognizesStream.StopStartDelay.Seconds(),
-					},
-					StartAfterYoutubeRecognizedStream: &streamd_grpc.StartAfterYoutubeRecognizedStream{
-						Enabled: quirks.StartAfterYoutubeRecognizedStream.Enabled,
+		return callWrapper(
+			ctx,
+			c,
+			client.UpdateStreamForward,
+			&streamd_grpc.UpdateStreamForwardRequest{
+				Config: &streamd_grpc.StreamForward{
+					StreamID:      string(streamID),
+					DestinationID: string(destinationID),
+					Enabled:       enabled,
+					Quirks: &streamd_grpc.StreamForwardQuirks{
+						RestartUntilYoutubeRecognizesStream: &streamd_grpc.RestartUntilYoutubeRecognizesStream{
+							Enabled:        quirks.RestartUntilYoutubeRecognizesStream.Enabled,
+							StartTimeout:   quirks.RestartUntilYoutubeRecognizesStream.StartTimeout.Seconds(),
+							StopStartDelay: quirks.RestartUntilYoutubeRecognizesStream.StopStartDelay.Seconds(),
+						},
+						StartAfterYoutubeRecognizedStream: &streamd_grpc.StartAfterYoutubeRecognizedStream{
+							Enabled: quirks.StartAfterYoutubeRecognizedStream.Enabled,
+						},
 					},
 				},
 			},
-		})
+		)
 	})
 	return err
 }
@@ -1211,12 +1679,17 @@ func (c *Client) RemoveStreamForward(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.RemoveStreamForwardReply, error) {
-		return callWrapper(ctx, c, client.RemoveStreamForward, &streamd_grpc.RemoveStreamForwardRequest{
-			Config: &streamd_grpc.StreamForward{
-				StreamID:      string(streamID),
-				DestinationID: string(destinationID),
+		return callWrapper(
+			ctx,
+			c,
+			client.RemoveStreamForward,
+			&streamd_grpc.RemoveStreamForwardRequest{
+				Config: &streamd_grpc.StreamForward{
+					StreamID:      string(streamID),
+					DestinationID: string(destinationID),
+				},
 			},
-		})
+		)
 	})
 	return err
 }
@@ -1262,14 +1735,23 @@ func (c *Client) AddStreamPlayer(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.AddStreamPlayerReply, error) {
-		return callWrapper(ctx, c, client.AddStreamPlayer, &streamd_grpc.AddStreamPlayerRequest{
-			Config: &streamd_grpc.StreamPlayerConfig{
-				StreamID:             string(streamID),
-				PlayerType:           goconv.StreamPlayerTypeGo2GRPC(playerType),
-				Disabled:             disabled,
-				StreamPlaybackConfig: goconv.StreamPlaybackConfigGo2GRPC(&streamPlaybackConfig),
+		return callWrapper(
+			ctx,
+			c,
+			client.AddStreamPlayer,
+			&streamd_grpc.AddStreamPlayerRequest{
+				Config: &streamd_grpc.StreamPlayerConfig{
+					StreamID: string(streamID),
+					PlayerType: goconv.StreamPlayerTypeGo2GRPC(
+						playerType,
+					),
+					Disabled: disabled,
+					StreamPlaybackConfig: goconv.StreamPlaybackConfigGo2GRPC(
+						&streamPlaybackConfig,
+					),
+				},
 			},
-		})
+		)
 	})
 	return err
 }
@@ -1281,9 +1763,24 @@ func (c *Client) UpdateStreamPlayer(
 	disabled bool,
 	streamPlaybackConfig sptypes.Config,
 ) (_err error) {
-	logger.Debugf(ctx, "UpdateStreamPlayer(ctx, '%s', '%s', %v, %#+v)", streamID, playerType, disabled, streamPlaybackConfig)
+	logger.Debugf(
+		ctx,
+		"UpdateStreamPlayer(ctx, '%s', '%s', %v, %#+v)",
+		streamID,
+		playerType,
+		disabled,
+		streamPlaybackConfig,
+	)
 	defer func() {
-		logger.Debugf(ctx, "/UpdateStreamPlayer(ctx, '%s', '%s', %v, %#+v): %v", streamID, playerType, disabled, streamPlaybackConfig, _err)
+		logger.Debugf(
+			ctx,
+			"/UpdateStreamPlayer(ctx, '%s', '%s', %v, %#+v): %v",
+			streamID,
+			playerType,
+			disabled,
+			streamPlaybackConfig,
+			_err,
+		)
 	}()
 
 	_, err := withStreamDClient(ctx, c, func(
@@ -1291,14 +1788,23 @@ func (c *Client) UpdateStreamPlayer(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.UpdateStreamPlayerReply, error) {
-		return callWrapper(ctx, c, client.UpdateStreamPlayer, &streamd_grpc.UpdateStreamPlayerRequest{
-			Config: &streamd_grpc.StreamPlayerConfig{
-				StreamID:             string(streamID),
-				PlayerType:           goconv.StreamPlayerTypeGo2GRPC(playerType),
-				Disabled:             disabled,
-				StreamPlaybackConfig: goconv.StreamPlaybackConfigGo2GRPC(&streamPlaybackConfig),
+		return callWrapper(
+			ctx,
+			c,
+			client.UpdateStreamPlayer,
+			&streamd_grpc.UpdateStreamPlayerRequest{
+				Config: &streamd_grpc.StreamPlayerConfig{
+					StreamID: string(streamID),
+					PlayerType: goconv.StreamPlayerTypeGo2GRPC(
+						playerType,
+					),
+					Disabled: disabled,
+					StreamPlaybackConfig: goconv.StreamPlaybackConfigGo2GRPC(
+						&streamPlaybackConfig,
+					),
+				},
 			},
-		})
+		)
 	})
 	return err
 }
@@ -1312,9 +1818,14 @@ func (c *Client) RemoveStreamPlayer(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.RemoveStreamPlayerReply, error) {
-		return callWrapper(ctx, c, client.RemoveStreamPlayer, &streamd_grpc.RemoveStreamPlayerRequest{
-			StreamID: string(streamID),
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.RemoveStreamPlayer,
+			&streamd_grpc.RemoveStreamPlayerRequest{
+				StreamID: string(streamID),
+			},
+		)
 	})
 	return err
 }
@@ -1327,19 +1838,34 @@ func (c *Client) ListStreamPlayers(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.ListStreamPlayersReply, error) {
-		return callWrapper(ctx, c, client.ListStreamPlayers, &streamd_grpc.ListStreamPlayersRequest{})
+		return callWrapper(
+			ctx,
+			c,
+			client.ListStreamPlayers,
+			&streamd_grpc.ListStreamPlayersRequest{},
+		)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("unable to query: %w", err)
 	}
 
-	result := make([]api.StreamPlayer, 0, len(resp.GetPlayers()))
+	result := make(
+		[]api.StreamPlayer,
+		0,
+		len(resp.GetPlayers()),
+	)
 	for _, player := range resp.GetPlayers() {
 		result = append(result, api.StreamPlayer{
-			StreamID:             streamtypes.StreamID(player.GetStreamID()),
-			PlayerType:           goconv.StreamPlayerTypeGRPC2Go(player.PlayerType),
-			Disabled:             player.GetDisabled(),
-			StreamPlaybackConfig: goconv.StreamPlaybackConfigGRPC2Go(player.GetStreamPlaybackConfig()),
+			StreamID: streamtypes.StreamID(
+				player.GetStreamID(),
+			),
+			PlayerType: goconv.StreamPlayerTypeGRPC2Go(
+				player.PlayerType,
+			),
+			Disabled: player.GetDisabled(),
+			StreamPlaybackConfig: goconv.StreamPlaybackConfigGRPC2Go(
+				player.GetStreamPlaybackConfig(),
+			),
 		})
 	}
 	return result, nil
@@ -1354,9 +1880,14 @@ func (c *Client) GetStreamPlayer(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.GetStreamPlayerReply, error) {
-		return callWrapper(ctx, c, client.GetStreamPlayer, &streamd_grpc.GetStreamPlayerRequest{
-			StreamID: string(streamID),
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.GetStreamPlayer,
+			&streamd_grpc.GetStreamPlayerRequest{
+				StreamID: string(streamID),
+			},
+		)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("unable to query: %w", err)
@@ -1364,10 +1895,14 @@ func (c *Client) GetStreamPlayer(
 
 	cfg := resp.GetConfig()
 	return &api.StreamPlayer{
-		StreamID:             streamID,
-		PlayerType:           goconv.StreamPlayerTypeGRPC2Go(cfg.PlayerType),
-		Disabled:             cfg.GetDisabled(),
-		StreamPlaybackConfig: goconv.StreamPlaybackConfigGRPC2Go(cfg.StreamPlaybackConfig),
+		StreamID: streamID,
+		PlayerType: goconv.StreamPlayerTypeGRPC2Go(
+			cfg.PlayerType,
+		),
+		Disabled: cfg.GetDisabled(),
+		StreamPlaybackConfig: goconv.StreamPlaybackConfigGRPC2Go(
+			cfg.StreamPlaybackConfig,
+		),
 	}, nil
 }
 
@@ -1380,9 +1915,14 @@ func (c *Client) StreamPlayerProcessTitle(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.StreamPlayerProcessTitleReply, error) {
-		return callWrapper(ctx, c, client.StreamPlayerProcessTitle, &streamd_grpc.StreamPlayerProcessTitleRequest{
-			StreamID: string(streamID),
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.StreamPlayerProcessTitle,
+			&streamd_grpc.StreamPlayerProcessTitleRequest{
+				StreamID: string(streamID),
+			},
+		)
 	})
 	if err != nil {
 		return "", fmt.Errorf("unable to query: %w", err)
@@ -1400,10 +1940,15 @@ func (c *Client) StreamPlayerOpenURL(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.StreamPlayerOpenReply, error) {
-		return callWrapper(ctx, c, client.StreamPlayerOpen, &streamd_grpc.StreamPlayerOpenRequest{
-			StreamID: string(streamID),
-			Request:  &player_grpc.OpenRequest{},
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.StreamPlayerOpen,
+			&streamd_grpc.StreamPlayerOpenRequest{
+				StreamID: string(streamID),
+				Request:  &player_grpc.OpenRequest{},
+			},
+		)
 	})
 	return err
 }
@@ -1417,10 +1962,15 @@ func (c *Client) StreamPlayerGetLink(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.StreamPlayerGetLinkReply, error) {
-		return callWrapper(ctx, c, client.StreamPlayerGetLink, &streamd_grpc.StreamPlayerGetLinkRequest{
-			StreamID: string(streamID),
-			Request:  &player_grpc.GetLinkRequest{},
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.StreamPlayerGetLink,
+			&streamd_grpc.StreamPlayerGetLinkRequest{
+				StreamID: string(streamID),
+				Request:  &player_grpc.GetLinkRequest{},
+			},
+		)
 	})
 	if err != nil {
 		return "", fmt.Errorf("unable to query: %w", err)
@@ -1467,10 +2017,15 @@ func (c *Client) StreamPlayerIsEnded(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.StreamPlayerIsEndedReply, error) {
-		return callWrapper(ctx, c, client.StreamPlayerIsEnded, &streamd_grpc.StreamPlayerIsEndedRequest{
-			StreamID: string(streamID),
-			Request:  &player_grpc.IsEndedRequest{},
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.StreamPlayerIsEnded,
+			&streamd_grpc.StreamPlayerIsEndedRequest{
+				StreamID: string(streamID),
+				Request:  &player_grpc.IsEndedRequest{},
+			},
+		)
 	})
 	if err != nil {
 		return false, fmt.Errorf("unable to query: %w", err)
@@ -1487,15 +2042,25 @@ func (c *Client) StreamPlayerGetPosition(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.StreamPlayerGetPositionReply, error) {
-		return callWrapper(ctx, c, client.StreamPlayerGetPosition, &streamd_grpc.StreamPlayerGetPositionRequest{
-			StreamID: string(streamID),
-			Request:  &player_grpc.GetPositionRequest{},
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.StreamPlayerGetPosition,
+			&streamd_grpc.StreamPlayerGetPositionRequest{
+				StreamID: string(streamID),
+				Request:  &player_grpc.GetPositionRequest{},
+			},
+		)
 	})
 	if err != nil {
 		return 0, fmt.Errorf("unable to query: %w", err)
 	}
-	return time.Duration(float64(time.Second) * resp.GetReply().GetPositionSecs()), nil
+	return time.Duration(
+		float64(
+			time.Second,
+		) * resp.GetReply().
+			GetPositionSecs(),
+	), nil
 }
 
 func (c *Client) StreamPlayerGetLength(
@@ -1507,15 +2072,25 @@ func (c *Client) StreamPlayerGetLength(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.StreamPlayerGetLengthReply, error) {
-		return callWrapper(ctx, c, client.StreamPlayerGetLength, &streamd_grpc.StreamPlayerGetLengthRequest{
-			StreamID: string(streamID),
-			Request:  &player_grpc.GetLengthRequest{},
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.StreamPlayerGetLength,
+			&streamd_grpc.StreamPlayerGetLengthRequest{
+				StreamID: string(streamID),
+				Request:  &player_grpc.GetLengthRequest{},
+			},
+		)
 	})
 	if err != nil {
 		return 0, fmt.Errorf("unable to query: %w", err)
 	}
-	return time.Duration(float64(time.Second) * resp.GetReply().GetLengthSecs()), nil
+	return time.Duration(
+		float64(
+			time.Second,
+		) * resp.GetReply().
+			GetLengthSecs(),
+	), nil
 }
 
 func (c *Client) StreamPlayerSetSpeed(
@@ -1528,12 +2103,17 @@ func (c *Client) StreamPlayerSetSpeed(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.StreamPlayerSetSpeedReply, error) {
-		return callWrapper(ctx, c, client.StreamPlayerSetSpeed, &streamd_grpc.StreamPlayerSetSpeedRequest{
-			StreamID: string(streamID),
-			Request: &player_grpc.SetSpeedRequest{
-				Speed: speed,
+		return callWrapper(
+			ctx,
+			c,
+			client.StreamPlayerSetSpeed,
+			&streamd_grpc.StreamPlayerSetSpeedRequest{
+				StreamID: string(streamID),
+				Request: &player_grpc.SetSpeedRequest{
+					Speed: speed,
+				},
 			},
-		})
+		)
 	})
 	return err
 }
@@ -1548,12 +2128,17 @@ func (c *Client) StreamPlayerSetPause(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.StreamPlayerSetPauseReply, error) {
-		return callWrapper(ctx, c, client.StreamPlayerSetPause, &streamd_grpc.StreamPlayerSetPauseRequest{
-			StreamID: string(streamID),
-			Request: &player_grpc.SetPauseRequest{
-				IsPaused: pause,
+		return callWrapper(
+			ctx,
+			c,
+			client.StreamPlayerSetPause,
+			&streamd_grpc.StreamPlayerSetPauseRequest{
+				StreamID: string(streamID),
+				Request: &player_grpc.SetPauseRequest{
+					IsPaused: pause,
+				},
 			},
-		})
+		)
 	})
 	return err
 }
@@ -1567,10 +2152,15 @@ func (c *Client) StreamPlayerStop(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.StreamPlayerStopReply, error) {
-		return callWrapper(ctx, c, client.StreamPlayerStop, &streamd_grpc.StreamPlayerStopRequest{
-			StreamID: string(streamID),
-			Request:  &player_grpc.StopRequest{},
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.StreamPlayerStop,
+			&streamd_grpc.StreamPlayerStopRequest{
+				StreamID: string(streamID),
+				Request:  &player_grpc.StopRequest{},
+			},
+		)
 	})
 	return err
 }
@@ -1584,10 +2174,15 @@ func (c *Client) StreamPlayerClose(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.StreamPlayerCloseReply, error) {
-		return callWrapper(ctx, c, client.StreamPlayerClose, &streamd_grpc.StreamPlayerCloseRequest{
-			StreamID: string(streamID),
-			Request:  &player_grpc.CloseRequest{},
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.StreamPlayerClose,
+			&streamd_grpc.StreamPlayerCloseRequest{
+				StreamID: string(streamID),
+				Request:  &player_grpc.CloseRequest{},
+			},
+		)
 	})
 	return err
 }
@@ -1774,32 +2369,54 @@ func (c *Client) SubscribeToStreamPlayersChanges(
 	)
 }
 
-func (c *Client) SetLoggingLevel(ctx context.Context, level logger.Level) error {
+func (c *Client) SetLoggingLevel(
+	ctx context.Context,
+	level logger.Level,
+) error {
 	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.SetLoggingLevelReply, error) {
-		return callWrapper(ctx, c, client.SetLoggingLevel, &streamd_grpc.SetLoggingLevelRequest{
-			LoggingLevel: goconv.LoggingLevelGo2GRPC(level),
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.SetLoggingLevel,
+			&streamd_grpc.SetLoggingLevelRequest{
+				LoggingLevel: goconv.LoggingLevelGo2GRPC(
+					level,
+				),
+			},
+		)
 	})
 	return err
 }
 
-func (c *Client) GetLoggingLevel(ctx context.Context) (logger.Level, error) {
+func (c *Client) GetLoggingLevel(
+	ctx context.Context,
+) (logger.Level, error) {
 	reply, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.GetLoggingLevelReply, error) {
-		return callWrapper(ctx, c, client.GetLoggingLevel, &streamd_grpc.GetLoggingLevelRequest{})
+		return callWrapper(
+			ctx,
+			c,
+			client.GetLoggingLevel,
+			&streamd_grpc.GetLoggingLevelRequest{},
+		)
 	})
 	if err != nil {
-		return logger.LevelUndefined, fmt.Errorf("unable to get the logging level: %w", err)
+		return logger.LevelUndefined, fmt.Errorf(
+			"unable to get the logging level: %w",
+			err,
+		)
 	}
 
-	return goconv.LoggingLevelGRPC2Go(reply.GetLoggingLevel()), nil
+	return goconv.LoggingLevelGRPC2Go(
+		reply.GetLoggingLevel(),
+	), nil
 }
 
 func (c *Client) AddTimer(
@@ -1809,17 +2426,25 @@ func (c *Client) AddTimer(
 ) (api.TimerID, error) {
 	actionGRPC, err := goconv.ActionGo2GRPC(action)
 	if err != nil {
-		return 0, fmt.Errorf("unable to convert the action: %w", err)
+		return 0, fmt.Errorf(
+			"unable to convert the action: %w",
+			err,
+		)
 	}
 	reply, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.AddTimerReply, error) {
-		return callWrapper(ctx, c, client.AddTimer, &streamd_grpc.AddTimerRequest{
-			TriggerAtUnixNano: triggerAt.UnixNano(),
-			Action:            actionGRPC,
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.AddTimer,
+			&streamd_grpc.AddTimerRequest{
+				TriggerAtUnixNano: triggerAt.UnixNano(),
+				Action:            actionGRPC,
+			},
+		)
 	})
 	if err != nil {
 		return 0, fmt.Errorf("unable to add timer: %w", err)
@@ -1837,12 +2462,21 @@ func (c *Client) RemoveTimer(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.RemoveTimerReply, error) {
-		return callWrapper(ctx, c, client.RemoveTimer, &streamd_grpc.RemoveTimerRequest{
-			TimerID: int64(timerID),
-		})
+		return callWrapper(
+			ctx,
+			c,
+			client.RemoveTimer,
+			&streamd_grpc.RemoveTimerRequest{
+				TimerID: int64(timerID),
+			},
+		)
 	})
 	if err != nil {
-		return fmt.Errorf("unable to remove the timer %d: %w", timerID, err)
+		return fmt.Errorf(
+			"unable to remove the timer %d: %w",
+			timerID,
+			err,
+		)
 	}
 	return nil
 }
@@ -1855,20 +2489,36 @@ func (c *Client) ListTimers(
 		client streamd_grpc.StreamDClient,
 		conn io.Closer,
 	) (*streamd_grpc.ListTimersReply, error) {
-		return callWrapper(ctx, c, client.ListTimers, &streamd_grpc.ListTimersRequest{})
+		return callWrapper(
+			ctx,
+			c,
+			client.ListTimers,
+			&streamd_grpc.ListTimersRequest{},
+		)
 	})
 	if err != nil {
-		return nil, fmt.Errorf("unable to list timers: %w", err)
+		return nil, fmt.Errorf(
+			"unable to list timers: %w",
+			err,
+		)
 	}
 
 	timers := reply.GetTimers()
 	result := make([]api.Timer, 0, len(timers))
 	for _, timer := range timers {
 		triggerAtUnixNano := timer.GetTriggerAtUnixNano()
-		triggerAt := time.Unix(triggerAtUnixNano/int64(time.Second), triggerAtUnixNano%int64(time.Second))
-		action, err := goconv.ActionGRPC2Go(timer.GetAction())
+		triggerAt := time.Unix(
+			triggerAtUnixNano/int64(time.Second),
+			triggerAtUnixNano%int64(time.Second),
+		)
+		action, err := goconv.ActionGRPC2Go(
+			timer.GetAction(),
+		)
 		if err != nil {
-			return nil, fmt.Errorf("unable to convert the action: %w", err)
+			return nil, fmt.Errorf(
+				"unable to convert the action: %w",
+				err,
+			)
 		}
 		result = append(result, api.Timer{
 			ID:        api.TimerID(timer.GetTimerID()),
@@ -1877,4 +2527,35 @@ func (c *Client) ListTimers(
 		})
 	}
 	return result, nil
+}
+
+func (c *Client) AddOBSSceneRule(
+	ctx context.Context,
+	sceneName obs.SceneName,
+	sceneRule obs.SceneRule,
+) error {
+
+}
+
+func (c *Client) UpdateOBSSceneRule(
+	ctx context.Context,
+	sceneName obs.SceneName,
+	idx uint64,
+	sceneRule obs.SceneRule,
+) error {
+
+}
+func (c *Client) RemoveOBSSceneRule(
+	ctx context.Context,
+	sceneName obs.SceneName,
+	idx uint64,
+) error {
+
+}
+
+func (c *Client) ListOBSSceneRules(
+	ctx context.Context,
+	sceneName obs.SceneName,
+) (obs.SceneRules, error) {
+
 }

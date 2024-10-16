@@ -1811,6 +1811,10 @@ func (p *Panel) initMainWindow(
 		streamInfoContainer,
 	)
 
+	setupSceneRulesButton := widget.NewButton("Setup scene rules", func() {
+		p.openSetupOBSSceneRulesWindow(ctx, obs.SceneName(p.obsSelectScene.Selected))
+	})
+
 	p.obsSelectScene = widget.NewSelect(nil, func(s string) {
 		logger.Debugf(ctx, "OBS scene is changed to '%s'", s)
 		obsServer, obsServerClose, err := p.StreamD.OBS(ctx)
@@ -1827,15 +1831,21 @@ func (p *Panel) initMainWindow(
 		if err != nil {
 			p.DisplayError(fmt.Errorf("unable to set the OBS scene: %w", err))
 		}
+		setupSceneRulesButton.Enable()
 	})
+
+	if p.obsSelectScene.Selected == "" {
+		setupSceneRulesButton.Disable()
+	}
+
 	obsPage := container.NewBorder(
 		nil,
 		nil,
 		nil,
 		nil,
 		container.NewVBox(
-			widget.NewLabel("Scene:"),
-			p.obsSelectScene,
+			container.NewHBox(widget.NewLabel("Scene:"), p.obsSelectScene),
+			setupSceneRulesButton,
 		),
 	)
 
