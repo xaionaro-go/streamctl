@@ -890,13 +890,14 @@ func (c *Client) ListStreamServers(
 	}
 	var result []api.StreamServer
 	for _, server := range reply.GetStreamServers() {
-		t, err := goconv.StreamServerTypeGRPC2Go(server.Config.GetServerType())
+		srvType, listenAddr, opts, err := goconv.StreamServerConfigGRPC2Go(ctx, server.Config)
 		if err != nil {
-			return nil, fmt.Errorf("unable to convert the server type value: %w", err)
+			return nil, fmt.Errorf("unable to convert the server config: %w", err)
 		}
 		result = append(result, api.StreamServer{
-			Type:                  t,
-			ListenAddr:            server.Config.GetListenAddr(),
+			ServerConfig:          opts.Config(ctx),
+			Type:                  srvType,
+			ListenAddr:            listenAddr,
 			NumBytesConsumerWrote: uint64(server.GetStatistics().GetNumBytesConsumerWrote()),
 			NumBytesProducerRead:  uint64(server.GetStatistics().GetNumBytesProducerRead()),
 		})
@@ -919,6 +920,8 @@ func (c *Client) StartStreamServer(
 	if err != nil {
 		return fmt.Errorf("unable to convert the server config: %w", err)
 	}
+
+	logger.Debugf(ctx, "StartStreamServer with cfg: %#+v", cfg)
 
 	_, err = withStreamDClient(ctx, c, func(
 		ctx context.Context,

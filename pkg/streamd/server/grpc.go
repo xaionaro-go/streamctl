@@ -703,16 +703,13 @@ func (grpc *GRPCServer) ListStreamServers(
 
 	var result []*streamd_grpc.StreamServerWithStatistics
 	for _, srv := range servers {
-		t, err := goconv.StreamServerTypeGo2GRPC(srv.Type)
+		srvGRPC, err := goconv.StreamServerConfigGo2GRPC(ctx, srv.Type, srv.ListenAddr, srv.Options())
 		if err != nil {
-			return nil, fmt.Errorf("unable to convert the server type value: %w", err)
+			return nil, fmt.Errorf("unable to convert the server server value: %w", err)
 		}
 
 		result = append(result, &streamd_grpc.StreamServerWithStatistics{
-			Config: &streamd_grpc.StreamServer{
-				ServerType: t,
-				ListenAddr: srv.ListenAddr,
-			},
+			Config: srvGRPC,
 			Statistics: &streamd_grpc.StreamServerStatistics{
 				NumBytesConsumerWrote: int64(srv.NumBytesConsumerWrote),
 				NumBytesProducerRead:  int64(srv.NumBytesProducerRead),
@@ -728,15 +725,16 @@ func (grpc *GRPCServer) StartStreamServer(
 	ctx context.Context,
 	req *streamd_grpc.StartStreamServerRequest,
 ) (*streamd_grpc.StartStreamServerReply, error) {
-	t, err := goconv.StreamServerTypeGRPC2Go(req.GetConfig().GetServerType())
+	srvType, addr, opts, err := goconv.StreamServerConfigGRPC2Go(ctx, req.GetConfig())
 	if err != nil {
-		return nil, fmt.Errorf("unable to convert the server type value: %w", err)
+		return nil, fmt.Errorf("unable to convert the stream server config %#+v: %w", req.GetConfig(), err)
 	}
 
 	err = grpc.StreamD.StartStreamServer(
 		ctx,
-		t,
-		req.GetConfig().GetListenAddr(),
+		srvType,
+		addr,
+		opts...,
 	)
 	if err != nil {
 		return nil, err

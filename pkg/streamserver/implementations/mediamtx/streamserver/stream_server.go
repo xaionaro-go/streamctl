@@ -115,7 +115,7 @@ func (s *StreamServer) init(
 			srv := srv
 			observability.Go(ctx, func() {
 				s.mutex.Do(ctx, func() {
-					_, err := s.startServer(ctx, srv.Type, srv.Listen)
+					_, err := s.startServer(ctx, srv.Type, srv.Listen, srv.Options()...)
 					if err != nil {
 						logger.Errorf(ctx, "unable to initialize %s server at %s: %w", srv.Type, srv.Listen, err)
 					}
@@ -230,8 +230,9 @@ func (s *StreamServer) StartServer(
 			return nil, err
 		}
 		s.config.Servers = append(s.config.Servers, types.Server{
-			Type:   serverType,
-			Listen: listenAddr,
+			ServerConfig: types.ServerOptions(opts).Config(ctx),
+			Type:         serverType,
+			Listen:       listenAddr,
 		})
 		return portSrv, nil
 	})
@@ -441,6 +442,7 @@ func (s *StreamServer) startServer(
 		return nil, fmt.Errorf("unable to initialize a new instance of a port server %s at %s with options %v: %w", serverType, listenAddr, opts, err)
 	}
 
+	logger.Tracef(ctx, "adding serverHandler %#+v %#+v", portSrv, portSrv.Config())
 	s.serverHandlers = append(s.serverHandlers, portSrv)
 	return nil, err
 }
@@ -472,6 +474,7 @@ func (s *StreamServer) newServerRTMP(
 	listenAddr string,
 	opts ...types.ServerOption,
 ) (_ types.PortServer, _ret error) {
+	logger.Tracef(ctx, "newServerRTMP(ctx, '%s', %#+v)", listenAddr, opts)
 	rtmpSrv, err := newRTMPServer(
 		s.pathManager,
 		listenAddr,

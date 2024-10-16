@@ -183,10 +183,16 @@ func (s *StreamServer) startServer(
 	ctx context.Context,
 	serverType streamtypes.ServerType,
 	listenAddr string,
-	_ ...types.ServerOption,
+	opts ...types.ServerOption,
 ) (_ types.PortServer, _ret error) {
 	logger.Tracef(ctx, "startServer(%s, '%s')", serverType, listenAddr)
 	defer func() { logger.Tracef(ctx, "/startServer(%s, '%s'): %v", serverType, listenAddr, _ret) }()
+
+	cfg := types.ServerOptions(opts).Config(ctx)
+	if cfg.IsTLS {
+		return nil, fmt.Errorf("this implementation of the stream server does not support TLS")
+	}
+
 	var srv types.PortServer
 	var err error
 	switch serverType {

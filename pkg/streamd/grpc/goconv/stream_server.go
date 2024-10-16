@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
@@ -50,6 +51,7 @@ func StreamServerConfigGo2GRPC(
 	cfg := types.ServerOptions(opts).Config(ctx)
 	var serverCert *streamd_grpc.TLSCertificate
 	if cfg.ServerCert != nil {
+		logger.Debugf(ctx, "cfg.ServerCert != nil: %#+v", cfg.ServerKey)
 		serverCert = &streamd_grpc.TLSCertificate{
 			TLSCertificateOneOf: &streamd_grpc.TLSCertificate_X509{
 				X509: cfg.ServerCert.Raw,
@@ -59,6 +61,7 @@ func StreamServerConfigGo2GRPC(
 
 	var privateKey *streamd_grpc.PrivateKey
 	if cfg.ServerKey != nil {
+		logger.Debugf(ctx, "cfg.ServerKey != nil: %#+v", cfg.ServerKey)
 		b, err := x509.MarshalPKCS8PrivateKey(cfg.ServerKey)
 		if err != nil {
 			return nil, fmt.Errorf("unable to serialize the private key to PKCS8: %w", err)

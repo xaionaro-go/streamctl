@@ -1052,14 +1052,18 @@ func (d *StreamD) ListStreamServers(
 		servers := d.StreamServer.ListServers(ctx)
 
 		var result []api.StreamServer
-		for _, src := range servers {
-			result = append(result, api.StreamServer{
-				Type:       src.Type(),
-				ListenAddr: src.ListenAddr(),
+		for idx, portSrv := range servers {
+			srv := api.StreamServer{
+				ServerConfig: portSrv.Config(),
 
-				NumBytesConsumerWrote: src.NumBytesConsumerWrote(),
-				NumBytesProducerRead:  src.NumBytesProducerRead(),
-			})
+				Type:       portSrv.Type(),
+				ListenAddr: portSrv.ListenAddr(),
+
+				NumBytesConsumerWrote: portSrv.NumBytesConsumerWrote(),
+				NumBytesProducerRead:  portSrv.NumBytesProducerRead(),
+			}
+			logger.Tracef(ctx, "srv[%d]: %#+v", idx, srv)
+			result = append(result, srv)
 		}
 
 		return result, nil

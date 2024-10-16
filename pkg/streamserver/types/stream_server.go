@@ -154,5 +154,9 @@ func (opt ServerOptionServerCert) apply(cfg *ServerConfig) {
 type ServerOptionServerKey struct{ crypto.PrivateKey }
 
 func (opt ServerOptionServerKey) apply(cfg *ServerConfig) {
-	cfg.ServerKey = (crypto.PrivateKey)(opt)
+	if opt.PrivateKey == nil {
+		cfg.ServerKey = nil
+		return
+	}
+	cfg.ServerKey = opt.PrivateKey
 }

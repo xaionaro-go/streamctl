@@ -9,6 +9,8 @@ import (
 type PortServer interface {
 	io.Closer
 
+	Config() ServerConfig
+
 	Type() streamtypes.ServerType
 	ListenAddr() string
 

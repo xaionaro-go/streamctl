@@ -33,3 +33,6 @@ func (srv *PortServer) NumBytesConsumerWrote() uint64 {
 func (srv *PortServer) NumBytesProducerRead() uint64 {
 	return atomic.LoadUint64(&srv.ReadCount)
 }
+func (srv *PortServer) Config() types.ServerConfig {
+	return types.ServerConfig{}
+}

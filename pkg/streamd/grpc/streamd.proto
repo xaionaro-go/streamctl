@@ -262,8 +262,8 @@ message StreamServer {
 	uint64 WriteQueueSize = 4;
 	uint64 WriteTimeoutNano  = 5;
 	uint64 ReadTimeoutNano = 6;
-	TLSCertificate ServerCert = 7;
-	PrivateKey ServerKey  = 8;
+	optional TLSCertificate ServerCert = 7;
+	optional PrivateKey ServerKey  = 8;
 }
 
 message StreamServerStatistics {

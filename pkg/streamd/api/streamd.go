@@ -196,6 +196,8 @@ type BackendDataYouTube struct {
 type StreamServerType = streamtypes.ServerType
 
 type StreamServer struct {
+	sstypes.ServerConfig
+
 	Type       StreamServerType
 	ListenAddr string
 

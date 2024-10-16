@@ -185,9 +185,14 @@ func (p *Panel) openAddStreamServerWindow(ctx context.Context) {
 		listenPort = uint16(_listenPort)
 	}
 
+	enableTLS := false
+	enableTLSCheckbox := widget.NewCheck("Enable TLS", func(b bool) {
+		enableTLS = b
+	})
+
 	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
 		listenHost := listenHostEntry.Text
-		err := p.addStreamServer(ctx, currentProtocol, listenHost, listenPort)
+		err := p.addStreamServer(ctx, currentProtocol, listenHost, listenPort, enableTLS)
 		if err != nil {
 			p.DisplayError(err)
 			return
@@ -208,6 +213,7 @@ func (p *Panel) openAddStreamServerWindow(ctx context.Context) {
 			widget.NewLabel("Listen address:"),
 			listenHostEntry,
 			listenPortEntry,
+			enableTLSCheckbox,
 		),
 	))
 	w.Show()
@@ -218,10 +224,18 @@ func (p *Panel) addStreamServer(
 	proto api.StreamServerType,
 	listenHost string,
 	listenPort uint16,
+	enableTLS bool,
 ) error {
 	logger.Debugf(ctx, "addStreamServer")
 	defer logger.Debugf(ctx, "/addStreamServer")
-	return p.StreamD.StartStreamServer(ctx, proto, fmt.Sprintf("%s:%d", listenHost, listenPort))
+	var opts sstypes.ServerOptions
+	opts = append(opts, sstypes.ServerOptionIsTLS(enableTLS))
+	return p.StreamD.StartStreamServer(
+		ctx,
+		proto,
+		fmt.Sprintf("%s:%d", listenHost, listenPort),
+		opts...,
+	)
 }
 
 func (p *Panel) displayStreamServers(
@@ -257,7 +271,11 @@ func (p *Panel) displayStreamServers(
 			)
 			w.Show()
 		})
-		label := widget.NewLabel(fmt.Sprintf("%s://%s", srv.Type, srv.ListenAddr))
+		protoName := srv.Type.String()
+		if srv.IsTLS {
+			protoName += "s"
+		}
+		label := widget.NewLabel(fmt.Sprintf("%s://%s", protoName, srv.ListenAddr))
 		c.RemoveAll()
 		c.Add(button)
 		c.Add(label)
