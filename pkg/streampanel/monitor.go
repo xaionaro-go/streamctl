@@ -149,7 +149,14 @@ func (p *Panel) updateMonitorPageImagesNoLock(
 				if !changed && lastWinSize == winSize && lastOrientation == orientation {
 					return
 				}
-				logger.Tracef(ctx, "updating the image '%s': %v %#+v %#+v", el.ElementName, changed, lastWinSize, winSize)
+				logger.Tracef(
+					ctx,
+					"updating the image '%s': %v %#+v %#+v",
+					el.ElementName,
+					changed,
+					lastWinSize,
+					winSize,
+				)
 				imgSize := image.Point{
 					X: int(winSize.Width * float32(el.Width) / 100),
 					Y: int(winSize.Height * float32(el.Height) / 100),
@@ -192,7 +199,13 @@ func (p *Panel) updateMonitorPageImagesNoLock(
 		if !changed && lastWinSize == winSize && lastOrientation == orientation {
 			return
 		}
-		logger.Tracef(ctx, "updating the screenshot image: %v %#+v %#+v", changed, lastWinSize, winSize)
+		logger.Tracef(
+			ctx,
+			"updating the screenshot image: %v %#+v %#+v",
+			changed,
+			lastWinSize,
+			winSize,
+		)
 		winSize := image.Point{X: int(winSize.Width), Y: int(winSize.Height)}
 		img = imgFillTo(
 			ctx,
@@ -366,7 +379,10 @@ func (p *Panel) newMonitorSettingsWindow(ctx context.Context) {
 			deleteButton := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
 				w := dialog.NewConfirm(
 					fmt.Sprintf("Delete monitor element '%s'?", name),
-					fmt.Sprintf("Are you sure you want to delete the element '%s' from the Monitor page?", name),
+					fmt.Sprintf(
+						"Are you sure you want to delete the element '%s' from the Monitor page?",
+						name,
+					),
 					func(b bool) {
 						if !b {
 							return
@@ -484,7 +500,9 @@ func (p *Panel) editMonitorElementWindow(
 			SceneName: &sceneName,
 		})
 		if err != nil {
-			p.DisplayError(fmt.Errorf("unable to get the list of items of scene '%s': %w", sceneName, err))
+			p.DisplayError(
+				fmt.Errorf("unable to get the list of items of scene '%s': %w", sceneName, err),
+			)
 			return
 		}
 		for _, item := range resp.SceneItems {
@@ -649,7 +667,9 @@ func (p *Panel) editMonitorElementWindow(
 	brightness.SetText(fmt.Sprintf("%f", brightnessValue))
 
 	obsVideoUpdateInterval := xfyne.NewNumericalEntry()
-	obsVideoUpdateInterval.SetText(fmt.Sprintf("%v", time.Duration(obsVideoSource.UpdateInterval).Seconds()))
+	obsVideoUpdateInterval.SetText(
+		fmt.Sprintf("%v", time.Duration(obsVideoSource.UpdateInterval).Seconds()),
+	)
 	obsVideoUpdateInterval.OnChanged = func(s string) {
 		if s == "" || s == "-" {
 			s = "0.2"
@@ -767,7 +787,15 @@ func (p *Panel) editMonitorElementWindow(
 		widget.NewLabel("Source:"),
 		sourceOBSVideoSelect,
 		widget.NewLabel("Source image size (use '0' for preserving the original size or ratio):"),
-		container.NewHBox(widget.NewLabel("X:"), sourceWidth, widget.NewLabel(`px`), widget.NewSeparator(), widget.NewLabel("Y:"), sourceHeight, widget.NewLabel(`px`)),
+		container.NewHBox(
+			widget.NewLabel("X:"),
+			sourceWidth,
+			widget.NewLabel(`px`),
+			widget.NewSeparator(),
+			widget.NewLabel("Y:"),
+			sourceHeight,
+			widget.NewLabel(`px`),
+		),
 		widget.NewLabel("Format:"),
 		imageFormatSelect,
 		widget.NewLabel("Update interval:"),
@@ -779,7 +807,9 @@ func (p *Panel) editMonitorElementWindow(
 	})
 
 	obsVolumeUpdateInterval := xfyne.NewNumericalEntry()
-	obsVolumeUpdateInterval.SetText(fmt.Sprintf("%v", time.Duration(obsVideoSource.UpdateInterval).Seconds()))
+	obsVolumeUpdateInterval.SetText(
+		fmt.Sprintf("%v", time.Duration(obsVideoSource.UpdateInterval).Seconds()),
+	)
 	obsVolumeUpdateInterval.OnChanged = func(s string) {
 		if s == "" || s == "-" {
 			s = "0.2"
@@ -796,7 +826,11 @@ func (p *Panel) editMonitorElementWindow(
 	if volumeColorActiveParsed, err = colorx.Parse(obsVolumeSource.ColorActive); err != nil {
 		volumeColorActiveParsed = color.RGBA{R: 0, G: 255, B: 0, A: 255}
 	}
-	volumeColorActive := colorpicker.NewColorSelectModalRect(w, fyne.NewSize(30, 20), volumeColorActiveParsed)
+	volumeColorActive := colorpicker.NewColorSelectModalRect(
+		w,
+		fyne.NewSize(30, 20),
+		volumeColorActiveParsed,
+	)
 	volumeColorActive.SetOnChange(func(c color.Color) {
 		r32, g32, b32, a32 := c.RGBA()
 		r8, g8, b8, a8 := uint8(r32>>8), uint8(g32>>8), uint8(b32>>8), uint8(a32>>8)
@@ -807,7 +841,11 @@ func (p *Panel) editMonitorElementWindow(
 	if volumeColorPassiveParsed, err = colorx.Parse(obsVolumeSource.ColorPassive); err != nil {
 		volumeColorPassiveParsed = color.RGBA{R: 0, G: 0, B: 0, A: 0}
 	}
-	volumeColorPassive := colorpicker.NewColorSelectModalRect(w, fyne.NewSize(30, 20), volumeColorPassiveParsed)
+	volumeColorPassive := colorpicker.NewColorSelectModalRect(
+		w,
+		fyne.NewSize(30, 20),
+		volumeColorPassiveParsed,
+	)
 	volumeColorPassive.SetOnChange(func(c color.Color) {
 		r32, g32, b32, a32 := c.RGBA()
 		r8, g8, b8, a8 := uint8(r32>>8), uint8(g32>>8), uint8(b32>>8), uint8(a32>>8)
@@ -884,11 +922,33 @@ func (p *Panel) editMonitorElementWindow(
 			widget.NewLabel("Z-Index / layer:"),
 			zIndex,
 			widget.NewLabel("Display size:"),
-			container.NewHBox(widget.NewLabel("X:"), displayWidth, widget.NewLabel(`%`), widget.NewSeparator(), widget.NewLabel("Y:"), displayHeight, widget.NewLabel(`%`)),
+			container.NewHBox(
+				widget.NewLabel("X:"),
+				displayWidth,
+				widget.NewLabel(`%`),
+				widget.NewSeparator(),
+				widget.NewLabel("Y:"),
+				displayHeight,
+				widget.NewLabel(`%`),
+			),
 			widget.NewLabel("Align:"),
-			container.NewHBox(widget.NewLabel("X:"), alignX, widget.NewSeparator(), widget.NewLabel("Y:"), alignY),
+			container.NewHBox(
+				widget.NewLabel("X:"),
+				alignX,
+				widget.NewSeparator(),
+				widget.NewLabel("Y:"),
+				alignY,
+			),
 			widget.NewLabel("Offset:"),
-			container.NewHBox(widget.NewLabel("X:"), offsetX, widget.NewLabel(`%`), widget.NewSeparator(), widget.NewLabel("Y:"), offsetY, widget.NewLabel(`%`)),
+			container.NewHBox(
+				widget.NewLabel("X:"),
+				offsetX,
+				widget.NewLabel(`%`),
+				widget.NewSeparator(),
+				widget.NewLabel("Y:"),
+				offsetY,
+				widget.NewLabel(`%`),
+			),
 			widget.NewLabel("Quality:"),
 			isLossless,
 			imageQuality,

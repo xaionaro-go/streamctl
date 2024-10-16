@@ -184,7 +184,9 @@ func StreamsHandle(url string) (core.Producer, error) {
 	return rtmp.DialPlay(url)
 }
 
-func StreamsConsumerHandle(url string) (core.Consumer, types.NumBytesReaderWroter, func(context.Context) error, error) {
+func StreamsConsumerHandle(
+	url string,
+) (core.Consumer, types.NumBytesReaderWroter, func(context.Context) error, error) {
 	cons := flv.NewConsumer()
 	trafficCounter := &types.TrafficCounter{}
 	run := func(ctx context.Context) error {

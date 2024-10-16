@@ -20,12 +20,12 @@ type VideoTrackConfig struct {
 }
 
 type RecodeVideoConfig struct {
-	Enable  bool            `json:"enable,omitempty" yaml:"enable,omitempty"`
-	FlipV   bool            `json:"flip_v,omitempty" yaml:"flip_v,omitempty"`
-	FlipH   bool            `json:"flip_h,omitempty" yaml:"flip_h,omitempty"`
-	Crop    image.Rectangle `json:"crop,omitempty" yaml:"crop,omitempty"`
-	Scale   image.Point     `json:"scale,omitempty" yaml:"scale,omitempty"`
-	Codec   VideoCodec      `json:"codec,omitempty" yaml:"codec,omitempty"`
+	Enable  bool            `json:"enable,omitempty"  yaml:"enable,omitempty"`
+	FlipV   bool            `json:"flip_v,omitempty"  yaml:"flip_v,omitempty"`
+	FlipH   bool            `json:"flip_h,omitempty"  yaml:"flip_h,omitempty"`
+	Crop    image.Rectangle `json:"crop,omitempty"    yaml:"crop,omitempty"`
+	Scale   image.Point     `json:"scale,omitempty"   yaml:"scale,omitempty"`
+	Codec   VideoCodec      `json:"codec,omitempty"   yaml:"codec,omitempty"`
 	Quality VideoQuality    `json:"quality,omitempty" yaml:"quality,omitempty"`
 }
 
@@ -65,8 +65,8 @@ type AudioTrackConfig struct {
 }
 
 type RecodeAudioConfig struct {
-	Enable  bool         `json:"enable,omitempty" yaml:"enable,omitempty"`
-	Codec   AudioCodec   `json:"codec,omitempty" yaml:"codec,omitempty"`
+	Enable  bool         `json:"enable,omitempty"  yaml:"enable,omitempty"`
+	Codec   AudioCodec   `json:"codec,omitempty"   yaml:"codec,omitempty"`
 	Quality AudioQuality `json:"quality,omitempty" yaml:"quality,omitempty"`
 }
 

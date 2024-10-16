@@ -115,7 +115,13 @@ func runStreamd(
 		},
 		func(listenPort uint16, platID streamcontrol.PlatformName, authURL string) bool {
 			logger.Debugf(ctx, "streamd.UI.OpenOAuthURL(%d, %s, '%s')", listenPort, platID, authURL)
-			defer logger.Debugf(ctx, "/streamd.UI.OpenOAuthURL(%d, %s, '%s')", listenPort, platID, authURL)
+			defer logger.Debugf(
+				ctx,
+				"/streamd.UI.OpenOAuthURL(%d, %s, '%s')",
+				listenPort,
+				platID,
+				authURL,
+			)
 
 			streamdGRPCLocker.Lock()
 			logger.Debugf(ctx, "streamdGRPCLocker.Lock()-ed")

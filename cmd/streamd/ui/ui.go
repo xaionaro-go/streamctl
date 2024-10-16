@@ -159,7 +159,13 @@ func (ui *UI) oauth2Handler(
 		defer removeReceiver()
 	}
 
-	logger.Debugf(ctx, "asking to open the URL '%s' using listen port %d for platform '%s'", arg.AuthURL, arg.ListenPort, platID)
+	logger.Debugf(
+		ctx,
+		"asking to open the URL '%s' using listen port %d for platform '%s'",
+		arg.AuthURL,
+		arg.ListenPort,
+		platID,
+	)
 	ui.OAuthURLOpenFn(arg.ListenPort, platID, arg.AuthURL)
 
 	t := time.NewTicker(time.Hour)

@@ -210,7 +210,11 @@ func (m *Manager) handleConnection(
 		m.unregisterConnection(ctx, sourceName)
 	}(regMessage.Source)
 	if err := encoder.Encode(RegistrationResult{}); err != nil {
-		err = fmt.Errorf("unable to encode&send the registration result to '%s': %w", regMessage.Source, err)
+		err = fmt.Errorf(
+			"unable to encode&send the registration result to '%s': %w",
+			regMessage.Source,
+			err,
+		)
 		logger.Error(ctx, err)
 		return
 	}
@@ -237,7 +241,13 @@ func (m *Manager) handleConnection(
 		logger.Tracef(ctx, "waiting for a message from '%s'", regMessage.Source)
 		decoder := gob.NewDecoder(conn)
 		err := decoder.Decode(&message)
-		logger.Tracef(ctx, "getting a message from '%s': %#+v %#+v", regMessage.Source, message, err)
+		logger.Tracef(
+			ctx,
+			"getting a message from '%s': %#+v %#+v",
+			regMessage.Source,
+			message,
+			err,
+		)
 		select {
 		case <-ctx.Done():
 			logger.Tracef(ctx, "context was closed")
@@ -305,7 +315,12 @@ func (m *Manager) processMessage(
 		close(errCh)
 		return err.ErrorOrNil()
 	case ProcessNameMain:
-		logger.Tracef(ctx, "got a message to the main process from '%s': %#+v", source, message.Content)
+		logger.Tracef(
+			ctx,
+			"got a message to the main process from '%s': %#+v",
+			source,
+			message.Content,
+		)
 		switch content := message.Content.(type) {
 		case MessageReady:
 			var result *multierror.Error
@@ -318,7 +333,13 @@ func (m *Manager) processMessage(
 			return onReceivedMessage(ctx, source, message.Content)
 		}
 	default:
-		logger.Tracef(ctx, "got a message to '%s' from '%s': %#+v", message.Destination, source, message.Content)
+		logger.Tracef(
+			ctx,
+			"got a message to '%s' from '%s': %#+v",
+			message.Destination,
+			source,
+			message.Content,
+		)
 		return m.sendMessage(ctx, source, message.Destination, message.Content)
 	}
 }
@@ -349,7 +370,14 @@ func (m *Manager) sendMessage(
 ) (_ret error) {
 	logger.Tracef(ctx, "sending message %#+v from '%s' to '%s'", content, source, destination)
 	defer func() {
-		logger.Tracef(ctx, "/sending message %#+v from '%s' to '%s': %v", content, source, destination, _ret)
+		logger.Tracef(
+			ctx,
+			"/sending message %#+v from '%s' to '%s': %v",
+			content,
+			source,
+			destination,
+			_ret,
+		)
 	}()
 
 	if !m.isExpectedProcess(destination) {
@@ -359,7 +387,11 @@ func (m *Manager) sendMessage(
 	observability.Go(ctx, func() {
 		conn, err := m.waitForReadyProcess(ctx, destination, reflect.TypeOf(content))
 		if err != nil {
-			logger.Errorf(ctx, "%v", fmt.Errorf("unable to wait for process '%s': %w", destination, err))
+			logger.Errorf(
+				ctx,
+				"%v",
+				fmt.Errorf("unable to wait for process '%s': %w", destination, err),
+			)
 			return
 		}
 
@@ -372,7 +404,9 @@ func (m *Manager) sendMessage(
 
 		h := m.connLocker.Lock(context.Background(), destination)
 		defer h.Unlock()
-		defer time.Sleep(100 * time.Millisecond) // TODO: Delete this horrible hack (that is introduced to avoid erasing messages in the buffer)
+		defer time.Sleep(
+			100 * time.Millisecond,
+		) // TODO: Delete this horrible hack (that is introduced to avoid erasing messages in the buffer)
 		err = gob.NewEncoder(conn).Encode(message)
 		if err != nil {
 			logger.Errorf(ctx, "%v", fmt.Errorf("unable to encode&send message: %w", err))
@@ -419,23 +453,37 @@ func (m *Manager) waitForReadyProcess(
 	}
 
 	for {
-		conn, ch, isReady := xsync.DoR3(ctx, &m.connsLocker, func() (net.Conn, chan struct{}, bool) {
-			readyMap := m.childReadyFor[name]
-			isReady := false
-			if readyMap != nil {
-				if _, ok := readyMap[msgType]; ok {
-					isReady = true
+		conn, ch, isReady := xsync.DoR3(
+			ctx,
+			&m.connsLocker,
+			func() (net.Conn, chan struct{}, bool) {
+				readyMap := m.childReadyFor[name]
+				isReady := false
+				if readyMap != nil {
+					if _, ok := readyMap[msgType]; ok {
+						isReady = true
+					}
 				}
-			}
-			return m.conns[name], m.connsChanged, isReady
-		})
+				return m.conns[name], m.connsChanged, isReady
+			},
+		)
 
 		if conn != nil && isReady {
-			logger.Debugf(ctx, "waitForReadyProcess(ctx, '%s', '%s'): waiting is complete", name, msgType)
+			logger.Debugf(
+				ctx,
+				"waitForReadyProcess(ctx, '%s', '%s'): waiting is complete",
+				name,
+				msgType,
+			)
 			return conn, nil
 		}
 
-		logger.Debugf(ctx, "waitForReadyProcess(ctx, '%s', '%s'): waiting for a change in connections", name, msgType)
+		logger.Debugf(
+			ctx,
+			"waitForReadyProcess(ctx, '%s', '%s'): waiting for a change in connections",
+			name,
+			msgType,
+		)
 		<-ch
 	}
 }
@@ -452,7 +500,12 @@ func (m *Manager) registerConnection(
 	conn net.Conn,
 ) error {
 	logger.Debugf(ctx, "registerConnection(ctx, '%s', %s)", sourceName, conn.RemoteAddr().String())
-	defer logger.Debugf(ctx, "/registerConnection(ctx, '%s', %s)", sourceName, conn.RemoteAddr().String())
+	defer logger.Debugf(
+		ctx,
+		"/registerConnection(ctx, '%s', %s)",
+		sourceName,
+		conn.RemoteAddr().String(),
+	)
 	if !m.isExpectedProcess(sourceName) {
 		return fmt.Errorf("process '%s' is not ever expected", sourceName)
 	}
@@ -550,7 +603,9 @@ func (m *Manager) SendMessagePreReady(
 	}
 	h := m.connLocker.Lock(context.Background(), dst)
 	defer h.Unlock()
-	defer time.Sleep(100 * time.Millisecond) // TODO: Delete this horrible hack (that is introduced to avoid erasing messages in the buffer)
+	defer time.Sleep(
+		100 * time.Millisecond,
+	) // TODO: Delete this horrible hack (that is introduced to avoid erasing messages in the buffer)
 	err = encoder.Encode(msg)
 	logger.Tracef(ctx, "sending message %#+v: %v", msg, err)
 	if err != nil {

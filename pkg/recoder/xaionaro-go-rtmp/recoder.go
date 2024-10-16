@@ -73,7 +73,11 @@ func (r *Recoder) StartRecoding(
 			return fmt.Errorf("recoding is already running")
 		}
 
-		stream, err := output.Client.CreateStream(ctx, &rtmpmsg.NetConnectionCreateStream{}, chunkSize)
+		stream, err := output.Client.CreateStream(
+			ctx,
+			&rtmpmsg.NetConnectionCreateStream{},
+			chunkSize,
+		)
 		if err != nil {
 			return fmt.Errorf("unable to create a stream on the remote side: %w", err)
 		}

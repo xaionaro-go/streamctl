@@ -73,7 +73,11 @@ func (srv *RTMPServer) init(
 		}
 	}()
 	if (cfg.ServerCert != nil) != (cfg.ServerKey != nil) {
-		return fmt.Errorf("fields 'ServerCert' and 'ServerKey' should be used together (cur values: ServerCert == %#+v; ServerKey == %#+v)", cfg.ServerCert, cfg.ServerKey)
+		return fmt.Errorf(
+			"fields 'ServerCert' and 'ServerKey' should be used together (cur values: ServerCert == %#+v; ServerKey == %#+v)",
+			cfg.ServerCert,
+			cfg.ServerKey,
+		)
 	}
 
 	if cfg.ServerCert != nil && cfg.ServerKey != nil {
@@ -84,7 +88,10 @@ func (srv *RTMPServer) init(
 	}
 	if cfg.IsTLS && (srv.ServerCert == "" || srv.ServerKey == "") {
 		ctx := context.TODO()
-		logger.Warnf(ctx, "TLS is enabled, but no certificate is supplied, generating an ephemeral self-signed certificate") // TODO: implement the support of providing the certificates in the UI
+		logger.Warnf(
+			ctx,
+			"TLS is enabled, but no certificate is supplied, generating an ephemeral self-signed certificate",
+		) // TODO: implement the support of providing the certificates in the UI
 		err := srv.generateServerCertificate()
 		if err != nil {
 			return fmt.Errorf("unable to set the TLS certificate: %w", err)
@@ -173,7 +180,11 @@ func (srv *RTMPServer) setServerCertificate(
 		Bytes: cert.Raw,
 	}
 	if err := pem.Encode(certFile, certPEM); err != nil {
-		return fmt.Errorf("unable to write the server certificate to file '%s' in PEM format: %w", certFile.Name(), err)
+		return fmt.Errorf(
+			"unable to write the server certificate to file '%s' in PEM format: %w",
+			certFile.Name(),
+			err,
+		)
 	}
 
 	keyFile, err = os.CreateTemp("", "rtmps-server-certkey-*.pem")
@@ -192,7 +203,11 @@ func (srv *RTMPServer) setServerCertificate(
 		Bytes: keyBytes,
 	}
 	if err := pem.Encode(keyFile, privatePem); err != nil {
-		return fmt.Errorf("unable to write the server certificate to file '%s' in PEM format: %w", certFile.Name(), err)
+		return fmt.Errorf(
+			"unable to write the server certificate to file '%s' in PEM format: %w",
+			certFile.Name(),
+			err,
+		)
 	}
 
 	srv.ServerCert = certFile.Name()

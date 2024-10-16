@@ -42,7 +42,9 @@ func New(
 		return nil, fmt.Errorf("'channel' is not set")
 	}
 	if cfg.Config.ClientID == "" || cfg.Config.ClientSecret == "" {
-		return nil, fmt.Errorf("'clientid' or/and 'clientsecret' is/are not set; go to https://dev.twitch.tv/console/apps/create and create an app if it not created, yet")
+		return nil, fmt.Errorf(
+			"'clientid' or/and 'clientsecret' is/are not set; go to https://dev.twitch.tv/console/apps/create and create an app if it not created, yet",
+		)
 	}
 
 	getPortsFn := cfg.Config.GetOAuthListenPorts
@@ -92,7 +94,10 @@ func New(
 		errmon.ObserveErrorCtx(ctx, err)
 		now := time.Now()
 		if now.Sub(prevTokenUpdate) < time.Second*30 {
-			logger.Errorf(ctx, "updating the token too often, most likely it won't help, so asking to re-authenticate")
+			logger.Errorf(
+				ctx,
+				"updating the token too often, most likely it won't help, so asking to re-authenticate",
+			)
 			t.prepareLocker.Do(ctx, func() {
 				t.client.SetAppAccessToken("")
 				t.client.SetUserAccessToken("")
@@ -121,7 +126,10 @@ func getUserID(
 		return "", fmt.Errorf("unable to query user info: %w", err)
 	}
 	if len(resp.Data.Users) != 1 {
-		return "", fmt.Errorf("expected 1 user with login, but received %d users", len(resp.Data.Users))
+		return "", fmt.Errorf(
+			"expected 1 user with login, but received %d users",
+			len(resp.Data.Users),
+		)
 	}
 	return resp.Data.Users[0].ID, nil
 }
@@ -146,7 +154,12 @@ func (t *Twitch) prepareNoLock(ctx context.Context) error {
 		if err != nil {
 			return
 		}
-		logger.Debugf(ctx, "broadcaster_id: %s (login: %s)", t.broadcasterID, t.config.Config.Channel)
+		logger.Debugf(
+			ctx,
+			"broadcaster_id: %s (login: %s)",
+			t.broadcasterID,
+			t.config.Config.Channel,
+		)
 	})
 	return err
 }
@@ -171,7 +184,13 @@ func (t *Twitch) editChannelInfo(
 		return fmt.Errorf("unable to update the channel info (%#+v): %w", *params, err)
 	}
 	if resp.ErrorStatus != 0 {
-		return fmt.Errorf("unable to update the channel info (%#+v), the response reported an error: %d %v: %v", *params, resp.ErrorStatus, resp.Error, resp.ErrorMessage)
+		return fmt.Errorf(
+			"unable to update the channel info (%#+v), the response reported an error: %d %v: %v",
+			*params,
+			resp.ErrorStatus,
+			resp.Error,
+			resp.ErrorMessage,
+		)
 	}
 	logger.Debugf(ctx, "success")
 	return nil
@@ -219,7 +238,10 @@ func (t *Twitch) ApplyProfile(
 
 	if profile.CategoryName != nil {
 		if profile.CategoryID != nil {
-			logger.Warnf(ctx, "both category name and ID are set; these are contradicting stream profile settings; prioritizing the name")
+			logger.Warnf(
+				ctx,
+				"both category name and ID are set; these are contradicting stream profile settings; prioritizing the name",
+			)
 		}
 		categoryID, err := t.getCategoryID(ctx, *profile.CategoryName)
 		if err == nil {
@@ -237,7 +259,10 @@ func (t *Twitch) ApplyProfile(
 		if tag == "" {
 			continue
 		}
-		tag = truncateStringByByteLength(tag, 25) // see also: https://github.com/twitchdev/issues/issues/789
+		tag = truncateStringByByteLength(
+			tag,
+			25,
+		) // see also: https://github.com/twitchdev/issues/issues/789
 		tags = append(tags, tag)
 	}
 
@@ -247,7 +272,10 @@ func (t *Twitch) ApplyProfile(
 	if tags != nil {
 		logger.Debugf(ctx, "has tags")
 		if len(tags) == 0 {
-			logger.Warnf(ctx, "unfortunately, there is a bug in the helix lib, which does not allow to set zero tags, so adding tag 'stream' to the list of tags as a placeholder")
+			logger.Warnf(
+				ctx,
+				"unfortunately, there is a bug in the helix lib, which does not allow to set zero tags, so adding tag 'stream' to the list of tags as a placeholder",
+			)
 			params.Tags = []string{"English"}
 		} else {
 			params.Tags = tags
@@ -294,7 +322,11 @@ func (t *Twitch) getCategoryID(
 		Names: []string{categoryName},
 	})
 	if err != nil {
-		return "", fmt.Errorf("unable to query the category info (of name '%s'): %w", categoryName, err)
+		return "", fmt.Errorf(
+			"unable to query the category info (of name '%s'): %w",
+			categoryName,
+			err,
+		)
 	}
 
 	if len(resp.Data.Games) != 1 {
@@ -360,7 +392,10 @@ func (t *Twitch) StartStream(
 		result = multierror.Append(result, fmt.Errorf("unable to set description: %w", err))
 	}
 	if err := t.ApplyProfile(ctx, profile, customArgs...); err != nil {
-		result = multierror.Append(result, fmt.Errorf("unable to apply the stream-specific profile: %w", err))
+		result = multierror.Append(
+			result,
+			fmt.Errorf("unable to apply the stream-specific profile: %w", err),
+		)
 	}
 	return multierror.Append(result).ErrorOrNil()
 }
@@ -614,7 +649,12 @@ func (t *Twitch) getNewTokenByUser(
 		return fmt.Errorf("unable to get user access token: %w", err)
 	}
 	if resp.ErrorStatus != 0 {
-		return fmt.Errorf("unable to query: %d %v: %v", resp.ErrorStatus, resp.Error, resp.ErrorMessage)
+		return fmt.Errorf(
+			"unable to query: %d %v: %v",
+			resp.ErrorStatus,
+			resp.Error,
+			resp.ErrorMessage,
+		)
 	}
 	t.client.SetUserAccessToken(resp.Data.AccessToken)
 	t.client.SetRefreshToken(resp.Data.RefreshToken)
@@ -637,7 +677,12 @@ func (t *Twitch) getNewTokenByApp(
 		return fmt.Errorf("unable to get app access token: %w", err)
 	}
 	if resp.ErrorStatus != 0 {
-		return fmt.Errorf("unable to get app access token (the response contains an error): %d %v: %v", resp.ErrorStatus, resp.Error, resp.ErrorMessage)
+		return fmt.Errorf(
+			"unable to get app access token (the response contains an error): %d %v: %v",
+			resp.ErrorStatus,
+			resp.Error,
+			resp.ErrorMessage,
+		)
 	}
 	logger.Debugf(ctx, "setting the app access token")
 	t.client.SetAppAccessToken(resp.Data.AccessToken)
@@ -735,7 +780,8 @@ func (t *Twitch) GetAllCategories(
 		}
 
 		pagination = &resp.Data.Pagination
-		logger.FromCtx(ctx).Tracef("I have %d categories now; new categories: %d", len(categoriesMap), newCategoriesCount)
+		logger.FromCtx(ctx).
+			Tracef("I have %d categories now; new categories: %d", len(categoriesMap), newCategoriesCount)
 	}
 	logger.FromCtx(ctx).Tracef("%d categories in total")
 

@@ -120,7 +120,13 @@ type StreamController[ProfileType StreamProfile] interface {
 	StreamControllerCommons
 
 	ApplyProfile(ctx context.Context, profile ProfileType, customArgs ...any) error
-	StartStream(ctx context.Context, title string, description string, profile ProfileType, customArgs ...any) error
+	StartStream(
+		ctx context.Context,
+		title string,
+		description string,
+		profile ProfileType,
+		customArgs ...any,
+	) error
 }
 
 type AbstractStreamController interface {

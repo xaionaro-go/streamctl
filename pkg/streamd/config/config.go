@@ -47,9 +47,15 @@ func NewConfig() Config {
 
 func NewSampleConfig() Config {
 	cfg := NewConfig()
-	cfg.Backends[obs.ID].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{"some_profile": obs.StreamProfile{}}
-	cfg.Backends[twitch.ID].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{"some_profile": twitch.StreamProfile{}}
-	cfg.Backends[youtube.ID].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{"some_profile": youtube.StreamProfile{}}
+	cfg.Backends[obs.ID].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{
+		"some_profile": obs.StreamProfile{},
+	}
+	cfg.Backends[twitch.ID].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{
+		"some_profile": twitch.StreamProfile{},
+	}
+	cfg.Backends[youtube.ID].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{
+		"some_profile": youtube.StreamProfile{},
+	}
 	return cfg
 }
 

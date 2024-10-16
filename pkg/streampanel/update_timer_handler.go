@@ -15,7 +15,10 @@ type updateTimerHandler struct {
 	startTS         time.Time
 }
 
-func newUpdateTimerHandler(startStopButton *widget.Button, startedAt time.Time) *updateTimerHandler {
+func newUpdateTimerHandler(
+	startStopButton *widget.Button,
+	startedAt time.Time,
+) *updateTimerHandler {
 	ctx, cancelFn := context.WithCancel(context.Background())
 	h := &updateTimerHandler{
 		ctx:             ctx,

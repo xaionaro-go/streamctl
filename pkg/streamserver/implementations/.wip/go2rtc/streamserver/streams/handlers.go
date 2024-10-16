@@ -89,7 +89,9 @@ func (s *StreamHandler) HandleConsumerFunc(scheme string, handler ConsumerHandle
 	s.consumerHandlers[scheme] = handler
 }
 
-func (s *StreamHandler) GetConsumer(url string) (core.Consumer, types.NumBytesReaderWroter, func(context.Context) error, error) {
+func (s *StreamHandler) GetConsumer(
+	url string,
+) (core.Consumer, types.NumBytesReaderWroter, func(context.Context) error, error) {
 	if i := strings.IndexByte(url, ':'); i > 0 {
 		scheme := url[:i]
 

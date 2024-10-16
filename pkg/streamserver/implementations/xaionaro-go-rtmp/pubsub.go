@@ -93,7 +93,10 @@ func (pb *Pubsub) ClosedChan() <-chan struct{} {
 
 const sendQueueLength = 2 * 60 * 10 // presumably it will give about 10 seconds of queue: 2 tracks * 60FPS * 30 seconds
 
-func (pb *Pubsub) Sub(connCloser io.Closer, eventCallback func(context.Context, *flvtag.FlvTag) error) *Sub {
+func (pb *Pubsub) Sub(
+	connCloser io.Closer,
+	eventCallback func(context.Context, *flvtag.FlvTag) error,
+) *Sub {
 	ctx := context.TODO()
 	return xsync.DoR1(ctx, &pb.m, func() *Sub {
 		subID := pb.nextSubID
@@ -303,7 +306,11 @@ func (s *Sub) senderLoop(
 
 		case tag, ok := <-s.sendQueue:
 			if !ok {
-				logger.Debugf(ctx, "Sub[%d].senderLoop: the queue is closed; closing the client", s.subID)
+				logger.Debugf(
+					ctx,
+					"Sub[%d].senderLoop: the queue is closed; closing the client",
+					s.subID,
+				)
 				s.Close()
 				return
 			}
@@ -313,7 +320,12 @@ func (s *Sub) senderLoop(
 			err := s.onEvent(ctx, tag)
 			if err != nil {
 				metrics.FromCtx(ctx).Count("submit_process_error").Add(1)
-				logger.Errorf(ctx, "Sub[%d].senderLoop: unable to send an FLV tag: %v", s.subID, err)
+				logger.Errorf(
+					ctx,
+					"Sub[%d].senderLoop: unable to send an FLV tag: %v",
+					s.subID,
+					err,
+				)
 			} else {
 				metrics.FromCtx(ctx).Count("submit_process_success").Add(1)
 			}
@@ -331,7 +343,11 @@ func (s *Sub) Submit(
 	case s.sendQueue <- flv:
 		metrics.FromCtx(ctx).Count("submit_pushed").Add(1)
 	default:
-		logger.Errorf(ctx, "subscriber #%d queue is full, cannot send a tag; closing the connection, because cannot restore from this", s.subID)
+		logger.Errorf(
+			ctx,
+			"subscriber #%d queue is full, cannot send a tag; closing the connection, because cannot restore from this",
+			s.subID,
+		)
 		observability.Go(ctx, func() {
 			s.CloseOrLog(ctx)
 		})

@@ -35,7 +35,9 @@ func New(
 		WaiterChan:    make(chan struct{}),
 		RecoderConfig: cfg,
 	}
-	close(result.WaiterChan) // to prevent Wait() from blocking when the process is not started, yet.
+	close(
+		result.WaiterChan,
+	) // to prevent Wait() from blocking when the process is not started, yet.
 	return result
 }
 

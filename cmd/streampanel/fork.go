@@ -63,7 +63,10 @@ func runSubprocess(
 ) {
 	parts := strings.SplitN(subprocessFlag, ":", 2)
 	if len(parts) != 2 {
-		logger.Panicf(belt.WithField(preCtx, "process", ""), "expected 2 parts in --subprocess: name and address, separated via a colon")
+		logger.Panicf(
+			belt.WithField(preCtx, "process", ""),
+			"expected 2 parts in --subprocess: name and address, separated via a colon",
+		)
 	}
 	procName := ProcessName(parts[0])
 	addr := parts[1]
@@ -123,7 +126,12 @@ func runSplitProcesses(
 				case ProcessNameStreamd:
 					err := m.SendMessage(ctx, ProcessNameUI, StreamDDied{})
 					if err != nil {
-						logger.Errorf(ctx, "failed to send a StreamDDied message to '%s': %v", ProcessNameUI, err)
+						logger.Errorf(
+							ctx,
+							"failed to send a StreamDDied message to '%s': %v",
+							ProcessNameUI,
+							err,
+						)
 					}
 				}
 			}
@@ -189,11 +197,25 @@ func runFork(
 
 	ctx, cancelFn := context.WithCancel(ctx)
 	os.Setenv(EnvPassword, password)
-	args := []string{execPath, "--sentry-dsn=" + flags.SentryDSN, "--log-level=" + logger.Level(flags.LoggerLevel).String(), "--subprocess=" + string(procName) + ":" + addr, "--logstash-addr=" + flags.LogstashAddr}
+	args := []string{
+		execPath,
+		"--sentry-dsn=" + flags.SentryDSN,
+		"--log-level=" + logger.Level(flags.LoggerLevel).String(),
+		"--subprocess=" + string(procName) + ":" + addr,
+		"--logstash-addr=" + flags.LogstashAddr,
+	}
 	logger.Infof(ctx, "running '%s %s'", args[0], strings.Join(args[1:], " "))
 	cmd := exec.Command(args[0], args[1:]...)
-	cmd.Stderr = logwriter.NewLogWriter(ctx, logger.FromCtx(ctx).WithField("log_writer_target", "split").WithField("output_type", "stderr"))
-	cmd.Stdout = logwriter.NewLogWriter(ctx, logger.FromCtx(ctx).WithField("log_writer_target", "split"))
+	cmd.Stderr = logwriter.NewLogWriter(
+		ctx,
+		logger.FromCtx(ctx).
+			WithField("log_writer_target", "split").
+			WithField("output_type", "stderr"),
+	)
+	cmd.Stdout = logwriter.NewLogWriter(
+		ctx,
+		logger.FromCtx(ctx).WithField("log_writer_target", "split"),
+	)
 	cmd.Stdin = os.Stdin
 	err = child_process_manager.ConfigureCommand(cmd)
 	if err != nil {
@@ -213,7 +235,13 @@ func runFork(
 		err := cmd.Wait()
 		cancelFn()
 		if err != nil {
-			logger.Errorf(ctx, "error running '%s %s': %v", args[0], strings.Join(args[1:], " "), err)
+			logger.Errorf(
+				ctx,
+				"error running '%s %s': %v",
+				args[0],
+				strings.Join(args[1:], " "),
+				err,
+			)
 		}
 	})
 	return nil
@@ -251,7 +279,11 @@ func setReadyFor(
 		func(ctx context.Context, source ProcessName, content any) error {
 			_, ok := content.(mainprocess.MessageReadyConfirmed)
 			if !ok {
-				return fmt.Errorf("got unexpected type '%T' instead of %T", content, mainprocess.MessageReadyConfirmed{})
+				return fmt.Errorf(
+					"got unexpected type '%T' instead of %T",
+					content,
+					mainprocess.MessageReadyConfirmed{},
+				)
 			}
 			return nil
 		},

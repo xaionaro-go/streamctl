@@ -49,7 +49,12 @@ func newRTMPClient(
 		dialFunc = rtmp.Dial
 	case "rtmps":
 		dialFunc = func(protocol, addr string, config *rtmp.ConnConfig) (*rtmp.ClientConn, error) {
-			return rtmp.TLSDial(protocol, addr, config, http.DefaultTransport.(*http.Transport).TLSClientConfig)
+			return rtmp.TLSDial(
+				protocol,
+				addr,
+				config,
+				http.DefaultTransport.(*http.Transport).TLSClientConfig,
+			)
 		}
 	default:
 		return nil, fmt.Errorf("unexpected scheme '%s' in URL '%s'", url.Scheme, url.String())

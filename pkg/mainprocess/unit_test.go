@@ -66,19 +66,25 @@ func Test(t *testing.T) {
 	c0, err := NewClient("child0", m.Addr().String(), m.Password())
 	require.NoError(t, err)
 	defer c0.Close()
-	go c0.Serve(belt.WithField(ctx, "process", "child0"), func(ctx context.Context, source ProcessName, content any) error {
-		handleCall("child0", content)
-		return nil
-	})
+	go c0.Serve(
+		belt.WithField(ctx, "process", "child0"),
+		func(ctx context.Context, source ProcessName, content any) error {
+			handleCall("child0", content)
+			return nil
+		},
+	)
 	c0.SendMessage(ctx, "main", MessageReady{})
 
 	c1, err := NewClient("child1", m.Addr().String(), m.Password())
 	require.NoError(t, err)
 	defer c1.Close()
-	go c1.Serve(belt.WithField(ctx, "process", "child1"), func(ctx context.Context, source ProcessName, content any) error {
-		handleCall("child1", content)
-		return nil
-	})
+	go c1.Serve(
+		belt.WithField(ctx, "process", "child1"),
+		func(ctx context.Context, source ProcessName, content any) error {
+			handleCall("child1", content)
+			return nil
+		},
+	)
 	c1.SendMessage(ctx, "main", MessageReady{})
 
 	_, err = NewClient("child2", m.Addr().String(), m.Password())

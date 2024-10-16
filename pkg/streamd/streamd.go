@@ -183,7 +183,12 @@ func getOBSImageBytes(
 ) ([]byte, time.Time, error) {
 	img, nextUpdateAt, err := el.Source.GetImage(ctx, obsServer, el, obsState)
 	if err != nil {
-		return nil, time.Now().Add(time.Second), fmt.Errorf("unable to get the image from the source: %w", err)
+		return nil, time.Now().
+				Add(time.Second),
+			fmt.Errorf(
+				"unable to get the image from the source: %w",
+				err,
+			)
 	}
 
 	for _, filter := range el.Filters {
@@ -292,7 +297,10 @@ func (d *StreamD) initStreamServer(ctx context.Context) (_err error) {
 	)
 	assert(d.StreamServer != nil)
 	defer d.notifyAboutChange(ctx, events.StreamServersChange)
-	return d.StreamServer.Init(ctx, sstypes.InitOptionDefaultStreamPlayerOptions(d.streamPlayerOptions()))
+	return d.StreamServer.Init(
+		ctx,
+		sstypes.InitOptionDefaultStreamPlayerOptions(d.streamPlayerOptions()),
+	)
 }
 
 func (d *StreamD) streamPlayerOptions() sptypes.Options {
@@ -526,7 +534,9 @@ func (d *StreamD) SaveConfig(ctx context.Context) error {
 		if d.GitStorage != nil {
 			err = d.sendConfigViaGIT(ctx)
 			if err != nil {
-				d.UI.DisplayError(fmt.Errorf("unable to send the config to the remote git repository: %w", err))
+				d.UI.DisplayError(
+					fmt.Errorf("unable to send the config to the remote git repository: %w", err),
+				)
 			}
 		}
 	})
@@ -550,7 +560,10 @@ func (d *StreamD) SetConfig(ctx context.Context, cfg *config.Config) error {
 	return nil
 }
 
-func (d *StreamD) IsBackendEnabled(ctx context.Context, id streamcontrol.PlatformName) (bool, error) {
+func (d *StreamD) IsBackendEnabled(
+	ctx context.Context,
+	id streamcontrol.PlatformName,
+) (bool, error) {
 	return xsync.RDoR2(ctx, &d.ControllersLocker, func() (bool, error) {
 		switch id {
 		case obs.ID:
@@ -600,7 +613,12 @@ func (d *StreamD) StartStream(
 			if err != nil {
 				return fmt.Errorf("unable to convert the profile into OBS profile: %w", err)
 			}
-			err = d.StreamControllers.OBS.StartStream(d.ctxForController(ctx), title, description, *profile, customArgs...)
+			err = d.StreamControllers.OBS.StartStream(
+				d.ctxForController(ctx),
+				title,
+				description,
+				*profile,
+				customArgs...)
 			if err != nil {
 				return fmt.Errorf("unable to start the stream on OBS: %w", err)
 			}
@@ -610,7 +628,12 @@ func (d *StreamD) StartStream(
 			if err != nil {
 				return fmt.Errorf("unable to convert the profile into Twitch profile: %w", err)
 			}
-			err = d.StreamControllers.Twitch.StartStream(d.ctxForController(ctx), title, description, *profile, customArgs...)
+			err = d.StreamControllers.Twitch.StartStream(
+				d.ctxForController(ctx),
+				title,
+				description,
+				*profile,
+				customArgs...)
 			if err != nil {
 				return fmt.Errorf("unable to start the stream on Twitch: %w", err)
 			}
@@ -620,7 +643,12 @@ func (d *StreamD) StartStream(
 			if err != nil {
 				return fmt.Errorf("unable to convert the profile into YouTube profile: %w", err)
 			}
-			err = d.StreamControllers.YouTube.StartStream(d.ctxForController(ctx), title, description, *profile, customArgs...)
+			err = d.StreamControllers.YouTube.StartStream(
+				d.ctxForController(ctx),
+				title,
+				description,
+				*profile,
+				customArgs...)
 			if err != nil {
 				return fmt.Errorf("unable to start the stream on YouTube: %w", err)
 			}
@@ -1492,9 +1520,24 @@ func (d *StreamD) UpdateStreamPlayer(
 	disabled bool,
 	streamPlaybackConfig sptypes.Config,
 ) (_err error) {
-	logger.Debugf(ctx, "UpdateStreamPlayer(ctx, '%s', '%s', %v, %#+v)", streamID, playerType, disabled, streamPlaybackConfig)
+	logger.Debugf(
+		ctx,
+		"UpdateStreamPlayer(ctx, '%s', '%s', %v, %#+v)",
+		streamID,
+		playerType,
+		disabled,
+		streamPlaybackConfig,
+	)
 	defer func() {
-		logger.Debugf(ctx, "/UpdateStreamPlayer(ctx, '%s', '%s', %v, %#+v): %v", streamID, playerType, disabled, streamPlaybackConfig, _err)
+		logger.Debugf(
+			ctx,
+			"/UpdateStreamPlayer(ctx, '%s', '%s', %v, %#+v): %v",
+			streamID,
+			playerType,
+			disabled,
+			streamPlaybackConfig,
+			_err,
+		)
 	}()
 	defer d.notifyAboutChange(ctx, events.StreamPlayersChange)
 	var result *multierror.Error

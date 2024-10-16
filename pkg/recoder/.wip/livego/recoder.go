@@ -34,7 +34,12 @@ func (r *Recoder) StartRecoding(
 	return xsync.DoR1(ctx, &r.Locker, func() error {
 		relay := rtmprelay.NewRtmpRelay(&input.URL, &output.URL)
 		if err := relay.Start(); err != nil {
-			return fmt.Errorf("unable to start RTMP relay from '%s' to '%s': %w", input.URL, output.URL, err)
+			return fmt.Errorf(
+				"unable to start RTMP relay from '%s' to '%s': %w",
+				input.URL,
+				output.URL,
+				err,
+			)
 		}
 
 		r.Relay = relay

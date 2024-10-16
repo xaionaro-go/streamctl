@@ -109,7 +109,11 @@ func (srv *GRPCServer) newInputByURL(
 	config := recoder.InputConfig{}
 	input, err := recoder.NewInputFromURL(ctx, path.Url.Url, path.Url.AuthKey, config)
 	if err != nil {
-		return nil, fmt.Errorf("unable to initialize an input using URL '%s' and config %#+v", path.Url, config)
+		return nil, fmt.Errorf(
+			"unable to initialize an input using URL '%s' and config %#+v",
+			path.Url,
+			config,
+		)
 	}
 
 	inputID := xsync.DoR1(ctx, &srv.InputLocker, func() InputID {
@@ -163,7 +167,11 @@ func (srv *GRPCServer) newOutputByURL(
 	config := recoder.OutputConfig{}
 	output, err := recoder.NewOutputFromURL(ctx, path.Url.Url, path.Url.AuthKey, config)
 	if err != nil {
-		return nil, fmt.Errorf("unable to initialize an output using URL '%s' and config %#+v", path.Url, config)
+		return nil, fmt.Errorf(
+			"unable to initialize an output using URL '%s' and config %#+v",
+			path.Url,
+			config,
+		)
 	}
 
 	outputID := xsync.DoR1(ctx, &srv.OutputLocker, func() OutputID {

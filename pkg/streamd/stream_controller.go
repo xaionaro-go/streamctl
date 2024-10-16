@@ -45,7 +45,10 @@ func (d *StreamD) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context) erro
 			continue
 		}
 		if err != nil {
-			result = multierror.Append(result, fmt.Errorf("unable to initialize '%s': %w", platName, err))
+			result = multierror.Append(
+				result,
+				fmt.Errorf("unable to initialize '%s': %w", platName, err),
+			)
 		}
 	}
 	return result.ErrorOrNil()
@@ -128,7 +131,8 @@ func newTwitch(
 	error,
 ) {
 	platCfg := streamcontrol.ConvertPlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile](
-		ctx, cfg,
+		ctx,
+		cfg,
 	)
 	if platCfg == nil {
 		return nil, fmt.Errorf("twitch config was not found")
@@ -139,7 +143,8 @@ func newTwitch(
 	}
 
 	hadSetNewUserData := false
-	if platCfg.Config.Channel == "" || platCfg.Config.ClientID == "" || platCfg.Config.ClientSecret == "" {
+	if platCfg.Config.Channel == "" || platCfg.Config.ClientID == "" ||
+		platCfg.Config.ClientSecret == "" {
 		ok, err := setUserData(ctx, platCfg)
 		if !ok {
 			err := saveCfgFunc(&streamcontrol.AbstractPlatformConfig{
@@ -197,7 +202,8 @@ func newYouTube(
 	error,
 ) {
 	platCfg := streamcontrol.ConvertPlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile](
-		ctx, cfg,
+		ctx,
+		cfg,
 	)
 	if platCfg == nil {
 		return nil, fmt.Errorf("youtube config was not found")
@@ -295,7 +301,9 @@ func (d *StreamD) listenOBSEvents(
 		default:
 		}
 
-		client, err := o.GetClient(obs.GetClientOption(goobs.WithEventSubscriptions(subscriptions.InputVolumeMeters)))
+		client, err := o.GetClient(
+			obs.GetClientOption(goobs.WithEventSubscriptions(subscriptions.InputVolumeMeters)),
+		)
 		if err != nil {
 			logger.Errorf(ctx, "unable to get an OBS client: %v", err)
 			time.Sleep(time.Second)

@@ -74,7 +74,11 @@ func (p *Panel) ShowErrorReports() {
 
 	content := container.NewVBox()
 	if len(reports) == 0 {
-		content.Add(widget.NewRichTextWithText("No significant errors were reported since the application was started, yet..."))
+		content.Add(
+			widget.NewRichTextWithText(
+				"No significant errors were reported since the application was started, yet...",
+			),
+		)
 	} else {
 		for _, report := range reports {
 			errLabel := report.Error.Error()

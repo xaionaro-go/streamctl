@@ -121,7 +121,8 @@ func getMousePos(window fyne.Window) fyne.Position {
 func (w *HintWidget) isHovering(mousePos fyne.Position) bool {
 	pos0 := GetAbsolutePosition(w, w.Window.Canvas().Content())
 	pos1 := pos0.Add(w.Label.Size())
-	if mousePos.X >= pos0.X && mousePos.Y >= pos0.Y && mousePos.X <= pos1.X && mousePos.Y <= pos1.Y {
+	if mousePos.X >= pos0.X && mousePos.Y >= pos0.Y && mousePos.X <= pos1.X &&
+		mousePos.Y <= pos1.Y {
 		return true
 	}
 

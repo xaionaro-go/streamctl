@@ -89,10 +89,10 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 }
 
 type MonitorSourceOBSVideo struct {
-	Name           string      `yaml:"name" json:"name"`
-	Width          float64     `yaml:"width" json:"width"`
-	Height         float64     `yaml:"height" json:"height"`
-	ImageFormat    ImageFormat `yaml:"image_format" json:"image_format"`
+	Name           string      `yaml:"name"            json:"name"`
+	Width          float64     `yaml:"width"           json:"width"`
+	Height         float64     `yaml:"height"          json:"height"`
+	ImageFormat    ImageFormat `yaml:"image_format"    json:"image_format"`
 	UpdateInterval Duration    `yaml:"update_interval" json:"update_interval"`
 }
 
@@ -166,24 +166,40 @@ func (s *MonitorSourceOBSVideo) GetImageBytes(
 	}
 	resp, err := obsServer.GetSourceScreenshot(ctx, req)
 	if err != nil {
-		return nil, "", time.Now().Add(time.Second), fmt.Errorf("unable to get a screenshot of '%s': %w", s.Name, err)
+		return nil, "", time.Now().
+				Add(time.Second),
+			fmt.Errorf(
+				"unable to get a screenshot of '%s': %w",
+				s.Name,
+				err,
+			)
 	}
 
 	imgB64 := resp.GetImageData()
 	imgBytes, mimeType, err := imgb64.Decode(string(imgB64))
 	if err != nil {
-		return nil, "", time.Time{}, fmt.Errorf("unable to decode the screenshot of '%s': %w", s.Name, err)
+		return nil, "", time.Time{}, fmt.Errorf(
+			"unable to decode the screenshot of '%s': %w",
+			s.Name,
+			err,
+		)
 	}
 
-	logger.Tracef(ctx, "the decoded image is of format '%s' (expected format: '%s') and size %d", mimeType, s.ImageFormat, len(imgBytes))
+	logger.Tracef(
+		ctx,
+		"the decoded image is of format '%s' (expected format: '%s') and size %d",
+		mimeType,
+		s.ImageFormat,
+		len(imgBytes),
+	)
 	return imgBytes, mimeType, time.Now().Add(time.Duration(s.UpdateInterval)), nil
 }
 
 type MonitorSourceOBSVolume struct {
-	Name           string   `yaml:"name" json:"name"`
+	Name           string   `yaml:"name"            json:"name"`
 	UpdateInterval Duration `yaml:"update_interval" json:"update_interval"`
-	ColorActive    string   `yaml:"color_active" json:"color_active"`
-	ColorPassive   string   `yaml:"color_passive" json:"color_passive"`
+	ColorActive    string   `yaml:"color_active"    json:"color_active"`
+	ColorPassive   string   `yaml:"color_passive"   json:"color_passive"`
 }
 
 var _ Source = (*MonitorSourceOBSVolume)(nil)
@@ -224,11 +240,19 @@ func (s *MonitorSourceOBSVolume) GetImage(
 
 	colorActive, err := colorx.Parse(s.ColorActive)
 	if err != nil {
-		return nil, time.Time{}, fmt.Errorf("unable to parse the `color_active` value '%s': %w", s.ColorActive, err)
+		return nil, time.Time{}, fmt.Errorf(
+			"unable to parse the `color_active` value '%s': %w",
+			s.ColorActive,
+			err,
+		)
 	}
 	colorPassive, err := colorx.Parse(s.ColorPassive)
 	if err != nil {
-		return nil, time.Time{}, fmt.Errorf("unable to parse the `color_passive` value '%s': %w", s.ColorPassive, err)
+		return nil, time.Time{}, fmt.Errorf(
+			"unable to parse the `color_passive` value '%s': %w",
+			s.ColorPassive,
+			err,
+		)
 	}
 
 	size := img.Bounds().Size()

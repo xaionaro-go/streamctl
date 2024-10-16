@@ -12,10 +12,16 @@ type dummyPlatformsController struct{}
 
 var _ streamservertypes.PlatformsController = (*dummyPlatformsController)(nil)
 
-func (dummyPlatformsController) CheckStreamStartedByURL(ctx context.Context, destination *url.URL) (bool, error) {
+func (dummyPlatformsController) CheckStreamStartedByURL(
+	ctx context.Context,
+	destination *url.URL,
+) (bool, error) {
 	return true, nil
 }
 
-func (dummyPlatformsController) CheckStreamStartedByPlatformID(ctx context.Context, platID streamcontrol.PlatformName) (bool, error) {
+func (dummyPlatformsController) CheckStreamStartedByPlatformID(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+) (bool, error) {
 	return true, nil
 }

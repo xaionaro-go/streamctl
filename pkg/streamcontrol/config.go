@@ -130,10 +130,14 @@ var _ yaml.BytesUnmarshaler = (*RawMessage)(nil)
 var _ yaml.BytesMarshaler = (*RawMessage)(nil)
 
 func (RawMessage) GetParent() (ProfileName, bool) {
-	panic("the value is not parsed; don't use the platform config directly, and use function GetPlatformConfig instead")
+	panic(
+		"the value is not parsed; don't use the platform config directly, and use function GetPlatformConfig instead",
+	)
 }
 func (RawMessage) GetOrder() int {
-	panic("the value is not parsed; don't use the platform config directly, and use function GetPlatformConfig instead")
+	panic(
+		"the value is not parsed; don't use the platform config directly, and use function GetPlatformConfig instead",
+	)
 }
 
 func (m *RawMessage) UnmarshalJSON(b []byte) error {
@@ -192,7 +196,11 @@ func (cfg *Config) UnmarshalYAML(b []byte) (_err error) {
 	t := map[PlatformName]*unparsedPlatformConfig{}
 	err := yaml.Unmarshal(b, &t)
 	if err != nil {
-		return fmt.Errorf("unable to unmarshal YAML of the root of the config: %w; config: <%s>", err, b)
+		return fmt.Errorf(
+			"unable to unmarshal YAML of the root of the config: %w; config: <%s>",
+			err,
+			b,
+		)
 	}
 
 	if *cfg == nil {
@@ -316,7 +324,9 @@ func GetPlatformSpecificConfig[T any](
 	}
 }
 
-func GetStreamProfiles[S StreamProfile](streamProfiles map[ProfileName]AbstractStreamProfile) StreamProfiles[S] {
+func GetStreamProfiles[S StreamProfile](
+	streamProfiles map[ProfileName]AbstractStreamProfile,
+) StreamProfiles[S] {
 	s := make(map[ProfileName]S, len(streamProfiles))
 	for k, p := range streamProfiles {
 		switch p := p.(type) {
@@ -345,7 +355,9 @@ func InitConfig[T any, S StreamProfile](cfg Config, id PlatformName, platCfg Pla
 	}
 }
 
-func ToAbstractStreamProfiles[S StreamProfile](in map[ProfileName]S) map[ProfileName]AbstractStreamProfile {
+func ToAbstractStreamProfiles[S StreamProfile](
+	in map[ProfileName]S,
+) map[ProfileName]AbstractStreamProfile {
 	m := make(map[ProfileName]AbstractStreamProfile, len(in))
 	for k, v := range in {
 		m[k] = v

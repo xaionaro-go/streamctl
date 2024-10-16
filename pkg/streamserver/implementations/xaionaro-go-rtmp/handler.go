@@ -66,7 +66,11 @@ func (h *Handler) OnCreateStream(timestamp uint32, cmd *rtmpmsg.NetConnectionCre
 	return nil
 }
 
-func (h *Handler) OnPublish(_ *rtmp.StreamContext, timestamp uint32, cmd *rtmpmsg.NetStreamPublish) error {
+func (h *Handler) OnPublish(
+	_ *rtmp.StreamContext,
+	timestamp uint32,
+	cmd *rtmpmsg.NetStreamPublish,
+) error {
 	log.Printf("OnPublish: %#v", cmd)
 
 	if h.sub != nil {
@@ -94,7 +98,11 @@ func (h *Handler) OnPublish(_ *rtmp.StreamContext, timestamp uint32, cmd *rtmpms
 	})
 }
 
-func (h *Handler) OnPlay(rtmpctx *rtmp.StreamContext, timestamp uint32, cmd *rtmpmsg.NetStreamPlay) error {
+func (h *Handler) OnPlay(
+	rtmpctx *rtmp.StreamContext,
+	timestamp uint32,
+	cmd *rtmpmsg.NetStreamPlay,
+) error {
 	if h.sub != nil {
 		return errors.New("Cannot play on this stream")
 	}

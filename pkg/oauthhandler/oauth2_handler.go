@@ -49,7 +49,10 @@ func OAuth2HandlerViaBrowser(ctx context.Context, arg OAuthHandlerArgument) erro
 		return err
 	}
 
-	fmt.Printf("Your browser has been launched (URL: %s).\nPlease approve the permissions.\n", arg.AuthURL)
+	fmt.Printf(
+		"Your browser has been launched (URL: %s).\nPlease approve the permissions.\n",
+		arg.AuthURL,
+	)
 
 	// Wait for the web server to get the code.
 	code := <-codeCh
@@ -75,7 +78,11 @@ func NewCodeReceiver(
 				fmt.Fprintf(w, "No code received :(\r\n\r\nYou can close this browser window.")
 				return
 			}
-			fmt.Fprintf(w, "Received code: %v\r\n\r\nYou can now safely close this browser window.", code)
+			fmt.Fprintf(
+				w,
+				"Received code: %v\r\n\r\nYou can now safely close this browser window.",
+				code,
+			)
 		}),
 	}
 

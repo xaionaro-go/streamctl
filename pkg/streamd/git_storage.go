@@ -99,7 +99,10 @@ func (d *StreamD) onConfigUpdateViaGIT(ctx context.Context, cfg *config.Config) 
 		d.UI.DisplayError(fmt.Errorf("unable to save data: %w", err))
 	}
 	if d.GitInitialized {
-		d.UI.Restart(ctx, "Received an updated config from another device, please restart the application")
+		d.UI.Restart(
+			ctx,
+			"Received an updated config from another device, please restart the application",
+		)
 	}
 }
 
@@ -203,7 +206,9 @@ func (d *StreamD) startPeriodicGitSyncer(ctx context.Context) {
 	observability.Go(ctx, func() {
 		err := d.sendConfigViaGIT(ctx)
 		if err != nil {
-			d.UI.DisplayError(fmt.Errorf("unable to send the config to the remote git repository: %w", err))
+			d.UI.DisplayError(
+				fmt.Errorf("unable to send the config to the remote git repository: %w", err),
+			)
 		}
 
 		ticker := time.NewTicker(time.Minute)

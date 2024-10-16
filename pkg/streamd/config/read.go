@@ -66,21 +66,30 @@ func (cfg *Config) UnmarshalYAML(b []byte) (_err error) {
 	}
 
 	if cfg.Backends[obs.ID] != nil {
-		err = streamcontrol.ConvertStreamProfiles[obs.StreamProfile](context.Background(), cfg.Backends[obs.ID].StreamProfiles)
+		err = streamcontrol.ConvertStreamProfiles[obs.StreamProfile](
+			context.Background(),
+			cfg.Backends[obs.ID].StreamProfiles,
+		)
 		if err != nil {
 			return fmt.Errorf("unable to convert stream profiles of OBS: %w", err)
 		}
 	}
 
 	if cfg.Backends[twitch.ID] != nil {
-		err = streamcontrol.ConvertStreamProfiles[twitch.StreamProfile](context.Background(), cfg.Backends[twitch.ID].StreamProfiles)
+		err = streamcontrol.ConvertStreamProfiles[twitch.StreamProfile](
+			context.Background(),
+			cfg.Backends[twitch.ID].StreamProfiles,
+		)
 		if err != nil {
 			return fmt.Errorf("unable to convert stream profiles of twitch: %w", err)
 		}
 	}
 
 	if cfg.Backends[youtube.ID] != nil {
-		err = streamcontrol.ConvertStreamProfiles[youtube.StreamProfile](context.Background(), cfg.Backends[youtube.ID].StreamProfiles)
+		err = streamcontrol.ConvertStreamProfiles[youtube.StreamProfile](
+			context.Background(),
+			cfg.Backends[youtube.ID].StreamProfiles,
+		)
 		if err != nil {
 			return fmt.Errorf("unable to convert stream profiles of youtube: %w", err)
 		}

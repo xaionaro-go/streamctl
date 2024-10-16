@@ -362,7 +362,10 @@ func (s *StreamPlayers) setStreamPlayer(
 
 		var opts SetupOptions
 		if playerCfg.DefaultStreamPlayerOptions != nil {
-			opts = append(opts, SetupOptionDefaultStreamPlayerOptions(playerCfg.DefaultStreamPlayerOptions))
+			opts = append(
+				opts,
+				SetupOptionDefaultStreamPlayerOptions(playerCfg.DefaultStreamPlayerOptions),
+			)
 		}
 
 		var streamCfg map[types.StreamID]*types.StreamConfig

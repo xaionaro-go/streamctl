@@ -65,7 +65,12 @@ func (s *StreamServer) init(ctx context.Context) error {
 	for dstID, dstCfg := range cfg.Destinations {
 		err := s.addStreamDestination(ctx, dstID, dstCfg.URL)
 		if err != nil {
-			return fmt.Errorf("unable to initialize stream destination '%s' to %#+v: %w", dstID, dstCfg, err)
+			return fmt.Errorf(
+				"unable to initialize stream destination '%s' to %#+v: %w",
+				dstID,
+				dstCfg,
+				err,
+			)
 		}
 	}
 
@@ -79,7 +84,12 @@ func (s *StreamServer) init(ctx context.Context) error {
 			if !fwd.Disabled {
 				_, err := s.addStreamForward(ctx, streamID, dstID, fwd.Quirks)
 				if err != nil {
-					return fmt.Errorf("unable to launch stream forward from '%s' to '%s': %w", streamID, dstID, err)
+					return fmt.Errorf(
+						"unable to launch stream forward from '%s' to '%s': %w",
+						streamID,
+						dstID,
+						err,
+					)
 				}
 			}
 		}
@@ -143,7 +153,11 @@ func (s *StreamServer) startServer(
 		observability.Go(ctx, func() {
 			err = portServer.Server.Serve(listener)
 			if err != nil {
-				err = fmt.Errorf("unable to start serving RTMP at '%s': %w", listener.Addr().String(), err)
+				err = fmt.Errorf(
+					"unable to start serving RTMP at '%s': %w",
+					listener.Addr().String(),
+					err,
+				)
 				logger.Error(ctx, err)
 			}
 		})
@@ -371,7 +385,15 @@ func (s *StreamServer) addStreamForward(
 
 	ctx = belt.WithField(ctx, "stream_forward", fmt.Sprintf("%s->%s", streamID, destinationID))
 	if actFwd, ok := s.ActiveStreamForwardings[destinationID]; ok {
-		return buildStreamForward(streamID, destinationID, cfg, actFwd), fmt.Errorf("there is already an active stream forwarding to '%s'", destinationID)
+		return buildStreamForward(
+				streamID,
+				destinationID,
+				cfg,
+				actFwd,
+			), fmt.Errorf(
+				"there is already an active stream forwarding to '%s'",
+				destinationID,
+			)
 	}
 
 	dst, err := s.findStreamDestinationByID(ctx, destinationID)
@@ -633,7 +655,10 @@ func (s *StreamServer) findStreamDestinationByID(
 			return dst, nil
 		}
 	}
-	return types.StreamDestination{}, fmt.Errorf("unable to find a stream destination by StreamID '%s'", destinationID)
+	return types.StreamDestination{}, fmt.Errorf(
+		"unable to find a stream destination by StreamID '%s'",
+		destinationID,
+	)
 }
 
 func (s *StreamServer) AddStreamPlayer(

@@ -48,7 +48,12 @@ type StreamD interface {
 	) error
 	SetTitle(ctx context.Context, platID streamcontrol.PlatformName, title string) error
 	SetDescription(ctx context.Context, platID streamcontrol.PlatformName, description string) error
-	ApplyProfile(ctx context.Context, platID streamcontrol.PlatformName, profile streamcontrol.AbstractStreamProfile, customArgs ...any) error
+	ApplyProfile(
+		ctx context.Context,
+		platID streamcontrol.PlatformName,
+		profile streamcontrol.AbstractStreamProfile,
+		customArgs ...any,
+	) error
 	OBSOLETE_GitRelogin(ctx context.Context) error
 	GetBackendData(ctx context.Context, platID streamcontrol.PlatformName) (any, error)
 	Restart(ctx context.Context) error
@@ -189,7 +194,12 @@ type StreamD interface {
 	ListTimers(ctx context.Context) ([]Timer, error)
 
 	AddOBSSceneRule(ctx context.Context, sceneName SceneName, sceneRule SceneRule) error
-	UpdateOBSSceneRule(ctx context.Context, sceneName SceneName, idx uint64, sceneRule SceneRule) error
+	UpdateOBSSceneRule(
+		ctx context.Context,
+		sceneName SceneName,
+		idx uint64,
+		sceneRule SceneRule,
+	) error
 	RemoveOBSSceneRule(ctx context.Context, sceneName SceneName, idx uint64) error
 	ListOBSSceneRules(ctx context.Context, sceneName SceneName) (SceneRules, error)
 }

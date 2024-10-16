@@ -52,7 +52,9 @@ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX=
 -----END OPENSSH PRIVATE KEY-----`)
 
-	gitInstruction := widget.NewRichTextFromMarkdown("We can sync the configuration among all of your devices via a git repository. To get a git repository you may, for example, use GitHub; but never use public repositories, always use private ones (because the repository will contain all the access credentials to YouTube/Twitch/whatever).")
+	gitInstruction := widget.NewRichTextFromMarkdown(
+		"We can sync the configuration among all of your devices via a git repository. To get a git repository you may, for example, use GitHub; but never use public repositories, always use private ones (because the repository will contain all the access credentials to YouTube/Twitch/whatever).",
+	)
 	gitInstruction.Wrapping = fyne.TextWrapWord
 
 	w.SetContent(container.NewBorder(

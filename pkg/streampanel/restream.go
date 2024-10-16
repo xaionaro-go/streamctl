@@ -288,7 +288,14 @@ func (p *Panel) displayStreamServers(
 		p.previousNumBytesLocker.Do(ctx, func() {
 			prevNumBytes := p.previousNumBytes[key]
 			now := time.Now()
-			bwStr := bwString(srv.NumBytesProducerRead, prevNumBytes[0], srv.NumBytesConsumerWrote, prevNumBytes[1], now, p.previousNumBytesTS[key])
+			bwStr := bwString(
+				srv.NumBytesProducerRead,
+				prevNumBytes[0],
+				srv.NumBytesConsumerWrote,
+				prevNumBytes[1],
+				now,
+				p.previousNumBytesTS[key],
+			)
 			bwText := widget.NewRichTextWithText(bwStr)
 			hasDynamicValue = hasDynamicValue || bwStr != ""
 			p.previousNumBytes[key] = [4]uint64{srv.NumBytesProducerRead, srv.NumBytesConsumerWrote}
@@ -571,7 +578,14 @@ func (p *Panel) displayStreamDestinations(
 }
 
 func (p *Panel) openAddPlayerWindow(ctx context.Context) {
-	p.openAddOrEditPlayerWindow(ctx, "Add player", false, sptypes.DefaultConfig(ctx), nil, p.StreamD.AddStreamPlayer)
+	p.openAddOrEditPlayerWindow(
+		ctx,
+		"Add player",
+		false,
+		sptypes.DefaultConfig(ctx),
+		nil,
+		p.StreamD.AddStreamPlayer,
+	)
 }
 
 func (p *Panel) openEditPlayerWindow(
@@ -593,7 +607,14 @@ func (p *Panel) openEditPlayerWindow(
 		p.DisplayError(fmt.Errorf("unable to find a stream player for '%s'", streamID))
 		return
 	}
-	p.openAddOrEditPlayerWindow(ctx, "Edit player", !playerCfg.Disabled, playerCfg.StreamPlayback, &streamID, p.StreamD.UpdateStreamPlayer)
+	p.openAddOrEditPlayerWindow(
+		ctx,
+		"Edit player",
+		!playerCfg.Disabled,
+		playerCfg.StreamPlayback,
+		&streamID,
+		p.StreamD.UpdateStreamPlayer,
+	)
 }
 
 func (p *Panel) openAddOrEditPlayerWindow(
@@ -779,14 +800,28 @@ func (p *Panel) displayStreamPlayers(
 		c := container.NewHBox()
 		deleteButton := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
 			w := dialog.NewConfirm(
-				fmt.Sprintf("Delete player for stream '%s' (%s) ?", player.StreamID, player.PlayerType),
+				fmt.Sprintf(
+					"Delete player for stream '%s' (%s) ?",
+					player.StreamID,
+					player.PlayerType,
+				),
 				"",
 				func(b bool) {
 					if !b {
 						return
 					}
-					logger.Debugf(ctx, "remove player '%s' (%s)", player.StreamID, player.PlayerType)
-					defer logger.Debugf(ctx, "/remove player '%s' (%s)", player.StreamID, player.PlayerType)
+					logger.Debugf(
+						ctx,
+						"remove player '%s' (%s)",
+						player.StreamID,
+						player.PlayerType,
+					)
+					defer logger.Debugf(
+						ctx,
+						"/remove player '%s' (%s)",
+						player.StreamID,
+						player.PlayerType,
+					)
 					err := p.StreamD.RemoveStreamPlayer(ctx, player.StreamID)
 					if err != nil {
 						p.DisplayError(err)
@@ -816,8 +851,22 @@ func (p *Panel) displayStreamPlayers(
 					if !b {
 						return
 					}
-					logger.Debugf(ctx, "stop/start player %s on '%s': disabled:%v->%v", player.PlayerType, player.StreamID, player.Disabled, !player.Disabled)
-					defer logger.Debugf(ctx, "/stop/start player %s on '%s': disabled:%v->%v", player.PlayerType, player.StreamID, player.Disabled, !player.Disabled)
+					logger.Debugf(
+						ctx,
+						"stop/start player %s on '%s': disabled:%v->%v",
+						player.PlayerType,
+						player.StreamID,
+						player.Disabled,
+						!player.Disabled,
+					)
+					defer logger.Debugf(
+						ctx,
+						"/stop/start player %s on '%s': disabled:%v->%v",
+						player.PlayerType,
+						player.StreamID,
+						player.Disabled,
+						!player.Disabled,
+					)
 					err := p.StreamD.UpdateStreamPlayer(
 						xcontext.DetachDone(ctx),
 						player.StreamID,
@@ -843,7 +892,12 @@ func (p *Panel) displayStreamPlayers(
 		if !player.Disabled {
 			pos, err := p.StreamD.StreamPlayerGetPosition(ctx, player.StreamID)
 			if err != nil {
-				logger.Errorf(ctx, "unable to get the current position at player '%s': %v", player.StreamID, err)
+				logger.Errorf(
+					ctx,
+					"unable to get the current position at player '%s': %v",
+					player.StreamID,
+					err,
+				)
 			} else {
 				c.Add(widget.NewSeparator())
 				posStr := pos.String()
@@ -932,8 +986,22 @@ func (p *Panel) openAddOrEditRestreamWindow(
 		quirks sstypes.ForwardingQuirks,
 	) error,
 ) {
-	logger.Debugf(ctx, "openAddOrEditRestreamWindow(ctx, '%s', '%s', '%s', %#+v)", title, streamID, dstID, fwd)
-	defer logger.Debugf(ctx, "/openAddOrEditRestreamWindow(ctx, '%s', '%s', '%s', %#+v)", title, streamID, dstID, fwd)
+	logger.Debugf(
+		ctx,
+		"openAddOrEditRestreamWindow(ctx, '%s', '%s', '%s', %#+v)",
+		title,
+		streamID,
+		dstID,
+		fwd,
+	)
+	defer logger.Debugf(
+		ctx,
+		"/openAddOrEditRestreamWindow(ctx, '%s', '%s', '%s', %#+v)",
+		title,
+		streamID,
+		dstID,
+		fwd,
+	)
 	w := p.app.NewWindow(AppName + ": " + title)
 	resizeWindow(w, fyne.NewSize(400, 300))
 
@@ -1146,7 +1214,11 @@ func (p *Panel) displayStreamForwards(
 		c := container.NewHBox()
 		deleteButton := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
 			w := dialog.NewConfirm(
-				fmt.Sprintf("Delete restreaming (stream forwarding) %s -> %s ?", fwd.StreamID, fwd.DestinationID),
+				fmt.Sprintf(
+					"Delete restreaming (stream forwarding) %s -> %s ?",
+					fwd.StreamID,
+					fwd.DestinationID,
+				),
 				"",
 				func(b bool) {
 					if !b {
@@ -1183,8 +1255,18 @@ func (p *Panel) displayStreamForwards(
 					if !b {
 						return
 					}
-					logger.Debugf(ctx, "pause/unpause restreaming (stream forwarding): enabled:%v->%v", fwd.Enabled, !fwd.Enabled)
-					defer logger.Debugf(ctx, "/pause/unpause restreaming (stream forwarding): enabled:%v->%v", !fwd.Enabled, fwd.Enabled)
+					logger.Debugf(
+						ctx,
+						"pause/unpause restreaming (stream forwarding): enabled:%v->%v",
+						fwd.Enabled,
+						!fwd.Enabled,
+					)
+					defer logger.Debugf(
+						ctx,
+						"/pause/unpause restreaming (stream forwarding): enabled:%v->%v",
+						!fwd.Enabled,
+						fwd.Enabled,
+					)
 					err := p.StreamD.UpdateStreamForward(
 						ctx,
 						fwd.StreamID,
@@ -1229,7 +1311,14 @@ func (p *Panel) displayStreamForwards(
 			now := time.Now()
 			p.previousNumBytesLocker.Do(ctx, func() {
 				prevNumBytes := p.previousNumBytes[key]
-				bwStr := bwString(fwd.NumBytesRead, prevNumBytes[0], fwd.NumBytesWrote, prevNumBytes[1], now, p.previousNumBytesTS[key])
+				bwStr := bwString(
+					fwd.NumBytesRead,
+					prevNumBytes[0],
+					fwd.NumBytesWrote,
+					prevNumBytes[1],
+					now,
+					p.previousNumBytesTS[key],
+				)
 				bwText := widget.NewRichTextWithText(bwStr)
 				hasDynamicValue = hasDynamicValue || bwStr != ""
 				p.previousNumBytes[key] = [4]uint64{fwd.NumBytesRead, fwd.NumBytesWrote}

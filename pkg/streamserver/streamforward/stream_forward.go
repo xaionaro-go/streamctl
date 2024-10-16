@@ -52,9 +52,21 @@ func (fwds *StreamForwards) NewActiveStreamForward(
 	pauseFunc func(ctx context.Context, fwd *ActiveStreamForwarding),
 	opts ...Option,
 ) (_ret *ActiveStreamForwarding, _err error) {
-	logger.Debugf(ctx, "NewActiveStreamForward(ctx, '%s', '%s', relayService, pauseFunc)", streamID, urlString)
+	logger.Debugf(
+		ctx,
+		"NewActiveStreamForward(ctx, '%s', '%s', relayService, pauseFunc)",
+		streamID,
+		urlString,
+	)
 	defer func() {
-		logger.Debugf(ctx, "/NewActiveStreamForward(ctx, '%s', '%s', relayService, pauseFunc): %#+v %v", streamID, urlString, _ret, _err)
+		logger.Debugf(
+			ctx,
+			"/NewActiveStreamForward(ctx, '%s', '%s', relayService, pauseFunc): %#+v %v",
+			streamID,
+			urlString,
+			_ret,
+			_err,
+		)
 	}()
 
 	urlParsed, err := url.Parse(urlString)
@@ -176,7 +188,10 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 	})
 
 	logger.Debugf(ctx, "DestinationStreamingLocker.Lock(ctx, '%s')", fwd.DestinationURL)
-	destinationUnlocker := fwd.StreamForwards.DestinationStreamingLocker.Lock(ctx, fwd.DestinationURL)
+	destinationUnlocker := fwd.StreamForwards.DestinationStreamingLocker.Lock(
+		ctx,
+		fwd.DestinationURL,
+	)
 	defer func() {
 		if destinationUnlocker != nil { // if ctx was cancelled before we locked then the unlocker is nil
 			destinationUnlocker.Unlock()
@@ -337,7 +352,12 @@ func (fwd *ActiveStreamForwarding) openOutputFor(
 	ctx context.Context,
 	recoderInstance recoder.Recoder,
 ) (recoder.Output, error) {
-	output, err := recoderInstance.NewOutputFromURL(ctx, fwd.DestinationURL.String(), fwd.DestinationStreamKey, recoder.OutputConfig{})
+	output, err := recoderInstance.NewOutputFromURL(
+		ctx,
+		fwd.DestinationURL.String(),
+		fwd.DestinationStreamKey,
+		recoder.OutputConfig{},
+	)
 	if err != nil {
 		return nil, fmt.Errorf("unable to open '%s' as the output: %w", fwd.DestinationURL, err)
 	}

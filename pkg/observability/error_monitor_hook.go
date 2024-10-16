@@ -75,7 +75,11 @@ func NewErrorMonitorLoggerHook(
 
 var _ loggertypes.PreHook = (*ErrorMonitorLoggerHook)(nil)
 
-func (h *ErrorMonitorLoggerHook) ProcessInput(traceIDs belt.TraceIDs, level loggertypes.Level, args ...any) loggertypes.PreHookResult {
+func (h *ErrorMonitorLoggerHook) ProcessInput(
+	traceIDs belt.TraceIDs,
+	level loggertypes.Level,
+	args ...any,
+) loggertypes.PreHookResult {
 	if level > loggertypes.LevelWarning {
 		return loggertypes.PreHookResult{
 			Skip: false,
@@ -93,7 +97,12 @@ func (h *ErrorMonitorLoggerHook) ProcessInput(traceIDs belt.TraceIDs, level logg
 	}
 }
 
-func (h *ErrorMonitorLoggerHook) ProcessInputf(traceIDs belt.TraceIDs, level loggertypes.Level, format string, args ...any) loggertypes.PreHookResult {
+func (h *ErrorMonitorLoggerHook) ProcessInputf(
+	traceIDs belt.TraceIDs,
+	level loggertypes.Level,
+	format string,
+	args ...any,
+) loggertypes.PreHookResult {
 	if level > loggertypes.LevelWarning {
 		return loggertypes.PreHookResult{
 			Skip: false,
@@ -110,7 +119,13 @@ func (h *ErrorMonitorLoggerHook) ProcessInputf(traceIDs belt.TraceIDs, level log
 		Skip: false,
 	}
 }
-func (h *ErrorMonitorLoggerHook) ProcessInputFields(traceIDs belt.TraceIDs, level loggertypes.Level, message string, fields field.AbstractFields) loggertypes.PreHookResult {
+
+func (h *ErrorMonitorLoggerHook) ProcessInputFields(
+	traceIDs belt.TraceIDs,
+	level loggertypes.Level,
+	message string,
+	fields field.AbstractFields,
+) loggertypes.PreHookResult {
 	if level > loggertypes.LevelWarning {
 		return loggertypes.PreHookResult{
 			Skip: false,

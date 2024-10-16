@@ -97,7 +97,8 @@ func init() {
 	StreamStart.PersistentFlags().String("title", "", "stream title")
 	StreamStart.PersistentFlags().String("description", "", "stream description")
 	StreamStart.PersistentFlags().String("profile", "", "profile")
-	StreamStart.PersistentFlags().StringArray("youtube-templates", nil, "the list of templates used to create streams; if nothing is provided, then a stream won't be created")
+	StreamStart.PersistentFlags().
+		StringArray("youtube-templates", nil, "the list of templates used to create streams; if nothing is provided, then a stream won't be created")
 
 	Root.AddCommand(GenerateConfig)
 	Root.AddCommand(SetTitle)
@@ -153,8 +154,12 @@ func generateConfig(cmd *cobra.Command, args []string) {
 		logger.Panicf(cmd.Context(), "file '%s' already exists", cfgPath)
 	}
 	cfg := newConfig()
-	cfg[idTwitch].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{"some_profile": twitch.StreamProfile{}}
-	cfg[idYoutube].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{"some_profile": youtube.StreamProfile{}}
+	cfg[idTwitch].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{
+		"some_profile": twitch.StreamProfile{},
+	}
+	cfg[idYoutube].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{
+		"some_profile": youtube.StreamProfile{},
+	}
 	err := writeConfigToPath(cmd.Context(), cfgPath, cfg)
 	if err != nil {
 		logger.Panic(cmd.Context(), err)
@@ -203,7 +208,10 @@ func readConfigFromPath(
 	}
 
 	if (*cfg)[idTwitch] != nil {
-		err = streamcontrol.ConvertStreamProfiles[twitch.StreamProfile](ctx, (*cfg)[idTwitch].StreamProfiles)
+		err = streamcontrol.ConvertStreamProfiles[twitch.StreamProfile](
+			ctx,
+			(*cfg)[idTwitch].StreamProfiles,
+		)
 		if err != nil {
 			return fmt.Errorf("unable to convert stream profiles of twitch: %w: <%s>", err, b)
 		}
@@ -211,11 +219,18 @@ func readConfigFromPath(
 	}
 
 	if (*cfg)[idYoutube] != nil {
-		err = streamcontrol.ConvertStreamProfiles[youtube.StreamProfile](ctx, (*cfg)[idYoutube].StreamProfiles)
+		err = streamcontrol.ConvertStreamProfiles[youtube.StreamProfile](
+			ctx,
+			(*cfg)[idYoutube].StreamProfiles,
+		)
 		if err != nil {
 			return fmt.Errorf("unable to convert stream profiles of twitch: %w: <%s>", err, b)
 		}
-		logger.Debugf(ctx, "final stream profiles of youtube: %#+v", (*cfg)[idYoutube].StreamProfiles)
+		logger.Debugf(
+			ctx,
+			"final stream profiles of youtube: %#+v",
+			(*cfg)[idYoutube].StreamProfiles,
+		)
 	}
 
 	return nil
@@ -244,7 +259,11 @@ func getTwitchStreamController(
 	ctx context.Context,
 	cfg streamcontrol.Config,
 ) (*twitch.Twitch, error) {
-	platCfg := streamcontrol.GetPlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile](ctx, cfg, idTwitch)
+	platCfg := streamcontrol.GetPlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile](
+		ctx,
+		cfg,
+		idTwitch,
+	)
 	if platCfg == nil {
 		logger.Infof(ctx, "twitch config was not found")
 		return nil, nil
@@ -268,7 +287,11 @@ func getYouTubeStreamController(
 	ctx context.Context,
 	cfg streamcontrol.Config,
 ) (*youtube.YouTube, error) {
-	platCfg := streamcontrol.GetPlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile](ctx, cfg, idYoutube)
+	platCfg := streamcontrol.GetPlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile](
+		ctx,
+		cfg,
+		idYoutube,
+	)
 	if platCfg == nil {
 		logger.Infof(ctx, "youtube config was not found")
 		return nil, nil
@@ -288,7 +311,10 @@ func getYouTubeStreamController(
 	)
 }
 
-func getStreamControllers(ctx context.Context, cfg streamcontrol.Config) streamcontrol.StreamControllers {
+func getStreamControllers(
+	ctx context.Context,
+	cfg streamcontrol.Config,
+) streamcontrol.StreamControllers {
 	var result streamcontrol.StreamControllers
 
 	twitch, err := getTwitchStreamController(ctx, cfg)

@@ -36,7 +36,10 @@ func (a *platformsControllerAdapter) CheckStreamStartedByURL(
 	case strings.Contains(destination.Hostname(), "twitch"):
 		platID = twitch.ID
 	default:
-		return false, fmt.Errorf("do not know how to check if the stream started for '%s'", destination.String())
+		return false, fmt.Errorf(
+			"do not know how to check if the stream started for '%s'",
+			destination.String(),
+		)
 	}
 	return a.CheckStreamStartedByPlatformID(ctx, platID)
 }

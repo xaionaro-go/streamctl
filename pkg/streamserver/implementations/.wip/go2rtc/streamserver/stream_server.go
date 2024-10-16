@@ -74,7 +74,12 @@ func (s *StreamServer) initNoLock(ctx context.Context) error {
 	for dstID, dstCfg := range cfg.Destinations {
 		err := s.addStreamDestination(ctx, dstID, dstCfg.URL)
 		if err != nil {
-			return fmt.Errorf("unable to initialize stream destination '%s' to %#+v: %w", dstID, dstCfg, err)
+			return fmt.Errorf(
+				"unable to initialize stream destination '%s' to %#+v: %w",
+				dstID,
+				dstCfg,
+				err,
+			)
 		}
 	}
 
@@ -88,7 +93,12 @@ func (s *StreamServer) initNoLock(ctx context.Context) error {
 			if !fwd.Disabled {
 				err := s.addStreamForward(ctx, streamID, dstID)
 				if err != nil {
-					return fmt.Errorf("unable to launch stream forward from '%s' to '%s': %w", streamID, dstID, err)
+					return fmt.Errorf(
+						"unable to launch stream forward from '%s' to '%s': %w",
+						streamID,
+						dstID,
+						err,
+					)
 				}
 			}
 		}
@@ -315,7 +325,11 @@ func (s *StreamServer) addStreamForward(
 ) error {
 	streamSrc := s.StreamHandler.Get(string(streamID))
 	if streamSrc == nil {
-		return fmt.Errorf("unable to find stream ID '%s', available stream IDs: %s", streamID, strings.Join(s.StreamHandler.GetAll(), ", "))
+		return fmt.Errorf(
+			"unable to find stream ID '%s', available stream IDs: %s",
+			streamID,
+			strings.Join(s.StreamHandler.GetAll(), ", "),
+		)
 	}
 	dst, err := s.findStreamDestinationByID(ctx, destinationID)
 	if err != nil {
@@ -418,7 +432,11 @@ func (s *StreamServer) listStreamForwards(
 			streamIDSrc := types.StreamID(name)
 			streamDst, err := s.findStreamDestinationByURL(ctx, fwd.URL)
 			if err != nil {
-				return nil, fmt.Errorf("unable to convert URL '%s' to a stream ID: %w", fwd.URL, err)
+				return nil, fmt.Errorf(
+					"unable to convert URL '%s' to a stream ID: %w",
+					fwd.URL,
+					err,
+				)
 			}
 			result = append(result, StreamForward{
 				StreamID:      streamIDSrc,
@@ -467,7 +485,13 @@ func (s *StreamServer) removeStreamForward(
 
 		err = fwd.Close()
 		if err != nil {
-			return fmt.Errorf("unable to close forwarding from %s to %s (%s): %w", streamID, dstID, fwd.URL, err)
+			return fmt.Errorf(
+				"unable to close forwarding from %s to %s (%s): %w",
+				streamID,
+				dstID,
+				fwd.URL,
+				err,
+			)
 		}
 		stream.Cleanup()
 		return nil
@@ -562,7 +586,10 @@ func (s *StreamServer) findStreamDestinationByURL(
 			return dst, nil
 		}
 	}
-	return types.StreamDestination{}, fmt.Errorf("unable to find a stream destination by URL '%s'", url)
+	return types.StreamDestination{}, fmt.Errorf(
+		"unable to find a stream destination by URL '%s'",
+		url,
+	)
 }
 
 func (s *StreamServer) findStreamDestinationByID(
@@ -574,5 +601,8 @@ func (s *StreamServer) findStreamDestinationByID(
 			return dst, nil
 		}
 	}
-	return types.StreamDestination{}, fmt.Errorf("unable to find a stream destination by StreamID '%s'", destinationID)
+	return types.StreamDestination{}, fmt.Errorf(
+		"unable to find a stream destination by StreamID '%s'",
+		destinationID,
+	)
 }

@@ -9,5 +9,8 @@ import (
 
 type PlatformsController interface {
 	CheckStreamStartedByURL(ctx context.Context, destination *url.URL) (bool, error)
-	CheckStreamStartedByPlatformID(ctx context.Context, platID streamcontrol.PlatformName) (bool, error)
+	CheckStreamStartedByPlatformID(
+		ctx context.Context,
+		platID streamcontrol.PlatformName,
+	) (bool, error)
 }

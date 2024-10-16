@@ -248,7 +248,11 @@ func (p *Panel) LazyInitStreamD(ctx context.Context) (_err error) {
 
 	if p.Config.RemoteStreamDAddr != "" {
 		if err := p.initRemoteStreamD(ctx); err != nil {
-			return fmt.Errorf("unable to initialize the remote stream controller '%s': %w", p.Config.RemoteStreamDAddr, err)
+			return fmt.Errorf(
+				"unable to initialize the remote stream controller '%s': %w",
+				p.Config.RemoteStreamDAddr,
+				err,
+			)
 		}
 	} else {
 		if err := p.initBuiltinStreamD(ctx); err != nil {
@@ -312,7 +316,12 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
 			p.setStatusFunc("Connecting...")
 			err := p.startOAuthListenerForRemoteStreamD(ctx, streamD)
 			if err != nil {
-				p.setStatusFunc(fmt.Sprintf("Connection failed, please restart the application.\n\nError: %v", err))
+				p.setStatusFunc(
+					fmt.Sprintf(
+						"Connection failed, please restart the application.\n\nError: %v",
+						err,
+					),
+				)
 				<-ctx.Done()
 			}
 			closeLoadingWindow()
@@ -341,7 +350,9 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
 
 		p.initMainWindow(ctx, initCfg.StartingPage)
 		if streamDRunErr != nil {
-			p.DisplayError(fmt.Errorf("unable to initialize the streaming controllers: %w", streamDRunErr))
+			p.DisplayError(
+				fmt.Errorf("unable to initialize the streaming controllers: %w", streamDRunErr),
+			)
 		}
 
 		logger.Tracef(ctx, "p.rearrangeProfiles")
@@ -367,7 +378,10 @@ func (p *Panel) startOAuthListenerForRemoteStreamD(
 	streamD *client.Client,
 ) error {
 	ctx, cancelFn := context.WithCancel(ctx)
-	receiver, listenPort, err := oauthhandler.NewCodeReceiver(ctx, p.Config.OAuth.ListenPorts.Twitch)
+	receiver, listenPort, err := oauthhandler.NewCodeReceiver(
+		ctx,
+		p.Config.OAuth.ListenPorts.Twitch,
+	)
 	if err != nil {
 		cancelFn()
 		return fmt.Errorf("unable to start listener for OAuth responses: %w", err)
@@ -401,7 +415,13 @@ func (p *Panel) startOAuthListenerForRemoteStreamD(
 				}
 
 				if err := p.openBrowser(ctx, req.GetAuthURL(), "It is required to confirm access in Twitch/YouTube using browser"); err != nil {
-					p.DisplayError(fmt.Errorf("unable to open browser with URL '%s': %w", req.GetAuthURL(), err))
+					p.DisplayError(
+						fmt.Errorf(
+							"unable to open browser with URL '%s': %w",
+							req.GetAuthURL(),
+							err,
+						),
+					)
 					continue
 				}
 
@@ -420,7 +440,13 @@ func (p *Panel) startOAuthListenerForRemoteStreamD(
 					Code:   code,
 				})
 				if err != nil {
-					p.DisplayError(fmt.Errorf("unable to submit the oauth code of '%s': %w", req.GetPlatID(), err))
+					p.DisplayError(
+						fmt.Errorf(
+							"unable to submit the oauth code of '%s': %w",
+							req.GetPlatID(),
+							err,
+						),
+					)
 					continue
 				}
 			}
@@ -626,13 +652,19 @@ func (p *Panel) OnSubmittedOAuthCode(
 	return nil
 }
 
-func (p *Panel) OAuthHandlerTwitch(ctx context.Context, arg oauthhandler.OAuthHandlerArgument) error {
+func (p *Panel) OAuthHandlerTwitch(
+	ctx context.Context,
+	arg oauthhandler.OAuthHandlerArgument,
+) error {
 	logger.Infof(ctx, "OAuthHandlerTwitch: %#+v", arg)
 	defer logger.Infof(ctx, "/OAuthHandlerTwitch")
 	return p.oauthHandler(ctx, twitch.ID, arg)
 }
 
-func (p *Panel) OAuthHandlerYouTube(ctx context.Context, arg oauthhandler.OAuthHandlerArgument) error {
+func (p *Panel) OAuthHandlerYouTube(
+	ctx context.Context,
+	arg oauthhandler.OAuthHandlerArgument,
+) error {
 	logger.Infof(ctx, "OAuthHandlerYouTube: %#+v", arg)
 	defer logger.Infof(ctx, "/OAuthHandlerYouTube")
 	return p.oauthHandler(ctx, youtube.ID, arg)
@@ -657,7 +689,11 @@ func (p *Panel) oauthHandler(
 		return fmt.Errorf("unable to open browser with URL '%s': %w", arg.AuthURL, err)
 	}
 
-	logger.Infof(ctx, "Your browser has been launched (URL: %s).\nPlease approve the permissions.\n", arg.AuthURL)
+	logger.Infof(
+		ctx,
+		"Your browser has been launched (URL: %s).\nPlease approve the permissions.\n",
+		arg.AuthURL,
+	)
 
 	// Wait for the web server to get the code.
 	code := <-codeCh
@@ -685,7 +721,12 @@ func (p *Panel) openBrowser(
 
 	if p.Config.Browser.Command != "" {
 		args := []string{p.Config.Browser.Command, url}
-		logger.Debugf(ctx, "the browser command is configured to be '%s', so running '%s'", p.Config.Browser.Command, strings.Join(args, " "))
+		logger.Debugf(
+			ctx,
+			"the browser command is configured to be '%s', so running '%s'",
+			p.Config.Browser.Command,
+			strings.Join(args, " "),
+		)
 		return exec.Command(args[0], args[1:]...).Start()
 	}
 
@@ -759,7 +800,9 @@ func (p *Panel) InputTwitchUserInfo(
 	resizeWindow(w, fyne.NewSize(600, 200))
 
 	channelField := widget.NewEntry()
-	channelField.SetPlaceHolder("channel ID (copy&paste it from the browser: https://www.twitch.tv/<the channel ID is here>)")
+	channelField.SetPlaceHolder(
+		"channel ID (copy&paste it from the browser: https://www.twitch.tv/<the channel ID is here>)",
+	)
 	clientIDField := widget.NewEntry()
 	clientIDField.SetPlaceHolder("client ID")
 	clientSecretField := widget.NewEntry()
@@ -767,7 +810,10 @@ func (p *Panel) InputTwitchUserInfo(
 	instructionText := widget.NewRichText(
 		&widget.TextSegment{Text: "Go to\n", Style: widget.RichTextStyle{Inline: true}},
 		&widget.HyperlinkSegment{Text: twitchAppsCreateLink.String(), URL: twitchAppsCreateLink},
-		&widget.TextSegment{Text: `,` + "\n" + `create an application (enter "http://localhost:8091/" as the "OAuth Redirect URLs" value), then click "Manage" then "New Secret", and copy&paste client ID and client secret.`, Style: widget.RichTextStyle{Inline: true}},
+		&widget.TextSegment{
+			Text:  `,` + "\n" + `create an application (enter "http://localhost:8091/" as the "OAuth Redirect URLs" value), then click "Manage" then "New Secret", and copy&paste client ID and client secret.`,
+			Style: widget.RichTextStyle{Inline: true},
+		},
 	)
 	instructionText.Wrapping = fyne.TextWrapWord
 
@@ -810,7 +856,9 @@ func (p *Panel) InputTwitchUserInfo(
 	return true, nil
 }
 
-var youtubeCredentialsCreateLink, _ = url.Parse("https://console.cloud.google.com/apis/credentials/oauthclient")
+var youtubeCredentialsCreateLink, _ = url.Parse(
+	"https://console.cloud.google.com/apis/credentials/oauthclient",
+)
 
 func (p *Panel) InputYouTubeUserInfo(
 	ctx context.Context,
@@ -825,10 +873,22 @@ func (p *Panel) InputYouTubeUserInfo(
 	clientSecretField.SetPlaceHolder("client secret")
 	instructionText := widget.NewRichText(
 		&widget.TextSegment{Text: "Go to\n", Style: widget.RichTextStyle{Inline: true}},
-		&widget.HyperlinkSegment{Text: youtubeCredentialsCreateLink.String(), URL: youtubeCredentialsCreateLink},
-		&widget.TextSegment{Text: `,` + "\n" + `configure "consent screen" (note: you may add yourself into Test Users to avoid problems further on, and don't forget to add "YouTube Data API v3" scopes) and go back to` + "\n", Style: widget.RichTextStyle{Inline: true}},
-		&widget.HyperlinkSegment{Text: youtubeCredentialsCreateLink.String(), URL: youtubeCredentialsCreateLink},
-		&widget.TextSegment{Text: `,` + "\n" + `choose "Desktop app", confirm and copy&paste client ID and client secret.`, Style: widget.RichTextStyle{Inline: true}},
+		&widget.HyperlinkSegment{
+			Text: youtubeCredentialsCreateLink.String(),
+			URL:  youtubeCredentialsCreateLink,
+		},
+		&widget.TextSegment{
+			Text:  `,` + "\n" + `configure "consent screen" (note: you may add yourself into Test Users to avoid problems further on, and don't forget to add "YouTube Data API v3" scopes) and go back to` + "\n",
+			Style: widget.RichTextStyle{Inline: true},
+		},
+		&widget.HyperlinkSegment{
+			Text: youtubeCredentialsCreateLink.String(),
+			URL:  youtubeCredentialsCreateLink,
+		},
+		&widget.TextSegment{
+			Text:  `,` + "\n" + `choose "Desktop app", confirm and copy&paste client ID and client secret.`,
+			Style: widget.RichTextStyle{Inline: true},
+		},
 	)
 	instructionText.Wrapping = fyne.TextWrapWord
 
@@ -879,11 +939,23 @@ func (p *Panel) profileCreateOrUpdate(ctx context.Context, profile Profile) erro
 			continue
 		}
 		cfg.Backends[platformName].StreamProfiles[profile.Name] = platformProfile
-		logger.Tracef(ctx, "profileCreateOrUpdate(%s): cfg.Backends[%s].StreamProfiles[%s] = %#+v", profile.Name, platformName, profile.Name, platformProfile)
+		logger.Tracef(
+			ctx,
+			"profileCreateOrUpdate(%s): cfg.Backends[%s].StreamProfiles[%s] = %#+v",
+			profile.Name,
+			platformName,
+			profile.Name,
+			platformProfile,
+		)
 	}
 	cfg.ProfileMetadata[profile.Name] = profile.ProfileMetadata
 
-	logger.Tracef(ctx, "profileCreateOrUpdate(%s): cfg.Backends == %#+v", profile.Name, cfg.Backends)
+	logger.Tracef(
+		ctx,
+		"profileCreateOrUpdate(%s): cfg.Backends == %#+v",
+		profile.Name,
+		cfg.Backends,
+	)
 
 	err = p.StreamD.SetConfig(ctx, cfg)
 	if err != nil {
@@ -1002,7 +1074,11 @@ func (p *Panel) refilterProfiles(ctx context.Context) {
 	if p.filterValue == "" {
 		p.profilesOrderFiltered = p.profilesOrderFiltered[:len(p.profilesOrder)]
 		copy(p.profilesOrderFiltered, p.profilesOrder)
-		logger.Tracef(ctx, "refilterProfiles(): profilesOrderFiltered <- p.profilesOrder: %#+v", p.profilesOrder)
+		logger.Tracef(
+			ctx,
+			"refilterProfiles(): profilesOrderFiltered <- p.profilesOrder: %#+v",
+			p.profilesOrder,
+		)
 		logger.Tracef(ctx, "refilterProfiles(): p.profilesListWidget.Refresh()")
 		p.profilesListWidget.Refresh()
 		return
@@ -1037,7 +1113,12 @@ func (p *Panel) refilterProfiles(ctx context.Context) {
 		}
 
 		if titleMatch || subValueMatch {
-			logger.Tracef(ctx, "refilterProfiles(): profilesOrderFiltered[%3d] = %s", len(p.profilesOrderFiltered), profileName)
+			logger.Tracef(
+				ctx,
+				"refilterProfiles(): profilesOrderFiltered[%3d] = %s",
+				len(p.profilesOrderFiltered),
+				profileName,
+			)
 			p.profilesOrderFiltered = append(p.profilesOrderFiltered, profileName)
 		}
 	}
@@ -1153,10 +1234,18 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 		logger.Debugf(ctx, "current OBS config: %#+v", obsCfg)
 	}
 
-	cmdBeforeStartStream, _ := cfg.Backends[obs.ID].GetCustomString(config.CustomConfigKeyBeforeStreamStart)
-	cmdBeforeStopStream, _ := cfg.Backends[obs.ID].GetCustomString(config.CustomConfigKeyBeforeStreamStop)
-	cmdAfterStartStream, _ := cfg.Backends[obs.ID].GetCustomString(config.CustomConfigKeyAfterStreamStart)
-	cmdAfterStopStream, _ := cfg.Backends[obs.ID].GetCustomString(config.CustomConfigKeyAfterStreamStop)
+	cmdBeforeStartStream, _ := cfg.Backends[obs.ID].GetCustomString(
+		config.CustomConfigKeyBeforeStreamStart,
+	)
+	cmdBeforeStopStream, _ := cfg.Backends[obs.ID].GetCustomString(
+		config.CustomConfigKeyBeforeStreamStop,
+	)
+	cmdAfterStartStream, _ := cfg.Backends[obs.ID].GetCustomString(
+		config.CustomConfigKeyAfterStreamStart,
+	)
+	cmdAfterStopStream, _ := cfg.Backends[obs.ID].GetCustomString(
+		config.CustomConfigKeyAfterStreamStop,
+	)
 
 	beforeStartStreamCommandEntry := widget.NewEntry()
 	beforeStartStreamCommandEntry.SetText(cmdBeforeStartStream)
@@ -1210,7 +1299,9 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 		w.Close()
 	})
 
-	templateInstruction := widget.NewRichTextFromMarkdown("Commands support [Go templates](https://pkg.go.dev/text/template) with two custom functions predefined:\n* `devnull` nullifies any inputs\n* `httpGET` makes an HTTP GET request and inserts the response body")
+	templateInstruction := widget.NewRichTextFromMarkdown(
+		"Commands support [Go templates](https://pkg.go.dev/text/template) with two custom functions predefined:\n* `devnull` nullifies any inputs\n* `httpGET` makes an HTTP GET request and inserts the response body",
+	)
 	templateInstruction.Wrapping = fyne.TextWrapWord
 
 	obsAlreadyLoggedIn := widget.NewLabel("")
@@ -1368,7 +1459,10 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 			displayIDSelector,
 			widget.NewLabel("Crop to:"),
 			container.NewHBox(
-				screenshotCropXEntry, screenshotCropYEntry, screenshotCropWEntry, screenshotCropHEntry,
+				screenshotCropXEntry,
+				screenshotCropYEntry,
+				screenshotCropWEntry,
+				screenshotCropHEntry,
 			),
 			widget.NewSeparator(),
 			widget.NewSeparator(),
@@ -1512,7 +1606,9 @@ func (p *Panel) getUpdatedStatus_backends_noLock(ctx context.Context) {
 	} {
 		isEnabled, err := p.StreamD.IsBackendEnabled(ctx, backendID)
 		if err != nil {
-			p.ReportError(fmt.Errorf("unable to get info if backend '%s' is enabled: %w", backendID, err))
+			p.ReportError(
+				fmt.Errorf("unable to get info if backend '%s' is enabled: %w", backendID, err),
+			)
 		}
 		backendEnabled[backendID] = isEnabled
 	}
@@ -1629,7 +1725,12 @@ func (p *Panel) getUpdatedStatus_startStopStreamButton_noLock(ctx context.Contex
 	logger.Tracef(ctx, "ytStreamStatus == %#+v", ytStreamStatus)
 
 	if d, ok := ytStreamStatus.CustomData.(youtube.StreamStatusCustomData); ok {
-		logger.Tracef(ctx, "len(d.UpcomingBroadcasts) == %d; len(d.Streams) == %d", len(d.UpcomingBroadcasts), len(d.Streams))
+		logger.Tracef(
+			ctx,
+			"len(d.UpcomingBroadcasts) == %d; len(d.Streams) == %d",
+			len(d.UpcomingBroadcasts),
+			len(d.Streams),
+		)
 		if len(d.UpcomingBroadcasts) != 0 {
 			p.startStopButton.Enable()
 		}
@@ -1694,18 +1795,30 @@ func (p *Panel) initMainWindow(
 		profileControl.Add(button)
 	}
 
-	p.setupStreamButton = widget.NewButtonWithIcon(setupStreamString(), theme.SettingsIcon(), func() {
-		p.onSetupStreamButton(ctx)
-	})
+	p.setupStreamButton = widget.NewButtonWithIcon(
+		setupStreamString(),
+		theme.SettingsIcon(),
+		func() {
+			p.onSetupStreamButton(ctx)
+		},
+	)
 	p.setupStreamButton.Disable()
 
-	p.startStopButton = widget.NewButtonWithIcon(startStreamString(), theme.MediaRecordIcon(), func() {
-		p.onStartStopButton(ctx)
-	})
+	p.startStopButton = widget.NewButtonWithIcon(
+		startStreamString(),
+		theme.MediaRecordIcon(),
+		func() {
+			p.onStartStopButton(ctx)
+		},
+	)
 	p.startStopButton.Importance = widget.SuccessImportance
 	p.startStopButton.Disable()
 
-	profilesList := widget.NewList(p.profilesListLength, p.profilesListItemCreate, p.profilesListItemUpdate)
+	profilesList := widget.NewList(
+		p.profilesListLength,
+		p.profilesListItemCreate,
+		p.profilesListItemUpdate,
+	)
 	profilesList.OnSelected = func(id widget.ListItemID) {
 		p.onProfilesListSelect(id)
 		for _, button := range selectedProfileButtons {
@@ -2116,7 +2229,9 @@ func (p *Panel) setupStreamNoLock(ctx context.Context) {
 	} {
 		isEnabled, err := p.StreamD.IsBackendEnabled(ctx, backendID)
 		if err != nil {
-			p.DisplayError(fmt.Errorf("unable to get info if backend '%s' is enabled: %w", backendID, err))
+			p.DisplayError(
+				fmt.Errorf("unable to get info if backend '%s' is enabled: %w", backendID, err),
+			)
 			return
 		}
 		backendEnabled[backendID] = isEnabled
@@ -2268,7 +2383,9 @@ func (p *Panel) stopStreamNoLock(ctx context.Context) {
 	} {
 		isEnabled, err := p.StreamD.IsBackendEnabled(ctx, backendID)
 		if err != nil {
-			p.DisplayError(fmt.Errorf("unable to get info if backend '%s' is enabled: %w", backendID, err))
+			p.DisplayError(
+				fmt.Errorf("unable to get info if backend '%s' is enabled: %w", backendID, err),
+			)
 			return
 		}
 		backendEnabled[backendID] = isEnabled
@@ -2627,9 +2744,13 @@ func newTagsEditor(
 	tagsControlsContainer.Add(widget.NewSeparator())
 	tagsControlsContainer.Add(widget.NewSeparator())
 	for _, additionalButtonInfo := range additionalButtons {
-		button := widget.NewButtonWithIcon(additionalButtonInfo.Label, additionalButtonInfo.Icon, func() {
-			additionalButtonInfo.Callback(t, selectedTagsOrdered())
-		})
+		button := widget.NewButtonWithIcon(
+			additionalButtonInfo.Label,
+			additionalButtonInfo.Icon,
+			func() {
+				additionalButtonInfo.Callback(t, selectedTagsOrdered())
+			},
+		)
 		tagsControlsContainer.Add(button)
 	}
 
@@ -2655,7 +2776,11 @@ func newTagsEditor(
 		tagLabel := tagName
 		overflown := false
 		for {
-			size := fyne.MeasureText(tagLabel, fyne.CurrentApp().Settings().Theme().Size("text"), fyne.TextStyle{})
+			size := fyne.MeasureText(
+				tagLabel,
+				fyne.CurrentApp().Settings().Theme().Size("text"),
+				fyne.TextStyle{},
+			)
 			if size.Width < 100 {
 				break
 			}
@@ -2732,7 +2857,9 @@ func (p *Panel) profileWindow(
 		isEnabled, err := p.StreamD.IsBackendEnabled(ctx, backendID)
 		if err != nil {
 			w.Close()
-			p.DisplayError(fmt.Errorf("unable to get info if backend '%s' is enabled: %w", backendID, err))
+			p.DisplayError(
+				fmt.Errorf("unable to get info if backend '%s' is enabled: %w", backendID, err),
+			)
 			return nil
 		}
 		backendEnabled[backendID] = isEnabled
@@ -2756,7 +2883,9 @@ func (p *Panel) profileWindow(
 	bottomContent = append(bottomContent, widget.NewRichTextFromMarkdown("# OBS:"))
 	if backendEnabled[obs.ID] {
 		if platProfile := values.PerPlatform[obs.ID]; platProfile != nil {
-			obsProfile = ptr(streamcontrol.GetPlatformSpecificConfig[obs.StreamProfile](ctx, platProfile))
+			obsProfile = ptr(
+				streamcontrol.GetPlatformSpecificConfig[obs.StreamProfile](ctx, platProfile),
+			)
 		} else {
 			obsProfile = &obs.StreamProfile{}
 		}
@@ -2778,7 +2907,9 @@ func (p *Panel) profileWindow(
 		}
 
 		if platProfile := values.PerPlatform[twitch.ID]; platProfile != nil {
-			twitchProfile = ptr(streamcontrol.GetPlatformSpecificConfig[twitch.StreamProfile](ctx, platProfile))
+			twitchProfile = ptr(
+				streamcontrol.GetPlatformSpecificConfig[twitch.StreamProfile](ctx, platProfile),
+			)
 			for _, tag := range twitchProfile.Tags {
 				addTag(tag)
 			}
@@ -2802,9 +2933,13 @@ func (p *Panel) profileWindow(
 				if strings.Contains(cleanTwitchCategoryName(cat.Name), text) {
 					selectedTwitchCategoryContainer := container.NewHBox()
 					catName := cat.Name
-					tagContainerRemoveButton := widget.NewButtonWithIcon(catName, theme.ContentAddIcon(), func() {
-						twitchCategory.OnSubmitted(catName)
-					})
+					tagContainerRemoveButton := widget.NewButtonWithIcon(
+						catName,
+						theme.ContentAddIcon(),
+						func() {
+							twitchCategory.OnSubmitted(catName)
+						},
+					)
 					selectedTwitchCategoryContainer.Add(tagContainerRemoveButton)
 					selectTwitchCategoryBox.Add(selectedTwitchCategoryContainer)
 					count++
@@ -2821,10 +2956,14 @@ func (p *Panel) profileWindow(
 		setSelectedTwitchCategory := func(catName string) {
 			selectedTwitchCategoryBox.RemoveAll()
 			selectedTwitchCategoryContainer := container.NewHBox()
-			tagContainerRemoveButton := widget.NewButtonWithIcon(catName, theme.ContentClearIcon(), func() {
-				selectedTwitchCategoryBox.Remove(selectedTwitchCategoryContainer)
-				twitchProfile.CategoryName = nil
-			})
+			tagContainerRemoveButton := widget.NewButtonWithIcon(
+				catName,
+				theme.ContentClearIcon(),
+				func() {
+					selectedTwitchCategoryBox.Remove(selectedTwitchCategoryContainer)
+					twitchProfile.CategoryName = nil
+				},
+			)
 			selectedTwitchCategoryContainer.Add(tagContainerRemoveButton)
 			selectedTwitchCategoryBox.Add(selectedTwitchCategoryContainer)
 			twitchProfile.CategoryName = &catName
@@ -2878,7 +3017,9 @@ func (p *Panel) profileWindow(
 			youtubeTags = append(youtubeTags, tagName)
 		}
 		if platProfile := values.PerPlatform[youtube.ID]; platProfile != nil {
-			youtubeProfile = ptr(streamcontrol.GetPlatformSpecificConfig[youtube.StreamProfile](ctx, platProfile))
+			youtubeProfile = ptr(
+				streamcontrol.GetPlatformSpecificConfig[youtube.StreamProfile](ctx, platProfile),
+			)
 			for _, tag := range youtubeProfile.Tags {
 				addTag(tag)
 			}
@@ -2890,8 +3031,14 @@ func (p *Panel) profileWindow(
 			youtubeProfile.AutoNumerate = b
 		})
 		autoNumerateCheck.SetChecked(youtubeProfile.AutoNumerate)
-		autoNumerateHint := NewHintWidget(w, "When enabled, it adds the number of the stream to the stream's title.\n\nFor example 'Watching presidential debate' -> 'Watching presidential debate [#52]'.")
-		bottomContent = append(bottomContent, container.NewHBox(autoNumerateCheck, autoNumerateHint))
+		autoNumerateHint := NewHintWidget(
+			w,
+			"When enabled, it adds the number of the stream to the stream's title.\n\nFor example 'Watching presidential debate' -> 'Watching presidential debate [#52]'.",
+		)
+		bottomContent = append(
+			bottomContent,
+			container.NewHBox(autoNumerateCheck, autoNumerateHint),
+		)
 
 		youtubeTemplate := widget.NewEntry()
 		youtubeTemplate.SetPlaceHolder("youtube live recording template")
@@ -2909,9 +3056,13 @@ func (p *Panel) profileWindow(
 				if strings.Contains(cleanYoutubeRecordingName(bc.Snippet.Title), text) {
 					selectedYoutubeRecordingsContainer := container.NewHBox()
 					recName := bc.Snippet.Title
-					tagContainerRemoveButton := widget.NewButtonWithIcon(recName, theme.ContentAddIcon(), func() {
-						youtubeTemplate.OnSubmitted(recName)
-					})
+					tagContainerRemoveButton := widget.NewButtonWithIcon(
+						recName,
+						theme.ContentAddIcon(),
+						func() {
+							youtubeTemplate.OnSubmitted(recName)
+						},
+					)
 					selectedYoutubeRecordingsContainer.Add(tagContainerRemoveButton)
 					selectYoutubeTemplateBox.Add(selectedYoutubeRecordingsContainer)
 					count++
@@ -2929,10 +3080,14 @@ func (p *Panel) profileWindow(
 			selectedYoutubeBroadcastBox.RemoveAll()
 			selectedYoutubeBroadcastContainer := container.NewHBox()
 			recName := bc.Snippet.Title
-			tagContainerRemoveButton := widget.NewButtonWithIcon(recName, theme.ContentClearIcon(), func() {
-				selectedYoutubeBroadcastBox.Remove(selectedYoutubeBroadcastContainer)
-				youtubeProfile.TemplateBroadcastIDs = youtubeProfile.TemplateBroadcastIDs[:0]
-			})
+			tagContainerRemoveButton := widget.NewButtonWithIcon(
+				recName,
+				theme.ContentClearIcon(),
+				func() {
+					selectedYoutubeBroadcastBox.Remove(selectedYoutubeBroadcastContainer)
+					youtubeProfile.TemplateBroadcastIDs = youtubeProfile.TemplateBroadcastIDs[:0]
+				},
+			)
 			selectedYoutubeBroadcastContainer.Add(tagContainerRemoveButton)
 			selectedYoutubeBroadcastBox.Add(selectedYoutubeBroadcastContainer)
 			youtubeProfile.TemplateBroadcastIDs = []string{bc.Id}
@@ -2966,18 +3121,21 @@ func (p *Panel) profileWindow(
 		bottomContent = append(bottomContent, youtubeTemplate)
 
 		templateTagsLabel := widget.NewLabel("Template tags:")
-		templateTags := widget.NewSelect([]string{"ignore", "use as primary", "use as additional"}, func(s string) {
-			switch s {
-			case "ignore":
-				youtubeProfile.TemplateTags = youtube.TemplateTagsIgnore
-			case "use as primary":
-				youtubeProfile.TemplateTags = youtube.TemplateTagsUseAsPrimary
-			case "use as additional":
-				youtubeProfile.TemplateTags = youtube.TemplateTagsUseAsAdditional
-			default:
-				p.DisplayError(fmt.Errorf("unexpected new value of 'template tags': '%s'", s))
-			}
-		})
+		templateTags := widget.NewSelect(
+			[]string{"ignore", "use as primary", "use as additional"},
+			func(s string) {
+				switch s {
+				case "ignore":
+					youtubeProfile.TemplateTags = youtube.TemplateTagsIgnore
+				case "use as primary":
+					youtubeProfile.TemplateTags = youtube.TemplateTagsUseAsPrimary
+				case "use as additional":
+					youtubeProfile.TemplateTags = youtube.TemplateTagsUseAsAdditional
+				default:
+					p.DisplayError(fmt.Errorf("unexpected new value of 'template tags': '%s'", s))
+				}
+			},
+		)
 		switch youtubeProfile.TemplateTags {
 		case youtube.TemplateTagsUndefined, youtube.TemplateTagsIgnore:
 			templateTags.SetSelected("ignore")
@@ -2986,11 +3144,22 @@ func (p *Panel) profileWindow(
 		case youtube.TemplateTagsUseAsAdditional:
 			templateTags.SetSelected("use as additional")
 		default:
-			p.DisplayError(fmt.Errorf("unexpected current value of 'template tags': '%s'", youtubeProfile.TemplateTags))
+			p.DisplayError(
+				fmt.Errorf(
+					"unexpected current value of 'template tags': '%s'",
+					youtubeProfile.TemplateTags,
+				),
+			)
 		}
 		templateTags.SetSelected(youtubeProfile.TemplateTags.String())
-		templateTagsHint := NewHintWidget(w, "'ignore' will ignore the tags set in the template; 'use as primary' will put the tags of the template first and then add the profile tags; 'use as additional' will put the tags of the profile first and then add the template tags")
-		bottomContent = append(bottomContent, container.NewHBox(templateTagsLabel, templateTags, templateTagsHint))
+		templateTagsHint := NewHintWidget(
+			w,
+			"'ignore' will ignore the tags set in the template; 'use as primary' will put the tags of the template first and then add the profile tags; 'use as additional' will put the tags of the profile first and then add the template tags",
+		)
+		bottomContent = append(
+			bottomContent,
+			container.NewHBox(templateTagsLabel, templateTags, templateTagsHint),
+		)
 
 		youtubeTagsEditor := newTagsEditor(youtubeTags, 0)
 		bottomContent = append(bottomContent, widget.NewLabel("Tags:"))

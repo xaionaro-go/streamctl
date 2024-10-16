@@ -243,7 +243,11 @@ func (grpc *GRPCServer) IsBackendEnabled(
 ) (*streamd_grpc.IsBackendEnabledReply, error) {
 	enabled, err := grpc.StreamD.IsBackendEnabled(ctx, streamcontrol.PlatformName(req.GetPlatID()))
 	if err != nil {
-		return nil, fmt.Errorf("unable to check if backend '%s' is enabled: %w", req.GetPlatID(), err)
+		return nil, fmt.Errorf(
+			"unable to check if backend '%s' is enabled: %w",
+			req.GetPlatID(),
+			err,
+		)
 	}
 	return &streamd_grpc.IsBackendEnabledReply{
 		IsInitialized: enabled,
@@ -564,7 +568,10 @@ func (grpc *GRPCServer) openBrowser(
 			count++
 			err := handler.Sender.Send(&req)
 			if err != nil {
-				err = multierror.Append(resultErr, fmt.Errorf("unable to send oauth request: %w", err))
+				err = multierror.Append(
+					resultErr,
+					fmt.Errorf("unable to send oauth request: %w", err),
+				)
 			}
 		}
 	}
@@ -583,10 +590,25 @@ func (grpc *GRPCServer) OpenOAuthURL(
 ) (_ret error) {
 	logger.Debugf(ctx, "OpenOAuthURL(ctx, %d, '%s', '%s')", listenPort, platID, authURL)
 	defer func() {
-		logger.Debugf(ctx, "/OpenOAuthURL(ctx, %d, '%s', '%s'): %v", listenPort, platID, authURL, _ret)
+		logger.Debugf(
+			ctx,
+			"/OpenOAuthURL(ctx, %d, '%s', '%s'): %v",
+			listenPort,
+			platID,
+			authURL,
+			_ret,
+		)
 	}()
 
-	return xsync.DoA4R1(ctx, &grpc.OAuthURLHandlerLocker, grpc.openOAuthURL, ctx, listenPort, platID, authURL)
+	return xsync.DoA4R1(
+		ctx,
+		&grpc.OAuthURLHandlerLocker,
+		grpc.openOAuthURL,
+		ctx,
+		listenPort,
+		platID,
+		authURL,
+	)
 }
 
 func (grpc *GRPCServer) openOAuthURL(
@@ -703,7 +725,12 @@ func (grpc *GRPCServer) ListStreamServers(
 
 	var result []*streamd_grpc.StreamServerWithStatistics
 	for _, srv := range servers {
-		srvGRPC, err := goconv.StreamServerConfigGo2GRPC(ctx, srv.Type, srv.ListenAddr, srv.Options())
+		srvGRPC, err := goconv.StreamServerConfigGo2GRPC(
+			ctx,
+			srv.Type,
+			srv.ListenAddr,
+			srv.Options(),
+		)
 		if err != nil {
 			return nil, fmt.Errorf("unable to convert the server server value: %w", err)
 		}
@@ -727,7 +754,11 @@ func (grpc *GRPCServer) StartStreamServer(
 ) (*streamd_grpc.StartStreamServerReply, error) {
 	srvType, addr, opts, err := goconv.StreamServerConfigGRPC2Go(ctx, req.GetConfig())
 	if err != nil {
-		return nil, fmt.Errorf("unable to convert the stream server config %#+v: %w", req.GetConfig(), err)
+		return nil, fmt.Errorf(
+			"unable to convert the stream server config %#+v: %w",
+			req.GetConfig(),
+			err,
+		)
 	}
 
 	err = grpc.StreamD.StartStreamServer(
@@ -921,9 +952,13 @@ func (grpc *GRPCServer) AddStreamForward(
 		cfg.Enabled,
 		api.StreamForwardingQuirks{
 			RestartUntilYoutubeRecognizesStream: api.RestartUntilYoutubeRecognizesStream{
-				Enabled:        cfg.Quirks.RestartUntilYoutubeRecognizesStream.Enabled,
-				StartTimeout:   sec2dur(cfg.Quirks.RestartUntilYoutubeRecognizesStream.StartTimeout),
-				StopStartDelay: sec2dur(cfg.Quirks.RestartUntilYoutubeRecognizesStream.StopStartDelay),
+				Enabled: cfg.Quirks.RestartUntilYoutubeRecognizesStream.Enabled,
+				StartTimeout: sec2dur(
+					cfg.Quirks.RestartUntilYoutubeRecognizesStream.StartTimeout,
+				),
+				StopStartDelay: sec2dur(
+					cfg.Quirks.RestartUntilYoutubeRecognizesStream.StopStartDelay,
+				),
 			},
 			StartAfterYoutubeRecognizedStream: api.StartAfterYoutubeRecognizedStream{
 				Enabled: cfg.Quirks.StartAfterYoutubeRecognizedStream.Enabled,
@@ -948,9 +983,13 @@ func (grpc *GRPCServer) UpdateStreamForward(
 		cfg.Enabled,
 		api.StreamForwardingQuirks{
 			RestartUntilYoutubeRecognizesStream: api.RestartUntilYoutubeRecognizesStream{
-				Enabled:        cfg.Quirks.RestartUntilYoutubeRecognizesStream.Enabled,
-				StartTimeout:   sec2dur(cfg.Quirks.RestartUntilYoutubeRecognizesStream.StartTimeout),
-				StopStartDelay: sec2dur(cfg.Quirks.RestartUntilYoutubeRecognizesStream.StopStartDelay),
+				Enabled: cfg.Quirks.RestartUntilYoutubeRecognizesStream.Enabled,
+				StartTimeout: sec2dur(
+					cfg.Quirks.RestartUntilYoutubeRecognizesStream.StartTimeout,
+				),
+				StopStartDelay: sec2dur(
+					cfg.Quirks.RestartUntilYoutubeRecognizesStream.StopStartDelay,
+				),
 			},
 			StartAfterYoutubeRecognizedStream: api.StartAfterYoutubeRecognizedStream{
 				Enabled: cfg.Quirks.StartAfterYoutubeRecognizedStream.Enabled,
@@ -1113,7 +1152,11 @@ func (grpc *GRPCServer) StreamPlayerOpen(
 	ctx context.Context,
 	req *streamd_grpc.StreamPlayerOpenRequest,
 ) (*streamd_grpc.StreamPlayerOpenReply, error) {
-	err := grpc.StreamD.StreamPlayerOpenURL(ctx, streamtypes.StreamID(req.GetStreamID()), req.GetRequest().GetLink())
+	err := grpc.StreamD.StreamPlayerOpenURL(
+		ctx,
+		streamtypes.StreamID(req.GetStreamID()),
+		req.GetRequest().GetLink(),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1125,7 +1168,10 @@ func (grpc *GRPCServer) StreamPlayerProcessTitle(
 	ctx context.Context,
 	req *streamd_grpc.StreamPlayerProcessTitleRequest,
 ) (*streamd_grpc.StreamPlayerProcessTitleReply, error) {
-	title, err := grpc.StreamD.StreamPlayerProcessTitle(ctx, streamtypes.StreamID(req.GetStreamID()))
+	title, err := grpc.StreamD.StreamPlayerProcessTitle(
+		ctx,
+		streamtypes.StreamID(req.GetStreamID()),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1214,7 +1260,11 @@ func (grpc *GRPCServer) StreamPlayerSetSpeed(
 	ctx context.Context,
 	req *streamd_grpc.StreamPlayerSetSpeedRequest,
 ) (*streamd_grpc.StreamPlayerSetSpeedReply, error) {
-	err := grpc.StreamD.StreamPlayerSetSpeed(ctx, streamtypes.StreamID(req.GetStreamID()), req.GetRequest().Speed)
+	err := grpc.StreamD.StreamPlayerSetSpeed(
+		ctx,
+		streamtypes.StreamID(req.GetStreamID()),
+		req.GetRequest().Speed,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1226,7 +1276,11 @@ func (grpc *GRPCServer) StreamPlayerSetPause(
 	ctx context.Context,
 	req *streamd_grpc.StreamPlayerSetPauseRequest,
 ) (*streamd_grpc.StreamPlayerSetPauseReply, error) {
-	err := grpc.StreamD.StreamPlayerSetPause(ctx, streamtypes.StreamID(req.GetStreamID()), req.GetRequest().IsPaused)
+	err := grpc.StreamD.StreamPlayerSetPause(
+		ctx,
+		streamtypes.StreamID(req.GetStreamID()),
+		req.GetRequest().IsPaused,
+	)
 	if err != nil {
 		return nil, err
 	}

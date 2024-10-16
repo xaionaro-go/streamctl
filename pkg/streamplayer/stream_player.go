@@ -96,7 +96,14 @@ func (sp *StreamPlayers) Create(
 ) (_ret *StreamPlayerHandler, _err error) {
 	logger.Debugf(ctx, "StreamPlayers.Create(ctx, '%s', %#+v)", streamID, opts)
 	defer func() {
-		logger.Debugf(ctx, "/StreamPlayers.Create(ctx, '%s', %#+v): (%v, %v)", streamID, opts, _ret, _err)
+		logger.Debugf(
+			ctx,
+			"/StreamPlayers.Create(ctx, '%s', %#+v): (%v, %v)",
+			streamID,
+			opts,
+			_ret,
+			_err,
+		)
 	}()
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -114,11 +121,18 @@ func (sp *StreamPlayers) Create(
 	}
 
 	if p.Config.CatchupMaxSpeedFactor <= 1 {
-		return nil, fmt.Errorf("MaxCatchupSpeedFactor should be higher than 1, but it is %v", p.Config.CatchupMaxSpeedFactor)
+		return nil, fmt.Errorf(
+			"MaxCatchupSpeedFactor should be higher than 1, but it is %v",
+			p.Config.CatchupMaxSpeedFactor,
+		)
 	}
 
 	if p.Config.MaxCatchupAtLag <= p.Config.JitterBufDuration {
-		return nil, fmt.Errorf("MaxCatchupAtLag (%v) should be higher than JitterBufDuration (%v)", p.Config.MaxCatchupAtLag, p.Config.JitterBufDuration)
+		return nil, fmt.Errorf(
+			"MaxCatchupAtLag (%v) should be higher than JitterBufDuration (%v)",
+			p.Config.MaxCatchupAtLag,
+			p.Config.JitterBufDuration,
+		)
 	}
 
 	if err := p.startU(ctx); err != nil {
@@ -157,13 +171,17 @@ func (sp *StreamPlayers) Get(streamID streamtypes.StreamID) *StreamPlayerHandler
 
 func (sp *StreamPlayers) GetAll() map[streamtypes.StreamID]*StreamPlayerHandler {
 	ctx := context.TODO()
-	return xsync.DoR1(ctx, &sp.StreamPlayersLocker, func() map[streamtypes.StreamID]*StreamPlayerHandler {
-		r := map[streamtypes.StreamID]*StreamPlayerHandler{}
-		for k, v := range sp.StreamPlayers {
-			r[k] = v
-		}
-		return r
-	})
+	return xsync.DoR1(
+		ctx,
+		&sp.StreamPlayersLocker,
+		func() map[streamtypes.StreamID]*StreamPlayerHandler {
+			r := map[streamtypes.StreamID]*StreamPlayerHandler{}
+			for k, v := range sp.StreamPlayers {
+				r[k] = v
+			}
+			return r
+		},
+	)
 }
 
 const (
@@ -570,7 +588,10 @@ func (p *StreamPlayerHandler) controllerLoop(
 			errmon.ObserveErrorCtx(ctx, p.Close())
 			return
 		case <-getRestartChan:
-			logger.Debugf(ctx, "received a notification that the player should be restarted immediately")
+			logger.Debugf(
+				ctx,
+				"received a notification that the player should be restarted immediately",
+			)
 			restart()
 			return
 		case <-t.C:
@@ -580,9 +601,17 @@ func (p *StreamPlayerHandler) controllerLoop(
 			now := time.Now()
 			l, err := player.GetLength(ctx)
 			if err != nil {
-				logger.Errorf(ctx, "StreamPlayer[%s].controllerLoop: unable to get the current length: %v", p.StreamID, err)
+				logger.Errorf(
+					ctx,
+					"StreamPlayer[%s].controllerLoop: unable to get the current length: %v",
+					p.StreamID,
+					err,
+				)
 				if prevLength != 0 {
-					logger.Debugf(ctx, "previously GetLength worked, so it seems like the player died or something, restarting")
+					logger.Debugf(
+						ctx,
+						"previously GetLength worked, so it seems like the player died or something, restarting",
+					)
 					restart()
 					return
 				}
@@ -593,11 +622,25 @@ func (p *StreamPlayerHandler) controllerLoop(
 
 			pos, err := player.GetPosition(ctx)
 			if err != nil {
-				logger.Errorf(ctx, "StreamPlayer[%s].controllerLoop: unable to get the current position: %v", p.StreamID, err)
+				logger.Errorf(
+					ctx,
+					"StreamPlayer[%s].controllerLoop: unable to get the current position: %v",
+					p.StreamID,
+					err,
+				)
 				time.Sleep(time.Second)
 				return
 			}
-			logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: now == %v, posUpdatedAt == %v, len == %v; pos == %v; readTimeout == %v", p.StreamID, now, posUpdatedAt, l, pos, p.Config.ReadTimeout)
+			logger.Tracef(
+				ctx,
+				"StreamPlayer[%s].controllerLoop: now == %v, posUpdatedAt == %v, len == %v; pos == %v; readTimeout == %v",
+				p.StreamID,
+				now,
+				posUpdatedAt,
+				l,
+				pos,
+				p.Config.ReadTimeout,
+			)
 
 			if pos < 0 {
 				logger.Debugf(ctx, "negative position: %v", pos)
@@ -628,7 +671,11 @@ func (p *StreamPlayerHandler) controllerLoop(
 				if curSpeed == 1 {
 					return
 				}
-				logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: resetting the speed to 1", p.StreamID)
+				logger.Debugf(
+					ctx,
+					"StreamPlayer[%s].controllerLoop: resetting the speed to 1",
+					p.StreamID,
+				)
 				err := player.SetSpeed(ctx, 1)
 				if err != nil {
 					logger.Errorf(ctx, "unable to reset the speed to 1: %v", err)
@@ -643,23 +690,34 @@ func (p *StreamPlayerHandler) controllerLoop(
 					(lag.Seconds()-p.Config.JitterBufDuration.Seconds())/
 					(p.Config.MaxCatchupAtLag.Seconds()-p.Config.JitterBufDuration.Seconds())
 
-			speed = float64(uint(speed*10)) / 10 // to avoid flickering (for example between 1.0001 and 1.0)
+			speed = float64(
+				uint(speed*10),
+			) / 10 // to avoid flickering (for example between 1.0001 and 1.0)
 
 			if speed > p.Config.CatchupMaxSpeedFactor {
 				logger.Warnf(
 					ctx,
 					"speed is calculated higher than the maximum: %v > %v: (%v-1)*(%v-%v)/(%v-%v); lag calculation: %v - %v",
-					speed, p.Config.CatchupMaxSpeedFactor,
+					speed,
 					p.Config.CatchupMaxSpeedFactor,
-					lag.Seconds(), p.Config.JitterBufDuration.Seconds(),
-					p.Config.MaxCatchupAtLag.Seconds(), p.Config.JitterBufDuration.Seconds(),
-					l, pos,
+					p.Config.CatchupMaxSpeedFactor,
+					lag.Seconds(),
+					p.Config.JitterBufDuration.Seconds(),
+					p.Config.MaxCatchupAtLag.Seconds(),
+					p.Config.JitterBufDuration.Seconds(),
+					l,
+					pos,
 				)
 				speed = p.Config.CatchupMaxSpeedFactor
 			}
 
 			if speed != curSpeed {
-				logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: setting the speed to %v", p.StreamID, speed)
+				logger.Debugf(
+					ctx,
+					"StreamPlayer[%s].controllerLoop: setting the speed to %v",
+					p.StreamID,
+					speed,
+				)
 				err = player.SetSpeed(ctx, speed)
 				if err != nil {
 					logger.Errorf(ctx, "unable to set the speed to %v: %v", speed, err)

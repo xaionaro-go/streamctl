@@ -119,7 +119,18 @@ func (p *MPV) execMPV(ctx context.Context) (_err error) {
 	err := os.Remove(socketPath)
 	logger.Debugf(ctx, "socket deletion result: '%s': %v", socketPath, err)
 
-	args := []string{p.PathToMPV, "--idle", "--keep-open=always", "--keep-open-pause=no", "--no-hidpi-window-scale", "--no-osc", "--no-osd-bar", "--window-scale=1", "--input-ipc-server=" + socketPath, fmt.Sprintf("--title=%s", p.Title)}
+	args := []string{
+		p.PathToMPV,
+		"--idle",
+		"--keep-open=always",
+		"--keep-open-pause=no",
+		"--no-hidpi-window-scale",
+		"--no-osc",
+		"--no-osd-bar",
+		"--window-scale=1",
+		"--input-ipc-server=" + socketPath,
+		fmt.Sprintf("--title=%s", p.Title),
+	}
 	switch observability.LogLevelFilter.GetLevel() {
 	case logger.LevelPanic, logger.LevelFatal:
 		args = append(args, "--msg-level=all=no")
@@ -135,8 +146,18 @@ func (p *MPV) execMPV(ctx context.Context) (_err error) {
 	logger.Debugf(ctx, "running command '%s %s'", args[0], strings.Join(args[1:], " "))
 	cmd := exec.Command(args[0], args[1:]...)
 
-	cmd.Stdout = logwriter.NewLogWriter(ctx, logger.FromCtx(ctx).WithField("log_writer_target", "mpv").WithField("output_type", "stdout"))
-	cmd.Stderr = logwriter.NewLogWriter(ctx, logger.FromCtx(ctx).WithField("log_writer_target", "mpv").WithField("output_type", "stderr"))
+	cmd.Stdout = logwriter.NewLogWriter(
+		ctx,
+		logger.FromCtx(ctx).
+			WithField("log_writer_target", "mpv").
+			WithField("output_type", "stdout"),
+	)
+	cmd.Stderr = logwriter.NewLogWriter(
+		ctx,
+		logger.FromCtx(ctx).
+			WithField("log_writer_target", "mpv").
+			WithField("output_type", "stderr"),
+	)
 	err = child_process_manager.ConfigureCommand(cmd)
 	errmon.ObserveErrorCtx(ctx, err)
 	err = cmd.Start()

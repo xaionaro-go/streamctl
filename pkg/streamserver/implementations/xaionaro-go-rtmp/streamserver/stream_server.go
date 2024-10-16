@@ -88,7 +88,13 @@ func (s *StreamServer) init(
 			observability.Go(ctx, func() {
 				_, err := s.startServer(ctx, srv.Type, srv.Listen)
 				if err != nil {
-					logger.Errorf(ctx, "unable to initialize %s server at %s: %w", srv.Type, srv.Listen, err)
+					logger.Errorf(
+						ctx,
+						"unable to initialize %s server at %s: %w",
+						srv.Type,
+						srv.Listen,
+						err,
+					)
 				}
 			})
 		}
@@ -210,7 +216,11 @@ func (s *StreamServer) startServer(
 			OnConnect: func(conn net.Conn) (io.ReadWriteCloser, *rtmp.ConnConfig) {
 				ctx := belt.WithField(ctx, "client", conn.RemoteAddr().String())
 				h := yutoppgortmp.NewHandler(s.RelayService)
-				wrcc := types.NewReaderWriterCloseCounter(conn, &portSrv.ReadCount, &portSrv.WriteCount)
+				wrcc := types.NewReaderWriterCloseCounter(
+					conn,
+					&portSrv.ReadCount,
+					&portSrv.WriteCount,
+				)
 				return wrcc, &rtmp.ConnConfig{
 					Handler: h,
 					ControlState: rtmp.StreamControlStateConfig{
@@ -223,7 +233,11 @@ func (s *StreamServer) startServer(
 		observability.Go(ctx, func() {
 			err = portSrv.Serve(listener)
 			if err != nil {
-				err = fmt.Errorf("unable to start serving RTMP at '%s': %w", listener.Addr().String(), err)
+				err = fmt.Errorf(
+					"unable to start serving RTMP at '%s': %w",
+					listener.Addr().String(),
+					err,
+				)
 				logger.Error(ctx, err)
 			}
 		})

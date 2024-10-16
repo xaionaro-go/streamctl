@@ -147,12 +147,24 @@ func streamSetup(cmd *cobra.Command, args []string) {
 	assertNoError(ctx, err)
 
 	if isEnabled[youtube.ID] {
-		err := streamD.StartStream(ctx, youtube.ID, title, description, cfg.Backends[youtube.ID].StreamProfiles[profileName])
+		err := streamD.StartStream(
+			ctx,
+			youtube.ID,
+			title,
+			description,
+			cfg.Backends[youtube.ID].StreamProfiles[profileName],
+		)
 		assertNoError(ctx, err)
 	}
 
 	if isEnabled[twitch.ID] {
-		err := streamD.StartStream(ctx, twitch.ID, title, description, cfg.Backends[twitch.ID].StreamProfiles[profileName])
+		err := streamD.StartStream(
+			ctx,
+			twitch.ID,
+			title,
+			description,
+			cfg.Backends[twitch.ID].StreamProfiles[profileName],
+		)
 		assertNoError(ctx, err)
 	}
 }

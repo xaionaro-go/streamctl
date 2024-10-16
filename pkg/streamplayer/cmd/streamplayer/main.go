@@ -37,8 +37,16 @@ func assertNoError(ctx context.Context, err error) {
 func main() {
 	loggerLevel := logger.LevelWarning
 	pflag.Var(&loggerLevel, "log-level", "Log level")
-	rtmpListenAddr := pflag.String("rtmp-listen-addr", "127.0.0.1:1935", "the TCP port to serve an RTMP server on")
-	streamID := pflag.String("stream-id", "test/test", "the path of the stream in rtmp://address/path")
+	rtmpListenAddr := pflag.String(
+		"rtmp-listen-addr",
+		"127.0.0.1:1935",
+		"the TCP port to serve an RTMP server on",
+	)
+	streamID := pflag.String(
+		"stream-id",
+		"test/test",
+		"the path of the stream in rtmp://address/path",
+	)
 	mpvPath := pflag.String("mpv", "mpv", "path to mpv")
 	pflag.Parse()
 

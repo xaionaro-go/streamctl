@@ -31,7 +31,7 @@ type Filter interface {
 
 type FilterColor struct {
 	Brightness float64 `yaml:"brightness" json:"brightness"`
-	Opacity    float64 `yaml:"opacity" json:"opacity"`
+	Opacity    float64 `yaml:"opacity"    json:"opacity"`
 }
 
 func (f *FilterColor) Filter(
@@ -88,7 +88,7 @@ func (f *FilterColor) MonitorFilterType() MonitorFilterType {
 }
 
 type serializableFilter struct {
-	Type   MonitorFilterType `yaml:"type" json:"type"`
+	Type   MonitorFilterType `yaml:"type"             json:"type"`
 	Config map[string]any    `yaml:"config,omitempty" json:"config"`
 }
 

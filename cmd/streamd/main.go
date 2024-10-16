@@ -39,9 +39,21 @@ const forceNetPProfOnAndroid = true
 func main() {
 	loggerLevel := logger.LevelWarning
 	pflag.Var(&loggerLevel, "log-level", "Log level")
-	listenAddr := pflag.String("listen-addr", ":3594", "the address to listen for incoming connections to")
-	configPath := pflag.String("config-path", "/etc/streamd/streamd.yaml", "the path to the config file")
-	netPprofAddr := pflag.String("go-net-pprof-addr", "", "address to listen to for net/pprof requests")
+	listenAddr := pflag.String(
+		"listen-addr",
+		":3594",
+		"the address to listen for incoming connections to",
+	)
+	configPath := pflag.String(
+		"config-path",
+		"/etc/streamd/streamd.yaml",
+		"the path to the config file",
+	)
+	netPprofAddr := pflag.String(
+		"go-net-pprof-addr",
+		"",
+		"address to listen to for net/pprof requests",
+	)
 	cpuProfile := pflag.String("go-profile-cpu", "", "file to write cpu profile to")
 	heapProfile := pflag.String("go-profile-heap", "", "file to write memory profile to")
 	sentryDSN := pflag.String("sentry-dsn", "", "DSN of a Sentry instance to send error reports")
@@ -210,7 +222,13 @@ func main() {
 		},
 		func(listenPort uint16, platID streamcontrol.PlatformName, authURL string) bool {
 			logger.Debugf(ctx, "streamd.UI.OpenOAuthURL(%d, %s, '%s')", listenPort, platID, authURL)
-			defer logger.Debugf(ctx, "/streamd.UI.OpenOAuthURL(%d, %s, '%s')", listenPort, platID, authURL)
+			defer logger.Debugf(
+				ctx,
+				"/streamd.UI.OpenOAuthURL(%d, %s, '%s')",
+				listenPort,
+				platID,
+				authURL,
+			)
 
 			grpcLocker.Lock()
 			logger.Debugf(ctx, "streamdGRPCLocker.Lock()-ed")

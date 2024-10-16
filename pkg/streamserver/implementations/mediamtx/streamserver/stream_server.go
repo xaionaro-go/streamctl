@@ -117,7 +117,13 @@ func (s *StreamServer) init(
 				s.mutex.Do(ctx, func() {
 					_, err := s.startServer(ctx, srv.Type, srv.Listen, srv.Options()...)
 					if err != nil {
-						logger.Errorf(ctx, "unable to initialize %s server at %s: %w", srv.Type, srv.Listen, err)
+						logger.Errorf(
+							ctx,
+							"unable to initialize %s server at %s: %w",
+							srv.Type,
+							srv.Listen,
+							err,
+						)
 					}
 				})
 			})
@@ -145,7 +151,11 @@ func (s *StreamServer) PathReady(path defs.Path) {
 	s.streamsStatusLocker.Do(context.Background(), func() {
 		publisher := s.publishers[appKey]
 		if publisher != nil {
-			logger.Errorf(ctx, "double-registration of a publisher for '%s' (this is an internal error in the code): %w", appKey)
+			logger.Errorf(
+				ctx,
+				"double-registration of a publisher for '%s' (this is an internal error in the code): %w",
+				appKey,
+			)
 			return
 		}
 		s.publishers[appKey] = newPublisherClosedNotifier()
@@ -386,7 +396,13 @@ func (s *StreamServer) WaitPublisherChan(
 				},
 			)
 
-			logger.Debugf(ctx, "WaitPublisherChan('%s', %v): publisher==%#+v", appKey, waitForNext, publisher)
+			logger.Debugf(
+				ctx,
+				"WaitPublisherChan('%s', %v): publisher==%#+v",
+				appKey,
+				waitForNext,
+				publisher,
+			)
 
 			if publisher != nil && publisher != curPublisher {
 				ch <- publisher
@@ -399,7 +415,12 @@ func (s *StreamServer) WaitPublisherChan(
 				logger.Debugf(ctx, "WaitPublisherChan('%s', %v): cancelled", appKey, waitForNext)
 				return
 			case <-waitCh:
-				logger.Debugf(ctx, "WaitPublisherChan('%s', %v): an event happened, rechecking", appKey, waitForNext)
+				logger.Debugf(
+					ctx,
+					"WaitPublisherChan('%s', %v): an event happened, rechecking",
+					appKey,
+					waitForNext,
+				)
 			}
 		}
 	})
@@ -433,13 +454,23 @@ func (s *StreamServer) startServer(
 
 	for _, portSrv := range s.serverHandlers {
 		if portSrv.ListenAddr() == listenAddr {
-			return nil, fmt.Errorf("we already have an port server %#+v instance at '%s'", portSrv, listenAddr)
+			return nil, fmt.Errorf(
+				"we already have an port server %#+v instance at '%s'",
+				portSrv,
+				listenAddr,
+			)
 		}
 	}
 
 	portSrv, err := s.newServer(ctx, serverType, listenAddr, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("unable to initialize a new instance of a port server %s at %s with options %v: %w", serverType, listenAddr, opts, err)
+		return nil, fmt.Errorf(
+			"unable to initialize a new instance of a port server %s at %s with options %v: %w",
+			serverType,
+			listenAddr,
+			opts,
+			err,
+		)
 	}
 
 	logger.Tracef(ctx, "adding serverHandler %#+v %#+v", portSrv, portSrv.Config())

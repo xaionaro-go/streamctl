@@ -10,7 +10,11 @@ type ErrInvalidStreamProfileType struct {
 var _ error = ErrInvalidStreamProfileType{}
 
 func (e ErrInvalidStreamProfileType) Error() string {
-	return fmt.Sprintf("received an invalid stream profile type: expected:%T, received:%T", e.Expected, e.Received)
+	return fmt.Sprintf(
+		"received an invalid stream profile type: expected:%T, received:%T",
+		e.Expected,
+		e.Received,
+	)
 }
 
 type ErrNoStreamControllerForProfile struct {

@@ -41,7 +41,11 @@ func (r *Recoder) NewInputFromPublisher(
 ) (recoder.Input, error) {
 	publisher, ok := publisherIface.(*xaionarogortmp.Pubsub)
 	if !ok {
-		return nil, fmt.Errorf("expected a publisher or type %T, but received %T", publisherIface, publisher)
+		return nil, fmt.Errorf(
+			"expected a publisher or type %T, but received %T",
+			publisherIface,
+			publisher,
+		)
 	}
 
 	return &Input{
@@ -85,7 +89,11 @@ func (r *Recoder) NewInputFromURL(
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("got an error on command 'Connect' to the input endpoint '%s': %w", urlString, err)
+		return nil, fmt.Errorf(
+			"got an error on command 'Connect' to the input endpoint '%s': %w",
+			urlString,
+			err,
+		)
 	}
 
 	return nil, fmt.Errorf("not implemented, yet")

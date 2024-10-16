@@ -10,7 +10,11 @@ import (
 func Screenshot(cfg Config) (*image.RGBA, error) {
 	activeDisplays := screenshot.NumActiveDisplays()
 	if cfg.DisplayID >= uint(activeDisplays) {
-		return nil, fmt.Errorf("display ID %d is out of range (max: %d)", cfg.DisplayID, activeDisplays-1)
+		return nil, fmt.Errorf(
+			"display ID %d is out of range (max: %d)",
+			cfg.DisplayID,
+			activeDisplays-1,
+		)
 	}
 
 	rgbaFull, err := screenshot.CaptureDisplay(int(cfg.DisplayID))

@@ -41,7 +41,11 @@ func main() {
 	loggerLevel := logger.LevelInfo
 	pflag.Var(&loggerLevel, "log-level", "Log level")
 	mpvPath := pflag.String("mpv", "mpv", "path to mpv")
-	backend := pflag.String("backend", backends[0], "player backend, supported values: "+strings.Join(backends, ", "))
+	backend := pflag.String(
+		"backend",
+		backends[0],
+		"player backend, supported values: "+strings.Join(backends, ", "),
+	)
 	pflag.Parse()
 
 	l := logrus.Default().WithLevel(loggerLevel)

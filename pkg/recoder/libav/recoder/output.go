@@ -55,7 +55,11 @@ func NewOutputFromURL(
 		Closer: astikit.NewCloser(),
 	}
 
-	formatContext, err := astiav.AllocOutputFormatContext(nil, formatFromScheme(url.Scheme), url.String())
+	formatContext, err := astiav.AllocOutputFormatContext(
+		nil,
+		formatFromScheme(url.Scheme),
+		url.String(),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("allocating output format context failed: %w", err)
 	}
@@ -69,7 +73,10 @@ func NewOutputFromURL(
 	// if output is a file:
 	if !output.FormatContext.OutputFormat().Flags().Has(astiav.IOFormatFlagNofile) {
 		logger.Tracef(ctx, "destination '%s' is a file", url.String())
-		ioContext, err := astiav.OpenIOContext(url.String(), astiav.NewIOContextFlags(astiav.IOContextFlagWrite))
+		ioContext, err := astiav.OpenIOContext(
+			url.String(),
+			astiav.NewIOContextFlags(astiav.IOContextFlagWrite),
+		)
 		if err != nil {
 			log.Fatal(fmt.Errorf("main: opening io context failed: %w", err))
 		}

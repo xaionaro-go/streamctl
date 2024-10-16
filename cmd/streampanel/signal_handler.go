@@ -31,7 +31,12 @@ func mainProcessSignalHandler(
 							logger.Debugf(ctx, "interrupting '%s'", name)
 							err := f.Process.Signal(os.Interrupt)
 							if err != nil {
-								logger.Errorf(ctx, "unable to send Interrupt to '%s': %v", name, err)
+								logger.Errorf(
+									ctx,
+									"unable to send Interrupt to '%s': %v",
+									name,
+									err,
+								)
 								logger.Debugf(ctx, "killing '%s'", name)
 								f.Process.Kill()
 								return

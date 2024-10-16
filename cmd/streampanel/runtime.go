@@ -86,7 +86,10 @@ func initRuntime(
 
 	if netPprofAddr != "" {
 		observability.Go(ctx, func() {
-			http.Handle("/metrics", promhttp.Handler()) // TODO: either split this from pprof argument, or rename the argument (and re-describe it)
+			http.Handle(
+				"/metrics",
+				promhttp.Handler(),
+			) // TODO: either split this from pprof argument, or rename the argument (and re-describe it)
 
 			l.Infof("starting to listen for net/pprof requests at '%s'", netPprofAddr)
 			l.Error(http.ListenAndServe(netPprofAddr, nil))

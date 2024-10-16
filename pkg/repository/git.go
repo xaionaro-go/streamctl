@@ -176,7 +176,8 @@ func (g *GIT) push(
 	if err == git.NoErrAlreadyUpToDate {
 		return nil
 	}
-	if err != nil && strings.Contains(err.Error(), "is at") && strings.Contains(err.Error(), "but expected") {
+	if err != nil && strings.Contains(err.Error(), "is at") &&
+		strings.Contains(err.Error(), "but expected") {
 		return ErrNeedsRebase{Err: err}
 	}
 	if err != nil {
@@ -200,7 +201,11 @@ func (g *GIT) Read() ([]byte, error) {
 	b, err := io.ReadAll(f)
 	f.Close()
 	if err != nil {
-		return nil, fmt.Errorf("unable to read the content of file '%s' from the virtual git repository: %w", g.FilePath, err)
+		return nil, fmt.Errorf(
+			"unable to read the content of file '%s' from the virtual git repository: %w",
+			g.FilePath,
+			err,
+		)
 	}
 
 	return b, nil
@@ -271,11 +276,21 @@ func (g *GIT) Pull(
 		logger.Debugf(ctx, "git is already in sync: %s == %s", lastKnownCommitHash, newCommitHash)
 		return nil
 	}
-	logger.Debugf(ctx, "got a different commit from git: %s != %s", lastKnownCommitHash, newCommitHash)
+	logger.Debugf(
+		ctx,
+		"got a different commit from git: %s != %s",
+		lastKnownCommitHash,
+		newCommitHash,
+	)
 
 	oldCommit, _ := g.Repo.CommitObject(newCommitHash)
 	if oldCommit != nil {
-		logger.Debugf(ctx, "we already have this commit in the history on our side, skipping it: %s: %#+v", newCommitHash, oldCommit)
+		logger.Debugf(
+			ctx,
+			"we already have this commit in the history on our side, skipping it: %s: %#+v",
+			newCommitHash,
+			oldCommit,
+		)
 		return nil
 	}
 
@@ -301,7 +316,11 @@ func (g *GIT) CommitAndPush(
 
 	_, err := worktree.Add(g.FilePath)
 	if err != nil {
-		return plumbing.Hash{}, fmt.Errorf("unable to add file '%s' to the git's worktree: %w", g.FilePath, err)
+		return plumbing.Hash{}, fmt.Errorf(
+			"unable to add file '%s' to the git's worktree: %w",
+			g.FilePath,
+			err,
+		)
 	}
 
 	now := time.Now()
@@ -312,12 +331,15 @@ func (g *GIT) CommitAndPush(
 		return plumbing.Hash{}, fmt.Errorf("unable to determine the host name: %w", err)
 	}
 
-	hash, err := worktree.Commit(fmt.Sprintf("Update from '%s' at %s", host, ts), &git.CommitOptions{
-		All:               true,
-		AllowEmptyCommits: false,
-		Author:            signature,
-		Committer:         signature,
-	})
+	hash, err := worktree.Commit(
+		fmt.Sprintf("Update from '%s' at %s", host, ts),
+		&git.CommitOptions{
+			All:               true,
+			AllowEmptyCommits: false,
+			Author:            signature,
+			Committer:         signature,
+		},
+	)
 	if err != nil {
 		return hash, fmt.Errorf("unable to commit the new config to the git repo: %w", err)
 	}
@@ -387,7 +409,11 @@ func (g *GIT) Write(
 	)
 	logger.Debugf(ctx, "file open result: %v", err)
 	if err != nil && !os.IsNotExist(err) {
-		return plumbing.Hash{}, fmt.Errorf("unable to open file '%s' for reading: %w", g.FilePath, err)
+		return plumbing.Hash{}, fmt.Errorf(
+			"unable to open file '%s' for reading: %w",
+			g.FilePath,
+			err,
+		)
 	}
 
 	var sha1SumBefore [sha1.Size]byte
@@ -420,12 +446,19 @@ func (g *GIT) Write(
 		0644,
 	)
 	if err != nil {
-		return plumbing.Hash{}, fmt.Errorf("unable to open file '%s' for writing: %w", g.FilePath, err)
+		return plumbing.Hash{}, fmt.Errorf(
+			"unable to open file '%s' for writing: %w",
+			g.FilePath,
+			err,
+		)
 	}
 	_, err = io.Copy(f, bytes.NewReader(b))
 	f.Close()
 	if err != nil {
-		return plumbing.Hash{}, fmt.Errorf("unable to write the config into virtual git repo: %w", err)
+		return plumbing.Hash{}, fmt.Errorf(
+			"unable to write the config into virtual git repo: %w",
+			err,
+		)
 	}
 
 	hash, err := g.CommitAndPush(ctx, worktree, ref)

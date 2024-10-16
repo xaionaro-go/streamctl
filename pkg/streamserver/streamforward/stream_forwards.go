@@ -72,7 +72,12 @@ func (s *StreamForwards) init(
 		for dstID, dstCfg := range cfg.Destinations {
 			err := s.addActiveStreamDestination(ctx, dstID, dstCfg.URL, dstCfg.StreamKey)
 			if err != nil {
-				_ret = fmt.Errorf("unable to initialize stream destination '%s' to %#+v: %w", dstID, dstCfg, err)
+				_ret = fmt.Errorf(
+					"unable to initialize stream destination '%s' to %#+v: %w",
+					dstID,
+					dstCfg,
+					err,
+				)
 				return
 			}
 		}
@@ -84,7 +89,12 @@ func (s *StreamForwards) init(
 				}
 				_, err := s.newActiveStreamForward(ctx, streamID, dstID, fwd.Quirks)
 				if err != nil {
-					_ret = fmt.Errorf("unable to launch stream forward from '%s' to '%s': %w", streamID, dstID, err)
+					_ret = fmt.Errorf(
+						"unable to launch stream forward from '%s' to '%s': %w",
+						streamID,
+						dstID,
+						err,
+					)
 					return
 				}
 			}
@@ -187,7 +197,10 @@ func (s *StreamForwards) newActiveStreamForward(
 		DestinationID: destinationID,
 	}
 	if _, ok := s.ActiveStreamForwardings[key]; ok {
-		return nil, fmt.Errorf("there is already an active stream forwarding to '%s'", destinationID)
+		return nil, fmt.Errorf(
+			"there is already an active stream forwarding to '%s'",
+			destinationID,
+		)
 	}
 
 	dst, err := s.findStreamDestinationByID(ctx, destinationID)
@@ -227,7 +240,10 @@ func (s *StreamForwards) newActiveStreamForward(
 		) {
 			if quirks.StartAfterYoutubeRecognizedStream.Enabled {
 				if quirks.RestartUntilYoutubeRecognizesStream.Enabled {
-					logger.Errorf(ctx, "StartAfterYoutubeRecognizedStream should not be used together with RestartUntilYoutubeRecognizesStream")
+					logger.Errorf(
+						ctx,
+						"StartAfterYoutubeRecognizedStream should not be used together with RestartUntilYoutubeRecognizesStream",
+					)
 				} else {
 					logger.Debugf(ctx, "fwd %s->%s is waiting for YouTube to recognize the stream", streamID, destinationID)
 					started, err := s.PlatformsController.CheckStreamStartedByPlatformID(
@@ -284,13 +300,21 @@ func (s *StreamForwards) restartUntilYoutubeRecognizesStream(
 	cfg types.RestartUntilYoutubeRecognizesStream,
 ) {
 	ctx = belt.WithField(ctx, "module", "restartUntilYoutubeRecognizesStream")
-	ctx = belt.WithField(ctx, "stream_forward", fmt.Sprintf("%s->%s", fwd.StreamID, fwd.DestinationID))
+	ctx = belt.WithField(
+		ctx,
+		"stream_forward",
+		fmt.Sprintf("%s->%s", fwd.StreamID, fwd.DestinationID),
+	)
 
 	logger.Debugf(ctx, "restartUntilYoutubeRecognizesStream(ctx, %#+v, %#+v)", fwd, cfg)
 	defer func() { logger.Debugf(ctx, "restartUntilYoutubeRecognizesStream(ctx, %#+v, %#+v)", fwd, cfg) }()
 
 	if !cfg.Enabled {
-		logger.Errorf(ctx, "an attempt to start restartUntilYoutubeRecognizesStream when the hack is disabled for this stream forwarder: %#+v", cfg)
+		logger.Errorf(
+			ctx,
+			"an attempt to start restartUntilYoutubeRecognizesStream when the hack is disabled for this stream forwarder: %#+v",
+			cfg,
+		)
 		return
 	}
 
@@ -316,21 +340,39 @@ func (s *StreamForwards) restartUntilYoutubeRecognizesStream(
 			return
 		case <-time.After(cfg.StartTimeout):
 		}
-		logger.Debugf(ctx, "waited %v, checking if the remote platform accepted the stream", cfg.StartTimeout)
+		logger.Debugf(
+			ctx,
+			"waited %v, checking if the remote platform accepted the stream",
+			cfg.StartTimeout,
+		)
 
 		for {
 			streamOK, err := s.PlatformsController.CheckStreamStartedByPlatformID(
 				memoize.SetNoCache(ctx, true),
 				youtube.ID,
 			)
-			logger.Debugf(ctx, "the result of checking the stream on the remote platform: %v %v", streamOK, err)
+			logger.Debugf(
+				ctx,
+				"the result of checking the stream on the remote platform: %v %v",
+				streamOK,
+				err,
+			)
 			if err != nil {
-				logger.Errorf(ctx, "unable to check if the stream with URL '%s' is started: %v", fwd.ActiveForwarding.DestinationURL, err)
+				logger.Errorf(
+					ctx,
+					"unable to check if the stream with URL '%s' is started: %v",
+					fwd.ActiveForwarding.DestinationURL,
+					err,
+				)
 				time.Sleep(time.Second)
 				continue
 			}
 			if streamOK {
-				logger.Debugf(ctx, "waiting %v to recheck if the stream will be still OK", cfg.StopStartDelay)
+				logger.Debugf(
+					ctx,
+					"waiting %v to recheck if the stream will be still OK",
+					cfg.StopStartDelay,
+				)
 				select {
 				case <-ctx.Done():
 					return
@@ -340,9 +382,19 @@ func (s *StreamForwards) restartUntilYoutubeRecognizesStream(
 					memoize.SetNoCache(ctx, true),
 					youtube.ID,
 				)
-				logger.Debugf(ctx, "the result of checking the stream on the remote platform: %v %v", streamOK, err)
+				logger.Debugf(
+					ctx,
+					"the result of checking the stream on the remote platform: %v %v",
+					streamOK,
+					err,
+				)
 				if err != nil {
-					logger.Errorf(ctx, "unable to check if the stream with URL '%s' is started: %v", fwd.ActiveForwarding.DestinationURL, err)
+					logger.Errorf(
+						ctx,
+						"unable to check if the stream with URL '%s' is started: %v",
+						fwd.ActiveForwarding.DestinationURL,
+						err,
+					)
 					time.Sleep(time.Second)
 					continue
 				}
@@ -353,7 +405,10 @@ func (s *StreamForwards) restartUntilYoutubeRecognizesStream(
 			break
 		}
 
-		logger.Infof(ctx, "the remote platform still does not see the stream, restarting the stream forwarding: stopping...")
+		logger.Infof(
+			ctx,
+			"the remote platform still does not see the stream, restarting the stream forwarding: stopping...",
+		)
 
 		err := fwd.ActiveForwarding.Stop()
 		if err != nil {
@@ -366,7 +421,10 @@ func (s *StreamForwards) restartUntilYoutubeRecognizesStream(
 		case <-time.After(cfg.StopStartDelay):
 		}
 
-		logger.Infof(ctx, "the remote platform still does not see the stream, restarting the stream forwarding: starting...")
+		logger.Infof(
+			ctx,
+			"the remote platform still does not see the stream, restarting the stream forwarding: starting...",
+		)
 
 		err = fwd.ActiveForwarding.Start(ctx)
 		if err != nil {
@@ -447,9 +505,12 @@ func (s *StreamForwards) ListStreamForwards(
 	}()
 
 	return xsync.DoR2(ctx, &s.Mutex, func() ([]StreamForward, error) {
-		return s.getStreamForwards(ctx, func(si types.StreamID, di ordered.Optional[types.DestinationID]) bool {
-			return true
-		})
+		return s.getStreamForwards(
+			ctx,
+			func(si types.StreamID, di ordered.Optional[types.DestinationID]) bool {
+				return true
+			},
+		)
 	})
 }
 
@@ -486,7 +547,12 @@ func (s *StreamForwards) getStreamForwards(
 			if !filterFunc(streamID, ordered.Optional[types.DestinationID]{}) {
 				continue
 			}
-			logger.Tracef(ctx, "len(s.Config.Streams[%s].Forwardings) == %d", streamID, len(stream.Forwardings))
+			logger.Tracef(
+				ctx,
+				"len(s.Config.Streams[%s].Forwardings) == %d",
+				streamID,
+				len(stream.Forwardings),
+			)
 			for dstID, cfg := range stream.Forwardings {
 				if !filterFunc(streamID, ordered.Opt(dstID)) {
 					continue
@@ -589,9 +655,12 @@ func (s *StreamForwards) GetStreamForwardsByDestination(
 	}()
 
 	return xsync.DoR2(ctx, &s.Mutex, func() ([]StreamForward, error) {
-		return s.getStreamForwards(ctx, func(streamID types.StreamID, dstID ordered.Optional[types.DestinationID]) bool {
-			return !dstID.IsSet() || dstID.Get() == destID
-		})
+		return s.getStreamForwards(
+			ctx,
+			func(streamID types.StreamID, dstID ordered.Optional[types.DestinationID]) bool {
+				return !dstID.IsSet() || dstID.Get() == destID
+			},
+		)
 	})
 }
 
@@ -647,7 +716,15 @@ func (s *StreamForwards) UpdateStreamDestination(
 	streamKey string,
 ) error {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
-	return xsync.DoA4R1(ctx, &s.Mutex, s.updateStreamDestination, ctx, destinationID, url, streamKey)
+	return xsync.DoA4R1(
+		ctx,
+		&s.Mutex,
+		s.updateStreamDestination,
+		ctx,
+		destinationID,
+		url,
+		streamKey,
+	)
 }
 
 func (s *StreamForwards) updateStreamDestination(
@@ -659,14 +736,20 @@ func (s *StreamForwards) updateStreamDestination(
 	s.WithConfig(ctx, func(ctx context.Context, cfg *types.Config) {
 		for key := range s.ActiveStreamForwardings {
 			if key.DestinationID == destinationID {
-				_ret = fmt.Errorf("there is already an active stream forwarding to '%s'", destinationID)
+				_ret = fmt.Errorf(
+					"there is already an active stream forwarding to '%s'",
+					destinationID,
+				)
 				return
 			}
 		}
 
 		err := s.removeActiveStreamDestination(ctx, destinationID)
 		if err != nil {
-			_ret = fmt.Errorf("unable to remove (to then re-add) the active stream destination: %w", err)
+			_ret = fmt.Errorf(
+				"unable to remove (to then re-add) the active stream destination: %w",
+				err,
+			)
 			return
 		}
 
@@ -725,9 +808,12 @@ func (s *StreamForwards) removeActiveStreamDestination(
 	ctx context.Context,
 	destinationID types.DestinationID,
 ) error {
-	streamForwards, err := s.getStreamForwards(ctx, func(si types.StreamID, di ordered.Optional[types.DestinationID]) bool {
-		return true
-	})
+	streamForwards, err := s.getStreamForwards(
+		ctx,
+		func(si types.StreamID, di ordered.Optional[types.DestinationID]) bool {
+			return true
+		},
+	)
 	if err != nil {
 		return fmt.Errorf("unable to list stream forwardings: %w", err)
 	}
@@ -756,7 +842,10 @@ func (s *StreamForwards) findStreamDestinationByID(
 			return dst, nil
 		}
 	}
-	return types.StreamDestination{}, fmt.Errorf("unable to find a stream destination by StreamID '%s'", destinationID)
+	return types.StreamDestination{}, fmt.Errorf(
+		"unable to find a stream destination by StreamID '%s'",
+		destinationID,
+	)
 }
 
 func (s *StreamForwards) getLocalhostEndpoint(ctx context.Context) (*url.URL, error) {

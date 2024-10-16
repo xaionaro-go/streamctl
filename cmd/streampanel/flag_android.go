@@ -103,5 +103,11 @@ func getFlagsAndroidFromFiles(flags *Flags) {
 		logger.Errorf(ctx, "unable to unserialize '%s': %v", flagsSerialized, err)
 	}
 
-	logger.Debugf(ctx, "successfully parsed file '%s' with content '%s'; now the flags == %#+v", flagsFilePath, flagsSerialized, *flags)
+	logger.Debugf(
+		ctx,
+		"successfully parsed file '%s' with content '%s'; now the flags == %#+v",
+		flagsFilePath,
+		flagsSerialized,
+		*flags,
+	)
 }

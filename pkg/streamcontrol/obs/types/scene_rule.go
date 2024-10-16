@@ -14,8 +14,8 @@ type SceneRules []SceneRule
 
 type SceneRule struct {
 	Description  string        `yaml:"description,omitempty" json:"description,omitempty"`
-	TriggerQuery trigger.Query `yaml:"trigger" json:"trigger"`
-	Action       action.Action `yaml:"action" json:"action"`
+	TriggerQuery trigger.Query `yaml:"trigger"               json:"trigger"`
+	Action       action.Action `yaml:"action"                json:"action"`
 }
 
 func (sr *SceneRule) UnmarshalYAML(b []byte) (_err error) {
@@ -71,26 +71,44 @@ func (sr SceneRule) MarshalYAML() (b []byte, _err error) {
 
 	triggerBytes, err := yaml.Marshal(sr.TriggerQuery)
 	if err != nil {
-		return nil, fmt.Errorf("unable to serialize the trigger %T:%#+v: %w", sr.TriggerQuery, sr.TriggerQuery, err)
+		return nil, fmt.Errorf(
+			"unable to serialize the trigger %T:%#+v: %w",
+			sr.TriggerQuery,
+			sr.TriggerQuery,
+			err,
+		)
 	}
 
 	triggerMap := map[string]any{}
 	err = yaml.Unmarshal(triggerBytes, &triggerMap)
 	if err != nil {
-		return nil, fmt.Errorf("unable to unserialize the trigger '%s' into a map: %w", triggerBytes, err)
+		return nil, fmt.Errorf(
+			"unable to unserialize the trigger '%s' into a map: %w",
+			triggerBytes,
+			err,
+		)
 	}
 
 	triggerMap["type"] = registry.ToTypeName(sr.TriggerQuery)
 
 	actionBytes, err := yaml.Marshal(sr.Action)
 	if err != nil {
-		return nil, fmt.Errorf("unable to serialize the action %T:%#+v: %w", sr.Action, sr.Action, err)
+		return nil, fmt.Errorf(
+			"unable to serialize the action %T:%#+v: %w",
+			sr.Action,
+			sr.Action,
+			err,
+		)
 	}
 
 	actionMap := map[string]any{}
 	err = yaml.Unmarshal(actionBytes, &actionMap)
 	if err != nil {
-		return nil, fmt.Errorf("unable to unserialize the action '%s' into a map: %w", actionBytes, err)
+		return nil, fmt.Errorf(
+			"unable to unserialize the action '%s' into a map: %w",
+			actionBytes,
+			err,
+		)
 	}
 
 	actionMap["type"] = registry.ToTypeName(sr.Action)
@@ -105,6 +123,6 @@ func (sr SceneRule) MarshalYAML() (b []byte, _err error) {
 
 type serializableSceneRule struct {
 	Description string         `yaml:"description,omitempty" json:"description,omitempty"`
-	Trigger     map[string]any `yaml:"trigger" json:"trigger"`
-	Action      map[string]any `yaml:"action" json:"action"`
+	Trigger     map[string]any `yaml:"trigger"               json:"trigger"`
+	Action      map[string]any `yaml:"action"                json:"action"`
 }

@@ -224,7 +224,13 @@ func (ui *timersUI) start(
 		}
 	}
 
-	duration := time.Hour*time.Duration(hours) + time.Minute*time.Duration(mins) + time.Second*time.Duration(secs)
+	duration := time.Hour*time.Duration(
+		hours,
+	) + time.Minute*time.Duration(
+		mins,
+	) + time.Second*time.Duration(
+		secs,
+	)
 
 	if duration == 0 {
 		ui.panel.DisplayError(fmt.Errorf("the time is not set for the timer"))

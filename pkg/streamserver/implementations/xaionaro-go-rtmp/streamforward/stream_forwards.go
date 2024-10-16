@@ -12,5 +12,9 @@ func NewStreamForwards(
 	s StreamServer,
 	platformsController types.PlatformsController,
 ) *StreamForwards {
-	return streamforward.NewStreamForwards(s, xaionarogortmp.NewRecoderFactory(), platformsController)
+	return streamforward.NewStreamForwards(
+		s,
+		xaionarogortmp.NewRecoderFactory(),
+		platformsController,
+	)
 }

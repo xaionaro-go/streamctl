@@ -88,7 +88,12 @@ func Memoize[REQ any, REPLY any, T func(context.Context, REQ) (REPLY, error)](
 				logger.Tracef(ctx, "using the cached value")
 				return v.Reply, v.Error
 			}
-			logger.Tracef(ctx, "the cached value expired: %s < %s", v.SavedAt.Format(timeFormat), cutoffTS.Format(timeFormat))
+			logger.Tracef(
+				ctx,
+				"the cached value expired: %s < %s",
+				v.SavedAt.Format(timeFormat),
+				cutoffTS.Format(timeFormat),
+			)
 			delete(cache, key)
 		} else {
 			logger.Errorf(ctx, "cache-failure: expected type %T, but got %T", (*cacheItem)(nil), cachedResult)
