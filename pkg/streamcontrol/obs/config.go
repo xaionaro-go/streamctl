@@ -8,9 +8,6 @@ import (
 const ID = types.ID
 
 type Config = types.Config
-type SceneName = types.SceneName
-type SceneRule = types.SceneRule
-type SceneRules = types.SceneRules
 type StreamProfile = types.StreamProfile
 type PlatformSpecificConfig = types.PlatformSpecificConfig
 

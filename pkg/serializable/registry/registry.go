@@ -1,8 +1,10 @@
 package registry
 
 import (
+	"fmt"
 	"reflect"
 	"sort"
+	"strings"
 
 	"github.com/iancoleman/strcase"
 )
@@ -18,11 +20,19 @@ func New[T any]() *Registry[T] {
 }
 
 func typeOf(v any) reflect.Type {
-	return reflect.ValueOf(v).Type().Elem()
+	return reflect.Indirect(reflect.ValueOf(v)).Type()
 }
 
 func ToTypeName[T any](sample T) string {
-	return strcase.ToSnake(typeOf(sample).Name())
+	name := typeOf(sample).Name()
+	name = strings.ReplaceAll(name, "github.com/xaionaro-go/streamctl/pkg/streamd/config/", "")
+	name = strings.ReplaceAll(name, "eventquery/", "")
+	name = strings.ReplaceAll(name, "eventquery.", "")
+	name = strings.ReplaceAll(name, "event/", "")
+	name = strings.ReplaceAll(name, "event.", "")
+	name = strings.ReplaceAll(name, "action/", "")
+	name = strings.ReplaceAll(name, "action.", "")
+	return strcase.ToSnake(name)
 }
 
 func (r *Registry[T]) RegisterType(sample T) {
@@ -30,7 +40,11 @@ func (r *Registry[T]) RegisterType(sample T) {
 }
 
 func (r *Registry[T]) NewByTypeName(typeName string) T {
-	return reflect.New(r.Types[typeName]).Interface().(T)
+	t := r.Types[typeName]
+	if t == nil {
+		panic(fmt.Errorf("type '%s' is not registered", typeName))
+	}
+	return reflect.New(t).Interface().(T)
 }
 
 func (r *Registry[T]) ListTypeNames() []string {

@@ -28,6 +28,7 @@ import (
 	youtube "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	streamdconfig "github.com/xaionaro-go/streamctl/pkg/streamd/config"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/config/event"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/goconv"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
@@ -2422,7 +2423,7 @@ func (c *Client) GetLoggingLevel(
 func (c *Client) AddTimer(
 	ctx context.Context,
 	triggerAt time.Time,
-	action api.TimerAction,
+	action api.Action,
 ) (api.TimerID, error) {
 	actionGRPC, err := goconv.ActionGo2GRPC(action)
 	if err != nil {
@@ -2529,33 +2530,142 @@ func (c *Client) ListTimers(
 	return result, nil
 }
 
-func (c *Client) AddOBSSceneRule(
+func (c *Client) AddTriggerRule(
 	ctx context.Context,
-	sceneName obs.SceneName,
-	sceneRule obs.SceneRule,
-) error {
-
+	triggerRule *api.TriggerRule,
+) (api.TriggerRuleID, error) {
+	triggerRuleGRPC, err := goconv.TriggerRuleGo2GRPC(triggerRule)
+	if err != nil {
+		return 0, fmt.Errorf("unable to convert the trigger rule %#+v: %w", triggerRule, err)
+	}
+	resp, err := withStreamDClient(ctx, c, func(
+		ctx context.Context,
+		client streamd_grpc.StreamDClient,
+		conn io.Closer,
+	) (*streamd_grpc.AddTriggerRuleReply, error) {
+		return callWrapper(
+			ctx,
+			c,
+			client.AddTriggerRule,
+			&streamd_grpc.AddTriggerRuleRequest{
+				Rule: triggerRuleGRPC,
+			},
+		)
+	})
+	if err != nil {
+		return 0, fmt.Errorf("unable to add the trigger rule %#+v: %w", triggerRule, err)
+	}
+	return api.TriggerRuleID(resp.GetRuleID()), nil
 }
 
-func (c *Client) UpdateOBSSceneRule(
+func (c *Client) UpdateTriggerRule(
 	ctx context.Context,
-	sceneName obs.SceneName,
-	idx uint64,
-	sceneRule obs.SceneRule,
+	ruleID api.TriggerRuleID,
+	triggerRule *api.TriggerRule,
 ) error {
-
+	triggerRuleGRPC, err := goconv.TriggerRuleGo2GRPC(triggerRule)
+	if err != nil {
+		return fmt.Errorf("unable to convert the trigger rule %#+v: %w", ruleID, triggerRule, err)
+	}
+	_, err = withStreamDClient(ctx, c, func(
+		ctx context.Context,
+		client streamd_grpc.StreamDClient,
+		conn io.Closer,
+	) (*streamd_grpc.UpdateTriggerRuleReply, error) {
+		return callWrapper(
+			ctx,
+			c,
+			client.UpdateTriggerRule,
+			&streamd_grpc.UpdateTriggerRuleRequest{
+				RuleID: uint64(ruleID),
+				Rule:   triggerRuleGRPC,
+			},
+		)
+	})
+	if err != nil {
+		return fmt.Errorf("unable to update the trigger rule %d to %#+v: %w", ruleID, triggerRule, err)
+	}
+	return nil
 }
-func (c *Client) RemoveOBSSceneRule(
+func (c *Client) RemoveTriggerRule(
 	ctx context.Context,
-	sceneName obs.SceneName,
-	idx uint64,
+	ruleID api.TriggerRuleID,
 ) error {
-
+	_, err := withStreamDClient(ctx, c, func(
+		ctx context.Context,
+		client streamd_grpc.StreamDClient,
+		conn io.Closer,
+	) (*streamd_grpc.RemoveTriggerRuleReply, error) {
+		return callWrapper(
+			ctx,
+			c,
+			client.RemoveTriggerRule,
+			&streamd_grpc.RemoveTriggerRuleRequest{
+				RuleID: uint64(ruleID),
+			},
+		)
+	})
+	if err != nil {
+		return fmt.Errorf("unable to remove the rule %d: %w", ruleID, err)
+	}
+	return nil
 }
 
-func (c *Client) ListOBSSceneRules(
+func (c *Client) ListTriggerRules(
 	ctx context.Context,
-	sceneName obs.SceneName,
-) (obs.SceneRules, error) {
+) (api.TriggerRules, error) {
+	response, err := withStreamDClient(ctx, c, func(
+		ctx context.Context,
+		client streamd_grpc.StreamDClient,
+		conn io.Closer,
+	) (*streamd_grpc.ListTriggerRulesReply, error) {
+		return callWrapper(
+			ctx,
+			c,
+			client.ListTriggerRules,
+			&streamd_grpc.ListTriggerRulesRequest{},
+		)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("unable to list the rules: %w", err)
+	}
 
+	rules := response.GetRules()
+	result := make(api.TriggerRules, 0, len(rules))
+	for _, ruleGRPC := range rules {
+		rule, err := goconv.TriggerRuleGRPC2Go(ruleGRPC)
+		if err != nil {
+			return nil, fmt.Errorf("unable to convert the trigger rule %#+v: %w", rule, err)
+		}
+		result = append(result, rule)
+	}
+	return result, nil
+}
+
+func (c *Client) SubmitEvent(
+	ctx context.Context,
+	event event.Event,
+) error {
+	eventGRPC, err := goconv.EventGo2GRPC(event)
+	if err != nil {
+		return fmt.Errorf("unable to convert the event: %w", err)
+	}
+	_, err = withStreamDClient(ctx, c, func(
+		ctx context.Context,
+		client streamd_grpc.StreamDClient,
+		conn io.Closer,
+	) (*streamd_grpc.SubmitEventReply, error) {
+		return callWrapper(
+			ctx,
+			c,
+			client.SubmitEvent,
+			&streamd_grpc.SubmitEventRequest{
+				Event: eventGRPC,
+			},
+		)
+	})
+	if err != nil {
+		return fmt.Errorf("unable to submit the event: %w", err)
+	}
+	return nil
 }

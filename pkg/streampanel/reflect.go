@@ -14,6 +14,25 @@ func makeFieldsFor(
 	return reflectMakeFieldsFor(reflect.ValueOf(obj), reflect.ValueOf(obj).Type(), nil, "")
 }
 
+func isUIDisabled(
+	obj any,
+) bool {
+	return reflectIsUIDisabled(reflect.ValueOf(obj))
+}
+
+func reflectIsUIDisabled(
+	v reflect.Value,
+) bool {
+	v = reflect.Indirect(v)
+	t := v.Type()
+	for i := 0; i < t.NumField(); i++ {
+		if t.Field(i).Name == "uiDisable" {
+			return true
+		}
+	}
+	return false
+}
+
 func reflectMakeFieldsFor(
 	v reflect.Value,
 	t reflect.Type,
@@ -53,6 +72,9 @@ func reflectMakeFieldsFor(
 			fv := v.Field(i)
 			ft := t.Field(i)
 			if ft.PkgPath != "" {
+				if ft.Name == "uiDisable" {
+					return nil
+				}
 				tag := ft.Tag.Get("uicomment")
 				if tag != "" {
 					result = append(result, widget.NewLabel(tag))
@@ -67,7 +89,7 @@ func reflectMakeFieldsFor(
 		}
 		return result
 	default:
-		panic(fmt.Errorf("internal error: support of %v is not implemented, yet", t.Kind()))
+		panic(fmt.Errorf("internal error: %s: support of %v is not implemented, yet", namePrefix, t.Kind()))
 	}
 }
 

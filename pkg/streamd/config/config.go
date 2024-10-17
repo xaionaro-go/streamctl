@@ -26,6 +26,7 @@ type config struct {
 	ProfileMetadata map[streamcontrol.ProfileName]ProfileMetadata
 	StreamServer    streamserver.Config `yaml:"stream_server"`
 	Monitor         MonitorConfig
+	TriggerRules    TriggerRules `yaml:"trigger_rules"`
 }
 
 type Config config

@@ -21,7 +21,7 @@ func NewTimer(
 	streamD *StreamD,
 	timerID api.TimerID,
 	triggerAt time.Time,
-	action api.TimerAction,
+	action api.Action,
 ) *Timer {
 	return &Timer{
 		StreamD: streamD,
@@ -108,29 +108,8 @@ func (t *Timer) trigger(ctx context.Context) {
 		}
 	})
 
-	switch action := t.Timer.Action.(type) {
-	case *api.TimerActionNoop:
-		return
-	case *api.TimerActionStartStream:
-		err := t.StreamD.StartStream(
-			ctx,
-			action.PlatID,
-			action.Title,
-			action.Description,
-			action.Profile,
-		)
-		if err != nil {
-			logger.Errorf(ctx, "unable to start stream by timer %d (%#+v): %v", t.Timer.ID, t.Timer, err)
-		}
-	case *api.TimerActionEndStream:
-		err := t.StreamD.EndStream(
-			ctx,
-			action.PlatID,
-		)
-		if err != nil {
-			logger.Errorf(ctx, "unable to end stream by timer %d (%#+v): %v", t.Timer.ID, t.Timer, err)
-		}
-	default:
-		logger.Error(ctx, "unknown action type: %t", action)
+	err := t.StreamD.doAction(ctx, t.Timer.Action, nil)
+	if err != nil {
+		logger.Errorf(ctx, "unable to perform action %#+v: %w", t.Timer.Action, err)
 	}
 }

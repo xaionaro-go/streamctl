@@ -1,61 +1,10 @@
 package streampanel
 
 import (
-	"bytes"
-	"fmt"
-	"io"
-	"net/http"
 	"strings"
-	"text/template"
+
+	"github.com/xaionaro-go/streamctl/pkg/expression"
 )
-
-var funcMap = map[string]interface{}{
-	"devnull": func(args ...any) string {
-		return ""
-	},
-	"httpGET": func(urlString string) string {
-		resp, err := http.Get(urlString)
-		if err != nil {
-			panic(err)
-		}
-		defer resp.Body.Close()
-
-		b, err := io.ReadAll(resp.Body)
-		if err != nil {
-			panic(err)
-		}
-
-		return string(b)
-	},
-	"httpGETIgnoreErrors": func(urlString string) string {
-		resp, err := http.Get(urlString)
-		if err != nil {
-			return ""
-		}
-		defer resp.Body.Close()
-
-		b, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return ""
-		}
-
-		return string(b)
-	},
-}
-
-func expandTemplate(tpl string) (string, error) {
-	parsed, err := template.New("").Funcs(funcMap).Parse(tpl)
-	if err != nil {
-		return "", fmt.Errorf("unable to parse the template: %w", err)
-	}
-
-	var buf bytes.Buffer
-	if err = parsed.Execute(&buf, nil); err != nil {
-		return "", fmt.Errorf("unable to execute the template: %w", err)
-	}
-
-	return buf.String(), nil
-}
 
 func splitWithQuotes(s string) []string {
 	var result []string
@@ -97,7 +46,7 @@ func splitWithQuotes(s string) []string {
 }
 
 func expandCommand(cmdString string) ([]string, error) {
-	cmdStringExpanded, err := expandTemplate(cmdString)
+	cmdStringExpanded, err := expression.Eval[string](expression.Expression(cmdString), nil)
 	if err != nil {
 		return nil, err
 	}

@@ -18,17 +18,11 @@ import (
 	obs "github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs/types"
 	twitch "github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/types"
 	youtube "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
-	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/config/action"
 	"github.com/xaionaro-go/streamctl/pkg/xcontext"
 	"github.com/xaionaro-go/streamctl/pkg/xfyne"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
-
-var closedChan = make(chan struct{})
-
-func init() {
-	close(closedChan)
-}
 
 type timersUI struct {
 	locker              xsync.Mutex
@@ -137,11 +131,11 @@ func (ui *timersUI) refreshFromRemote(
 	var triggerAt time.Time
 	for _, timer := range timers {
 		switch timer.Action.(type) {
-		case *api.TimerActionNoop:
+		case *action.Noop:
 			continue
-		case *api.TimerActionStartStream:
+		case *action.StartStream:
 			continue
-		case *api.TimerActionEndStream:
+		case *action.EndStream:
 			triggerAt = timer.TriggerAt
 		default:
 			continue
@@ -258,7 +252,7 @@ func (ui *timersUI) kickOffRemotely(
 		twitch.ID,
 		obs.ID,
 	} {
-		_, err := streamD.AddTimer(ctx, deadline, &api.TimerActionEndStream{
+		_, err := streamD.AddTimer(ctx, deadline, &action.EndStream{
 			PlatID: platID,
 		})
 		if err != nil {

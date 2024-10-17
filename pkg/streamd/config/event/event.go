@@ -1,16 +1,13 @@
-package trigger
+package event
+
+import "github.com/xaionaro-go/streamctl/pkg/serializable"
 
 func init() {
-	//registry.RegisterType((*Not)(nil))
-	registry.RegisterType((*WindowFocusChange)(nil))
+	serializable.RegisterType[WindowFocusChange]()
 }
 
-type Query interface {
-	isTriggerQuery()
-}
-
-type Not struct {
-	Query `yaml:"query"`
+type Event interface {
+	isEvent() // just to enable build-time type checks
 }
 
 type WindowFocusChange struct {
@@ -23,4 +20,4 @@ type WindowFocusChange struct {
 	uiComment struct{} `uicomment:"This action will also add field .IsFocused to the event."`
 }
 
-func (WindowFocusChange) isTriggerQuery() {}
+func (WindowFocusChange) isEvent() {}

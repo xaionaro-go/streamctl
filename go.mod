@@ -39,6 +39,7 @@ require (
 	dario.cat/mergo v1.0.0 // indirect
 	fyne.io/systray v1.11.0 // indirect
 	github.com/BurntSushi/toml v1.4.0 // indirect
+	github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802 // indirect
 	github.com/MicahParks/jwkset v0.5.20 // indirect
 	github.com/MicahParks/keyfunc/v3 v3.3.5 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
@@ -219,6 +220,7 @@ require (
 )
 
 require (
+	github.com/BurntSushi/xgbutil v0.0.0-20190907113008-ad855c713046
 	github.com/onsi/gomega v1.30.0 // indirect
 	github.com/phuslu/goid v1.0.1 // indirect
 	github.com/pion/datachannel v1.5.6 // indirect

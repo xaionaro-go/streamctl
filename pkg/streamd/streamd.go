@@ -1,7 +1,6 @@
 package streamd
 
 import (
-	"bytes"
 	"context"
 	"crypto"
 	"fmt"
@@ -11,15 +10,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/andreykaipov/goobs"
 	eventbus "github.com/asaskevich/EventBus"
-	"github.com/chai2010/webp"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
-	"github.com/xaionaro-go/obs-grpc-proxy/pkg/obsgrpcproxy"
-	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/repository"
@@ -172,110 +167,6 @@ func (d *StreamD) Run(ctx context.Context) (_ret error) { // TODO: delete the fe
 	}
 
 	d.UI.SetStatus("Initializing UI...")
-	return nil
-}
-
-func getOBSImageBytes(
-	ctx context.Context,
-	obsServer obs_grpc.OBSServer,
-	el config.MonitorElementConfig,
-	obsState *streamtypes.OBSState,
-) ([]byte, time.Time, error) {
-	img, nextUpdateAt, err := el.Source.GetImage(ctx, obsServer, el, obsState)
-	if err != nil {
-		return nil, time.Now().
-				Add(time.Second),
-			fmt.Errorf(
-				"unable to get the image from the source: %w",
-				err,
-			)
-	}
-
-	for _, filter := range el.Filters {
-		img = filter.Filter(ctx, img)
-	}
-
-	var out bytes.Buffer
-	err = webp.Encode(&out, img, &webp.Options{
-		Lossless: el.ImageLossless,
-		Quality:  float32(el.ImageQuality),
-		Exact:    false,
-	})
-	if err != nil {
-		return nil, time.Now().Add(time.Second), fmt.Errorf("unable to encode the image: %w", err)
-	}
-
-	return out.Bytes(), nextUpdateAt, nil
-}
-
-func (d *StreamD) initImageTaker(ctx context.Context) error {
-	for elName, el := range d.Config.Monitor.Elements {
-		if el.Source == nil {
-			continue
-		}
-		if _, ok := el.Source.(*config.MonitorSourceDummy); ok {
-			continue
-		}
-		{
-			elName, el := elName, el
-			_ = el
-			observability.Go(ctx, func() {
-				logger.Debugf(ctx, "taker of image '%s'", elName)
-				defer logger.Debugf(ctx, "/taker of image '%s'", elName)
-
-				obsServer, obsServerClose, err := d.OBS(ctx)
-				if obsServerClose != nil {
-					defer obsServerClose()
-				}
-				if err != nil {
-					logger.Errorf(ctx, "unable to init connection with OBS: %w", err)
-					return
-				}
-
-				for {
-					var (
-						imgBytes     []byte
-						nextUpdateAt time.Time
-						err          error
-					)
-
-					waitUntilNextIteration := func() bool {
-						if nextUpdateAt.IsZero() {
-							return false
-						}
-						select {
-						case <-ctx.Done():
-							return false
-						case <-time.After(time.Until(nextUpdateAt)):
-							return true
-						}
-					}
-
-					imgBytes, nextUpdateAt, err = getOBSImageBytes(ctx, obsServer, el, &d.OBSState)
-					if err != nil {
-						logger.Errorf(ctx, "unable to get the image of '%s': %v", elName, err)
-						if !waitUntilNextIteration() {
-							return
-						}
-						continue
-					}
-
-					err = d.SetVariable(ctx, consts.VarKeyImage(consts.ImageID(elName)), imgBytes)
-					if err != nil {
-						logger.Errorf(ctx, "unable to save the image of '%s': %w", elName, err)
-						if !waitUntilNextIteration() {
-							return
-						}
-						continue
-					}
-
-					if !waitUntilNextIteration() {
-						return
-					}
-				}
-			})
-		}
-	}
 	return nil
 }
 
@@ -971,43 +862,6 @@ func (d *StreamD) SetVariable(
 	defer logger.Tracef(ctx, "/SetVariable(ctx, '%s', value [len == %d])", key, len(value))
 	d.Variables.Store(key, value)
 	return nil
-}
-
-func (d *StreamD) OBS(
-	ctx context.Context,
-) (obs_grpc.OBSServer, context.CancelFunc, error) {
-	logger.Tracef(ctx, "OBS()")
-	defer logger.Tracef(ctx, "/OBS()")
-
-	proxy := obsgrpcproxy.New(
-		ctx,
-		func(ctx context.Context) (*goobs.Client, context.CancelFunc, error) {
-			logger.Tracef(ctx, "OBS proxy getting client")
-			defer logger.Tracef(ctx, "/OBS proxy getting client")
-			obs := xsync.RDoR1(ctx, &d.ControllersLocker, func() *obs.OBS {
-				return d.StreamControllers.OBS
-			})
-			if obs == nil {
-				return nil, nil, fmt.Errorf("connection to OBS is not initialized")
-			}
-
-			client, err := obs.GetClient()
-			logger.Tracef(ctx, "getting OBS client result: %v %v", client, err)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			return client, func() {
-				err := client.Disconnect()
-				if err != nil {
-					logger.Errorf(ctx, "unable to disconnect from OBS: %w", err)
-				} else {
-					logger.Tracef(ctx, "disconnected from OBS")
-				}
-			}, nil
-		},
-	)
-	return proxy, func() {}, nil
 }
 
 func (d *StreamD) SubmitOAuthCode(
@@ -1816,7 +1670,7 @@ func (d *StreamD) GetLoggingLevel(ctx context.Context) (logger.Level, error) {
 func (d *StreamD) AddTimer(
 	ctx context.Context,
 	triggerAt time.Time,
-	action api.TimerAction,
+	action api.Action,
 ) (api.TimerID, error) {
 	return xsync.DoA3R2(ctx, &d.TimersLocker, d.addTimer, ctx, triggerAt, action)
 }
@@ -1824,7 +1678,7 @@ func (d *StreamD) AddTimer(
 func (d *StreamD) addTimer(
 	ctx context.Context,
 	triggerAt time.Time,
-	action api.TimerAction,
+	action api.Action,
 ) (api.TimerID, error) {
 	logger.Debugf(ctx, "addTimer(ctx, %v, %v)", triggerAt, action)
 	defer logger.Debugf(ctx, "/addTimer(ctx, %v, %v)", triggerAt, action)

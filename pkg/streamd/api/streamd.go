@@ -9,9 +9,10 @@ import (
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
-	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/cache"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/config/action"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/config/event"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
@@ -29,7 +30,10 @@ type StreamD interface {
 	SaveConfig(ctx context.Context) error
 	GetConfig(ctx context.Context) (*config.Config, error)
 	SetConfig(ctx context.Context, cfg *config.Config) error
-	IsBackendEnabled(ctx context.Context, id streamcontrol.PlatformName) (bool, error)
+	IsBackendEnabled(
+		ctx context.Context,
+		id streamcontrol.PlatformName,
+	) (bool, error)
 	OBSOLETE_IsGITInitialized(ctx context.Context) (bool, error)
 	StartStream(
 		ctx context.Context,
@@ -46,8 +50,16 @@ type StreamD interface {
 		profile streamcontrol.AbstractStreamProfile,
 		customArgs ...any,
 	) error
-	SetTitle(ctx context.Context, platID streamcontrol.PlatformName, title string) error
-	SetDescription(ctx context.Context, platID streamcontrol.PlatformName, description string) error
+	SetTitle(
+		ctx context.Context,
+		platID streamcontrol.PlatformName,
+		title string,
+	) error
+	SetDescription(
+		ctx context.Context,
+		platID streamcontrol.PlatformName,
+		description string,
+	) error
 	ApplyProfile(
 		ctx context.Context,
 		platID streamcontrol.PlatformName,
@@ -55,7 +67,10 @@ type StreamD interface {
 		customArgs ...any,
 	) error
 	OBSOLETE_GitRelogin(ctx context.Context) error
-	GetBackendData(ctx context.Context, platID streamcontrol.PlatformName) (any, error)
+	GetBackendData(
+		ctx context.Context,
+		platID streamcontrol.PlatformName,
+	) (any, error)
 	Restart(ctx context.Context) error
 	EXPERIMENTAL_ReinitStreamControllers(ctx context.Context) error
 	GetStreamStatus(
@@ -63,7 +78,11 @@ type StreamD interface {
 		platID streamcontrol.PlatformName,
 	) (*streamcontrol.StreamStatus, error)
 	GetVariable(ctx context.Context, key consts.VarKey) ([]byte, error)
-	GetVariableHash(ctx context.Context, key consts.VarKey, hashType crypto.Hash) ([]byte, error)
+	GetVariableHash(
+		ctx context.Context,
+		key consts.VarKey,
+		hashType crypto.Hash,
+	) ([]byte, error)
 	SetVariable(ctx context.Context, key consts.VarKey, value []byte) error
 
 	OBS(ctx context.Context) (obs_grpc.OBSServer, context.CancelFunc, error)
@@ -169,39 +188,89 @@ type StreamD interface {
 		streamID streamtypes.StreamID,
 	) (*StreamPlayer, error)
 
-	StreamPlayerProcessTitle(ctx context.Context, streamID StreamID) (string, error)
-	StreamPlayerOpenURL(ctx context.Context, streamID StreamID, link string) error
+	StreamPlayerProcessTitle(
+		ctx context.Context,
+		streamID StreamID,
+	) (string, error)
+	StreamPlayerOpenURL(
+		ctx context.Context,
+		streamID StreamID,
+		link string,
+	) error
 	StreamPlayerGetLink(ctx context.Context, streamID StreamID) (string, error)
-	StreamPlayerEndChan(ctx context.Context, streamID StreamID) (<-chan struct{}, error)
+	StreamPlayerEndChan(
+		ctx context.Context,
+		streamID StreamID,
+	) (<-chan struct{}, error)
 	StreamPlayerIsEnded(ctx context.Context, streamID StreamID) (bool, error)
-	StreamPlayerGetPosition(ctx context.Context, streamID StreamID) (time.Duration, error)
-	StreamPlayerGetLength(ctx context.Context, streamID StreamID) (time.Duration, error)
-	StreamPlayerSetSpeed(ctx context.Context, streamID StreamID, speed float64) error
-	StreamPlayerSetPause(ctx context.Context, streamID StreamID, pause bool) error
+	StreamPlayerGetPosition(
+		ctx context.Context,
+		streamID StreamID,
+	) (time.Duration, error)
+	StreamPlayerGetLength(
+		ctx context.Context,
+		streamID StreamID,
+	) (time.Duration, error)
+	StreamPlayerSetSpeed(
+		ctx context.Context,
+		streamID StreamID,
+		speed float64,
+	) error
+	StreamPlayerSetPause(
+		ctx context.Context,
+		streamID StreamID,
+		pause bool,
+	) error
 	StreamPlayerStop(ctx context.Context, streamID StreamID) error
 	StreamPlayerClose(ctx context.Context, streamID StreamID) error
 
 	SubscribeToConfigChanges(ctx context.Context) (<-chan DiffConfig, error)
 	SubscribeToStreamsChanges(ctx context.Context) (<-chan DiffStreams, error)
-	SubscribeToStreamServersChanges(ctx context.Context) (<-chan DiffStreamServers, error)
-	SubscribeToStreamDestinationsChanges(ctx context.Context) (<-chan DiffStreamDestinations, error)
-	SubscribeToIncomingStreamsChanges(ctx context.Context) (<-chan DiffIncomingStreams, error)
-	SubscribeToStreamForwardsChanges(ctx context.Context) (<-chan DiffStreamForwards, error)
-	SubscribeToStreamPlayersChanges(ctx context.Context) (<-chan DiffStreamPlayers, error)
+	SubscribeToStreamServersChanges(
+		ctx context.Context,
+	) (<-chan DiffStreamServers, error)
+	SubscribeToStreamDestinationsChanges(
+		ctx context.Context,
+	) (<-chan DiffStreamDestinations, error)
+	SubscribeToIncomingStreamsChanges(
+		ctx context.Context,
+	) (<-chan DiffIncomingStreams, error)
+	SubscribeToStreamForwardsChanges(
+		ctx context.Context,
+	) (<-chan DiffStreamForwards, error)
+	SubscribeToStreamPlayersChanges(
+		ctx context.Context,
+	) (<-chan DiffStreamPlayers, error)
 
-	AddTimer(ctx context.Context, triggerAt time.Time, action TimerAction) (TimerID, error)
+	AddTimer(
+		ctx context.Context,
+		triggerAt time.Time,
+		action Action,
+	) (TimerID, error)
 	RemoveTimer(ctx context.Context, timerID TimerID) error
 	ListTimers(ctx context.Context) ([]Timer, error)
 
-	AddOBSSceneRule(ctx context.Context, sceneName SceneName, sceneRule SceneRule) error
-	UpdateOBSSceneRule(
+	AddTriggerRule(
 		ctx context.Context,
-		sceneName SceneName,
-		idx uint64,
-		sceneRule SceneRule,
+		triggerRule *config.TriggerRule,
+	) (TriggerRuleID, error)
+	UpdateTriggerRule(
+		ctx context.Context,
+		ruleID TriggerRuleID,
+		triggerRule *config.TriggerRule,
 	) error
-	RemoveOBSSceneRule(ctx context.Context, sceneName SceneName, idx uint64) error
-	ListOBSSceneRules(ctx context.Context, sceneName SceneName) (SceneRules, error)
+	RemoveTriggerRule(
+		ctx context.Context,
+		ruleID TriggerRuleID,
+	) error
+	ListTriggerRules(
+		ctx context.Context,
+	) (TriggerRules, error)
+
+	SubmitEvent(
+		ctx context.Context,
+		event event.Event,
+	) error
 }
 
 type StreamPlayer = sstypes.StreamPlayer
@@ -252,7 +321,9 @@ type DestinationID = streamtypes.DestinationID
 type OBSInstanceID = streamtypes.OBSInstanceID
 
 type StreamForwardingQuirks = sstypes.ForwardingQuirks
+
 type RestartUntilYoutubeRecognizesStream = sstypes.RestartUntilYoutubeRecognizesStream
+
 type StartAfterYoutubeRecognizedStream = sstypes.StartAfterYoutubeRecognizedStream
 
 type DiffConfig struct{}
@@ -263,51 +334,16 @@ type DiffIncomingStreams struct{}
 type DiffStreamForwards struct{}
 type DiffStreamPlayers struct{}
 
-/*
-	AddTimer(ctx context.Context, triggerAt time.Time, action TimerAction) (TimerID, error)
-	RemoveTimer(ctx context.Context, timerID TimerID) error
-	ListTimers(ctx context.Context) ([]Timer, error)
-*/
-
-type TimerAction interface {
-	timerAction() // just to enable build-time type checks
-}
-
 type TimerID uint64
 
 type Timer struct {
 	ID        TimerID
 	TriggerAt time.Time
-	Action    TimerAction
+	Action    Action
 }
 
-type TimerActionNoop struct{}
+type Action = action.Action
 
-var _ TimerAction = (*TimerActionNoop)(nil)
-
-func (*TimerActionNoop) timerAction() {}
-
-type TimerActionStartStream struct {
-	PlatID      streamcontrol.PlatformName
-	Title       string
-	Description string
-	Profile     streamcontrol.AbstractStreamProfile
-	CustomArgs  []any
-}
-
-var _ TimerAction = (*TimerActionStartStream)(nil)
-
-func (*TimerActionStartStream) timerAction() {}
-
-type TimerActionEndStream struct {
-	PlatID streamcontrol.PlatformName
-}
-
-var _ TimerAction = (*TimerActionEndStream)(nil)
-
-func (*TimerActionEndStream) timerAction() {}
-
-type SceneName = obs.SceneName
-
-type SceneRule = obs.SceneRule
-type SceneRules = obs.SceneRules
+type TriggerRuleID uint64
+type TriggerRule = config.TriggerRule
+type TriggerRules = config.TriggerRules

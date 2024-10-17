@@ -6,14 +6,10 @@ import (
 
 const ID = streamctl.PlatformName("obs")
 
-type SceneName string
-
 type PlatformSpecificConfig struct {
 	Host     string
 	Port     uint16
 	Password string `yaml:"pass" json:"pass"`
-
-	SceneRulesByScene map[SceneName]SceneRules `yaml:"scene_rules" json:"scene_rules"`
 }
 
 type Config = streamctl.PlatformConfig[PlatformSpecificConfig, StreamProfile]

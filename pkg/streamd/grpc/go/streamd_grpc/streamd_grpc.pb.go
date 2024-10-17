@@ -90,6 +90,11 @@ type StreamDClient interface {
 	AddTimer(ctx context.Context, in *AddTimerRequest, opts ...grpc.CallOption) (*AddTimerReply, error)
 	RemoveTimer(ctx context.Context, in *RemoveTimerRequest, opts ...grpc.CallOption) (*RemoveTimerReply, error)
 	ListTimers(ctx context.Context, in *ListTimersRequest, opts ...grpc.CallOption) (*ListTimersReply, error)
+	ListTriggerRules(ctx context.Context, in *ListTriggerRulesRequest, opts ...grpc.CallOption) (*ListTriggerRulesReply, error)
+	AddTriggerRule(ctx context.Context, in *AddTriggerRuleRequest, opts ...grpc.CallOption) (*AddTriggerRuleReply, error)
+	RemoveTriggerRule(ctx context.Context, in *RemoveTriggerRuleRequest, opts ...grpc.CallOption) (*RemoveTriggerRuleReply, error)
+	UpdateTriggerRule(ctx context.Context, in *UpdateTriggerRuleRequest, opts ...grpc.CallOption) (*UpdateTriggerRuleReply, error)
+	SubmitEvent(ctx context.Context, in *SubmitEventRequest, opts ...grpc.CallOption) (*SubmitEventReply, error)
 }
 
 type streamDClient struct {
@@ -942,6 +947,51 @@ func (c *streamDClient) ListTimers(ctx context.Context, in *ListTimersRequest, o
 	return out, nil
 }
 
+func (c *streamDClient) ListTriggerRules(ctx context.Context, in *ListTriggerRulesRequest, opts ...grpc.CallOption) (*ListTriggerRulesReply, error) {
+	out := new(ListTriggerRulesReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/ListTriggerRules", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) AddTriggerRule(ctx context.Context, in *AddTriggerRuleRequest, opts ...grpc.CallOption) (*AddTriggerRuleReply, error) {
+	out := new(AddTriggerRuleReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/AddTriggerRule", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) RemoveTriggerRule(ctx context.Context, in *RemoveTriggerRuleRequest, opts ...grpc.CallOption) (*RemoveTriggerRuleReply, error) {
+	out := new(RemoveTriggerRuleReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/RemoveTriggerRule", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) UpdateTriggerRule(ctx context.Context, in *UpdateTriggerRuleRequest, opts ...grpc.CallOption) (*UpdateTriggerRuleReply, error) {
+	out := new(UpdateTriggerRuleReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/UpdateTriggerRule", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) SubmitEvent(ctx context.Context, in *SubmitEventRequest, opts ...grpc.CallOption) (*SubmitEventReply, error) {
+	out := new(SubmitEventReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/SubmitEvent", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // StreamDServer is the server API for StreamD service.
 // All implementations must embed UnimplementedStreamDServer
 // for forward compatibility
@@ -1014,6 +1064,11 @@ type StreamDServer interface {
 	AddTimer(context.Context, *AddTimerRequest) (*AddTimerReply, error)
 	RemoveTimer(context.Context, *RemoveTimerRequest) (*RemoveTimerReply, error)
 	ListTimers(context.Context, *ListTimersRequest) (*ListTimersReply, error)
+	ListTriggerRules(context.Context, *ListTriggerRulesRequest) (*ListTriggerRulesReply, error)
+	AddTriggerRule(context.Context, *AddTriggerRuleRequest) (*AddTriggerRuleReply, error)
+	RemoveTriggerRule(context.Context, *RemoveTriggerRuleRequest) (*RemoveTriggerRuleReply, error)
+	UpdateTriggerRule(context.Context, *UpdateTriggerRuleRequest) (*UpdateTriggerRuleReply, error)
+	SubmitEvent(context.Context, *SubmitEventRequest) (*SubmitEventReply, error)
 	mustEmbedUnimplementedStreamDServer()
 }
 
@@ -1224,6 +1279,21 @@ func (UnimplementedStreamDServer) RemoveTimer(context.Context, *RemoveTimerReque
 }
 func (UnimplementedStreamDServer) ListTimers(context.Context, *ListTimersRequest) (*ListTimersReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListTimers not implemented")
+}
+func (UnimplementedStreamDServer) ListTriggerRules(context.Context, *ListTriggerRulesRequest) (*ListTriggerRulesReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListTriggerRules not implemented")
+}
+func (UnimplementedStreamDServer) AddTriggerRule(context.Context, *AddTriggerRuleRequest) (*AddTriggerRuleReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddTriggerRule not implemented")
+}
+func (UnimplementedStreamDServer) RemoveTriggerRule(context.Context, *RemoveTriggerRuleRequest) (*RemoveTriggerRuleReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveTriggerRule not implemented")
+}
+func (UnimplementedStreamDServer) UpdateTriggerRule(context.Context, *UpdateTriggerRuleRequest) (*UpdateTriggerRuleReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateTriggerRule not implemented")
+}
+func (UnimplementedStreamDServer) SubmitEvent(context.Context, *SubmitEventRequest) (*SubmitEventReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SubmitEvent not implemented")
 }
 func (UnimplementedStreamDServer) mustEmbedUnimplementedStreamDServer() {}
 
@@ -2492,6 +2562,96 @@ func _StreamD_ListTimers_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _StreamD_ListTriggerRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListTriggerRulesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).ListTriggerRules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/ListTriggerRules",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).ListTriggerRules(ctx, req.(*ListTriggerRulesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_AddTriggerRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddTriggerRuleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).AddTriggerRule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/AddTriggerRule",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).AddTriggerRule(ctx, req.(*AddTriggerRuleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_RemoveTriggerRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveTriggerRuleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).RemoveTriggerRule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/RemoveTriggerRule",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).RemoveTriggerRule(ctx, req.(*RemoveTriggerRuleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_UpdateTriggerRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateTriggerRuleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).UpdateTriggerRule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/UpdateTriggerRule",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).UpdateTriggerRule(ctx, req.(*UpdateTriggerRuleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_SubmitEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SubmitEventRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).SubmitEvent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/SubmitEvent",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).SubmitEvent(ctx, req.(*SubmitEventRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // StreamD_ServiceDesc is the grpc.ServiceDesc for StreamD service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2730,6 +2890,26 @@ var StreamD_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListTimers",
 			Handler:    _StreamD_ListTimers_Handler,
+		},
+		{
+			MethodName: "ListTriggerRules",
+			Handler:    _StreamD_ListTriggerRules_Handler,
+		},
+		{
+			MethodName: "AddTriggerRule",
+			Handler:    _StreamD_AddTriggerRule_Handler,
+		},
+		{
+			MethodName: "RemoveTriggerRule",
+			Handler:    _StreamD_RemoveTriggerRule_Handler,
+		},
+		{
+			MethodName: "UpdateTriggerRule",
+			Handler:    _StreamD_UpdateTriggerRule_Handler,
+		},
+		{
+			MethodName: "SubmitEvent",
+			Handler:    _StreamD_SubmitEvent_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

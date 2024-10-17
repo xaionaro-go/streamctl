@@ -79,6 +79,13 @@ service StreamD {
     rpc AddTimer(AddTimerRequest) returns (AddTimerReply) {}
     rpc RemoveTimer(RemoveTimerRequest) returns (RemoveTimerReply) {}
     rpc ListTimers(ListTimersRequest) returns (ListTimersReply) {}
+
+    rpc ListTriggerRules(ListTriggerRulesRequest) returns (ListTriggerRulesReply) {}
+    rpc AddTriggerRule(AddTriggerRuleRequest) returns (AddTriggerRuleReply) {}
+    rpc RemoveTriggerRule(RemoveTriggerRuleRequest) returns (RemoveTriggerRuleReply) {}
+    rpc UpdateTriggerRule(UpdateTriggerRuleRequest) returns (UpdateTriggerRuleReply) {}
+
+    rpc SubmitEvent(SubmitEventRequest) returns (SubmitEventReply) {}
 }
 
 message PingRequest {
@@ -534,11 +541,31 @@ message StreamPlayersChange {}
 
 message NoopRequest {}
 
+message OBSActionElementShowHide {
+    optional string elementName =  1;
+    optional string elementUUID =  2;
+    string valueExpression = 3;
+}
+
+message OBSActionWindowCaptureSetSource {
+    optional string elementName =  1;
+    optional string elementUUID =  2;
+    string valueExpression = 3;
+}
+
+message OBSAction {
+    oneof OBSActionOneOf {
+        OBSActionElementShowHide elementShowHide = 1;
+        OBSActionWindowCaptureSetSource windowCaptureSetSource = 2;
+    }
+}
+
 message Action {
     oneof ActionOneof {
         NoopRequest noopRequest = 1;
         StartStreamRequest startStreamRequest = 2;
         EndStreamRequest endStreamRequest = 3;
+        OBSAction obsAction = 4;
     }
 }
 
@@ -565,3 +592,79 @@ message ListTimersRequest {}
 message ListTimersReply {
     repeated Timer timers = 1;
 }
+
+message EventQueryAnd {
+    repeated Event queries = 1;
+}
+
+message EventQueryOr {
+    repeated Event queries =  1;
+}
+
+message EventQueryNot {
+    Event query = 1;
+}
+
+message EventOBSSceneChange {
+    string sceneName =  1;
+}
+
+message EventWindowFocusChange {
+    optional uint64 windowID = 1;
+    optional string windowTitle = 2;
+    optional string windowTitlePartial = 3;
+    optional uint64 userID = 4;
+}
+
+message EventQuery {
+    oneof EventQueryOneOf {
+        EventQueryAnd and = 1;
+        EventQueryOr or = 2;
+        EventQueryNot not = 3;
+        EventType eventType = 4;
+        Event event = 5;
+    }
+}
+
+enum EventType {
+    eventWindowFocusChange = 0;
+    eventOBSSceneChange = 1;
+}
+
+message Event {
+    oneof EventOneOf {
+        EventOBSSceneChange obsSceneChange = 1;
+        EventWindowFocusChange windowFocusChange = 2;
+    }
+}
+
+message TriggerRule {
+    string Description = 1;
+    EventQuery eventQuery = 2;
+    Action action = 3;
+}
+
+message ListTriggerRulesRequest {}
+message ListTriggerRulesReply {
+    repeated TriggerRule rules = 1;
+}
+message AddTriggerRuleRequest {
+    TriggerRule rule = 1;
+}
+message AddTriggerRuleReply {
+    uint64 ruleID =  1;
+}
+message RemoveTriggerRuleRequest  {
+    uint64 ruleID =  1;
+}
+message RemoveTriggerRuleReply {}
+message UpdateTriggerRuleRequest  {
+    uint64 ruleID = 1;
+    TriggerRule rule = 2;
+}
+message UpdateTriggerRuleReply {}
+
+message SubmitEventRequest {
+    Event event = 1;
+}
+message SubmitEventReply {}
