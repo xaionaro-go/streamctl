@@ -347,6 +347,7 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
 		}
 
 		p.reinitScreenshoter(ctx)
+		p.initEventSensor(ctx)
 
 		p.initMainWindow(ctx, initCfg.StartingPage)
 		if streamDRunErr != nil {
@@ -1630,25 +1631,18 @@ func (p *Panel) getUpdatedStatus_backends_noLock(ctx context.Context) {
 				return
 			}
 
-			sceneList, err := obsServer.GetSceneList(ctx, &obs_grpc.GetSceneListRequest{})
+			sceneListResp, err := obsServer.GetSceneList(ctx, &obs_grpc.GetSceneListRequest{})
 			if err != nil {
-				p.ReportError(fmt.Errorf("unable to get the list of scene from OBS: %w", err))
+				p.ReportError(err)
 				return
 			}
-			logger.Tracef(ctx, "OBS SceneList response: %#+v", sceneList)
 
-			p.obsSelectScene.Options = p.obsSelectScene.Options[:0]
-			for _, scene := range sceneList.Scenes {
-				sceneNameAny := scene.GetFields()["sceneName"]
-				sceneName := string(sceneNameAny.GetString_())
-				if sceneName == "" {
-					p.ReportError(fmt.Errorf("unable to parse the scene name from %#+v", scene))
-					return
-				}
-				p.obsSelectScene.Options = append(p.obsSelectScene.Options, sceneName)
+			for _, scene := range sceneListResp.Scenes {
+				p.obsSelectScene.Options = append(p.obsSelectScene.Options, *scene.SceneName)
 			}
-			if sceneList.CurrentProgramSceneName != p.obsSelectScene.Selected {
-				p.obsSelectScene.SetSelected(sceneList.CurrentProgramSceneName)
+
+			if sceneListResp.CurrentProgramSceneName != p.obsSelectScene.Selected {
+				p.obsSelectScene.SetSelected(sceneListResp.CurrentProgramSceneName)
 			}
 		})
 	} else {

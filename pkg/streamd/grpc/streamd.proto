@@ -541,21 +541,21 @@ message StreamPlayersChange {}
 
 message NoopRequest {}
 
-message OBSActionElementShowHide {
-    optional string elementName =  1;
-    optional string elementUUID =  2;
+message OBSActionItemShowHide {
+    optional string itemName =  1;
+    optional string itemUUID =  2;
     string valueExpression = 3;
 }
 
 message OBSActionWindowCaptureSetSource {
-    optional string elementName =  1;
-    optional string elementUUID =  2;
+    optional string itemName =  1;
+    optional string itemUUID =  2;
     string valueExpression = 3;
 }
 
 message OBSAction {
     oneof OBSActionOneOf {
-        OBSActionElementShowHide elementShowHide = 1;
+        OBSActionItemShowHide itemShowHide = 1;
         OBSActionWindowCaptureSetSource windowCaptureSetSource = 2;
     }
 }
@@ -610,10 +610,13 @@ message EventOBSSceneChange {
 }
 
 message EventWindowFocusChange {
-    optional uint64 windowID = 1;
-    optional string windowTitle = 2;
-    optional string windowTitlePartial = 3;
-    optional uint64 userID = 4;
+    optional string host = 1;
+    optional uint64 windowID = 2;
+    optional string windowTitle = 3;
+    optional uint64 processID = 4;
+    optional string processName = 5;
+    optional uint64 userID = 6;
+    optional bool isFocused = 7;
 }
 
 message EventQuery {

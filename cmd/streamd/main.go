@@ -196,6 +196,9 @@ func main() {
 		if obsGRPCClose != nil {
 			defer obsGRPCClose()
 		}
+		if err != nil {
+			log.Fatal(err)
+		}
 		obs_grpc.RegisterOBSServer(grpcServer, obsGRPC)
 		streamd_grpc.RegisterStreamDServer(grpcServer, streamdGRPC)
 		l.Infof("started server at %s", *listenAddr)

@@ -11,7 +11,7 @@ import (
 
 func init() {
 	serializable.RegisterType[Noop]()
-	serializable.RegisterType[OBSElementShowHide]()
+	serializable.RegisterType[OBSItemShowHide]()
 	serializable.RegisterType[OBSWindowCaptureSetSource]()
 	serializable.RegisterType[StartStream]()
 	serializable.RegisterType[EndStream]()
@@ -24,23 +24,23 @@ type Action interface {
 
 type ValueExpression = expression.Expression
 
-type OBSElementShowHide struct {
-	ElementName     *string         `yaml:"element_name,omitempty"     json:"element_name,omitempty"`
-	ElementUUID     *string         `yaml:"element_uuid,omitempty"     json:"element_uuid,omitempty"`
+type OBSItemShowHide struct {
+	ItemName        *string         `yaml:"item_name,omitempty"        json:"item_name,omitempty"`
+	ItemUUID        *string         `yaml:"item_uuid,omitempty"        json:"item_uuid,omitempty"`
 	ValueExpression ValueExpression `yaml:"value_expression,omitempty" json:"value_expression,omitempty"`
 }
 
-var _ Action = (*OBSElementShowHide)(nil)
+var _ Action = (*OBSItemShowHide)(nil)
 
-func (OBSElementShowHide) isAction() {}
+func (OBSItemShowHide) isAction() {}
 
-func (a OBSElementShowHide) String() string {
+func (a OBSItemShowHide) String() string {
 	return string(tryJSON(a))
 }
 
 type OBSWindowCaptureSetSource struct {
-	ElementName     *string         `yaml:"element_name,omitempty"     json:"element_name,omitempty"`
-	ElementUUID     *string         `yaml:"element_uuid,omitempty"     json:"element_uuid,omitempty"`
+	ItemName        *string         `yaml:"item_name,omitempty"        json:"item_name,omitempty"`
+	ItemUUID        *string         `yaml:"item_uuid,omitempty"        json:"item_uuid,omitempty"`
 	ValueExpression ValueExpression `yaml:"value_expression,omitempty" json:"value_expression,omitempty"`
 }
 

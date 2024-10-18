@@ -57,6 +57,10 @@ func reflectMakeFieldsFor(
 		return []fyne.CanvasObject{newReflectField(v, func(i uint64) {
 			setter(reflect.ValueOf(i).Convert(t))
 		}, namePrefix)}
+	case reflect.Bool:
+		return []fyne.CanvasObject{newReflectField(v, func(i bool) {
+			setter(reflect.ValueOf(i).Convert(t))
+		}, namePrefix)}
 	case reflect.Ptr:
 		return reflectMakeFieldsFor(v.Elem(), t.Elem(), func(newValue reflect.Value) {
 			if newValue.IsZero() && v.CanAddr() {

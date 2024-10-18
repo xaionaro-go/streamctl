@@ -35,16 +35,16 @@ func ActionGRPC2Go(
 		}
 	case *streamd_grpc.Action_ObsAction:
 		switch o := a.ObsAction.OBSActionOneOf.(type) {
-		case *streamd_grpc.OBSAction_ElementShowHide:
-			result = &action.OBSElementShowHide{
-				ElementName:     o.ElementShowHide.ElementName,
-				ElementUUID:     o.ElementShowHide.ElementUUID,
-				ValueExpression: expression.Expression(o.ElementShowHide.ValueExpression),
+		case *streamd_grpc.OBSAction_ItemShowHide:
+			result = &action.OBSItemShowHide{
+				ItemName:        o.ItemShowHide.ItemName,
+				ItemUUID:        o.ItemShowHide.ItemUUID,
+				ValueExpression: expression.Expression(o.ItemShowHide.ValueExpression),
 			}
 		case *streamd_grpc.OBSAction_WindowCaptureSetSource:
 			result = &action.OBSWindowCaptureSetSource{
-				ElementName:     o.WindowCaptureSetSource.ElementName,
-				ElementUUID:     o.WindowCaptureSetSource.ElementUUID,
+				ItemName:        o.WindowCaptureSetSource.ItemName,
+				ItemUUID:        o.WindowCaptureSetSource.ItemUUID,
 				ValueExpression: expression.Expression(o.WindowCaptureSetSource.ValueExpression),
 			}
 		default:
@@ -82,13 +82,13 @@ func ActionGo2GRPC(
 				PlatID: string(a.PlatID),
 			},
 		}
-	case *action.OBSElementShowHide:
+	case *action.OBSItemShowHide:
 		result.ActionOneof = &streamd_grpc.Action_ObsAction{
 			ObsAction: &streamd_grpc.OBSAction{
-				OBSActionOneOf: &streamd_grpc.OBSAction_ElementShowHide{
-					ElementShowHide: &streamd_grpc.OBSActionElementShowHide{
-						ElementName:     a.ElementName,
-						ElementUUID:     a.ElementUUID,
+				OBSActionOneOf: &streamd_grpc.OBSAction_ItemShowHide{
+					ItemShowHide: &streamd_grpc.OBSActionItemShowHide{
+						ItemName:        a.ItemName,
+						ItemUUID:        a.ItemUUID,
 						ValueExpression: string(a.ValueExpression),
 					},
 				},
@@ -99,8 +99,8 @@ func ActionGo2GRPC(
 			ObsAction: &streamd_grpc.OBSAction{
 				OBSActionOneOf: &streamd_grpc.OBSAction_WindowCaptureSetSource{
 					WindowCaptureSetSource: &streamd_grpc.OBSActionWindowCaptureSetSource{
-						ElementName:     a.ElementName,
-						ElementUUID:     a.ElementUUID,
+						ItemName:        a.ItemName,
+						ItemUUID:        a.ItemUUID,
 						ValueExpression: string(a.ValueExpression),
 					},
 				},

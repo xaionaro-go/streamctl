@@ -6,7 +6,7 @@ import (
 )
 
 type WindowManagerHandler struct {
-	*PlatformSpecificWindowManagerHandler
+	PlatformSpecificWindowManagerHandler
 }
 
 func New() (*WindowManagerHandler, error) {
@@ -22,6 +22,9 @@ func (wmh *WindowManagerHandler) WindowFocusChangeChan(ctx context.Context) <-ch
 }
 
 type WindowFocusChange struct {
-	WindowID    WindowID
-	WindowTitle string
+	WindowID    *WindowID
+	WindowTitle *string
+	ProcessID   *PID
+	UserID      *UID
+	ProcessName *string
 }

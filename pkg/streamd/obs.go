@@ -170,5 +170,51 @@ func (d *StreamD) OBSElementSetShow(
 	elID SceneElementIdentifier,
 	shouldShow bool,
 ) error {
-	return fmt.Errorf("not implemented, yet")
+	if elID.Name == nil && elID.UUID == nil {
+		return fmt.Errorf("elID.Name == nil && elID.UUID == nil (which is legit, but unexpected, so we fail just in case)")
+	}
+
+	obsServer, obsServerClose, err := d.OBS(ctx)
+	if obsServerClose != nil {
+		defer obsServerClose()
+	}
+	if err != nil {
+		return fmt.Errorf("unable to get a client to OBS: %w", err)
+	}
+
+	sceneListResp, err := obsServer.GetSceneList(ctx, &obs_grpc.GetSceneListRequest{})
+	if err != nil {
+		return fmt.Errorf("unable to get the scenes list: %w", err)
+	}
+
+	for _, scene := range sceneListResp.Scenes {
+		itemList, err := obsServer.GetSceneItemList(ctx, &obs_grpc.GetSceneItemListRequest{
+			SceneUUID: scene.SceneUUID,
+		})
+		if err != nil {
+			return fmt.Errorf("unable to get the list of items of scene %#+v: %w", scene, err)
+		}
+
+		for _, item := range itemList.GetSceneItems() {
+			if elID.Name != nil && *elID.Name != item.GetSourceName() {
+				continue
+			}
+			if elID.UUID != nil && *elID.UUID != item.GetSourceUUID() {
+				continue
+			}
+
+			req := &obs_grpc.SetSceneItemEnabledRequest{
+				SceneName:        scene.SceneName,
+				SceneUUID:        scene.SceneUUID,
+				SceneItemID:      item.SceneItemID,
+				SceneItemEnabled: shouldShow,
+			}
+			_, err := obsServer.SetSceneItemEnabled(ctx, req)
+			if err != nil {
+				return fmt.Errorf("unable to submit %#+v: %w", shouldShow, item, err)
+			}
+		}
+	}
+
+	return nil
 }

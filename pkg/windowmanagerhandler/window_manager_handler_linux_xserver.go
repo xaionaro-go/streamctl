@@ -13,6 +13,7 @@ import (
 	"github.com/BurntSushi/xgbutil"
 	"github.com/BurntSushi/xgbutil/ewmh"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/shirou/gopsutil/process"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 )
 
@@ -69,9 +70,36 @@ func (wmh *XWindowManagerHandler) WindowFocusChangeChan(ctx context.Context) <-c
 				continue
 			}
 
+			pid, err := ewmh.WmPidGet(wmh.XUtil, clientID)
+			if err != nil {
+				logger.Errorf(ctx, "unable to get the PID of the active window (%d): %w", clientID, err)
+				continue
+			}
+
+			proc, err := process.NewProcess(int32(pid))
+			if err != nil {
+				logger.Errorf(ctx, "unable to get process info of the active window (%d) using PID %d: %w", clientID, pid, err)
+				continue
+			}
+
+			uids, err := proc.Uids()
+			if err != nil {
+				logger.Errorf(ctx, "unable to get the UIDs of the active window (%d) using PID %d", clientID, pid, err)
+				continue
+			}
+
+			procName, err := proc.Name()
+			if err != nil {
+				logger.Errorf(ctx, "unable to get the process name of the active window (%d) using PID %d", clientID, pid, err)
+				continue
+			}
+
 			ch <- WindowFocusChange{
-				WindowID:    WindowID(clientID),
-				WindowTitle: name,
+				WindowID:    ptr(WindowID(clientID)),
+				WindowTitle: ptr(name),
+				UserID:      ptr(UID(uids[0])),
+				ProcessID:   ptr(PID(pid)),
+				ProcessName: ptr(procName),
 			}
 		}
 	})

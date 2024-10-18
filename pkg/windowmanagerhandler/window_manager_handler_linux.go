@@ -9,6 +9,8 @@ import (
 )
 
 type WindowID uint64
+type PID int // using the same underlying type as `os` does
+type UID int // using the same underlying type as `os` does
 
 type XWMOrWaylandWM interface {
 	WindowFocusChangeChan(ctx context.Context) <-chan WindowFocusChange

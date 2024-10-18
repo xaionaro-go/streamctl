@@ -60,16 +60,20 @@ $(GOPATH)/bin/pkg-config-wrapper:
 	sh -c 'cd 3rdparty/amd64/windows && wget https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2024-09-29-12-53/ffmpeg-n7.0.2-19-g45ecf80f0e-win64-gpl-shared-7.0.zip && unzip ffmpeg-n7.0.2-19-g45ecf80f0e-win64-gpl-shared-7.0.zip && rm -f ffmpeg-n7.0.2-19-g45ecf80f0e-win64-gpl-shared-7.0.zip'
 
 streampanel-linux-amd64: builddir
-	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build $(GOBUILD_FLAGS) -o build/streampanel-linux-amd64 ./cmd/streampanel
+	$(eval INSTALL_DEST?=build/streampanel-linux-amd64)
+	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build $(GOBUILD_FLAGS) -o "$(INSTALL_DEST)" ./cmd/streampanel
 
 streampanel-linux-arm64: builddir
-	CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build $(GOBUILD_FLAGS) -o build/streampanel-linux-arm64 ./cmd/streampanel
+	$(eval INSTALL_DEST?=build/streampanel-linux-arm64)
+	CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build $(GOBUILD_FLAGS) -o "$(INSTALL_DEST)" ./cmd/streampanel
 
 streampanel-macos-amd64: builddir
-	CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build $(GOBUILD_FLAGS) -o build/streampanel-macos-amd64 ./cmd/streampanel
+	$(eval INSTALL_DEST?=build/streampanel-macos-amd64)
+	CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build $(GOBUILD_FLAGS) -o "$(INSTALL_DEST)" ./cmd/streampanel
 
 streampanel-macos-arm64: builddir
-	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build $(GOBUILD_FLAGS) -o build/streampanel-macos-arm64 ./cmd/streampanel
+	$(eval INSTALL_DEST?=build/streampanel-macos-arm64)
+	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build $(GOBUILD_FLAGS) -o "$(INSTALL_DEST)" ./cmd/streampanel
 
 3rdparty/arm64/termux-packages:
 	mkdir -p 3rdparty/arm64/

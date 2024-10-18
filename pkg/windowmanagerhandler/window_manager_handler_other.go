@@ -10,6 +10,8 @@ import (
 
 type PlatformSpecificWindowManagerHandler struct{}
 type WindowID struct{}
+type PID struct{}
+type UID struct{}
 
 func (wmh *WindowManagerHandler) init(context.Context) error {
 	return fmt.Errorf("the support of window manager handler for this platform is not implemented, yet")

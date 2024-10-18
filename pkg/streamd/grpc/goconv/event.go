@@ -23,10 +23,13 @@ func EventGo2GRPC(in event.Event) (*streamd_grpc.Event, error) {
 
 func triggerGo2GRPCWindowFocusChange(q *event.WindowFocusChange) *streamd_grpc.EventWindowFocusChange {
 	return &streamd_grpc.EventWindowFocusChange{
-		WindowID:           q.WindowID,
-		WindowTitle:        q.WindowTitle,
-		WindowTitlePartial: q.WindowTitlePartial,
-		UserID:             q.UserID,
+		Host:        q.Host,
+		WindowID:    q.WindowID,
+		WindowTitle: q.WindowTitle,
+		ProcessID:   q.ProcessID,
+		ProcessName: q.ProcessName,
+		UserID:      q.UserID,
+		IsFocused:   q.IsFocused,
 	}
 }
 
@@ -43,9 +46,12 @@ func triggerGRPC2GoWindowFocusChange(
 	q *streamd_grpc.EventWindowFocusChange,
 ) config.Event {
 	return &event.WindowFocusChange{
-		WindowID:           q.WindowID,
-		WindowTitle:        q.WindowTitle,
-		WindowTitlePartial: q.WindowTitlePartial,
-		UserID:             q.UserID,
+		Host:        q.Host,
+		WindowID:    q.WindowID,
+		WindowTitle: q.WindowTitle,
+		UserID:      q.UserID,
+		ProcessID:   q.ProcessID,
+		ProcessName: q.ProcessName,
+		IsFocused:   q.IsFocused,
 	}
 }

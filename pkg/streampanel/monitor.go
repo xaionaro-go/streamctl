@@ -22,7 +22,6 @@ import (
 	"github.com/anthonynsimon/bild/adjust"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/lusingander/colorpicker"
-	"github.com/xaionaro-go/obs-grpc-proxy/pkg/obsgrpcproxy"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/colorx"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
@@ -488,50 +487,37 @@ func (p *Panel) editMonitorElementWindow(
 	var audioSourceNames []string
 	videoSourceNameIsSet := map[string]struct{}{}
 	audioSourceNameIsSet := map[string]struct{}{}
-	for _, _scene := range resp.Scenes {
-		scene, err := obsgrpcproxy.FromAbstractObject[map[string]any](_scene)
-		if err != nil {
-			p.DisplayError(fmt.Errorf("unable to convert scene info: %w", err))
-			return
-		}
-		logger.Debugf(ctx, "scene info: %#+v", scene)
-		sceneName, _ := scene["sceneName"].(string)
+	for _, scene := range resp.Scenes {
 		resp, err := obsServer.GetSceneItemList(ctx, &obs_grpc.GetSceneItemListRequest{
-			SceneName: &sceneName,
+			SceneName: scene.SceneName,
 		})
 		if err != nil {
 			p.DisplayError(
-				fmt.Errorf("unable to get the list of items of scene '%s': %w", sceneName, err),
+				fmt.Errorf("unable to get the list of items of scene '%s': %w", scene.SceneName, err),
 			)
 			return
 		}
 		for _, item := range resp.SceneItems {
-			source, err := obsgrpcproxy.FromAbstractObject[map[string]any](item)
-			if err != nil {
-				p.DisplayError(fmt.Errorf("unable to convert source info: %w", err))
-				return
-			}
-			logger.Debugf(ctx, "source info: %#+v", source)
-			sourceName, _ := source["sourceName"].(string)
+			logger.Debugf(ctx, "source info: %#+v", item)
 			func() {
-				if _, ok := videoSourceNameIsSet[sourceName]; ok {
+				if _, ok := videoSourceNameIsSet[item.SourceName]; ok {
 					return
 				}
-				sceneItemTransform := source["sceneItemTransform"].(map[string]any)
-				sourceWidth, _ := sceneItemTransform["sourceWidth"].(float64)
+				sceneItemTransform := item.SceneItemTransform
+				sourceWidth := sceneItemTransform.SourceWidth
 				if sourceWidth == 0 {
 					return
 				}
-				videoSourceNameIsSet[sourceName] = struct{}{}
-				videoSourceNames = append(videoSourceNames, sourceName)
+				videoSourceNameIsSet[item.SourceName] = struct{}{}
+				videoSourceNames = append(videoSourceNames, item.SourceName)
 			}()
 			func() {
-				if _, ok := audioSourceNameIsSet[sourceName]; ok {
+				if _, ok := audioSourceNameIsSet[item.SourceName]; ok {
 					return
 				}
 				// TODO: filter only audio sources
-				audioSourceNameIsSet[sourceName] = struct{}{}
-				audioSourceNames = append(audioSourceNames, sourceName)
+				audioSourceNameIsSet[item.SourceName] = struct{}{}
+				audioSourceNames = append(audioSourceNames, item.SourceName)
 			}()
 		}
 	}

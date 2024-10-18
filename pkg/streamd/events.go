@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/expression"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
@@ -37,13 +38,15 @@ func (d *StreamD) submitEvent(
 	ctx context.Context,
 	ev event.Event,
 ) error {
+	logger.Debugf(ctx, "submitEvent(ctx, %s)", spew.Sdump(ev))
+	defer logger.Debugf(ctx, "/submitEvent(ctx, %#v)", spew.Sdump(ev))
 	exprCtx := objToMap(ev)
 	for _, rule := range d.Config.TriggerRules {
 		if rule.EventQuery.Match(ev) {
 			observability.Go(ctx, func() {
 				err := d.doAction(ctx, rule.Action, exprCtx)
 				if err != nil {
-					logger.Errorf(ctx, "unable to perform action %#+v: %w", rule.Action, err)
+					logger.Errorf(ctx, "unable to perform action %s: %v", rule.Action, err)
 				}
 			})
 		}
@@ -63,7 +66,7 @@ func (d *StreamD) doAction(
 		return d.StartStream(ctx, a.PlatID, a.Title, a.Description, a.Profile, a.CustomArgs...)
 	case *action.EndStream:
 		return d.EndStream(ctx, a.PlatID)
-	case *action.OBSElementShowHide:
+	case *action.OBSItemShowHide:
 		value, err := expression.Eval[bool](a.ValueExpression, exprCtx)
 		if err != nil {
 			return fmt.Errorf("unable to Eval() the expression '%s': %w", a.ValueExpression, err)
@@ -71,8 +74,8 @@ func (d *StreamD) doAction(
 		return d.OBSElementSetShow(
 			ctx,
 			SceneElementIdentifier{
-				Name: a.ElementName,
-				UUID: a.ElementUUID,
+				Name: a.ItemName,
+				UUID: a.ItemUUID,
 			},
 			value,
 		)
