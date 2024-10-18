@@ -206,6 +206,7 @@ func (ui *triggerRulesUI) openAddOrEditSceneRuleWindow(
 		w.SetContent(container.NewBorder(
 			nil,
 			widget.NewButton("Save", func() {
+				logger.Debugf(ctx, "triggerRule == %v", triggerRule)
 				err := commitFn(ctx, &triggerRule)
 				if err != nil {
 					ui.panel.DisplayError(err)

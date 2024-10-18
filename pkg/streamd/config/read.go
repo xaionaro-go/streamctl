@@ -36,6 +36,10 @@ func (cfg *Config) traceDump() {
 		return
 	}
 
+	for idx, rule := range cfg.TriggerRules {
+		l.Tracef("triggerRule[%d] == %s", idx, rule)
+	}
+
 	var buf bytes.Buffer
 	_, err := cfg.WriteTo(&buf)
 	if err != nil {

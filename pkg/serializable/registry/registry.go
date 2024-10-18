@@ -19,8 +19,16 @@ func New[T any]() *Registry[T] {
 	}
 }
 
-func typeOf(v any) reflect.Type {
-	return reflect.Indirect(reflect.ValueOf(v)).Type()
+func typeOf(in any) reflect.Type {
+	v := reflect.ValueOf(in)
+	if v.Kind() == reflect.Interface {
+		panic("should not support to happen") // or should we just do v = v.Elem() here?
+	}
+	t := v.Type()
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	return t
 }
 
 func ToTypeName[T any](sample T) string {
@@ -36,7 +44,15 @@ func ToTypeName[T any](sample T) string {
 }
 
 func (r *Registry[T]) RegisterType(sample T) {
-	r.Types[ToTypeName(sample)] = typeOf(sample)
+	name := ToTypeName(sample)
+	if _, ok := r.Types[name]; ok {
+		panic(fmt.Errorf("type '%s' is already registered; cannot register %T", name, sample))
+	}
+	t := typeOf(sample)
+	if t.Kind() == reflect.Interface {
+		panic(fmt.Errorf("type '%s' (%T) is an interface; cannot register it", name, sample))
+	}
+	r.Types[name] = t
 }
 
 func (r *Registry[T]) NewByTypeName(typeName string) T {

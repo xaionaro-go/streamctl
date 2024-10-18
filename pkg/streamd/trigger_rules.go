@@ -13,8 +13,8 @@ func (d *StreamD) AddTriggerRule(
 	ctx context.Context,
 	triggerRule *api.TriggerRule,
 ) (api.TriggerRuleID, error) {
-	logger.Debugf(ctx, "AddTriggerRule(ctx, %#+v)", triggerRule)
-	defer logger.Debugf(ctx, "/AddTriggerRule(ctx, %#+v)", triggerRule)
+	logger.Debugf(ctx, "AddTriggerRule(ctx, %s)", triggerRule)
+	defer logger.Debugf(ctx, "/AddTriggerRule(ctx, %s)", triggerRule)
 	ruleID, err := d.addTriggerRuleToConfig(ctx, triggerRule)
 	if err != nil {
 		return 0, fmt.Errorf("unable to add the trigger rule to config: %w", err)
@@ -41,8 +41,8 @@ func (d *StreamD) UpdateTriggerRule(
 	ruleID api.TriggerRuleID,
 	triggerRule *api.TriggerRule,
 ) error {
-	logger.Debugf(ctx, "UpdateTriggerRule(ctx, %v, %#+v)", ruleID, triggerRule)
-	defer logger.Debugf(ctx, "/UpdateTriggerRule(ctx, %v, %#+v)", ruleID, triggerRule)
+	logger.Debugf(ctx, "UpdateTriggerRule(ctx, %v, %s)", ruleID, triggerRule)
+	defer logger.Debugf(ctx, "/UpdateTriggerRule(ctx, %v, %s)", ruleID, triggerRule)
 	if err := d.updateTriggerRuleInConfig(ctx, ruleID, triggerRule); err != nil {
 		return fmt.Errorf("unable to update the trigger rule %d in the config: %w", ruleID, err)
 	}

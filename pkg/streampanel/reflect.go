@@ -5,7 +5,10 @@ import (
 	"reflect"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
+	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/serializable"
 )
 
 func makeFieldsFor(
@@ -39,6 +42,8 @@ func reflectMakeFieldsFor(
 	setter func(reflect.Value),
 	namePrefix string,
 ) []fyne.CanvasObject {
+	l := logger.Default().WithField("name_prefix", namePrefix)
+
 	if setter == nil {
 		setter = func(v reflect.Value) {}
 	}
@@ -88,6 +93,46 @@ func reflectMakeFieldsFor(
 			}, namePrefix+"."+ft.Name)...)
 		}
 		return result
+	case reflect.Interface:
+		typeNames := serializable.ListTypeNames[any]()
+		var options []string
+		values := map[string]any{}
+		for _, n := range typeNames {
+			candidate, ok := serializable.NewByTypeName[any](n)
+			if !ok {
+				continue
+			}
+			if reflect.ValueOf(candidate).Type().Implements(t) {
+				options = append(options, n)
+				values[n] = candidate
+			}
+		}
+		l.Debugf("options == %v", options)
+
+		container := container.NewVBox()
+		var selector *widget.Select
+		refreshContent := func() {
+			container.RemoveAll()
+			container.Add(selector)
+			value := values[selector.Selected]
+			fields := reflectMakeFieldsFor(
+				reflect.ValueOf(value), reflect.TypeOf(value),
+				setter,
+				namePrefix,
+			)
+			l.Debugf("'%s' has %d fields", selector.Selected, len(fields))
+			for _, field := range fields {
+				container.Add(field)
+			}
+			setter(reflect.ValueOf(value))
+		}
+		selector = widget.NewSelect(options, func(s string) {
+			refreshContent()
+		})
+		if len(options) > 0 {
+			selector.SetSelected(options[0])
+		}
+		return []fyne.CanvasObject{container}
 	default:
 		panic(fmt.Errorf("internal error: %s: support of %v is not implemented, yet", namePrefix, t.Kind()))
 	}

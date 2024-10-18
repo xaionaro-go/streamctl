@@ -12,7 +12,7 @@ import (
 func EventQueryGo2GRPC(in eventquery.EventQuery) (*streamd_grpc.EventQuery, error) {
 	switch q := in.(type) {
 	case *eventquery.Event:
-		ev, err := EventGo2GRPC(q.Value)
+		ev, err := EventGo2GRPC(q.Event)
 		if err != nil {
 			return nil, fmt.Errorf("unable to convert event: %w", err)
 		}
@@ -21,7 +21,7 @@ func EventQueryGo2GRPC(in eventquery.EventQuery) (*streamd_grpc.EventQuery, erro
 				Event: ev,
 			},
 		}, nil
-	case *eventquery.EventType[event.WindowFocusChange]:
+	case *eventquery.EventType[*event.WindowFocusChange]:
 		return &streamd_grpc.EventQuery{
 			EventQueryOneOf: &streamd_grpc.EventQuery_EventType{
 				EventType: streamd_grpc.EventType_eventWindowFocusChange,
@@ -40,12 +40,12 @@ func EventQueryGRPC2Go(in *streamd_grpc.EventQuery) (config.EventQuery, error) {
 			return nil, fmt.Errorf("unable to convert event: %w", err)
 		}
 		return &eventquery.Event{
-			Value: ev,
+			Event: ev,
 		}, nil
 	case *streamd_grpc.EventQuery_EventType:
 		switch q.EventType {
 		case streamd_grpc.EventType_eventWindowFocusChange:
-			return &eventquery.EventType[event.WindowFocusChange]{}, nil
+			return &eventquery.EventType[*event.WindowFocusChange]{}, nil
 		default:
 			return nil, fmt.Errorf("unable to convert event type %v", q.EventType)
 		}

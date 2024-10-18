@@ -2,9 +2,11 @@ package config
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 
+	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
 	"github.com/xaionaro-go/datacounter"
 	goyaml "gopkg.in/yaml.v3"
@@ -33,6 +35,9 @@ func (cfg Config) WriteTo(
 }
 
 func (cfg Config) MarshalYAML() ([]byte, error) {
+	for _, r := range cfg.TriggerRules {
+		logger.Tracef(context.TODO(), "triggerRule == %s", r)
+	}
 	// There is bug in github.com/goccy/go-yaml that makes wrong intention
 	// in cfg.BuiltinStreamD.GitRepo.PrivateKey makes the whole value unparsable
 	//
