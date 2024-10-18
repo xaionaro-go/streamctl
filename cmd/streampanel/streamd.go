@@ -13,6 +13,7 @@ import (
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/streamctl/cmd/streamd/ui"
 	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
@@ -276,7 +277,20 @@ func initGRPCServers(
 		logger.Panicf(ctx, "unable to initialize OBS client: %v", err)
 	}
 
-	grpcServer := grpc.NewServer()
+	opts := []grpc_recovery.Option{
+		grpc_recovery.WithRecoveryHandler(func(p interface{}) (err error) {
+			errmon.ObserveRecoverCtx(ctx, p)
+			return nil
+		}),
+	}
+	grpcServer := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(
+			grpc_recovery.UnaryServerInterceptor(opts...),
+		),
+		grpc.ChainStreamInterceptor(
+			grpc_recovery.StreamServerInterceptor(opts...),
+		),
+	)
 	streamdGRPC := server.NewGRPCServer(streamD)
 	streamd_grpc.RegisterStreamDServer(grpcServer, streamdGRPC)
 	obs_grpc.RegisterOBSServer(grpcServer, obsGRPC)

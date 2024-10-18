@@ -17,6 +17,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
 	"github.com/getsentry/sentry-go"
+	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"github.com/spf13/pflag"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/streamctl/cmd/streamd/ui"
@@ -189,7 +190,20 @@ func main() {
 			listener.Close()
 		})
 
-		grpcServer := grpc.NewServer()
+		opts := []grpc_recovery.Option{
+			grpc_recovery.WithRecoveryHandler(func(p interface{}) (err error) {
+				errmon.ObserveRecoverCtx(ctx, p)
+				return nil
+			}),
+		}
+		grpcServer := grpc.NewServer(
+			grpc.ChainUnaryInterceptor(
+				grpc_recovery.UnaryServerInterceptor(opts...),
+			),
+			grpc.ChainStreamInterceptor(
+				grpc_recovery.StreamServerInterceptor(opts...),
+			),
+		)
 		streamdGRPC = server.NewGRPCServer(streamD)
 		var obsGRPCClose context.CancelFunc
 		obsGRPC, obsGRPCClose, err = streamD.OBS(ctx)
