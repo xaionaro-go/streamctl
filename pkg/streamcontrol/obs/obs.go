@@ -257,3 +257,19 @@ func (obs *OBS) SetCurrentProgramScene(
 	}
 	return nil
 }
+
+func (obs *OBS) GetChatChan(
+	ctx context.Context,
+) (<-chan streamcontrol.ChatEvent, error) {
+	return nil, nil
+}
+
+func (obs *OBS) SendChatMessage(ctx context.Context, message string) error {
+	return fmt.Errorf("not implemented, yet")
+}
+func (obs *OBS) DeleteChatMessage(ctx context.Context, messageID string) error {
+	return fmt.Errorf("not implemented, yet")
+}
+func (obs *OBS) BanUser(ctx context.Context, userID string, reason string, deadline time.Time) error {
+	return fmt.Errorf("not implemented, yet")
+}

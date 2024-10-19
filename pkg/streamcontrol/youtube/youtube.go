@@ -1163,3 +1163,19 @@ func (yt *YouTube) fixError(ctx context.Context, err error, counterPtr *int) boo
 
 	return false
 }
+
+func (yt *YouTube) GetChatChan(
+	ctx context.Context,
+) (<-chan streamcontrol.ChatEvent, error) {
+	return nil, nil
+}
+
+func (yt *YouTube) SendChatMessage(ctx context.Context, message string) error {
+	return fmt.Errorf("not implemented, yet")
+}
+func (yt *YouTube) DeleteChatMessage(ctx context.Context, messageID string) error {
+	return fmt.Errorf("not implemented, yet")
+}
+func (yt *YouTube) BanUser(ctx context.Context, userID string, reason string, deadline time.Time) error {
+	return fmt.Errorf("not implemented, yet")
+}

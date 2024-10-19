@@ -792,3 +792,67 @@ func (t *Twitch) GetAllCategories(
 
 	return allCategories, nil
 }
+
+func (t *Twitch) GetChatChan(
+	ctx context.Context,
+) (<-chan streamcontrol.ChatEvent, error) {
+	logger.Debugf(ctx, "GetChatChan")
+	defer logger.Debugf(ctx, "/GetChatChan")
+
+	t.prepare(ctx)
+
+	h, err := NewChatHandler(t.broadcasterID)
+	if err != nil {
+		return nil, fmt.Errorf("unable to initialize a chat handler for channel '%s': %w", t.broadcasterID, err)
+	}
+
+	return h.MessagesChan(), nil
+}
+
+func (t *Twitch) SendChatMessage(ctx context.Context, message string) (_ret error) {
+	logger.Debugf(ctx, "SendChatMessage(ctx, '%s')", message)
+	defer func() { logger.Debugf(ctx, "/SendChatMessage(ctx, '%s'): %v", message, _ret) }()
+
+	t.prepare(ctx)
+
+	_, err := t.client.SendChatMessage(&helix.SendChatMessageParams{
+		BroadcasterID: t.broadcasterID,
+		SenderID:      t.broadcasterID,
+		Message:       message,
+	})
+	return err
+}
+func (t *Twitch) DeleteChatMessage(ctx context.Context, messageID string) (_ret error) {
+	logger.Debugf(ctx, "DeleteChatMessage(ctx, '%s')", messageID)
+	defer func() { logger.Debugf(ctx, "/DeleteChatMessage(ctx, '%s'): %v", messageID, _ret) }()
+
+	t.prepare(ctx)
+
+	_, err := t.client.DeleteChatMessage(&helix.DeleteChatMessageParams{
+		BroadcasterID: t.broadcasterID,
+		ModeratorID:   t.broadcasterID,
+		MessageID:     messageID,
+	})
+	return err
+}
+func (t *Twitch) BanUser(ctx context.Context, userID string, reason string, deadline time.Time) (_err error) {
+	logger.Debugf(ctx, "BanUser(ctx, '%s', '%s', %v)", userID, reason, deadline)
+	defer func() { logger.Debugf(ctx, "/BanUser(ctx, '%s', '%s', %v): %v", userID, reason, deadline, _err) }()
+
+	t.prepare(ctx)
+
+	duration := 0
+	if !deadline.IsZero() {
+		duration = int(time.Until(deadline).Seconds())
+	}
+	_, err := t.client.BanUser(&helix.BanUserParams{
+		BroadcasterID: t.broadcasterID,
+		ModeratorId:   t.broadcasterID,
+		Body: helix.BanUserRequestBody{
+			Duration: duration,
+			Reason:   reason,
+			UserId:   userID,
+		},
+	})
+	return err
+}

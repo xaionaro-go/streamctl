@@ -105,6 +105,12 @@ type StreamStatus struct {
 	CustomData any        `json:",omitempty"`
 }
 
+type ChatEvent struct {
+	UserID    string
+	MessageID string
+	Message   string
+}
+
 type StreamControllerCommons interface {
 	io.Closer
 
@@ -114,6 +120,11 @@ type StreamControllerCommons interface {
 	Flush(ctx context.Context) error
 	EndStream(ctx context.Context) error
 	GetStreamStatus(ctx context.Context) (*StreamStatus, error)
+
+	GetChatChan(ctx context.Context) (<-chan ChatEvent, error)
+	SendChatMessage(ctx context.Context, message string) error
+	DeleteChatMessage(ctx context.Context, messageID string) error
+	BanUser(ctx context.Context, userID string, reason string, deadline time.Time) error
 }
 
 type StreamController[ProfileType StreamProfile] interface {
@@ -210,6 +221,19 @@ func (c *abstractStreamController) GetStreamStatus(
 
 func (c *abstractStreamController) StreamProfileType() reflect.Type {
 	return c.StreamProfileTypeValue
+}
+
+func (c *abstractStreamController) GetChatChan(ctx context.Context) (<-chan ChatEvent, error) {
+	return c.StreamController.GetChatChan(ctx)
+}
+func (c *abstractStreamController) SendChatMessage(ctx context.Context, message string) error {
+	return c.StreamController.SendChatMessage(ctx, message)
+}
+func (c *abstractStreamController) DeleteChatMessage(ctx context.Context, messageID string) error {
+	return c.StreamController.DeleteChatMessage(ctx, messageID)
+}
+func (c *abstractStreamController) BanUser(ctx context.Context, userID string, reason string, deadline time.Time) error {
+	return c.StreamController.BanUser(ctx, userID, reason, deadline)
 }
 
 func ToAbstract[T StreamProfile](c StreamController[T]) AbstractStreamController {
