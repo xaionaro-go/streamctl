@@ -22,7 +22,7 @@ type Output struct {
 
 func formatFromScheme(scheme string) string {
 	switch scheme {
-	case "rtmp":
+	case "rtmp", "rtmps":
 		return "flv"
 	default:
 		return scheme

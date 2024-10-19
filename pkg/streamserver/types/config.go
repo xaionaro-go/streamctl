@@ -5,13 +5,41 @@ import (
 
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
 
-type Server struct {
-	ServerConfig `yaml:"config"`
-	Type         streamtypes.ServerType `yaml:"protocol"`
-	Listen       string                 `yaml:"listen"`
+type Config struct {
+	PortServers  []streamportserver.Config            `yaml:"servers"`
+	Streams      map[StreamID]*StreamConfig           `yaml:"streams"`
+	Destinations map[DestinationID]*DestinationConfig `yaml:"destinations"`
+	VideoPlayer  struct {
+		MPV struct {
+			Path string `yaml:"path"`
+		} `yaml:"mpv"`
+	} `yaml:"video_player"`
+}
+
+type ForwardingConfig struct {
+	Disabled bool               `yaml:"disabled,omitempty"`
+	Quirks   ForwardingQuirks   `yaml:"quirks,omitempty"`
+	Convert  VideoConvertConfig `yaml:"convert,omitempty"`
+}
+
+type PlayerConfig struct {
+	Player         player.Backend `yaml:"player,omitempty"`
+	Disabled       bool           `yaml:"disabled,omitempty"`
+	StreamPlayback sptypes.Config `yaml:"stream_playback,omitempty"`
+}
+
+type StreamConfig struct {
+	Forwardings map[DestinationID]ForwardingConfig `yaml:"forwardings"`
+	Player      *PlayerConfig                      `yaml:"player,omitempty"`
+}
+
+type DestinationConfig struct {
+	URL       string `yaml:"url"`
+	StreamKey string `yaml:"stream_key"`
 }
 
 type RestartUntilYoutubeRecognizesStream struct {
@@ -44,36 +72,3 @@ type ForwardingQuirks struct {
 }
 
 type VideoConvertConfig = streamtypes.VideoConvertConfig
-
-type ForwardingConfig struct {
-	Disabled bool               `yaml:"disabled,omitempty"`
-	Quirks   ForwardingQuirks   `yaml:"quirks,omitempty"`
-	Convert  VideoConvertConfig `yaml:"convert,omitempty"`
-}
-
-type PlayerConfig struct {
-	Player         player.Backend `yaml:"player,omitempty"`
-	Disabled       bool           `yaml:"disabled,omitempty"`
-	StreamPlayback sptypes.Config `yaml:"stream_playback,omitempty"`
-}
-
-type StreamConfig struct {
-	Forwardings map[DestinationID]ForwardingConfig `yaml:"forwardings"`
-	Player      *PlayerConfig                      `yaml:"player,omitempty"`
-}
-
-type DestinationConfig struct {
-	URL       string `yaml:"url"`
-	StreamKey string `yaml:"stream_key"`
-}
-
-type Config struct {
-	Servers      []Server                             `yaml:"servers"`
-	Streams      map[StreamID]*StreamConfig           `yaml:"streams"`
-	Destinations map[DestinationID]*DestinationConfig `yaml:"destinations"`
-	VideoPlayer  struct {
-		MPV struct {
-			Path string `yaml:"path"`
-		} `yaml:"mpv"`
-	} `yaml:"video_player"`
-}

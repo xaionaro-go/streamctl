@@ -61,12 +61,15 @@ func (c *Client) NewInputFromURL(
 	url string,
 	authKey string,
 	config InputConfig,
-) (InputID, error) {
+) (_ InputID, _err error) {
 	client, conn, err := c.grpcClient()
 	if err != nil {
 		return 0, err
 	}
 	defer conn.Close()
+
+	logger.Debugf(ctx, "NewInputFromURL(ctx, '%s', authKey, %#+v)", url, authKey)
+	defer func() { logger.Debugf(ctx, "/NewInputFromURL(ctx, '%s', authKey, %#+v): %v", url, authKey, _err) }()
 
 	resp, err := client.NewInput(ctx, &recoder_grpc.NewInputRequest{
 		Path: &recoder_grpc.ResourcePath{

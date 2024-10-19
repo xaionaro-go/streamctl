@@ -21,6 +21,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/libav/streamforward"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/streamplayers"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
@@ -36,7 +37,7 @@ type StreamServer struct {
 	mutex          xsync.Gorex
 	config         *types.Config
 	pathManager    *pathmanager.PathManager
-	serverHandlers []types.PortServer
+	serverHandlers []streamportserver.Server
 	isInitialized  bool
 
 	streamsStatusLocker xsync.Mutex
@@ -110,18 +111,18 @@ func (s *StreamServer) init(
 
 	s.reloadPathConfs(ctx)
 
-	for _, srv := range cfg.Servers {
+	for _, srv := range cfg.PortServers {
 		{
 			srv := srv
 			observability.Go(ctx, func() {
 				s.mutex.Do(ctx, func() {
-					_, err := s.startServer(ctx, srv.Type, srv.Listen, srv.Options()...)
+					_, err := s.startServer(ctx, srv.Type, srv.ListenAddr, srv.Options()...)
 					if err != nil {
 						logger.Errorf(
 							ctx,
 							"unable to initialize %s server at %s: %w",
 							srv.Type,
-							srv.Listen,
+							srv.ListenAddr,
 							err,
 						)
 					}
@@ -215,13 +216,13 @@ func (s *StreamServer) PubsubNames() (types.AppKeys, error) {
 
 func (s *StreamServer) ListServers(
 	ctx context.Context,
-) (_ret []types.PortServer) {
+) (_ret []streamportserver.Server) {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
 	logger.Tracef(ctx, "ListServers")
 	defer func() { logger.Tracef(ctx, "/ListServers: %d servers", len(_ret)) }()
 
-	return xsync.DoR1(ctx, &s.mutex, func() []types.PortServer {
-		c := make([]types.PortServer, len(s.serverHandlers))
+	return xsync.DoR1(ctx, &s.mutex, func() []streamportserver.Server {
+		c := make([]streamportserver.Server, len(s.serverHandlers))
 		copy(c, s.serverHandlers)
 		return c
 	})
@@ -231,18 +232,18 @@ func (s *StreamServer) StartServer(
 	ctx context.Context,
 	serverType streamtypes.ServerType,
 	listenAddr string,
-	opts ...types.ServerOption,
-) (types.PortServer, error) {
+	opts ...streamportserver.Option,
+) (streamportserver.Server, error) {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
-	return xsync.DoR2(ctx, &s.mutex, func() (types.PortServer, error) {
+	return xsync.DoR2(ctx, &s.mutex, func() (streamportserver.Server, error) {
 		portSrv, err := s.startServer(ctx, serverType, listenAddr, opts...)
 		if err != nil {
 			return nil, err
 		}
-		s.config.Servers = append(s.config.Servers, types.Server{
-			ServerConfig: types.ServerOptions(opts).Config(ctx),
-			Type:         serverType,
-			Listen:       listenAddr,
+		s.config.PortServers = append(s.config.PortServers, streamportserver.Config{
+			ProtocolSpecificConfig: streamportserver.Options(opts).ProtocolSpecificConfig(ctx),
+			Type:                   serverType,
+			ListenAddr:             listenAddr,
 		})
 		return portSrv, nil
 	})
@@ -250,7 +251,7 @@ func (s *StreamServer) StartServer(
 
 func (s *StreamServer) findServer(
 	_ context.Context,
-	server types.PortServer,
+	server streamportserver.Server,
 ) (int, error) {
 	for i := range s.serverHandlers {
 		if s.serverHandlers[i] == server {
@@ -262,13 +263,13 @@ func (s *StreamServer) findServer(
 
 func (s *StreamServer) StopServer(
 	ctx context.Context,
-	server types.PortServer,
+	server streamportserver.Server,
 ) error {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
 	return xsync.DoR1(ctx, &s.mutex, func() error {
-		for idx, srv := range s.config.Servers {
-			if srv.Listen == server.ListenAddr() {
-				s.config.Servers = append(s.config.Servers[:idx], s.config.Servers[idx+1:]...)
+		for idx, srv := range s.config.PortServers {
+			if srv.ListenAddr == server.ListenAddr() {
+				s.config.PortServers = append(s.config.PortServers[:idx], s.config.PortServers[idx+1:]...)
 				break
 			}
 		}
@@ -278,7 +279,7 @@ func (s *StreamServer) StopServer(
 
 func (s *StreamServer) stopServer(
 	ctx context.Context,
-	server types.PortServer,
+	server streamportserver.Server,
 ) error {
 	idx, err := s.findServer(ctx, server)
 	if err != nil {
@@ -429,14 +430,15 @@ func (s *StreamServer) WaitPublisherChan(
 
 func (s *StreamServer) GetPortServers(
 	ctx context.Context,
-) ([]streamplayer.StreamPortServer, error) {
+) ([]streamportserver.Config, error) {
 	srvs := s.ListServers(ctx)
 
-	result := make([]streamplayer.StreamPortServer, 0, len(srvs))
+	result := make([]streamportserver.Config, 0, len(srvs))
 	for _, srv := range srvs {
-		result = append(result, streamplayer.StreamPortServer{
-			Addr: srv.ListenAddr(),
-			Type: srv.Type(),
+		result = append(result, streamportserver.Config{
+			ProtocolSpecificConfig: srv.ProtocolSpecificConfig(),
+			Type:                   srv.Type(),
+			ListenAddr:             srv.ListenAddr(),
 		})
 	}
 
@@ -447,8 +449,8 @@ func (s *StreamServer) startServer(
 	ctx context.Context,
 	serverType streamtypes.ServerType,
 	listenAddr string,
-	opts ...types.ServerOption,
-) (_ types.PortServer, _ret error) {
+	opts ...streamportserver.Option,
+) (_ streamportserver.Server, _ret error) {
 	logger.Tracef(ctx, "startServer(%s, '%s')", serverType, listenAddr)
 	defer func() { logger.Tracef(ctx, "/startServer(%s, '%s'): %v", serverType, listenAddr, _ret) }()
 
@@ -473,7 +475,7 @@ func (s *StreamServer) startServer(
 		)
 	}
 
-	logger.Tracef(ctx, "adding serverHandler %#+v %#+v", portSrv, portSrv.Config())
+	logger.Tracef(ctx, "adding serverHandler %#+v %#+v", portSrv, portSrv.ProtocolSpecificConfig())
 	s.serverHandlers = append(s.serverHandlers, portSrv)
 	return nil, err
 }
@@ -482,8 +484,8 @@ func (s *StreamServer) newServer(
 	ctx context.Context,
 	serverType streamtypes.ServerType,
 	listenAddr string,
-	opts ...types.ServerOption,
-) (_ types.PortServer, _ret error) {
+	opts ...streamportserver.Option,
+) (_ streamportserver.Server, _ret error) {
 	switch serverType {
 	case streamtypes.ServerTypeRTSP:
 		return s.newServerRTSP(ctx, listenAddr, opts...)
@@ -503,8 +505,8 @@ func (s *StreamServer) newServer(
 func (s *StreamServer) newServerRTMP(
 	ctx context.Context,
 	listenAddr string,
-	opts ...types.ServerOption,
-) (_ types.PortServer, _ret error) {
+	opts ...streamportserver.Option,
+) (_ streamportserver.Server, _ret error) {
 	logger.Tracef(ctx, "newServerRTMP(ctx, '%s', %#+v)", listenAddr, opts)
 	rtmpSrv, err := newRTMPServer(
 		s.pathManager,

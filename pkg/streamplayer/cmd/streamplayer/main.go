@@ -23,6 +23,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver"
 	sstypes "github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/streamctl/pkg/xfyne"
 )
@@ -64,9 +65,9 @@ func main() {
 	m := player.NewManager(ptypes.OptionPathToMPV(*mpvPath))
 	ss := streamserver.New(
 		&sstypes.Config{
-			Servers: []sstypes.Server{{
-				Type:   streamtypes.ServerTypeRTMP,
-				Listen: *rtmpListenAddr,
+			PortServers: []streamportserver.Config{{
+				Type:       streamtypes.ServerTypeRTMP,
+				ListenAddr: *rtmpListenAddr,
 			}},
 			Streams: map[sstypes.StreamID]*sstypes.StreamConfig{
 				sstypes.StreamID(*streamID): {},

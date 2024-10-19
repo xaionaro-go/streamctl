@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"sort"
 	"time"
 
 	"github.com/facebookincubator/go-belt"
@@ -175,7 +176,7 @@ func (s *StreamForwards) getLocalhostRTMP(ctx context.Context) (*url.URL, error)
 	}
 	portSrv := portSrvs[0]
 
-	urlString := fmt.Sprintf("%s://%s", portSrv.Type, portSrv.Addr)
+	urlString := fmt.Sprintf("%s://%s", portSrv.Type, portSrv.ListenAddr)
 	urlParsed, err := url.Parse(urlString)
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse '%s': %w", urlString, err)
@@ -848,14 +849,30 @@ func (s *StreamForwards) findStreamDestinationByID(
 	)
 }
 
-func (s *StreamForwards) getLocalhostEndpoint(ctx context.Context) (*url.URL, error) {
+func (s *StreamForwards) getLocalhostEndpoint(ctx context.Context) (_ret *url.URL, _err error) {
+	defer func() { logger.Debugf(ctx, "getLocalhostEndpoint result: %v %v", _ret, _err) }()
+
 	portSrvs, err := s.StreamServer.GetPortServers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get port servers info: %w", err)
 	}
-	portSrv := portSrvs[0]
 
-	urlString := fmt.Sprintf("%s://%s", portSrv.Type, portSrv.Addr)
+	sort.Slice(portSrvs, func(i, j int) bool {
+		a := &portSrvs[i]
+		b := &portSrvs[j]
+		if a.IsTLS != b.IsTLS {
+			return b.IsTLS
+		}
+		return false
+	})
+	portSrv := portSrvs[0]
+	logger.Debugf(ctx, "getLocalhostEndpoint: chosen portSrv == %#+v", portSrv)
+
+	protoString := portSrv.Type.String()
+	if portSrv.IsTLS {
+		protoString += "s"
+	}
+	urlString := fmt.Sprintf("%s://%s", protoString, portSrv.ListenAddr)
 	urlParsed, err := url.Parse(urlString)
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse '%s': %w", urlString, err)

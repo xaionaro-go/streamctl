@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 
 	"github.com/xaionaro-go/go-rtmp"
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
 
@@ -16,7 +16,7 @@ type PortServer struct {
 	WriteCount uint64
 }
 
-var _ types.PortServer = (*PortServer)(nil)
+var _ streamportserver.Server = (*PortServer)(nil)
 
 func (srv *PortServer) Close() error {
 	return srv.Server.Close()
@@ -33,6 +33,6 @@ func (srv *PortServer) NumBytesConsumerWrote() uint64 {
 func (srv *PortServer) NumBytesProducerRead() uint64 {
 	return atomic.LoadUint64(&srv.ReadCount)
 }
-func (srv *PortServer) Config() types.ServerConfig {
-	return types.ServerConfig{}
+func (srv *PortServer) ProtocolSpecificConfig() streamportserver.ProtocolSpecificConfig {
+	return streamportserver.ProtocolSpecificConfig{}
 }

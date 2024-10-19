@@ -20,7 +20,7 @@ import (
 	mediamtxlogger "github.com/xaionaro-go/mediamtx/pkg/logger"
 	"github.com/xaionaro-go/mediamtx/pkg/pathmanager"
 	"github.com/xaionaro-go/mediamtx/pkg/servers/rtmp"
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
@@ -29,7 +29,7 @@ type RTMPServer struct {
 	*rtmp.Server
 
 	locker         xsync.Mutex
-	originalConfig types.ServerConfig
+	originalConfig streamportserver.Config
 	isInitialized  bool
 }
 
@@ -37,16 +37,20 @@ func newRTMPServer(
 	pathManager *pathmanager.PathManager,
 	listenAddr string,
 	logger mediamtxlogger.Writer,
-	opts ...types.ServerOption,
+	opts ...streamportserver.Option,
 ) (*RTMPServer, error) {
-	cfg := types.ServerOptions(opts).Config(context.Background())
+	psCfg := streamportserver.Options(opts).ProtocolSpecificConfig(context.Background())
 	srv := &RTMPServer{
-		originalConfig: cfg,
+		originalConfig: streamportserver.Config{
+			ProtocolSpecificConfig: psCfg,
+			Type:                   streamtypes.ServerTypeRTMP,
+			ListenAddr:             listenAddr,
+		},
 		Server: &rtmp.Server{
 			Address:             listenAddr,
-			ReadTimeout:         conf.StringDuration(cfg.ReadTimeout),
-			WriteTimeout:        conf.StringDuration(cfg.WriteTimeout),
-			IsTLS:               cfg.IsTLS,
+			ReadTimeout:         conf.StringDuration(psCfg.ReadTimeout),
+			WriteTimeout:        conf.StringDuration(psCfg.WriteTimeout),
+			IsTLS:               psCfg.IsTLS,
 			ServerCert:          "",
 			ServerKey:           "",
 			RTSPAddress:         "",
@@ -58,14 +62,14 @@ func newRTMPServer(
 			Parent:              logger,
 		},
 	}
-	if err := srv.init(cfg); err != nil {
+	if err := srv.init(srv.originalConfig); err != nil {
 		return nil, err
 	}
 	return srv, nil
 }
 
 func (srv *RTMPServer) init(
-	cfg types.ServerConfig,
+	cfg streamportserver.Config,
 ) (_err error) {
 	defer func() {
 		if _err != nil {
@@ -215,10 +219,10 @@ func (srv *RTMPServer) setServerCertificate(
 	return nil
 }
 
-var _ types.PortServer = (*RTMPServer)(nil)
+var _ streamportserver.Server = (*RTMPServer)(nil)
 
-func (srv *RTMPServer) Config() types.ServerConfig {
-	return srv.originalConfig
+func (srv *RTMPServer) ProtocolSpecificConfig() streamportserver.ProtocolSpecificConfig {
+	return srv.originalConfig.ProtocolSpecificConfig
 }
 
 func (srv *RTMPServer) Close() error {

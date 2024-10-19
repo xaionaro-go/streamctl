@@ -8,6 +8,7 @@ import (
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/streamforward"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
 
@@ -24,11 +25,11 @@ type StreamServer interface {
 		ctx context.Context,
 		serverType streamtypes.ServerType,
 		listenAddr string,
-		opts ...types.ServerOption,
-	) (types.PortServer, error)
+		opts ...streamportserver.Option,
+	) (streamportserver.Server, error)
 	StopServer(
 		ctx context.Context,
-		server types.PortServer,
+		server streamportserver.Server,
 	) error
 
 	AddIncomingStream(
@@ -118,5 +119,5 @@ type StreamServer interface {
 		streamID types.StreamID,
 	) (player.Player, error)
 
-	ListServers(ctx context.Context) []types.PortServer
+	ListServers(ctx context.Context) []streamportserver.Server
 }

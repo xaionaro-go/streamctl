@@ -30,10 +30,10 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/memoize"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/ui"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
-	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver"
 	sstypes "github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/streamctl/pkg/xcontext"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
@@ -936,10 +936,12 @@ func (d *StreamD) ListStreamServers(
 		var result []api.StreamServer
 		for idx, portSrv := range servers {
 			srv := api.StreamServer{
-				ServerConfig: portSrv.Config(),
+				Config: streamportserver.Config{
+					ProtocolSpecificConfig: portSrv.ProtocolSpecificConfig(),
 
-				Type:       portSrv.Type(),
-				ListenAddr: portSrv.ListenAddr(),
+					Type:       portSrv.Type(),
+					ListenAddr: portSrv.ListenAddr(),
+				},
 
 				NumBytesConsumerWrote: portSrv.NumBytesConsumerWrote(),
 				NumBytesProducerRead:  portSrv.NumBytesProducerRead(),
@@ -957,7 +959,7 @@ func (d *StreamD) StartStreamServer(
 	ctx context.Context,
 	serverType api.StreamServerType,
 	listenAddr string,
-	opts ...sstypes.ServerOption,
+	opts ...streamportserver.Option,
 ) error {
 	logger.Debugf(ctx, "StartStreamServer")
 	defer logger.Debugf(ctx, "/StartStreamServer")
@@ -974,7 +976,7 @@ func (d *StreamD) StartStreamServer(
 			return fmt.Errorf("unable to start stream server: %w", err)
 		}
 
-		logger.Tracef(ctx, "new StreamServer.Servers config == %#+v", d.Config.StreamServer.Servers)
+		logger.Tracef(ctx, "new StreamServer.Servers config == %#+v", d.Config.StreamServer.PortServers)
 		err = d.SaveConfig(ctx)
 		if err != nil {
 			return fmt.Errorf("unable to save config: %w", err)
@@ -987,10 +989,10 @@ func (d *StreamD) StartStreamServer(
 func (d *StreamD) getStreamServerByListenAddr(
 	ctx context.Context,
 	listenAddr string,
-) *sstypes.PortServer {
+) streamportserver.Server {
 	for _, server := range d.StreamServer.ListServers(ctx) {
 		if server.ListenAddr() == listenAddr {
-			return &server
+			return server
 		}
 	}
 	return nil
@@ -1010,9 +1012,9 @@ func (d *StreamD) StopStreamServer(
 			return fmt.Errorf("have not found any stream listeners at %s", listenAddr)
 		}
 
-		err := d.StreamServer.StopServer(ctx, *srv)
+		err := d.StreamServer.StopServer(ctx, srv)
 		if err != nil {
-			return fmt.Errorf("unable to stop server %#+v: %w", *srv, err)
+			return fmt.Errorf("unable to stop server %#+v: %w", srv, err)
 		}
 
 		err = d.SaveConfig(ctx)
@@ -1276,7 +1278,7 @@ func (d *StreamD) UpdateStreamForward(
 			quirks,
 		)
 		if err != nil {
-			return fmt.Errorf("unable to add the stream forwarding: %w", err)
+			return fmt.Errorf("unable to update the stream forwarding: %w", err)
 		}
 
 		err = d.SaveConfig(ctx)
@@ -1338,12 +1340,6 @@ func (d *StreamD) WaitForStreamPublisher(
 		}
 	})
 	return ch, nil
-}
-
-func (d *StreamD) GetStreamPortServers(
-	ctx context.Context,
-) ([]streamplayer.StreamPortServer, error) {
-	return d.StreamServer.GetPortServers(ctx)
 }
 
 func (d *StreamD) AddStreamPlayer(

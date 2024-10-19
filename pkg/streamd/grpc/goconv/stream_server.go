@@ -9,7 +9,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
 
@@ -41,14 +41,14 @@ func StreamServerConfigGo2GRPC(
 	ctx context.Context,
 	serverType api.StreamServerType,
 	listenAddr string,
-	opts ...types.ServerOption,
+	opts ...streamportserver.Option,
 ) (*streamd_grpc.StreamServer, error) {
 	t, err := StreamServerTypeGo2GRPC(serverType)
 	if err != nil {
 		return nil, fmt.Errorf("unable to convert the server type: %w", err)
 	}
 
-	cfg := types.ServerOptions(opts).Config(ctx)
+	cfg := streamportserver.Options(opts).ProtocolSpecificConfig(ctx)
 	var serverCert *streamd_grpc.TLSCertificate
 	if cfg.ServerCert != nil {
 		logger.Debugf(ctx, "cfg.ServerCert != nil: %#+v", cfg.ServerKey)
@@ -88,7 +88,7 @@ func StreamServerConfigGo2GRPC(
 func StreamServerConfigGRPC2Go(
 	ctx context.Context,
 	srv *streamd_grpc.StreamServer,
-) (api.StreamServerType, string, types.ServerOptions, error) {
+) (api.StreamServerType, string, streamportserver.Options, error) {
 	srvType, err := StreamServerTypeGRPC2Go(srv.GetServerType())
 	if err != nil {
 		return 0, "", nil, fmt.Errorf("unable to convert the server type value: %w", err)
@@ -104,7 +104,7 @@ func StreamServerConfigGRPC2Go(
 		return 0, "", nil, fmt.Errorf("unable to convert the private key: %w", err)
 	}
 
-	cfg := &types.ServerConfig{
+	psCfg := &streamportserver.ProtocolSpecificConfig{
 		IsTLS:          srv.GetIsTLS(),
 		WriteQueueSize: srv.GetWriteQueueSize(),
 		WriteTimeout:   time.Nanosecond * time.Duration(srv.GetWriteTimeoutNano()),
@@ -113,5 +113,5 @@ func StreamServerConfigGRPC2Go(
 		ServerKey:      serverKey,
 	}
 
-	return srvType, srv.GetListenAddr(), cfg.Options(), nil
+	return srvType, srv.GetListenAddr(), psCfg.Options(), nil
 }

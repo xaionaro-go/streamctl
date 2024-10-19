@@ -34,6 +34,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 	"google.golang.org/grpc"
@@ -1259,9 +1260,11 @@ func (c *Client) ListStreamServers(
 			)
 		}
 		result = append(result, api.StreamServer{
-			ServerConfig: opts.Config(ctx),
-			Type:         srvType,
-			ListenAddr:   listenAddr,
+			Config: streamportserver.Config{
+				ProtocolSpecificConfig: opts.ProtocolSpecificConfig(ctx),
+				Type:                   srvType,
+				ListenAddr:             listenAddr,
+			},
 			NumBytesConsumerWrote: uint64(
 				server.GetStatistics().
 					GetNumBytesConsumerWrote(),
@@ -1279,7 +1282,7 @@ func (c *Client) StartStreamServer(
 	ctx context.Context,
 	serverType api.StreamServerType,
 	listenAddr string,
-	opts ...types.ServerOption,
+	opts ...streamportserver.Option,
 ) error {
 	cfg, err := goconv.StreamServerConfigGo2GRPC(
 		ctx,

@@ -21,6 +21,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	sstypes "github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/streamctl/pkg/xcontext"
 	"github.com/xaionaro-go/streamctl/pkg/xfyne"
@@ -228,8 +229,8 @@ func (p *Panel) addStreamServer(
 ) error {
 	logger.Debugf(ctx, "addStreamServer")
 	defer logger.Debugf(ctx, "/addStreamServer")
-	var opts sstypes.ServerOptions
-	opts = append(opts, sstypes.ServerOptionIsTLS(enableTLS))
+	var opts streamportserver.Options
+	opts = append(opts, streamportserver.OptionIsTLS(enableTLS))
 	return p.StreamD.StartStreamServer(
 		ctx,
 		proto,

@@ -16,14 +16,10 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/player/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
-
-type StreamPortServer struct {
-	Addr string
-	Type streamtypes.ServerType
-}
 
 type Publisher interface {
 	ClosedChan() <-chan struct{}
@@ -37,13 +33,9 @@ type WaitPublisherChaner interface {
 	) (<-chan Publisher, error)
 }
 
-type GetPortServerser interface {
-	GetPortServers(context.Context) ([]StreamPortServer, error)
-}
-
 type StreamServer interface {
 	WaitPublisherChaner
-	GetPortServerser
+	streamportserver.GetPortServerser
 }
 
 type StreamPlayers struct {
@@ -274,7 +266,7 @@ func (p *StreamPlayerHandler) getInternalURL(ctx context.Context) (*url.URL, err
 
 	var u url.URL
 	u.Scheme = portSrv.Type.String()
-	u.Host = portSrv.Addr
+	u.Host = portSrv.ListenAddr
 	u.Path = string(p.StreamID)
 	return &u, nil
 }

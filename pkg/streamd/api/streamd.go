@@ -17,6 +17,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	sstypes "github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
 
@@ -99,7 +100,7 @@ type StreamD interface {
 		ctx context.Context,
 		serverType StreamServerType,
 		listenAddr string,
-		opts ...sstypes.ServerOption,
+		opts ...streamportserver.Option,
 	) error
 	StopStreamServer(
 		ctx context.Context,
@@ -288,10 +289,7 @@ type BackendDataYouTube struct {
 type StreamServerType = streamtypes.ServerType
 
 type StreamServer struct {
-	sstypes.ServerConfig
-
-	Type       StreamServerType
-	ListenAddr string
+	streamportserver.Config
 
 	NumBytesConsumerWrote uint64
 	NumBytesProducerRead  uint64
