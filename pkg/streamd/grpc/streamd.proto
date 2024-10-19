@@ -677,8 +677,9 @@ message SubmitEventReply {}
 message SubscribeToChatMessagesRequest {
 }
 message ChatMessage {
-    string platID = 1;
-    string userID = 2;
-    string messageID = 3;
-    string message = 4;
+	uint64 createdAtNano  = 1;
+    string platID = 2;
+    string userID = 3;
+    string messageID = 4;
+    string message = 5;
 }

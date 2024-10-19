@@ -102,6 +102,7 @@ func eventSubToChan[T any](
 	callback := func(in T) {
 		mutex.Lock()
 		defer mutex.Unlock()
+		logger.Debugf(ctx, "eventSubToChan[%T]: received %#+v", sample, in)
 
 		select {
 		case <-ctx.Done():

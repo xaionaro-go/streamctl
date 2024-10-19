@@ -106,6 +106,7 @@ type StreamStatus struct {
 }
 
 type ChatMessage struct {
+	CreatedAt time.Time
 	UserID    string
 	MessageID string
 	Message   string

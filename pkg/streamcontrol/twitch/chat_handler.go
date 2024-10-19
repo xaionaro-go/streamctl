@@ -62,6 +62,7 @@ func newChatHandler(
 			case ev := <-h.messagesInChan:
 				select {
 				case h.messagesOutChan <- streamcontrol.ChatMessage{
+					CreatedAt: ev.CreatedAt,
 					UserID:    ev.Sender.Username,
 					MessageID: ev.ID,
 					Message:   ev.Text, // TODO: investigate if we need ev.IRCMessage.Text

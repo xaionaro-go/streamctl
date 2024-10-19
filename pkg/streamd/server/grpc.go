@@ -1647,6 +1647,7 @@ type sender[T any] interface {
 func wrapChan[T any, E any](
 	getChan func(ctx context.Context) (<-chan E, error),
 	sender sender[T],
+	parse func(E) T,
 ) error {
 	ctx, cancelFn := context.WithCancel(sender.Context())
 	defer cancelFn()
@@ -1655,12 +1656,13 @@ func wrapChan[T any, E any](
 		return err
 	}
 	for {
+		var input E
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-ch:
+		case input = <-ch:
 		}
-		var result T
+		result := parse(input)
 		err := sender.Send(&result)
 		if err != nil {
 			return fmt.Errorf(
@@ -1679,6 +1681,9 @@ func (grpc *GRPCServer) SubscribeToConfigChanges(
 	return wrapChan(
 		grpc.StreamD.SubscribeToConfigChanges,
 		srv,
+		func(input api.DiffConfig) streamd_grpc.ConfigChange {
+			return streamd_grpc.ConfigChange{}
+		},
 	)
 }
 func (grpc *GRPCServer) SubscribeToStreamsChanges(
@@ -1688,6 +1693,9 @@ func (grpc *GRPCServer) SubscribeToStreamsChanges(
 	return wrapChan(
 		grpc.StreamD.SubscribeToStreamsChanges,
 		srv,
+		func(input api.DiffStreams) streamd_grpc.StreamsChange {
+			return streamd_grpc.StreamsChange{}
+		},
 	)
 }
 func (grpc *GRPCServer) SubscribeToStreamServersChanges(
@@ -1697,6 +1705,9 @@ func (grpc *GRPCServer) SubscribeToStreamServersChanges(
 	return wrapChan(
 		grpc.StreamD.SubscribeToStreamServersChanges,
 		srv,
+		func(input api.DiffStreamServers) streamd_grpc.StreamServersChange {
+			return streamd_grpc.StreamServersChange{}
+		},
 	)
 }
 
@@ -1707,6 +1718,9 @@ func (grpc *GRPCServer) SubscribeToStreamDestinationsChanges(
 	return wrapChan(
 		grpc.StreamD.SubscribeToStreamDestinationsChanges,
 		srv,
+		func(input api.DiffStreamDestinations) streamd_grpc.StreamDestinationsChange {
+			return streamd_grpc.StreamDestinationsChange{}
+		},
 	)
 }
 func (grpc *GRPCServer) SubscribeToIncomingStreamsChanges(
@@ -1716,6 +1730,9 @@ func (grpc *GRPCServer) SubscribeToIncomingStreamsChanges(
 	return wrapChan(
 		grpc.StreamD.SubscribeToIncomingStreamsChanges,
 		srv,
+		func(input api.DiffIncomingStreams) streamd_grpc.IncomingStreamsChange {
+			return streamd_grpc.IncomingStreamsChange{}
+		},
 	)
 }
 func (grpc *GRPCServer) SubscribeToStreamForwardsChanges(
@@ -1725,6 +1742,9 @@ func (grpc *GRPCServer) SubscribeToStreamForwardsChanges(
 	return wrapChan(
 		grpc.StreamD.SubscribeToStreamForwardsChanges,
 		srv,
+		func(input api.DiffStreamForwards) streamd_grpc.StreamForwardsChange {
+			return streamd_grpc.StreamForwardsChange{}
+		},
 	)
 }
 
@@ -1735,6 +1755,9 @@ func (grpc *GRPCServer) SubscribeToStreamPlayersChanges(
 	return wrapChan(
 		grpc.StreamD.SubscribeToStreamPlayersChanges,
 		srv,
+		func(input api.DiffStreamPlayers) streamd_grpc.StreamPlayersChange {
+			return streamd_grpc.StreamPlayersChange{}
+		},
 	)
 }
 
@@ -1921,5 +1944,14 @@ func (grpc *GRPCServer) SubscribeToChatMessages(
 	return wrapChan(
 		grpc.StreamD.SubscribeToChatMessages,
 		srv,
+		func(input api.ChatMessage) streamd_grpc.ChatMessage {
+			return streamd_grpc.ChatMessage{
+				CreatedAtNano: uint64(input.CreatedAt.UnixNano()),
+				PlatID:        string(input.Platform),
+				UserID:        input.UserID,
+				MessageID:     input.MessageID,
+				Message:       input.Message,
+			}
+		},
 	)
 }
