@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -263,7 +264,7 @@ func (c *Client) RecodingEndedChan(
 			logger.Debugf(ctx, "the receiver is closed: %v", err)
 			return
 		}
-		if err != nil {
+		if err != nil && !errors.Is(err, context.Canceled) {
 			logger.Errorf(ctx, "unable to read data: %v", err)
 			return
 		}
