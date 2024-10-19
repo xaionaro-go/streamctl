@@ -7,7 +7,7 @@ toolchain go1.22.3
 // The original go-yaml is very slow, using the improved version instead
 replace github.com/goccy/go-yaml v1.11.3 => github.com/yoelsusanto/go-yaml v0.0.0-20240324162521-2018c1ab915b
 
-replace github.com/andreykaipov/goobs v1.4.1 => github.com/xaionaro-go/goobs v0.0.0-20241009130652-ffb0e76ad260
+replace github.com/andreykaipov/goobs v1.4.1 => github.com/xaionaro-go/goobs v0.0.0-20241018191659-49be16b2ceb5
 
 replace github.com/adrg/libvlc-go/v3 v3.1.5 => github.com/xaionaro-go/libvlc-go/v3 v3.0.0-20241011194409-0fe4e2a9d901
 
@@ -97,7 +97,6 @@ require (
 	github.com/gookit/color v1.5.4 // indirect
 	github.com/gopherjs/gopherjs v1.17.2 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
-	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/logutils v1.0.0 // indirect
 	github.com/huandu/go-tls v0.0.0-20200109070953-6f75fb441850 // indirect
@@ -196,6 +195,7 @@ require (
 	github.com/go-ng/xmath v0.0.0-20230704233441-028f5ea62335
 	github.com/go-yaml/yaml v2.1.0+incompatible
 	github.com/google/uuid v1.6.0
+	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/iancoleman/strcase v0.3.0
 	github.com/immune-gmbh/attestation-sdk v0.0.0-20230711173209-f44e4502aeca
 	github.com/kbinani/screenshot v0.0.0-20230812210009-b87d31814237

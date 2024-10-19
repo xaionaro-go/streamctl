@@ -59,6 +59,10 @@ func (wmh *XWindowManagerHandler) WindowFocusChangeChan(ctx context.Context) <-c
 				continue
 			}
 
+			if clientID == 0 {
+				continue
+			}
+
 			if clientID == prevClientID {
 				continue
 			}
@@ -66,19 +70,19 @@ func (wmh *XWindowManagerHandler) WindowFocusChangeChan(ctx context.Context) <-c
 
 			name, err := ewmh.WmNameGet(wmh.XUtil, clientID)
 			if err != nil {
-				logger.Errorf(ctx, "unable to get the name of the active window (%d): %w", clientID, err)
+				logger.Errorf(ctx, "unable to get the name of the active window (%d): %v", clientID, err)
 				continue
 			}
 
 			pid, err := ewmh.WmPidGet(wmh.XUtil, clientID)
 			if err != nil {
-				logger.Errorf(ctx, "unable to get the PID of the active window (%d): %w", clientID, err)
+				logger.Errorf(ctx, "unable to get the PID of the active window (%d): %v", clientID, err)
 				continue
 			}
 
 			proc, err := process.NewProcess(int32(pid))
 			if err != nil {
-				logger.Errorf(ctx, "unable to get process info of the active window (%d) using PID %d: %w", clientID, pid, err)
+				logger.Errorf(ctx, "unable to get process info of the active window (%d) using PID %d: %v", clientID, pid, err)
 				continue
 			}
 

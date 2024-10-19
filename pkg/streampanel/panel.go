@@ -1918,7 +1918,13 @@ func (p *Panel) initMainWindow(
 		streamInfoContainer,
 	)
 
+	var prevScene string
 	p.obsSelectScene = widget.NewSelect(nil, func(s string) {
+		if s == prevScene {
+			logger.Debugf(ctx, "OBS scene remained to be '%s'", s)
+			return
+		}
+		prevScene = s
 		logger.Debugf(ctx, "OBS scene is changed to '%s'", s)
 		obsServer, obsServerClose, err := p.StreamD.OBS(ctx)
 		if obsServerClose != nil {

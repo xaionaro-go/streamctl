@@ -38,8 +38,8 @@ func (d *StreamD) submitEvent(
 	ctx context.Context,
 	ev event.Event,
 ) error {
-	logger.Debugf(ctx, "submitEvent(ctx, %s)", spew.Sdump(ev))
-	defer logger.Debugf(ctx, "/submitEvent(ctx, %#v)", spew.Sdump(ev))
+	logger.Tracef(ctx, "submitEvent(ctx, %s)", spew.Sdump(ev))
+	defer logger.Tracef(ctx, "/submitEvent(ctx, %#v)", spew.Sdump(ev))
 	exprCtx := objToMap(ev)
 	for _, rule := range d.Config.TriggerRules {
 		if rule.EventQuery.Match(ev) {
@@ -58,7 +58,9 @@ func (d *StreamD) doAction(
 	ctx context.Context,
 	a action.Action,
 	exprCtx any,
-) error {
+) (_err error) {
+	logger.Debugf(ctx, "doAction: %s %#+v", a, exprCtx)
+	defer func() { logger.Debugf(ctx, "/doAction: %s %#+v: %v", a, exprCtx, _err) }()
 	switch a := a.(type) {
 	case *action.Noop:
 		return nil
