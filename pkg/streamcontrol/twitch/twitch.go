@@ -20,6 +20,9 @@ import (
 )
 
 type Twitch struct {
+	closeCtx      context.Context
+	closeFn       context.CancelFunc
+	chatHandler   *ChatHandler
 	client        *helix.Client
 	config        Config
 	broadcasterID string
@@ -65,10 +68,20 @@ func New(
 		return nil, fmt.Errorf("the function GetOAuthListenPorts returned zero ports")
 	}
 
+	closeCtx, closeFn := context.WithCancel(ctx)
 	t := &Twitch{
+		closeCtx:  closeCtx,
+		closeFn:   closeFn,
 		config:    cfg,
 		saveCfgFn: saveCfgFn,
 	}
+
+	h, err := NewChatHandler(ctx, cfg.Config.Channel)
+	if err != nil {
+		return nil, fmt.Errorf("unable to initialize a chat handler for channel '%s': %w", cfg.Config.Channel, err)
+	}
+	t.chatHandler = h
+
 	client, err := getClient(ctx, cfg, oauthPorts[0])
 	if err != nil {
 		return nil, err
@@ -165,6 +178,7 @@ func (t *Twitch) prepareNoLock(ctx context.Context) error {
 }
 
 func (t *Twitch) Close() error {
+	t.closeFn()
 	return nil
 }
 
@@ -793,20 +807,28 @@ func (t *Twitch) GetAllCategories(
 	return allCategories, nil
 }
 
-func (t *Twitch) GetChatChan(
+func (t *Twitch) GetChatMessagesChan(
 	ctx context.Context,
-) (<-chan streamcontrol.ChatEvent, error) {
-	logger.Debugf(ctx, "GetChatChan")
-	defer logger.Debugf(ctx, "/GetChatChan")
+) (<-chan streamcontrol.ChatMessage, error) {
+	logger.Debugf(ctx, "GetChatMessagesChan")
+	defer logger.Debugf(ctx, "/GetChatMessagesChan")
 
-	t.prepare(ctx)
+	outCh := make(chan streamcontrol.ChatMessage)
+	observability.Go(ctx, func() {
+		defer func() {
+			close(outCh)
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case ev := <-t.chatHandler.MessagesChan():
+				outCh <- ev
+			}
+		}
+	})
 
-	h, err := NewChatHandler(t.broadcasterID)
-	if err != nil {
-		return nil, fmt.Errorf("unable to initialize a chat handler for channel '%s': %w", t.broadcasterID, err)
-	}
-
-	return h.MessagesChan(), nil
+	return outCh, nil
 }
 
 func (t *Twitch) SendChatMessage(ctx context.Context, message string) (_ret error) {

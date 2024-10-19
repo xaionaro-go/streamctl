@@ -86,6 +86,8 @@ service StreamD {
     rpc UpdateTriggerRule(UpdateTriggerRuleRequest) returns (UpdateTriggerRuleReply) {}
 
     rpc SubmitEvent(SubmitEventRequest) returns (SubmitEventReply) {}
+
+    rpc SubscribeToChatMessages(SubscribeToChatMessagesRequest) returns (stream ChatMessage) {}
 }
 
 message PingRequest {
@@ -671,3 +673,12 @@ message SubmitEventRequest {
     Event event = 1;
 }
 message SubmitEventReply {}
+
+message SubscribeToChatMessagesRequest {
+}
+message ChatMessage {
+    string platID = 1;
+    string userID = 2;
+    string messageID = 3;
+    string message = 4;
+}

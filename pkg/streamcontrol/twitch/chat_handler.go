@@ -3,7 +3,6 @@ package twitch
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/adeithe/go-twitch/irc"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
@@ -19,18 +18,19 @@ type ChatClient interface {
 type ChatHandler struct {
 	client          ChatClient
 	cancelFunc      context.CancelFunc
-	closeOnce       sync.Once
 	messagesInChan  chan irc.ChatMessage
-	messagesOutChan chan streamcontrol.ChatEvent
+	messagesOutChan chan streamcontrol.ChatMessage
 }
 
 func NewChatHandler(
+	ctx context.Context,
 	channelID string,
 ) (*ChatHandler, error) {
-	return newChatHandler(newChatClient(), channelID)
+	return newChatHandler(ctx, newChatClient(), channelID)
 }
 
 func newChatHandler(
+	ctx context.Context,
 	chatClient ChatClient,
 	channelID string,
 ) (*ChatHandler, error) {
@@ -39,16 +39,20 @@ func newChatHandler(
 		return nil, fmt.Errorf("unable to join channel '%s': %w", channelID, err)
 	}
 
-	ctx, cancelFn := context.WithCancel(context.Background())
+	ctx, cancelFn := context.WithCancel(ctx)
 	h := &ChatHandler{
 		client:          chatClient,
 		cancelFunc:      cancelFn,
 		messagesInChan:  make(chan irc.ChatMessage),
-		messagesOutChan: make(chan streamcontrol.ChatEvent),
+		messagesOutChan: make(chan streamcontrol.ChatMessage, 100),
 	}
 
 	observability.Go(ctx, func() {
 		defer func() {
+			h.client.Close()
+			// h.Client.Close above waits inside for everything to finish,
+			// so we can safely close the channel here:
+			close(h.messagesInChan)
 			close(h.messagesOutChan)
 		}()
 		for {
@@ -56,10 +60,13 @@ func newChatHandler(
 			case <-ctx.Done():
 				return
 			case ev := <-h.messagesInChan:
-				h.messagesOutChan <- streamcontrol.ChatEvent{
+				select {
+				case h.messagesOutChan <- streamcontrol.ChatMessage{
 					UserID:    ev.Sender.Username,
 					MessageID: ev.ID,
 					Message:   ev.Text, // TODO: investigate if we need ev.IRCMessage.Text
+				}:
+				default:
 				}
 			}
 		}
@@ -74,16 +81,10 @@ func (h *ChatHandler) onShardMessage(shard int, msg irc.ChatMessage) {
 }
 
 func (h *ChatHandler) Close() error {
-	h.closeOnce.Do(func() {
-		h.cancelFunc()
-		h.client.Close()
-		// h.Client.Close above waits inside for everything to finish,
-		// so we can safely close the channel here:
-		close(h.messagesInChan)
-	})
+	h.cancelFunc()
 	return nil
 }
 
-func (h *ChatHandler) MessagesChan() <-chan streamcontrol.ChatEvent {
+func (h *ChatHandler) MessagesChan() <-chan streamcontrol.ChatMessage {
 	return h.messagesOutChan
 }

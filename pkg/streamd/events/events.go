@@ -11,4 +11,5 @@ const (
 	StreamForwardsChange     Event = "stream_forwards_change"
 	StreamPlayersChange      Event = "stream_players_change"
 	OBSCurrentProgramScene   Event = "obs_current_program_scene"
+	ChatMessage              Event = "chat_message"
 )

@@ -272,6 +272,10 @@ type StreamD interface {
 		ctx context.Context,
 		event event.Event,
 	) error
+
+	SubscribeToChatMessages(
+		ctx context.Context,
+	) (<-chan ChatMessage, error)
 }
 
 type StreamPlayer = sstypes.StreamPlayer
@@ -345,3 +349,8 @@ type Action = action.Action
 type TriggerRuleID uint64
 type TriggerRule = config.TriggerRule
 type TriggerRules = config.TriggerRules
+
+type ChatMessage struct {
+	streamcontrol.ChatMessage
+	Platform streamcontrol.PlatformName
+}

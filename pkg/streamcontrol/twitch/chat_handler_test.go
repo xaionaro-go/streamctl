@@ -1,6 +1,7 @@
 package twitch
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -29,6 +30,7 @@ func (c *chatClientMock) Close() {
 }
 
 func TestChatHandler(t *testing.T) {
+	ctx := context.TODO()
 	const channelID = "test-channel-id"
 
 	var (
@@ -36,7 +38,7 @@ func TestChatHandler(t *testing.T) {
 		callback         func(shard int, msg irc.ChatMessage)
 		closeCount       = 0
 	)
-	h, err := newChatHandler(&chatClientMock{
+	h, err := newChatHandler(ctx, &chatClientMock{
 		join: func(channelIDs ...string) error {
 			joinedChannelIDs = append(joinedChannelIDs, channelIDs...)
 			return nil
@@ -50,7 +52,7 @@ func TestChatHandler(t *testing.T) {
 	}, channelID)
 	require.NoError(t, err)
 
-	expectedEvent := streamcontrol.ChatEvent{
+	expectedEvent := streamcontrol.ChatMessage{
 		UserID:    "user-id",
 		MessageID: "message-id",
 		Message:   "some\nmulti line\n message",

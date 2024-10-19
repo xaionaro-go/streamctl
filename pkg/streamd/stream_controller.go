@@ -49,6 +49,12 @@ func (d *StreamD) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context) erro
 				result,
 				fmt.Errorf("unable to initialize '%s': %w", platName, err),
 			)
+			continue
+		}
+		err = d.startListeningForChatMessages(ctx, platName)
+		if err != nil {
+			logger.Errorf(ctx, "unable to initialize the reader of chat messages for '%s': %w", string(platName), err)
+			continue
 		}
 	}
 	return result.ErrorOrNil()

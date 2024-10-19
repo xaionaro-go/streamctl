@@ -1574,7 +1574,7 @@ func eventSubToChan[T any](
 ) (<-chan T, error) {
 	var mutex sync.Mutex
 	r := make(chan T)
-	callback := func() {
+	callback := func(in T) {
 		mutex.Lock()
 		defer mutex.Unlock()
 
@@ -1584,9 +1584,8 @@ func eventSubToChan[T any](
 		default:
 		}
 
-		var zeroValue T
 		select {
-		case r <- zeroValue:
+		case r <- in:
 		case <-time.After(time.Minute):
 			logger.Errorf(ctx, "unable to notify about '%s': timeout", topic)
 		}
@@ -1726,4 +1725,10 @@ func (d *StreamD) listTimers(
 		return result[i].ID < result[j].ID
 	})
 	return result, nil
+}
+
+func (d *StreamD) SubscribeToChatMessages(
+	ctx context.Context,
+) (<-chan api.ChatMessage, error) {
+	return eventSubToChan[api.ChatMessage](ctx, d, events.ChatMessage)
 }

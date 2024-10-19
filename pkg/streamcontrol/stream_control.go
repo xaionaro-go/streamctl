@@ -105,7 +105,7 @@ type StreamStatus struct {
 	CustomData any        `json:",omitempty"`
 }
 
-type ChatEvent struct {
+type ChatMessage struct {
 	UserID    string
 	MessageID string
 	Message   string
@@ -121,7 +121,7 @@ type StreamControllerCommons interface {
 	EndStream(ctx context.Context) error
 	GetStreamStatus(ctx context.Context) (*StreamStatus, error)
 
-	GetChatChan(ctx context.Context) (<-chan ChatEvent, error)
+	GetChatMessagesChan(ctx context.Context) (<-chan ChatMessage, error)
 	SendChatMessage(ctx context.Context, message string) error
 	DeleteChatMessage(ctx context.Context, messageID string) error
 	BanUser(ctx context.Context, userID string, reason string, deadline time.Time) error
@@ -223,8 +223,8 @@ func (c *abstractStreamController) StreamProfileType() reflect.Type {
 	return c.StreamProfileTypeValue
 }
 
-func (c *abstractStreamController) GetChatChan(ctx context.Context) (<-chan ChatEvent, error) {
-	return c.StreamController.GetChatChan(ctx)
+func (c *abstractStreamController) GetChatMessagesChan(ctx context.Context) (<-chan ChatMessage, error) {
+	return c.StreamController.GetChatMessagesChan(ctx)
 }
 func (c *abstractStreamController) SendChatMessage(ctx context.Context, message string) error {
 	return c.StreamController.SendChatMessage(ctx, message)

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -17,6 +18,7 @@ func assertNoError(err error) {
 }
 
 func main() {
+	ctx := context.TODO()
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "syntax: chatlistener <channel_id>\n")
 	}
@@ -27,7 +29,7 @@ func main() {
 	}
 	channelID := flag.Arg(0)
 
-	h, err := twitch.NewChatHandler(channelID)
+	h, err := twitch.NewChatHandler(ctx, channelID)
 	assertNoError(err)
 
 	fmt.Println("started")

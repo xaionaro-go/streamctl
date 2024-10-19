@@ -258,9 +258,9 @@ func (obs *OBS) SetCurrentProgramScene(
 	return nil
 }
 
-func (obs *OBS) GetChatChan(
+func (obs *OBS) GetChatMessagesChan(
 	ctx context.Context,
-) (<-chan streamcontrol.ChatEvent, error) {
+) (<-chan streamcontrol.ChatMessage, error) {
 	return nil, nil
 }
 

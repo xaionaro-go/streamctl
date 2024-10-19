@@ -1164,9 +1164,9 @@ func (yt *YouTube) fixError(ctx context.Context, err error, counterPtr *int) boo
 	return false
 }
 
-func (yt *YouTube) GetChatChan(
+func (yt *YouTube) GetChatMessagesChan(
 	ctx context.Context,
-) (<-chan streamcontrol.ChatEvent, error) {
+) (<-chan streamcontrol.ChatMessage, error) {
 	return nil, nil
 }
 

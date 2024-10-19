@@ -1913,3 +1913,13 @@ func (grpc *GRPCServer) SubmitEvent(
 	}
 	return &streamd_grpc.SubmitEventReply{}, nil
 }
+
+func (grpc *GRPCServer) SubscribeToChatMessages(
+	req *streamd_grpc.SubscribeToChatMessagesRequest,
+	srv streamd_grpc.StreamD_SubscribeToChatMessagesServer,
+) error {
+	return wrapChan(
+		grpc.StreamD.SubscribeToChatMessages,
+		srv,
+	)
+}

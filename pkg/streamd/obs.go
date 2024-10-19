@@ -211,7 +211,7 @@ func (d *StreamD) OBSElementSetShow(
 			}
 			_, err := obsServer.SetSceneItemEnabled(ctx, req)
 			if err != nil {
-				return fmt.Errorf("unable to submit %#+v: %w", shouldShow, item, err)
+				return fmt.Errorf("unable to submit shouldShow:%v for %#+v: %w", shouldShow, item, err)
 			}
 		}
 	}

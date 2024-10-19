@@ -2568,7 +2568,7 @@ func (c *Client) UpdateTriggerRule(
 ) error {
 	triggerRuleGRPC, err := goconv.TriggerRuleGo2GRPC(triggerRule)
 	if err != nil {
-		return fmt.Errorf("unable to convert the trigger rule %#+v: %w", ruleID, triggerRule, err)
+		return fmt.Errorf("unable to convert the trigger rule %d:%#+v: %w", ruleID, triggerRule, err)
 	}
 	_, err = withStreamDClient(ctx, c, func(
 		ctx context.Context,
@@ -2671,4 +2671,37 @@ func (c *Client) SubmitEvent(
 		return fmt.Errorf("unable to submit the event: %w", err)
 	}
 	return nil
+}
+
+func (c *Client) SubscribeToChatMessages(
+	ctx context.Context,
+) (<-chan api.ChatMessage, error) {
+	return unwrapStreamDChan(
+		ctx,
+		c,
+		func(
+			ctx context.Context,
+			client streamd_grpc.StreamDClient,
+		) (streamd_grpc.StreamD_SubscribeToChatMessagesClient, error) {
+			return callWrapper(
+				ctx,
+				c,
+				client.SubscribeToChatMessages,
+				&streamd_grpc.SubscribeToChatMessagesRequest{},
+			)
+		},
+		func(
+			ctx context.Context,
+			event *streamd_grpc.ChatMessage,
+		) api.ChatMessage {
+			return api.ChatMessage{
+				ChatMessage: streamcontrol.ChatMessage{
+					UserID:    event.GetUserID(),
+					MessageID: event.GetMessageID(),
+					Message:   event.GetMessage(),
+				},
+				Platform: streamcontrol.PlatformName(event.GetPlatID()),
+			}
+		},
+	)
 }

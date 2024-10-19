@@ -7,10 +7,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/spf13/cobra"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	obs "github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs/types"
 	twitch "github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/types"
@@ -30,6 +34,20 @@ var (
 			ctx = logger.CtxWithLogger(ctx, l)
 			cmd.SetContext(ctx)
 			logger.Debugf(ctx, "log-level: %v", LoggerLevel)
+
+			netPprofAddr, err := cmd.Flags().GetString("go-net-pprof-addr")
+			if err != nil {
+				l.Error("unable to get the value of the flag 'go-net-pprof-addr': %v", err)
+			}
+			if netPprofAddr != "" {
+				observability.Go(ctx, func() {
+					if netPprofAddr == "" {
+						netPprofAddr = "localhost:0"
+					}
+					l.Infof("starting to listen for net/pprof requests at '%s'", netPprofAddr)
+					l.Error(http.ListenAndServe(netPprofAddr, nil))
+				})
+			}
 		},
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
 			ctx := cmd.Context()
@@ -85,6 +103,16 @@ var (
 		Run:  configGet,
 	}
 
+	Chat = &cobra.Command{
+		Use: "chat",
+	}
+
+	ChatListen = &cobra.Command{
+		Use:  "listen",
+		Args: cobra.ExactArgs(0),
+		Run:  chatListen,
+	}
+
 	LoggerLevel = logger.LevelWarning
 )
 
@@ -101,8 +129,13 @@ func init() {
 	Root.AddCommand(Config)
 	Config.AddCommand(ConfigGet)
 
+	Root.AddCommand(Chat)
+	Chat.AddCommand(ChatListen)
+
 	Root.PersistentFlags().Var(&LoggerLevel, "log-level", "")
 	Root.PersistentFlags().String("remote-addr", "localhost:3594", "the path to the config file")
+	Root.PersistentFlags().String("go-net-pprof-addr", "", "address to listen to for net/pprof requests")
+
 	StreamSetup.PersistentFlags().String("title", "", "stream title")
 	StreamSetup.PersistentFlags().String("description", "", "stream description")
 	StreamSetup.PersistentFlags().String("profile", "", "profile")
@@ -273,4 +306,22 @@ func configGet(cmd *cobra.Command, args []string) {
 	assertNoError(ctx, err)
 
 	cfg.WriteTo(os.Stdout)
+}
+
+func chatListen(cmd *cobra.Command, args []string) {
+	ctx := cmd.Context()
+
+	remoteAddr, err := cmd.Flags().GetString("remote-addr")
+	assertNoError(ctx, err)
+	streamD, err := client.New(ctx, remoteAddr)
+	assertNoError(ctx, err)
+
+	fmt.Println("subscribing...")
+	ch, err := streamD.SubscribeToChatMessages(ctx)
+	assertNoError(ctx, err)
+
+	fmt.Println("started listening...")
+	for ev := range ch {
+		spew.Dump(ev)
+	}
 }
