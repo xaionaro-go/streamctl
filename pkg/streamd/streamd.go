@@ -25,7 +25,6 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/cache"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
-	"github.com/xaionaro-go/streamctl/pkg/streamd/events"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/memoize"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/ui"
@@ -187,7 +186,7 @@ func (d *StreamD) initStreamServer(ctx context.Context) (_err error) {
 		//newBrowserOpenerAdapter(d),
 	)
 	assert(d.StreamServer != nil)
-	defer d.notifyAboutChange(ctx, events.StreamServersChange)
+	defer d.publishEvent(ctx, api.DiffStreamServers{})
 	return d.StreamServer.Init(
 		ctx,
 		sstypes.InitOptionDefaultStreamPlayerOptions(d.streamPlayerOptions()),
@@ -200,16 +199,6 @@ func (d *StreamD) streamPlayerOptions() sptypes.Options {
 			d.notifyStreamPlayerStart,
 		},
 	}
-}
-
-func (d *StreamD) notifyStreamPlayerStart(
-	ctx context.Context,
-	streamID streamtypes.StreamID,
-) {
-	logger.Debugf(ctx, "notifyStreamPlayerStart")
-	defer logger.Debugf(ctx, "/notifyStreamPlayerStart")
-
-	d.notifyAboutChange(ctx, events.StreamPlayersChange)
 }
 
 func (d *StreamD) readCache(ctx context.Context) error {
@@ -415,7 +404,7 @@ func (d *StreamD) normalizeYoutubeData() {
 }
 
 func (d *StreamD) SaveConfig(ctx context.Context) error {
-	defer d.notifyAboutChange(ctx, events.ConfigChange)
+	defer d.publishEvent(ctx, api.DiffConfig{})
 	err := d.SaveConfigFunc(ctx, d.Config)
 	if err != nil {
 		return err
@@ -483,7 +472,7 @@ func (d *StreamD) StartStream(
 	logger.Debugf(ctx, "StartStream(%s)", platID)
 	return xsync.RDoR1(ctx, &d.ControllersLocker, func() error {
 		defer func() { logger.Debugf(ctx, "/StartStream(%s): %v", platID, _err) }()
-		defer d.notifyAboutChange(ctx, events.StreamsChange)
+		defer d.publishEvent(ctx, api.DiffStreams{})
 
 		defer func() {
 			d.StreamStatusCache.InvalidateCache(ctx)
@@ -596,7 +585,7 @@ func (d *StreamD) EndStream(ctx context.Context, platID streamcontrol.PlatformNa
 	logger.Debugf(ctx, "EndStream(ctx, '%s')", platID)
 	defer logger.Debugf(ctx, "/EndStream(ctx, '%s')", platID)
 
-	defer d.notifyAboutChange(ctx, events.StreamsChange)
+	defer d.publishEvent(ctx, api.DiffStreams{})
 
 	return xsync.RDoR1(ctx, &d.ControllersLocker, func() error {
 		defer d.StreamStatusCache.InvalidateCache(ctx)
@@ -739,7 +728,7 @@ func (d *StreamD) SetTitle(
 	platID streamcontrol.PlatformName,
 	title string,
 ) error {
-	defer d.notifyAboutChange(ctx, events.StreamsChange)
+	defer d.publishEvent(ctx, api.DiffStreams{})
 
 	return xsync.RDoR1(ctx, &d.ControllersLocker, func() error {
 		c, err := d.streamController(ctx, platID)
@@ -756,7 +745,7 @@ func (d *StreamD) SetDescription(
 	platID streamcontrol.PlatformName,
 	description string,
 ) error {
-	defer d.notifyAboutChange(ctx, events.StreamsChange)
+	defer d.publishEvent(ctx, api.DiffStreams{})
 
 	return xsync.RDoR1(ctx, &d.ControllersLocker, func() error {
 		c, err := d.streamController(ctx, platID)
@@ -779,7 +768,7 @@ func (d *StreamD) ApplyProfile(
 	profile streamcontrol.AbstractStreamProfile,
 	customArgs ...any,
 ) error {
-	defer d.notifyAboutChange(ctx, events.StreamsChange)
+	defer d.publishEvent(ctx, api.DiffStreams{})
 
 	return xsync.RDoR1(ctx, &d.ControllersLocker, func() error {
 		c, err := d.streamController(d.ctxForController(ctx), platID)
@@ -798,7 +787,7 @@ func (d *StreamD) UpdateStream(
 	profile streamcontrol.AbstractStreamProfile,
 	customArgs ...any,
 ) error {
-	defer d.notifyAboutChange(ctx, events.StreamsChange)
+	defer d.publishEvent(ctx, api.DiffStreams{})
 
 	return xsync.RDoR1(ctx, &d.ControllersLocker, func() error {
 		err := d.SetTitle(d.ctxForController(ctx), platID, title)
@@ -963,7 +952,7 @@ func (d *StreamD) StartStreamServer(
 ) error {
 	logger.Debugf(ctx, "StartStreamServer")
 	defer logger.Debugf(ctx, "/StartStreamServer")
-	defer d.notifyAboutChange(ctx, events.StreamServersChange)
+	defer d.publishEvent(ctx, api.DiffStreamServers{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		_, err := d.StreamServer.StartServer(
@@ -1004,7 +993,7 @@ func (d *StreamD) StopStreamServer(
 ) error {
 	logger.Debugf(ctx, "StopStreamServer")
 	defer logger.Debugf(ctx, "/StopStreamServer")
-	defer d.notifyAboutChange(ctx, events.StreamServersChange)
+	defer d.publishEvent(ctx, api.DiffStreamServers{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		srv := d.getStreamServerByListenAddr(ctx, listenAddr)
@@ -1032,7 +1021,7 @@ func (d *StreamD) AddIncomingStream(
 ) error {
 	logger.Debugf(ctx, "AddIncomingStream")
 	defer logger.Debugf(ctx, "/AddIncomingStream")
-	defer d.notifyAboutChange(ctx, events.IncomingStreamsChange)
+	defer d.publishEvent(ctx, api.DiffIncomingStreams{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		err := d.StreamServer.AddIncomingStream(ctx, sstypes.StreamID(streamID))
@@ -1055,7 +1044,7 @@ func (d *StreamD) RemoveIncomingStream(
 ) error {
 	logger.Debugf(ctx, "RemoveIncomingStream")
 	defer logger.Debugf(ctx, "/RemoveIncomingStream")
-	defer d.notifyAboutChange(ctx, events.IncomingStreamsChange)
+	defer d.publishEvent(ctx, api.DiffIncomingStreams{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		err := d.StreamServer.RemoveIncomingStream(ctx, sstypes.StreamID(streamID))
@@ -1120,7 +1109,7 @@ func (d *StreamD) AddStreamDestination(
 ) error {
 	logger.Debugf(ctx, "AddStreamDestination")
 	defer logger.Debugf(ctx, "/AddStreamDestination")
-	defer d.notifyAboutChange(ctx, events.StreamDestinationsChange)
+	defer d.publishEvent(ctx, api.DiffStreamDestinations{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		err := d.StreamServer.AddStreamDestination(
@@ -1150,7 +1139,7 @@ func (d *StreamD) UpdateStreamDestination(
 ) error {
 	logger.Debugf(ctx, "UpdateStreamDestination")
 	defer logger.Debugf(ctx, "/UpdateStreamDestination")
-	defer d.notifyAboutChange(ctx, events.StreamDestinationsChange)
+	defer d.publishEvent(ctx, api.DiffStreamDestinations{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		err := d.StreamServer.UpdateStreamDestination(
@@ -1178,7 +1167,7 @@ func (d *StreamD) RemoveStreamDestination(
 ) error {
 	logger.Debugf(ctx, "RemoveStreamDestination")
 	defer logger.Debugf(ctx, "/RemoveStreamDestination")
-	defer d.notifyAboutChange(ctx, events.StreamDestinationsChange)
+	defer d.publishEvent(ctx, api.DiffStreamDestinations{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		err := d.StreamServer.RemoveStreamDestination(ctx, sstypes.DestinationID(destinationID))
@@ -1235,7 +1224,7 @@ func (d *StreamD) AddStreamForward(
 ) error {
 	logger.Debugf(ctx, "AddStreamForward")
 	defer logger.Debugf(ctx, "/AddStreamForward")
-	defer d.notifyAboutChange(ctx, events.StreamForwardsChange)
+	defer d.publishEvent(ctx, api.DiffStreamForwards{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		_, err := d.StreamServer.AddStreamForward(
@@ -1267,7 +1256,7 @@ func (d *StreamD) UpdateStreamForward(
 ) error {
 	logger.Debugf(ctx, "AddStreamForward")
 	defer logger.Debugf(ctx, "/AddStreamForward")
-	defer d.notifyAboutChange(ctx, events.StreamForwardsChange)
+	defer d.publishEvent(ctx, api.DiffStreamForwards{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		_, err := d.StreamServer.UpdateStreamForward(
@@ -1297,7 +1286,7 @@ func (d *StreamD) RemoveStreamForward(
 ) error {
 	logger.Debugf(ctx, "RemoveStreamForward")
 	defer logger.Debugf(ctx, "/RemoveStreamForward")
-	defer d.notifyAboutChange(ctx, events.StreamForwardsChange)
+	defer d.publishEvent(ctx, api.DiffStreamForwards{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		err := d.StreamServer.RemoveStreamForward(
@@ -1349,7 +1338,7 @@ func (d *StreamD) AddStreamPlayer(
 	disabled bool,
 	streamPlaybackConfig sptypes.Config,
 ) error {
-	defer d.notifyAboutChange(ctx, events.StreamPlayersChange)
+	defer d.publishEvent(ctx, api.DiffStreamPlayers{})
 	var result *multierror.Error
 	result = multierror.Append(result, d.StreamServer.AddStreamPlayer(
 		ctx,
@@ -1389,7 +1378,7 @@ func (d *StreamD) UpdateStreamPlayer(
 			_err,
 		)
 	}()
-	defer d.notifyAboutChange(ctx, events.StreamPlayersChange)
+	defer d.publishEvent(ctx, api.DiffStreamPlayers{})
 	var result *multierror.Error
 	result = multierror.Append(result, d.StreamServer.UpdateStreamPlayer(
 		ctx,
@@ -1407,7 +1396,7 @@ func (d *StreamD) RemoveStreamPlayer(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 ) error {
-	defer d.notifyAboutChange(ctx, events.StreamPlayersChange)
+	defer d.publishEvent(ctx, api.DiffStreamPlayers{})
 	var result *multierror.Error
 	result = multierror.Append(result, d.StreamServer.RemoveStreamPlayer(
 		ctx,
@@ -1558,100 +1547,6 @@ func (d *StreamD) StreamPlayerClose(
 	return streamPlayer.Close(ctx)
 }
 
-func (d *StreamD) notifyAboutChange(
-	ctx context.Context,
-	topic events.Event,
-) {
-	logger.Debugf(ctx, "notifyAboutChange(ctx, '%s')", topic)
-	defer logger.Debugf(ctx, "/notifyAboutChange(ctx, '%s')", topic)
-	d.EventBus.Publish(topic)
-}
-
-func eventSubToChan[T any](
-	ctx context.Context,
-	d *StreamD,
-	topic events.Event,
-) (<-chan T, error) {
-	var mutex sync.Mutex
-	r := make(chan T)
-	callback := func(in T) {
-		mutex.Lock()
-		defer mutex.Unlock()
-
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
-		select {
-		case r <- in:
-		case <-time.After(time.Minute):
-			logger.Errorf(ctx, "unable to notify about '%s': timeout", topic)
-		}
-	}
-
-	err := d.EventBus.SubscribeAsync(topic, callback, true)
-	if err != nil {
-		return nil, fmt.Errorf("unable to subscribe: %w", err)
-	}
-
-	observability.Go(ctx, func() {
-		<-ctx.Done()
-
-		mutex.Lock()
-		defer mutex.Unlock()
-
-		d.EventBus.Unsubscribe(topic, callback)
-		d.EventBus.WaitAsync()
-		close(r)
-	})
-
-	return r, nil
-}
-
-func (d *StreamD) SubscribeToConfigChanges(
-	ctx context.Context,
-) (<-chan api.DiffConfig, error) {
-	return eventSubToChan[api.DiffConfig](ctx, d, events.ConfigChange)
-}
-
-func (d *StreamD) SubscribeToStreamsChanges(
-	ctx context.Context,
-) (<-chan api.DiffStreams, error) {
-	return eventSubToChan[api.DiffStreams](ctx, d, events.StreamsChange)
-}
-
-func (d *StreamD) SubscribeToStreamServersChanges(
-	ctx context.Context,
-) (<-chan api.DiffStreamServers, error) {
-	return eventSubToChan[api.DiffStreamServers](ctx, d, events.StreamServersChange)
-}
-
-func (d *StreamD) SubscribeToStreamDestinationsChanges(
-	ctx context.Context,
-) (<-chan api.DiffStreamDestinations, error) {
-	return eventSubToChan[api.DiffStreamDestinations](ctx, d, events.StreamDestinationsChange)
-}
-
-func (d *StreamD) SubscribeToIncomingStreamsChanges(
-	ctx context.Context,
-) (<-chan api.DiffIncomingStreams, error) {
-	return eventSubToChan[api.DiffIncomingStreams](ctx, d, events.IncomingStreamsChange)
-}
-
-func (d *StreamD) SubscribeToStreamForwardsChanges(
-	ctx context.Context,
-) (<-chan api.DiffStreamForwards, error) {
-	return eventSubToChan[api.DiffStreamForwards](ctx, d, events.StreamForwardsChange)
-}
-
-func (d *StreamD) SubscribeToStreamPlayersChanges(
-	ctx context.Context,
-) (<-chan api.DiffStreamPlayers, error) {
-	return eventSubToChan[api.DiffStreamPlayers](ctx, d, events.StreamPlayersChange)
-}
-
 func (d *StreamD) SetLoggingLevel(ctx context.Context, level logger.Level) error {
 	observability.LogLevelFilter.SetLevel(level)
 	d.UI.SetLoggingLevel(ctx, level)
@@ -1730,5 +1625,5 @@ func (d *StreamD) listTimers(
 func (d *StreamD) SubscribeToChatMessages(
 	ctx context.Context,
 ) (<-chan api.ChatMessage, error) {
-	return eventSubToChan[api.ChatMessage](ctx, d, events.ChatMessage)
+	return eventSubToChan[api.ChatMessage](ctx, d)
 }
