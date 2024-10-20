@@ -21,6 +21,10 @@ func (wmh *WindowManagerHandler) WindowFocusChangeChan(ctx context.Context) <-ch
 	return wmh.PlatformSpecificWindowManagerHandler.WindowFocusChangeChan(ctx)
 }
 
+func (wmh *WindowManagerHandler) Close() error {
+	return wmh.PlatformSpecificWindowManagerHandler.Close()
+}
+
 type WindowFocusChange struct {
 	WindowID    *WindowID
 	WindowTitle *string

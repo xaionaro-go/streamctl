@@ -29,6 +29,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/go-ng/xmath"
+	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
@@ -154,6 +155,8 @@ type Panel struct {
 
 	statusPanelLocker xsync.Mutex
 	statusPanel       *widget.Label
+
+	eventSensor *eventSensor
 }
 
 func New(
@@ -3410,4 +3413,13 @@ func (p *Panel) showWaitStreamDConnectWindow(ctx context.Context) {
 			p.statusPanelSet("Connecting is in process, please wait...")
 		})
 	})
+}
+
+func (p *Panel) Close() error {
+	var err *multierror.Error
+	err = multierror.Append(err, p.eventSensor.Close())
+	// TODO: remove observability.Go, Quit should be executed synchronously,
+	// but there is a bug in fyne and it hangs
+	observability.Go(context.TODO(), p.app.Quit)
+	return err.ErrorOrNil()
 }

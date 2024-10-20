@@ -16,3 +16,7 @@ type UID struct{}
 func (wmh *WindowManagerHandler) init(context.Context) error {
 	return fmt.Errorf("the support of window manager handler for this platform is not implemented, yet")
 }
+
+func (PlatformSpecificWindowManagerHandler) Close() error {
+	return nil
+}

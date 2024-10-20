@@ -11,7 +11,7 @@ replace github.com/andreykaipov/goobs v1.4.1 => github.com/xaionaro-go/goobs v0.
 
 replace github.com/adrg/libvlc-go/v3 v3.1.5 => github.com/xaionaro-go/libvlc-go/v3 v3.0.0-20241011194409-0fe4e2a9d901
 
-replace fyne.io/fyne/v2 v2.5.0 => github.com/xaionaro-go/fyne/v2 v2.0.0-20241012203222-61bfd3b898c0
+replace fyne.io/fyne/v2 v2.5.0 => github.com/xaionaro-go/fyne/v2 v2.0.0-20241020235352-fd61e4920f24
 
 replace code.cloudfoundry.org/bytefmt => github.com/cloudfoundry/bytefmt v0.0.0-20211005130812-5bb3c17173e5
 

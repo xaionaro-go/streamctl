@@ -28,6 +28,8 @@ func (p *Panel) initEventSensor(ctx context.Context) {
 		return
 	}
 
+	p.eventSensor = es
+
 	observability.Go(ctx, func() {
 		logger.Debugf(ctx, "eventSensor")
 		defer logger.Debugf(ctx, "/eventSensor")
@@ -36,7 +38,8 @@ func (p *Panel) initEventSensor(ctx context.Context) {
 }
 
 type eventSensor struct {
-	WMH *windowmanagerhandler.WindowManagerHandler
+	WMH        *windowmanagerhandler.WindowManagerHandler
+	CancelFunc context.CancelFunc
 
 	PreviouslyFocusedWindow *windowmanagerhandler.WindowFocusChange
 }
@@ -63,7 +66,12 @@ func (es *eventSensor) Loop(
 	ctx context.Context,
 	eventSubmitter submitEventer,
 ) {
+	ctx, cancelFn := context.WithCancel(ctx)
 	windowFocusChangeChan := es.WMH.WindowFocusChangeChan(ctx)
+	if es.CancelFunc != nil {
+		panic("this sensor was already used")
+	}
+	es.CancelFunc = cancelFn
 
 	for {
 		select {
@@ -75,6 +83,13 @@ func (es *eventSensor) Loop(
 			}
 		}
 	}
+}
+
+func (es *eventSensor) Close() error {
+	var err *multierror.Error
+	err = multierror.Append(err, es.WMH.Close())
+	es.CancelFunc()
+	return err.ErrorOrNil()
 }
 
 func (es *eventSensor) submitEventWindowFocusChange(

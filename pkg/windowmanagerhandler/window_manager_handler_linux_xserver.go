@@ -22,9 +22,10 @@ type XWindowManagerHandler struct {
 }
 
 func (wmh *WindowManagerHandler) initUsingXServer() error {
-	x, err := xgbutil.NewConn()
+	display := os.Getenv("DISPLAY")
+	x, err := xgbutil.NewConnDisplay(display)
 	if err != nil {
-		return fmt.Errorf("unable to connect to X-server using DISPLAY '%s': %w", os.Getenv("DISPLAY"), err)
+		return fmt.Errorf("unable to connect to X-server using DISPLAY '%s': %w", display, err)
 	}
 	wmh.XWMOrWaylandWM = &XWindowManagerHandler{
 		XUtil: x,
@@ -109,4 +110,12 @@ func (wmh *XWindowManagerHandler) WindowFocusChangeChan(ctx context.Context) <-c
 	})
 
 	return ch
+}
+
+func (wmh *XWindowManagerHandler) Close() error {
+	ctx := context.TODO()
+	logger.Debugf(ctx, "Close")
+	defer logger.Debugf(ctx, "/Close")
+	wmh.XUtil.Conn().Close()
+	return nil
 }

@@ -13,6 +13,7 @@ type PID int // using the same underlying type as `os` does
 type UID int // using the same underlying type as `os` does
 
 type XWMOrWaylandWM interface {
+	Close() error
 	WindowFocusChangeChan(ctx context.Context) <-chan WindowFocusChange
 }
 

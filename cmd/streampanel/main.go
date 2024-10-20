@@ -179,4 +179,8 @@ func runPanel(
 	if err != nil {
 		logger.Panic(ctx, err)
 	}
+	err = panel.Close()
+	if err != nil {
+		logger.Error(ctx, err)
+	}
 }
