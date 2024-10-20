@@ -3,6 +3,7 @@ package streamd
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -34,5 +35,43 @@ func (d *StreamD) startListeningForChatMessages(
 			}
 		}
 	})
+	return nil
+}
+
+func (d *StreamD) RemoveChatMessage(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	msgID streamcontrol.ChatMessageID,
+) error {
+	ctrl, err := d.streamController(ctx, platID)
+	if err != nil {
+		return fmt.Errorf("unable to get stream controller '%s': %w", platID, err)
+	}
+
+	err = ctrl.RemoveChatMessage(ctx, msgID)
+	if err != nil {
+		return fmt.Errorf("unable to remove message '%s' on '%s': %w", msgID, platID, err)
+	}
+
+	return nil
+}
+
+func (d *StreamD) BanUser(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	userID streamcontrol.ChatUserID,
+	reason string,
+	deadline time.Time,
+) error {
+	ctrl, err := d.streamController(ctx, platID)
+	if err != nil {
+		return fmt.Errorf("unable to get stream controller '%s': %w", platID, err)
+	}
+
+	err = ctrl.BanUser(ctx, streamcontrol.ChatUserID(userID), reason, deadline)
+	if err != nil {
+		return fmt.Errorf("unable to ban user '%s' on '%s': %w", userID, platID, err)
+	}
+
 	return nil
 }

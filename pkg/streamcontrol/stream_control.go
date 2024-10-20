@@ -105,10 +105,13 @@ type StreamStatus struct {
 	CustomData any        `json:",omitempty"`
 }
 
+type ChatUserID string
+type ChatMessageID string
+
 type ChatMessage struct {
 	CreatedAt time.Time
-	UserID    string
-	MessageID string
+	UserID    ChatUserID
+	MessageID ChatMessageID
 	Message   string
 }
 
@@ -124,8 +127,8 @@ type StreamControllerCommons interface {
 
 	GetChatMessagesChan(ctx context.Context) (<-chan ChatMessage, error)
 	SendChatMessage(ctx context.Context, message string) error
-	DeleteChatMessage(ctx context.Context, messageID string) error
-	BanUser(ctx context.Context, userID string, reason string, deadline time.Time) error
+	RemoveChatMessage(ctx context.Context, messageID ChatMessageID) error
+	BanUser(ctx context.Context, userID ChatUserID, reason string, deadline time.Time) error
 }
 
 type StreamController[ProfileType StreamProfile] interface {
@@ -230,10 +233,10 @@ func (c *abstractStreamController) GetChatMessagesChan(ctx context.Context) (<-c
 func (c *abstractStreamController) SendChatMessage(ctx context.Context, message string) error {
 	return c.StreamController.SendChatMessage(ctx, message)
 }
-func (c *abstractStreamController) DeleteChatMessage(ctx context.Context, messageID string) error {
-	return c.StreamController.DeleteChatMessage(ctx, messageID)
+func (c *abstractStreamController) RemoveChatMessage(ctx context.Context, messageID ChatMessageID) error {
+	return c.StreamController.RemoveChatMessage(ctx, messageID)
 }
-func (c *abstractStreamController) BanUser(ctx context.Context, userID string, reason string, deadline time.Time) error {
+func (c *abstractStreamController) BanUser(ctx context.Context, userID ChatUserID, reason string, deadline time.Time) error {
 	return c.StreamController.BanUser(ctx, userID, reason, deadline)
 }
 

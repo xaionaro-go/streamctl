@@ -88,6 +88,8 @@ service StreamD {
     rpc SubmitEvent(SubmitEventRequest) returns (SubmitEventReply) {}
 
     rpc SubscribeToChatMessages(SubscribeToChatMessagesRequest) returns (stream ChatMessage) {}
+    rpc RemoveChatMessage(RemoveChatMessageRequest) returns (RemoveChatMessageReply) {}
+    rpc BanUser(BanUserRequest) returns (BanUserReply) {}
 }
 
 message PingRequest {
@@ -683,3 +685,16 @@ message ChatMessage {
     string messageID = 4;
     string message = 5;
 }
+
+message RemoveChatMessageRequest {
+    string platID = 1;
+    string messageID = 2;
+}
+message RemoveChatMessageReply {}
+message BanUserRequest {
+    string platID = 1;
+    string userID = 2;
+    string reason = 3;
+	optional int64 deadlineUnixNano  = 4;
+}
+message BanUserReply {}

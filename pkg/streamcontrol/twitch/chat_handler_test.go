@@ -73,9 +73,9 @@ func TestChatHandler(t *testing.T) {
 
 	callback(0, irc.ChatMessage{
 		Sender: irc.ChatSender{
-			Username: expectedEvent.UserID,
+			Username: string(expectedEvent.UserID),
 		},
-		ID:        expectedEvent.MessageID,
+		ID:        string(expectedEvent.MessageID),
 		Channel:   channelID,
 		Text:      expectedEvent.Message,
 		CreatedAt: time.Now(),

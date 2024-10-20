@@ -1948,10 +1948,46 @@ func (grpc *GRPCServer) SubscribeToChatMessages(
 			return streamd_grpc.ChatMessage{
 				CreatedAtNano: uint64(input.CreatedAt.UnixNano()),
 				PlatID:        string(input.Platform),
-				UserID:        input.UserID,
-				MessageID:     input.MessageID,
+				UserID:        string(input.UserID),
+				MessageID:     string(input.MessageID),
 				Message:       input.Message,
 			}
 		},
 	)
+}
+
+func (grpc *GRPCServer) RemoveChatMessage(
+	ctx context.Context,
+	req *streamd_grpc.RemoveChatMessageRequest,
+) (*streamd_grpc.RemoveChatMessageReply, error) {
+	err := grpc.StreamD.RemoveChatMessage(
+		ctx,
+		streamcontrol.PlatformName(req.GetPlatID()),
+		streamcontrol.ChatMessageID(req.GetMessageID()),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.RemoveChatMessageReply{}, nil
+}
+func (grpc *GRPCServer) BanUser(
+	ctx context.Context,
+	req *streamd_grpc.BanUserRequest,
+) (*streamd_grpc.BanUserReply, error) {
+
+	var deadline time.Time
+	if req.DeadlineUnixNano != nil {
+		deadline = goconv.UnixGRPC2Go(*req.DeadlineUnixNano)
+	}
+	err := grpc.StreamD.BanUser(
+		ctx,
+		streamcontrol.PlatformName(req.GetPlatID()),
+		streamcontrol.ChatUserID(req.GetUserID()),
+		req.GetReason(),
+		deadline,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.BanUserReply{}, nil
 }

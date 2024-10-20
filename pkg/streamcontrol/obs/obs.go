@@ -264,12 +264,23 @@ func (obs *OBS) GetChatMessagesChan(
 	return nil, nil
 }
 
-func (obs *OBS) SendChatMessage(ctx context.Context, message string) error {
+func (obs *OBS) SendChatMessage(
+	ctx context.Context,
+	message string,
+) error {
 	return fmt.Errorf("not implemented, yet")
 }
-func (obs *OBS) DeleteChatMessage(ctx context.Context, messageID string) error {
+func (obs *OBS) RemoveChatMessage(
+	ctx context.Context,
+	messageID streamcontrol.ChatMessageID,
+) error {
 	return fmt.Errorf("not implemented, yet")
 }
-func (obs *OBS) BanUser(ctx context.Context, userID string, reason string, deadline time.Time) error {
+func (obs *OBS) BanUser(
+	ctx context.Context,
+	userID streamcontrol.ChatUserID,
+	reason string,
+	deadline time.Time,
+) error {
 	return fmt.Errorf("not implemented, yet")
 }

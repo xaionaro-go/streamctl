@@ -2701,12 +2701,71 @@ func (c *Client) SubscribeToChatMessages(
 						int64(createdAtUnix)/int64(time.Second),
 						(int64(createdAtUnix)%int64(time.Second))/int64(time.Nanosecond),
 					),
-					UserID:    event.GetUserID(),
-					MessageID: event.GetMessageID(),
+					UserID:    streamcontrol.ChatUserID(event.GetUserID()),
+					MessageID: streamcontrol.ChatMessageID(event.GetMessageID()),
 					Message:   event.GetMessage(),
 				},
 				Platform: streamcontrol.PlatformName(event.GetPlatID()),
 			}
 		},
 	)
+}
+
+func (c *Client) RemoveChatMessage(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	msgID streamcontrol.ChatMessageID,
+) error {
+	_, err := withStreamDClient(ctx, c, func(
+		ctx context.Context,
+		client streamd_grpc.StreamDClient,
+		conn io.Closer,
+	) (*streamd_grpc.RemoveChatMessageReply, error) {
+		return callWrapper(
+			ctx,
+			c,
+			client.RemoveChatMessage,
+			&streamd_grpc.RemoveChatMessageRequest{
+				PlatID:    string(platID),
+				MessageID: string(msgID),
+			},
+		)
+	})
+	if err != nil {
+		return fmt.Errorf("unable to submit the event: %w", err)
+	}
+	return nil
+}
+func (c *Client) BanUser(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	userID streamcontrol.ChatUserID,
+	reason string,
+	deadline time.Time,
+) error {
+	_, err := withStreamDClient(ctx, c, func(
+		ctx context.Context,
+		client streamd_grpc.StreamDClient,
+		conn io.Closer,
+	) (*streamd_grpc.BanUserReply, error) {
+		var deadlineNano *int64
+		if !deadline.IsZero() {
+			deadlineNano = ptr(int64(deadline.UnixNano()))
+		}
+		return callWrapper(
+			ctx,
+			c,
+			client.BanUser,
+			&streamd_grpc.BanUserRequest{
+				PlatID:           string(platID),
+				UserID:           string(userID),
+				Reason:           reason,
+				DeadlineUnixNano: deadlineNano,
+			},
+		)
+	})
+	if err != nil {
+		return fmt.Errorf("unable to submit the event: %w", err)
+	}
+	return nil
 }

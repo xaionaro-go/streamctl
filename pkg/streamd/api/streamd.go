@@ -276,6 +276,18 @@ type StreamD interface {
 	SubscribeToChatMessages(
 		ctx context.Context,
 	) (<-chan ChatMessage, error)
+	RemoveChatMessage(
+		ctx context.Context,
+		platID streamcontrol.PlatformName,
+		msgID streamcontrol.ChatMessageID,
+	) error
+	BanUser(
+		ctx context.Context,
+		platID streamcontrol.PlatformName,
+		userID streamcontrol.ChatUserID,
+		reason string,
+		deadline time.Time,
+	) error
 }
 
 type StreamPlayer = sstypes.StreamPlayer

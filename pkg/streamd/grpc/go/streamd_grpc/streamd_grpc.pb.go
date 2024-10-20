@@ -91,6 +91,8 @@ type StreamDClient interface {
 	UpdateTriggerRule(ctx context.Context, in *UpdateTriggerRuleRequest, opts ...grpc.CallOption) (*UpdateTriggerRuleReply, error)
 	SubmitEvent(ctx context.Context, in *SubmitEventRequest, opts ...grpc.CallOption) (*SubmitEventReply, error)
 	SubscribeToChatMessages(ctx context.Context, in *SubscribeToChatMessagesRequest, opts ...grpc.CallOption) (StreamD_SubscribeToChatMessagesClient, error)
+	RemoveChatMessage(ctx context.Context, in *RemoveChatMessageRequest, opts ...grpc.CallOption) (*RemoveChatMessageReply, error)
+	BanUser(ctx context.Context, in *BanUserRequest, opts ...grpc.CallOption) (*BanUserReply, error)
 }
 
 type streamDClient struct {
@@ -1020,6 +1022,24 @@ func (x *streamDSubscribeToChatMessagesClient) Recv() (*ChatMessage, error) {
 	return m, nil
 }
 
+func (c *streamDClient) RemoveChatMessage(ctx context.Context, in *RemoveChatMessageRequest, opts ...grpc.CallOption) (*RemoveChatMessageReply, error) {
+	out := new(RemoveChatMessageReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/RemoveChatMessage", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) BanUser(ctx context.Context, in *BanUserRequest, opts ...grpc.CallOption) (*BanUserReply, error) {
+	out := new(BanUserReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/BanUser", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // StreamDServer is the server API for StreamD service.
 // All implementations must embed UnimplementedStreamDServer
 // for forward compatibility
@@ -1098,6 +1118,8 @@ type StreamDServer interface {
 	UpdateTriggerRule(context.Context, *UpdateTriggerRuleRequest) (*UpdateTriggerRuleReply, error)
 	SubmitEvent(context.Context, *SubmitEventRequest) (*SubmitEventReply, error)
 	SubscribeToChatMessages(*SubscribeToChatMessagesRequest, StreamD_SubscribeToChatMessagesServer) error
+	RemoveChatMessage(context.Context, *RemoveChatMessageRequest) (*RemoveChatMessageReply, error)
+	BanUser(context.Context, *BanUserRequest) (*BanUserReply, error)
 	mustEmbedUnimplementedStreamDServer()
 }
 
@@ -1326,6 +1348,12 @@ func (UnimplementedStreamDServer) SubmitEvent(context.Context, *SubmitEventReque
 }
 func (UnimplementedStreamDServer) SubscribeToChatMessages(*SubscribeToChatMessagesRequest, StreamD_SubscribeToChatMessagesServer) error {
 	return status.Errorf(codes.Unimplemented, "method SubscribeToChatMessages not implemented")
+}
+func (UnimplementedStreamDServer) RemoveChatMessage(context.Context, *RemoveChatMessageRequest) (*RemoveChatMessageReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveChatMessage not implemented")
+}
+func (UnimplementedStreamDServer) BanUser(context.Context, *BanUserRequest) (*BanUserReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BanUser not implemented")
 }
 func (UnimplementedStreamDServer) mustEmbedUnimplementedStreamDServer() {}
 
@@ -2705,6 +2733,42 @@ func (x *streamDSubscribeToChatMessagesServer) Send(m *ChatMessage) error {
 	return x.ServerStream.SendMsg(m)
 }
 
+func _StreamD_RemoveChatMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveChatMessageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).RemoveChatMessage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/RemoveChatMessage",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).RemoveChatMessage(ctx, req.(*RemoveChatMessageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_BanUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BanUserRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).BanUser(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/BanUser",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).BanUser(ctx, req.(*BanUserRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _StreamD_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "streamd.StreamD",
 	HandlerType: (*StreamDServer)(nil),
@@ -2960,6 +3024,14 @@ var _StreamD_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SubmitEvent",
 			Handler:    _StreamD_SubmitEvent_Handler,
+		},
+		{
+			MethodName: "RemoveChatMessage",
+			Handler:    _StreamD_RemoveChatMessage_Handler,
+		},
+		{
+			MethodName: "BanUser",
+			Handler:    _StreamD_BanUser_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

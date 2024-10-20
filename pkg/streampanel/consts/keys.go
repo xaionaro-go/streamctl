@@ -21,6 +21,7 @@ type Page string
 const (
 	PageControl     = Page("Control")
 	PageMoreControl = Page("More control")
+	PageChat        = Page("Chat")
 	PageMonitor     = Page("Monitor")
 	PageOBS         = Page("OBS")
 	PageRestream    = Page("Restream")

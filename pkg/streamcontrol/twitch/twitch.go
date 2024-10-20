@@ -844,20 +844,28 @@ func (t *Twitch) SendChatMessage(ctx context.Context, message string) (_ret erro
 	})
 	return err
 }
-func (t *Twitch) DeleteChatMessage(ctx context.Context, messageID string) (_ret error) {
-	logger.Debugf(ctx, "DeleteChatMessage(ctx, '%s')", messageID)
-	defer func() { logger.Debugf(ctx, "/DeleteChatMessage(ctx, '%s'): %v", messageID, _ret) }()
+func (t *Twitch) RemoveChatMessage(
+	ctx context.Context,
+	messageID streamcontrol.ChatMessageID,
+) (_ret error) {
+	logger.Debugf(ctx, "RemoveChatMessage(ctx, '%s')", messageID)
+	defer func() { logger.Debugf(ctx, "/RemoveChatMessage(ctx, '%s'): %v", messageID, _ret) }()
 
 	t.prepare(ctx)
 
 	_, err := t.client.DeleteChatMessage(&helix.DeleteChatMessageParams{
 		BroadcasterID: t.broadcasterID,
 		ModeratorID:   t.broadcasterID,
-		MessageID:     messageID,
+		MessageID:     string(messageID),
 	})
 	return err
 }
-func (t *Twitch) BanUser(ctx context.Context, userID string, reason string, deadline time.Time) (_err error) {
+func (t *Twitch) BanUser(
+	ctx context.Context,
+	userID streamcontrol.ChatUserID,
+	reason string,
+	deadline time.Time,
+) (_err error) {
 	logger.Debugf(ctx, "BanUser(ctx, '%s', '%s', %v)", userID, reason, deadline)
 	defer func() { logger.Debugf(ctx, "/BanUser(ctx, '%s', '%s', %v): %v", userID, reason, deadline, _err) }()
 
@@ -873,7 +881,7 @@ func (t *Twitch) BanUser(ctx context.Context, userID string, reason string, dead
 		Body: helix.BanUserRequestBody{
 			Duration: duration,
 			Reason:   reason,
-			UserId:   userID,
+			UserId:   string(userID),
 		},
 	})
 	return err

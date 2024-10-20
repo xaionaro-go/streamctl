@@ -2018,6 +2018,20 @@ func (p *Panel) initMainWindow(
 		),
 	)
 
+	chatPage := container.NewBorder(nil, nil, nil, nil)
+	chatUI, err := newChatUI(ctx, p)
+	if err != nil {
+		logger.Errorf(ctx, "unable to initialize the page for chat: %v", err)
+	} else {
+		chatPage = container.NewBorder(
+			nil,
+			nil,
+			nil,
+			nil,
+			chatUI.CanvasObject,
+		)
+	}
+
 	var cancelPage context.CancelFunc
 	setPage := func(page consts.Page) {
 		logger.Debugf(ctx, "setPage(%s)", page)
@@ -2036,6 +2050,7 @@ func (p *Panel) initMainWindow(
 			obsPage.Hide()
 			restreamPage.Hide()
 			moreControlPage.Hide()
+			chatPage.Hide()
 			profileControl.Show()
 			monitorControl.Hide()
 			timersUI.StopRefreshingFromRemote(ctx)
@@ -2044,12 +2059,21 @@ func (p *Panel) initMainWindow(
 			p.monitorPage.Hide()
 			obsPage.Hide()
 			restreamPage.Hide()
-			moreControlPage.Hide()
+			chatPage.Hide()
 			profileControl.Hide()
 			monitorControl.Hide()
 			controlPage.Hide()
 			moreControlPage.Show()
 			timersUI.StartRefreshingFromRemote(ctx)
+		case consts.PageChat:
+			p.monitorPage.Hide()
+			obsPage.Hide()
+			restreamPage.Hide()
+			moreControlPage.Hide()
+			profileControl.Hide()
+			monitorControl.Hide()
+			controlPage.Hide()
+			chatPage.Show()
 		case consts.PageMonitor:
 			controlPage.Hide()
 			profileControl.Hide()
@@ -2086,6 +2110,7 @@ func (p *Panel) initMainWindow(
 		[]string{
 			string(consts.PageControl),
 			string(consts.PageMoreControl),
+			string(consts.PageChat),
 			string(consts.PageMonitor),
 			string(consts.PageOBS),
 			string(consts.PageRestream),
@@ -2112,7 +2137,7 @@ func (p *Panel) initMainWindow(
 		),
 		nil,
 		nil,
-		container.NewStack(controlPage, moreControlPage, p.monitorPage, obsPage, restreamPage),
+		container.NewStack(controlPage, moreControlPage, chatPage, p.monitorPage, obsPage, restreamPage),
 	))
 
 	w.Show()
