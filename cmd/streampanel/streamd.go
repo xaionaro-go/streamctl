@@ -19,6 +19,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
@@ -144,6 +145,12 @@ func runStreamd(
 		func(
 			ctx context.Context,
 			cfg *streamcontrol.PlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile],
+		) (bool, error) {
+			return false, streamd.ErrSkipBackend
+		},
+		func(
+			ctx context.Context,
+			cfg *streamcontrol.PlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile],
 		) (bool, error) {
 			return false, streamd.ErrSkipBackend
 		},

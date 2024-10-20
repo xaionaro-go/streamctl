@@ -35,6 +35,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/screenshot"
 	"github.com/xaionaro-go/streamctl/pkg/screenshoter"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
@@ -107,6 +108,7 @@ type Panel struct {
 
 	youtubeCheck *widget.Check
 	twitchCheck  *widget.Check
+	kickCheck    *widget.Check
 
 	configPath  string
 	configCache *streamdconfig.Config
@@ -662,6 +664,15 @@ func (p *Panel) OAuthHandlerTwitch(
 	return p.oauthHandler(ctx, twitch.ID, arg)
 }
 
+func (p *Panel) OAuthHandlerKick(
+	ctx context.Context,
+	arg oauthhandler.OAuthHandlerArgument,
+) error {
+	logger.Infof(ctx, "OAuthHandlerKick: %#+v", arg)
+	defer logger.Infof(ctx, "/OAuthHandlerKick")
+	return p.oauthHandler(ctx, kick.ID, arg)
+}
+
 func (p *Panel) OAuthHandlerYouTube(
 	ctx context.Context,
 	arg oauthhandler.OAuthHandlerArgument,
@@ -855,6 +866,13 @@ func (p *Panel) InputTwitchUserInfo(
 	cfg.Config.ClientSecret = clientSecretField.Text
 
 	return true, nil
+}
+
+func (p *Panel) InputKickUserInfo(
+	ctx context.Context,
+	cfg *streamcontrol.PlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile],
+) (bool, error) {
+	return false, fmt.Errorf("not implemented, yet")
 }
 
 var youtubeCredentialsCreateLink, _ = url.Parse(
@@ -1105,6 +1123,7 @@ func (p *Panel) refilterProfiles(ctx context.Context) {
 					subValueMatch = true
 					break
 				}
+			case kick.StreamProfile:
 			case youtube.StreamProfile:
 				if containTagSubstringCI(prof.Tags, filterValue) {
 					subValueMatch = true
@@ -1214,6 +1233,7 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 	for _, backendID := range []streamcontrol.PlatformName{
 		obs.ID,
 		twitch.ID,
+		kick.ID,
 		youtube.ID,
 	} {
 		isEnabled, err := p.StreamD.IsBackendEnabled(ctx, backendID)
@@ -1317,6 +1337,13 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 		twitchAlreadyLoggedIn.SetText("(not logged in)")
 	} else {
 		twitchAlreadyLoggedIn.SetText("(already logged in)")
+	}
+
+	kickAlreadyLoggedIn := widget.NewLabel("")
+	if !backendEnabled[kick.ID] {
+		kickAlreadyLoggedIn.SetText("(not logged in)")
+	} else {
+		kickAlreadyLoggedIn.SetText("(already logged in)")
 	}
 
 	youtubeAlreadyLoggedIn := widget.NewLabel("")
@@ -1431,6 +1458,27 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 					}
 				}),
 				twitchAlreadyLoggedIn,
+			),
+			container.NewHBox(
+				widget.NewButtonWithIcon("(Re-)login in Kick", theme.LoginIcon(), func() {
+					if cfg.Backends[kick.ID] == nil {
+						kick.InitConfig(cfg.Backends)
+					}
+
+					cfg.Backends[kick.ID].Enable = nil
+					cfg.Backends[kick.ID].Config = kick.PlatformSpecificConfig{}
+
+					if err := p.StreamD.SetConfig(ctx, cfg); err != nil {
+						p.DisplayError(err)
+						return
+					}
+
+					if err := p.StreamD.EXPERIMENTAL_ReinitStreamControllers(ctx); err != nil {
+						p.DisplayError(err)
+						return
+					}
+				}),
+				kickAlreadyLoggedIn,
 			),
 			container.NewHBox(
 				widget.NewButtonWithIcon("(Re-)login in YouTube", theme.LoginIcon(), func() {
@@ -1603,6 +1651,7 @@ func (p *Panel) getUpdatedStatus_backends_noLock(ctx context.Context) {
 	for _, backendID := range []streamcontrol.PlatformName{
 		obs.ID,
 		twitch.ID,
+		kick.ID,
 		youtube.ID,
 	} {
 		isEnabled, err := p.StreamD.IsBackendEnabled(ctx, backendID)
@@ -1615,6 +1664,9 @@ func (p *Panel) getUpdatedStatus_backends_noLock(ctx context.Context) {
 	}
 	if backendEnabled[twitch.ID] {
 		p.twitchCheck.Enable()
+	}
+	if backendEnabled[kick.ID] {
+		p.kickCheck.Enable()
 	}
 	if backendEnabled[youtube.ID] {
 		p.youtubeCheck.Enable()
@@ -1856,6 +1908,10 @@ func (p *Panel) initMainWindow(
 	p.twitchCheck.SetChecked(true)
 	p.twitchCheck.Disable()
 
+	p.kickCheck = widget.NewCheck("Kick", nil)
+	p.kickCheck.SetChecked(true)
+	p.kickCheck.Disable()
+
 	p.youtubeCheck = widget.NewCheck("YouTube", nil)
 	p.youtubeCheck.SetChecked(true)
 	p.youtubeCheck.Disable()
@@ -1892,6 +1948,9 @@ func (p *Panel) initMainWindow(
 	twLabel := widget.NewLabel("TW:")
 	twLabel.Importance = widget.HighImportance
 	p.streamStatus[twitch.ID] = widget.NewLabel("")
+	kcLabel := widget.NewLabel("Kc:")
+	kcLabel.Importance = widget.HighImportance
+	p.streamStatus[kick.ID] = widget.NewLabel("")
 	ytLabel := widget.NewLabel("YT:")
 	ytLabel.Importance = widget.HighImportance
 	p.streamStatus[youtube.ID] = widget.NewLabel("")
@@ -1903,6 +1962,7 @@ func (p *Panel) initMainWindow(
 	}
 	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), obsLabel, p.streamStatus[obs.ID]))
 	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), twLabel, p.streamStatus[twitch.ID]))
+	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), kcLabel, p.streamStatus[kick.ID]))
 	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), ytLabel, p.streamStatus[youtube.ID]))
 	streamInfoContainer := container.NewBorder(
 		nil,
@@ -2243,6 +2303,7 @@ func (p *Panel) setupStreamNoLock(ctx context.Context) {
 	for _, backendID := range []streamcontrol.PlatformName{
 		obs.ID,
 		twitch.ID,
+		kick.ID,
 		youtube.ID,
 	} {
 		isEnabled, err := p.StreamD.IsBackendEnabled(ctx, backendID)
@@ -2272,6 +2333,19 @@ func (p *Panel) setupStreamNoLock(ctx context.Context) {
 			p.streamTitleField.Text,
 			p.streamDescriptionField.Text,
 			profile.PerPlatform[twitch.ID],
+		)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to setup the stream on Twitch: %w", err))
+		}
+	}
+
+	if p.kickCheck.Checked && backendEnabled[kick.ID] {
+		err := p.StreamD.StartStream(
+			ctx,
+			kick.ID,
+			p.streamTitleField.Text,
+			p.streamDescriptionField.Text,
+			profile.PerPlatform[kick.ID],
 		)
 		if err != nil {
 			p.DisplayError(fmt.Errorf("unable to setup the stream on Twitch: %w", err))
@@ -2434,6 +2508,9 @@ func (p *Panel) stopStreamNoLock(ctx context.Context) {
 
 	if backendEnabled[twitch.ID] {
 		p.twitchCheck.Enable()
+	}
+	if backendEnabled[kick.ID] {
+		p.kickCheck.Enable()
 	}
 	if backendEnabled[youtube.ID] {
 		p.youtubeCheck.Enable()
@@ -2845,6 +2922,7 @@ func (p *Panel) profileWindow(
 	var (
 		obsProfile     *obs.StreamProfile
 		twitchProfile  *twitch.StreamProfile
+		kickProfile    *kick.StreamProfile
 		youtubeProfile *youtube.StreamProfile
 	)
 
@@ -2870,6 +2948,7 @@ func (p *Panel) profileWindow(
 	for _, backendID := range []streamcontrol.PlatformName{
 		obs.ID,
 		twitch.ID,
+		kick.ID,
 		youtube.ID,
 	} {
 		isEnabled, err := p.StreamD.IsBackendEnabled(ctx, backendID)
@@ -2893,6 +2972,8 @@ func (p *Panel) profileWindow(
 	}
 	_ = backendData[obs.ID].(api.BackendDataOBS)
 	dataTwitch := backendData[twitch.ID].(api.BackendDataTwitch)
+	dataKick := backendData[kick.ID].(api.BackendDataKick)
+	_ = dataKick // TODO: delete me!
 	dataYouTube := backendData[youtube.ID].(api.BackendDataYouTube)
 
 	var bottomContent []fyne.CanvasObject
@@ -3024,6 +3105,14 @@ func (p *Panel) profileWindow(
 		getTwitchTags = twitchTagsEditor.GetTags
 	} else {
 		bottomContent = append(bottomContent, widget.NewLabel("Twitch is disabled"))
+	}
+
+	bottomContent = append(bottomContent, widget.NewSeparator())
+	bottomContent = append(bottomContent, widget.NewRichTextFromMarkdown("# Kick:"))
+	if backendEnabled[kick.ID] {
+		bottomContent = append(bottomContent, widget.NewLabel("Kick configuration is not implemented, yet"))
+	} else {
+		bottomContent = append(bottomContent, widget.NewLabel("Kick is disabled"))
 	}
 
 	var getYoutubeTags func() []string
@@ -3227,6 +3316,9 @@ func (p *Panel) profileWindow(
 					}
 				}
 				profile.PerPlatform[twitch.ID] = twitchProfile
+			}
+			if kickProfile != nil {
+				profile.PerPlatform[kick.ID] = kickProfile
 			}
 			if youtubeProfile != nil {
 				if getYoutubeTags != nil {

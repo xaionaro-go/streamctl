@@ -8,6 +8,7 @@ import (
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	twitch "github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/types"
 	youtube "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
@@ -35,6 +36,8 @@ func (a *platformsControllerAdapter) CheckStreamStartedByURL(
 		platID = youtube.ID
 	case strings.Contains(destination.Hostname(), "twitch"):
 		platID = twitch.ID
+	case strings.Contains(destination.Hostname(), "global-contribute.live-video.net"):
+		platID = kick.ID
 	default:
 		return false, fmt.Errorf(
 			"do not know how to check if the stream started for '%s'",

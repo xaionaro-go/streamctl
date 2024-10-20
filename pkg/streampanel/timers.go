@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	obs "github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs/types"
 	twitch "github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/types"
 	youtube "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
@@ -250,6 +251,7 @@ func (ui *timersUI) kickOffRemotely(
 	for _, platID := range []streamcontrol.PlatformName{
 		youtube.ID,
 		twitch.ID,
+		kick.ID,
 		obs.ID,
 	} {
 		_, err := streamD.AddTimer(ctx, deadline, &action.EndStream{

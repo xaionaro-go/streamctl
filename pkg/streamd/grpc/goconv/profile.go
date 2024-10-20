@@ -6,6 +6,7 @@ import (
 	"github.com/goccy/go-yaml"
 
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
@@ -22,6 +23,8 @@ func ProfileGRPC2Go(
 		profile = &obs.StreamProfile{}
 	case twitch.ID:
 		profile = &twitch.StreamProfile{}
+	case kick.ID:
+		profile = &kick.StreamProfile{}
 	case youtube.ID:
 		profile = &youtube.StreamProfile{}
 	default:

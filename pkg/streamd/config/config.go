@@ -7,6 +7,7 @@ import (
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
@@ -35,6 +36,7 @@ func NewConfig() Config {
 	cfg := streamcontrol.Config{}
 	obs.InitConfig(cfg)
 	twitch.InitConfig(cfg)
+	kick.InitConfig(cfg)
 	youtube.InitConfig(cfg)
 	return Config{
 		Backends:        cfg,
@@ -53,6 +55,9 @@ func NewSampleConfig() Config {
 	}
 	cfg.Backends[twitch.ID].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{
 		"some_profile": twitch.StreamProfile{},
+	}
+	cfg.Backends[kick.ID].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{
+		"some_profile": kick.StreamProfile{},
 	}
 	cfg.Backends[youtube.ID].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{
 		"some_profile": youtube.StreamProfile{},

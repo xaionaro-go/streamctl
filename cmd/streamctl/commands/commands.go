@@ -12,6 +12,7 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/spf13/cobra"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
@@ -138,12 +139,14 @@ func expandPath(rawPath string) string {
 
 const (
 	idTwitch  = twitch.ID
+	idKick    = kick.ID
 	idYoutube = youtube.ID
 )
 
 func newConfig() streamcontrol.Config {
 	cfg := streamcontrol.Config{}
 	twitch.InitConfig(cfg)
+	kick.InitConfig(cfg)
 	youtube.InitConfig(cfg)
 	return cfg
 }
@@ -156,6 +159,9 @@ func generateConfig(cmd *cobra.Command, args []string) {
 	cfg := newConfig()
 	cfg[idTwitch].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{
 		"some_profile": twitch.StreamProfile{},
+	}
+	cfg[idKick].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{
+		"some_profile": kick.StreamProfile{},
 	}
 	cfg[idYoutube].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{
 		"some_profile": youtube.StreamProfile{},
@@ -218,13 +224,24 @@ func readConfigFromPath(
 		logger.Debugf(ctx, "final stream profiles of twitch: %#+v", (*cfg)[idTwitch].StreamProfiles)
 	}
 
+	if (*cfg)[idKick] != nil {
+		err = streamcontrol.ConvertStreamProfiles[kick.StreamProfile](
+			ctx,
+			(*cfg)[idKick].StreamProfiles,
+		)
+		if err != nil {
+			return fmt.Errorf("unable to convert stream profiles of kick: %w: <%s>", err, b)
+		}
+		logger.Debugf(ctx, "final stream profiles of kick: %#+v", (*cfg)[idKick].StreamProfiles)
+	}
+
 	if (*cfg)[idYoutube] != nil {
 		err = streamcontrol.ConvertStreamProfiles[youtube.StreamProfile](
 			ctx,
 			(*cfg)[idYoutube].StreamProfiles,
 		)
 		if err != nil {
-			return fmt.Errorf("unable to convert stream profiles of twitch: %w: <%s>", err, b)
+			return fmt.Errorf("unable to convert stream profiles of youtube: %w: <%s>", err, b)
 		}
 		logger.Debugf(
 			ctx,
@@ -283,6 +300,34 @@ func getTwitchStreamController(
 	)
 }
 
+func getKickStreamController(
+	ctx context.Context,
+	cfg streamcontrol.Config,
+) (*kick.Kick, error) {
+	platCfg := streamcontrol.GetPlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile](
+		ctx,
+		cfg,
+		idKick,
+	)
+	if platCfg == nil {
+		logger.Infof(ctx, "kick config was not found")
+		return nil, nil
+	}
+
+	logger.Debugf(ctx, "kick config: %#+v", platCfg)
+	return kick.New(ctx, *platCfg,
+		func(c kick.Config) error {
+			return xsync.DoR1(ctx, &saveConfigLock, func() error {
+				cfg[idKick] = &streamcontrol.AbstractPlatformConfig{
+					Config:         c.Config,
+					StreamProfiles: streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
+				}
+				return saveConfig(ctx, cfg)
+			})
+		},
+	)
+}
+
 func getYouTubeStreamController(
 	ctx context.Context,
 	cfg streamcontrol.Config,
@@ -323,6 +368,14 @@ func getStreamControllers(
 	}
 	if twitch != nil {
 		result = append(result, streamcontrol.ToAbstract(twitch))
+	}
+
+	kick, err := getKickStreamController(ctx, cfg)
+	if err != nil {
+		logger.Panic(ctx, err)
+	}
+	if kick != nil {
+		result = append(result, streamcontrol.ToAbstract(kick))
 	}
 
 	youtube, err := getYouTubeStreamController(ctx, cfg)

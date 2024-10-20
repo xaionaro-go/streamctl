@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
@@ -15,6 +16,8 @@ func NewStreamProfile(
 	switch platID {
 	case twitch.ID:
 		return &twitch.StreamProfile{}, nil
+	case kick.ID:
+		return &kick.StreamProfile{}, nil
 	case youtube.ID:
 		return &youtube.StreamProfile{}, nil
 	case obs.ID:

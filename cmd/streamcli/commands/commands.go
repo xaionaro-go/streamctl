@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	kick "github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick/types"
 	obs "github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs/types"
 	twitch "github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/types"
 	youtube "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
@@ -216,7 +217,7 @@ func streamStatus(cmd *cobra.Command, args []string) {
 
 	result := map[streamcontrol.PlatformName]*streamcontrol.StreamStatus{}
 	for _, platID := range []streamcontrol.PlatformName{
-		obs.ID, twitch.ID, youtube.ID,
+		obs.ID, twitch.ID, youtube.ID, kick.ID,
 	} {
 		isEnabled, err := streamD.IsBackendEnabled(ctx, platID)
 		assertNoError(ctx, err)

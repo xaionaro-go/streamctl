@@ -9,6 +9,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	obs "github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs/types"
 	twitch "github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/types"
 	youtube "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
@@ -27,6 +28,10 @@ type UI struct {
 	InputTwitchUserInfoFn func(
 		ctx context.Context,
 		cfg *streamcontrol.PlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile],
+	) (bool, error)
+	InputKickUserInfoFn func(
+		ctx context.Context,
+		cfg *streamcontrol.PlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile],
 	) (bool, error)
 	InputYouTubeUserInfoFn func(
 		ctx context.Context,
@@ -50,6 +55,10 @@ func NewUI(
 		ctx context.Context,
 		cfg *streamcontrol.PlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile],
 	) (bool, error),
+	inputKickUserInfoFn func(
+		ctx context.Context,
+		cfg *streamcontrol.PlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile],
+	) (bool, error),
 	inputYouTubeUserInfoFn func(
 		ctx context.Context,
 		cfg *streamcontrol.PlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile],
@@ -68,6 +77,7 @@ func NewUI(
 		CodeChMapLocker:        xsync.RWMutex{},
 		SetLoggingLevelFn:      setLoggingLevel,
 		InputTwitchUserInfoFn:  inputTwitchUserInfoFn,
+		InputKickUserInfoFn:    inputKickUserInfoFn,
 		InputYouTubeUserInfoFn: inputYouTubeUserInfoFn,
 		InputOBSConnectInfoFn:  inputOBSConnectInfoFn,
 	}
@@ -220,6 +230,13 @@ func (ui *UI) OAuthHandlerTwitch(
 	return ui.oauth2Handler(ctx, twitch.ID, arg)
 }
 
+func (ui *UI) OAuthHandlerKick(
+	ctx context.Context,
+	arg oauthhandler.OAuthHandlerArgument,
+) error {
+	return ui.oauth2Handler(ctx, kick.ID, arg)
+}
+
 func (ui *UI) OAuthHandlerYouTube(
 	ctx context.Context,
 	arg oauthhandler.OAuthHandlerArgument,
@@ -232,6 +249,13 @@ func (ui *UI) InputTwitchUserInfo(
 	cfg *streamcontrol.PlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile],
 ) (bool, error) {
 	return ui.InputTwitchUserInfoFn(ctx, cfg)
+}
+
+func (ui *UI) InputKickUserInfo(
+	ctx context.Context,
+	cfg *streamcontrol.PlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile],
+) (bool, error) {
+	return ui.InputKickUserInfoFn(ctx, cfg)
 }
 
 func (ui *UI) InputYouTubeUserInfo(

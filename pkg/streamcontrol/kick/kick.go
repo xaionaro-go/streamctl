@@ -19,26 +19,35 @@ type Kick struct {
 	Channel     *kickcom.ChannelV1
 	Client      Client
 	ChatHandler *ChatHandler
+	SaveCfgFn   func(Config) error
 }
 
 var _ streamcontrol.StreamController[StreamProfile] = (*Kick)(nil)
 
-func New(channelSlug string) (*Kick, error) {
-	ctx := context.TODO()
+func New(
+	ctx context.Context,
+	cfg Config,
+	saveCfgFn func(Config) error,
+) (*Kick, error) {
+
+	if cfg.Config.Channel == "" {
+		return nil, fmt.Errorf("channel is not set")
+	}
 
 	client, err := kickcom.New()
 	if err != nil {
 		return nil, fmt.Errorf("unable to initialize a client to Kick: %w", err)
 	}
 
-	channel, err := client.GetChannelV1(ctx, channelSlug)
+	channel, err := client.GetChannelV1(ctx, cfg.Config.Channel)
 	if err != nil {
 		return nil, fmt.Errorf("unable to obtain channel info: %w", err)
 	}
 
 	k := &Kick{
-		Client:  client,
-		Channel: channel,
+		Client:    client,
+		Channel:   channel,
+		SaveCfgFn: saveCfgFn,
 	}
 
 	chatHandler, err := k.newChatHandler(ctx, channel.ID)

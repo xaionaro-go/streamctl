@@ -23,6 +23,7 @@ import (
 	"github.com/xaionaro-go/streamctl/cmd/streamd/ui"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
@@ -263,6 +264,9 @@ func main() {
 			observability.LogLevelFilter.SetLevel(l)
 		},
 		func(ctx context.Context, cfg *streamcontrol.PlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile]) (bool, error) {
+			return false, streamd.ErrSkipBackend
+		},
+		func(ctx context.Context, cfg *streamcontrol.PlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile]) (bool, error) {
 			return false, streamd.ErrSkipBackend
 		},
 		func(ctx context.Context, cfg *streamcontrol.PlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile]) (bool, error) {

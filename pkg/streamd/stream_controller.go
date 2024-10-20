@@ -14,6 +14,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
@@ -37,6 +38,8 @@ func (d *StreamD) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context) erro
 			err = d.initOBSBackend(ctx)
 		case strings.ToLower(string(twitch.ID)):
 			err = d.initTwitchBackend(ctx)
+		case strings.ToLower(string(kick.ID)):
+			err = d.initKickBackend(ctx)
 		case strings.ToLower(string(youtube.ID)):
 			err = d.initYouTubeBackend(ctx)
 		}
@@ -194,6 +197,47 @@ func newTwitch(
 		}
 	}
 	return twitch, nil
+}
+
+func newKick(
+	ctx context.Context,
+	cfg *streamcontrol.AbstractPlatformConfig,
+	setUserData func(context.Context, *streamcontrol.PlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile]) (bool, error),
+	saveCfgFunc func(*streamcontrol.AbstractPlatformConfig) error,
+	customOAuthHandler kick.OAuthHandler,
+	getOAuthListenPorts func() []uint16,
+) (
+	*kick.Kick,
+	error,
+) {
+	platCfg := streamcontrol.ConvertPlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile](
+		ctx,
+		cfg,
+	)
+	if platCfg == nil {
+		return nil, fmt.Errorf("kick config was not found")
+	}
+
+	if cfg.Enable != nil && !*cfg.Enable {
+		return nil, ErrSkipBackend
+	}
+
+	logger.Debugf(ctx, "kick config: %#+v", platCfg)
+	cfg = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
+	kick, err := kick.New(ctx, *platCfg,
+		func(c kick.Config) error {
+			return saveCfgFunc(&streamcontrol.AbstractPlatformConfig{
+				Enable:         c.Enable,
+				Config:         c.Config,
+				StreamProfiles: streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
+				Custom:         c.Custom,
+			})
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("unable to initialize Kick client: %w", err)
+	}
+	return kick, nil
 }
 
 func newYouTube(
@@ -362,6 +406,24 @@ func (d *StreamD) initTwitchBackend(ctx context.Context) error {
 		return err
 	}
 	d.StreamControllers.Twitch = twitch
+	return nil
+}
+
+func (d *StreamD) initKickBackend(ctx context.Context) error {
+	kick, err := newKick(
+		ctx,
+		d.Config.Backends[kick.ID],
+		d.UI.InputKickUserInfo,
+		func(cfg *streamcontrol.AbstractPlatformConfig) error {
+			return d.setPlatformConfig(ctx, kick.ID, cfg)
+		},
+		d.UI.OAuthHandlerKick,
+		d.GetOAuthListenPorts,
+	)
+	if err != nil {
+		return err
+	}
+	d.StreamControllers.Kick = kick
 	return nil
 }
 

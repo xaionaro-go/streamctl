@@ -26,6 +26,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/colorx"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
@@ -278,6 +279,7 @@ func (p *Panel) updateMonitorPageStreamStatus(
 		obs.ID,
 		youtube.ID,
 		twitch.ID,
+		kick.ID,
 	} {
 		wg.Add(1)
 		observability.Go(ctx, func() {

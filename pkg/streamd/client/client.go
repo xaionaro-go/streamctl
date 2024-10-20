@@ -23,6 +23,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/player/protobuf/go/player_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	obs "github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs/types"
 	twitch "github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/types"
 	youtube "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
@@ -797,6 +798,13 @@ func (c *Client) GetBackendData(
 		data = _data
 	case twitch.ID:
 		_data := api.BackendDataTwitch{}
+		err = json.Unmarshal(
+			[]byte(reply.GetData()),
+			&_data,
+		)
+		data = _data
+	case kick.ID:
+		_data := api.BackendDataKick{}
 		err = json.Unmarshal(
 			[]byte(reply.GetData()),
 			&_data,

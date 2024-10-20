@@ -11,6 +11,7 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
@@ -86,6 +87,16 @@ func (cfg *Config) UnmarshalYAML(b []byte) (_err error) {
 		)
 		if err != nil {
 			return fmt.Errorf("unable to convert stream profiles of twitch: %w", err)
+		}
+	}
+
+	if cfg.Backends[kick.ID] != nil {
+		err = streamcontrol.ConvertStreamProfiles[kick.StreamProfile](
+			context.Background(),
+			cfg.Backends[kick.ID].StreamProfiles,
+		)
+		if err != nil {
+			return fmt.Errorf("unable to convert stream profiles of kick: %w", err)
 		}
 	}
 

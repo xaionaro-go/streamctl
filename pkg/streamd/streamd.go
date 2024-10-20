@@ -19,6 +19,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/repository"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
@@ -42,6 +43,7 @@ import (
 type StreamControllers struct {
 	OBS     *obs.OBS
 	Twitch  *twitch.Twitch
+	Kick    *kick.Kick
 	YouTube *youtube.YouTube
 }
 
@@ -450,6 +452,8 @@ func (d *StreamD) IsBackendEnabled(
 			return d.StreamControllers.OBS != nil, nil
 		case twitch.ID:
 			return d.StreamControllers.Twitch != nil, nil
+		case kick.ID:
+			return d.StreamControllers.Kick != nil, nil
 		case youtube.ID:
 			return d.StreamControllers.YouTube != nil, nil
 		default:
@@ -509,6 +513,21 @@ func (d *StreamD) StartStream(
 				return fmt.Errorf("unable to convert the profile into Twitch profile: %w", err)
 			}
 			err = d.StreamControllers.Twitch.StartStream(
+				d.ctxForController(ctx),
+				title,
+				description,
+				*profile,
+				customArgs...)
+			if err != nil {
+				return fmt.Errorf("unable to start the stream on Twitch: %w", err)
+			}
+			return nil
+		case kick.ID:
+			profile, err := streamcontrol.GetStreamProfile[kick.StreamProfile](ctx, profile)
+			if err != nil {
+				return fmt.Errorf("unable to convert the profile into Twitch profile: %w", err)
+			}
+			err = d.StreamControllers.Kick.StartStream(
 				d.ctxForController(ctx),
 				title,
 				description,
@@ -617,6 +636,8 @@ func (d *StreamD) GetBackendData(
 		return api.BackendDataOBS{}, nil
 	case twitch.ID:
 		return api.BackendDataTwitch{Cache: d.Cache.Twitch}, nil
+	case kick.ID:
+		return api.BackendDataKick{}, nil
 	case youtube.ID:
 		return api.BackendDataYouTube{Cache: d.Cache.Youtube}, nil
 	default:
@@ -641,6 +662,21 @@ func (d *StreamD) tryConnectTwitch(
 	}
 
 	err := d.initTwitchBackend(ctx)
+	errmon.ObserveErrorCtx(ctx, err)
+}
+
+func (d *StreamD) tryConnectKick(
+	ctx context.Context,
+) {
+	if d.StreamControllers.Kick != nil {
+		return
+	}
+
+	if _, ok := d.Config.Backends[kick.ID]; !ok {
+		return
+	}
+
+	err := d.initKickBackend(ctx)
 	errmon.ObserveErrorCtx(ctx, err)
 }
 
@@ -675,6 +711,13 @@ func (d *StreamD) streamController(
 		}
 		if d.StreamControllers.Twitch != nil {
 			result = streamcontrol.ToAbstract(d.StreamControllers.Twitch)
+		}
+	case kick.ID:
+		if d.StreamControllers.Kick == nil {
+			d.tryConnectKick(ctx)
+		}
+		if d.StreamControllers.Kick != nil {
+			result = streamcontrol.ToAbstract(d.StreamControllers.Kick)
 		}
 	case youtube.ID:
 		if d.StreamControllers.YouTube == nil {
