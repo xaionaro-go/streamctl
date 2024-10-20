@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
@@ -107,13 +109,59 @@ func (ui *chatUI) listUpdateItem(
 		),
 	)
 	container.RemoveAll()
-	container.Add(widget.NewButtonWithIcon("", theme.ContentRemoveIcon(), func() {
-		ui.onRemoveClicked(itemID)
+	container.Add(widget.NewButtonWithIcon("", theme.ErrorIcon(), func() {
+		w := dialog.NewConfirm(
+			"Banning an user",
+			fmt.Sprintf("Are you sure you want to ban user '%s' on '%s'", msg.UserID, msg.Platform),
+			func(b bool) {
+				if b {
+					ui.onBanClicked(msg.Platform, msg.UserID)
+				}
+			},
+			ui.Panel.mainWindow,
+		)
+		w.Show()
+	}))
+	container.Add(widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
+		w := dialog.NewConfirm(
+			"Removing a message",
+			fmt.Sprintf("Are you sure you want to remove the message from '%s' on '%s'", msg.UserID, msg.Platform),
+			func(b bool) {
+				if b {
+					// TODO: think of consistency with onBanClicked
+					ui.onRemoveClicked(itemID)
+				}
+			},
+			ui.Panel.mainWindow,
+		)
+		w.Show()
 	}))
 	container.Add(label)
 
 	// TODO: think of how to get rid of this racy hack:
 	observability.Go(context.TODO(), func() { ui.List.SetItemHeight(itemID, label.MinSize().Height) })
+}
+
+func (ui *chatUI) onBanClicked(
+	platID streamcontrol.PlatformName,
+	userID streamcontrol.ChatUserID,
+) {
+	ui.Panel.chatUserBan(ui.ctx, platID, userID)
+}
+
+func (p *Panel) chatUserBan(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	userID streamcontrol.ChatUserID,
+) error {
+	// TODO: add controls for the reason and deadline
+	return p.StreamD.BanUser(
+		ctx,
+		platID,
+		userID,
+		"",
+		time.Time{},
+	)
 }
 
 func (ui *chatUI) onRemoveClicked(
@@ -126,18 +174,17 @@ func (ui *chatUI) onRemoveClicked(
 	}
 	msg := ui.MessagesHistory[itemID]
 	ui.MessagesHistory = append(ui.MessagesHistory[:itemID], ui.MessagesHistory[itemID+1:]...)
-	ui.Panel.chatMessageRemove(ui.ctx, msg.Platform, msg.MessageID)
+	err := ui.Panel.chatMessageRemove(ui.ctx, msg.Platform, msg.MessageID)
 	ui.CanvasObject.Refresh()
+	if err != nil {
+		ui.Panel.DisplayError(err)
+	}
 }
 
 func (p *Panel) chatMessageRemove(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
 	msgID streamcontrol.ChatMessageID,
-) {
-
-	err := p.StreamD.RemoveChatMessage(ctx, platID, msgID)
-	if err != nil {
-		p.DisplayError(err)
-	}
+) error {
+	return p.StreamD.RemoveChatMessage(ctx, platID, msgID)
 }
