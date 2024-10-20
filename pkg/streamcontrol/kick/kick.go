@@ -16,6 +16,8 @@ type Client interface {
 }
 
 type Kick struct {
+	CloseCtx    context.Context
+	CloseFn     context.CancelFunc
 	Channel     *kickcom.ChannelV1
 	Client      Client
 	ChatHandler *ChatHandler
@@ -44,7 +46,10 @@ func New(
 		return nil, fmt.Errorf("unable to obtain channel info: %w", err)
 	}
 
+	ctx, closeFn := context.WithCancel(ctx)
 	k := &Kick{
+		CloseCtx:  ctx,
+		CloseFn:   closeFn,
 		Client:    client,
 		Channel:   channel,
 		SaveCfgFn: saveCfgFn,
@@ -60,6 +65,7 @@ func New(
 }
 
 func (k *Kick) Close() error {
+	k.CloseFn()
 	return nil
 }
 func (k *Kick) SetTitle(ctx context.Context, title string) error {

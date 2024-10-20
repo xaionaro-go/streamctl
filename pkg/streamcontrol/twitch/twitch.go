@@ -68,9 +68,9 @@ func New(
 		return nil, fmt.Errorf("the function GetOAuthListenPorts returned zero ports")
 	}
 
-	closeCtx, closeFn := context.WithCancel(ctx)
+	ctx, closeFn := context.WithCancel(ctx)
 	t := &Twitch{
-		closeCtx:  closeCtx,
+		closeCtx:  ctx,
 		closeFn:   closeFn,
 		config:    cfg,
 		saveCfgFn: saveCfgFn,
