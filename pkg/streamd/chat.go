@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
@@ -14,6 +15,7 @@ func (d *StreamD) startListeningForChatMessages(
 	ctx context.Context,
 	platName streamcontrol.PlatformName,
 ) error {
+	logger.Debugf(ctx, "startListeningForChatMessages(ctx, '%s')", platName)
 	ctrl, err := d.streamController(ctx, platName)
 	if err != nil {
 		return fmt.Errorf("unable to get the just initialized '%s': %w", platName, err)
@@ -23,6 +25,7 @@ func (d *StreamD) startListeningForChatMessages(
 		return fmt.Errorf("unable to get the channel for chat messages of '%s': %w", platName, err)
 	}
 	observability.Go(ctx, func() {
+		logger.Debugf(ctx, "/startListeningForChatMessages(ctx, '%s')", platName)
 		for {
 			select {
 			case <-ctx.Done():

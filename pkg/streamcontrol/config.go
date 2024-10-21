@@ -287,6 +287,9 @@ func ConvertPlatformConfig[T any, S StreamProfile](
 	ctx context.Context,
 	platCfg *AbstractPlatformConfig,
 ) *PlatformConfig[T, S] {
+	if platCfg == nil {
+		platCfg = &AbstractPlatformConfig{}
+	}
 	return &PlatformConfig[T, S]{
 		Enable:         platCfg.Enable,
 		Config:         GetPlatformSpecificConfig[T](ctx, platCfg.Config),
@@ -299,6 +302,10 @@ func GetPlatformSpecificConfig[T any](
 	ctx context.Context,
 	platCfgCfg any,
 ) T {
+	if platCfgCfg == nil {
+		var zeroValue T
+		return zeroValue
+	}
 	switch platCfgCfg := platCfgCfg.(type) {
 	case T:
 		return platCfgCfg

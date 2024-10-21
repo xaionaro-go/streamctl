@@ -57,6 +57,21 @@ func NewChatHandler(
 			close(h.messagesOutChan)
 		}()
 
+		h.sendMessage(kickcom.ChatMessageV2{
+			ID:        "",
+			ChatID:    0,
+			UserID:    0,
+			Content:   "test\nmultiline message",
+			Type:      "",
+			Metadata:  nil,
+			CreatedAt: time.Time{},
+			Sender: kickcom.ChatMessageSenderV2{
+				ID:       0,
+				Slug:     "",
+				Username: "test-user",
+				Identity: kickcom.Identity{},
+			},
+		})
 		err := h.iterate(ctx)
 		if err != nil {
 			logger.Errorf(ctx, "unable to perform an iteration: %w", err)

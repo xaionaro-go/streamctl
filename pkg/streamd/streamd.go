@@ -318,6 +318,9 @@ func (d *StreamD) setPlatformConfig(
 	logger.Debugf(ctx, "setPlatformConfig('%s', '%#+v')", platID, platCfg)
 	defer logger.Debugf(ctx, "endof setPlatformConfig('%s', '%#+v')", platID, platCfg)
 	return xsync.DoR1(ctx, &d.ConfigLock, func() error {
+		if d.Config.Backends == nil {
+			d.Config.Backends = make(streamcontrol.Config)
+		}
 		d.Config.Backends[platID] = platCfg
 		return d.SaveConfig(ctx)
 	})

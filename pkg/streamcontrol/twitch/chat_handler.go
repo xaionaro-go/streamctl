@@ -3,6 +3,7 @@ package twitch
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/adeithe/go-twitch/irc"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
@@ -45,6 +46,13 @@ func newChatHandler(
 		cancelFunc:      cancelFn,
 		messagesInChan:  make(chan irc.ChatMessage),
 		messagesOutChan: make(chan streamcontrol.ChatMessage, 100),
+	}
+
+	h.messagesOutChan <- streamcontrol.ChatMessage{
+		CreatedAt: time.Now(),
+		UserID:    "test-twitch-user",
+		MessageID: "test-message-id",
+		Message:   "test\nmultiline message",
 	}
 
 	observability.Go(ctx, func() {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -22,16 +21,16 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
-func (d *StreamD) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context) error {
-	platNames := make([]streamcontrol.PlatformName, 0, len(d.Config.Backends))
-	for platName := range d.Config.Backends {
-		platNames = append(platNames, platName)
-	}
-	sort.Slice(platNames, func(i, j int) bool {
-		return platNames[i] < platNames[j]
-	})
+func (d *StreamD) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context) (_err error) {
+	logger.Debugf(ctx, "ReinitStreamControllers")
+	defer func() { logger.Debugf(ctx, "/ReinitStreamControllers: %v", _err) }()
 	var result *multierror.Error
-	for _, platName := range platNames {
+	for _, platName := range []streamcontrol.PlatformName{
+		youtube.ID,
+		twitch.ID,
+		kick.ID,
+		obs.ID,
+	} {
 		var err error
 		switch strings.ToLower(string(platName)) {
 		case strings.ToLower(string(obs.ID)):
@@ -76,7 +75,9 @@ func newOBS(
 ) {
 	logger.Debugf(ctx, "newOBS(ctx, %#+v, ...)", cfg)
 	defer func() { logger.Debugf(ctx, "/newOBS: %v", _err) }()
-
+	if cfg == nil {
+		cfg = &streamcontrol.AbstractPlatformConfig{}
+	}
 	platCfg := streamcontrol.ConvertPlatformConfig[
 		obs.PlatformSpecificConfig, obs.StreamProfile,
 	](
@@ -139,6 +140,9 @@ func newTwitch(
 	*twitch.Twitch,
 	error,
 ) {
+	if cfg == nil {
+		cfg = &streamcontrol.AbstractPlatformConfig{}
+	}
 	platCfg := streamcontrol.ConvertPlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile](
 		ctx,
 		cfg,
@@ -210,6 +214,9 @@ func newKick(
 	*kick.Kick,
 	error,
 ) {
+	if cfg == nil {
+		cfg = &streamcontrol.AbstractPlatformConfig{}
+	}
 	platCfg := streamcontrol.ConvertPlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile](
 		ctx,
 		cfg,
@@ -220,6 +227,27 @@ func newKick(
 
 	if cfg.Enable != nil && !*cfg.Enable {
 		return nil, ErrSkipBackend
+	}
+
+	hadSetNewUserData := false
+	if platCfg.Config.Channel == "" {
+		ok, err := setUserData(ctx, platCfg)
+		if !ok {
+			err := saveCfgFunc(&streamcontrol.AbstractPlatformConfig{
+				Enable:         platCfg.Enable,
+				Config:         platCfg.Config,
+				StreamProfiles: streamcontrol.ToAbstractStreamProfiles(platCfg.StreamProfiles),
+				Custom:         platCfg.Custom,
+			})
+			if err != nil {
+				logger.Error(ctx, err)
+			}
+			return nil, ErrSkipBackend
+		}
+		if err != nil {
+			return nil, fmt.Errorf("unable to set user info: %w", err)
+		}
+		hadSetNewUserData = true
 	}
 
 	logger.Debugf(ctx, "kick config: %#+v", platCfg)
@@ -237,6 +265,12 @@ func newKick(
 	if err != nil {
 		return nil, fmt.Errorf("unable to initialize Kick client: %w", err)
 	}
+	if hadSetNewUserData {
+		logger.Debugf(ctx, "confirmed new youtube user data, saving it")
+		if err := saveCfgFunc(cfg); err != nil {
+			return nil, fmt.Errorf("unable to save the configuration: %w", err)
+		}
+	}
 	return kick, nil
 }
 
@@ -251,6 +285,9 @@ func newYouTube(
 	*youtube.YouTube,
 	error,
 ) {
+	if cfg == nil {
+		cfg = &streamcontrol.AbstractPlatformConfig{}
+	}
 	platCfg := streamcontrol.ConvertPlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile](
 		ctx,
 		cfg,
