@@ -19,10 +19,6 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
-	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
-	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
-	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
-	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	"github.com/xaionaro-go/streamctl/pkg/streamd"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
@@ -141,30 +137,6 @@ func runStreamd(
 		},
 		func(ctx context.Context, l logger.Level) {
 			observability.LogLevelFilter.SetLevel(l)
-		},
-		func(
-			ctx context.Context,
-			cfg *streamcontrol.PlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile],
-		) (bool, error) {
-			return false, streamd.ErrSkipBackend
-		},
-		func(
-			ctx context.Context,
-			cfg *streamcontrol.PlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile],
-		) (bool, error) {
-			return false, streamd.ErrSkipBackend
-		},
-		func(
-			ctx context.Context,
-			cfg *streamcontrol.PlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile],
-		) (bool, error) {
-			return false, streamd.ErrSkipBackend
-		},
-		func(
-			ctx context.Context,
-			cfg *streamcontrol.PlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile],
-		) (bool, error) {
-			return false, streamd.ErrSkipBackend
 		},
 	)
 

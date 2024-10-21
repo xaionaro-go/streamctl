@@ -24,6 +24,11 @@ import (
 func (d *StreamD) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context) (_err error) {
 	logger.Debugf(ctx, "ReinitStreamControllers")
 	defer func() { logger.Debugf(ctx, "/ReinitStreamControllers: %v", _err) }()
+
+	return xsync.DoA1R1(ctx, &d.ConfigLock, d.reinitStreamControllers, ctx)
+}
+
+func (d *StreamD) reinitStreamControllers(ctx context.Context) error {
 	var result *multierror.Error
 	for _, platName := range []streamcontrol.PlatformName{
 		youtube.ID,
@@ -31,6 +36,22 @@ func (d *StreamD) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context) (_er
 		kick.ID,
 		obs.ID,
 	} {
+		platCfg := d.Config.Backends[platName]
+		if platCfg == nil {
+			logger.Debugf(ctx, "backend '%s' is not configured", platName)
+			continue
+		}
+
+		if platCfg.Enable != nil && !*platCfg.Enable {
+			logger.Debugf(ctx, "backend '%s' is disabled", platName)
+			continue
+		}
+
+		if !platCfg.IsInitialized() {
+			logger.Debugf(ctx, "config of backend '%s' is missing necessary data", platName)
+			continue
+		}
+
 		var err error
 		switch strings.ToLower(string(platName)) {
 		case strings.ToLower(string(obs.ID)):
@@ -67,8 +88,6 @@ var ErrSkipBackend = streamd.ErrSkipBackend
 func newOBS(
 	ctx context.Context,
 	cfg *streamcontrol.AbstractPlatformConfig,
-	setConnectionInfo func(context.Context, *streamcontrol.PlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile]) (bool, error),
-	saveCfgFunc func(*streamcontrol.AbstractPlatformConfig) error,
 ) (
 	_ *obs.OBS,
 	_err error,
@@ -92,38 +111,10 @@ func newOBS(
 		return nil, ErrSkipBackend
 	}
 
-	hadSetNewConnectionInfo := false
-	if platCfg.Config.Host == "" || platCfg.Config.Port == 0 {
-		ok, err := setConnectionInfo(ctx, platCfg)
-		if !ok {
-			logger.Debugf(ctx, "setConnectionInfo commands to skip OBS")
-			err := saveCfgFunc(&streamcontrol.AbstractPlatformConfig{
-				Enable:         platCfg.Enable,
-				Config:         platCfg.Config,
-				StreamProfiles: streamcontrol.ToAbstractStreamProfiles(platCfg.StreamProfiles),
-			})
-			if err != nil {
-				logger.Errorf(ctx, "unable to save the config: %v", err)
-			}
-			return nil, ErrSkipBackend
-		}
-		if err != nil {
-			return nil, fmt.Errorf("unable to set connection info: %w", err)
-		}
-		hadSetNewConnectionInfo = true
-	}
-
 	logger.Debugf(ctx, "OBS config: %#+v", platCfg)
-	cfg = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
 	obs, err := obs.New(ctx, *platCfg)
 	if err != nil {
 		return nil, fmt.Errorf("unable to initialize OBS client: %w", err)
-	}
-	if hadSetNewConnectionInfo {
-		logger.Debugf(ctx, "confirmed new OBS connection info, saving it")
-		if err := saveCfgFunc(cfg); err != nil {
-			return nil, fmt.Errorf("unable to save the configuration: %w", err)
-		}
 	}
 	return obs, nil
 
@@ -132,7 +123,6 @@ func newOBS(
 func newTwitch(
 	ctx context.Context,
 	cfg *streamcontrol.AbstractPlatformConfig,
-	setUserData func(context.Context, *streamcontrol.PlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile]) (bool, error),
 	saveCfgFunc func(*streamcontrol.AbstractPlatformConfig) error,
 	customOAuthHandler twitch.OAuthHandler,
 	getOAuthListenPorts func() []uint16,
@@ -155,32 +145,9 @@ func newTwitch(
 		return nil, ErrSkipBackend
 	}
 
-	hadSetNewUserData := false
-	if platCfg.Config.Channel == "" || platCfg.Config.ClientID == "" ||
-		platCfg.Config.ClientSecret == "" {
-		ok, err := setUserData(ctx, platCfg)
-		if !ok {
-			err := saveCfgFunc(&streamcontrol.AbstractPlatformConfig{
-				Enable:         platCfg.Enable,
-				Config:         platCfg.Config,
-				StreamProfiles: streamcontrol.ToAbstractStreamProfiles(platCfg.StreamProfiles),
-				Custom:         platCfg.Custom,
-			})
-			if err != nil {
-				logger.Error(ctx, err)
-			}
-			return nil, ErrSkipBackend
-		}
-		if err != nil {
-			return nil, fmt.Errorf("unable to set user info: %w", err)
-		}
-		hadSetNewUserData = true
-	}
-
 	logger.Debugf(ctx, "twitch config: %#+v", platCfg)
 	platCfg.Config.CustomOAuthHandler = customOAuthHandler
 	platCfg.Config.GetOAuthListenPorts = getOAuthListenPorts
-	cfg = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
 	twitch, err := twitch.New(ctx, *platCfg,
 		func(c twitch.Config) error {
 			return saveCfgFunc(&streamcontrol.AbstractPlatformConfig{
@@ -194,19 +161,12 @@ func newTwitch(
 	if err != nil {
 		return nil, fmt.Errorf("unable to initialize Twitch client: %w", err)
 	}
-	if hadSetNewUserData {
-		logger.Debugf(ctx, "confirmed new twitch user data, saving it")
-		if err := saveCfgFunc(cfg); err != nil {
-			return nil, fmt.Errorf("unable to save the configuration: %w", err)
-		}
-	}
 	return twitch, nil
 }
 
 func newKick(
 	ctx context.Context,
 	cfg *streamcontrol.AbstractPlatformConfig,
-	setUserData func(context.Context, *streamcontrol.PlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile]) (bool, error),
 	saveCfgFunc func(*streamcontrol.AbstractPlatformConfig) error,
 	customOAuthHandler kick.OAuthHandler,
 	getOAuthListenPorts func() []uint16,
@@ -229,29 +189,7 @@ func newKick(
 		return nil, ErrSkipBackend
 	}
 
-	hadSetNewUserData := false
-	if platCfg.Config.Channel == "" {
-		ok, err := setUserData(ctx, platCfg)
-		if !ok {
-			err := saveCfgFunc(&streamcontrol.AbstractPlatformConfig{
-				Enable:         platCfg.Enable,
-				Config:         platCfg.Config,
-				StreamProfiles: streamcontrol.ToAbstractStreamProfiles(platCfg.StreamProfiles),
-				Custom:         platCfg.Custom,
-			})
-			if err != nil {
-				logger.Error(ctx, err)
-			}
-			return nil, ErrSkipBackend
-		}
-		if err != nil {
-			return nil, fmt.Errorf("unable to set user info: %w", err)
-		}
-		hadSetNewUserData = true
-	}
-
 	logger.Debugf(ctx, "kick config: %#+v", platCfg)
-	cfg = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
 	kick, err := kick.New(ctx, *platCfg,
 		func(c kick.Config) error {
 			return saveCfgFunc(&streamcontrol.AbstractPlatformConfig{
@@ -265,19 +203,12 @@ func newKick(
 	if err != nil {
 		return nil, fmt.Errorf("unable to initialize Kick client: %w", err)
 	}
-	if hadSetNewUserData {
-		logger.Debugf(ctx, "confirmed new youtube user data, saving it")
-		if err := saveCfgFunc(cfg); err != nil {
-			return nil, fmt.Errorf("unable to save the configuration: %w", err)
-		}
-	}
 	return kick, nil
 }
 
 func newYouTube(
 	ctx context.Context,
 	cfg *streamcontrol.AbstractPlatformConfig,
-	setUserData func(context.Context, *streamcontrol.PlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile]) (bool, error),
 	saveCfgFunc func(*streamcontrol.AbstractPlatformConfig) error,
 	customOAuthHandler youtube.OAuthHandler,
 	getOAuthListenPorts func() []uint16,
@@ -300,31 +231,9 @@ func newYouTube(
 		return nil, ErrSkipBackend
 	}
 
-	hadSetNewUserData := false
-	if platCfg.Config.ClientID == "" || platCfg.Config.ClientSecret == "" {
-		ok, err := setUserData(ctx, platCfg)
-		if !ok {
-			err := saveCfgFunc(&streamcontrol.AbstractPlatformConfig{
-				Enable:         platCfg.Enable,
-				Config:         platCfg.Config,
-				StreamProfiles: streamcontrol.ToAbstractStreamProfiles(platCfg.StreamProfiles),
-				Custom:         platCfg.Custom,
-			})
-			if err != nil {
-				logger.Error(ctx, err)
-			}
-			return nil, ErrSkipBackend
-		}
-		if err != nil {
-			return nil, fmt.Errorf("unable to set user info: %w", err)
-		}
-		hadSetNewUserData = true
-	}
-
 	logger.Debugf(ctx, "youtube config: %#+v", platCfg)
 	platCfg.Config.CustomOAuthHandler = customOAuthHandler
 	platCfg.Config.GetOAuthListenPorts = getOAuthListenPorts
-	cfg = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
 	yt, err := youtube.New(ctx, *platCfg,
 		func(c youtube.Config) error {
 			logger.Debugf(ctx, "saveCfgFunc")
@@ -340,12 +249,6 @@ func newYouTube(
 	if err != nil {
 		return nil, fmt.Errorf("unable to initialize YouTube client: %w", err)
 	}
-	if hadSetNewUserData {
-		logger.Debugf(ctx, "confirmed new youtube user data, saving it")
-		if err := saveCfgFunc(cfg); err != nil {
-			return nil, fmt.Errorf("unable to save the configuration: %w", err)
-		}
-	}
 	return yt, nil
 }
 
@@ -353,10 +256,6 @@ func (d *StreamD) initOBSBackend(ctx context.Context) error {
 	obs, err := newOBS(
 		ctx,
 		d.Config.Backends[obs.ID],
-		d.UI.InputOBSConnectInfo,
-		func(cfg *streamcontrol.AbstractPlatformConfig) error {
-			return d.setPlatformConfig(ctx, obs.ID, cfg)
-		},
 	)
 	if err != nil {
 		return err
@@ -432,7 +331,6 @@ func (d *StreamD) initTwitchBackend(ctx context.Context) error {
 	twitch, err := newTwitch(
 		ctx,
 		d.Config.Backends[twitch.ID],
-		d.UI.InputTwitchUserInfo,
 		func(cfg *streamcontrol.AbstractPlatformConfig) error {
 			return d.setPlatformConfig(ctx, twitch.ID, cfg)
 		},
@@ -450,7 +348,6 @@ func (d *StreamD) initKickBackend(ctx context.Context) error {
 	kick, err := newKick(
 		ctx,
 		d.Config.Backends[kick.ID],
-		d.UI.InputKickUserInfo,
 		func(cfg *streamcontrol.AbstractPlatformConfig) error {
 			return d.setPlatformConfig(ctx, kick.ID, cfg)
 		},
@@ -468,7 +365,6 @@ func (d *StreamD) initYouTubeBackend(ctx context.Context) error {
 	youTube, err := newYouTube(
 		ctx,
 		d.Config.Backends[youtube.ID],
-		d.UI.InputYouTubeUserInfo,
 		func(cfg *streamcontrol.AbstractPlatformConfig) error {
 			return d.setPlatformConfig(ctx, youtube.ID, cfg)
 		},

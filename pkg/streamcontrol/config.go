@@ -80,7 +80,11 @@ func isNil(v reflect.Value) bool {
 	}
 }
 
-type PlatformConfig[T any, S StreamProfile] struct {
+type PlatformSpecificConfig interface {
+	IsInitialized() bool
+}
+
+type PlatformConfig[T PlatformSpecificConfig, S StreamProfile] struct {
 	Enable         *bool
 	Config         T
 	StreamProfiles StreamProfiles[S]
@@ -88,6 +92,10 @@ type PlatformConfig[T any, S StreamProfile] struct {
 }
 
 type ProfileName string
+
+func (cfg PlatformConfig[T, S]) IsInitialized() bool {
+	return cfg.Config.IsInitialized()
+}
 
 func (cfg PlatformConfig[T, S]) GetStreamProfile(name ProfileName) (S, bool) {
 	return cfg.StreamProfiles.Get(name)
@@ -122,7 +130,7 @@ func (cfg *PlatformConfig[T, S]) GetCustomString(key string) (string, bool) {
 	return s, true
 }
 
-type AbstractPlatformConfig = PlatformConfig[any, AbstractStreamProfile]
+type AbstractPlatformConfig = PlatformConfig[PlatformSpecificConfig, AbstractStreamProfile]
 
 type RawMessage json.RawMessage
 
@@ -138,6 +146,9 @@ func (RawMessage) GetOrder() int {
 	panic(
 		"the value is not parsed; don't use the platform config directly, and use function GetPlatformConfig instead",
 	)
+}
+func (RawMessage) IsInitialized() bool {
+	return false
 }
 
 func (m *RawMessage) UnmarshalJSON(b []byte) error {
@@ -213,7 +224,7 @@ func (cfg *Config) UnmarshalYAML(b []byte) (_err error) {
 		}
 		vOrig := (*cfg)[k]
 		if vOrig == nil {
-			(*cfg)[k] = &PlatformConfig[any, AbstractStreamProfile]{
+			(*cfg)[k] = &PlatformConfig[PlatformSpecificConfig, AbstractStreamProfile]{
 				Config:         &RawMessage{},
 				StreamProfiles: make(StreamProfiles[AbstractStreamProfile]),
 				Custom:         map[string]any{},
@@ -257,7 +268,7 @@ func (cfg *Config) UnmarshalYAML(b []byte) (_err error) {
 	return nil
 }
 
-func GetPlatformConfig[T any, S StreamProfile](
+func GetPlatformConfig[T PlatformSpecificConfig, S StreamProfile](
 	ctx context.Context,
 	cfg Config,
 	id PlatformName,
@@ -271,7 +282,7 @@ func GetPlatformConfig[T any, S StreamProfile](
 	return ConvertPlatformConfig[T, S](ctx, platCfg)
 }
 
-func ToAbstractPlatformConfig[T any, S StreamProfile](
+func ToAbstractPlatformConfig[T PlatformSpecificConfig, S StreamProfile](
 	ctx context.Context,
 	platCfg *PlatformConfig[T, S],
 ) *AbstractPlatformConfig {
@@ -283,7 +294,7 @@ func ToAbstractPlatformConfig[T any, S StreamProfile](
 	}
 }
 
-func ConvertPlatformConfig[T any, S StreamProfile](
+func ConvertPlatformConfig[T PlatformSpecificConfig, S StreamProfile](
 	ctx context.Context,
 	platCfg *AbstractPlatformConfig,
 ) *PlatformConfig[T, S] {
@@ -298,7 +309,7 @@ func ConvertPlatformConfig[T any, S StreamProfile](
 	}
 }
 
-func GetPlatformSpecificConfig[T any](
+func GetPlatformSpecificConfig[T PlatformSpecificConfig](
 	ctx context.Context,
 	platCfgCfg any,
 ) T {
@@ -352,12 +363,12 @@ func GetStreamProfiles[S StreamProfile](
 	return s
 }
 
-func InitConfig[T any, S StreamProfile](cfg Config, id PlatformName, platCfg PlatformConfig[T, S]) {
+func InitConfig[T PlatformSpecificConfig, S StreamProfile](cfg Config, id PlatformName, platCfg PlatformConfig[T, S]) {
 	if _, ok := cfg[id]; ok {
 		panic(fmt.Errorf("id '%s' is already registered", id))
 	}
-	cfg[id] = &PlatformConfig[any, AbstractStreamProfile]{
-		Config: &platCfg.Config,
+	cfg[id] = &PlatformConfig[PlatformSpecificConfig, AbstractStreamProfile]{
+		Config: platCfg.Config,
 		Custom: map[string]any{},
 	}
 }

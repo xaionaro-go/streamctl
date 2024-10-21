@@ -27,6 +27,10 @@ func InitConfig(cfg streamctl.Config) {
 	streamctl.InitConfig(cfg, ID, Config{})
 }
 
+func (cfg PlatformSpecificConfig) IsInitialized() bool {
+	return cfg.ClientID != "" && cfg.ClientSecret != ""
+}
+
 type TemplateTags string
 
 const (

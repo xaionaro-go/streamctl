@@ -51,35 +51,15 @@ func NewUI(
 	oauthURLOpener func(listenPort uint16, platID streamcontrol.PlatformName, authURL string) bool,
 	restartFn func(context.Context, string),
 	setLoggingLevel func(context.Context, logger.Level),
-	inputTwitchUserInfoFn func(
-		ctx context.Context,
-		cfg *streamcontrol.PlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile],
-	) (bool, error),
-	inputKickUserInfoFn func(
-		ctx context.Context,
-		cfg *streamcontrol.PlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile],
-	) (bool, error),
-	inputYouTubeUserInfoFn func(
-		ctx context.Context,
-		cfg *streamcontrol.PlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile],
-	) (bool, error),
-	inputOBSConnectInfoFn func(
-		ctx context.Context,
-		cfg *streamcontrol.PlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile],
-	) (bool, error),
 ) *UI {
 	return &UI{
-		OpenBrowserFn:          openBrowserFn,
-		OAuthURLOpenFn:         oauthURLOpener,
-		Belt:                   belt.CtxBelt(ctx),
-		RestartFn:              restartFn,
-		CodeChMap:              map[streamcontrol.PlatformName]chan string{},
-		CodeChMapLocker:        xsync.RWMutex{},
-		SetLoggingLevelFn:      setLoggingLevel,
-		InputTwitchUserInfoFn:  inputTwitchUserInfoFn,
-		InputKickUserInfoFn:    inputKickUserInfoFn,
-		InputYouTubeUserInfoFn: inputYouTubeUserInfoFn,
-		InputOBSConnectInfoFn:  inputOBSConnectInfoFn,
+		OpenBrowserFn:     openBrowserFn,
+		OAuthURLOpenFn:    oauthURLOpener,
+		Belt:              belt.CtxBelt(ctx),
+		RestartFn:         restartFn,
+		CodeChMap:         map[streamcontrol.PlatformName]chan string{},
+		CodeChMapLocker:   xsync.RWMutex{},
+		SetLoggingLevelFn: setLoggingLevel,
 	}
 }
 
@@ -242,32 +222,4 @@ func (ui *UI) OAuthHandlerYouTube(
 	arg oauthhandler.OAuthHandlerArgument,
 ) error {
 	return ui.oauth2Handler(ctx, youtube.ID, arg)
-}
-
-func (ui *UI) InputTwitchUserInfo(
-	ctx context.Context,
-	cfg *streamcontrol.PlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile],
-) (bool, error) {
-	return ui.InputTwitchUserInfoFn(ctx, cfg)
-}
-
-func (ui *UI) InputKickUserInfo(
-	ctx context.Context,
-	cfg *streamcontrol.PlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile],
-) (bool, error) {
-	return ui.InputKickUserInfoFn(ctx, cfg)
-}
-
-func (ui *UI) InputYouTubeUserInfo(
-	ctx context.Context,
-	cfg *streamcontrol.PlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile],
-) (bool, error) {
-	return ui.InputYouTubeUserInfoFn(ctx, cfg)
-}
-
-func (ui *UI) InputOBSConnectInfo(
-	ctx context.Context,
-	cfg *streamcontrol.PlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile],
-) (bool, error) {
-	return ui.InputOBSConnectInfoFn(ctx, cfg)
 }

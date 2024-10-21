@@ -361,21 +361,137 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
 			)
 		}
 
+		err := p.initStreamDConfig(ctx)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to initialize the streamd config: %w", err))
+		}
+
 		logger.Tracef(ctx, "p.rearrangeProfiles")
 		if err := p.rearrangeProfiles(ctx); err != nil {
 			err = fmt.Errorf("unable to arrange the profiles: %w", err)
 			p.DisplayError(err)
 		}
 
-		/*if p.Config.RemoteStreamDAddr == "" {
-			logger.Tracef(ctx, "hiding the loading window")
-			hideWindow(loadingWindow)
-		}*/
-
 		logger.Tracef(ctx, "ended stream controllers initialization")
 	})
 
 	p.app.Run()
+	return nil
+}
+
+func (p *Panel) initStreamDConfig(
+	ctx context.Context,
+) (_err error) {
+	logger.Debugf(ctx, "initStreamDConfig")
+	defer func() { logger.Debugf(ctx, "/initStreamDConfig: %v", _err) }()
+
+	cfg, err := p.StreamD.GetConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to get the config: %w", err)
+	}
+
+	configHasChanged := false
+
+	// TODO: move the 'git' configuration here as well.
+
+	for _, platName := range []streamcontrol.PlatformName{
+		youtube.ID,
+		twitch.ID,
+		kick.ID,
+		obs.ID,
+	} {
+		platCfg := cfg.Backends[platName]
+		if platCfg.IsInitialized() {
+			continue
+		}
+		configHasChanged = true
+
+		err := p.inputUserInfo(ctx, cfg, platName)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to input config for '%s': %w", platName, err))
+			continue
+		}
+	}
+
+	if configHasChanged {
+		err := p.StreamD.SetConfig(ctx, cfg)
+		if err != nil {
+			return fmt.Errorf("unable to set the new config: %w", err)
+		}
+
+		err = p.StreamD.SaveConfig(ctx)
+		if err != nil {
+			return fmt.Errorf("unable to save the new config: %w", err)
+		}
+
+		err = p.StreamD.EXPERIMENTAL_ReinitStreamControllers(ctx)
+		if err != nil {
+			return fmt.Errorf("unable to reinit the stream controllers: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (p *Panel) inputUserInfo(
+	ctx context.Context,
+	cfg *streamdconfig.Config,
+	platName streamcontrol.PlatformName,
+) error {
+	platCfg := cfg.Backends[platName]
+	if platCfg == nil {
+		platCfg = &streamcontrol.AbstractPlatformConfig{}
+	}
+
+	var enabled bool
+	var err error
+	switch platName {
+	case youtube.ID:
+		platCfg := streamcontrol.ConvertPlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile](
+			ctx,
+			platCfg,
+		)
+		enabled, err = p.InputYouTubeUserInfo(ctx, platCfg)
+		if enabled {
+			cfg.Backends[platName] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
+		}
+	case twitch.ID:
+		platCfg := streamcontrol.ConvertPlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile](
+			ctx,
+			platCfg,
+		)
+		enabled, err = p.InputTwitchUserInfo(ctx, platCfg)
+		if enabled {
+			cfg.Backends[platName] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
+		}
+	case kick.ID:
+		platCfg := streamcontrol.ConvertPlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile](
+			ctx,
+			platCfg,
+		)
+		enabled, err = p.InputKickUserInfo(ctx, platCfg)
+		if enabled {
+			cfg.Backends[platName] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
+		}
+	case obs.ID:
+		platCfg := streamcontrol.ConvertPlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile](
+			ctx,
+			platCfg,
+		)
+		enabled, err = p.InputOBSConnectInfo(ctx, platCfg)
+		if enabled {
+			cfg.Backends[platName] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
+		}
+	}
+
+	if err != nil {
+		return fmt.Errorf("unable to input the config for %s: %w", platName, err)
+	}
+
+	if !enabled {
+		cfg.Backends[platName].Enable = ptr(false)
+	}
+
 	return nil
 }
 
@@ -2987,9 +3103,11 @@ func (p *Panel) profileWindow(
 	bottomContent = append(bottomContent, widget.NewRichTextFromMarkdown("# OBS:"))
 	if backendEnabled[obs.ID] {
 		if platProfile := values.PerPlatform[obs.ID]; platProfile != nil {
-			obsProfile = ptr(
-				streamcontrol.GetPlatformSpecificConfig[obs.StreamProfile](ctx, platProfile),
-			)
+			var err error
+			obsProfile, err = streamcontrol.GetStreamProfile[obs.StreamProfile](ctx, platProfile)
+			if err != nil {
+				p.DisplayError(fmt.Errorf("unable to convert the stream profile: %w", err))
+			}
 		} else {
 			obsProfile = &obs.StreamProfile{}
 		}
@@ -3011,9 +3129,11 @@ func (p *Panel) profileWindow(
 		}
 
 		if platProfile := values.PerPlatform[twitch.ID]; platProfile != nil {
-			twitchProfile = ptr(
-				streamcontrol.GetPlatformSpecificConfig[twitch.StreamProfile](ctx, platProfile),
-			)
+			var err error
+			twitchProfile, err = streamcontrol.GetStreamProfile[twitch.StreamProfile](ctx, platProfile)
+			if err != nil {
+				p.DisplayError(fmt.Errorf("unable to convert the stream profile: %w", err))
+			}
 			for _, tag := range twitchProfile.Tags {
 				addTag(tag)
 			}
@@ -3129,9 +3249,11 @@ func (p *Panel) profileWindow(
 			youtubeTags = append(youtubeTags, tagName)
 		}
 		if platProfile := values.PerPlatform[youtube.ID]; platProfile != nil {
-			youtubeProfile = ptr(
-				streamcontrol.GetPlatformSpecificConfig[youtube.StreamProfile](ctx, platProfile),
-			)
+			var err error
+			youtubeProfile, err = streamcontrol.GetStreamProfile[youtube.StreamProfile](ctx, platProfile)
+			if err != nil {
+				p.DisplayError(fmt.Errorf("unable to convert the stream profile: %w", err))
+			}
 			for _, tag := range youtubeProfile.Tags {
 				addTag(tag)
 			}

@@ -18,6 +18,10 @@ func InitConfig(cfg streamctl.Config) {
 	streamctl.InitConfig(cfg, ID, Config{})
 }
 
+func (cfg PlatformSpecificConfig) IsInitialized() bool {
+	return cfg.Host != "" && cfg.Port != 0
+}
+
 type StreamProfile struct {
 	streamctl.StreamProfileBase `yaml:",omitempty,inline,alias"`
 
