@@ -317,13 +317,11 @@ func (d *StreamD) setPlatformConfig(
 ) error {
 	logger.Debugf(ctx, "setPlatformConfig('%s', '%#+v')", platID, platCfg)
 	defer logger.Debugf(ctx, "endof setPlatformConfig('%s', '%#+v')", platID, platCfg)
-	return xsync.DoR1(ctx, &d.ConfigLock, func() error {
-		if d.Config.Backends == nil {
-			d.Config.Backends = make(streamcontrol.Config)
-		}
-		d.Config.Backends[platID] = platCfg
-		return d.SaveConfig(ctx)
-	})
+	if d.Config.Backends == nil {
+		d.Config.Backends = make(streamcontrol.Config)
+	}
+	d.Config.Backends[platID] = platCfg
+	return d.SaveConfig(ctx)
 }
 
 func (d *StreamD) initTwitchData(ctx context.Context) bool {
