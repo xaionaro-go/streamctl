@@ -102,14 +102,15 @@ func (ui *chatUI) listCreateItem() fyne.CanvasObject {
 }
 
 func (ui *chatUI) listUpdateItem(
-	itemID int,
+	rowID int,
 	obj fyne.CanvasObject,
 ) {
+	ctx := context.TODO()
 	ui.MessagesHistoryLocker.Lock()
 	defer ui.MessagesHistoryLocker.Unlock()
 	container := obj.(*fyne.Container)
-	itemID = len(ui.MessagesHistory) - 1 - itemID
-	msg := ui.MessagesHistory[itemID]
+	entryID := len(ui.MessagesHistory) - 1 - rowID
+	msg := ui.MessagesHistory[entryID]
 
 	label := widget.NewLabel(
 		fmt.Sprintf(
@@ -141,7 +142,7 @@ func (ui *chatUI) listUpdateItem(
 			func(b bool) {
 				if b {
 					// TODO: think of consistency with onBanClicked
-					ui.onRemoveClicked(itemID)
+					ui.onRemoveClicked(entryID)
 				}
 			},
 			ui.Panel.mainWindow,
@@ -150,8 +151,11 @@ func (ui *chatUI) listUpdateItem(
 	}))
 	container.Add(label)
 
+	requiredHeight := label.MinSize().Height
+	logger.Debugf(ctx, "%d: requiredHeight == %f", rowID, requiredHeight)
+
 	// TODO: think of how to get rid of this racy hack:
-	observability.Go(context.TODO(), func() { ui.List.SetItemHeight(itemID, label.MinSize().Height) })
+	observability.Go(ctx, func() { ui.List.SetItemHeight(rowID, requiredHeight) })
 }
 
 func (ui *chatUI) onBanClicked(
