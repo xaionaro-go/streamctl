@@ -728,14 +728,14 @@ func (p *Panel) oauthHandler(
 
 func (p *Panel) openBrowser(
 	ctx context.Context,
-	url string,
+	urlString string,
 	reason string,
 ) (_err error) {
-	logger.Debugf(ctx, "openBrowser(ctx, '%s', '%s')", url, reason)
-	defer func() { logger.Debugf(ctx, "/openBrowser(ctx, '%s', '%s'): %v", url, reason, _err) }()
+	logger.Debugf(ctx, "openBrowser(ctx, '%s', '%s')", urlString, reason)
+	defer func() { logger.Debugf(ctx, "/openBrowser(ctx, '%s', '%s'): %v", urlString, reason, _err) }()
 
 	if p.Config.Browser.Command != "" {
-		args := []string{p.Config.Browser.Command, url}
+		args := []string{p.Config.Browser.Command, urlString}
 		logger.Debugf(
 			ctx,
 			"the browser command is configured to be '%s', so running '%s'",
@@ -747,8 +747,6 @@ func (p *Panel) openBrowser(
 
 	var browserCmd string
 	switch runtime.GOOS {
-	case "darwin":
-		browserCmd = "open"
 	case "linux":
 		if envBrowser := os.Getenv("BROWSER"); envBrowser != "" {
 			browserCmd = envBrowser
@@ -756,7 +754,11 @@ func (p *Panel) openBrowser(
 			browserCmd = "xdg-open"
 		}
 	default:
-		return oauthhandler.LaunchBrowser(ctx, url)
+		url, err := url.Parse(urlString)
+		if err != nil {
+			return fmt.Errorf("unable to parse URL '%s': %w", urlString, err)
+		}
+		return p.app.OpenURL(url)
 	}
 
 	waitCh := make(chan struct{})
@@ -801,8 +803,8 @@ func (p *Panel) openBrowser(
 		errmon.ObserveErrorCtx(ctx, err)
 	}
 
-	logger.Debugf(ctx, "openBrowser(ctx, '%s', '%s'): resulting command '%s %s'", browserCmd, url)
-	return exec.Command(browserCmd, url).Start()
+	logger.Debugf(ctx, "openBrowser(ctx, '%s', '%s'): resulting command '%s %s'", browserCmd, urlString)
+	return exec.Command(browserCmd, urlString).Start()
 }
 
 var twitchAppsCreateLink, _ = url.Parse("https://dev.twitch.tv/console/apps/create")
