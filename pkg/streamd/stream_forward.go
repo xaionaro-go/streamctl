@@ -36,7 +36,7 @@ func (a *platformsControllerAdapter) CheckStreamStartedByURL(
 		platID = youtube.ID
 	case strings.Contains(destination.Hostname(), "twitch"):
 		platID = twitch.ID
-	case strings.Contains(destination.Hostname(), "global-contribute.live-video.net"):
+	case strings.Contains(destination.Hostname(), "fa723fc1b171.global-contribute.live-video.net"):
 		platID = kick.ID
 	default:
 		return false, fmt.Errorf(
