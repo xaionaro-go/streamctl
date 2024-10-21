@@ -99,13 +99,18 @@ func (k *Kick) GetChatMessagesChan(
 	outCh := make(chan streamcontrol.ChatMessage)
 	observability.Go(ctx, func() {
 		defer func() {
+			logger.Debugf(ctx, "closing the messages channel")
 			close(outCh)
 		}()
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case ev := <-k.ChatHandler.MessagesChan():
+			case ev, ok := <-k.ChatHandler.MessagesChan():
+				if !ok {
+					logger.Debugf(ctx, "the input channel is closed")
+					return
+				}
 				outCh <- ev
 			}
 		}

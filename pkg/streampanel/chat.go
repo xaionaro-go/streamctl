@@ -67,7 +67,11 @@ func (ui *chatUI) messageReceiverLoop(
 		select {
 		case <-ctx.Done():
 			return
-		case msg := <-msgCh:
+		case msg, ok := <-msgCh:
+			if !ok {
+				logger.Errorf(ctx, "message channel got closed")
+				return
+			}
 			ui.onReceiveMessage(ctx, msg)
 		}
 	}

@@ -30,7 +30,10 @@ func (d *StreamD) startListeningForChatMessages(
 			select {
 			case <-ctx.Done():
 				return
-			case ev := <-ch:
+			case ev, ok := <-ch:
+				if !ok {
+					return
+				}
 				d.publishEvent(ctx, api.ChatMessage{
 					ChatMessage: ev,
 					Platform:    platName,
