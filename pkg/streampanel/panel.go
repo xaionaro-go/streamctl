@@ -438,10 +438,19 @@ func (p *Panel) inputUserInfo(
 	cfg *streamdconfig.Config,
 	platName streamcontrol.PlatformName,
 ) error {
-	platCfg := cfg.Backends[platName]
-	if platCfg == nil {
-		platCfg = &streamcontrol.AbstractPlatformConfig{}
+	if cfg.Backends[platName] == nil {
+		switch platName {
+		case youtube.ID:
+			youtube.InitConfig(cfg.Backends)
+		case twitch.ID:
+			twitch.InitConfig(cfg.Backends)
+		case kick.ID:
+			kick.InitConfig(cfg.Backends)
+		case obs.ID:
+			obs.InitConfig(cfg.Backends)
+		}
 	}
+	platCfg := cfg.Backends[platName]
 
 	var enabled bool
 	var err error
@@ -452,46 +461,35 @@ func (p *Panel) inputUserInfo(
 			platCfg,
 		)
 		enabled, err = p.InputYouTubeUserInfo(ctx, platCfg)
-		if enabled {
-			cfg.Backends[platName] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
-		}
+		cfg.Backends[platName] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
 	case twitch.ID:
 		platCfg := streamcontrol.ConvertPlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile](
 			ctx,
 			platCfg,
 		)
 		enabled, err = p.InputTwitchUserInfo(ctx, platCfg)
-		if enabled {
-			cfg.Backends[platName] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
-		}
+		cfg.Backends[platName] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
 	case kick.ID:
 		platCfg := streamcontrol.ConvertPlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile](
 			ctx,
 			platCfg,
 		)
 		enabled, err = p.InputKickUserInfo(ctx, platCfg)
-		if enabled {
-			cfg.Backends[platName] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
-		}
+		cfg.Backends[platName] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
 	case obs.ID:
 		platCfg := streamcontrol.ConvertPlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile](
 			ctx,
 			platCfg,
 		)
 		enabled, err = p.InputOBSConnectInfo(ctx, platCfg)
-		if enabled {
-			cfg.Backends[platName] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
-		}
+		cfg.Backends[platName] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
 	}
 
 	if err != nil {
 		return fmt.Errorf("unable to input the config for %s: %w", platName, err)
 	}
 
-	if !enabled {
-		cfg.Backends[platName].Enable = ptr(false)
-	}
-
+	cfg.Backends[platName].Enable = ptr(enabled)
 	return nil
 }
 
@@ -691,7 +689,7 @@ func (p *Panel) InputOBSConnectInfo(
 	ctx context.Context,
 	cfg *streamcontrol.PlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile],
 ) (bool, error) {
-	w := p.app.NewWindow(AppName + ": Input Twitch user info")
+	w := p.app.NewWindow(AppName + ": Input OBS connection info")
 	resizeWindow(w, fyne.NewSize(600, 200))
 
 	hostField := widget.NewEntry()
@@ -993,7 +991,45 @@ func (p *Panel) InputKickUserInfo(
 	ctx context.Context,
 	cfg *streamcontrol.PlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile],
 ) (bool, error) {
-	return false, fmt.Errorf("not implemented, yet")
+	w := p.app.NewWindow(AppName + ": Input Kick user info")
+	resizeWindow(w, fyne.NewSize(600, 200))
+
+	channelField := widget.NewEntry()
+	channelField.SetPlaceHolder(
+		"channel ID (copy&paste it from the browser: https://kick.com/<the channel ID is here>)",
+	)
+
+	waitCh := make(chan struct{})
+	skip := false
+	skipButton := widget.NewButtonWithIcon("Skip", theme.ConfirmIcon(), func() {
+		skip = true
+		close(waitCh)
+	})
+	okButton := widget.NewButtonWithIcon("OK", theme.ConfirmIcon(), func() {
+		close(waitCh)
+	})
+
+	w.SetContent(container.NewBorder(
+		widget.NewRichTextWithText("Enter Kick user info:"),
+		container.NewHBox(skipButton, okButton),
+		nil,
+		nil,
+		container.NewVBox(
+			channelField,
+		),
+	))
+	w.Show()
+	<-waitCh
+	w.Hide()
+
+	if skip {
+		cfg.Enable = ptr(false)
+		return false, nil
+	}
+	channelWords := strings.Split(channelField.Text, "/")
+	cfg.Config.Channel = channelWords[len(channelWords)-1]
+
+	return true, nil
 }
 
 var youtubeCredentialsCreateLink, _ = url.Parse(

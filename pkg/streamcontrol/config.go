@@ -93,7 +93,10 @@ type PlatformConfig[T PlatformSpecificConfig, S StreamProfile] struct {
 
 type ProfileName string
 
-func (cfg PlatformConfig[T, S]) IsInitialized() bool {
+func (cfg *PlatformConfig[T, S]) IsInitialized() bool {
+	if cfg == nil {
+		return false
+	}
 	return cfg.Config.IsInitialized()
 }
 
