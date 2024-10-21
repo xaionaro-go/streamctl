@@ -400,11 +400,10 @@ func (p *Panel) initStreamDConfig(
 		kick.ID,
 		obs.ID,
 	} {
-		platCfg := cfg.Backends[platName]
-		if platCfg.IsInitialized() {
+		if streamcontrol.IsInitialized(cfg.Backends, platName) {
 			continue
 		}
-		logger.Debugf(ctx, "'%s' is not initialized: %#+v, fixing", platName, platCfg)
+		logger.Debugf(ctx, "'%s' is not initialized: %#+v, fixing", platName, cfg.Backends[platName])
 		configHasChanged = true
 
 		err := p.inputUserInfo(ctx, cfg, platName)

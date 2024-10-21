@@ -88,7 +88,7 @@ func NewChatHandler(
 			}
 			err := h.iterate(ctx)
 			if err != nil {
-				logger.Errorf(ctx, "unable to perform an iteration: %w", err)
+				logger.Errorf(ctx, "unable to perform an iteration: %v", err)
 				return
 			}
 		}
@@ -107,11 +107,15 @@ func (h *ChatHandler) iterate(ctx context.Context) error {
 	logger.Tracef(ctx, "round trip time == %v", rtt)
 
 	// TODO: use the cursor instead of message ID to avoid duplicates
-	cursor, err := strconv.ParseUint(reply.Data.Cursor, 10, 64)
-	if err != nil {
-		return fmt.Errorf("unable to parse the cursor value '%s': %w", reply.Data.Cursor, err)
+	if reply.Data.Cursor != "" {
+		cursor, err := strconv.ParseUint(reply.Data.Cursor, 10, 64)
+		if err != nil {
+			return fmt.Errorf("unable to parse the cursor value '%s': %w", reply.Data.Cursor, err)
+		}
+		h.currentCursor = cursor
+	} else {
+		h.currentCursor = 0
 	}
-	h.currentCursor = cursor
 
 	// assuming reply.Data is already sorted by CreatedAt DESC
 
