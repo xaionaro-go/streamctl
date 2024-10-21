@@ -12,6 +12,10 @@ type StreamProfile = kick.StreamProfile
 type PlatformSpecificConfig = kick.PlatformSpecificConfig
 type OAuthHandler = kick.OAuthHandler
 
+func init() {
+	streamctl.RegisterPlatform[PlatformSpecificConfig, StreamProfile](ID)
+}
+
 func InitConfig(cfg streamctl.Config) {
 	kick.InitConfig(cfg)
 }

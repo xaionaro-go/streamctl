@@ -404,6 +404,7 @@ func (p *Panel) initStreamDConfig(
 		if platCfg.IsInitialized() {
 			continue
 		}
+		logger.Debugf(ctx, "'%s' is not initialized: %#+v, fixing", platName, platCfg)
 		configHasChanged = true
 
 		err := p.inputUserInfo(ctx, cfg, platName)
@@ -917,7 +918,7 @@ func (p *Panel) openBrowser(
 		errmon.ObserveErrorCtx(ctx, err)
 	}
 
-	logger.Debugf(ctx, "openBrowser(ctx, '%s', '%s'): resulting command '%s %s'", browserCmd, urlString)
+	logger.Debugf(ctx, "openBrowser(ctx, '%s', '%s'): resulting command '%s %s'", urlString, reason, browserCmd, urlString)
 	return exec.Command(browserCmd, urlString).Start()
 }
 

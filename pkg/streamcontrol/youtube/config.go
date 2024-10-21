@@ -12,6 +12,10 @@ type Config = youtube.Config
 type StreamProfile = youtube.StreamProfile
 type PlatformSpecificConfig = youtube.PlatformSpecificConfig
 
+func init() {
+	streamctl.RegisterPlatform[PlatformSpecificConfig, StreamProfile](ID)
+}
+
 func InitConfig(cfg streamctl.Config) {
 	youtube.InitConfig(cfg)
 }

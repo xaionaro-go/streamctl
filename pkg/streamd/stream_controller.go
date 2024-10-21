@@ -25,7 +25,7 @@ func (d *StreamD) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context) (_er
 	logger.Debugf(ctx, "ReinitStreamControllers")
 	defer func() { logger.Debugf(ctx, "/ReinitStreamControllers: %v", _err) }()
 
-	return xsync.DoA1R1(ctx, &d.ConfigLock, d.reinitStreamControllers, ctx)
+	return xsync.DoA1R1(xsync.WithEnableDeadlock(ctx, false), &d.ConfigLock, d.reinitStreamControllers, ctx)
 }
 
 func (d *StreamD) reinitStreamControllers(ctx context.Context) error {
@@ -47,7 +47,7 @@ func (d *StreamD) reinitStreamControllers(ctx context.Context) error {
 			continue
 		}
 
-		if !platCfg.IsInitialized() {
+		if !streamcontrol.IsInitialized(d.Config.Backends, platName) {
 			logger.Debugf(ctx, "config of backend '%s' is missing necessary data", platName)
 			continue
 		}

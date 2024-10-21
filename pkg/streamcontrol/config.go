@@ -151,7 +151,9 @@ func (RawMessage) GetOrder() int {
 	)
 }
 func (RawMessage) IsInitialized() bool {
-	return false
+	panic(
+		"the value is not parsed; don't use the platform config directly, and use function GetPlatformConfig instead",
+	)
 }
 
 func (m *RawMessage) UnmarshalJSON(b []byte) error {

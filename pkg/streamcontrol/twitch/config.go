@@ -12,6 +12,10 @@ type StreamProfile = twitch.StreamProfile
 type PlatformSpecificConfig = twitch.PlatformSpecificConfig
 type OAuthHandler = twitch.OAuthHandler
 
+func init() {
+	streamctl.RegisterPlatform[PlatformSpecificConfig, StreamProfile](ID)
+}
+
 func InitConfig(cfg streamctl.Config) {
 	twitch.InitConfig(cfg)
 }
