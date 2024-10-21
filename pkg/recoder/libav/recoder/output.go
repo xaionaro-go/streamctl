@@ -3,15 +3,17 @@ package recoder
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/url"
 	"strings"
 
 	"github.com/asticode/go-astiav"
 	"github.com/asticode/go-astikit"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/proxy"
 	"github.com/xaionaro-go/streamctl/pkg/recoder"
 )
+
+const unwrapTLSViaProxy = false
 
 type OutputConfig = recoder.OutputConfig
 
@@ -45,14 +47,50 @@ func NewOutputFromURL(
 	}
 
 	if streamKey != "" {
-		if !strings.HasSuffix(url.Path, "/") {
+		switch {
+		case url.Path == "" || url.Path == "/":
+			url.Path = "//"
+		case !strings.HasSuffix(url.Path, "/"):
 			url.Path += "/"
 		}
 		url.Path += streamKey
 	}
 
+	if url.Port() == "" {
+		switch url.Scheme {
+		case "rtmp":
+			url.Host += ":1935"
+		case "rtmps":
+			url.Host += ":443"
+		}
+	}
+
+	needUnwrapTLSFor := ""
+	switch url.Scheme {
+	case "rtmps":
+		needUnwrapTLSFor = "rtmp"
+	}
+
 	output := &Output{
 		Closer: astikit.NewCloser(),
+	}
+
+	if needUnwrapTLSFor != "" && unwrapTLSViaProxy {
+		proxy := proxy.NewTCP(url.Host, &proxy.TCPConfig{
+			DestinationIsTLS: true,
+		})
+		proxyAddr, err := proxy.ListenRandomPort(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("unable to make a TLS-proxy: %w", err)
+		}
+		output.Closer.Add(func() {
+			err := proxy.Close()
+			if err != nil {
+				logger.Errorf(ctx, "unable to close the TLS-proxy: %w", err)
+			}
+		})
+		url.Scheme = needUnwrapTLSFor
+		url.Host = proxyAddr.String()
 	}
 
 	formatContext, err := astiav.AllocOutputFormatContext(
@@ -61,7 +99,7 @@ func NewOutputFromURL(
 		url.String(),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("allocating output format context failed: %w", err)
+		return nil, fmt.Errorf("allocating output format context failed using URL '%s': %w", url, err)
 	}
 	if formatContext == nil {
 		// TODO: is there a way to extract the actual error code or something?
@@ -70,20 +108,20 @@ func NewOutputFromURL(
 	output.FormatContext = formatContext
 	output.Closer.Add(output.FormatContext.Free)
 
-	// if output is a file:
 	if !output.FormatContext.OutputFormat().Flags().Has(astiav.IOFormatFlagNofile) {
-		logger.Tracef(ctx, "destination '%s' is a file", url.String())
+		// if output is a file:
+		logger.Tracef(ctx, "destination '%s' is a file", url)
 		ioContext, err := astiav.OpenIOContext(
 			url.String(),
 			astiav.NewIOContextFlags(astiav.IOContextFlagWrite),
 		)
 		if err != nil {
-			log.Fatal(fmt.Errorf("main: opening io context failed: %w", err))
+			return nil, fmt.Errorf("unable to open IO context (URL: '%s'): %w", url, err)
 		}
 		output.Closer.Add(func() {
 			err := ioContext.Close()
 			if err != nil {
-				logger.Errorf(ctx, "unable to close the IO context: %w", err)
+				logger.Errorf(ctx, "unable to close the IO context (URL: %s): %v", url, err)
 			}
 		})
 		output.FormatContext.SetPb(ioContext)

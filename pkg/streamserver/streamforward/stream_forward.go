@@ -252,7 +252,7 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 	defer func() {
 		err := output.Close()
 		if err != nil {
-			logger.Errorf(ctx, "unable to close the output: %w", err)
+			logger.Errorf(ctx, "unable to close the output: %v", err)
 		}
 	}()
 

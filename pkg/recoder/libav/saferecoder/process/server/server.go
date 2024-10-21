@@ -168,9 +168,10 @@ func (srv *GRPCServer) newOutputByURL(
 	output, err := recoder.NewOutputFromURL(ctx, path.Url.Url, path.Url.AuthKey, config)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"unable to initialize an output using URL '%s' and config %#+v",
+			"unable to initialize an output using URL '%s' and config %#+v: %w",
 			path.Url,
 			config,
+			err,
 		)
 	}
 
