@@ -11,6 +11,8 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/davecgh/go-spew/spew"
+	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
@@ -66,17 +68,22 @@ func (ui *chatUI) messageReceiverLoop(
 		case <-ctx.Done():
 			return
 		case msg := <-msgCh:
-			ui.onReceiveMessage(msg)
+			ui.onReceiveMessage(ctx, msg)
 		}
 	}
 }
 
 func (ui *chatUI) onReceiveMessage(
+	ctx context.Context,
 	msg api.ChatMessage,
 ) {
+	logger.Debugf(ctx, "onReceiveMessage(ctx, %s)", spew.Sdump(msg))
 	ui.MessagesHistoryLocker.Lock()
 	defer ui.MessagesHistoryLocker.Unlock()
 	ui.MessagesHistory = append(ui.MessagesHistory, msg)
+	observability.Go(ctx, func() {
+		ui.List.Refresh()
+	})
 }
 
 func (ui *chatUI) listLength() int {
@@ -97,6 +104,7 @@ func (ui *chatUI) listUpdateItem(
 	ui.MessagesHistoryLocker.Lock()
 	defer ui.MessagesHistoryLocker.Unlock()
 	container := obj.(*fyne.Container)
+	itemID = len(ui.MessagesHistory) - 1 - itemID
 	msg := ui.MessagesHistory[itemID]
 
 	label := widget.NewLabel(
