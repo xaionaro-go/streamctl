@@ -100,9 +100,10 @@ func ConvertStreamProfiles[T StreamProfile](
 }
 
 type StreamStatus struct {
-	IsActive   bool
-	StartedAt  *time.Time `json:",omitempty"`
-	CustomData any        `json:",omitempty"`
+	IsActive     bool
+	ViewersCount *uint      `json:",omitempty"`
+	StartedAt    *time.Time `json:",omitempty"`
+	CustomData   any        `json:",omitempty"`
 }
 
 type ChatUserID string

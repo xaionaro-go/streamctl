@@ -448,8 +448,9 @@ func (t *Twitch) GetStreamStatus(
 	stream := reply.Data.Streams[0]
 
 	return &streamcontrol.StreamStatus{
-		IsActive:  true,
-		StartedAt: &stream.StartedAt,
+		IsActive:     true,
+		StartedAt:    &stream.StartedAt,
+		ViewersCount: ptr(uint(stream.ViewerCount)),
 	}, nil
 }
 
