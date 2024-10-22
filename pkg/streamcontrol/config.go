@@ -9,6 +9,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
+	"github.com/hashicorp/go-multierror"
 )
 
 type StreamProfiles[S StreamProfile] map[ProfileName]S
@@ -194,6 +195,14 @@ var _ yaml.BytesUnmarshaler = (*Config)(nil)
 
 func ptr[T any](in T) *T {
 	return &in
+}
+
+func (cfg Config) Convert() error {
+	var result *multierror.Error
+	for k := range cfg {
+		result = multierror.Append(result, ConvertPlatformConfigInplace(cfg, k))
+	}
+	return result.ErrorOrNil()
 }
 
 func (cfg *Config) UnmarshalYAML(b []byte) (_err error) {

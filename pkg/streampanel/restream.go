@@ -593,7 +593,7 @@ func (p *Panel) openEditPlayerWindow(
 	ctx context.Context,
 	streamID api.StreamID,
 ) {
-	cfg, err := p.StreamD.GetConfig(ctx)
+	cfg, err := p.GetStreamDConfig(ctx)
 	if err != nil {
 		p.DisplayError(fmt.Errorf("unable to get the current config: %w", err))
 		return
@@ -932,7 +932,7 @@ func (p *Panel) openEditRestreamWindow(
 	streamID streamtypes.StreamID,
 	dstID streamtypes.DestinationID,
 ) {
-	cfg, err := p.StreamD.GetConfig(ctx)
+	cfg, err := p.GetStreamDConfig(ctx)
 	if err != nil {
 		p.DisplayError(fmt.Errorf("unable to get the current config: %w", err))
 		return

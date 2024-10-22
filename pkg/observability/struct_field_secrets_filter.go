@@ -8,11 +8,11 @@ import (
 	"github.com/xaionaro-go/deepcopy"
 )
 
-type SecretsFilter struct{}
+type StructFieldSecretsFilter struct{}
 
-var _ logger.PreHook = (*SecretsFilter)(nil)
+var _ logger.PreHook = (*StructFieldSecretsFilter)(nil)
 
-func (SecretsFilter) ProcessInput(
+func (StructFieldSecretsFilter) ProcessInput(
 	_ belt.TraceIDs,
 	_ logger.Level,
 	args ...any,
@@ -23,7 +23,7 @@ func (SecretsFilter) ProcessInput(
 	return loggertypes.PreHookResult{}
 }
 
-func (SecretsFilter) ProcessInputf(
+func (StructFieldSecretsFilter) ProcessInputf(
 	_ belt.TraceIDs,
 	_ logger.Level,
 	format string,
@@ -34,7 +34,7 @@ func (SecretsFilter) ProcessInputf(
 	}
 	return loggertypes.PreHookResult{}
 }
-func (SecretsFilter) ProcessInputFields(
+func (StructFieldSecretsFilter) ProcessInputFields(
 	_ belt.TraceIDs,
 	_ logger.Level,
 	message string,

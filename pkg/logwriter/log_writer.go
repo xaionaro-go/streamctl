@@ -33,8 +33,8 @@ func NewLogWriter(
 }
 
 func (l *logWriter) flusher(ctx context.Context) {
-	logger.Debugf(ctx, "flusher()")
-	defer logger.Debugf(ctx, "/flusher()")
+	logger.Tracef(ctx, "flusher()")
+	defer logger.Tracef(ctx, "/flusher()")
 
 	defer l.Flush()
 

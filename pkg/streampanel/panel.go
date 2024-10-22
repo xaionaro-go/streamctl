@@ -111,8 +111,9 @@ type Panel struct {
 	twitchCheck  *widget.Check
 	kickCheck    *widget.Check
 
-	configPath  string
-	configCache *streamdconfig.Config
+	configPath        string
+	configCacheLocker xsync.Mutex
+	configCache       *streamdconfig.Config
 
 	setStatusFunc func(string)
 
@@ -354,16 +355,16 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
 		p.reinitScreenshoter(ctx)
 		p.initEventSensor(ctx)
 
+		err := p.initStreamDConfig(ctx)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to initialize the streamd config: %w", err))
+		}
+
 		p.initMainWindow(ctx, initCfg.StartingPage)
 		if streamDRunErr != nil {
 			p.DisplayError(
 				fmt.Errorf("unable to initialize the streaming controllers: %w", streamDRunErr),
 			)
-		}
-
-		err := p.initStreamDConfig(ctx)
-		if err != nil {
-			p.DisplayError(fmt.Errorf("unable to initialize the streamd config: %w", err))
 		}
 
 		logger.Tracef(ctx, "p.rearrangeProfiles")
@@ -385,7 +386,12 @@ func (p *Panel) initStreamDConfig(
 	logger.Debugf(ctx, "initStreamDConfig")
 	defer func() { logger.Debugf(ctx, "/initStreamDConfig: %v", _err) }()
 
-	cfg, err := p.StreamD.GetConfig(ctx)
+	err := p.localConfigCacheUpdater(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to initialize the config cache updater: %w", err)
+	}
+
+	cfg, err := p.GetStreamDConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to get the config: %w", err)
 	}
@@ -414,7 +420,7 @@ func (p *Panel) initStreamDConfig(
 	}
 
 	if configHasChanged {
-		err := p.StreamD.SetConfig(ctx, cfg)
+		err := p.SetStreamDConfig(ctx, cfg)
 		if err != nil {
 			return fmt.Errorf("unable to set the new config: %w", err)
 		}
@@ -1104,7 +1110,7 @@ func (p *Panel) InputYouTubeUserInfo(
 }
 
 func (p *Panel) profileCreateOrUpdate(ctx context.Context, profile Profile) error {
-	cfg, err := p.StreamD.GetConfig(ctx)
+	cfg, err := p.GetStreamDConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to get config: %w", err)
 	}
@@ -1133,7 +1139,7 @@ func (p *Panel) profileCreateOrUpdate(ctx context.Context, profile Profile) erro
 		cfg.Backends,
 	)
 
-	err = p.StreamD.SetConfig(ctx, cfg)
+	err = p.SetStreamDConfig(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("unable to set config: %w", err)
 	}
@@ -1149,7 +1155,7 @@ func (p *Panel) profileCreateOrUpdate(ctx context.Context, profile Profile) erro
 }
 
 func (p *Panel) profileDelete(ctx context.Context, profileName streamcontrol.ProfileName) error {
-	cfg, err := p.StreamD.GetConfig(ctx)
+	cfg, err := p.GetStreamDConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to get config: %w", err)
 	}
@@ -1160,7 +1166,7 @@ func (p *Panel) profileDelete(ctx context.Context, profileName streamcontrol.Pro
 	}
 	delete(cfg.ProfileMetadata, profileName)
 
-	err = p.StreamD.SetConfig(ctx, cfg)
+	err = p.SetStreamDConfig(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("unable to set config: %w", err)
 	}
@@ -1192,10 +1198,10 @@ func getProfile(cfg *streamdconfig.Config, profileName streamcontrol.ProfileName
 }
 
 func (p *Panel) rearrangeProfiles(ctx context.Context) error {
-	cfg, err := p.StreamD.GetConfig(ctx)
-	if err != nil {
-		return fmt.Errorf("unable to get config: %w", err)
-	}
+	var cfg *streamdconfig.Config
+	p.configCacheLocker.Do(ctx, func() {
+		cfg = p.configCache
+	})
 
 	curProfilesMap := map[streamcontrol.ProfileName]*Profile{}
 	for platName, platCfg := range cfg.Backends {
@@ -1235,7 +1241,6 @@ func (p *Panel) rearrangeProfiles(ctx context.Context) error {
 		logger.Tracef(ctx, "rearrangeProfiles(): profilesOrder[%3d] = %#+v", idx, profile)
 	}
 
-	p.configCache = cfg
 	p.refilterProfiles(ctx)
 
 	return nil
@@ -1264,30 +1269,32 @@ func (p *Panel) refilterProfiles(ctx context.Context) {
 	for _, profileName := range p.profilesOrder {
 		titleMatch := strings.Contains(strings.ToLower(string(profileName)), filterValue)
 		subValueMatch := false
-		for _, platCfg := range p.configCache.Backends {
-			prof, ok := platCfg.GetStreamProfile(profileName)
-			if !ok {
-				continue
-			}
+		p.configCacheLocker.Do(ctx, func() {
+			for _, platCfg := range p.configCache.Backends {
+				prof, ok := platCfg.GetStreamProfile(profileName)
+				if !ok {
+					continue
+				}
 
-			switch prof := prof.(type) {
-			case twitch.StreamProfile:
-				if containTagSubstringCI(prof.Tags[:], filterValue) {
-					subValueMatch = true
-					break
-				}
-				if ptrStringMatchCI(prof.Language, filterValue) {
-					subValueMatch = true
-					break
-				}
-			case kick.StreamProfile:
-			case youtube.StreamProfile:
-				if containTagSubstringCI(prof.Tags, filterValue) {
-					subValueMatch = true
-					break
+				switch prof := prof.(type) {
+				case twitch.StreamProfile:
+					if containTagSubstringCI(prof.Tags[:], filterValue) {
+						subValueMatch = true
+						break
+					}
+					if ptrStringMatchCI(prof.Language, filterValue) {
+						subValueMatch = true
+						break
+					}
+				case kick.StreamProfile:
+				case youtube.StreamProfile:
+					if containTagSubstringCI(prof.Tags, filterValue) {
+						subValueMatch = true
+						break
+					}
 				}
 			}
-		}
+		})
 
 		if titleMatch || subValueMatch {
 			logger.Tracef(
@@ -1333,10 +1340,14 @@ func (p *Panel) profilesListItemUpdate(
 	itemID widget.ListItemID,
 	obj fyne.CanvasObject,
 ) {
+	ctx := context.TODO()
 	w := obj.(*widget.Label)
 
 	profileName := streamcontrol.ProfileName(p.profilesOrderFiltered[itemID])
-	profile := getProfile(p.configCache, profileName)
+	var profile Profile
+	p.configCacheLocker.Do(ctx, func() {
+		profile = getProfile(p.configCache, profileName)
+	})
 
 	w.SetText(string(profile.Name))
 }
@@ -1348,10 +1359,14 @@ func ptrCopy[T any](v T) *T {
 func (p *Panel) onProfilesListSelect(
 	id widget.ListItemID,
 ) {
+	ctx := context.TODO()
 	p.setupStreamButton.Enable()
 
 	profileName := p.profilesOrder[id]
-	profile := getProfile(p.configCache, profileName)
+	var profile Profile
+	p.configCacheLocker.Do(ctx, func() {
+		profile = getProfile(p.configCache, profileName)
+	})
 	p.selectedProfileName = ptrCopy(profileName)
 	p.streamTitleField.SetText(profile.DefaultStreamTitle)
 	p.streamDescriptionField.SetText(profile.DefaultStreamDescription)
@@ -1371,7 +1386,7 @@ func (p *Panel) setFilter(ctx context.Context, filter string) {
 }
 
 func (p *Panel) openSettingsWindow(ctx context.Context) error {
-	cfg, err := p.StreamD.GetConfig(ctx)
+	cfg, err := p.GetStreamDConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to get config: %w", err)
 	}
@@ -1466,7 +1481,7 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 			config.CustomConfigKeyAfterStreamStop, afterStopStreamCommandEntry.Text)
 		cfg.Backends[obs.ID] = obsCfg
 
-		if err := p.StreamD.SetConfig(ctx, cfg); err != nil {
+		if err := p.SetStreamDConfig(ctx, cfg); err != nil {
 			p.DisplayError(fmt.Errorf("unable to update the remote config: %w", err))
 		} else {
 			if err := p.StreamD.SaveConfig(ctx); err != nil {
@@ -1583,7 +1598,7 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 					cfg.Backends[obs.ID].Enable = nil
 					cfg.Backends[obs.ID].Config = obs.PlatformSpecificConfig{}
 
-					if err := p.StreamD.SetConfig(ctx, cfg); err != nil {
+					if err := p.SetStreamDConfig(ctx, cfg); err != nil {
 						p.DisplayError(err)
 						return
 					}
@@ -1604,7 +1619,7 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 					cfg.Backends[twitch.ID].Enable = nil
 					cfg.Backends[twitch.ID].Config = twitch.PlatformSpecificConfig{}
 
-					if err := p.StreamD.SetConfig(ctx, cfg); err != nil {
+					if err := p.SetStreamDConfig(ctx, cfg); err != nil {
 						p.DisplayError(err)
 						return
 					}
@@ -1625,7 +1640,7 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 					cfg.Backends[kick.ID].Enable = nil
 					cfg.Backends[kick.ID].Config = kick.PlatformSpecificConfig{}
 
-					if err := p.StreamD.SetConfig(ctx, cfg); err != nil {
+					if err := p.SetStreamDConfig(ctx, cfg); err != nil {
 						p.DisplayError(err)
 						return
 					}
@@ -1645,7 +1660,7 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 
 					cfg.Backends[youtube.ID].Enable = nil
 					cfg.Backends[youtube.ID].Config = youtube.PlatformSpecificConfig{}
-					if err := p.StreamD.SetConfig(ctx, cfg); err != nil {
+					if err := p.SetStreamDConfig(ctx, cfg); err != nil {
 						p.DisplayError(err)
 						return
 					}
@@ -1946,6 +1961,9 @@ func (p *Panel) initMainWindow(
 	ctx context.Context,
 	startingPage consts.Page,
 ) {
+	logger.Debugf(ctx, "initMainWindow")
+	defer logger.Debugf(ctx, "/initMainWindow")
+
 	w := p.app.NewWindow(AppName)
 	p.mainWindow = w
 	w.SetMaster()
@@ -2377,6 +2395,8 @@ func (p *Panel) subscribeUpdateControlPage(ctx context.Context) {
 		p.DisplayError(err)
 		//return
 	}
+
+	// TODO: deduplicate with localConfigCacheUpdater
 	chConfigs, err := p.StreamD.SubscribeToConfigChanges(ctx)
 	if err != nil {
 		p.DisplayError(err)
@@ -2404,7 +2424,8 @@ func (p *Panel) getSelectedProfile() Profile {
 	if p.selectedProfileName == nil {
 		return Profile{}
 	}
-	return getProfile(p.configCache, *p.selectedProfileName)
+	ctx := context.TODO()
+	return xsync.DoA2R1(ctx, &p.configCacheLocker, getProfile, p.configCache, *p.selectedProfileName)
 }
 
 func (p *Panel) execCommand(ctx context.Context, cmdString string) {
@@ -2614,7 +2635,11 @@ func (p *Panel) startStream(ctx context.Context) {
 		p.DisplayError(fmt.Errorf("unable to start the stream on YouTube: %w", err))
 	}
 
-	if onStreamStart, ok := p.configCache.Backends[obs.ID].GetCustomString(config.CustomConfigKeyAfterStreamStart); ok {
+	var platCfg *streamcontrol.AbstractPlatformConfig
+	p.configCacheLocker.Do(ctx, func() {
+		platCfg = p.configCache.Backends[obs.ID]
+	})
+	if onStreamStart, ok := platCfg.GetCustomString(config.CustomConfigKeyAfterStreamStart); ok {
 		p.execCommand(ctx, onStreamStart)
 	}
 
@@ -2677,7 +2702,11 @@ func (p *Panel) stopStreamNoLock(ctx context.Context) {
 
 	p.startStopButton.SetText("OnStopStream command...")
 
-	if onStreamStop, ok := p.configCache.Backends[obs.ID].GetCustomString(config.CustomConfigKeyAfterStreamStop); ok {
+	var platCfg *streamcontrol.AbstractPlatformConfig
+	p.configCacheLocker.Do(ctx, func() {
+		platCfg = p.configCache.Backends[obs.ID]
+	})
+	if onStreamStop, ok := platCfg.GetCustomString(config.CustomConfigKeyAfterStreamStop); ok {
 		p.execCommand(ctx, onStreamStop)
 	}
 
@@ -2734,7 +2763,7 @@ func cleanYoutubeRecordingName(in string) string {
 }
 
 func (p *Panel) editProfileWindow(ctx context.Context) fyne.Window {
-	oldProfile := getProfile(p.configCache, *p.selectedProfileName)
+	oldProfile := xsync.DoA2R1(ctx, &p.configCacheLocker, getProfile, p.configCache, *p.selectedProfileName)
 	w := p.profileWindow(
 		ctx,
 		fmt.Sprintf("Edit the profile '%s'", oldProfile.Name),
@@ -2756,7 +2785,7 @@ func (p *Panel) editProfileWindow(ctx context.Context) fyne.Window {
 }
 
 func (p *Panel) cloneProfileWindow(ctx context.Context) fyne.Window {
-	oldProfile := getProfile(p.configCache, *p.selectedProfileName)
+	oldProfile := xsync.DoA2R1(ctx, &p.configCacheLocker, getProfile, p.configCache, *p.selectedProfileName)
 	w := p.profileWindow(
 		ctx,
 		"Create a profile",
@@ -2811,13 +2840,15 @@ func (p *Panel) newProfileWindow(ctx context.Context) fyne.Window {
 		Profile{},
 		func(ctx context.Context, profile Profile) error {
 			found := false
-			for _, platCfg := range p.configCache.Backends {
-				_, ok := platCfg.GetStreamProfile(profile.Name)
-				if ok {
-					found = true
-					break
+			p.configCacheLocker.Do(ctx, func() {
+				for _, platCfg := range p.configCache.Backends {
+					_, ok := platCfg.GetStreamProfile(profile.Name)
+					if ok {
+						found = true
+						break
+					}
 				}
-			}
+			})
 			if found {
 				return fmt.Errorf("profile with name '%s' already exists", profile.Name)
 			}
@@ -3584,4 +3615,85 @@ func (p *Panel) Close() error {
 	// but there is a bug in fyne and it hangs
 	observability.Go(context.TODO(), p.app.Quit)
 	return err.ErrorOrNil()
+}
+
+func (p *Panel) GetStreamDConfig(ctx context.Context) (*streamdconfig.Config, error) {
+	return xsync.DoR1(ctx, &p.configCacheLocker, func() *streamdconfig.Config {
+		return p.configCache
+	}), nil
+}
+
+func (p *Panel) SetStreamDConfig(
+	ctx context.Context,
+	newCfg *streamdconfig.Config,
+) (_err error) {
+	logger.Debugf(ctx, "SetStreamDConfig")
+	defer func() { logger.Debugf(ctx, "SetStreamDConfig: %v", _err) }()
+
+	return xsync.DoR1(ctx, &p.configCacheLocker, func() error {
+		if err := p.StreamD.SetConfig(ctx, newCfg); err != nil {
+			return err
+		}
+
+		p.configCache = newCfg
+		return nil
+	})
+}
+
+func (p *Panel) localConfigCacheUpdater(ctx context.Context) (_err error) {
+	logger.Debugf(ctx, "localConfigCacheUpdater")
+	defer logger.Debugf(ctx, "/localConfigCacheUpdater: %v", _err)
+
+	cfgChangeCh, err := p.StreamD.SubscribeToConfigChanges(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to subscribe to config changes: %w", err)
+	}
+
+	newCfg, err := p.StreamD.GetConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to get the new config: %w", err)
+	}
+
+	err = newCfg.Convert()
+	if err != nil {
+		return fmt.Errorf("unable to convert the config: %w", err)
+	}
+
+	observability.SecretsProviderFromCtx(ctx).(*observability.SecretsStaticProvider).ParseSecretsFrom(newCfg)
+	logger.Debugf(ctx, "updated the secrets")
+
+	p.configCacheLocker.Do(ctx, func() {
+		p.configCache = newCfg
+	})
+
+	observability.Go(ctx, func() {
+		logger.Debugf(ctx, "localConfigUpdaterLoop")
+		defer logger.Debugf(ctx, "/localConfigUpdaterLoop")
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-cfgChangeCh:
+				newCfg, err := p.StreamD.GetConfig(ctx)
+				if err != nil {
+					logger.Errorf(ctx, "unable to get the new config: %w", err)
+					continue
+				}
+				err = newCfg.Convert()
+				if err != nil {
+					logger.Errorf(ctx, "unable to convert the config: %w", err)
+					continue
+				}
+				p.configCacheLocker.Do(ctx, func() {
+					p.configCache = newCfg
+				})
+				logger.Debugf(ctx, "updated the config cache")
+				observability.SecretsProviderFromCtx(ctx).(*observability.SecretsStaticProvider).ParseSecretsFrom(newCfg)
+				logger.Debugf(ctx, "updated the secrets")
+			}
+		}
+	})
+
+	return nil
 }

@@ -15,9 +15,9 @@ type OAuthHandler func(context.Context, oauthhandler.OAuthHandlerArgument) error
 
 type PlatformSpecificConfig struct {
 	ChannelID           string
-	ClientID            string `secret:""`
-	ClientSecret        string `secret:""`
-	Token               *oauth2.Token
+	ClientID            string          `secret:""`
+	ClientSecret        string          `secret:""`
+	Token               *oauth2.Token   `secret:""`
 	CustomOAuthHandler  OAuthHandler    `yaml:"-"`
 	GetOAuthListenPorts func() []uint16 `yaml:"-"`
 }

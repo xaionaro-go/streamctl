@@ -43,7 +43,7 @@ func (p *Panel) startMonitorPage(
 	logger.Debugf(ctx, "startMonitorPage")
 	defer logger.Debugf(ctx, "/startMonitorPage")
 
-	cfg, err := p.StreamD.GetConfig(ctx)
+	cfg, err := p.GetStreamDConfig(ctx)
 	if err != nil {
 		p.DisplayError(fmt.Errorf("unable to get the current config: %w", err))
 		return
@@ -343,13 +343,13 @@ func (p *Panel) newMonitorSettingsWindow(ctx context.Context) {
 	refreshContent = func() {
 		content.RemoveAll()
 
-		cfg, err := p.StreamD.GetConfig(ctx)
+		cfg, err := p.GetStreamDConfig(ctx)
 		if err != nil {
 			p.DisplayError(fmt.Errorf("unable to get the current config: %w", err))
 		}
 
 		saveCfg := func(ctx context.Context) error {
-			err := p.StreamD.SetConfig(ctx, cfg)
+			err := p.SetStreamDConfig(ctx, cfg)
 			if err != nil {
 				return fmt.Errorf("unable to set the config: %w", err)
 			}

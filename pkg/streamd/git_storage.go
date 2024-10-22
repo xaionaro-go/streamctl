@@ -93,16 +93,19 @@ func (d *StreamD) getLastKnownGitCommitHash() plumbing.Hash {
 }
 
 func (d *StreamD) onConfigUpdateViaGIT(ctx context.Context, cfg *config.Config) {
+	err := convertConfig(*cfg)
+	if err != nil {
+		d.UI.DisplayError(fmt.Errorf("unable to convert the config: %w", err))
+		return
+	}
 	d.Config = *cfg
-	err := d.SaveConfig(ctx)
+	err = d.SaveConfig(ctx)
 	if err != nil {
 		d.UI.DisplayError(fmt.Errorf("unable to save data: %w", err))
+		return
 	}
 	if d.GitInitialized {
-		d.UI.Restart(
-			ctx,
-			"Received an updated config from another device, please restart the application",
-		)
+		d.UI.Restart(ctx, "Received an updated config from another device, please restart the application")
 	}
 }
 

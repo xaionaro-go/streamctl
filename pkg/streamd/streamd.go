@@ -104,6 +104,10 @@ func New(
 	logger.Debugf(ctx, "New()")
 	defer func() { logger.Debugf(ctx, "/New(): %#+v %v", _ret, _ret) }()
 
+	err := convertConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("unable to convert the config: %w", err)
+	}
 	d := &StreamD{
 		UI:                ui,
 		SaveConfigFunc:    saveCfgFunc,
@@ -118,7 +122,7 @@ func New(
 		Timers: map[api.TimerID]*Timer{},
 	}
 
-	err := d.readCache(ctx)
+	err = d.readCache(ctx)
 	if err != nil {
 		logger.FromBelt(b).Errorf("unable to read cache: %v", err)
 	}
@@ -140,8 +144,13 @@ func (d *StreamD) Run(ctx context.Context) (_ret error) { // TODO: delete the fe
 	}
 	defer d.ControllersLocker.ManualUnlock(ctx)
 
+	err := d.secretsProviderUpdater(ctx)
+	if err != nil {
+		d.UI.DisplayError(fmt.Errorf("unable to initialize the secrets updater: %w", err))
+	}
+
 	d.UI.SetStatus("Initializing remote GIT storage...")
-	err := d.FetchConfig(ctx)
+	err = d.FetchConfig(ctx)
 	if err != nil {
 		d.UI.DisplayError(fmt.Errorf("unable to initialize the GIT storage: %w", err))
 	}
@@ -168,6 +177,36 @@ func (d *StreamD) Run(ctx context.Context) (_ret error) { // TODO: delete the fe
 	}
 
 	d.UI.SetStatus("Initializing UI...")
+	return nil
+}
+
+func (d *StreamD) secretsProviderUpdater(ctx context.Context) (_err error) {
+	logger.Debugf(ctx, "secretsProviderUpdater")
+	defer logger.Debugf(ctx, "/secretsProviderUpdater: %v", _err)
+
+	cfgChangeCh, err := eventSubToChan[api.DiffConfig](ctx, d)
+	if err != nil {
+		return fmt.Errorf("unable to subscribe to config changes: %w", err)
+	}
+
+	d.ConfigLock.Do(ctx, func() {
+		observability.SecretsProviderFromCtx(ctx).(*observability.SecretsStaticProvider).ParseSecretsFrom(d.Config)
+	})
+	logger.Debugf(ctx, "updated the secrets")
+
+	observability.Go(ctx, func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-cfgChangeCh:
+				d.ConfigLock.Do(ctx, func() {
+					observability.SecretsProviderFromCtx(ctx).(*observability.SecretsStaticProvider).ParseSecretsFrom(d.Config)
+				})
+				logger.Debugf(ctx, "updated the secrets")
+			}
+		}
+	})
 	return nil
 }
 
@@ -439,6 +478,10 @@ func (d *StreamD) GetConfig(ctx context.Context) (*config.Config, error) {
 
 func (d *StreamD) SetConfig(ctx context.Context, cfg *config.Config) error {
 	logger.Debugf(ctx, "SetConfig: %#+v", *cfg)
+	err := convertConfig(*cfg)
+	if err != nil {
+		return fmt.Errorf("unable to convert the config: %w", err)
+	}
 	d.Config = *cfg
 	return nil
 }

@@ -766,22 +766,9 @@ func (grpc *GRPCServer) OpenOAuthURL(
 	platID streamcontrol.PlatformName,
 	authURL string,
 ) (_ret error) {
-	logger.Debugf(
-		ctx,
-		"OpenOAuthURL(ctx, %d, '%s', '%s')",
-		listenPort,
-		platID,
-		authURL,
-	)
+	logger.Debugf(ctx, "OpenOAuthURL(ctx, %d, '%s', '%s')", listenPort, platID, authURL)
 	defer func() {
-		logger.Debugf(
-			ctx,
-			"/OpenOAuthURL(ctx, %d, '%s', '%s'): %v",
-			listenPort,
-			platID,
-			authURL,
-			_ret,
-		)
+		logger.Debugf(ctx, "/OpenOAuthURL(ctx, %d, '%s', '%s'): %v", listenPort, platID, authURL, _ret)
 	}()
 
 	return xsync.DoA4R1(

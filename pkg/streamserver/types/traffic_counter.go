@@ -2,7 +2,6 @@ package types
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"math"
 	"sync/atomic"
@@ -58,7 +57,6 @@ func (tc *TrafficCounter) NumBytesRead() uint64 {
 		if tc.ReaderCounter == nil {
 			return math.MaxUint64
 		}
-		fmt.Println(tc.ReaderCounter.Count())
 		return tc.ReaderCounter.Count()
 	})
 }

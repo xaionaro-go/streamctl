@@ -65,6 +65,10 @@ func NewSampleConfig() Config {
 	return cfg
 }
 
+func (cfg *Config) Convert() error {
+	return cfg.Backends.Convert()
+}
+
 var _ = NewSampleConfig
 
 func ReadConfigFromPath(

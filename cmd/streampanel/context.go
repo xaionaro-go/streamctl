@@ -64,11 +64,15 @@ func getContext(
 
 	ctx = metrics.CtxWithMetrics(ctx, prometheusadapter.Default())
 
+	secretsProvider := observability.NewStaticSecretsProvider()
+	ctx = observability.WithSecretsProvider(ctx, secretsProvider)
+
 	ll := xlogrus.DefaultLogrusLogger()
 	ll.Formatter.(*logrus.TextFormatter).ForceColors = true
 	l := xlogrus.New(ll).WithLevel(logger.LevelTrace).WithPreHooks(
-		observability.SecretsFilter{},
 		&observability.LogLevelFilter,
+		observability.StructFieldSecretsFilter{},
+		observability.NewSecretValuesFilter(secretsProvider),
 	)
 
 	if flags.LogFile != "" {

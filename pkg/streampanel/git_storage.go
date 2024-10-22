@@ -31,7 +31,7 @@ func (p *Panel) InputGitUserData(
 		close(waitCh)
 	})
 
-	cfg, err := p.StreamD.GetConfig(ctx)
+	cfg, err := p.GetStreamDConfig(ctx)
 	if err != nil {
 		return false, "", nil, fmt.Errorf("unable to get the config from StreamD: %w", err)
 	}

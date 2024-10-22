@@ -20,7 +20,7 @@ func TestSecretsFilter(t *testing.T) {
 		return "", ""
 	}
 	l := xlogrus.New(ll).WithLevel(logger.LevelTrace).WithPreHooks(
-		observability.SecretsFilter{},
+		observability.StructFieldSecretsFilter{},
 	)
 
 	t.Run("youtubeConfig", func(t *testing.T) {
