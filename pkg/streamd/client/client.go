@@ -2716,6 +2716,7 @@ func (c *Client) SubscribeToChatMessages(
 						(int64(createdAtUnix)%int64(time.Second))/int64(time.Nanosecond),
 					),
 					UserID:    streamcontrol.ChatUserID(event.GetUserID()),
+					Username:  event.GetUsername(),
 					MessageID: streamcontrol.ChatMessageID(event.GetMessageID()),
 					Message:   event.GetMessage(),
 				},

@@ -1942,6 +1942,7 @@ func (grpc *GRPCServer) SubscribeToChatMessages(
 				CreatedAtNano: uint64(input.CreatedAt.UnixNano()),
 				PlatID:        string(input.Platform),
 				UserID:        string(input.UserID),
+				Username:      input.Username,
 				MessageID:     string(input.MessageID),
 				Message:       input.Message,
 			}

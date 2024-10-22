@@ -109,6 +109,7 @@ func (l *ChatListener) listenLoop(ctx context.Context) error {
 			l.messagesOutChan <- streamcontrol.ChatMessage{
 				CreatedAt: msg.Timestamp,
 				UserID:    streamcontrol.ChatUserID(msg.AuthorName),
+				Username:  msg.AuthorName,
 				MessageID: "", // TODO: find a way to extract the message ID
 				Message:   msg.Message,
 			}

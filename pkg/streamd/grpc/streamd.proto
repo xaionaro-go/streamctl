@@ -684,8 +684,9 @@ message ChatMessage {
 	uint64 createdAtNano  = 1;
     string platID = 2;
     string userID = 3;
-    string messageID = 4;
-    string message = 5;
+    string username = 4;
+    string messageID = 5;
+    string message = 6;
 }
 
 message SendChatMessageRequest {

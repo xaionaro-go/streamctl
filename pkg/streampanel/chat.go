@@ -221,12 +221,12 @@ func (ui *chatUI) listUpdateItem(
 		"%s: %s: %s: %s",
 		msg.CreatedAt.Format("15:04"),
 		msg.Platform,
-		msg.UserID,
+		msg.Username,
 		msg.Message,
 	))
 
 	requiredHeight := containerPtr.MinSize().Height
-	logger.Debugf(ctx, "%d: requiredHeight == %f", rowID, requiredHeight)
+	logger.Tracef(ctx, "%d: requiredHeight == %f", rowID, requiredHeight)
 
 	// TODO: think of how to get rid of this racy hack:
 	observability.Go(ctx, func() { ui.List.SetItemHeight(rowID, requiredHeight) })

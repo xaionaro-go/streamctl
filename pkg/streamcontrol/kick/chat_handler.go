@@ -128,6 +128,7 @@ func (h *ChatHandler) sendMessage(
 	case h.messagesOutChan <- streamcontrol.ChatMessage{
 		CreatedAt: msg.CreatedAt,
 		UserID:    streamcontrol.ChatUserID(fmt.Sprintf("%d", msg.UserID)),
+		Username:  msg.Sender.Slug,
 		MessageID: streamcontrol.ChatMessageID(msg.ID),
 		Message:   msg.Content,
 	}:

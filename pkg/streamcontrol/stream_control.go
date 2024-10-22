@@ -112,6 +112,7 @@ type ChatMessageID string
 type ChatMessage struct {
 	CreatedAt time.Time
 	UserID    ChatUserID
+	Username  string
 	MessageID ChatMessageID
 	Message   string
 }
