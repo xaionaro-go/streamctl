@@ -125,7 +125,7 @@ func (yt *YouTube) checkTokenNoLock(ctx context.Context) (_err error) {
 			if yt.fixError(ctx, err, &counter) {
 				continue
 			}
-			return fmt.Errorf("unable to get a token: %v", err)
+			return fmt.Errorf("unable to get a token: %w", err)
 		}
 		if token.AccessToken == yt.Config.Config.Token.AccessToken {
 			logger.Tracef(ctx, "the token have not changed")
