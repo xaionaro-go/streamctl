@@ -661,6 +661,8 @@ github.com/xaionaro-go/datacounter v1.0.4 h1:+QMZLmu73R5WGkQfUPwlXF/JFN+Weo4iuDZ
 github.com/xaionaro-go/datacounter v1.0.4/go.mod h1:Sf9vBevuV6w5iE6K3qJ9pWVKcyS60clWBUSQLjt5++c=
 github.com/xaionaro-go/deepcopy v0.0.0-20241022170035-e7567ec09853 h1:i8myxLpqtNsz0pXpaZhBSkLjeV5+qlgXiEEzOl8eCsk=
 github.com/xaionaro-go/deepcopy v0.0.0-20241022170035-e7567ec09853/go.mod h1:FdcXb6OQaB+zrL4xtd+AW85iDYnAuZ7iP2qDGFTX6ok=
+github.com/xaionaro-go/deepcopy v0.0.0-20241022201332-e9025712e972 h1:0RuOVRrOFvEvCQe95VGarA9yDgHoz2pyU22F3XYmdC8=
+github.com/xaionaro-go/deepcopy v0.0.0-20241022201332-e9025712e972/go.mod h1:FdcXb6OQaB+zrL4xtd+AW85iDYnAuZ7iP2qDGFTX6ok=
 github.com/xaionaro-go/fyne/v2 v2.0.0-20241020235352-fd61e4920f24 h1:eewdCRMkJmK2ipI9653XL2dE3EFS2I3GTFRadIyyEo4=
 github.com/xaionaro-go/fyne/v2 v2.0.0-20241020235352-fd61e4920f24/go.mod h1:NdxEG8L7EVWo06/cYbXW11uA0X7UG8Q8j5CLebvTZi8=
 github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42 h1:izCjREd+62HDF9FRYqUI7dgJNdUxAIysEuqed8lBcDY=
