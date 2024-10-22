@@ -6,13 +6,21 @@ import (
 	"time"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/xaionaro-go/kickcom/pkg/kickcom"
+	"github.com/xaionaro-go/kickcom"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 )
 
 type Client interface {
 	ChatClient
+	LivestreamInfoClient
+}
+
+type LivestreamInfoClient interface {
+	GetLivestreamV2(
+		ctx context.Context,
+		channelSlug string,
+	) (*kickcom.LivestreamV2Reply, error)
 }
 
 type Kick struct {
@@ -88,7 +96,26 @@ func (k *Kick) EndStream(ctx context.Context) error {
 	return nil
 }
 func (k *Kick) GetStreamStatus(ctx context.Context) (*streamcontrol.StreamStatus, error) {
-	return nil, fmt.Errorf("not implemented, yet")
+	info, err := k.Client.GetLivestreamV2(ctx, k.Channel.Slug)
+	if err != nil {
+		return nil, fmt.Errorf("unable to request stream status: %w", err)
+	}
+
+	if info.Data == nil {
+		return &streamcontrol.StreamStatus{
+			IsActive:     false,
+			ViewersCount: nil,
+			StartedAt:    nil,
+			CustomData:   nil,
+		}, nil
+	}
+
+	return &streamcontrol.StreamStatus{
+		IsActive:     true,
+		ViewersCount: ptr(uint(info.Data.Viewers)),
+		StartedAt:    &info.Data.CreatedAt,
+		CustomData:   nil,
+	}, nil
 }
 func (k *Kick) GetChatMessagesChan(
 	ctx context.Context,

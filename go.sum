@@ -669,6 +669,10 @@ github.com/xaionaro-go/gorex v0.0.0-20241010205749-bcd59d639c4d h1:9DyH0lboWWzKU
 github.com/xaionaro-go/gorex v0.0.0-20241010205749-bcd59d639c4d/go.mod h1:yI0EvHC6Ir5WIZp3tEk7o42/QqeTb9pkII+T8p4FlPo=
 github.com/xaionaro-go/kickcom v0.0.0-20241020191155-4a9e942e8e35 h1:aVCVi4OMOC09ogSaNjEwW4et2EYcpQHHASNbfW5yATw=
 github.com/xaionaro-go/kickcom v0.0.0-20241020191155-4a9e942e8e35/go.mod h1:gzKL0qgtR13PXl4woI3nvxVhQ9Z6lHtGL5tk9HmITxA=
+github.com/xaionaro-go/kickcom v0.0.0-20241022142319-c24893d6bec0 h1:IKOz5bB+oLXJEBnCj8j6uVtN/gNJkpgKhdh5HyGahGs=
+github.com/xaionaro-go/kickcom v0.0.0-20241022142319-c24893d6bec0/go.mod h1:gzKL0qgtR13PXl4woI3nvxVhQ9Z6lHtGL5tk9HmITxA=
+github.com/xaionaro-go/kickcom v0.0.0-20241022142825-25a234cc8628 h1:/ohdYrl4nFgEJJTQqP8hSzXqXxyetiB07jnQu5pcvNo=
+github.com/xaionaro-go/kickcom v0.0.0-20241022142825-25a234cc8628/go.mod h1:gzKL0qgtR13PXl4woI3nvxVhQ9Z6lHtGL5tk9HmITxA=
 github.com/xaionaro-go/libvlc-go/v3 v3.0.0-20241011194409-0fe4e2a9d901 h1:HX0CO6h5oDQfp9NquzQT0xWH4Gn9Z5BZ0IFJrYFl88k=
 github.com/xaionaro-go/libvlc-go/v3 v3.0.0-20241011194409-0fe4e2a9d901/go.mod h1:xJK0YD8cyMDejnrTFQinStE6RYCV1nlfS8KmqTpszSc=
 github.com/xaionaro-go/lockmap v0.0.0-20240901172806-e17aea364748 h1:SlB3zLAuLgRxdOo250gMUG/7hSiEU2NzEUNYbJDuI2A=

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -10,7 +11,6 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	xlogrus "github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
 	"github.com/spf13/pflag"
-	"github.com/xaionaro-go/kickcom"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 )
 
@@ -39,17 +39,23 @@ func main() {
 	}
 	defer belt.Flush(ctx)
 
-	client, err := kickcom.New()
+	k, err := kick.New(ctx, kick.Config{
+		Enable: ptr(true),
+		Config: kick.PlatformSpecificConfig{
+			Channel: channelSlug,
+		},
+	}, nil)
 	assertNoError(err)
 
-	channel, err := client.GetChannelV1(ctx, channelSlug)
+	status, err := k.GetStreamStatus(ctx)
 	assertNoError(err)
 
-	h, err := kick.NewChatHandler(ctx, client, channel.ID)
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", " ")
+	err = enc.Encode(status)
 	assertNoError(err)
+}
 
-	fmt.Println("started")
-	for ev := range h.MessagesChan() {
-		fmt.Printf("%#+v\n", ev)
-	}
+func ptr[T any](in T) *T {
+	return &in
 }
