@@ -1053,6 +1053,8 @@ func (yt *YouTube) GetStreamStatus(
 	var startedAt *time.Time
 	isActive := false
 
+	viewersCount := uint64(0)
+
 	err := yt.IterateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
 		ts := broadcast.Snippet.ActualStartTime
 		_startedAt, err := time.Parse(timeLayout, ts)
@@ -1069,6 +1071,7 @@ func (yt *YouTube) GetStreamStatus(
 			}
 		}
 		startedAt = &_startedAt
+		viewersCount += broadcast.Statistics.ConcurrentViewers
 		activeBroadcasts = append(activeBroadcasts, broadcast)
 		isActive = true
 		return nil
@@ -1134,9 +1137,10 @@ func (yt *YouTube) GetStreamStatus(
 	}
 
 	return &streamcontrol.StreamStatus{
-		IsActive:   true,
-		StartedAt:  startedAt,
-		CustomData: customData,
+		IsActive:     true,
+		StartedAt:    startedAt,
+		CustomData:   customData,
+		ViewersCount: ptr(uint(viewersCount)),
 	}, nil
 }
 
