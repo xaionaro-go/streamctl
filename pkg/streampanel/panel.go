@@ -1851,8 +1851,9 @@ func (p *Panel) getUpdatedStatus_backends_noLock(ctx context.Context) {
 			}
 
 			if sceneListResp.CurrentProgramSceneName != p.obsSelectScene.Selected {
-				logger.Debugf(ctx, "the scene was changed from %s to %s", p.obsSelectScene.Selected, sceneListResp.CurrentProgramSceneName)
-				p.obsSelectScene.SetSelected(sceneListResp.CurrentProgramSceneName)
+				logger.Debugf(ctx, "the scene was changed from '%s' to '%s'", p.obsSelectScene.Selected, sceneListResp.CurrentProgramSceneName)
+				p.obsSelectScene.Selected = sceneListResp.CurrentProgramSceneName
+				p.obsSelectScene.Refresh()
 			}
 		})
 	} else {
