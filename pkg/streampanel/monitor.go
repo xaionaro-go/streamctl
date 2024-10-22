@@ -313,12 +313,18 @@ func (p *Panel) updateMonitorPageStreamStatus(
 				return
 			}
 			dst.Importance = widget.SuccessImportance
-			if streamStatus.StartedAt != nil {
-				duration := time.Since(*streamStatus.StartedAt)
-				dst.SetText(duration.Truncate(time.Second).String())
-			} else {
+			if streamStatus.StartedAt == nil {
 				dst.SetText("started")
+				return
 			}
+			duration := time.Since(*streamStatus.StartedAt)
+
+			viewerCountString := ""
+			if streamStatus.ViewersCount != nil {
+				viewerCountString = fmt.Sprintf(" (%d)", *streamStatus.ViewersCount)
+			}
+
+			dst.SetText(fmt.Sprintf("%s%s", duration.Truncate(time.Second).String(), viewerCountString))
 		})
 	}
 

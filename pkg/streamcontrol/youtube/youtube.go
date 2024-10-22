@@ -1071,7 +1071,9 @@ func (yt *YouTube) GetStreamStatus(
 			}
 		}
 		startedAt = &_startedAt
-		viewersCount += broadcast.Statistics.ConcurrentViewers
+		if broadcast.Statistics != nil {
+			viewersCount += broadcast.Statistics.ConcurrentViewers
+		}
 		activeBroadcasts = append(activeBroadcasts, broadcast)
 		isActive = true
 		return nil

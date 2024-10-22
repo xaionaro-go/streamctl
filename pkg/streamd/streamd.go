@@ -744,7 +744,7 @@ func (d *StreamD) GetStreamStatus(
 	case obs.ID:
 		cacheDuration = 3 * time.Second
 	case youtube.ID:
-		cacheDuration = 5 * time.Minute
+		cacheDuration = 5 * time.Minute // because of quota limits by YouTube
 	}
 	return memoize.Memoize(d.StreamStatusCache, d.getStreamStatus, ctx, platID, cacheDuration)
 }

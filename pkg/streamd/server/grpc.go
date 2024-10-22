@@ -575,6 +575,11 @@ func (grpc *GRPCServer) GetStreamStatus(
 		startedAt = ptr(streamStatus.StartedAt.UnixNano())
 	}
 
+	var viewersCount *uint64
+	if streamStatus.ViewersCount != nil {
+		viewersCount = ptr(uint64(*streamStatus.ViewersCount))
+	}
+
 	var customData string
 	if streamStatus.CustomData != nil {
 		customDataSerialized, err := json.Marshal(
@@ -590,9 +595,10 @@ func (grpc *GRPCServer) GetStreamStatus(
 	}
 
 	return &streamd_grpc.GetStreamStatusReply{
-		IsActive:   streamStatus.IsActive,
-		StartedAt:  startedAt,
-		CustomData: customData,
+		IsActive:     streamStatus.IsActive,
+		StartedAt:    startedAt,
+		CustomData:   customData,
+		ViewersCount: viewersCount,
 	}, nil
 }
 

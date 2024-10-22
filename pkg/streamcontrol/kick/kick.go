@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/kickcom"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
@@ -100,6 +101,7 @@ func (k *Kick) GetStreamStatus(ctx context.Context) (*streamcontrol.StreamStatus
 	if err != nil {
 		return nil, fmt.Errorf("unable to request stream status: %w", err)
 	}
+	logger.Tracef(ctx, "the received livestream status is: %s", spew.Sdump(info))
 
 	if info.Data == nil {
 		return &streamcontrol.StreamStatus{

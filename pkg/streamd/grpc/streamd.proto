@@ -155,6 +155,7 @@ message GetStreamStatusReply {
     bool isActive = 1;
     optional int64 started_at = 2;
     string customData = 3;
+    optional uint64 viewers_count = 4;
 }
 message GetBackendInfoRequest {
     string platID = 1;

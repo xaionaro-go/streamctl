@@ -919,10 +919,16 @@ func (c *Client) GetStreamStatus(
 		customData = d
 	}
 
+	var viewersCount *uint
+	if streamStatus != nil && streamStatus.ViewersCount != nil {
+		viewersCount = ptr(uint(*streamStatus.ViewersCount))
+	}
+
 	return &streamcontrol.StreamStatus{
-		IsActive:   streamStatus.GetIsActive(),
-		StartedAt:  startedAt,
-		CustomData: customData,
+		IsActive:     streamStatus.GetIsActive(),
+		StartedAt:    startedAt,
+		CustomData:   customData,
+		ViewersCount: viewersCount,
 	}, nil
 }
 
