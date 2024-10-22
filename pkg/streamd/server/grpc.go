@@ -1962,6 +1962,21 @@ func (grpc *GRPCServer) SubscribeToChatMessages(
 	)
 }
 
+func (grpc *GRPCServer) SendChatMessage(
+	ctx context.Context,
+	req *streamd_grpc.SendChatMessageRequest,
+) (*streamd_grpc.SendChatMessageReply, error) {
+	err := grpc.StreamD.SendChatMessage(
+		ctx,
+		streamcontrol.PlatformName(req.PlatID),
+		req.GetMessage(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.SendChatMessageReply{}, nil
+}
+
 func (grpc *GRPCServer) RemoveChatMessage(
 	ctx context.Context,
 	req *streamd_grpc.RemoveChatMessageRequest,
@@ -1976,6 +1991,7 @@ func (grpc *GRPCServer) RemoveChatMessage(
 	}
 	return &streamd_grpc.RemoveChatMessageReply{}, nil
 }
+
 func (grpc *GRPCServer) BanUser(
 	ctx context.Context,
 	req *streamd_grpc.BanUserRequest,

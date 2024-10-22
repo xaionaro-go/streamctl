@@ -88,6 +88,7 @@ service StreamD {
     rpc SubmitEvent(SubmitEventRequest) returns (SubmitEventReply) {}
 
     rpc SubscribeToChatMessages(SubscribeToChatMessagesRequest) returns (stream ChatMessage) {}
+    rpc SendChatMessage(SendChatMessageRequest) returns (SendChatMessageReply) {}
     rpc RemoveChatMessage(RemoveChatMessageRequest) returns (RemoveChatMessageReply) {}
     rpc BanUser(BanUserRequest) returns (BanUserReply) {}
 }
@@ -686,6 +687,12 @@ message ChatMessage {
     string messageID = 4;
     string message = 5;
 }
+
+message SendChatMessageRequest {
+    string platID = 1;
+    string message = 2;
+}
+message SendChatMessageReply {}
 
 message RemoveChatMessageRequest {
     string platID = 1;

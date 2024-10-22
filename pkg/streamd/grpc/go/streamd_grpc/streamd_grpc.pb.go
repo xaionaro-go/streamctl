@@ -91,6 +91,7 @@ type StreamDClient interface {
 	UpdateTriggerRule(ctx context.Context, in *UpdateTriggerRuleRequest, opts ...grpc.CallOption) (*UpdateTriggerRuleReply, error)
 	SubmitEvent(ctx context.Context, in *SubmitEventRequest, opts ...grpc.CallOption) (*SubmitEventReply, error)
 	SubscribeToChatMessages(ctx context.Context, in *SubscribeToChatMessagesRequest, opts ...grpc.CallOption) (StreamD_SubscribeToChatMessagesClient, error)
+	SendChatMessage(ctx context.Context, in *SendChatMessageRequest, opts ...grpc.CallOption) (*SendChatMessageReply, error)
 	RemoveChatMessage(ctx context.Context, in *RemoveChatMessageRequest, opts ...grpc.CallOption) (*RemoveChatMessageReply, error)
 	BanUser(ctx context.Context, in *BanUserRequest, opts ...grpc.CallOption) (*BanUserReply, error)
 }
@@ -1022,6 +1023,15 @@ func (x *streamDSubscribeToChatMessagesClient) Recv() (*ChatMessage, error) {
 	return m, nil
 }
 
+func (c *streamDClient) SendChatMessage(ctx context.Context, in *SendChatMessageRequest, opts ...grpc.CallOption) (*SendChatMessageReply, error) {
+	out := new(SendChatMessageReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/SendChatMessage", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *streamDClient) RemoveChatMessage(ctx context.Context, in *RemoveChatMessageRequest, opts ...grpc.CallOption) (*RemoveChatMessageReply, error) {
 	out := new(RemoveChatMessageReply)
 	err := c.cc.Invoke(ctx, "/streamd.StreamD/RemoveChatMessage", in, out, opts...)
@@ -1118,6 +1128,7 @@ type StreamDServer interface {
 	UpdateTriggerRule(context.Context, *UpdateTriggerRuleRequest) (*UpdateTriggerRuleReply, error)
 	SubmitEvent(context.Context, *SubmitEventRequest) (*SubmitEventReply, error)
 	SubscribeToChatMessages(*SubscribeToChatMessagesRequest, StreamD_SubscribeToChatMessagesServer) error
+	SendChatMessage(context.Context, *SendChatMessageRequest) (*SendChatMessageReply, error)
 	RemoveChatMessage(context.Context, *RemoveChatMessageRequest) (*RemoveChatMessageReply, error)
 	BanUser(context.Context, *BanUserRequest) (*BanUserReply, error)
 	mustEmbedUnimplementedStreamDServer()
@@ -1348,6 +1359,9 @@ func (UnimplementedStreamDServer) SubmitEvent(context.Context, *SubmitEventReque
 }
 func (UnimplementedStreamDServer) SubscribeToChatMessages(*SubscribeToChatMessagesRequest, StreamD_SubscribeToChatMessagesServer) error {
 	return status.Errorf(codes.Unimplemented, "method SubscribeToChatMessages not implemented")
+}
+func (UnimplementedStreamDServer) SendChatMessage(context.Context, *SendChatMessageRequest) (*SendChatMessageReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SendChatMessage not implemented")
 }
 func (UnimplementedStreamDServer) RemoveChatMessage(context.Context, *RemoveChatMessageRequest) (*RemoveChatMessageReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RemoveChatMessage not implemented")
@@ -2733,6 +2747,24 @@ func (x *streamDSubscribeToChatMessagesServer) Send(m *ChatMessage) error {
 	return x.ServerStream.SendMsg(m)
 }
 
+func _StreamD_SendChatMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SendChatMessageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).SendChatMessage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/SendChatMessage",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).SendChatMessage(ctx, req.(*SendChatMessageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _StreamD_RemoveChatMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RemoveChatMessageRequest)
 	if err := dec(in); err != nil {
@@ -3024,6 +3056,10 @@ var _StreamD_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SubmitEvent",
 			Handler:    _StreamD_SubmitEvent_Handler,
+		},
+		{
+			MethodName: "SendChatMessage",
+			Handler:    _StreamD_SendChatMessage_Handler,
 		},
 		{
 			MethodName: "RemoveChatMessage",

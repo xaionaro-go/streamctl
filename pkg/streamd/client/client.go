@@ -2783,3 +2783,29 @@ func (c *Client) BanUser(
 	}
 	return nil
 }
+
+func (c *Client) SendChatMessage(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	message string,
+) error {
+	_, err := withStreamDClient(ctx, c, func(
+		ctx context.Context,
+		client streamd_grpc.StreamDClient,
+		conn io.Closer,
+	) (*streamd_grpc.SendChatMessageReply, error) {
+		return callWrapper(
+			ctx,
+			c,
+			client.SendChatMessage,
+			&streamd_grpc.SendChatMessageRequest{
+				PlatID:  string(platID),
+				Message: message,
+			},
+		)
+	})
+	if err != nil {
+		return fmt.Errorf("unable to submit the event: %w", err)
+	}
+	return nil
+}

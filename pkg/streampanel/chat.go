@@ -13,8 +13,12 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 )
 
@@ -55,8 +59,65 @@ func (ui *chatUI) init(
 	observability.Go(ctx, func() {
 		ui.messageReceiverLoop(ctx, msgCh)
 	})
-	ui.CanvasObject = ui.List
+
+	messageInputEntry := widget.NewEntry()
+	messageInputEntry.OnSubmitted = func(s string) {
+		err := ui.sendMessage(ctx, s)
+		if err != nil {
+			ui.Panel.DisplayError(err)
+		}
+	}
+	messageSendButton := widget.NewButtonWithIcon("", theme.MailSendIcon(), func() {
+		messageInputEntry.OnSubmitted(messageInputEntry.Text)
+	})
+
+	ui.CanvasObject = container.NewBorder(
+		nil,
+		container.NewBorder(
+			nil,
+			nil,
+			nil,
+			messageSendButton,
+			messageInputEntry,
+		),
+		nil,
+		nil,
+		ui.List,
+	)
 	return nil
+}
+
+func (ui *chatUI) sendMessage(
+	ctx context.Context,
+	message string,
+) error {
+	var result *multierror.Error
+	panel := ui.Panel
+	streamD := panel.StreamD
+
+	for _, platID := range []streamcontrol.PlatformName{
+		twitch.ID,
+		kick.ID,
+		youtube.ID,
+	} {
+		isEnabled, err := streamD.IsBackendEnabled(ctx, platID)
+		if err != nil {
+			result = multierror.Append(result, fmt.Errorf("unable to check if platform '%s' is enabled: %w", platID, err))
+			continue
+		}
+
+		if !isEnabled {
+			continue
+		}
+
+		err = streamD.SendChatMessage(ctx, platID, message)
+		if err != nil {
+			result = multierror.Append(result, fmt.Errorf("unable to send the message to platform '%s': %w", platID, err))
+			continue
+		}
+	}
+
+	return result.ErrorOrNil()
 }
 
 func (ui *chatUI) messageReceiverLoop(

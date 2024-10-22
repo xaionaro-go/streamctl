@@ -1671,3 +1671,27 @@ func (d *StreamD) SubscribeToChatMessages(
 ) (<-chan api.ChatMessage, error) {
 	return eventSubToChan[api.ChatMessage](ctx, d)
 }
+
+func (d *StreamD) SendChatMessage(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	message string,
+) (_err error) {
+	logger.Debugf(ctx, "SendChatMessage(ctx, '%s', '%s')", platID, message)
+	defer func() { logger.Debugf(ctx, "/SendChatMessage(ctx, '%s', '%s'): %v", platID, message, _err) }()
+	if message == "" {
+		return nil
+	}
+
+	ctrl, err := d.streamController(ctx, platID)
+	if err != nil {
+		return fmt.Errorf("unable to get stream controller for platform '%s': %w", platID, err)
+	}
+
+	err = ctrl.SendChatMessage(ctx, message)
+	if err != nil {
+		return fmt.Errorf("unable to send message '%s' to platform '%s': %w", message, platID, err)
+	}
+
+	return nil
+}

@@ -276,6 +276,11 @@ type StreamD interface {
 	SubscribeToChatMessages(
 		ctx context.Context,
 	) (<-chan ChatMessage, error)
+	SendChatMessage(
+		ctx context.Context,
+		platID streamcontrol.PlatformName,
+		message string,
+	) error
 	RemoveChatMessage(
 		ctx context.Context,
 		platID streamcontrol.PlatformName,
