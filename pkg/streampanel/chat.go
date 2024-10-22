@@ -158,8 +158,20 @@ func (ui *chatUI) listLength() int {
 }
 
 func (ui *chatUI) listCreateItem() fyne.CanvasObject {
-	container := container.NewHBox()
-	return container
+	banUserButton := widget.NewButtonWithIcon("", theme.ErrorIcon(), func() {})
+	removeMsgButton := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {})
+	label := widget.NewLabel("<...loading...>")
+	label.Wrapping = fyne.TextWrapWord
+	return container.NewBorder(
+		nil,
+		nil,
+		container.NewHBox(
+			banUserButton,
+			removeMsgButton,
+		),
+		nil,
+		label,
+	)
 }
 
 func (ui *chatUI) listUpdateItem(
@@ -169,21 +181,15 @@ func (ui *chatUI) listUpdateItem(
 	ctx := context.TODO()
 	ui.MessagesHistoryLocker.Lock()
 	defer ui.MessagesHistoryLocker.Unlock()
-	container := obj.(*fyne.Container)
 	entryID := len(ui.MessagesHistory) - 1 - rowID
 	msg := ui.MessagesHistory[entryID]
 
-	label := widget.NewLabel(
-		fmt.Sprintf(
-			"%s: %s: %s: %s",
-			msg.CreatedAt.Format("15:04"),
-			msg.Platform,
-			msg.UserID,
-			msg.Message,
-		),
-	)
-	container.RemoveAll()
-	container.Add(widget.NewButtonWithIcon("", theme.ErrorIcon(), func() {
+	containerPtr := obj.(*fyne.Container)
+	objs := containerPtr.Objects
+	label := objs[0].(*widget.Label)
+	subContainer := objs[1].(*fyne.Container)
+	banUserButton := subContainer.Objects[0].(*widget.Button)
+	banUserButton.OnTapped = func() {
 		w := dialog.NewConfirm(
 			"Banning an user",
 			fmt.Sprintf("Are you sure you want to ban user '%s' on '%s'", msg.UserID, msg.Platform),
@@ -195,8 +201,9 @@ func (ui *chatUI) listUpdateItem(
 			ui.Panel.mainWindow,
 		)
 		w.Show()
-	}))
-	container.Add(widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
+	}
+	removeMsgButton := subContainer.Objects[1].(*widget.Button)
+	removeMsgButton.OnTapped = func() {
 		w := dialog.NewConfirm(
 			"Removing a message",
 			fmt.Sprintf("Are you sure you want to remove the message from '%s' on '%s'", msg.UserID, msg.Platform),
@@ -209,10 +216,16 @@ func (ui *chatUI) listUpdateItem(
 			ui.Panel.mainWindow,
 		)
 		w.Show()
-	}))
-	container.Add(label)
+	}
+	label.SetText(fmt.Sprintf(
+		"%s: %s: %s: %s",
+		msg.CreatedAt.Format("15:04"),
+		msg.Platform,
+		msg.UserID,
+		msg.Message,
+	))
 
-	requiredHeight := label.MinSize().Height
+	requiredHeight := containerPtr.MinSize().Height
 	logger.Debugf(ctx, "%d: requiredHeight == %f", rowID, requiredHeight)
 
 	// TODO: think of how to get rid of this racy hack:
