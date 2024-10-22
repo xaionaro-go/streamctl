@@ -184,6 +184,7 @@ require (
 	github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802
 	github.com/DataDog/gostackparse v0.6.0
 	github.com/DexterLB/mpvipc v0.0.0-20230829142118-145d6eabdc37
+	github.com/abhinavxd/youtube-live-chat-downloader/v2 v2.0.3
 	github.com/adeithe/go-twitch v0.3.1
 	github.com/adrg/libvlc-go/v3 v3.1.5
 	github.com/andreykaipov/goobs v1.4.1

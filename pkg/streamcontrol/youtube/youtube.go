@@ -44,8 +44,10 @@ type YouTube struct {
 	CancelFunc     context.CancelFunc
 	SaveConfigFunc func(Config) error
 
-	CurrentVideoIDsLocker xsync.Mutex
-	CurrentVideoIDs       []string
+	currentVideoIDsLocker xsync.Mutex
+	currentVideoIDs       []string
+
+	messagesOutChan chan streamcontrol.ChatMessage
 }
 
 var _ streamcontrol.StreamController[StreamProfile] = (*YouTube)(nil)
@@ -67,6 +69,8 @@ func New(
 		Config:         cfg,
 		SaveConfigFunc: saveCfgFn,
 		CancelFunc:     cancelFn,
+
+		messagesOutChan: make(chan streamcontrol.ChatMessage, 100),
 	}
 
 	err := yt.init(ctx)
@@ -591,8 +595,10 @@ func (yt *YouTube) StartStream(
 	profile StreamProfile,
 	customArgs ...any,
 ) (_err error) {
-	err := xsync.DoR1(ctx, &yt.CurrentVideoIDsLocker, func() error {
-		if len(yt.CurrentVideoIDs) != 0 {
+	// TODO: split this function!
+
+	err := xsync.DoR1(ctx, &yt.currentVideoIDsLocker, func() error {
+		if len(yt.currentVideoIDs) != 0 {
 			return fmt.Errorf("streams are already started")
 		}
 		return nil
@@ -765,8 +771,8 @@ func (yt *YouTube) StartStream(
 		}
 	}
 
-	return xsync.DoR1(ctx, &yt.CurrentVideoIDsLocker, func() error {
-		yt.CurrentVideoIDs = yt.CurrentVideoIDs[:0]
+	return xsync.DoR1(ctx, &yt.currentVideoIDsLocker, func() error {
+		yt.currentVideoIDs = yt.currentVideoIDs[:0]
 		for idx, broadcast := range broadcasts {
 			video := videos[idx]
 
@@ -953,7 +959,11 @@ func (yt *YouTube) StartStream(
 					return fmt.Errorf("unable to set the thumbnail: %w", err)
 				}
 			}
-			yt.CurrentVideoIDs = append(yt.CurrentVideoIDs, newBroadcast.Id)
+			yt.currentVideoIDs = append(yt.currentVideoIDs, newBroadcast.Id)
+			err = yt.startChatListener(ctx, newBroadcast.Id)
+			if err != nil {
+				logger.Errorf(ctx, "unable to start a chat listener for video '%s': %w", newBroadcast.Id, err)
+			}
 		}
 
 		return nil
@@ -972,15 +982,45 @@ func setProfile(broadcast *youtube.LiveBroadcast, profile StreamProfile) {
 	// Don't know how to set the tags :(
 }
 
+func (yt *YouTube) startChatListener(
+	ctx context.Context,
+	videoID string,
+) error {
+	chatListener, err := NewChatListener(ctx, videoID)
+	if err != nil {
+		return err
+	}
+
+	observability.Go(ctx, func() {
+		defer func() {
+			err := chatListener.Close()
+			if err != nil {
+				logger.Errorf(ctx, "unable to close the chat listener for '%s': %v", videoID, err)
+			}
+		}()
+		defer logger.Debugf(ctx, "stopped listening for chat messages in '%s'", videoID)
+		for msg := range chatListener.MessagesChan() {
+			select {
+			case <-ctx.Done():
+				return
+			case yt.messagesOutChan <- msg:
+			default:
+				logger.Errorf(ctx, "chat messages queue overflow, dropping a message")
+			}
+		}
+	})
+	return nil
+}
+
 func (yt *YouTube) EndStream(
 	ctx context.Context,
 ) error {
 	expectedVideoIDs := map[string]struct{}{}
-	yt.CurrentVideoIDsLocker.Do(ctx, func() {
-		for _, videoID := range yt.CurrentVideoIDs {
+	yt.currentVideoIDsLocker.Do(ctx, func() {
+		for _, videoID := range yt.currentVideoIDs {
 			expectedVideoIDs[videoID] = struct{}{}
 		}
-		yt.CurrentVideoIDs = yt.CurrentVideoIDs[:0]
+		yt.currentVideoIDs = yt.currentVideoIDs[:0]
 	})
 
 	return yt.updateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
@@ -1196,30 +1236,42 @@ func (yt *YouTube) fixError(ctx context.Context, err error, counterPtr *int) boo
 	return false
 }
 
-var commentParts = []string{
-	"id",
-	"snippet",
-}
-
 func (yt *YouTube) GetChatMessagesChan(
 	ctx context.Context,
 ) (<-chan streamcontrol.ChatMessage, error) {
-	return xsync.DoA1R2(ctx, &yt.CurrentVideoIDsLocker, yt.getChatMessagesChan, ctx)
-}
+	logger.Debugf(ctx, "GetChatMessagesChan")
+	defer logger.Debugf(ctx, "/GetChatMessagesChan")
 
-func (yt *YouTube) getChatMessagesChan(
-	ctx context.Context,
-) (<-chan streamcontrol.ChatMessage, error) {
-	return nil, nil
+	outCh := make(chan streamcontrol.ChatMessage)
+	observability.Go(ctx, func() {
+		defer func() {
+			logger.Debugf(ctx, "closing the messages channel")
+			close(outCh)
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case ev, ok := <-yt.messagesOutChan:
+				if !ok {
+					logger.Debugf(ctx, "the input channel is closed")
+					return
+				}
+				outCh <- ev
+			}
+		}
+	})
+
+	return outCh, nil
 }
 
 func (yt *YouTube) SendChatMessage(
 	ctx context.Context,
 	message string,
 ) error {
-	return xsync.DoR1(ctx, &yt.CurrentVideoIDsLocker, func() error {
+	return xsync.DoR1(ctx, &yt.currentVideoIDsLocker, func() error {
 		var result *multierror.Error
-		for _, videoID := range yt.CurrentVideoIDs {
+		for _, videoID := range yt.currentVideoIDs {
 			_, err := yt.YouTubeService.CommentThreads.Insert([]string{"snippet"}, &youtube.CommentThread{
 				Snippet: &youtube.CommentThreadSnippet{
 					CanReply:  true,

@@ -83,6 +83,8 @@ github.com/RomainMichau/cloudscraper_go v0.4.1 h1:np8XbbkXXTPK+KOqtO49FYiAD34bYC
 github.com/RomainMichau/cloudscraper_go v0.4.1/go.mod h1:j+U5wG7A4FASVo0vroqf3td+9k0+RbLRH62IlYxg7Ao=
 github.com/abema/go-mp4 v1.2.0 h1:gi4X8xg/m179N/J15Fn5ugywN9vtI6PLk6iLldHGLAk=
 github.com/abema/go-mp4 v1.2.0/go.mod h1:vPl9t5ZK7K0x68jh12/+ECWBCXoWuIDtNgPtU2f04ws=
+github.com/abhinavxd/youtube-live-chat-downloader/v2 v2.0.3 h1:rJRsl52IhgD5yaUBV7npuyqxB5h5TfILn7xs0/JV220=
+github.com/abhinavxd/youtube-live-chat-downloader/v2 v2.0.3/go.mod h1:TrUogg8mrebgMD/JU094CmSXn3yKrt+CZjiDL3YtmMw=
 github.com/adeithe/go-twitch v0.3.1 h1:vGvnS3zq8fYl1sCK0I5dUozlb24eHUp1j2zZXxaBchU=
 github.com/adeithe/go-twitch v0.3.1/go.mod h1:hjUvA7PIUsv2oqi34mExy/clwQz026bjotsqXQOFVJY=
 github.com/aler9/ice/v2 v2.0.0-20241006110309-c973995af023 h1:z/HjA8RgJDfvF2vca08z77PJvz0jDFK9QDJaZkaOXgk=
