@@ -14,6 +14,7 @@ const ID = streamctl.PlatformName("youtube")
 type OAuthHandler func(context.Context, oauthhandler.OAuthHandlerArgument) error
 
 type PlatformSpecificConfig struct {
+	ChannelID           string
 	ClientID            string
 	ClientSecret        string
 	Token               *oauth2.Token

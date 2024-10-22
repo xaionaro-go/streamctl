@@ -41,16 +41,19 @@ func IsInitialized(
 	platCfgCfgTyped := reflect.New(meta.PlatformSpecificConfig).Interface().(PlatformSpecificConfig)
 
 	platCfg := cfg[platID]
+	if platCfg == nil {
+		return false
+	}
 	var b []byte
 	switch platCfgCfg := platCfg.Config.(type) {
+	case nil:
+		return false
 	case RawMessage:
 		b = platCfgCfg
 	case *RawMessage:
 		b = *platCfgCfg
 	case PlatformSpecificConfig:
 		return platCfgCfg.IsInitialized()
-	case nil:
-		return false
 	default:
 		panic(fmt.Errorf("unable to get the config: expected type '%T' or RawMessage, but received type '%T'", platCfgCfgTyped, platCfgCfg))
 	}
