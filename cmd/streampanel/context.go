@@ -66,7 +66,10 @@ func getContext(
 
 	ll := xlogrus.DefaultLogrusLogger()
 	ll.Formatter.(*logrus.TextFormatter).ForceColors = true
-	l := xlogrus.New(ll).WithLevel(logger.LevelTrace).WithPreHooks(&observability.LogLevelFilter)
+	l := xlogrus.New(ll).WithLevel(logger.LevelTrace).WithPreHooks(
+		observability.SecretsFilter{},
+		&observability.LogLevelFilter,
+	)
 
 	if flags.LogFile != "" {
 		logPathUnexpanded := flags.LogFile

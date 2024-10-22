@@ -7,7 +7,7 @@ import (
 type StreamDestination struct {
 	ID        DestinationID
 	URL       string
-	StreamKey string
+	StreamKey string `secret:""`
 }
 
 type StreamID = streamtypes.StreamID

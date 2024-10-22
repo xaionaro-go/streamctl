@@ -13,13 +13,13 @@ type OAuthHandler func(context.Context, oauthhandler.OAuthHandlerArgument) error
 
 type PlatformSpecificConfig struct {
 	Channel             string
-	ClientID            string
-	ClientSecret        string
-	ClientCode          string
+	ClientID            string `secret:"true"`
+	ClientSecret        string `secret:"true"`
+	ClientCode          string `secret:"true"`
 	AuthType            string
-	AppAccessToken      string
-	UserAccessToken     string
-	RefreshToken        string
+	AppAccessToken      string          `secret:"true"`
+	UserAccessToken     string          `secret:"true"`
+	RefreshToken        string          `secret:"true"`
 	CustomOAuthHandler  OAuthHandler    `yaml:"-"`
 	GetOAuthListenPorts func() []uint16 `yaml:"-"`
 }

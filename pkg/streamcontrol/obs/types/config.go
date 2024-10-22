@@ -9,7 +9,7 @@ const ID = streamctl.PlatformName("obs")
 type PlatformSpecificConfig struct {
 	Host     string
 	Port     uint16
-	Password string `yaml:"pass" json:"pass"`
+	Password string `yaml:"pass" json:"pass" secret:""`
 }
 
 type Config = streamctl.PlatformConfig[PlatformSpecificConfig, StreamProfile]
