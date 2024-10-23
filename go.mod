@@ -229,6 +229,7 @@ require (
 	github.com/xaionaro-go/kickcom v0.0.0-20241022142825-25a234cc8628
 	github.com/xaionaro-go/lockmap v0.0.0-20240901172806-e17aea364748
 	github.com/xaionaro-go/mediamtx v0.0.0-20241009124606-94c22c603970
+	github.com/xaionaro-go/object v0.0.0-20241023233950-91f3bc4a92c3
 	github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20241018162120-5faf4e7a684a
 	github.com/xaionaro-go/timeapiio v0.0.0-20240915203246-b907cf699af3
 	github.com/xaionaro-go/typing v0.0.0-20221123235249-2229101d38ba

@@ -5,7 +5,7 @@ import (
 	"github.com/facebookincubator/go-belt/pkg/field"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	loggertypes "github.com/facebookincubator/go-belt/tool/logger/types"
-	"github.com/xaionaro-go/deepcopy"
+	"github.com/xaionaro-go/object"
 )
 
 type StructFieldSecretsFilter struct{}
@@ -17,8 +17,8 @@ func (StructFieldSecretsFilter) ProcessInput(
 	_ logger.Level,
 	args ...any,
 ) loggertypes.PreHookResult {
-	for idx, arg := range args {
-		args[idx] = deepcopy.DeepCopyWithoutSecrets(arg)
+	for idx := range args {
+		object.RemoveSecrets(&args[idx])
 	}
 	return loggertypes.PreHookResult{}
 }
@@ -29,8 +29,8 @@ func (StructFieldSecretsFilter) ProcessInputf(
 	format string,
 	args ...any,
 ) loggertypes.PreHookResult {
-	for idx, arg := range args {
-		args[idx] = deepcopy.DeepCopyWithoutSecrets(arg)
+	for idx := range args {
+		object.RemoveSecrets(&args[idx])
 	}
 	return loggertypes.PreHookResult{}
 }
@@ -41,7 +41,7 @@ func (StructFieldSecretsFilter) ProcessInputFields(
 	fields field.AbstractFields,
 ) loggertypes.PreHookResult {
 	fields.ForEachField(func(f *field.Field) bool {
-		f.Value = deepcopy.DeepCopyWithoutSecrets(f.Value)
+		object.RemoveSecrets(&f.Value)
 		return true
 	})
 	return loggertypes.PreHookResult{}

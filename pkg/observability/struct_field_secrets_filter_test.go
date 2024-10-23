@@ -2,6 +2,7 @@ package observability_test
 
 import (
 	"bytes"
+	"fmt"
 	"runtime"
 	"testing"
 
@@ -33,5 +34,14 @@ func TestSecretsFilter(t *testing.T) {
 		}
 		l.Debugf("%#+v", sample)
 		require.Equal(t, `time=unit-test level=debug msg="youtube.PlatformSpecificConfig{ChannelID:\"someChannel\", ClientID:\"\", ClientSecret:\"\", Token:(*oauth2.Token)(nil), CustomOAuthHandler:(youtube.OAuthHandler)(nil), GetOAuthListenPorts:(func() []uint16)(nil)}"`+"\n", buf.String())
+	})
+
+	t.Run("error", func(t *testing.T) {
+		e0 := fmt.Errorf("some error")
+		e1 := fmt.Errorf("the parent error: %w", e0)
+		var buf bytes.Buffer
+		ll.SetOutput(&buf)
+		l.Debugf("%v", e1)
+		require.Equal(t, `time=unit-test level=debug msg="the parent error: some error"`+"\n", buf.String())
 	})
 }
