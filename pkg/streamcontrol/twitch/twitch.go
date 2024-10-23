@@ -564,7 +564,11 @@ func (t *Twitch) getNewClientCode(
 				authURL := GetAuthorizationURL(
 					&helix.AuthorizationURLParams{
 						ResponseType: "code", // or "token"
-						Scopes:       []string{"channel:manage:broadcast"},
+						Scopes: []string{
+							"channel:manage:broadcast",
+							"moderator:manage:chat_messages",
+							"moderator:manage:banned_users",
+						},
 					},
 					t.config.Config.ClientID,
 					authRedirectURI(listenPort),
