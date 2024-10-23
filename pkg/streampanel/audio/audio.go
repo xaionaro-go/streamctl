@@ -9,12 +9,13 @@ import (
 )
 
 type Audio struct {
-	playbacker audioSubsystem.Audio
+	playbacker *audioSubsystem.Audio
 	audioTheme audiotheme.AudioTheme
 }
 
 func NewAudio() *Audio {
 	return &Audio{
+		playbacker: audioSubsystem.NewAudioAuto(),
 		audioTheme: defaultaudiotheme.AudioTheme(),
 	}
 }

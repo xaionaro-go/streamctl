@@ -149,6 +149,12 @@ func (ui *chatUI) onReceiveMessage(
 	observability.Go(ctx, func() {
 		ui.List.Refresh()
 	})
+	observability.Go(ctx, func() {
+		err := ui.Panel.Audio.PlayChatMessage()
+		if err != nil {
+			logger.Errorf(ctx, "unable to playback the chat message sound: %v", err)
+		}
+	})
 }
 
 func (ui *chatUI) listLength() int {

@@ -45,6 +45,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/client"
 	streamdconfig "github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
+	"github.com/xaionaro-go/streamctl/pkg/streampanel/audio"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/config"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
@@ -64,6 +65,7 @@ type Profile struct {
 type Panel struct {
 	StreamD      api.StreamD
 	Screenshoter Screenshoter
+	Audio        *audio.Audio
 
 	OnInternallySubmittedOAuthCode func(
 		ctx context.Context,
@@ -176,6 +178,7 @@ func New(
 	}
 
 	p := &Panel{
+		Audio:               audio.NewAudio(),
 		configPath:          configPath,
 		Config:              Options(opts).ApplyOverrides(cfg),
 		Screenshoter:        screenshoter.New(screenshot.Implementation{}),
