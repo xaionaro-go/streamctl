@@ -51,6 +51,7 @@ func ytWatchURL(videoID string) *url.URL {
 }
 
 type ChatListener struct {
+	videoID          string
 	continuationCode string
 	clientConfig     ytchat.YtCfg
 	wg               sync.WaitGroup
@@ -75,6 +76,7 @@ func NewChatListener(
 
 	ctx, cancelFunc := context.WithCancel(ctx)
 	l := &ChatListener{
+		videoID:          videoID,
 		continuationCode: continuationCode,
 		clientConfig:     cfg,
 		cancelFunc:       cancelFunc,
@@ -97,7 +99,9 @@ func NewChatListener(
 
 const chatFetchRetryInterval = time.Second
 
-func (l *ChatListener) listenLoop(ctx context.Context) error {
+func (l *ChatListener) listenLoop(ctx context.Context) (_err error) {
+	logger.Debugf(ctx, "listenLoop")
+	defer func() { logger.Debugf(ctx, "/listenLoop: %v", _err) }()
 	for {
 		msgs, newContinuation, err := ytchat.FetchContinuationChat(l.continuationCode, l.clientConfig)
 		switch err {

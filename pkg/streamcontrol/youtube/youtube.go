@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/go-yaml/yaml"
@@ -22,6 +23,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/xcontext"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 	"github.com/xaionaro-go/timeapiio"
 	"golang.org/x/oauth2"
@@ -986,6 +988,9 @@ func (yt *YouTube) startChatListener(
 	ctx context.Context,
 	videoID string,
 ) (_err error) {
+	ctx = belt.WithField(ctx, "video_id", videoID)
+	ctx = xcontext.DetachDone(ctx)
+
 	logger.Debugf(ctx, "startChatListener(ctx, '%s')", videoID)
 	defer func() { logger.Debugf(ctx, "/startChatListener(ctx, '%s'): %v", videoID, _err) }()
 
@@ -995,24 +1000,42 @@ func (yt *YouTube) startChatListener(
 	}
 
 	observability.Go(ctx, func() {
-		defer func() {
-			err := chatListener.Close()
-			if err != nil {
-				logger.Errorf(ctx, "unable to close the chat listener for '%s': %v", videoID, err)
-			}
-		}()
-		defer logger.Debugf(ctx, "stopped listening for chat messages in '%s'", videoID)
-		for msg := range chatListener.MessagesChan() {
-			select {
-			case <-ctx.Done():
-				return
-			case yt.messagesOutChan <- msg:
-			default:
-				logger.Errorf(ctx, "chat messages queue overflow, dropping a message")
-			}
+		err := yt.processChatListener(ctx, chatListener)
+		if err != nil && !errors.Is(err, context.Canceled) {
+			logger.Errorf(ctx, "unable to process the chat listener for '%s': %w", videoID, err)
 		}
 	})
 	return nil
+}
+
+func (yt *YouTube) processChatListener(
+	ctx context.Context,
+	chatListener *ChatListener,
+) (_err error) {
+	defer func() {
+		err := chatListener.Close()
+		if err != nil {
+			logger.Errorf(ctx, "unable to close the chat listener for '%s': %v", chatListener.videoID, err)
+		}
+	}()
+	defer func() {
+		logger.Debugf(ctx, "stopped listening for chat messages in '%s': %v", chatListener.videoID, _err)
+	}()
+	inChan := chatListener.MessagesChan()
+	for {
+		msg, ok := <-inChan
+		if !ok {
+			logger.Debugf(ctx, "the input channel got closed")
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case yt.messagesOutChan <- msg:
+		default:
+			logger.Errorf(ctx, "chat messages queue overflow, dropping a message")
+		}
+	}
 }
 
 func (yt *YouTube) EndStream(
