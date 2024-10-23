@@ -44,8 +44,8 @@ type YouTube struct {
 	CancelFunc     context.CancelFunc
 	SaveConfigFunc func(Config) error
 
-	currentVideoIDsLocker xsync.Mutex
-	currentVideoIDs       []string
+	currentLiveBroadcastsLocker xsync.Mutex
+	currentLiveBroadcasts       []*youtube.LiveBroadcast
 
 	messagesOutChan chan streamcontrol.ChatMessage
 }
@@ -597,8 +597,8 @@ func (yt *YouTube) StartStream(
 ) (_err error) {
 	// TODO: split this function!
 
-	err := xsync.DoR1(ctx, &yt.currentVideoIDsLocker, func() error {
-		if len(yt.currentVideoIDs) != 0 {
+	err := xsync.DoR1(ctx, &yt.currentLiveBroadcastsLocker, func() error {
+		if len(yt.currentLiveBroadcasts) != 0 {
 			return fmt.Errorf("streams are already started")
 		}
 		return nil
@@ -771,8 +771,8 @@ func (yt *YouTube) StartStream(
 		}
 	}
 
-	return xsync.DoR1(ctx, &yt.currentVideoIDsLocker, func() error {
-		yt.currentVideoIDs = yt.currentVideoIDs[:0]
+	return xsync.DoR1(ctx, &yt.currentLiveBroadcastsLocker, func() error {
+		yt.currentLiveBroadcasts = yt.currentLiveBroadcasts[:0]
 		for idx, broadcast := range broadcasts {
 			video := videos[idx]
 
@@ -959,7 +959,7 @@ func (yt *YouTube) StartStream(
 					return fmt.Errorf("unable to set the thumbnail: %w", err)
 				}
 			}
-			yt.currentVideoIDs = append(yt.currentVideoIDs, newBroadcast.Id)
+			yt.currentLiveBroadcasts = append(yt.currentLiveBroadcasts, newBroadcast)
 			err = yt.startChatListener(ctx, newBroadcast.Id)
 			if err != nil {
 				logger.Errorf(ctx, "unable to start a chat listener for video '%s': %w", newBroadcast.Id, err)
@@ -985,10 +985,13 @@ func setProfile(broadcast *youtube.LiveBroadcast, profile StreamProfile) {
 func (yt *YouTube) startChatListener(
 	ctx context.Context,
 	videoID string,
-) error {
+) (_err error) {
+	logger.Debugf(ctx, "startChatListener(ctx, '%s')", videoID)
+	defer func() { logger.Debugf(ctx, "/startChatListener(ctx, '%s'): %v", videoID, _err) }()
+
 	chatListener, err := NewChatListener(ctx, videoID)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to initialize the chat listener instance: %w", err)
 	}
 
 	observability.Go(ctx, func() {
@@ -1016,11 +1019,11 @@ func (yt *YouTube) EndStream(
 	ctx context.Context,
 ) error {
 	expectedVideoIDs := map[string]struct{}{}
-	yt.currentVideoIDsLocker.Do(ctx, func() {
-		for _, videoID := range yt.currentVideoIDs {
-			expectedVideoIDs[videoID] = struct{}{}
+	yt.currentLiveBroadcastsLocker.Do(ctx, func() {
+		for _, broadcast := range yt.currentLiveBroadcasts {
+			expectedVideoIDs[broadcast.Id] = struct{}{}
 		}
-		yt.currentVideoIDs = yt.currentVideoIDs[:0]
+		yt.currentLiveBroadcasts = yt.currentLiveBroadcasts[:0]
 	})
 
 	return yt.updateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
@@ -1039,7 +1042,7 @@ const timeLayoutFallback = time.RFC3339
 func (yt *YouTube) GetStreamStatus(
 	ctx context.Context,
 ) (_ret *streamcontrol.StreamStatus, _err error) {
-	// TODO: try to use yt.CurrentVideoIDs instead of re-requesting the list to
+	// TODO: try to use yt.currentLiveBroadcasts instead of re-requesting the list to
 	//       save some API quota points.
 
 	logger.Tracef(ctx, "GetStreamStatus")
@@ -1081,6 +1084,23 @@ func (yt *YouTube) GetStreamStatus(
 	if err != nil {
 		return nil, fmt.Errorf("unable to get active broadcasts info: %w", err)
 	}
+	yt.currentLiveBroadcastsLocker.Do(ctx, func() {
+		ids := map[string]struct{}{}
+		for _, broadcast := range yt.currentLiveBroadcasts {
+			ids[broadcast.Id] = struct{}{}
+		}
+
+		for _, newBroadcast := range activeBroadcasts {
+			if _, ok := ids[newBroadcast.Id]; ok {
+				continue
+			}
+			err = yt.startChatListener(ctx, newBroadcast.Id)
+			if err != nil {
+				logger.Errorf(ctx, "unable to start a chat listener for video '%s': %v", newBroadcast.Id, err)
+			}
+		}
+		yt.currentLiveBroadcasts = activeBroadcasts
+	})
 
 	var upcomingBroadcasts []*youtube.LiveBroadcast
 	err = yt.IterateUpcomingBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
@@ -1275,9 +1295,9 @@ func (yt *YouTube) SendChatMessage(
 	ctx context.Context,
 	message string,
 ) error {
-	return xsync.DoR1(ctx, &yt.currentVideoIDsLocker, func() error {
+	return xsync.DoR1(ctx, &yt.currentLiveBroadcastsLocker, func() error {
 		var result *multierror.Error
-		for _, videoID := range yt.currentVideoIDs {
+		for _, broadcast := range yt.currentLiveBroadcasts {
 			_, err := yt.YouTubeService.CommentThreads.Insert([]string{"snippet"}, &youtube.CommentThread{
 				Snippet: &youtube.CommentThreadSnippet{
 					CanReply:  true,
@@ -1288,11 +1308,11 @@ func (yt *YouTube) SendChatMessage(
 							TextOriginal: message,
 						},
 					},
-					VideoId: videoID,
+					VideoId: broadcast.Id,
 				},
 			}).Context(ctx).Do()
 			if err != nil {
-				result = multierror.Append(result, fmt.Errorf("unable to post the comment under video '%s': %w", videoID, err))
+				result = multierror.Append(result, fmt.Errorf("unable to post the comment under video '%s': %w", broadcast.Id, err))
 			}
 		}
 		return result.ErrorOrNil()
@@ -1303,7 +1323,46 @@ func (yt *YouTube) RemoveChatMessage(
 	ctx context.Context,
 	messageID streamcontrol.ChatMessageID,
 ) error {
-	return fmt.Errorf("not implemented, yet")
+	// TODO: The `messageID` value below is not a message ID, unfortunately.
+	//       It just contains the author and the message as a temporary solution.
+	//       Find a way to extract the message ID.
+
+	words := strings.SplitN(string(messageID), "/", 2)
+	if len(words) != 2 {
+		return fmt.Errorf("internal error: cannot split '%s' to author and message", messageID)
+	}
+	authorName := words[0]
+	message := words[1]
+
+	count := 0
+	for _, broadcast := range yt.currentLiveBroadcasts {
+		resp, err := yt.YouTubeService.
+			LiveChatMessages.
+			List(broadcast.Snippet.LiveChatId, []string{"snippet"}).
+			Context(ctx).Do()
+		if err != nil {
+			return fmt.Errorf("unable to get the list of current chat messages under livestream %s: %w", broadcast.Id, err)
+		}
+
+		for _, item := range resp.Items {
+			msgText := item.Snippet.TextMessageDetails.MessageText
+			msgAuthor := item.Snippet.AuthorChannelId
+			logger.Debugf(ctx, "comparing <%s|%s> with <%s|%s>", msgAuthor, msgText, authorName, message)
+			if msgText == message && msgAuthor == authorName {
+				count++
+				err := yt.YouTubeService.LiveChatMessages.Delete(string(messageID)).Context(ctx).Do()
+				if err != nil {
+					return fmt.Errorf("unable to remove the message '%s': %w", messageID, err)
+				}
+			}
+		}
+	}
+
+	if count == 0 {
+		return fmt.Errorf("not found")
+	}
+
+	return nil
 }
 func (yt *YouTube) BanUser(
 	ctx context.Context,

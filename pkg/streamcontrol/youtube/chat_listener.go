@@ -43,9 +43,11 @@ func init() {
 }
 
 func ytWatchURL(videoID string) *url.URL {
-	result := *youtubeWatchURL
-	result.Query().Add("v", videoID)
-	return &result
+	result := ptr(*youtubeWatchURL)
+	query := result.Query()
+	query.Add("v", videoID)
+	result.RawQuery = query.Encode()
+	return result
 }
 
 type ChatListener struct {
@@ -60,6 +62,10 @@ func NewChatListener(
 	ctx context.Context,
 	videoID string,
 ) (*ChatListener, error) {
+	if videoID == "" {
+		return nil, fmt.Errorf("video ID is empty")
+	}
+
 	watchURL := ytWatchURL(videoID)
 
 	continuationCode, cfg, err := ytchat.ParseInitialData(watchURL.String())
@@ -110,7 +116,9 @@ func (l *ChatListener) listenLoop(ctx context.Context) error {
 				CreatedAt: msg.Timestamp,
 				UserID:    streamcontrol.ChatUserID(msg.AuthorName),
 				Username:  msg.AuthorName,
-				MessageID: "", // TODO: find a way to extract the message ID
+				// TODO: find a way to extract the message ID,
+				//       in the mean while we we use a soft key for that:
+				MessageID: streamcontrol.ChatMessageID(fmt.Sprintf("%s/%s", msg.AuthorName, msg.Message)),
 				Message:   msg.Message,
 			}
 		}
