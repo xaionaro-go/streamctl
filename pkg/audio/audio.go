@@ -8,7 +8,7 @@ import (
 	"github.com/jfreymuth/oggvorbis"
 )
 
-const BufferSize = 200 * time.Millisecond
+const BufferSize = 20 * time.Second
 
 type Audio struct {
 	PlayerPCM

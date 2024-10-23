@@ -2,15 +2,17 @@ package main
 
 import (
 	"bytes"
+	_ "embed"
 
 	"github.com/xaionaro-go/streamctl/pkg/audio"
-	"github.com/xaionaro-go/streamctl/pkg/audiotheme/defaultaudiotheme"
 )
 
+//go:embed resources/long_audio.ogg
+var longVorbis []byte
+
 func main() {
-	audiotheme := defaultaudiotheme.AudioTheme()
 	a := audio.NewAudioAuto()
-	err := a.PlayVorbis(bytes.NewReader(audiotheme.ChatMessage))
+	err := a.PlayVorbis(bytes.NewReader(longVorbis))
 	if err != nil {
 		panic(err)
 	}

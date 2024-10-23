@@ -59,7 +59,19 @@ func (PlayerPulse) PlayPCM(
 	if stream.Underflow() {
 		return fmt.Errorf("underflow")
 	}
-	stream.Close()
+	func() {
+		defer func() {
+			r := recover()
+			if r != nil {
+				err = fmt.Errorf("got a panic: %v", r)
+			}
+		}()
+		stream.Close()
+	}()
+	if err != nil {
+		return fmt.Errorf("unable to close the stream: %w", err)
+	}
+
 	return nil
 }
 
@@ -72,7 +84,7 @@ func newPulseReader(pcmFormat PCMFormat, reader io.Reader) (*pulseReader, error)
 	var pulseFormat byte
 	switch pcmFormat {
 	case PCMFormatFloat32LE:
-		pulseFormat = proto.FormatInt32LE
+		pulseFormat = proto.FormatFloat32LE
 	default:
 		return nil, fmt.Errorf("received an unexpected format: %v", pcmFormat)
 	}
