@@ -11,6 +11,7 @@ import (
 // you don't accidentally leak these secrets via logging or whatever.
 type Any[T any] struct {
 	encryptedMessage
+	plainText T
 }
 
 func New[T any](in T) Any[T] {
@@ -46,14 +47,23 @@ func (s *Any[T]) Set(v T) {
 		panic(err)
 	}
 	s.encryptedMessage = encrypt(b)
+	if !secrecyEnabled {
+		s.plainText = v
+	}
 }
 
 func (s *Any[T]) String() string {
-	return "<HIDDEN>"
+	if secrecyEnabled {
+		return "<HIDDEN>"
+	}
+	return fmt.Sprintf("%#v", s.plainText)
 }
 
 func (s Any[T]) GoString() string {
-	return "HIDDEN{}"
+	if secrecyEnabled {
+		return "<HIDDEN>"
+	}
+	return fmt.Sprintf("%#+v", s.plainText)
 }
 
 func (s Any[T]) MarshalYAML() (_ret []byte, _err error) {

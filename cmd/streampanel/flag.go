@@ -42,6 +42,7 @@ type Flags struct {
 	Subprocess            string        `yaml:"Subprocess,omitempty"`
 	SplitProcess          bool          `yaml:"SplitProcess,omitempty"`
 	LockTimeout           time.Duration `yaml:"LockTimeout,omitempty"`
+	InsecureDebug         bool          `yaml:"InsecureDebug,omitempty"`
 	RemoveSecretsFromLogs bool          `yaml:"RemoveSecretsFromLogs,omitempty"`
 
 	OAuthListenPortTwitch  uint16 `yaml:"OAuthListenPortTwitch,omitempty"`
@@ -129,6 +130,7 @@ func parseFlags() Flags {
 		8092,
 		"the port that is used for OAuth callbacks while authenticating in YouTube",
 	)
+	insecureDebug := pflag.Bool("insecure-debug", false, "explicitly enable logging of sensitive data")
 	removeSecretsFromLogs := pflag.Bool(
 		"remove-secrets-from-logs",
 		false,
@@ -158,6 +160,7 @@ func parseFlags() Flags {
 		OAuthListenPortTwitch:  *oauthListenPortTwitch,
 		OAuthListenPortYouTube: *oauthListenPortYouTube,
 
+		InsecureDebug:         *insecureDebug,
 		RemoveSecretsFromLogs: *removeSecretsFromLogs,
 	}
 

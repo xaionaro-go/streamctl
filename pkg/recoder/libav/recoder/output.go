@@ -9,6 +9,7 @@ import (
 	"github.com/asticode/go-astiav"
 	"github.com/asticode/go-astikit"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/proxy"
 	"github.com/xaionaro-go/streamctl/pkg/recoder"
 )
@@ -93,6 +94,7 @@ func NewOutputFromURL(
 		url.Host = proxyAddr.String()
 	}
 
+	logger.Debugf(observability.OnInsecureDebug(ctx), "URL: %s", url)
 	formatContext, err := astiav.AllocOutputFormatContext(
 		nil,
 		formatFromScheme(url.Scheme),

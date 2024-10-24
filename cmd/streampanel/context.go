@@ -20,6 +20,7 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/sirupsen/logrus"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/streamctl/pkg/secret"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
 )
@@ -74,13 +75,25 @@ func getContext(
 		&observability.LogLevelFilter,
 	}
 	if flags.RemoveSecretsFromLogs {
+		if flags.InsecureDebug {
+			panic("options RemoveSecretsFromLogs and InsecureDebug contradict each other")
+		}
 		logPreHooks = append(logPreHooks,
 			observability.StructFieldSecretsFilter{},
 			observability.NewSecretValuesFilter(secretsProvider),
 		)
 	}
 
-	l := xlogrus.New(ll).WithLevel(logger.LevelTrace).WithPreHooks(logPreHooks...)
+	logHooks := logger.Hooks{}
+	if flags.InsecureDebug {
+		secret.SetSecrecy(false)
+	} else {
+		logHooks = append(logHooks,
+			observability.NewRemoveInsecureDebugFilter(),
+		)
+	}
+
+	l := xlogrus.New(ll).WithLevel(logger.LevelTrace).WithPreHooks(logPreHooks...).WithHooks(logHooks...)
 
 	if flags.LogFile != "" {
 		logPathUnexpanded := flags.LogFile
