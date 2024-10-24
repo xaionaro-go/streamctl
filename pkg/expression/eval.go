@@ -24,6 +24,9 @@ func Eval[T any](
 	}
 
 	value := buf.String()
+	if value == "" {
+		return result, nil
+	}
 	_, err = fmt.Sscanf(value, "%v", &result)
 	if err != nil {
 		return result, fmt.Errorf("unable to scan value '%v' into %T: %w", value, result, err)

@@ -635,6 +635,9 @@ func (yt *YouTube) StartStream(
 		templateBroadcastIDs,
 		customArgs,
 	)
+	if len(templateBroadcastIDs) == 0 {
+		return fmt.Errorf("no template stream is selected")
+	}
 
 	templateBroadcastIDMap := map[string]struct{}{}
 	for _, broadcastID := range templateBroadcastIDs {

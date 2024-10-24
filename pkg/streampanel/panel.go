@@ -3532,6 +3532,10 @@ func (p *Panel) profileWindow(
 					youtubeProfile.Tags = sanitizeTags(getYoutubeTags())
 				}
 				profile.PerPlatform[youtube.ID] = youtubeProfile
+				if len(youtubeProfile.TemplateBroadcastIDs) == 0 {
+					p.DisplayError(fmt.Errorf("no youtube template stream is selected"))
+					return
+				}
 			}
 			err := commitFn(ctx, profile)
 			if err != nil {
