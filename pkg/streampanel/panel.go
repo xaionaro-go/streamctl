@@ -466,7 +466,7 @@ func (p *Panel) inputUserInfo(
 	}
 	platCfg := cfg.Backends[platName]
 
-	var enabled bool
+	var status BackendStatusCode
 	var err error
 	switch platName {
 	case youtube.ID:
@@ -474,28 +474,28 @@ func (p *Panel) inputUserInfo(
 			ctx,
 			platCfg,
 		)
-		enabled, err = p.InputYouTubeUserInfo(ctx, platCfg)
+		status, err = p.InputYouTubeUserInfo(ctx, platCfg)
 		cfg.Backends[platName] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
 	case twitch.ID:
 		platCfg := streamcontrol.ConvertPlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile](
 			ctx,
 			platCfg,
 		)
-		enabled, err = p.InputTwitchUserInfo(ctx, platCfg)
+		status, err = p.InputTwitchUserInfo(ctx, platCfg)
 		cfg.Backends[platName] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
 	case kick.ID:
 		platCfg := streamcontrol.ConvertPlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile](
 			ctx,
 			platCfg,
 		)
-		enabled, err = p.InputKickUserInfo(ctx, platCfg)
+		status, err = p.InputKickUserInfo(ctx, platCfg)
 		cfg.Backends[platName] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
 	case obs.ID:
 		platCfg := streamcontrol.ConvertPlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile](
 			ctx,
 			platCfg,
 		)
-		enabled, err = p.InputOBSConnectInfo(ctx, platCfg)
+		status, err = p.InputOBSConnectInfo(ctx, platCfg)
 		cfg.Backends[platName] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
 	}
 
@@ -503,7 +503,13 @@ func (p *Panel) inputUserInfo(
 		return fmt.Errorf("unable to input the config for %s: %w", platName, err)
 	}
 
-	cfg.Backends[platName].Enable = ptr(enabled)
+	switch status {
+	case BackendStatusCodeReady:
+		cfg.Backends[platName].Enable = ptr(true)
+	case BackendStatusCodeNotNow:
+	case BackendStatusCodeDisable:
+		cfg.Backends[platName].Enable = ptr(false)
+	}
 	return nil
 }
 
@@ -702,7 +708,7 @@ func removeNonDigits(input string) string {
 func (p *Panel) InputOBSConnectInfo(
 	ctx context.Context,
 	cfg *streamcontrol.PlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile],
-) (bool, error) {
+) (BackendStatusCode, error) {
 	w := p.app.NewWindow(AppName + ": Input OBS connection info")
 	resizeWindow(w, fyne.NewSize(600, 200))
 
@@ -731,9 +737,15 @@ func (p *Panel) InputOBSConnectInfo(
 	instructionText.Wrapping = fyne.TextWrapWord
 
 	waitCh := make(chan struct{})
-	skip := false
-	skipButton := widget.NewButtonWithIcon("Skip", theme.ConfirmIcon(), func() {
-		skip = true
+	disable := false
+	disableButton := widget.NewButtonWithIcon("Disable", theme.ConfirmIcon(), func() {
+		disable = true
+		close(waitCh)
+	})
+
+	notNow := false
+	notNowButton := widget.NewButtonWithIcon("Not now", theme.ConfirmIcon(), func() {
+		notNow = true
 		close(waitCh)
 	})
 
@@ -751,7 +763,7 @@ func (p *Panel) InputOBSConnectInfo(
 
 	w.SetContent(container.NewBorder(
 		widget.NewRichTextWithText("Enter OBS user info:"),
-		container.NewHBox(skipButton, okButton),
+		container.NewHBox(disableButton, notNowButton, okButton),
 		nil,
 		nil,
 		container.NewVBox(
@@ -765,16 +777,18 @@ func (p *Panel) InputOBSConnectInfo(
 	<-waitCh
 	w.Hide()
 
-	if skip {
-		cfg.Enable = ptr(false)
-		return false, nil
+	if disable {
+		return BackendStatusCodeDisable, nil
+	}
+	if notNow {
+		return BackendStatusCodeNotNow, nil
 	}
 
 	cfg.Config.Host = hostField.Text
 	cfg.Config.Port = uint16(port)
 	cfg.Config.Password.Set(passField.Text)
 
-	return true, nil
+	return BackendStatusCodeReady, nil
 }
 
 func (p *Panel) OnSubmittedOAuthCode(
@@ -940,7 +954,7 @@ var twitchAppsCreateLink, _ = url.Parse("https://dev.twitch.tv/console/apps/crea
 func (p *Panel) InputTwitchUserInfo(
 	ctx context.Context,
 	cfg *streamcontrol.PlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile],
-) (bool, error) {
+) (BackendStatusCode, error) {
 	w := p.app.NewWindow(AppName + ": Input Twitch user info")
 	resizeWindow(w, fyne.NewSize(600, 200))
 
@@ -963,18 +977,26 @@ func (p *Panel) InputTwitchUserInfo(
 	instructionText.Wrapping = fyne.TextWrapWord
 
 	waitCh := make(chan struct{})
-	skip := false
-	skipButton := widget.NewButtonWithIcon("Skip", theme.ConfirmIcon(), func() {
-		skip = true
+
+	disable := false
+	disableButton := widget.NewButtonWithIcon("Disable", theme.ConfirmIcon(), func() {
+		disable = true
 		close(waitCh)
 	})
+
+	notNow := false
+	notNowButton := widget.NewButtonWithIcon("Not now", theme.ConfirmIcon(), func() {
+		notNow = true
+		close(waitCh)
+	})
+
 	okButton := widget.NewButtonWithIcon("OK", theme.ConfirmIcon(), func() {
 		close(waitCh)
 	})
 
 	w.SetContent(container.NewBorder(
 		widget.NewRichTextWithText("Enter Twitch user info:"),
-		container.NewHBox(skipButton, okButton),
+		container.NewHBox(disableButton, notNowButton, okButton),
 		nil,
 		nil,
 		container.NewVBox(
@@ -988,23 +1010,26 @@ func (p *Panel) InputTwitchUserInfo(
 	<-waitCh
 	w.Hide()
 
-	if skip {
-		cfg.Enable = ptr(false)
-		return false, nil
+	if disable {
+		return BackendStatusCodeDisable, nil
 	}
+	if notNow {
+		return BackendStatusCodeNotNow, nil
+	}
+
 	cfg.Config.AuthType = "user"
 	channelWords := strings.Split(channelField.Text, "/")
 	cfg.Config.Channel = channelWords[len(channelWords)-1]
 	cfg.Config.ClientID = clientIDField.Text
 	cfg.Config.ClientSecret.Set(clientSecretField.Text)
 
-	return true, nil
+	return BackendStatusCodeReady, nil
 }
 
 func (p *Panel) InputKickUserInfo(
 	ctx context.Context,
 	cfg *streamcontrol.PlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile],
-) (bool, error) {
+) (BackendStatusCode, error) {
 	w := p.app.NewWindow(AppName + ": Input Kick user info")
 	resizeWindow(w, fyne.NewSize(600, 200))
 
@@ -1014,18 +1039,26 @@ func (p *Panel) InputKickUserInfo(
 	)
 
 	waitCh := make(chan struct{})
-	skip := false
-	skipButton := widget.NewButtonWithIcon("Skip", theme.ConfirmIcon(), func() {
-		skip = true
+
+	disable := false
+	disableButton := widget.NewButtonWithIcon("Disable", theme.ConfirmIcon(), func() {
+		disable = true
 		close(waitCh)
 	})
+
+	notNow := false
+	notNowButton := widget.NewButtonWithIcon("Not now", theme.ConfirmIcon(), func() {
+		notNow = true
+		close(waitCh)
+	})
+
 	okButton := widget.NewButtonWithIcon("OK", theme.ConfirmIcon(), func() {
 		close(waitCh)
 	})
 
 	w.SetContent(container.NewBorder(
 		widget.NewRichTextWithText("Enter Kick user info:"),
-		container.NewHBox(skipButton, okButton),
+		container.NewHBox(disableButton, notNowButton, okButton),
 		nil,
 		nil,
 		container.NewVBox(
@@ -1036,14 +1069,17 @@ func (p *Panel) InputKickUserInfo(
 	<-waitCh
 	w.Hide()
 
-	if skip {
-		cfg.Enable = ptr(false)
-		return false, nil
+	if disable {
+		return BackendStatusCodeDisable, nil
 	}
+	if notNow {
+		return BackendStatusCodeNotNow, nil
+	}
+
 	channelWords := strings.Split(channelField.Text, "/")
 	cfg.Config.Channel = channelWords[len(channelWords)-1]
 
-	return true, nil
+	return BackendStatusCodeReady, nil
 }
 
 var youtubeCredentialsCreateLink, _ = url.Parse(
@@ -1053,7 +1089,7 @@ var youtubeCredentialsCreateLink, _ = url.Parse(
 func (p *Panel) InputYouTubeUserInfo(
 	ctx context.Context,
 	cfg *streamcontrol.PlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile],
-) (bool, error) {
+) (BackendStatusCode, error) {
 	w := p.app.NewWindow(AppName + ": Input YouTube user info")
 	resizeWindow(w, fyne.NewSize(600, 200))
 
@@ -1083,18 +1119,26 @@ func (p *Panel) InputYouTubeUserInfo(
 	instructionText.Wrapping = fyne.TextWrapWord
 
 	waitCh := make(chan struct{})
-	skip := false
-	skipButton := widget.NewButtonWithIcon("Skip", theme.ConfirmIcon(), func() {
-		skip = true
+
+	disable := false
+	disableButton := widget.NewButtonWithIcon("Disable", theme.ConfirmIcon(), func() {
+		disable = true
 		close(waitCh)
 	})
+
+	notNow := false
+	notNowButton := widget.NewButtonWithIcon("Not now", theme.ConfirmIcon(), func() {
+		notNow = true
+		close(waitCh)
+	})
+
 	okButton := widget.NewButtonWithIcon("OK", theme.ConfirmIcon(), func() {
 		close(waitCh)
 	})
 
 	w.SetContent(container.NewBorder(
 		widget.NewRichTextWithText("Enter YouTube user info:"),
-		container.NewHBox(skipButton, okButton),
+		container.NewHBox(disableButton, notNowButton, okButton),
 		nil,
 		nil,
 		container.NewVBox(
@@ -1107,14 +1151,17 @@ func (p *Panel) InputYouTubeUserInfo(
 	<-waitCh
 	w.Hide()
 
-	if skip {
-		cfg.Enable = ptr(false)
-		return false, nil
+	if disable {
+		return BackendStatusCodeDisable, nil
 	}
+	if notNow {
+		return BackendStatusCodeNotNow, nil
+	}
+
 	cfg.Config.ClientID = clientIDField.Text
 	cfg.Config.ClientSecret.Set(clientSecretField.Text)
 
-	return true, nil
+	return BackendStatusCodeReady, nil
 }
 
 func (p *Panel) profileCreateOrUpdate(ctx context.Context, profile Profile) error {
