@@ -21,6 +21,8 @@ replace github.com/pion/webrtc/v3 => github.com/aler9/webrtc/v3 v3.0.0-202406101
 
 replace github.com/jfreymuth/pulse v0.1.1 => github.com/xaionaro-go/pulse v0.0.0-20241023202712-7151fa00d4bb
 
+replace github.com/xaionaro-go/object v0.0.0-20241024021849-9d779d330f28 => ../object
+
 require (
 	github.com/facebookincubator/go-belt v0.0.0-20240804203001-846c4409d41c
 	github.com/go-git/go-billy/v5 v5.5.0

@@ -78,15 +78,20 @@ func ParseStringsFrom(obj any) []string {
 	var strings []string
 	object.DeepCopy(
 		obj,
-		object.OptionWithProcessingFunc(func(ctx *object.ProcContext, v reflect.Value, sf *reflect.StructField) reflect.Value {
-			switch v.Kind() {
-			case reflect.String:
-				if v.String() != "" {
-					strings = append(strings, v.String())
+		object.OptionWithVisitorFunc(
+			func(
+				ctx *object.ProcContext,
+				v reflect.Value,
+				sf *reflect.StructField,
+			) (reflect.Value, bool, error) {
+				switch v.Kind() {
+				case reflect.String:
+					if v.String() != "" {
+						strings = append(strings, v.String())
+					}
 				}
-			}
-			return v
-		}),
+				return v, true, nil
+			}),
 		object.OptionWithUnexported(true),
 	)
 	return strings

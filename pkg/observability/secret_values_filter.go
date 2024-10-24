@@ -9,7 +9,7 @@ import (
 	"github.com/facebookincubator/go-belt/pkg/field"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	loggertypes "github.com/facebookincubator/go-belt/tool/logger/types"
-	"github.com/xaionaro-go/deepcopy"
+	"github.com/xaionaro-go/object"
 )
 
 type SecretsProvider interface {
@@ -91,36 +91,44 @@ func filterSecretValues[T any](
 	sf *SecretValuesFilter,
 	in T,
 ) T {
-	return deepcopy.DeepCopyWithProcessing(in, sf.filterSecretValuesInLeaf)
+	return object.DeepCopy(in, object.OptionWithVisitorFunc(sf.filterSecretValuesInLeaf))
 }
 
-func (sf *SecretValuesFilter) filterSecretValuesInLeaf(v reflect.Value, f *reflect.StructField) reflect.Value {
+func (sf *SecretValuesFilter) filterSecretValuesInLeaf(
+	ctx *object.ProcContext,
+	v reflect.Value,
+	f *reflect.StructField,
+) (reflect.Value, bool, error) {
 	switch v.Kind() {
 	case reflect.Pointer:
 		if v.IsNil() {
-			return v
+			return v, false, nil
 		}
 		t := v.Type()
 		result := reflect.New(t).Elem()
-		result.Set(reflect.New(t.Elem()))                           // result = (*T)(nil)
-		result.Elem().Set(sf.filterSecretValuesInLeaf(v.Elem(), f)) // *result = *v
-		return result
+		result.Set(reflect.New(t.Elem())) // result = (*T)(nil)
+		newV, _, err := sf.filterSecretValuesInLeaf(ctx, v.Elem(), f)
+		if err != nil {
+			return result, false, err
+		}
+		result.Elem().Set(newV) // *result = *v
+		return result, false, nil
 	case reflect.String:
-		return reflect.ValueOf(filterSecretValuesInString(sf, v.String())).Convert(v.Type())
+		return reflect.ValueOf(filterSecretValuesInString(sf, v.String())).Convert(v.Type()), false, nil
 	case reflect.Slice:
 		if v.Type().Elem().Kind() != reflect.Uint8 {
-			return v
+			return v, true, nil
 		}
 
 		orig := string(v.Bytes())
 		censored := filterSecretValuesInString(sf, orig)
 		if orig == censored {
-			return v
+			return v, false, nil
 		}
 
-		return reflect.ValueOf([]byte(censored)).Convert(v.Type())
+		return reflect.ValueOf([]byte(censored)).Convert(v.Type()), false, nil
 	default:
-		return v
+		return v, true, nil
 	}
 }
 
