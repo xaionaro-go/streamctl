@@ -34,8 +34,11 @@ var _ Action = (*OBSItemShowHide)(nil)
 
 func (OBSItemShowHide) isAction() {}
 
-func (a OBSItemShowHide) String() string {
-	return string(tryJSON(a))
+func (a *OBSItemShowHide) String() string {
+	if a == nil {
+		return "null"
+	}
+	return string(tryJSON(*a))
 }
 
 type OBSWindowCaptureSetSource struct {
@@ -48,8 +51,11 @@ var _ Action = (*OBSWindowCaptureSetSource)(nil)
 
 func (OBSWindowCaptureSetSource) isAction() {}
 
-func (a OBSWindowCaptureSetSource) String() string {
-	return string(tryJSON(a))
+func (a *OBSWindowCaptureSetSource) String() string {
+	if a == nil {
+		return "null"
+	}
+	return string(tryJSON(*a))
 }
 
 type Noop struct{}
@@ -58,8 +64,11 @@ var _ Action = (*Noop)(nil)
 
 func (*Noop) isAction() {}
 
-func (a Noop) String() string {
-	return string(tryJSON(a))
+func (a *Noop) String() string {
+	if a == nil {
+		return "null"
+	}
+	return string(tryJSON(*a))
 }
 
 type StartStream struct {
@@ -77,8 +86,11 @@ var _ Action = (*StartStream)(nil)
 
 func (*StartStream) isAction() {}
 
-func (a StartStream) String() string {
-	return string(tryJSON(a))
+func (a *StartStream) String() string {
+	if a == nil {
+		return "null"
+	}
+	return string(tryJSON(*a))
 }
 
 type EndStream struct {
@@ -89,8 +101,11 @@ var _ Action = (*EndStream)(nil)
 
 func (*EndStream) isAction() {}
 
-func (a EndStream) String() string {
-	return string(tryJSON(a))
+func (a *EndStream) String() string {
+	if a == nil {
+		return "null"
+	}
+	return string(tryJSON(*a))
 }
 
 func tryJSON(value any) []byte {

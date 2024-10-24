@@ -24,13 +24,17 @@ const (
 	PCMFormatFloat32LE
 )
 
-func (f PCMFormat) String() string {
-	switch f {
+func (f *PCMFormat) String() string {
+	if f == nil {
+		return "null"
+	}
+
+	switch *f {
 	case PCMFormatUndefined:
 		return "<undefined>"
 	case PCMFormatFloat32LE:
 		return "f32le"
 	default:
-		return fmt.Sprintf("<unexpected_value_%d>", f)
+		return fmt.Sprintf("<unexpected_value_%d>", *f)
 	}
 }

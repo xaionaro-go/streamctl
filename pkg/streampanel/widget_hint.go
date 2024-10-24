@@ -2,6 +2,7 @@ package streampanel
 
 import (
 	"context"
+	"reflect"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -115,7 +116,7 @@ func GetAbsolutePosition(w, root fyne.CanvasObject) fyne.Position {
 }
 
 func getMousePos(window fyne.Window) fyne.Position {
-	return *unsafetools.FieldByName(window, "mousePos").(*fyne.Position)
+	return *unsafetools.FieldByNameInValue(reflect.ValueOf(window), "mousePos").Interface().(*fyne.Position)
 }
 
 func (w *HintWidget) isHovering(mousePos fyne.Position) bool {

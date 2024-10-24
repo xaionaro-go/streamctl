@@ -66,7 +66,11 @@ type serializableTriggerRule struct {
 	Action      serializable.Serializable[action.Action]               `yaml:"action"                json:"action"`
 }
 
-func (tr TriggerRule) String() string {
+func (tr *TriggerRule) String() string {
+	if tr == nil {
+		return "null"
+	}
+
 	descr := tr.Description
 	if descr != "" {
 		descr += ": "
@@ -77,7 +81,7 @@ func (tr TriggerRule) String() string {
 	} else {
 		eventQueryString = ""
 	}
-	actionString := strings.Trim(fmt.Sprintf("%s", tr.Action), "&")
+	actionString := strings.Trim(tr.Action.String(), "&")
 	if actionString != "{}" {
 		actionString = ":" + actionString
 	} else {

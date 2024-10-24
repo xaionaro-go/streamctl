@@ -2,10 +2,9 @@ package observability
 
 import (
 	"context"
-	"fmt"
 	"reflect"
 
-	"github.com/xaionaro-go/deepcopy"
+	"github.com/xaionaro-go/object"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
@@ -38,51 +37,57 @@ func (sp *SecretsStaticProvider) ParseSecretsFrom(obj any) {
 }
 
 func ParseSecretsFrom(obj any) []string {
+	type markerIsSecretT struct{}
+	var markerIsSecret markerIsSecretT
+
 	var secrets []string
-	deepcopy.DeepCopyWithProcessing(obj, func(in reflect.Value, sf *reflect.StructField) reflect.Value {
+	object.Traverse(obj, func(ctx *object.ProcContext, v reflect.Value, sf *reflect.StructField) (reflect.Value, bool, error) {
 		if sf == nil {
-			return in
+			return v, true, nil
 		}
-		if _, ok := sf.Tag.Lookup("secret"); !ok {
-			return in
+		if !v.IsValid() {
+			return v, false, nil
 		}
 
-		v := in
-		if v.Kind() == reflect.Pointer {
-			v = v.Elem()
+		_, isSecret := sf.Tag.Lookup("secret")
+		if !isSecret {
+			isSecret = ctx.CustomData == markerIsSecret
 		}
+		if !isSecret {
+			return v, true, nil
+		}
+		ctx.CustomData = markerIsSecret
 
 		switch v.Kind() {
 		case reflect.Struct:
 			secrets = append(secrets, ParseStringsFrom(v.Interface())...)
+			return v, false, nil
 		case reflect.String:
 			if v.String() == "" {
-				return in
+				return v, true, nil
 			}
 			secrets = append(secrets, v.String())
-		default:
-			panic(fmt.Errorf("support of filtering %v is not implemented", v.Kind()))
 		}
 
-		return in
+		return v, true, nil
 	})
 	return secrets
 }
 
 func ParseStringsFrom(obj any) []string {
 	var strings []string
-	deepcopy.DeepCopyWithProcessing(obj, func(in reflect.Value, sf *reflect.StructField) reflect.Value {
-		v := in
-		if v.Kind() == reflect.Pointer {
-			v = v.Elem()
-		}
-		switch v.Kind() {
-		case reflect.String:
-			if v.String() != "" {
-				strings = append(strings, v.String())
+	object.DeepCopy(
+		obj,
+		object.OptionWithProcessingFunc(func(ctx *object.ProcContext, v reflect.Value, sf *reflect.StructField) reflect.Value {
+			switch v.Kind() {
+			case reflect.String:
+				if v.String() != "" {
+					strings = append(strings, v.String())
+				}
 			}
-		}
-		return in
-	})
+			return v
+		}),
+		object.OptionWithUnexported(true),
+	)
 	return strings
 }

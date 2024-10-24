@@ -406,5 +406,8 @@ func (fwd *ActiveStreamForwarding) Close() error {
 }
 
 func (fwd *ActiveStreamForwarding) String() string {
+	if fwd == nil {
+		return "null"
+	}
 	return fmt.Sprintf("%s->%s", fwd.StreamID, fwd.DestinationURL)
 }

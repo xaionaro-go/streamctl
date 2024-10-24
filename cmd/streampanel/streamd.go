@@ -212,6 +212,7 @@ func runStreamd(
 
 		err = streamD.Run(ctx)
 		if err != nil {
+			logger.Errorf(ctx, "unable to start streamd: %v", err)
 			logger.Panicf(ctx, "unable to start streamd: %v", err)
 		}
 	})

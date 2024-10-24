@@ -41,8 +41,11 @@ const (
 	TemplateTagsUseAsAdditional = TemplateTags("use_as_additional")
 )
 
-func (t TemplateTags) String() string {
-	return string(t)
+func (t *TemplateTags) String() string {
+	if t == nil {
+		return "null"
+	}
+	return string(*t)
 }
 
 func (t *TemplateTags) Parse(in string) error {

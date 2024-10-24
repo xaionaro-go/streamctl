@@ -185,8 +185,12 @@ const (
 	EndOfAudioCodec
 )
 
-func (ac AudioCodec) String() string {
-	switch ac {
+func (ac *AudioCodec) String() string {
+	if ac == nil {
+		return "null"
+	}
+
+	switch *ac {
 	case AudioCodecUndefined:
 		return "<undefined>"
 	case AudioCodecAAC:
@@ -196,7 +200,7 @@ func (ac AudioCodec) String() string {
 	case AudioCodecOpus:
 		return "opus"
 	}
-	return fmt.Sprintf("unexpected_audio_codec_id_%d", uint(ac))
+	return fmt.Sprintf("unexpected_audio_codec_id_%d", uint(*ac))
 }
 
 func (ac AudioCodec) MarshalJSON() ([]byte, error) {
@@ -331,8 +335,12 @@ const (
 	EndOfVideoCodec
 )
 
-func (vc VideoCodec) String() string {
-	switch vc {
+func (vc *VideoCodec) String() string {
+	if vc == nil {
+		return "null"
+	}
+
+	switch *vc {
 	case VideoCodecUndefined:
 		return "<undefined>"
 	case VideoCodecH264:
@@ -340,7 +348,7 @@ func (vc VideoCodec) String() string {
 	case VideoCodecHEVC:
 		return "hevc"
 	}
-	return fmt.Sprintf("unexpected_video_codec_id_%d", uint(vc))
+	return fmt.Sprintf("unexpected_video_codec_id_%d", uint(*vc))
 }
 
 func (vc VideoCodec) MarshalJSON() ([]byte, error) {

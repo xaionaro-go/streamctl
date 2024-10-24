@@ -18,7 +18,7 @@ func (StructFieldSecretsFilter) ProcessInput(
 	args ...any,
 ) loggertypes.PreHookResult {
 	for idx := range args {
-		object.RemoveSecrets(&args[idx])
+		args[idx] = object.DeepCopyWithoutSecrets(args[idx])
 	}
 	return loggertypes.PreHookResult{}
 }
@@ -30,7 +30,7 @@ func (StructFieldSecretsFilter) ProcessInputf(
 	args ...any,
 ) loggertypes.PreHookResult {
 	for idx := range args {
-		object.RemoveSecrets(&args[idx])
+		args[idx] = object.DeepCopyWithoutSecrets(args[idx])
 	}
 	return loggertypes.PreHookResult{}
 }
@@ -41,7 +41,7 @@ func (StructFieldSecretsFilter) ProcessInputFields(
 	fields field.AbstractFields,
 ) loggertypes.PreHookResult {
 	fields.ForEachField(func(f *field.Field) bool {
-		object.RemoveSecrets(&f.Value)
+		f.Value = object.DeepCopyWithoutSecrets(f.Value, object.OptionWithUnexported(true))
 		return true
 	})
 	return loggertypes.PreHookResult{}

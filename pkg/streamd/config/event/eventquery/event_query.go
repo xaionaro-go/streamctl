@@ -53,6 +53,9 @@ func (ev *Event) UnmarshalYAML(b []byte) error {
 }
 
 func (ev *Event) String() string {
+	if ev == nil {
+		return "null"
+	}
 	content := ev.Event.String()
 	if content == "{}" {
 		content = ""

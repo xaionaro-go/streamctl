@@ -61,7 +61,10 @@ func (ev *WindowFocusChange) Match(cmpIface Event) bool {
 }
 
 func (ev *WindowFocusChange) String() string {
-	return string(tryJSON(ev))
+	if ev == nil {
+		return "null"
+	}
+	return string(tryJSON(*ev))
 }
 
 func tryJSON(value any) []byte {

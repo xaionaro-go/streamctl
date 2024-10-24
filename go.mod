@@ -229,11 +229,11 @@ require (
 	github.com/xaionaro-go/kickcom v0.0.0-20241022142825-25a234cc8628
 	github.com/xaionaro-go/lockmap v0.0.0-20240901172806-e17aea364748
 	github.com/xaionaro-go/mediamtx v0.0.0-20241009124606-94c22c603970
-	github.com/xaionaro-go/object v0.0.0-20241023233950-91f3bc4a92c3
+	github.com/xaionaro-go/object v0.0.0-20241024021849-9d779d330f28
 	github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20241018162120-5faf4e7a684a
 	github.com/xaionaro-go/timeapiio v0.0.0-20240915203246-b907cf699af3
 	github.com/xaionaro-go/typing v0.0.0-20221123235249-2229101d38ba
-	github.com/xaionaro-go/unsafetools v0.0.0-20210722164218-75ba48cf7b3c
+	github.com/xaionaro-go/unsafetools v0.0.0-20241024014258-a46e1ce3763e
 	github.com/yutopp/go-flv v0.3.1
 	golang.org/x/crypto v0.28.0
 	golang.org/x/net v0.30.0

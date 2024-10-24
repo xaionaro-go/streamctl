@@ -160,8 +160,8 @@ func (p *Panel) openAddStreamServerWindow(ctx context.Context) {
 	currentProtocol := streamtypes.ServerTypeRTMP
 	protocolSelectLabel := widget.NewLabel("Protocol:")
 	protocolSelect := widget.NewSelect([]string{
-		streamtypes.ServerTypeRTMP.String(),
-		streamtypes.ServerTypeRTSP.String(),
+		ptr(streamtypes.ServerTypeRTMP).String(),
+		ptr(streamtypes.ServerTypeRTSP).String(),
 	}, func(s string) {
 		currentProtocol = streamtypes.ParseServerType(s)
 	})
