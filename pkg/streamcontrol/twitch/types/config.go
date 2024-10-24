@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
+	"github.com/xaionaro-go/streamctl/pkg/secret"
 	streamctl "github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 )
 
@@ -13,13 +14,13 @@ type OAuthHandler func(context.Context, oauthhandler.OAuthHandlerArgument) error
 
 type PlatformSpecificConfig struct {
 	Channel             string
-	ClientID            string `secret:"true"`
-	ClientSecret        string `secret:"true"`
-	ClientCode          string `secret:"true"`
+	ClientID            string
+	ClientSecret        secret.String
+	ClientCode          secret.String
 	AuthType            string
-	AppAccessToken      string          `secret:"true"`
-	UserAccessToken     string          `secret:"true"`
-	RefreshToken        string          `secret:"true"`
+	AppAccessToken      secret.String
+	UserAccessToken     secret.String
+	RefreshToken        secret.String
 	CustomOAuthHandler  OAuthHandler    `yaml:"-"`
 	GetOAuthListenPorts func() []uint16 `yaml:"-"`
 }

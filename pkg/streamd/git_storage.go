@@ -117,7 +117,7 @@ func (d *StreamD) initGitIfNeeded(ctx context.Context) {
 	}
 
 	newUserData := false
-	if d.Config.GitRepo.URL == "" || d.Config.GitRepo.PrivateKey == "" {
+	if d.Config.GitRepo.URL == "" || d.Config.GitRepo.PrivateKey.Get() == "" {
 		newUserData = true
 	}
 
@@ -131,7 +131,7 @@ func (d *StreamD) initGitIfNeeded(ctx context.Context) {
 			}
 			d.Config.GitRepo.Enable = ptr(ok)
 			d.Config.GitRepo.URL = url
-			d.Config.GitRepo.PrivateKey = string(privKey)
+			d.Config.GitRepo.PrivateKey.Set(string(privKey))
 			if err := d.SaveConfig(ctx); err != nil {
 				d.UI.DisplayError(err)
 			}
@@ -145,7 +145,7 @@ func (d *StreamD) initGitIfNeeded(ctx context.Context) {
 		gitStorage, err := repository.NewGit(
 			ctx,
 			d.Config.GitRepo.URL,
-			[]byte(d.Config.GitRepo.PrivateKey),
+			[]byte(d.Config.GitRepo.PrivateKey.Get()),
 			gitRepoPanelConfigFileName,
 			gitCommitterName,
 			gitCommitterEmail,
@@ -157,7 +157,7 @@ func (d *StreamD) initGitIfNeeded(ctx context.Context) {
 			}
 			d.Config.GitRepo.Enable = ptr(false)
 			d.Config.GitRepo.URL = ""
-			d.Config.GitRepo.PrivateKey = ""
+			d.Config.GitRepo.PrivateKey.Set("")
 			return
 		}
 

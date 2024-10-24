@@ -772,7 +772,7 @@ func (p *Panel) InputOBSConnectInfo(
 
 	cfg.Config.Host = hostField.Text
 	cfg.Config.Port = uint16(port)
-	cfg.Config.Password = passField.Text
+	cfg.Config.Password.Set(passField.Text)
 
 	return true, nil
 }
@@ -996,7 +996,7 @@ func (p *Panel) InputTwitchUserInfo(
 	channelWords := strings.Split(channelField.Text, "/")
 	cfg.Config.Channel = channelWords[len(channelWords)-1]
 	cfg.Config.ClientID = clientIDField.Text
-	cfg.Config.ClientSecret = clientSecretField.Text
+	cfg.Config.ClientSecret.Set(clientSecretField.Text)
 
 	return true, nil
 }
@@ -1112,7 +1112,7 @@ func (p *Panel) InputYouTubeUserInfo(
 		return false, nil
 	}
 	cfg.Config.ClientID = clientIDField.Text
-	cfg.Config.ClientSecret = clientSecretField.Text
+	cfg.Config.ClientSecret.Set(clientSecretField.Text)
 
 	return true, nil
 }

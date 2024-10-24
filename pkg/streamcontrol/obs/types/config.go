@@ -1,6 +1,7 @@
 package types
 
 import (
+	"github.com/xaionaro-go/streamctl/pkg/secret"
 	streamctl "github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 )
 
@@ -9,7 +10,7 @@ const ID = streamctl.PlatformName("obs")
 type PlatformSpecificConfig struct {
 	Host     string
 	Port     uint16
-	Password string `yaml:"pass" json:"pass" secret:""`
+	Password secret.String `yaml:"pass" json:"pass"`
 }
 
 type Config = streamctl.PlatformConfig[PlatformSpecificConfig, StreamProfile]

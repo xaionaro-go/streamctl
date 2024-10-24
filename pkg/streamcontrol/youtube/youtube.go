@@ -22,6 +22,7 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/streamctl/pkg/secret"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/xcontext"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
@@ -59,7 +60,7 @@ func New(
 	cfg Config,
 	saveCfgFn func(Config) error,
 ) (*YouTube, error) {
-	if cfg.Config.ClientID == "" || cfg.Config.ClientSecret == "" {
+	if cfg.Config.ClientID == "" || cfg.Config.ClientSecret.Get() == "" {
 		return nil, fmt.Errorf(
 			"'clientid' or/and 'clientsecret' is/are not set; go to https://console.cloud.google.com/apis/credentials and create an app if it not created, yet",
 		)
@@ -118,7 +119,8 @@ func (yt *YouTube) checkTokenNoLock(ctx context.Context) (_err error) {
 	logger.Tracef(ctx, "YouTube.checkTokenNoLock")
 	defer func() { logger.Tracef(ctx, "/YouTube.checkTokenNoLock: %v", _err) }()
 
-	tokenSource := getAuthCfgBase(yt.Config).TokenSource(ctx, yt.Config.Config.Token)
+	cfgToken := yt.Config.Config.Token.GetPointer()
+	tokenSource := getAuthCfgBase(yt.Config).TokenSource(ctx, cfgToken)
 	counter := 0
 	for {
 		logger.Tracef(ctx, "checking if the token changed")
@@ -129,12 +131,12 @@ func (yt *YouTube) checkTokenNoLock(ctx context.Context) (_err error) {
 			}
 			return fmt.Errorf("unable to get a token: %w", err)
 		}
-		if token.AccessToken == yt.Config.Config.Token.AccessToken {
+		if token.AccessToken == cfgToken.AccessToken {
 			logger.Tracef(ctx, "the token have not changed")
 			return nil
 		}
 		logger.Debugf(ctx, "the token have changed")
-		yt.Config.Config.Token = token
+		yt.Config.Config.Token = ptr(secret.New(*token))
 		err = yt.SaveConfigFunc(yt.Config)
 		logger.Debugf(ctx, "saved the new token token; %v", err)
 		return err
@@ -148,7 +150,7 @@ func (yt *YouTube) getNewToken(ctx context.Context) (_ret *oauth2.Token, _err er
 	if err != nil {
 		return nil, fmt.Errorf("unable to get an access token: %w", err)
 	}
-	yt.Config.Config.Token = t
+	yt.Config.Config.Token = ptr(secret.New(*t))
 	err = yt.SaveConfigFunc(yt.Config)
 	errmon.ObserveErrorCtx(ctx, err)
 	return t, nil
@@ -175,7 +177,7 @@ func (yt *YouTube) initNoLock(ctx context.Context) (_err error) {
 
 	authCfg := getAuthCfgBase(yt.Config)
 
-	tokenSource := authCfg.TokenSource(ctx, yt.Config.Config.Token)
+	tokenSource := authCfg.TokenSource(ctx, yt.Config.Config.Token.GetPointer())
 
 	if !isNewToken {
 		if err := yt.checkTokenNoLock(ctx); err != nil {
@@ -186,7 +188,7 @@ func (yt *YouTube) initNoLock(ctx context.Context) (_err error) {
 				return err
 			}
 			isNewToken = true
-			tokenSource = authCfg.TokenSource(ctx, yt.Config.Config.Token)
+			tokenSource = authCfg.TokenSource(ctx, yt.Config.Config.Token.GetPointer())
 		}
 	}
 
@@ -209,7 +211,7 @@ func (yt *YouTube) initNoLock(ctx context.Context) (_err error) {
 func getAuthCfgBase(cfg Config) *oauth2.Config {
 	return &oauth2.Config{
 		ClientID:     cfg.Config.ClientID,
-		ClientSecret: cfg.Config.ClientSecret,
+		ClientSecret: cfg.Config.ClientSecret.Get(),
 		Endpoint:     google.Endpoint,
 		Scopes: []string{
 			"https://www.googleapis.com/auth/youtube",

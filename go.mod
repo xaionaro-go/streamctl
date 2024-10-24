@@ -225,7 +225,6 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.9.0
 	github.com/xaionaro-go/datacounter v1.0.4
-	github.com/xaionaro-go/deepcopy v0.0.0-20241022201332-e9025712e972
 	github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42
 	github.com/xaionaro-go/gorex v0.0.0-20241010205749-bcd59d639c4d
 	github.com/xaionaro-go/kickcom v0.0.0-20241022142825-25a234cc8628

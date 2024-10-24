@@ -37,62 +37,49 @@ func (sp *SecretsStaticProvider) ParseSecretsFrom(obj any) {
 }
 
 func ParseSecretsFrom(obj any) []string {
-	type markerIsSecretT struct{}
-	var markerIsSecret markerIsSecretT
-
 	var secrets []string
 	object.Traverse(obj, func(ctx *object.ProcContext, v reflect.Value, sf *reflect.StructField) (reflect.Value, bool, error) {
-		if sf == nil {
+		if v.Kind() != reflect.Struct {
 			return v, true, nil
 		}
-		if !v.IsValid() {
-			return v, false, nil
-		}
-
-		_, isSecret := sf.Tag.Lookup("secret")
-		if !isSecret {
-			isSecret = ctx.CustomData == markerIsSecret
-		}
-		if !isSecret {
+		encryptedField := v.FieldByName("encryptedMessage")
+		if !encryptedField.IsValid() {
 			return v, true, nil
 		}
-		ctx.CustomData = markerIsSecret
-
-		switch v.Kind() {
-		case reflect.Struct:
-			secrets = append(secrets, ParseStringsFrom(v.Interface())...)
-			return v, false, nil
-		case reflect.String:
-			if v.String() == "" {
-				return v, true, nil
-			}
-			secrets = append(secrets, v.String())
+		getSecretFunc := v.MethodByName("Get")
+		if !getSecretFunc.IsValid() {
+			return v, true, nil
 		}
 
-		return v, true, nil
+		// is a secret...
+
+		secretValue := getSecretFunc.Call([]reflect.Value{})[0]
+		if !secretValue.IsValid() {
+			return v, false, nil
+		}
+		secrets = append(secrets, ParseStringsFrom(secretValue.Interface())...)
+		return v, false, nil
 	})
 	return secrets
 }
 
 func ParseStringsFrom(obj any) []string {
 	var strings []string
-	object.DeepCopy(
+	object.Traverse(
 		obj,
-		object.OptionWithVisitorFunc(
-			func(
-				ctx *object.ProcContext,
-				v reflect.Value,
-				sf *reflect.StructField,
-			) (reflect.Value, bool, error) {
-				switch v.Kind() {
-				case reflect.String:
-					if v.String() != "" {
-						strings = append(strings, v.String())
-					}
+		func(
+			ctx *object.ProcContext,
+			v reflect.Value,
+			sf *reflect.StructField,
+		) (reflect.Value, bool, error) {
+			switch v.Kind() {
+			case reflect.String:
+				if v.String() != "" {
+					strings = append(strings, v.String())
 				}
-				return v, true, nil
-			}),
-		object.OptionWithUnexported(true),
+			}
+			return v, true, nil
+		},
 	)
 	return strings
 }

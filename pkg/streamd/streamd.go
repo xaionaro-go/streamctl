@@ -1181,7 +1181,7 @@ func (d *StreamD) ListStreamDestinations(
 			c = append(c, api.StreamDestination{
 				ID:        api.DestinationID(dst.ID),
 				URL:       dst.URL,
-				StreamKey: dst.StreamKey,
+				StreamKey: dst.StreamKey.Get(),
 			})
 		}
 		return c, nil

@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
+	"github.com/xaionaro-go/streamctl/pkg/secret"
 	streamctl "github.com/xaionaro-go/streamctl/pkg/streamcontrol"
-	"golang.org/x/oauth2"
 )
 
 const ID = streamctl.PlatformName("youtube")
@@ -15,9 +15,9 @@ type OAuthHandler func(context.Context, oauthhandler.OAuthHandlerArgument) error
 
 type PlatformSpecificConfig struct {
 	ChannelID           string
-	ClientID            string          `secret:""`
-	ClientSecret        string          `secret:""`
-	Token               *oauth2.Token   `secret:""`
+	ClientID            string
+	ClientSecret        secret.String
+	Token               *secret.OAuth2Token
 	CustomOAuthHandler  OAuthHandler    `yaml:"-"`
 	GetOAuthListenPorts func() []uint16 `yaml:"-"`
 }
@@ -29,7 +29,7 @@ func InitConfig(cfg streamctl.Config) {
 }
 
 func (cfg PlatformSpecificConfig) IsInitialized() bool {
-	return cfg.ClientID != "" && cfg.ClientSecret != ""
+	return cfg.ClientID != "" && cfg.ClientSecret.Get() != ""
 }
 
 type TemplateTags string

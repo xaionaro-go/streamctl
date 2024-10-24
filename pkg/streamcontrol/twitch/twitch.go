@@ -44,7 +44,7 @@ func New(
 	if cfg.Config.Channel == "" {
 		return nil, fmt.Errorf("'channel' is not set")
 	}
-	if cfg.Config.ClientID == "" || cfg.Config.ClientSecret == "" {
+	if cfg.Config.ClientID == "" || cfg.Config.ClientSecret.Get() == "" {
 		return nil, fmt.Errorf(
 			"'clientid' or/and 'clientsecret' is/are not set; go to https://dev.twitch.tv/console/apps/create and create an app if it not created, yet",
 		)
@@ -101,8 +101,8 @@ func New(
 			}
 		}
 		logger.Debugf(ctx, "saving the new tokens")
-		cfg.Config.UserAccessToken = newAccessToken
-		cfg.Config.RefreshToken = newRefreshToken
+		cfg.Config.UserAccessToken.Set(newAccessToken)
+		cfg.Config.RefreshToken.Set(newRefreshToken)
 		err = saveCfgFn(cfg)
 		errmon.ObserveErrorCtx(ctx, err)
 		now := time.Now()
@@ -461,10 +461,10 @@ func (t *Twitch) getTokenIfNeeded(
 	case "user":
 		t.tokenLocker.Do(ctx, func() {
 			if t.client.GetUserAccessToken() == "" {
-				t.client.SetUserAccessToken(t.config.Config.UserAccessToken)
+				t.client.SetUserAccessToken(t.config.Config.UserAccessToken.Get())
 			}
 			if t.client.GetRefreshToken() == "" {
-				t.client.SetRefreshToken(t.config.Config.RefreshToken)
+				t.client.SetRefreshToken(t.config.Config.RefreshToken.Get())
 			}
 		})
 		if t.client.GetUserAccessToken() != "" {
@@ -472,7 +472,7 @@ func (t *Twitch) getTokenIfNeeded(
 		}
 	case "app":
 		t.tokenLocker.Do(ctx, func() {
-			t.client.SetAppAccessToken(t.config.Config.AppAccessToken)
+			t.client.SetAppAccessToken(t.config.Config.AppAccessToken.Get())
 		})
 		if t.client.GetAppAccessToken() != "" {
 			logger.Debugf(ctx, "already have an app access token")
@@ -583,7 +583,7 @@ func (t *Twitch) getNewClientCode(
 						if code == "" {
 							return fmt.Errorf("code is empty")
 						}
-						t.config.Config.ClientCode = code
+						t.config.Config.ClientCode.Set(code)
 						err := t.saveCfgFn(t.config)
 						errmon.ObserveErrorCtx(ctx, err)
 						return nil
@@ -650,19 +650,19 @@ func (t *Twitch) getNewTokenByUser(
 	logger.Debugf(ctx, "getNewTokenByUser")
 	defer logger.Debugf(ctx, "/getNewTokenByUser")
 
-	if t.config.Config.ClientCode == "" {
+	if t.config.Config.ClientCode.Get() == "" {
 		err := t.getNewClientCode(ctx)
 		if err != nil {
 			return fmt.Errorf("unable to get client code: %w", err)
 		}
 	}
 
-	if t.config.Config.ClientCode == "" {
+	if t.config.Config.ClientCode.Get() == "" {
 		return fmt.Errorf("internal error: ClientCode is empty")
 	}
 
 	logger.Debugf(ctx, "requesting user access token...")
-	resp, err := t.client.RequestUserAccessToken(t.config.Config.ClientCode)
+	resp, err := t.client.RequestUserAccessToken(t.config.Config.ClientCode.Get())
 	logger.Debugf(ctx, "requesting user access token result: %#+v %v", resp, err)
 	if err != nil {
 		return fmt.Errorf("unable to get user access token: %w", err)
@@ -677,9 +677,9 @@ func (t *Twitch) getNewTokenByUser(
 	}
 	t.client.SetUserAccessToken(resp.Data.AccessToken)
 	t.client.SetRefreshToken(resp.Data.RefreshToken)
-	t.config.Config.ClientCode = ""
-	t.config.Config.UserAccessToken = resp.Data.AccessToken
-	t.config.Config.RefreshToken = resp.Data.RefreshToken
+	t.config.Config.ClientCode.Set("")
+	t.config.Config.UserAccessToken.Set(resp.Data.AccessToken)
+	t.config.Config.RefreshToken.Set(resp.Data.RefreshToken)
 	err = t.saveCfgFn(t.config)
 	errmon.ObserveErrorCtx(ctx, err)
 	return nil
@@ -705,7 +705,7 @@ func (t *Twitch) getNewTokenByApp(
 	}
 	logger.Debugf(ctx, "setting the app access token")
 	t.client.SetAppAccessToken(resp.Data.AccessToken)
-	t.config.Config.AppAccessToken = resp.Data.AccessToken
+	t.config.Config.AppAccessToken.Set(resp.Data.AccessToken)
 	err = t.saveCfgFn(t.config)
 	errmon.ObserveErrorCtx(ctx, err)
 	return nil
@@ -721,7 +721,7 @@ func getClient(
 
 	options := &helix.Options{
 		ClientID:     cfg.Config.ClientID,
-		ClientSecret: cfg.Config.ClientSecret,
+		ClientSecret: cfg.Config.ClientSecret.Get(),
 		RedirectURI:  authRedirectURI(oauthListenPort), // TODO: delete this hardcode
 	}
 	client, err := helix.NewClient(options)

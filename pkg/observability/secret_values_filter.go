@@ -64,7 +64,7 @@ func (sf *SecretValuesFilter) ProcessInputf(
 	args ...any,
 ) loggertypes.PreHookResult {
 	if censored := filterSecretValues(sf, format); censored != format {
-		logger.Errorf(context.TODO(), "secrets are leaking through the logging format message: %s != ", format, censored)
+		logger.Errorf(context.TODO(), "secrets are leaking through the logging format message: %s", censored)
 	}
 	for idx, arg := range args {
 		args[idx] = filterSecretValues(sf, arg)
@@ -78,7 +78,7 @@ func (sf *SecretValuesFilter) ProcessInputFields(
 	fields field.AbstractFields,
 ) loggertypes.PreHookResult {
 	if censored := filterSecretValues(sf, message); censored != message {
-		logger.Errorf(context.TODO(), "secrets are leaking through the logging message: %s != %s", message, censored)
+		logger.Errorf(context.TODO(), "secrets are leaking through the logging message: %s", censored)
 	}
 	fields.ForEachField(func(f *field.Field) bool {
 		f.Value = filterSecretValues(sf, f.Value)

@@ -1,13 +1,14 @@
 package types
 
 import (
+	"github.com/xaionaro-go/streamctl/pkg/secret"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
 
 type StreamDestination struct {
 	ID        DestinationID
 	URL       string
-	StreamKey string `secret:""`
+	StreamKey secret.String
 }
 
 type StreamID = streamtypes.StreamID

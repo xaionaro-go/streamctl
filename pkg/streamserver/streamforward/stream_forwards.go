@@ -12,6 +12,7 @@ import (
 	"github.com/xaionaro-go/lockmap"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/recoder"
+	"github.com/xaionaro-go/streamctl/pkg/secret"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/memoize"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
@@ -234,7 +235,7 @@ func (s *StreamForwards) newActiveStreamForward(
 		ctx,
 		streamID,
 		urlParsed.String(),
-		dst.StreamKey,
+		dst.StreamKey.Get(),
 		func(
 			ctx context.Context,
 			fwd *ActiveStreamForwarding,
@@ -778,7 +779,7 @@ func (s *StreamForwards) addActiveStreamDestination(
 	s.StreamDestinations = append(s.StreamDestinations, types.StreamDestination{
 		ID:        destinationID,
 		URL:       url,
-		StreamKey: streamKey,
+		StreamKey: secret.New(streamKey),
 	})
 	return nil
 }

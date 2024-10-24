@@ -11,6 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/streamctl/pkg/secret"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 )
 
@@ -30,10 +31,10 @@ func TestSecretsFilter(t *testing.T) {
 		sample := youtube.PlatformSpecificConfig{
 			ChannelID:    "someChannel",
 			ClientID:     "someID",
-			ClientSecret: "someSecret",
+			ClientSecret: secret.New("someSecret"),
 		}
 		l.Debugf("%#+v", sample)
-		require.Equal(t, `time=unit-test level=debug msg="youtube.PlatformSpecificConfig{ChannelID:\"someChannel\", ClientID:\"\", ClientSecret:\"\", Token:(*oauth2.Token)(nil), CustomOAuthHandler:(youtube.OAuthHandler)(nil), GetOAuthListenPorts:(func() []uint16)(nil)}"`+"\n", buf.String())
+		require.Equal(t, `time=unit-test level=debug msg="youtube.PlatformSpecificConfig{ChannelID:\"someChannel\", ClientID:\"someID\", ClientSecret:HIDDEN{}, Token:<nil>, CustomOAuthHandler:(youtube.OAuthHandler)(nil), GetOAuthListenPorts:(func() []uint16)(nil)}"`+"\n", buf.String())
 	})
 
 	t.Run("error", func(t *testing.T) {

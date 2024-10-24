@@ -48,8 +48,8 @@ func (obs *OBS) GetClient(clientOpts ...GetClientOption) (*goobs.Client, error) 
 	for _, opt := range clientOpts {
 		opts = append(opts, goobs.Option(opt))
 	}
-	if obs.Config.Config.Password != "" {
-		opts = append(opts, goobs.WithPassword(obs.Config.Config.Password))
+	if obs.Config.Config.Password.Get() != "" {
+		opts = append(opts, goobs.WithPassword(obs.Config.Config.Password.Get()))
 	}
 	return goobs.New(
 		fmt.Sprintf("%s:%d", obs.Config.Config.Host, obs.Config.Config.Port),
