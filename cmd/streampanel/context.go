@@ -69,11 +69,18 @@ func getContext(
 
 	ll := xlogrus.DefaultLogrusLogger()
 	ll.Formatter.(*logrus.TextFormatter).ForceColors = true
-	l := xlogrus.New(ll).WithLevel(logger.LevelTrace).WithPreHooks(
+
+	logPreHooks := logger.PreHooks{
 		&observability.LogLevelFilter,
-		observability.StructFieldSecretsFilter{},
-		observability.NewSecretValuesFilter(secretsProvider),
-	)
+	}
+	if flags.RemoveSecretsFromLogs {
+		logPreHooks = append(logPreHooks,
+			observability.StructFieldSecretsFilter{},
+			observability.NewSecretValuesFilter(secretsProvider),
+		)
+	}
+
+	l := xlogrus.New(ll).WithLevel(logger.LevelTrace).WithPreHooks(logPreHooks...)
 
 	if flags.LogFile != "" {
 		logPathUnexpanded := flags.LogFile

@@ -26,22 +26,23 @@ func (l *loggerLevel) UnmarshalYAML(b []byte) error {
 }
 
 type Flags struct {
-	LoggerLevel         loggerLevel   `yaml:"LoggerLevel,omitempty"`
-	ListenAddr          string        `yaml:"ListenAddr,omitempty"`
-	RemoteAddr          string        `yaml:"RemoteAddr,omitempty"`
-	ConfigPath          string        `yaml:"ConfigPath,omitempty"`
-	NetPprofAddrMain    string        `yaml:"NetPprofAddrMain,omitempty"`
-	NetPprofAddrUI      string        `yaml:"NetPprofAddrUI,omitempty"`
-	NetPprofAddrStreamD string        `yaml:"NetPprofAddrStreamD,omitempty"`
-	CPUProfile          string        `yaml:"CPUProfile,omitempty"`
-	HeapProfile         string        `yaml:"HeapProfile,omitempty"`
-	LogstashAddr        string        `yaml:"LogstashAddr,omitempty"`
-	SentryDSN           string        `yaml:"SentryDSN,omitempty"`
-	Page                string        `yaml:"Page,omitempty"`
-	LogFile             string        `yaml:"LogFile,omitempty"`
-	Subprocess          string        `yaml:"Subprocess,omitempty"`
-	SplitProcess        bool          `yaml:"SplitProcess,omitempty"`
-	LockTimeout         time.Duration `yaml:"LockTimeout,omitempty"`
+	LoggerLevel           loggerLevel   `yaml:"LoggerLevel,omitempty"`
+	ListenAddr            string        `yaml:"ListenAddr,omitempty"`
+	RemoteAddr            string        `yaml:"RemoteAddr,omitempty"`
+	ConfigPath            string        `yaml:"ConfigPath,omitempty"`
+	NetPprofAddrMain      string        `yaml:"NetPprofAddrMain,omitempty"`
+	NetPprofAddrUI        string        `yaml:"NetPprofAddrUI,omitempty"`
+	NetPprofAddrStreamD   string        `yaml:"NetPprofAddrStreamD,omitempty"`
+	CPUProfile            string        `yaml:"CPUProfile,omitempty"`
+	HeapProfile           string        `yaml:"HeapProfile,omitempty"`
+	LogstashAddr          string        `yaml:"LogstashAddr,omitempty"`
+	SentryDSN             string        `yaml:"SentryDSN,omitempty"`
+	Page                  string        `yaml:"Page,omitempty"`
+	LogFile               string        `yaml:"LogFile,omitempty"`
+	Subprocess            string        `yaml:"Subprocess,omitempty"`
+	SplitProcess          bool          `yaml:"SplitProcess,omitempty"`
+	LockTimeout           time.Duration `yaml:"LockTimeout,omitempty"`
+	RemoveSecretsFromLogs bool          `yaml:"RemoveSecretsFromLogs,omitempty"`
 
 	OAuthListenPortTwitch  uint16 `yaml:"OAuthListenPortTwitch,omitempty"`
 	OAuthListenPortYouTube uint16 `yaml:"OAuthListenPortYouTube,omitempty"`
@@ -128,6 +129,11 @@ func parseFlags() Flags {
 		8092,
 		"the port that is used for OAuth callbacks while authenticating in YouTube",
 	)
+	removeSecretsFromLogs := pflag.Bool(
+		"remove-secrets-from-logs",
+		false,
+		"adds a processing hook to the logger which removes secret/sensitive data from logs; for example if you want to stream how you work with this application or if you want to share the logs somewhere publicly, you may want to be extra careful and enable this flag just in case (it does not provide a guarantee, but good as an additional safeguard)",
+	)
 
 	pflag.Parse()
 
@@ -151,6 +157,8 @@ func parseFlags() Flags {
 
 		OAuthListenPortTwitch:  *oauthListenPortTwitch,
 		OAuthListenPortYouTube: *oauthListenPortYouTube,
+
+		RemoveSecretsFromLogs: *removeSecretsFromLogs,
 	}
 
 	for _, platformGetFlagsFunc := range platformGetFlagsFuncs {

@@ -5,18 +5,21 @@ package windowmanagerhandler
 
 import (
 	"context"
-	"fmt"
 )
 
 type PlatformSpecificWindowManagerHandler struct{}
-type WindowID struct{}
-type PID struct{}
-type UID struct{}
+type WindowID uint64
+type PID uint64
+type UID uint64
 
-func (wmh *WindowManagerHandler) init(context.Context) error {
-	return fmt.Errorf("the support of window manager handler for this platform is not implemented, yet")
+func (wmh *WindowManagerHandler) init() error {
+	return nil //fmt.Errorf("the support of window manager handler for this platform is not implemented, yet")
 }
 
 func (PlatformSpecificWindowManagerHandler) Close() error {
+	return nil
+}
+
+func (PlatformSpecificWindowManagerHandler) WindowFocusChangeChan(ctx context.Context) <-chan WindowFocusChange {
 	return nil
 }

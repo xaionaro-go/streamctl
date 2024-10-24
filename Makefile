@@ -26,7 +26,7 @@ endif
 GOPATH?=$(shell go env GOPATH)
 
 WINDOWS_CGO_FLAGS?=-I$(PWD)/3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/sdk/include
-WINDOWS_LINKER_FLAGS?=-L$(PWD)/3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/sdk/lib -L$(PWD)/3rdparty/amd64/windows/ffmpeg-n7.0.2-19-g45ecf80f0e-win64-gpl-shared-7.0/lib
+WINDOWS_LINKER_FLAGS?=-L$(PWD)/3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/sdk/lib -L$(PWD)/3rdparty/amd64/windows/ffmpeg-n7.0-21-gfb8f0ea7b3-win64-gpl-shared-7.0/lib
 WINDOWS_PKG_CONFIG_PATH?=$(PWD)/3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/sdk/lib/pkgconfig
 
 all: streampanel-linux-amd64 streampanel-linux-arm64 streampanel-android-arm64 streampanel-windows
@@ -52,12 +52,10 @@ $(GOPATH)/bin/pkg-config-wrapper:
 		wget https://github.com/xaionaro/termux-prebuilt-packages/raw/refs/heads/main/$$PACKAGE && ar x $$PACKAGE && tar -xJvf data.tar.xz && rm -f data.tar.xz control.tar.xz debian-binary $$PACKAGE; \
 	done
 
-
-
 3rdparty/amd64/windows:
 	mkdir -p 3rdparty/amd64/windows
 	sh -c 'cd 3rdparty/amd64/windows && wget https://get.videolan.org/vlc/$(WINDOWS_VLC_VERSION)/win64/vlc-$(WINDOWS_VLC_VERSION)-win64.7z && 7z x vlc-$(WINDOWS_VLC_VERSION)-win64.7z && rm -f vlc-$(WINDOWS_VLC_VERSION)-win64.7z'
-	sh -c 'cd 3rdparty/amd64/windows && wget https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2024-09-29-12-53/ffmpeg-n7.0.2-19-g45ecf80f0e-win64-gpl-shared-7.0.zip && unzip ffmpeg-n7.0.2-19-g45ecf80f0e-win64-gpl-shared-7.0.zip && rm -f ffmpeg-n7.0.2-19-g45ecf80f0e-win64-gpl-shared-7.0.zip'
+	sh -c 'cd 3rdparty/amd64/windows && wget https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2024-04-30-12-51/ffmpeg-n7.0-21-gfb8f0ea7b3-win64-gpl-shared-7.0.zip && unzip ffmpeg-n7.0-21-gfb8f0ea7b3-win64-gpl-shared-7.0.zip && rm -f ffmpeg-n7.0-21-gfb8f0ea7b3-win64-gpl-shared-7.0.zip'
 
 streampanel-linux-amd64: builddir
 	$(eval INSTALL_DEST?=build/streampanel-linux-amd64)

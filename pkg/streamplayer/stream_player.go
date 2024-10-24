@@ -219,6 +219,10 @@ func (p *StreamPlayerHandler) stopU(ctx context.Context) error {
 	logger.Debugf(ctx, "StreamPlayers.stopU(ctx): '%s'", p.StreamID)
 	defer logger.Debugf(ctx, "/StreamPlayers.stopU(ctx): '%s'", p.StreamID)
 
+	if p.Player == nil {
+		return fmt.Errorf("p.Player == nil")
+	}
+
 	err := p.Player.Close(ctx)
 	if err != nil {
 		errmon.ObserveErrorCtx(ctx, p.Close())
