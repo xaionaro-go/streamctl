@@ -412,7 +412,12 @@ func (p *Panel) initStreamDConfig(
 		if streamcontrol.IsInitialized(cfg.Backends, platName) {
 			continue
 		}
-		logger.Debugf(ctx, "'%s' is not initialized: %#+v, fixing", platName, cfg.Backends[platName])
+		platCfg := cfg.Backends[platName]
+		if platCfg != nil && platCfg.Enable != nil && !*platCfg.Enable {
+			logger.Debugf(ctx, "platform '%s' is explicitly disabled")
+			continue
+		}
+		logger.Debugf(ctx, "'%s' is not initialized: %#+v, fixing", platName, platCfg)
 		configHasChanged = true
 
 		err := p.inputUserInfo(ctx, cfg, platName)
