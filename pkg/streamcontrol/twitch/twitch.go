@@ -13,8 +13,10 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/nicklaw5/helix/v2"
+	"github.com/xaionaro-go/streamctl/pkg/buildvars"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/streamctl/pkg/secret"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
@@ -30,6 +32,8 @@ type Twitch struct {
 	saveCfgFn     func(Config) error
 	tokenLocker   xsync.Mutex
 	prepareLocker xsync.Mutex
+	clientID      string
+	clientSecret  secret.String
 }
 
 const twitchDebug = false
@@ -44,7 +48,9 @@ func New(
 	if cfg.Config.Channel == "" {
 		return nil, fmt.Errorf("'channel' is not set")
 	}
-	if cfg.Config.ClientID == "" || cfg.Config.ClientSecret.Get() == "" {
+	clientID := valueOrDefault(cfg.Config.ClientID, buildvars.TwitchClientID)
+	clientSecret := valueOrDefault(cfg.Config.ClientSecret.Get(), buildvars.TwitchClientID)
+	if clientID == "" || clientSecret == "" {
 		return nil, fmt.Errorf(
 			"'clientid' or/and 'clientsecret' is/are not set; go to https://dev.twitch.tv/console/apps/create and create an app if it not created, yet",
 		)
@@ -70,10 +76,12 @@ func New(
 
 	ctx, closeFn := context.WithCancel(ctx)
 	t := &Twitch{
-		closeCtx:  ctx,
-		closeFn:   closeFn,
-		config:    cfg,
-		saveCfgFn: saveCfgFn,
+		closeCtx:     ctx,
+		closeFn:      closeFn,
+		config:       cfg,
+		saveCfgFn:    saveCfgFn,
+		clientID:     clientID,
+		clientSecret: secret.New(clientSecret),
 	}
 
 	h, err := NewChatHandler(ctx, cfg.Config.Channel)
@@ -82,7 +90,7 @@ func New(
 	}
 	t.chatHandler = h
 
-	client, err := getClient(ctx, cfg, oauthPorts[0])
+	client, err := t.getClient(ctx, oauthPorts[0])
 	if err != nil {
 		return nil, err
 	}
@@ -570,7 +578,7 @@ func (t *Twitch) getNewClientCode(
 							"moderator:manage:banned_users",
 						},
 					},
-					t.config.Config.ClientID,
+					t.clientID,
 					authRedirectURI(listenPort),
 				)
 
@@ -711,17 +719,16 @@ func (t *Twitch) getNewTokenByApp(
 	return nil
 }
 
-func getClient(
+func (t *Twitch) getClient(
 	ctx context.Context,
-	cfg Config,
 	oauthListenPort uint16,
 ) (*helix.Client, error) {
-	logger.Debugf(ctx, "getClient(ctx, %#+v, %v)", cfg, oauthListenPort)
+	logger.Debugf(ctx, "getClient(ctx, %#+v, %v)", t.config, oauthListenPort)
 	defer logger.Debugf(ctx, "/getClient")
 
 	options := &helix.Options{
-		ClientID:     cfg.Config.ClientID,
-		ClientSecret: cfg.Config.ClientSecret.Get(),
+		ClientID:     t.clientID,
+		ClientSecret: t.clientSecret.Get(),
 		RedirectURI:  authRedirectURI(oauthListenPort), // TODO: delete this hardcode
 	}
 	client, err := helix.NewClient(options)

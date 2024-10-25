@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"runtime"
 	"strings"
 	"time"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/spf13/pflag"
+	"github.com/xaionaro-go/streamctl/pkg/buildvars"
 	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 )
@@ -136,8 +138,13 @@ func parseFlags() Flags {
 		false,
 		"adds a processing hook to the logger which removes secret/sensitive data from logs; for example if you want to stream how you work with this application or if you want to share the logs somewhere publicly, you may want to be extra careful and enable this flag just in case (it does not provide a guarantee, but good as an additional safeguard)",
 	)
+	version := pflag.Bool("version", false, "display the version")
 
 	pflag.Parse()
+	if *version {
+		fmt.Println(buildvars.Version)
+		os.Exit(0)
+	}
 
 	flags := Flags{
 		LoggerLevel:         loggerLevel(loggerLevelValue),
