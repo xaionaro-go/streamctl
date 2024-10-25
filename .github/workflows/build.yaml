@@ -1,0 +1,61 @@
+name: build-and-release
+
+on:
+  push:
+    branches:
+    - main
+    - test/ci
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - name: streampanel-linux-amd64
+            artifact: streampanel-linux-amd64
+          - name: dockerbuild-streampanel-android-arm64
+            env:
+              - ENABLE_VLC: false
+            artifact: streampanel-arm64.apk
+          - name: streampanel-windows-amd64.zip
+            artifact: streampanel-windows-amd64.zip
+          - name: streampanel-windows-debug-amd64.zip
+            artifact: streampanel-windows-debug-amd64.zip
+    name: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: crazy-max/ghaction-setup-docker@v3
+        timeout-minutes: 12
+      - name: setup go
+        uses: actions/setup-go@v5
+      - name: install fyne
+        run: go install fyne.io/fyne/v2/cmd/fyne@latest
+      - name: apt install
+        run: |
+          sudo apt install -fy \
+            gcc-mingw-w64-x86-64-win32 \
+            libavcodec-dev \
+            libavdevice-dev \
+            libavfilter-dev \
+            libavformat-dev \
+            libavutil-dev \
+            libvlc-dev \
+            libx11-dev \
+            libxcursor-dev \
+            libxinerama-dev \
+            libxi-dev \
+            libglfw3-dev \
+            libasound2-dev \
+            libxxf86vm-dev \
+      - name: make ${{ matrix.target.name }}
+        run: make ${{ matrix.target.name }}
+        env:
+          ENABLE_VLC:   ${{ matrix.target.env.ENABLE_VLC }}
+          ENABLE_LIBAV: ${{ matrix.target.env.ENABLE_LIBAV }}
+      - name: upload-artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target.artifact }}
+          path: build/${{ matrix.target.artifact }}
