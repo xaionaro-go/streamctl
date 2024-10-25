@@ -66,8 +66,8 @@ func (cfg *Config) UnmarshalYAML(b []byte) (_err error) {
 	if cfg.Backends == nil {
 		cfg.Backends = streamcontrol.Config{}
 	}
-	if cfg.Monitor.Elements == nil {
-		cfg.Monitor.Elements = make(map[string]MonitorElementConfig)
+	if cfg.Dashboard.Elements == nil {
+		cfg.Dashboard.Elements = make(map[string]DashboardElementConfig)
 	}
 
 	if cfg.Backends[obs.ID] != nil {

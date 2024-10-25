@@ -59,7 +59,7 @@ func (d *StreamD) OBS(
 func getOBSImageBytes(
 	ctx context.Context,
 	obsServer obs_grpc.OBSServer,
-	el config.MonitorElementConfig,
+	el config.DashboardElementConfig,
 	obsState *streamtypes.OBSState,
 ) ([]byte, time.Time, error) {
 	img, nextUpdateAt, err := el.Source.GetImage(ctx, obsServer, el, obsState)
@@ -90,11 +90,11 @@ func getOBSImageBytes(
 }
 
 func (d *StreamD) initImageTaker(ctx context.Context) error {
-	for elName, el := range d.Config.Monitor.Elements {
+	for elName, el := range d.Config.Dashboard.Elements {
 		if el.Source == nil {
 			continue
 		}
-		if _, ok := el.Source.(*config.MonitorSourceDummy); ok {
+		if _, ok := el.Source.(*config.DashboardSourceDummy); ok {
 			continue
 		}
 		{

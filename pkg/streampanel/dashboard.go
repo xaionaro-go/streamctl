@@ -17,6 +17,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/anthonynsimon/bild/adjust"
@@ -35,23 +36,120 @@ import (
 	streamdconsts "github.com/xaionaro-go/streamctl/pkg/streamd/consts"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	"github.com/xaionaro-go/streamctl/pkg/xfyne"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
-func (p *Panel) startMonitorPage(
+func (p *Panel) focusDashboardWindow(
 	ctx context.Context,
 ) {
-	logger.Debugf(ctx, "startMonitorPage")
-	defer logger.Debugf(ctx, "/startMonitorPage")
-
-	cfg, err := p.GetStreamDConfig(ctx)
+	err := p.openDashboardWindow(ctx)
 	if err != nil {
-		p.DisplayError(fmt.Errorf("unable to get the current config: %w", err))
+		p.DisplayError(err)
+	}
+}
+
+func (p *Panel) openDashboardWindow(
+	ctx context.Context,
+) (_err error) {
+	logger.Debugf(ctx, "newDashboardWindow")
+	defer func() { logger.Debugf(ctx, "/newDashboardWindow: %v", _err) }()
+	return xsync.DoA1R1(ctx, &p.dashboardLocker, p.openDashboardWindowNoLock, ctx)
+}
+
+type dashboardWindow struct {
+	fyne.Window
+	*Panel
+	locker              xsync.Mutex
+	stopUpdatingFunc    context.CancelFunc
+	lastWinSize         fyne.Size
+	lastOrientation     fyne.DeviceOrientation
+	screenshotContainer *fyne.Container
+	layersContainer     *fyne.Container
+}
+
+func (p *Panel) newDashboardWindow(
+	context.Context,
+) *dashboardWindow {
+	w := &dashboardWindow{
+		Window: p.app.NewWindow("Dashboard"),
+		Panel:  p,
+	}
+
+	bg := image.NewGray(image.Rect(0, 0, 1, 1))
+	bgFyne := canvas.NewImageFromImage(bg)
+	bgFyne.FillMode = canvas.ImageFillStretch
+
+	w.screenshotContainer = container.NewStack()
+	p.appStatus = widget.NewLabel("")
+	obsLabel := widget.NewLabel("OBS:")
+	obsLabel.Importance = widget.HighImportance
+	p.streamStatus[obs.ID] = widget.NewLabel("")
+	twLabel := widget.NewLabel("TW:")
+	twLabel.Importance = widget.HighImportance
+	p.streamStatus[twitch.ID] = widget.NewLabel("")
+	kcLabel := widget.NewLabel("Kc:")
+	kcLabel.Importance = widget.HighImportance
+	p.streamStatus[kick.ID] = widget.NewLabel("")
+	ytLabel := widget.NewLabel("YT:")
+	ytLabel.Importance = widget.HighImportance
+	p.streamStatus[youtube.ID] = widget.NewLabel("")
+	streamInfoItems := container.NewVBox()
+	if _, ok := p.StreamD.(*client.Client); ok {
+		appLabel := widget.NewLabel("App:")
+		appLabel.Importance = widget.HighImportance
+		streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), appLabel, p.appStatus))
+	}
+	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), obsLabel, p.streamStatus[obs.ID]))
+	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), twLabel, p.streamStatus[twitch.ID]))
+	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), kcLabel, p.streamStatus[kick.ID]))
+	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), ytLabel, p.streamStatus[youtube.ID]))
+	streamInfoContainer := container.NewBorder(
+		nil,
+		nil,
+		nil,
+		streamInfoItems,
+	)
+	w.layersContainer = container.NewStack()
+
+	w.Window.SetContent(container.NewStack(
+		bgFyne,
+		w.screenshotContainer,
+		w.layersContainer,
+		streamInfoContainer,
+	))
+	w.Window.Show()
+	return w
+}
+
+func (w *dashboardWindow) startUpdating(
+	ctx context.Context,
+) {
+	logger.Debugf(ctx, "startUpdating")
+	defer logger.Debugf(ctx, "/startUpdating")
+	xsync.DoA1(ctx, &w.locker, w.startUpdatingNoLock, ctx)
+}
+
+func (w *dashboardWindow) startUpdatingNoLock(
+	ctx context.Context,
+) {
+
+	if w.stopUpdatingFunc != nil {
+		logger.Errorf(ctx, "updating is already started")
+		return
+	}
+
+	ctx, cancelFunc := context.WithCancel(ctx)
+	w.stopUpdatingFunc = cancelFunc
+
+	cfg, err := w.GetStreamDConfig(ctx)
+	if err != nil {
+		w.DisplayError(fmt.Errorf("unable to get the current config: %w", err))
 		return
 	}
 
 	observability.Go(ctx, func() {
-		p.updateMonitorPageImages(ctx, cfg.Monitor)
-		p.updateMonitorPageStreamStatus(ctx)
+		w.updateImages(ctx, cfg.Dashboard)
+		w.updateStreamStatus(ctx)
 
 		observability.Go(ctx, func() {
 			t := time.NewTicker(200 * time.Millisecond)
@@ -62,7 +160,7 @@ func (p *Panel) startMonitorPage(
 				case <-t.C:
 				}
 
-				p.updateMonitorPageImages(ctx, cfg.Monitor)
+				w.updateImages(ctx, cfg.Dashboard)
 			}
 		})
 
@@ -75,39 +173,65 @@ func (p *Panel) startMonitorPage(
 				case <-t.C:
 				}
 
-				p.updateMonitorPageStreamStatus(ctx)
+				w.updateStreamStatus(ctx)
 			}
 		})
 	})
 }
 
-func (p *Panel) updateMonitorPageImages(
+func (w *dashboardWindow) stopUpdating(
 	ctx context.Context,
-	monitorCfg streamdconfig.MonitorConfig,
 ) {
-	logger.Tracef(ctx, "updateMonitorPageImages")
-	defer logger.Tracef(ctx, "/updateMonitorPageImages")
-
-	p.monitorLocker.Do(ctx, func() {
-		p.updateMonitorPageImagesNoLock(ctx, monitorCfg)
+	w.locker.Do(ctx, func() {
+		if w.stopUpdatingFunc == nil {
+			logger.Errorf(ctx, "the updating is already stopped (or was not started)")
+			return
+		}
+		w.stopUpdatingFunc()
+		w.stopUpdatingFunc = nil
 	})
 }
 
-func (p *Panel) updateMonitorPageImagesNoLock(
+func (p *Panel) openDashboardWindowNoLock(
 	ctx context.Context,
-	monitorCfg streamdconfig.MonitorConfig,
+) error {
+	if p.dashboardWindow != nil {
+		p.dashboardWindow.RequestFocus()
+	} else {
+		p.dashboardWindow = p.newDashboardWindow(ctx)
+	}
+	w := p.dashboardWindow
+	w.startUpdating(ctx)
+	return nil
+}
+
+func (w *dashboardWindow) updateImages(
+	ctx context.Context,
+	dashboardCfg streamdconfig.DashboardConfig,
+) {
+	logger.Tracef(ctx, "updateImages")
+	defer logger.Tracef(ctx, "/updateImages")
+
+	w.dashboardLocker.Do(ctx, func() {
+		w.updateImagesNoLock(ctx, dashboardCfg)
+	})
+}
+
+func (w *dashboardWindow) updateImagesNoLock(
+	ctx context.Context,
+	dashboardCfg streamdconfig.DashboardConfig,
 ) {
 	var winSize fyne.Size
 	var orientation fyne.DeviceOrientation
 	switch runtime.GOOS {
 	default:
-		winSize = p.monitorPage.Size()
-		orientation = p.app.Driver().Device().Orientation()
+		winSize = w.dashboardWindow.Canvas().Size()
+		orientation = w.app.Driver().Device().Orientation()
 	}
-	lastWinSize := p.monitorLastWinSize
-	lastOrientation := p.monitorLastOrientation
-	p.monitorLastWinSize = winSize
-	p.monitorLastOrientation = orientation
+	lastWinSize := w.lastWinSize
+	lastOrientation := w.lastOrientation
+	w.lastWinSize = winSize
+	w.lastOrientation = orientation
 
 	if lastWinSize != winSize {
 		logger.Debugf(ctx, "window size changed %#+v -> %#+v", lastWinSize, winSize)
@@ -115,15 +239,15 @@ func (p *Panel) updateMonitorPageImagesNoLock(
 
 	type elementType struct {
 		ElementName string
-		streamdconfig.MonitorElementConfig
+		streamdconfig.DashboardElementConfig
 		NewImage *canvas.Image
 	}
 
-	elements := make([]elementType, 0, len(monitorCfg.Elements))
-	for elName, el := range monitorCfg.Elements {
+	elements := make([]elementType, 0, len(dashboardCfg.Elements))
+	for elName, el := range dashboardCfg.Elements {
 		elements = append(elements, elementType{
-			ElementName:          elName,
-			MonitorElementConfig: el,
+			ElementName:            elName,
+			DashboardElementConfig: el,
 		})
 	}
 	sort.Slice(elements, func(i, j int) bool {
@@ -140,12 +264,12 @@ func (p *Panel) updateMonitorPageImagesNoLock(
 		{
 			el := &elements[idx]
 			var oldObj fyne.CanvasObject
-			if len(p.monitorLayersContainer.Objects) > idx {
-				oldObj = p.monitorLayersContainer.Objects[idx]
+			if len(w.layersContainer.Objects) > idx {
+				oldObj = w.layersContainer.Objects[idx]
 			}
 			observability.Go(ctx, func() {
 				defer wg.Done()
-				img, changed, err := p.getImage(ctx, streamdconsts.ImageID(el.ElementName))
+				img, changed, err := w.getImage(ctx, streamdconsts.ImageID(el.ElementName))
 				if err != nil {
 					logger.Error(ctx, err)
 					return
@@ -185,6 +309,7 @@ func (p *Panel) updateMonitorPageImagesNoLock(
 				)
 				imgFyne := canvas.NewImageFromImage(img)
 				imgFyne.FillMode = canvas.ImageFillContain
+				imgFyne.SetMinSize(fyne.NewSize(1, 1))
 				logger.Tracef(ctx, "image '%s' size: %#+v", el.ElementName, img.Bounds().Size())
 				el.NewImage = imgFyne
 			})
@@ -194,11 +319,11 @@ func (p *Panel) updateMonitorPageImagesNoLock(
 	wg.Add(1)
 	observability.Go(ctx, func() {
 		defer wg.Done()
-		img, changed, err := p.getImage(ctx, consts.ImageScreenshot)
+		img, changed, err := w.getImage(ctx, consts.ImageScreenshot)
 		if err != nil {
 			// we use local config, which is invalid, but we don't want to make a request
 			// to another instance just to know if this should be an error or a trace message
-			if p.Config.Screenshot.Enabled != nil && *p.Config.Screenshot.Enabled {
+			if w.Config.Screenshot.Enabled != nil && *w.Config.Screenshot.Enabled {
 				logger.Errorf(ctx, "unable to get the screenshot: %v", err)
 			} else {
 				logger.Tracef(ctx, "unable to get the screenshot: %v", err)
@@ -231,23 +356,23 @@ func (p *Panel) updateMonitorPageImagesNoLock(
 		imgFyne.FillMode = canvas.ImageFillContain
 		logger.Tracef(ctx, "screenshot image size: %#+v", img.Bounds().Size())
 
-		p.screenshotContainer.Objects = p.screenshotContainer.Objects[:0]
-		p.screenshotContainer.Objects = append(p.screenshotContainer.Objects, imgFyne)
-		p.screenshotContainer.Refresh()
+		w.screenshotContainer.Objects = w.screenshotContainer.Objects[:0]
+		w.screenshotContainer.Objects = append(w.screenshotContainer.Objects, imgFyne)
+		w.screenshotContainer.Refresh()
 	})
 	wg.Wait()
 
-	if len(p.monitorLayersContainer.Objects) != len(elements) {
-		p.monitorLayersContainer.Objects = p.monitorLayersContainer.Objects[:0]
+	if len(w.layersContainer.Objects) != len(elements) {
+		w.layersContainer.Objects = w.layersContainer.Objects[:0]
 		img := image.NewRGBA(image.Rectangle{
 			Max: image.Point{
 				X: 1,
 				Y: 1,
 			},
 		})
-		for len(p.monitorLayersContainer.Objects) < len(elements) {
-			p.monitorLayersContainer.Objects = append(
-				p.monitorLayersContainer.Objects,
+		for len(w.layersContainer.Objects) < len(elements) {
+			w.layersContainer.Objects = append(
+				w.layersContainer.Objects,
 				canvas.NewImageFromImage(img),
 			)
 		}
@@ -256,32 +381,32 @@ func (p *Panel) updateMonitorPageImagesNoLock(
 		if el.NewImage == nil {
 			continue
 		}
-		p.monitorLayersContainer.Objects[idx] = el.NewImage
+		w.layersContainer.Objects[idx] = el.NewImage
 	}
-	p.monitorLayersContainer.Refresh()
+	w.layersContainer.Refresh()
 }
 
-func (p *Panel) updateMonitorPageStreamStatus(
+func (w *dashboardWindow) updateStreamStatus(
 	ctx context.Context,
 ) {
-	logger.Tracef(ctx, "updateMonitorPageStreamStatus")
-	defer logger.Tracef(ctx, "/updateMonitorPageStreamStatus")
+	logger.Tracef(ctx, "updateStreamStatus")
+	defer logger.Tracef(ctx, "/updateStreamStatus")
 
-	if streamDClient, ok := p.StreamD.(*client.Client); ok {
+	if streamDClient, ok := w.StreamD.(*client.Client); ok {
 		now := time.Now()
 		appBytesIn := atomic.LoadUint64(&streamDClient.Stats.BytesIn)
 		appBytesOut := atomic.LoadUint64(&streamDClient.Stats.BytesOut)
-		if !p.appStatusData.prevUpdateTS.IsZero() {
-			tsDiff := now.Sub(p.appStatusData.prevUpdateTS)
-			bytesInDiff := appBytesIn - p.appStatusData.prevBytesIn
-			bytesOutDiff := appBytesOut - p.appStatusData.prevBytesOut
+		if !w.appStatusData.prevUpdateTS.IsZero() {
+			tsDiff := now.Sub(w.appStatusData.prevUpdateTS)
+			bytesInDiff := appBytesIn - w.appStatusData.prevBytesIn
+			bytesOutDiff := appBytesOut - w.appStatusData.prevBytesOut
 			bwIn := float64(bytesInDiff) * 8 / tsDiff.Seconds() / 1000
 			bwOut := float64(bytesOutDiff) * 8 / tsDiff.Seconds() / 1000
-			p.appStatus.SetText(fmt.Sprintf("%4.0fKb/s | %4.0fKb/s", bwIn, bwOut))
+			w.appStatus.SetText(fmt.Sprintf("%4.0fKb/s | %4.0fKb/s", bwIn, bwOut))
 		}
-		p.appStatusData.prevUpdateTS = now
-		p.appStatusData.prevBytesIn = appBytesIn
-		p.appStatusData.prevBytesOut = appBytesOut
+		w.appStatusData.prevUpdateTS = now
+		w.appStatusData.prevBytesIn = appBytesIn
+		w.appStatusData.prevBytesOut = appBytesOut
 	}
 
 	var wg sync.WaitGroup
@@ -295,9 +420,9 @@ func (p *Panel) updateMonitorPageStreamStatus(
 		observability.Go(ctx, func() {
 			defer wg.Done()
 
-			dst := p.streamStatus[platID]
+			dst := w.streamStatus[platID]
 
-			ok, err := p.StreamD.IsBackendEnabled(ctx, platID)
+			ok, err := w.StreamD.IsBackendEnabled(ctx, platID)
 			if err != nil {
 				logger.Error(ctx, err)
 				dst.Importance = widget.LowImportance
@@ -310,7 +435,7 @@ func (p *Panel) updateMonitorPageStreamStatus(
 				return
 			}
 
-			streamStatus, err := p.StreamD.GetStreamStatus(ctx, platID)
+			streamStatus, err := w.StreamD.GetStreamStatus(ctx, platID)
 			if err != nil {
 				logger.Error(ctx, err)
 				dst.SetText("error")
@@ -341,11 +466,11 @@ func (p *Panel) updateMonitorPageStreamStatus(
 	wg.Wait()
 }
 
-func (p *Panel) newMonitorSettingsWindow(ctx context.Context) {
-	logger.Debugf(ctx, "newMonitorSettingsWindow")
-	defer logger.Debugf(ctx, "/newMonitorSettingsWindow")
-	w := p.app.NewWindow("Monitor settings")
-	resizeWindow(w, fyne.NewSize(1500, 1000))
+func (p *Panel) newDashboardSettingsWindow(ctx context.Context) {
+	logger.Debugf(ctx, "newDashboardSettingsWindow")
+	defer logger.Debugf(ctx, "/newDashboardSettingsWindow")
+	settingsWindow := p.app.NewWindow("Dashboard settings")
+	resizeWindow(settingsWindow, fyne.NewSize(1500, 1000))
 
 	content := container.NewVBox()
 
@@ -373,17 +498,17 @@ func (p *Panel) newMonitorSettingsWindow(ctx context.Context) {
 		}
 
 		content.Add(widget.NewRichTextFromMarkdown("## Elements"))
-		for name, el := range cfg.Monitor.Elements {
+		for name, el := range cfg.Dashboard.Elements {
 			editButton := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
-				p.editMonitorElementWindow(
+				p.editDashboardElementWindow(
 					ctx,
 					name,
 					el,
-					func(ctx context.Context, elementName string, newElement streamdconfig.MonitorElementConfig) error {
-						if _, ok := cfg.Monitor.Elements[elementName]; !ok {
+					func(ctx context.Context, elementName string, newElement streamdconfig.DashboardElementConfig) error {
+						if _, ok := cfg.Dashboard.Elements[elementName]; !ok {
 							return fmt.Errorf("element with name '%s' does not exist", elementName)
 						}
-						cfg.Monitor.Elements[elementName] = newElement
+						cfg.Dashboard.Elements[elementName] = newElement
 						err := saveCfg(ctx)
 						if err != nil {
 							return err
@@ -395,9 +520,9 @@ func (p *Panel) newMonitorSettingsWindow(ctx context.Context) {
 			})
 			deleteButton := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
 				w := dialog.NewConfirm(
-					fmt.Sprintf("Delete monitor element '%s'?", name),
+					fmt.Sprintf("Delete dashboard element '%s'?", name),
 					fmt.Sprintf(
-						"Are you sure you want to delete the element '%s' from the Monitor page?",
+						"Are you sure you want to delete the element '%s' from the Dashboard?",
 						name,
 					),
 					func(b bool) {
@@ -405,7 +530,7 @@ func (p *Panel) newMonitorSettingsWindow(ctx context.Context) {
 							return
 						}
 
-						delete(cfg.Monitor.Elements, name)
+						delete(cfg.Dashboard.Elements, name)
 						err := saveCfg(ctx)
 						if err != nil {
 							p.DisplayError(err)
@@ -413,7 +538,7 @@ func (p *Panel) newMonitorSettingsWindow(ctx context.Context) {
 						}
 						refreshContent()
 					},
-					w,
+					settingsWindow,
 				)
 				w.Show()
 			})
@@ -425,15 +550,15 @@ func (p *Panel) newMonitorSettingsWindow(ctx context.Context) {
 		}
 
 		addButton := widget.NewButtonWithIcon("Add", theme.ContentAddIcon(), func() {
-			p.editMonitorElementWindow(
+			p.editDashboardElementWindow(
 				ctx,
 				"",
-				streamdconfig.MonitorElementConfig{},
-				func(ctx context.Context, elementName string, newElement streamdconfig.MonitorElementConfig) error {
-					if _, ok := cfg.Monitor.Elements[elementName]; ok {
+				streamdconfig.DashboardElementConfig{},
+				func(ctx context.Context, elementName string, newElement streamdconfig.DashboardElementConfig) error {
+					if _, ok := cfg.Dashboard.Elements[elementName]; ok {
 						return fmt.Errorf("element with name '%s' already exists", elementName)
 					}
-					cfg.Monitor.Elements[elementName] = newElement
+					cfg.Dashboard.Elements[elementName] = newElement
 					err := saveCfg(ctx)
 					if err != nil {
 						return err
@@ -447,36 +572,36 @@ func (p *Panel) newMonitorSettingsWindow(ctx context.Context) {
 	}
 
 	refreshContent()
-	w.SetContent(content)
-	w.Show()
+	settingsWindow.SetContent(content)
+	settingsWindow.Show()
 }
 
-func (p *Panel) editMonitorElementWindow(
+func (p *Panel) editDashboardElementWindow(
 	ctx context.Context,
 	_elementNameValue string,
-	cfg streamdconfig.MonitorElementConfig,
-	saveFunc func(ctx context.Context, elementName string, cfg streamdconfig.MonitorElementConfig) error,
+	cfg streamdconfig.DashboardElementConfig,
+	saveFunc func(ctx context.Context, elementName string, cfg streamdconfig.DashboardElementConfig) error,
 ) {
-	logger.Debugf(ctx, "editMonitorElementWindow")
-	defer logger.Debugf(ctx, "/editMonitorElementWindow")
-	w := p.app.NewWindow("Monitor element settings")
+	logger.Debugf(ctx, "editDashboardElementWindow")
+	defer logger.Debugf(ctx, "/editDashboardElementWindow")
+	w := p.app.NewWindow("Dashboard element settings")
 	resizeWindow(w, fyne.NewSize(1500, 1000))
 
-	obsVideoSource := &streamdconfig.MonitorSourceOBSVideo{
+	obsVideoSource := &streamdconfig.DashboardSourceOBSVideo{
 		UpdateInterval: streamdconfig.Duration(200 * time.Millisecond),
 	}
-	obsVolumeSource := &streamdconfig.MonitorSourceOBSVolume{
+	obsVolumeSource := &streamdconfig.DashboardSourceOBSVolume{
 		UpdateInterval: streamdconfig.Duration(200 * time.Millisecond),
 		ColorActive:    "00FF00FF",
 		ColorPassive:   "00000000",
 	}
-	dummy := &streamdconfig.MonitorSourceDummy{}
+	dummy := &streamdconfig.DashboardSourceDummy{}
 	switch source := cfg.Source.(type) {
-	case *streamdconfig.MonitorSourceOBSVideo:
+	case *streamdconfig.DashboardSourceOBSVideo:
 		obsVideoSource = source
-	case *streamdconfig.MonitorSourceOBSVolume:
+	case *streamdconfig.DashboardSourceOBSVolume:
 		obsVolumeSource = source
-	case *streamdconfig.MonitorSourceDummy:
+	case *streamdconfig.DashboardSourceDummy:
 		dummy = source
 	}
 
@@ -869,35 +994,35 @@ func (p *Panel) editMonitorElementWindow(
 	)
 
 	sourceTypeSelect := widget.NewSelect([]string{
-		string(streamdconfig.MonitorSourceTypeOBSVideo),
-		string(streamdconfig.MonitorSourceTypeOBSVolume),
-		string(streamdconfig.MonitorSourceTypeDummy),
+		string(streamdconfig.DashboardSourceTypeOBSVideo),
+		string(streamdconfig.DashboardSourceTypeOBSVolume),
+		string(streamdconfig.DashboardSourceTypeDummy),
 	}, func(s string) {
-		switch streamdconfig.MonitorSourceType(s) {
-		case streamdconfig.MonitorSourceTypeOBSVideo:
+		switch streamdconfig.DashboardSourceType(s) {
+		case streamdconfig.DashboardSourceTypeOBSVideo:
 			sourceOBSVolumeConfig.Hide()
 			sourceOBSVideoConfig.Show()
-		case streamdconfig.MonitorSourceTypeOBSVolume:
+		case streamdconfig.DashboardSourceTypeOBSVolume:
 			sourceOBSVideoConfig.Hide()
 			sourceOBSVolumeConfig.Show()
-		case streamdconfig.MonitorSourceTypeDummy:
+		case streamdconfig.DashboardSourceTypeDummy:
 			sourceOBSVideoConfig.Hide()
 			sourceOBSVolumeConfig.Hide()
 		}
 	})
-	sourceTypeSelect.SetSelected(string(streamdconfig.MonitorSourceTypeOBSVideo))
+	sourceTypeSelect.SetSelected(string(streamdconfig.DashboardSourceTypeOBSVideo))
 
 	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
 		if elementName.Text == "" {
 			p.DisplayError(fmt.Errorf("element name is not set"))
 			return
 		}
-		switch streamdconfig.MonitorSourceType(sourceTypeSelect.Selected) {
-		case streamdconfig.MonitorSourceTypeOBSVideo:
+		switch streamdconfig.DashboardSourceType(sourceTypeSelect.Selected) {
+		case streamdconfig.DashboardSourceTypeOBSVideo:
 			cfg.Source = obsVideoSource
-		case streamdconfig.MonitorSourceTypeOBSVolume:
+		case streamdconfig.DashboardSourceTypeOBSVolume:
 			cfg.Source = obsVolumeSource
-		case streamdconfig.MonitorSourceTypeDummy:
+		case streamdconfig.DashboardSourceTypeDummy:
 			cfg.Source = dummy
 		}
 		cfg.Filters = cfg.Filters[:0]
@@ -909,7 +1034,7 @@ func (p *Panel) editMonitorElementWindow(
 		}
 		err := saveFunc(ctx, elementName.Text, cfg)
 		if err != nil {
-			p.DisplayError(fmt.Errorf("unable to save the monitor element: %w", err))
+			p.DisplayError(fmt.Errorf("unable to save the dashboard element: %w", err))
 			return
 		}
 		w.Close()
@@ -921,7 +1046,7 @@ func (p *Panel) editMonitorElementWindow(
 		nil,
 		nil,
 		container.NewVBox(
-			widget.NewLabel("Monitor element name:"),
+			widget.NewLabel("Dashboard element name:"),
 			elementName,
 			widget.NewLabel("Z-Index / layer:"),
 			zIndex,

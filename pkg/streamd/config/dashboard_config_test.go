@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMonitorElementConfig(t *testing.T) {
-	e := MonitorElementConfig{
+func TestDashboardElementConfig(t *testing.T) {
+	e := DashboardElementConfig{
 		Width:         1,
 		Height:        2,
 		ZIndex:        3,
@@ -19,7 +19,7 @@ func TestMonitorElementConfig(t *testing.T) {
 		Rotate:        6,
 		ImageLossless: true,
 		ImageQuality:  7,
-		Source: &MonitorSourceOBSVideo{
+		Source: &DashboardSourceOBSVideo{
 			Name:           "c",
 			Width:          8,
 			Height:         9,
@@ -36,7 +36,7 @@ func TestMonitorElementConfig(t *testing.T) {
 	b, err := yaml.Marshal(e)
 	require.NoError(t, err)
 
-	var cmp MonitorElementConfig
+	var cmp DashboardElementConfig
 	err = yaml.Unmarshal(b, &cmp)
 	require.NoError(t, err)
 

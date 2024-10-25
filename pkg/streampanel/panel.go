@@ -5,7 +5,6 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"image"
 	"net/url"
 	"os"
 	"os/exec"
@@ -19,7 +18,6 @@ import (
 
 	"fyne.io/fyne/v2"
 	fyneapp "fyne.io/fyne/v2/app"
-	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
@@ -86,18 +84,14 @@ type Panel struct {
 	defaultContext        context.Context
 
 	mainWindow             fyne.Window
+	dashboardWindow        *dashboardWindow
 	setupStreamButton      *widget.Button
 	startStopButton        *widget.Button
 	profilesListWidget     *widget.List
 	streamTitleField       *widget.Entry
 	streamDescriptionField *widget.Entry
 
-	monitorLocker          xsync.Mutex
-	monitorPage            *fyne.Container
-	monitorLastWinSize     fyne.Size
-	monitorLastOrientation fyne.DeviceOrientation
-	screenshotContainer    *fyne.Container
-	monitorLayersContainer *fyne.Container
+	dashboardLocker xsync.Mutex
 
 	appStatus     *widget.Label
 	appStatusData struct {
@@ -1717,7 +1711,7 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 			),
 			widget.NewSeparator(),
 			widget.NewSeparator(),
-			widget.NewRichTextFromMarkdown(`# Monitor`),
+			widget.NewRichTextFromMarkdown(`# Dashboard`),
 			enableScreenshotSendingCheckbox,
 			widget.NewLabel("The screen/display to screenshot:"),
 			displayIDSelector,
@@ -2030,18 +2024,18 @@ func (p *Panel) initMainWindow(
 		}),
 	)
 
-	monitorControl := container.NewHBox(
+	dashboardControl := container.NewHBox(
 		widget.NewSeparator(),
 		widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
-			p.newMonitorSettingsWindow(ctx)
+			p.newDashboardSettingsWindow(ctx)
 		}),
 	)
-	monitorControl.Hide()
+	dashboardControl.Hide()
 
 	topPanel := container.NewHBox(
 		menuButton,
 		profileControl,
-		monitorControl,
+		dashboardControl,
 	)
 
 	for _, button := range selectedProfileButtons {
@@ -2142,48 +2136,6 @@ func (p *Panel) initMainWindow(
 		nil,
 		nil,
 		profilesList,
-	)
-
-	monitorBackground := image.NewGray(image.Rect(0, 0, 1, 1))
-	monitorBackgroundFyne := canvas.NewImageFromImage(monitorBackground)
-	monitorBackgroundFyne.FillMode = canvas.ImageFillStretch
-
-	p.screenshotContainer = container.NewStack()
-	p.appStatus = widget.NewLabel("")
-	obsLabel := widget.NewLabel("OBS:")
-	obsLabel.Importance = widget.HighImportance
-	p.streamStatus[obs.ID] = widget.NewLabel("")
-	twLabel := widget.NewLabel("TW:")
-	twLabel.Importance = widget.HighImportance
-	p.streamStatus[twitch.ID] = widget.NewLabel("")
-	kcLabel := widget.NewLabel("Kc:")
-	kcLabel.Importance = widget.HighImportance
-	p.streamStatus[kick.ID] = widget.NewLabel("")
-	ytLabel := widget.NewLabel("YT:")
-	ytLabel.Importance = widget.HighImportance
-	p.streamStatus[youtube.ID] = widget.NewLabel("")
-	streamInfoItems := container.NewVBox()
-	if _, ok := p.StreamD.(*client.Client); ok {
-		appLabel := widget.NewLabel("App:")
-		appLabel.Importance = widget.HighImportance
-		streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), appLabel, p.appStatus))
-	}
-	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), obsLabel, p.streamStatus[obs.ID]))
-	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), twLabel, p.streamStatus[twitch.ID]))
-	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), kcLabel, p.streamStatus[kick.ID]))
-	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), ytLabel, p.streamStatus[youtube.ID]))
-	streamInfoContainer := container.NewBorder(
-		nil,
-		nil,
-		nil,
-		streamInfoItems,
-	)
-	p.monitorLayersContainer = container.NewStack()
-	p.monitorPage = container.NewStack(
-		monitorBackgroundFyne,
-		p.screenshotContainer,
-		p.monitorLayersContainer,
-		streamInfoContainer,
 	)
 
 	var prevScene string
@@ -2314,50 +2266,37 @@ func (p *Panel) initMainWindow(
 
 		switch page {
 		case consts.PageControl:
-			p.monitorPage.Hide()
 			obsPage.Hide()
 			restreamPage.Hide()
 			moreControlPage.Hide()
 			chatPage.Hide()
 			profileControl.Show()
-			monitorControl.Hide()
+			dashboardControl.Hide()
 			timersUI.StopRefreshingFromRemote(ctx)
 			controlPage.Show()
 		case consts.PageMoreControl:
-			p.monitorPage.Hide()
 			obsPage.Hide()
 			restreamPage.Hide()
 			chatPage.Hide()
 			profileControl.Hide()
-			monitorControl.Hide()
+			dashboardControl.Hide()
 			controlPage.Hide()
 			moreControlPage.Show()
 			timersUI.StartRefreshingFromRemote(ctx)
 		case consts.PageChat:
-			p.monitorPage.Hide()
 			obsPage.Hide()
 			restreamPage.Hide()
 			moreControlPage.Hide()
 			profileControl.Hide()
-			monitorControl.Hide()
+			dashboardControl.Hide()
 			controlPage.Hide()
 			chatPage.Show()
-		case consts.PageMonitor:
-			controlPage.Hide()
-			profileControl.Hide()
-			restreamPage.Hide()
-			chatPage.Hide()
-			moreControlPage.Hide()
-			obsPage.Hide()
-			timersUI.StopRefreshingFromRemote(ctx)
-			p.monitorPage.Show()
-			monitorControl.Show()
-			p.startMonitorPage(pageCtx)
+		case consts.PageDashboard:
+			p.focusDashboardWindow(pageCtx)
 		case consts.PageOBS:
 			controlPage.Hide()
 			profileControl.Hide()
-			p.monitorPage.Hide()
-			monitorControl.Hide()
+			dashboardControl.Hide()
 			restreamPage.Hide()
 			chatPage.Hide()
 			moreControlPage.Hide()
@@ -2368,8 +2307,7 @@ func (p *Panel) initMainWindow(
 			profileControl.Hide()
 			moreControlPage.Hide()
 			chatPage.Hide()
-			p.monitorPage.Hide()
-			monitorControl.Hide()
+			dashboardControl.Hide()
 			obsPage.Hide()
 			timersUI.StopRefreshingFromRemote(ctx)
 			restreamPage.Show()
@@ -2382,7 +2320,7 @@ func (p *Panel) initMainWindow(
 			string(consts.PageControl),
 			string(consts.PageMoreControl),
 			string(consts.PageChat),
-			string(consts.PageMonitor),
+			string(consts.PageDashboard),
 			string(consts.PageOBS),
 			string(consts.PageRestream),
 		},
@@ -2408,7 +2346,7 @@ func (p *Panel) initMainWindow(
 		),
 		nil,
 		nil,
-		container.NewStack(controlPage, moreControlPage, chatPage, p.monitorPage, obsPage, restreamPage),
+		container.NewStack(controlPage, moreControlPage, chatPage, obsPage, restreamPage),
 	))
 
 	w.Show()

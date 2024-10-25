@@ -21,23 +21,23 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
-type MonitorSourceType string
+type DashboardSourceType string
 
 const (
-	MonitorSourceTypeUndefined = MonitorSourceType("")
-	MonitorSourceTypeDummy     = MonitorSourceType("dummy")
-	MonitorSourceTypeOBSVideo  = MonitorSourceType("obs_video")
-	MonitorSourceTypeOBSVolume = MonitorSourceType("obs_volume")
+	DashboardSourceTypeUndefined = DashboardSourceType("")
+	DashboardSourceTypeDummy     = DashboardSourceType("dummy")
+	DashboardSourceTypeOBSVideo  = DashboardSourceType("obs_video")
+	DashboardSourceTypeOBSVolume = DashboardSourceType("obs_volume")
 )
 
-func (mst MonitorSourceType) New() Source {
+func (mst DashboardSourceType) New() Source {
 	switch mst {
-	case MonitorSourceTypeDummy:
-		return &MonitorSourceDummy{}
-	case MonitorSourceTypeOBSVideo:
-		return &MonitorSourceOBSVideo{}
-	case MonitorSourceTypeOBSVolume:
-		return &MonitorSourceOBSVolume{}
+	case DashboardSourceTypeDummy:
+		return &DashboardSourceDummy{}
+	case DashboardSourceTypeOBSVideo:
+		return &DashboardSourceOBSVideo{}
+	case DashboardSourceTypeOBSVolume:
+		return &DashboardSourceOBSVolume{}
 	default:
 		return nil
 	}
@@ -56,7 +56,7 @@ type GetImageByteser interface {
 	GetImageBytes(
 		ctx context.Context,
 		obsServer obs_grpc.OBSServer,
-		el MonitorElementConfig,
+		el DashboardElementConfig,
 	) ([]byte, string, time.Time, error)
 }
 
@@ -88,7 +88,7 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 	}
 }
 
-type MonitorSourceOBSVideo struct {
+type DashboardSourceOBSVideo struct {
 	Name           string      `yaml:"name"            json:"name"`
 	Width          float64     `yaml:"width"           json:"width"`
 	Height         float64     `yaml:"height"          json:"height"`
@@ -96,17 +96,17 @@ type MonitorSourceOBSVideo struct {
 	UpdateInterval Duration    `yaml:"update_interval" json:"update_interval"`
 }
 
-var _ Source = (*MonitorSourceOBSVideo)(nil)
-var _ GetImageByteser = (*MonitorSourceOBSVideo)(nil)
+var _ Source = (*DashboardSourceOBSVideo)(nil)
+var _ GetImageByteser = (*DashboardSourceOBSVideo)(nil)
 
-func (*MonitorSourceOBSVideo) SourceType() MonitorSourceType {
-	return MonitorSourceTypeOBSVideo
+func (*DashboardSourceOBSVideo) SourceType() DashboardSourceType {
+	return DashboardSourceTypeOBSVideo
 }
 
-func (s *MonitorSourceOBSVideo) GetImage(
+func (s *DashboardSourceOBSVideo) GetImage(
 	ctx context.Context,
 	obsServer obs_grpc.OBSServer,
-	el MonitorElementConfig,
+	el DashboardElementConfig,
 	obsState *streamtypes.OBSState,
 ) (image.Image, time.Time, error) {
 	b, mimeType, nextUpdateTS, err := s.GetImageBytes(ctx, obsServer, el)
@@ -132,10 +132,10 @@ func (s *MonitorSourceOBSVideo) GetImage(
 	return img, nextUpdateTS, nil
 }
 
-func (s *MonitorSourceOBSVideo) GetImageBytes(
+func (s *DashboardSourceOBSVideo) GetImageBytes(
 	ctx context.Context,
 	obsServer obs_grpc.OBSServer,
-	el MonitorElementConfig,
+	el DashboardElementConfig,
 ) ([]byte, string, time.Time, error) {
 	imageQuality := ptr(int64(el.ImageQuality))
 	if s.ImageFormat == ImageFormatJPEG && el.ImageQuality < 100 {
@@ -195,19 +195,19 @@ func (s *MonitorSourceOBSVideo) GetImageBytes(
 	return imgBytes, mimeType, time.Now().Add(time.Duration(s.UpdateInterval)), nil
 }
 
-type MonitorSourceOBSVolume struct {
+type DashboardSourceOBSVolume struct {
 	Name           string   `yaml:"name"            json:"name"`
 	UpdateInterval Duration `yaml:"update_interval" json:"update_interval"`
 	ColorActive    string   `yaml:"color_active"    json:"color_active"`
 	ColorPassive   string   `yaml:"color_passive"   json:"color_passive"`
 }
 
-var _ Source = (*MonitorSourceOBSVolume)(nil)
+var _ Source = (*DashboardSourceOBSVolume)(nil)
 
-func (s *MonitorSourceOBSVolume) GetImage(
+func (s *DashboardSourceOBSVolume) GetImage(
 	ctx context.Context,
 	obsServer obs_grpc.OBSServer,
-	el MonitorElementConfig,
+	el DashboardElementConfig,
 	obsState *streamtypes.OBSState,
 ) (image.Image, time.Time, error) {
 	if obsState == nil {
@@ -272,16 +272,16 @@ func (s *MonitorSourceOBSVolume) GetImage(
 	return img, time.Now().Add(time.Duration(s.UpdateInterval)), nil
 }
 
-func (*MonitorSourceOBSVolume) SourceType() MonitorSourceType {
-	return MonitorSourceTypeOBSVolume
+func (*DashboardSourceOBSVolume) SourceType() DashboardSourceType {
+	return DashboardSourceTypeOBSVolume
 }
 
-type MonitorSourceDummy struct{}
+type DashboardSourceDummy struct{}
 
-func (*MonitorSourceDummy) GetImage(
+func (*DashboardSourceDummy) GetImage(
 	ctx context.Context,
 	obsServer obs_grpc.OBSServer,
-	el MonitorElementConfig,
+	el DashboardElementConfig,
 	obsState *streamtypes.OBSState,
 ) (image.Image, time.Time, error) {
 	img := image.NewRGBA(image.Rectangle{
@@ -297,26 +297,26 @@ func (*MonitorSourceDummy) GetImage(
 	return img, time.Time{}, nil
 }
 
-func (*MonitorSourceDummy) SourceType() MonitorSourceType {
-	return MonitorSourceTypeDummy
+func (*DashboardSourceDummy) SourceType() DashboardSourceType {
+	return DashboardSourceTypeDummy
 }
 
-var _ Source = (*MonitorSourceDummy)(nil)
+var _ Source = (*DashboardSourceDummy)(nil)
 
 type Source interface {
 	GetImage(
 		ctx context.Context,
 		obsServer obs_grpc.OBSServer,
-		el MonitorElementConfig,
+		el DashboardElementConfig,
 		obsState *streamtypes.OBSState,
 	) (image.Image, time.Time, error)
 
-	SourceType() MonitorSourceType
+	SourceType() DashboardSourceType
 }
 
 type serializableSource struct {
-	Type   MonitorSourceType `yaml:"type"`
-	Config map[string]any    `yaml:"config,omitempty"`
+	Type   DashboardSourceType `yaml:"type"`
+	Config map[string]any      `yaml:"config,omitempty"`
 }
 
 func (s serializableSource) Unwrap() Source {

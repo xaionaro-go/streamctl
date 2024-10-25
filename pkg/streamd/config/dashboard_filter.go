@@ -8,16 +8,16 @@ import (
 	"github.com/anthonynsimon/bild/adjust"
 )
 
-type MonitorFilterType string
+type DashboardFilterType string
 
 const (
-	MonitorFilterTypeUndefined = MonitorFilterType("")
-	MonitorFilterTypeColor     = MonitorFilterType("color")
+	DashboardFilterTypeUndefined = DashboardFilterType("")
+	DashboardFilterTypeColor     = DashboardFilterType("color")
 )
 
-func (mst MonitorFilterType) New() Filter {
+func (mst DashboardFilterType) New() Filter {
 	switch mst {
-	case MonitorFilterTypeColor:
+	case DashboardFilterTypeColor:
 		return &FilterColor{}
 	default:
 		return nil
@@ -26,7 +26,7 @@ func (mst MonitorFilterType) New() Filter {
 
 type Filter interface {
 	Filter(context.Context, image.Image) image.Image
-	MonitorFilterType() MonitorFilterType
+	DashboardFilterType() DashboardFilterType
 }
 
 type FilterColor struct {
@@ -83,13 +83,13 @@ func processImage(
 	return result
 }
 
-func (f *FilterColor) MonitorFilterType() MonitorFilterType {
-	return MonitorFilterTypeColor
+func (f *FilterColor) DashboardFilterType() DashboardFilterType {
+	return DashboardFilterTypeColor
 }
 
 type serializableFilter struct {
-	Type   MonitorFilterType `yaml:"type"             json:"type"`
-	Config map[string]any    `yaml:"config,omitempty" json:"config"`
+	Type   DashboardFilterType `yaml:"type"             json:"type"`
+	Config map[string]any      `yaml:"config,omitempty" json:"config"`
 }
 
 func (s serializableFilter) Unwrap() Filter {
@@ -107,7 +107,7 @@ func (s serializableFilter) Filter(
 
 func wrapFilterForYaml(filter Filter) serializableFilter {
 	return serializableFilter{
-		Type:   filter.MonitorFilterType(),
+		Type:   filter.DashboardFilterType(),
 		Config: toMap(filter),
 	}
 }

@@ -26,8 +26,8 @@ type config struct {
 	Backends        streamcontrol.Config
 	ProfileMetadata map[streamcontrol.ProfileName]ProfileMetadata
 	StreamServer    streamserver.Config `yaml:"stream_server"`
-	Monitor         MonitorConfig
-	TriggerRules    TriggerRules `yaml:"trigger_rules"`
+	Dashboard       DashboardConfig     `yaml:"monitor"` // TODO: rename to `dashboard`
+	TriggerRules    TriggerRules        `yaml:"trigger_rules"`
 }
 
 type Config config
@@ -42,8 +42,8 @@ func NewConfig() Config {
 		Backends:        cfg,
 		ProfileMetadata: map[streamcontrol.ProfileName]ProfileMetadata{},
 		CachePath:       ptr("~/.streamd.cache"),
-		Monitor: MonitorConfig{
-			Elements: map[string]MonitorElementConfig{},
+		Dashboard: DashboardConfig{
+			Elements: map[string]DashboardElementConfig{},
 		},
 	}
 }

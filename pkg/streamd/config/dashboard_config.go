@@ -11,13 +11,13 @@ import (
 type AlignX = consts.AlignX
 type AlignY = consts.AlignY
 
-type MonitorConfig struct {
-	Elements map[string]MonitorElementConfig
+type DashboardConfig struct {
+	Elements map[string]DashboardElementConfig
 }
 
-type MonitorElementConfig _RawMonitorElementConfig
+type DashboardElementConfig _RawDashboardElementConfig
 
-type _RawMonitorElementConfig struct {
+type _RawDashboardElementConfig struct {
 	Width         float64  `yaml:"width"`
 	Height        float64  `yaml:"height"`
 	ZIndex        float64  `yaml:"z_index"`
@@ -32,7 +32,7 @@ type _RawMonitorElementConfig struct {
 	Filters       []Filter `yaml:"filters"`
 }
 
-type serializableMonitorElementConfig struct {
+type serializableDashboardElementConfig struct {
 	Width         float64              `yaml:"width"`
 	Height        float64              `yaml:"height"`
 	ZIndex        float64              `yaml:"z_index"`
@@ -47,23 +47,23 @@ type serializableMonitorElementConfig struct {
 	Filters       []serializableFilter `yaml:"filters"`
 }
 
-func (cfg *MonitorElementConfig) UnmarshalYAML(b []byte) (_err error) {
+func (cfg *DashboardElementConfig) UnmarshalYAML(b []byte) (_err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			_err = fmt.Errorf("got a panic: %v\n%s", r, debug.Stack())
 		}
 	}()
 	if cfg == nil {
-		return fmt.Errorf("nil MonitorElementConfig")
+		return fmt.Errorf("nil DashboardElementConfig")
 	}
 
-	intermediate := serializableMonitorElementConfig{}
+	intermediate := serializableDashboardElementConfig{}
 	err := yaml.Unmarshal(b, &intermediate)
 	if err != nil {
-		return fmt.Errorf("unable to unmarshal the MonitorElementConfig: %w", err)
+		return fmt.Errorf("unable to unmarshal the DashboardElementConfig: %w", err)
 	}
 
-	*cfg = MonitorElementConfig{
+	*cfg = DashboardElementConfig{
 		Width:         intermediate.Width,
 		Height:        intermediate.Height,
 		ZIndex:        intermediate.ZIndex,
@@ -84,14 +84,14 @@ func (cfg *MonitorElementConfig) UnmarshalYAML(b []byte) (_err error) {
 	return nil
 }
 
-func (cfg MonitorElementConfig) MarshalYAML() (b []byte, _err error) {
+func (cfg DashboardElementConfig) MarshalYAML() (b []byte, _err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			_err = fmt.Errorf("got a panic: %v\n%s", r, debug.Stack())
 		}
 	}()
 
-	intermediate := &serializableMonitorElementConfig{
+	intermediate := &serializableDashboardElementConfig{
 		Width:         cfg.Width,
 		Height:        cfg.Height,
 		ZIndex:        cfg.ZIndex,
