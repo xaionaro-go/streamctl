@@ -139,6 +139,10 @@ func (p *Panel) updateMonitorPageImagesNoLock(
 		wg.Add(1)
 		{
 			el := &elements[idx]
+			var oldObj fyne.CanvasObject
+			if len(p.monitorLayersContainer.Objects) > idx {
+				oldObj = p.monitorLayersContainer.Objects[idx]
+			}
 			observability.Go(ctx, func() {
 				defer wg.Done()
 				img, changed, err := p.getImage(ctx, streamdconsts.ImageID(el.ElementName))
@@ -165,8 +169,13 @@ func (p *Panel) updateMonitorPageImagesNoLock(
 					X: int(winSize.Width * float32(el.OffsetX) / 100),
 					Y: int(winSize.Height * float32(el.OffsetY) / 100),
 				}
+				var oldImg image.Image
+				if oldCanvasImg, ok := oldObj.(*canvas.Image); ok {
+					oldImg = oldCanvasImg.Image
+				}
 				img = imgFillTo(
 					ctx,
+					oldImg,
 					img,
 					image.Point{X: int(winSize.Width), Y: int(winSize.Height)},
 					imgSize,
@@ -209,6 +218,7 @@ func (p *Panel) updateMonitorPageImagesNoLock(
 		winSize := image.Point{X: int(winSize.Width), Y: int(winSize.Height)}
 		img = imgFillTo(
 			ctx,
+			nil,
 			img,
 			winSize,
 			winSize,

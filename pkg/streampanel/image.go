@@ -156,6 +156,7 @@ func imgFitTo(src image.Image, size image.Point) (image.Image, error) {
 
 func imgFillTo(
 	ctx context.Context,
+	dstReuse image.Image,
 	src image.Image,
 	canvasSize image.Point,
 	outSize image.Point,
@@ -190,9 +191,17 @@ func imgFillTo(
 	}
 
 	logger.Tracef(ctx, "ratio: %v -> %v; size: %#+v -> %#+v", ratioCur, ratioNew, sizeCur, sizeNew)
-	img := image.NewRGBA(image.Rectangle{
-		Max: sizeNew,
-	})
+	dst, ok := dstReuse.(*image.RGBA)
+	if !ok || dst.Bounds().Max != sizeNew {
+		if !ok {
+			logger.Tracef(ctx, "received dstReuse type is %T, expected %T", dstReuse, dst)
+		} else {
+			logger.Tracef(ctx, "the size changed since the previous time: %#+v -> %#+v", dst.Bounds(), sizeNew)
+		}
+		dst = image.NewRGBA(image.Rectangle{
+			Max: sizeNew,
+		})
+	}
 
 	var offsetX, offsetY int
 	if ratioCur < ratioNew {
@@ -224,11 +233,11 @@ func imgFillTo(
 			xNew := x + offsetX
 			yNew := y + offsetY
 
-			img.Set(xNew, yNew, src.At(x, y))
+			dst.Set(xNew, yNew, src.At(x, y))
 		}
 	}
 
-	return img
+	return dst
 }
 
 const (
