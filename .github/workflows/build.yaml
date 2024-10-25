@@ -1,10 +1,5 @@
-name: build-and-release
-
-on:
-  push:
-    branches:
-    - main
-    - test/ci
+name: build
+on: [workflow_call]
 
 jobs:
   build:
@@ -15,9 +10,7 @@ jobs:
         target:
           - name: streampanel-linux-amd64
             artifact: streampanel-linux-amd64
-          - name: dockerbuild-streampanel-android-arm64
-            env:
-              - ENABLE_VLC: false
+          - name: ENABLE_VLC=false dockerbuild-streampanel-android-arm64
             artifact: streampanel-arm64.apk
           - name: streampanel-windows-amd64.zip
             artifact: streampanel-windows-amd64.zip
@@ -27,15 +20,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: crazy-max/ghaction-setup-docker@v3
+        if: ${{ matrix.target.name == 'ENABLE_VLC=false dockerbuild-streampanel-android-arm64' }}
         timeout-minutes: 12
       - name: setup go
         uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          check-latest: true
       - name: install fyne
         run: go install fyne.io/fyne/v2/cmd/fyne@latest
       - name: apt install
+        if: ${{ matrix.target.name != 'ENABLE_VLC=false dockerbuild-streampanel-android-arm64' }}
         run: |
           sudo apt install -fy \
-            gcc-mingw-w64-x86-64-win32 \
             libavcodec-dev \
             libavdevice-dev \
             libavfilter-dev \
@@ -49,11 +46,19 @@ jobs:
             libglfw3-dev \
             libasound2-dev \
             libxxf86vm-dev \
+      - name: apt install
+        if: ${{ matrix.target.name == 'streampanel-windows-amd64.zip' || matrix.target.name == 'streampanel-windows-debug-amd64.zip' }}
+        run: |
+          sudo apt install -fy \
+            gcc-mingw-w64-x86-64-win32 \
+      - name: apt clean
+        run: |
+          sudo apt clean
       - name: make ${{ matrix.target.name }}
         run: make ${{ matrix.target.name }}
         env:
-          ENABLE_VLC:   ${{ matrix.target.env.ENABLE_VLC }}
-          ENABLE_LIBAV: ${{ matrix.target.env.ENABLE_LIBAV }}
+          TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
+          TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
       - name: upload-artifact
         uses: actions/upload-artifact@v4
         with:

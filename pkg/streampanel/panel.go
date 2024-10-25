@@ -29,6 +29,7 @@ import (
 	"github.com/go-ng/xmath"
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
+	"github.com/xaionaro-go/streamctl/pkg/buildvars"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/screenshot"
@@ -958,8 +959,14 @@ func (p *Panel) InputTwitchUserInfo(
 	)
 	clientIDField := widget.NewEntry()
 	clientIDField.SetPlaceHolder("client ID")
+	if buildvars.TwitchClientID != "" {
+		clientIDField.Hide()
+	}
 	clientSecretField := widget.NewEntry()
 	clientSecretField.SetPlaceHolder("client secret")
+	if buildvars.TwitchClientSecret != "" {
+		clientSecretField.Hide()
+	}
 	instructionText := widget.NewRichText(
 		&widget.TextSegment{Text: "Go to\n", Style: widget.RichTextStyle{Inline: true}},
 		&widget.HyperlinkSegment{Text: twitchAppsCreateLink.String(), URL: twitchAppsCreateLink},

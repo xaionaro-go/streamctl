@@ -3,6 +3,7 @@ package twitch
 import (
 	"context"
 
+	"github.com/xaionaro-go/streamctl/pkg/buildvars"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/secret"
 	streamctl "github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -32,7 +33,9 @@ func InitConfig(cfg streamctl.Config) {
 }
 
 func (cfg PlatformSpecificConfig) IsInitialized() bool {
-	return cfg.Channel != "" && cfg.ClientID != ""
+	return cfg.Channel != "" &&
+		valueOrDefault(cfg.ClientID, buildvars.TwitchClientID) != "" &&
+		valueOrDefault(cfg.ClientSecret.Get(), buildvars.TwitchClientSecret) != ""
 }
 
 type StreamProfile struct {

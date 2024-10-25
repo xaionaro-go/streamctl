@@ -23,11 +23,15 @@ ifneq ($(GOTAGS),)
 	FYNEBUILD_FLAGS+=--tags $(GOTAGS)
 endif
 
+
 GOPATH?=$(shell go env GOPATH)
 
 WINDOWS_CGO_FLAGS?=-I$(PWD)/3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/sdk/include
 WINDOWS_LINKER_FLAGS?=-L$(PWD)/3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/sdk/lib -L$(PWD)/3rdparty/amd64/windows/ffmpeg-n7.0-21-gfb8f0ea7b3-win64-gpl-shared-7.0/lib
 WINDOWS_PKG_CONFIG_PATH?=$(PWD)/3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/sdk/lib/pkgconfig
+
+VERSION_STRING?=$(shell git rev-list -1 HEAD)
+GOBUILD_FLAGS+=-ldflags "-X github.com/xaionaro-go/streamctl/pkg/buildvars.Version=$(VERSION_STRING) -X github.com/xaionaro-go/streamctl/pkg/buildvars.TwitchClientID=$(TWITCH_CLIENT_ID) -X github.com/xaionaro-go/streamctl/pkg/buildvars.TwitchClientSecret=$(TWITCH_CLIENT_SECRET)"
 
 all: streampanel-linux-amd64 streampanel-linux-arm64 streampanel-android-arm64 streampanel-windows
 
@@ -110,88 +114,22 @@ streampanel-macos-arm64: builddir
 	$(eval INSTALL_DEST?=build/streampanel-macos-arm64)
 	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build $(GOBUILD_FLAGS) -o "$(INSTALL_DEST)" ./cmd/streampanel
 
-3rdparty/arm64/termux-packages:
-	mkdir -p 3rdparty/arm64/
-	cd 3rdparty/arm64 && git clone --depth=1 -b feat/static_libav https://github.com/xaionaro/termux-packages
+DOCKER_IMAGE?=xaionaro2/streampanel-android-builder
+DOCKER_CONTAINER_NAME?=streampanel-android-builder
 
-3rdparty/arm64/termux-packages/environment-ready: 3rdparty/arm64/termux-packages
-	cd 3rdparty/arm64/termux-packages && \
-	./scripts/update-docker.sh || /bin/true
+dockerbuilder-android-arm64:
+	docker pull  $(DOCKER_IMAGE)
+	docker start $(DOCKER_IMAGE) >/dev/null 2>&1 || \
+		docker run \
+			--detach \
+			--init \
+			--name $(DOCKER_CONTAINER_NAME) \
+			--volume ".:/project" \
+			--tty \
+			$(DOCKER_IMAGE)
 
-	cp 3rdparty/arm64/termux-patched-scripts/run-docker.sh \
-	   3rdparty/arm64/termux-packages/scripts/run-docker.sh
-	
-	cd 3rdparty/arm64/termux-packages && \
-	./scripts/run-docker.sh ./scripts/setup-android-sdk.sh
-
-	# downloading dependencies (e.g. we do not need ccls,
-	# but we need the most of the dependencies of ccls)
-
-	cd 3rdparty/arm64/termux-packages && \
-	./scripts/run-docker.sh ./build-package.sh -I gettext
-
-	cd 3rdparty/arm64/termux-packages && \
-	./scripts/run-docker.sh ./build-package.sh -I ccls
-
-	cd 3rdparty/arm64/termux-packages && \
-	./scripts/run-docker.sh ./build-package.sh -I termux-api
-
-	cd 3rdparty/arm64/termux-packages && \
-	./scripts/run-docker.sh ./build-package.sh -I xdotool
-
-	cd 3rdparty/arm64/termux-packages && \
-	./scripts/run-docker.sh ./build-package.sh -I xdg-utils
-
-	cd 3rdparty/arm64/termux-packages && \
-	./scripts/run-docker.sh ./build-package.sh -I liblzma
-
-	if ! [ -f /data/data/com.termux/files/usr/lib/liblzma.a ]; then \
-		cd 3rdparty/arm64/termux-packages; \
-		./scripts/run-docker.sh rm -f /data/data/.built-packages/liblzma; \
-		./scripts/run-docker.sh ./build-package.sh -I liblzma; \
-	fi
-
-	if ! [ -f /data/data/com.termux/files/usr/lib/libiconv.a ]; then \
-		cd 3rdparty/arm64/termux-packages; \
-		./scripts/run-docker.sh rm -f /data/data/.built-packages/libiconv; \
-		./scripts/run-docker.sh ./build-package.sh -I libiconv; \
-	fi
-
-	cd 3rdparty/arm64/termux-packages && \
-	./scripts/run-docker.sh ./build-package.sh -I libx11
-
-	# building what we need
-
-	cd 3rdparty/arm64/termux-packages && \
-	./scripts/run-docker.sh ./build-package.sh ffmpeg
-
-	cd 3rdparty/arm64/termux-packages && \
-	./scripts/run-docker.sh ./build-package.sh libxxf86vm
-	
-	#cd 3rdparty/arm64/termux-packages && \
-	#./scripts/run-docker.sh ./build-package.sh vlc
-
-	# installing fyne
-
-	cd 3rdparty/arm64/termux-packages && \
-	./scripts/run-docker.sh sudo apt update
-
-	cd 3rdparty/arm64/termux-packages && \
-	./scripts/run-docker.sh sudo apt install -y golang-go
-
-	cd 3rdparty/arm64/termux-packages && \
-	./scripts/run-docker.sh go install fyne.io/fyne/v2/cmd/fyne@latest
-
-	# avoiding fyne loading wrong GL libraries:
-	rm -f /data/data/com.termux/files/usr/lib/*lib*GL*
-
-	# marking to do not redo all the work above next time:
-	touch 3rdparty/arm64/termux-packages/environment-ready
-
-dockerbuild-streampanel-android-arm64: 3rdparty/arm64/termux-packages/environment-ready
-	cd 3rdparty/arm64/termux-packages && \
-	./scripts/run-docker.sh make ENABLE_VLC="$(ENABLE_VLC)" ENABLE_LIBAV="$(ENABLE_LIBAV)" FORCE_DEBUG="$(FORCE_DEBUG)" -C /project streampanel-android-arm64-in-docker
-
+dockerbuild-streampanel-android-arm64: dockerbuilder-android-arm64
+	docker exec $(DOCKER_CONTAINER_NAME) make ENABLE_VLC="$(ENABLE_VLC)" ENABLE_LIBAV="$(ENABLE_LIBAV)" FORCE_DEBUG="$(FORCE_DEBUG)" -C /project streampanel-android-arm64-in-docker
 
 checkconfig-android-in-docker:
 	@if [ "$(ENABLE_VLC)" != 'false' ]; then \

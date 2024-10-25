@@ -1,0 +1,43 @@
+name: rolling-release
+
+on:
+  push:
+    branches:
+      - main
+      - test/ci
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yaml
+  rolling-release:
+    name: rolling-release
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: download streampanel-linux-amd64
+        uses: actions/download-artifact@v4
+        with:
+          name: streampanel-linux-amd64
+      - name: download streampanel-arm64.apk
+        uses: actions/download-artifact@v4
+        with:
+          name: streampanel-arm64.apk
+      - name: download streampanel-windows-amd64.zip
+        uses: actions/download-artifact@v4
+        with:
+          name: streampanel-windows-amd64.zip
+      - name: download streampanel-windows-debug-amd64.zip
+        uses: actions/download-artifact@v4
+        with:
+          name: streampanel-windows-debug-amd64.zip
+      - uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          prerelease: true
+          draft: true
+          automatic_release_tag: unstable
+          files: |
+            streampanel-linux-amd64
+            streampanel-arm64.apk
+            streampanel-windows-amd64.zip
+            streampanel-windows-debug-amd64.zip
