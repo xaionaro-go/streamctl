@@ -1,13 +1,13 @@
 module github.com/xaionaro-go/streamctl
 
-go 1.22.2
+go 1.23
 
-toolchain go1.22.3
+toolchain go1.23.2
 
 // The original go-yaml is very slow, using the improved version instead
 replace github.com/goccy/go-yaml v1.11.3 => github.com/yoelsusanto/go-yaml v0.0.0-20240324162521-2018c1ab915b
 
-replace github.com/andreykaipov/goobs v1.4.1 => github.com/xaionaro-go/goobs v0.0.0-20241018191659-49be16b2ceb5
+replace github.com/andreykaipov/goobs v1.4.1 => github.com/xaionaro-go/goobs v0.0.0-20241025144519-45ebde014c09
 
 replace github.com/adrg/libvlc-go/v3 v3.1.5 => github.com/xaionaro-go/libvlc-go/v3 v3.0.0-20241011194409-0fe4e2a9d901
 
@@ -20,8 +20,6 @@ replace github.com/pion/ice/v2 => github.com/aler9/ice/v2 v2.0.0-20241006110309-
 replace github.com/pion/webrtc/v3 => github.com/aler9/webrtc/v3 v3.0.0-20240610104456-eaec24056d06
 
 replace github.com/jfreymuth/pulse v0.1.1 => github.com/xaionaro-go/pulse v0.0.0-20241023202712-7151fa00d4bb
-
-replace github.com/xaionaro-go/object v0.0.0-20241024021849-9d779d330f28 => ../object
 
 require (
 	github.com/facebookincubator/go-belt v0.0.0-20240804203001-846c4409d41c
@@ -230,7 +228,7 @@ require (
 	github.com/xaionaro-go/kickcom v0.0.0-20241022142825-25a234cc8628
 	github.com/xaionaro-go/lockmap v0.0.0-20240901172806-e17aea364748
 	github.com/xaionaro-go/mediamtx v0.0.0-20241009124606-94c22c603970
-	github.com/xaionaro-go/object v0.0.0-20241024021849-9d779d330f28
+	github.com/xaionaro-go/object v0.0.0-20241024025057-382352276e7b
 	github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20241018162120-5faf4e7a684a
 	github.com/xaionaro-go/timeapiio v0.0.0-20240915203246-b907cf699af3
 	github.com/xaionaro-go/typing v0.0.0-20221123235249-2229101d38ba
