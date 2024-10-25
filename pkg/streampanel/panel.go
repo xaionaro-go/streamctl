@@ -1470,11 +1470,6 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 		backendEnabled[backendID] = isEnabled
 	}
 
-	gitIsEnabled, err := p.StreamD.OBSOLETE_IsGITInitialized(ctx)
-	if err != nil {
-		return fmt.Errorf("unable to get info if GIT is initialized: %w", err)
-	}
-
 	w := p.app.NewWindow(AppName + ": Settings")
 	resizeWindow(w, fyne.NewSize(400, 900))
 
@@ -1578,13 +1573,6 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 		youtubeAlreadyLoggedIn.SetText("(not logged in)")
 	} else {
 		youtubeAlreadyLoggedIn.SetText("(already logged in)")
-	}
-
-	gitAlreadyLoggedIn := widget.NewLabel("")
-	if !gitIsEnabled {
-		gitAlreadyLoggedIn.SetText("(not logged in)")
-	} else {
-		gitAlreadyLoggedIn.SetText("(already logged in)")
 	}
 
 	numDisplays := p.Screenshoter.Engine().NumActiveDisplays()
@@ -1759,18 +1747,6 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 			beforeStopStreamCommandEntry,
 			widget.NewLabel("Run command on stream stop (after):"),
 			afterStopStreamCommandEntry,
-			widget.NewSeparator(),
-			widget.NewSeparator(),
-			widget.NewRichTextFromMarkdown(`# Syncing (via git)`),
-			container.NewHBox(
-				widget.NewButtonWithIcon("(Re-)login in GIT", theme.LoginIcon(), func() {
-					err := p.StreamD.OBSOLETE_GitRelogin(ctx)
-					if err != nil {
-						p.DisplayError(err)
-					}
-				}),
-				twitchAlreadyLoggedIn,
-			),
 		),
 		container.NewHBox(
 			cancelButton,

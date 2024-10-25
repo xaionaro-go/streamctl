@@ -31,10 +31,6 @@ service StreamD {
 
     rpc EXPERIMENTAL_ReinitStreamControllers(EXPERIMENTAL_ReinitStreamControllersRequest) returns (EXPERIMENTAL_ReinitStreamControllersReply) {}
 
-    rpc OBSOLETE_FetchConfig(OBSOLETE_FetchConfigRequest) returns (OBSOLETE_FetchConfigReply) {}
-    rpc OBSOLETE_GitInfo(OBSOLETE_GetGitInfoRequest) returns (OBSOLETE_GetGitInfoReply) {}
-    rpc OBSOLETE_GitRelogin(OBSOLETE_GitReloginRequest) returns (OBSOLETE_GitReloginReply) {}
-
     rpc SubscribeToOAuthRequests(SubscribeToOAuthRequestsRequest) returns (stream OAuthRequest) {}
     rpc SubmitOAuthCode(SubmitOAuthCodeRequest) returns (SubmitOAuthCodeReply) {}
 

@@ -512,22 +512,6 @@ func (c *Client) Ping(
 	return err
 }
 
-func (c *Client) FetchConfig(ctx context.Context) error {
-	_, err := withStreamDClient(ctx, c, func(
-		ctx context.Context,
-		client streamd_grpc.StreamDClient,
-		conn io.Closer,
-	) (*streamd_grpc.OBSOLETE_FetchConfigReply, error) {
-		return callWrapper(
-			ctx,
-			c,
-			client.OBSOLETE_FetchConfig,
-			&streamd_grpc.OBSOLETE_FetchConfigRequest{},
-		)
-	})
-	return err
-}
-
 func (c *Client) InitCache(ctx context.Context) error {
 	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
@@ -663,27 +647,6 @@ func (c *Client) IsBackendEnabled(
 	return reply.IsInitialized, nil
 }
 
-func (c *Client) OBSOLETE_IsGITInitialized(
-	ctx context.Context,
-) (bool, error) {
-	reply, err := withStreamDClient(ctx, c, func(
-		ctx context.Context,
-		client streamd_grpc.StreamDClient,
-		conn io.Closer,
-	) (*streamd_grpc.OBSOLETE_GetGitInfoReply, error) {
-		return callWrapper(
-			ctx,
-			c,
-			client.OBSOLETE_GitInfo,
-			&streamd_grpc.OBSOLETE_GetGitInfoRequest{},
-		)
-	})
-	if err != nil {
-		return false, err
-	}
-	return reply.IsInitialized, nil
-}
-
 func (c *Client) StartStream(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
@@ -739,24 +702,6 @@ func (c *Client) EndStream(
 			&streamd_grpc.EndStreamRequest{
 				PlatID: string(platID),
 			},
-		)
-	})
-	return err
-}
-
-func (c *Client) OBSOLETE_GitRelogin(
-	ctx context.Context,
-) error {
-	_, err := withStreamDClient(ctx, c, func(
-		ctx context.Context,
-		client streamd_grpc.StreamDClient,
-		conn io.Closer,
-	) (*streamd_grpc.OBSOLETE_GitReloginReply, error) {
-		return callWrapper(
-			ctx,
-			c,
-			client.OBSOLETE_GitRelogin,
-			&streamd_grpc.OBSOLETE_GitReloginRequest{},
 		)
 	})
 	return err

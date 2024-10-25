@@ -25,7 +25,6 @@ type StreamD interface {
 	Run(ctx context.Context) error
 	SetLoggingLevel(ctx context.Context, level logger.Level) error
 	GetLoggingLevel(ctx context.Context) (logger.Level, error)
-	FetchConfig(ctx context.Context) error
 	ResetCache(ctx context.Context) error
 	InitCache(ctx context.Context) error
 	SaveConfig(ctx context.Context) error
@@ -35,7 +34,6 @@ type StreamD interface {
 		ctx context.Context,
 		id streamcontrol.PlatformName,
 	) (bool, error)
-	OBSOLETE_IsGITInitialized(ctx context.Context) (bool, error)
 	StartStream(
 		ctx context.Context,
 		platID streamcontrol.PlatformName,
@@ -67,12 +65,10 @@ type StreamD interface {
 		profile streamcontrol.AbstractStreamProfile,
 		customArgs ...any,
 	) error
-	OBSOLETE_GitRelogin(ctx context.Context) error
 	GetBackendData(
 		ctx context.Context,
 		platID streamcontrol.PlatformName,
 	) (any, error)
-	Restart(ctx context.Context) error
 	EXPERIMENTAL_ReinitStreamControllers(ctx context.Context) error
 	GetStreamStatus(
 		ctx context.Context,

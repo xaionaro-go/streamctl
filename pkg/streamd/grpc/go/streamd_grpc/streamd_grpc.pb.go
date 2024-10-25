@@ -41,9 +41,6 @@ type StreamDClient interface {
 	GetVariableHash(ctx context.Context, in *GetVariableHashRequest, opts ...grpc.CallOption) (*GetVariableHashReply, error)
 	SetVariable(ctx context.Context, in *SetVariableRequest, opts ...grpc.CallOption) (*SetVariableReply, error)
 	EXPERIMENTAL_ReinitStreamControllers(ctx context.Context, in *EXPERIMENTAL_ReinitStreamControllersRequest, opts ...grpc.CallOption) (*EXPERIMENTAL_ReinitStreamControllersReply, error)
-	OBSOLETE_FetchConfig(ctx context.Context, in *OBSOLETE_FetchConfigRequest, opts ...grpc.CallOption) (*OBSOLETE_FetchConfigReply, error)
-	OBSOLETE_GitInfo(ctx context.Context, in *OBSOLETE_GetGitInfoRequest, opts ...grpc.CallOption) (*OBSOLETE_GetGitInfoReply, error)
-	OBSOLETE_GitRelogin(ctx context.Context, in *OBSOLETE_GitReloginRequest, opts ...grpc.CallOption) (*OBSOLETE_GitReloginReply, error)
 	SubscribeToOAuthRequests(ctx context.Context, in *SubscribeToOAuthRequestsRequest, opts ...grpc.CallOption) (StreamD_SubscribeToOAuthRequestsClient, error)
 	SubmitOAuthCode(ctx context.Context, in *SubmitOAuthCodeRequest, opts ...grpc.CallOption) (*SubmitOAuthCodeReply, error)
 	ListStreamServers(ctx context.Context, in *ListStreamServersRequest, opts ...grpc.CallOption) (*ListStreamServersReply, error)
@@ -360,33 +357,6 @@ func (c *streamDClient) SetVariable(ctx context.Context, in *SetVariableRequest,
 func (c *streamDClient) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context, in *EXPERIMENTAL_ReinitStreamControllersRequest, opts ...grpc.CallOption) (*EXPERIMENTAL_ReinitStreamControllersReply, error) {
 	out := new(EXPERIMENTAL_ReinitStreamControllersReply)
 	err := c.cc.Invoke(ctx, "/streamd.StreamD/EXPERIMENTAL_ReinitStreamControllers", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *streamDClient) OBSOLETE_FetchConfig(ctx context.Context, in *OBSOLETE_FetchConfigRequest, opts ...grpc.CallOption) (*OBSOLETE_FetchConfigReply, error) {
-	out := new(OBSOLETE_FetchConfigReply)
-	err := c.cc.Invoke(ctx, "/streamd.StreamD/OBSOLETE_FetchConfig", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *streamDClient) OBSOLETE_GitInfo(ctx context.Context, in *OBSOLETE_GetGitInfoRequest, opts ...grpc.CallOption) (*OBSOLETE_GetGitInfoReply, error) {
-	out := new(OBSOLETE_GetGitInfoReply)
-	err := c.cc.Invoke(ctx, "/streamd.StreamD/OBSOLETE_GitInfo", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *streamDClient) OBSOLETE_GitRelogin(ctx context.Context, in *OBSOLETE_GitReloginRequest, opts ...grpc.CallOption) (*OBSOLETE_GitReloginReply, error) {
-	out := new(OBSOLETE_GitReloginReply)
-	err := c.cc.Invoke(ctx, "/streamd.StreamD/OBSOLETE_GitRelogin", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1078,9 +1048,6 @@ type StreamDServer interface {
 	GetVariableHash(context.Context, *GetVariableHashRequest) (*GetVariableHashReply, error)
 	SetVariable(context.Context, *SetVariableRequest) (*SetVariableReply, error)
 	EXPERIMENTAL_ReinitStreamControllers(context.Context, *EXPERIMENTAL_ReinitStreamControllersRequest) (*EXPERIMENTAL_ReinitStreamControllersReply, error)
-	OBSOLETE_FetchConfig(context.Context, *OBSOLETE_FetchConfigRequest) (*OBSOLETE_FetchConfigReply, error)
-	OBSOLETE_GitInfo(context.Context, *OBSOLETE_GetGitInfoRequest) (*OBSOLETE_GetGitInfoReply, error)
-	OBSOLETE_GitRelogin(context.Context, *OBSOLETE_GitReloginRequest) (*OBSOLETE_GitReloginReply, error)
 	SubscribeToOAuthRequests(*SubscribeToOAuthRequestsRequest, StreamD_SubscribeToOAuthRequestsServer) error
 	SubmitOAuthCode(context.Context, *SubmitOAuthCodeRequest) (*SubmitOAuthCodeReply, error)
 	ListStreamServers(context.Context, *ListStreamServersRequest) (*ListStreamServersReply, error)
@@ -1209,15 +1176,6 @@ func (UnimplementedStreamDServer) SetVariable(context.Context, *SetVariableReque
 }
 func (UnimplementedStreamDServer) EXPERIMENTAL_ReinitStreamControllers(context.Context, *EXPERIMENTAL_ReinitStreamControllersRequest) (*EXPERIMENTAL_ReinitStreamControllersReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method EXPERIMENTAL_ReinitStreamControllers not implemented")
-}
-func (UnimplementedStreamDServer) OBSOLETE_FetchConfig(context.Context, *OBSOLETE_FetchConfigRequest) (*OBSOLETE_FetchConfigReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method OBSOLETE_FetchConfig not implemented")
-}
-func (UnimplementedStreamDServer) OBSOLETE_GitInfo(context.Context, *OBSOLETE_GetGitInfoRequest) (*OBSOLETE_GetGitInfoReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method OBSOLETE_GitInfo not implemented")
-}
-func (UnimplementedStreamDServer) OBSOLETE_GitRelogin(context.Context, *OBSOLETE_GitReloginRequest) (*OBSOLETE_GitReloginReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method OBSOLETE_GitRelogin not implemented")
 }
 func (UnimplementedStreamDServer) SubscribeToOAuthRequests(*SubscribeToOAuthRequestsRequest, StreamD_SubscribeToOAuthRequestsServer) error {
 	return status.Errorf(codes.Unimplemented, "method SubscribeToOAuthRequests not implemented")
@@ -1816,60 +1774,6 @@ func _StreamD_EXPERIMENTAL_ReinitStreamControllers_Handler(srv interface{}, ctx 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).EXPERIMENTAL_ReinitStreamControllers(ctx, req.(*EXPERIMENTAL_ReinitStreamControllersRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _StreamD_OBSOLETE_FetchConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(OBSOLETE_FetchConfigRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(StreamDServer).OBSOLETE_FetchConfig(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/streamd.StreamD/OBSOLETE_FetchConfig",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(StreamDServer).OBSOLETE_FetchConfig(ctx, req.(*OBSOLETE_FetchConfigRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _StreamD_OBSOLETE_GitInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(OBSOLETE_GetGitInfoRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(StreamDServer).OBSOLETE_GitInfo(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/streamd.StreamD/OBSOLETE_GitInfo",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(StreamDServer).OBSOLETE_GitInfo(ctx, req.(*OBSOLETE_GetGitInfoRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _StreamD_OBSOLETE_GitRelogin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(OBSOLETE_GitReloginRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(StreamDServer).OBSOLETE_GitRelogin(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/streamd.StreamD/OBSOLETE_GitRelogin",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(StreamDServer).OBSOLETE_GitRelogin(ctx, req.(*OBSOLETE_GitReloginRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2892,18 +2796,6 @@ var _StreamD_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "EXPERIMENTAL_ReinitStreamControllers",
 			Handler:    _StreamD_EXPERIMENTAL_ReinitStreamControllers_Handler,
-		},
-		{
-			MethodName: "OBSOLETE_FetchConfig",
-			Handler:    _StreamD_OBSOLETE_FetchConfig_Handler,
-		},
-		{
-			MethodName: "OBSOLETE_GitInfo",
-			Handler:    _StreamD_OBSOLETE_GitInfo_Handler,
-		},
-		{
-			MethodName: "OBSOLETE_GitRelogin",
-			Handler:    _StreamD_OBSOLETE_GitRelogin_Handler,
 		},
 		{
 			MethodName: "SubmitOAuthCode",

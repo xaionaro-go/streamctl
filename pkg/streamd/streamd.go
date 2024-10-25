@@ -149,12 +149,6 @@ func (d *StreamD) Run(ctx context.Context) (_ret error) { // TODO: delete the fe
 		d.UI.DisplayError(fmt.Errorf("unable to initialize the secrets updater: %w", err))
 	}
 
-	d.UI.SetStatus("Initializing remote GIT storage...")
-	err = d.FetchConfig(ctx)
-	if err != nil {
-		d.UI.DisplayError(fmt.Errorf("unable to initialize the GIT storage: %w", err))
-	}
-
 	d.UI.SetStatus("Initializing streaming backends...")
 	if err := d.EXPERIMENTAL_ReinitStreamControllers(ctx); err != nil {
 		return fmt.Errorf("unable to initialize stream controllers: %w", err)
@@ -303,14 +297,6 @@ func (d *StreamD) writeCache(ctx context.Context) error {
 	return nil
 }
 
-func (d *StreamD) FetchConfig(ctx context.Context) error {
-	logger.Tracef(ctx, "FetchConfig")
-	defer logger.Tracef(ctx, "/FetchConfig")
-
-	d.initGitIfNeeded(ctx)
-	return nil
-}
-
 func (d *StreamD) InitCache(ctx context.Context) error {
 	logger.Tracef(ctx, "InitCache")
 	defer logger.Tracef(ctx, "/InitCache")
@@ -451,17 +437,6 @@ func (d *StreamD) SaveConfig(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-
-	observability.Go(ctx, func() {
-		if d.GitStorage != nil {
-			err = d.sendConfigViaGIT(ctx)
-			if err != nil {
-				d.UI.DisplayError(
-					fmt.Errorf("unable to send the config to the remote git repository: %w", err),
-				)
-			}
-		}
-	})
 
 	return nil
 }
@@ -687,11 +662,6 @@ func (d *StreamD) GetBackendData(
 	default:
 		return nil, fmt.Errorf("unexpected platform ID '%s'", platID)
 	}
-}
-
-func (d *StreamD) Restart(ctx context.Context) error {
-	d.UI.Restart(ctx, "A restart was requested")
-	return nil
 }
 
 func (d *StreamD) tryConnectTwitch(

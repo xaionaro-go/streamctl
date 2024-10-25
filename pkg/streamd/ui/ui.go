@@ -11,10 +11,6 @@ import (
 type UI interface {
 	SetStatus(string)
 	DisplayError(error)
-	Restart(context.Context, string)
-	InputGitUserData(
-		ctx context.Context,
-	) (bool, string, []byte, error)
 	OAuthHandlerTwitch(ctx context.Context, arg oauthhandler.OAuthHandlerArgument) error
 	OAuthHandlerKick(ctx context.Context, arg oauthhandler.OAuthHandlerArgument) error
 	OAuthHandlerYouTube(ctx context.Context, arg oauthhandler.OAuthHandlerArgument) error

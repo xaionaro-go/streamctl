@@ -266,9 +266,7 @@ func (m *Manager) handleConnection(
 		}
 
 		if err := m.processMessage(ctx, regMessage.Source, message, onReceivedMessage); err != nil {
-			logger.Errorf(
-				ctx,
-				"unable to process the message %#+v from %s (%s): %w",
+			logger.Errorf(ctx, "unable to process the message %#+v from %s (%s): %v",
 				message, regMessage.Source, conn.RemoteAddr().String(), err,
 			)
 		}

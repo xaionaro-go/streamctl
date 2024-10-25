@@ -355,18 +355,6 @@ func (grpc *GRPCServer) GetBackendInfo(
 	}, nil
 }
 
-func (grpc *GRPCServer) Restart(
-	ctx context.Context,
-	req *streamd_grpc.RestartRequest,
-) (*streamd_grpc.RestartReply, error) {
-	err := grpc.StreamD.Restart(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unable to restart: %w", err)
-	}
-	grpc.invalidateCache(ctx)
-	return &streamd_grpc.RestartReply{}, nil
-}
-
 func (grpc *GRPCServer) SetTitle(
 	ctx context.Context,
 	req *streamd_grpc.SetTitleRequest,
@@ -499,51 +487,6 @@ func (grpc *GRPCServer) EXPERIMENTAL_ReinitStreamControllers(
 	}
 
 	return &streamd_grpc.EXPERIMENTAL_ReinitStreamControllersReply{}, nil
-}
-
-func (grpc *GRPCServer) OBSOLETE_FetchConfig(
-	ctx context.Context,
-	req *streamd_grpc.OBSOLETE_FetchConfigRequest,
-) (*streamd_grpc.OBSOLETE_FetchConfigReply, error) {
-	err := grpc.StreamD.FetchConfig(ctx)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"unable to fetch the config: %w",
-			err,
-		)
-	}
-	grpc.invalidateCache(ctx)
-	return &streamd_grpc.OBSOLETE_FetchConfigReply{}, nil
-}
-
-func (grpc *GRPCServer) OBSOLETE_GitInfo(
-	ctx context.Context,
-	req *streamd_grpc.OBSOLETE_GetGitInfoRequest,
-) (*streamd_grpc.OBSOLETE_GetGitInfoReply, error) {
-	isEnabled, err := grpc.StreamD.OBSOLETE_IsGITInitialized(
-		ctx,
-	)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"unable to get the git info: %w",
-			err,
-		)
-	}
-	return &streamd_grpc.OBSOLETE_GetGitInfoReply{
-		IsInitialized: isEnabled,
-	}, nil
-}
-
-func (grpc *GRPCServer) OBSOLETE_GitRelogin(
-	ctx context.Context,
-	req *streamd_grpc.OBSOLETE_GitReloginRequest,
-) (*streamd_grpc.OBSOLETE_GitReloginReply, error) {
-	err := grpc.StreamD.OBSOLETE_GitRelogin(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unable to relogin: %w", err)
-	}
-	grpc.invalidateCache(ctx)
-	return &streamd_grpc.OBSOLETE_GitReloginReply{}, nil
 }
 
 func (grpc *GRPCServer) GetStreamStatus(
