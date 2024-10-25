@@ -19,14 +19,11 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/logwriter"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/streamctl/pkg/xpath"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 const SupportedMPV = true
-
-const (
-	TimeoutMPVStart = 10 * time.Second
-)
 
 const (
 	restartMPV = true
@@ -77,7 +74,6 @@ func NewMPV(
 	logger.Debugf(ctx, "NewMPV()")
 	defer func() { logger.Debugf(ctx, "/NewMPV(): %#+v %v", _ret, _err) }()
 
-	ctx, cancelFn := context.WithCancel(ctx)
 	if pathToMPV == "" {
 		pathToMPV = "mpv"
 		switch runtime.GOOS {
@@ -85,15 +81,22 @@ func NewMPV(
 			pathToMPV += ".exe"
 		}
 	}
+
+	execPathToMPV, err := xpath.GetExecPath(pathToMPV, "mpv")
+	if err != nil {
+		return nil, fmt.Errorf("unable to locate the executable of MPV: '%s': %w", pathToMPV, err)
+	}
+
+	ctx, cancelFn := context.WithCancel(ctx)
 	p := &MPV{
 		PlayerCommon: PlayerCommon{
 			Title: title,
 		},
-		PathToMPV:  pathToMPV,
+		PathToMPV:  execPathToMPV,
 		EndCh:      make(chan struct{}),
 		CancelFunc: cancelFn,
 	}
-	err := p.execMPV(ctx)
+	err = p.execMPV(ctx)
 	if err != nil {
 		return nil, err
 	}

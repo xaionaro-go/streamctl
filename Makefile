@@ -52,10 +52,30 @@ $(GOPATH)/bin/pkg-config-wrapper:
 		wget https://github.com/xaionaro/termux-prebuilt-packages/raw/refs/heads/main/$$PACKAGE && ar x $$PACKAGE && tar -xJvf data.tar.xz && rm -f data.tar.xz control.tar.xz debian-binary $$PACKAGE; \
 	done
 
-3rdparty/amd64/windows:
+3rdparty/amd64/windows/ready:
 	mkdir -p 3rdparty/amd64/windows
-	sh -c 'cd 3rdparty/amd64/windows && wget https://get.videolan.org/vlc/$(WINDOWS_VLC_VERSION)/win64/vlc-$(WINDOWS_VLC_VERSION)-win64.7z && 7z x vlc-$(WINDOWS_VLC_VERSION)-win64.7z && rm -f vlc-$(WINDOWS_VLC_VERSION)-win64.7z'
-	sh -c 'cd 3rdparty/amd64/windows && wget https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2024-04-30-12-51/ffmpeg-n7.0-21-gfb8f0ea7b3-win64-gpl-shared-7.0.zip && unzip ffmpeg-n7.0-21-gfb8f0ea7b3-win64-gpl-shared-7.0.zip && rm -f ffmpeg-n7.0-21-gfb8f0ea7b3-win64-gpl-shared-7.0.zip'
+	sh -c 'cd 3rdparty/amd64/windows && wget https://get.videolan.org/vlc/$(WINDOWS_VLC_VERSION)/win64/vlc-$(WINDOWS_VLC_VERSION)-win64.7z && 7z -y x vlc-$(WINDOWS_VLC_VERSION)-win64.7z && rm -f vlc-$(WINDOWS_VLC_VERSION)-win64.7z'
+	sh -c 'cd 3rdparty/amd64/windows && wget https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2024-04-30-12-51/ffmpeg-n7.0-21-gfb8f0ea7b3-win64-gpl-shared-7.0.zip && unzip -o ffmpeg-n7.0-21-gfb8f0ea7b3-win64-gpl-shared-7.0.zip && rm -f ffmpeg-n7.0-21-gfb8f0ea7b3-win64-gpl-shared-7.0.zip'
+	mkdir 3rdparty/amd64/windows/mpv
+	sh -c 'cd 3rdparty/amd64/windows/mpv && wget https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20241025/mpv-x86_64-20241025-git-5c59f8a.7z && 7z -y x mpv-x86_64-20241025-git-5c59f8a.7z && rm -f mpv-x86_64-20241025-git-5c59f8a.7z'
+	touch 3rdparty/amd64/windows/ready
+
+windows-builddir: build/windows-amd64
+
+build/windows-amd64:
+	mkdir -p build/windows-amd64
+
+windows-deps: build/windows-amd64/libvlc.dll build/windows-amd64/avdevice-61.dll build/windows-amd64/mpv/mpv.exe
+
+build/windows-amd64/libvlc.dll: windows-builddir 3rdparty/amd64/windows/ready
+	cp -av 3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/*.dll 3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/plugins build/windows-amd64/
+
+build/windows-amd64/avdevice-61.dll:
+	cp -av 3rdparty/amd64/windows/ffmpeg*/bin/*.dll build/windows-amd64/
+
+build/windows-amd64/mpv/mpv.exe: windows-builddir 3rdparty/amd64/windows/ready
+	mkdir -p build/windows-amd64/mpv
+	cp -av 3rdparty/amd64/windows/mpv/*.exe 3rdparty/amd64/windows/mpv/*.dll build/windows-amd64/mpv/
 
 streampanel-linux-amd64: builddir
 	$(eval INSTALL_DEST?=build/streampanel-linux-amd64)
@@ -233,13 +253,11 @@ install-android-arm64:
 streampanel-ios: builddir
 	cd cmd/streampanel && fyne package $(GOBUILD_FLAGS) -release -os ios && mv streampanel.ipa ../../build/
 
-streampanel-windows: 3rdparty/amd64/windows builddir
+streampanel-windows: windows-builddir windows-deps
 	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "-H windowsgui '-extldflags=$(WINDOWS_LINKER_FLAGS)'" -o build/windows-amd64/streampanel.exe ./cmd/streampanel/
-	cp 3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/*.dll build/windows-amd64/
 
-streampanel-windows-debug: 3rdparty/amd64/windows builddir
+streampanel-windows-debug: windows-builddir windows-deps
 	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "-a '-extldflags=$(WINDOWS_LINKER_FLAGS)'" -o build/windows-amd64/streampanel-debug.exe ./cmd/streampanel/
-	cp 3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/*.dll build/windows-amd64/
 
 streamd-linux-amd64: builddir
 	CGO_ENABLED=1 CGO_LDFLAGS="-static" GOOS=linux GOARCH=amd64 go build -o build/streamd-linux-amd64 ./cmd/streamd
@@ -250,13 +268,11 @@ streamcli-linux-amd64: builddir
 streamcli-linux-arm64: builddir
 	CGO_ENABLED=0 CGO_LDFLAGS="-static" GOOS=linux GOARCH=arm64 go build -o build/streamcli-linux-arm64 ./cmd/streamcli
 
-player-windows:
+player-windows: windows-builddir windows-deps
 	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "-a '-extldflags=$(WINDOWS_LINKER_FLAGS)'" -o build/windows-amd64/player.exe ./pkg/player/cmd/player/
-	cp -av 3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/*.dll 3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/plugins build/windows-amd64/
 
-streamplayer-windows:
+streamplayer-windows: windows-builddir windows-deps
 	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "-a '-extldflags=$(WINDOWS_LINKER_FLAGS)'" -o build/windows-amd64/streamplayer.exe ./pkg/streamplayer/cmd/streamplayer/
-	cp -av 3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/*.dll 3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/plugins build/windows-amd64/
 
 builddir:
 	mkdir -p build
