@@ -2292,6 +2292,9 @@ func (p *Panel) initMainWindow(
 			controlPage.Hide()
 			chatPage.Show()
 		case consts.PageDashboard:
+			profileControl.Hide()
+			moreControlPage.Hide()
+			dashboardControl.Show()
 			p.focusDashboardWindow(pageCtx)
 		case consts.PageOBS:
 			controlPage.Hide()

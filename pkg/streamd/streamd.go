@@ -89,7 +89,11 @@ type StreamD struct {
 	TimersLocker xsync.Mutex
 	NextTimerID  uint64
 	Timers       map[api.TimerID]*Timer
+
+	ImageHash xsync.Map[string, imageHash]
 }
+
+type imageHash uint64
 
 var _ api.StreamD = (*StreamD)(nil)
 

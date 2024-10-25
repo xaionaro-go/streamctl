@@ -132,11 +132,13 @@ func (w *dashboardWindow) startUpdating(
 func (w *dashboardWindow) startUpdatingNoLock(
 	ctx context.Context,
 ) {
-
 	if w.stopUpdatingFunc != nil {
 		logger.Errorf(ctx, "updating is already started")
 		return
 	}
+	w.Window.SetOnClosed(func() {
+		w.stopUpdating(ctx)
+	})
 
 	ctx, cancelFunc := context.WithCancel(ctx)
 	w.stopUpdatingFunc = cancelFunc
@@ -636,7 +638,7 @@ func (p *Panel) editDashboardElementWindow(
 		})
 		if err != nil {
 			p.DisplayError(
-				fmt.Errorf("unable to get the list of items of scene '%s': %w", scene.SceneName, err),
+				fmt.Errorf("unable to get the list of items of scene '%v': %w", scene.SceneName, err),
 			)
 			return
 		}

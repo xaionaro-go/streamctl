@@ -3,6 +3,7 @@ package streamd
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -56,20 +57,36 @@ func (d *StreamD) OBS(
 	return proxy, func() {}, nil
 }
 
-func getOBSImageBytes(
+var ErrNotChanged = errors.New("not changed")
+
+func (d *StreamD) getOBSImageBytes(
 	ctx context.Context,
 	obsServer obs_grpc.OBSServer,
+	elName string,
 	el config.DashboardElementConfig,
 	obsState *streamtypes.OBSState,
 ) ([]byte, time.Time, error) {
+
+	src := el.Source
+	if getImageByteser, ok := src.(config.GetImageByteser); ok {
+		bytes, _, nextUpdateAt, err := getImageByteser.GetImageBytes(ctx, obsServer, el)
+		if err != nil {
+			return nil, time.Now().Add(time.Second), fmt.Errorf("unable to get the image from the source using GetImageByteser: %w", err)
+		}
+		return bytes, nextUpdateAt, nil
+	}
+
 	img, nextUpdateAt, err := el.Source.GetImage(ctx, obsServer, el, obsState)
 	if err != nil {
-		return nil, time.Now().
-				Add(time.Second),
-			fmt.Errorf(
-				"unable to get the image from the source: %w",
-				err,
-			)
+		return nil, time.Now().Add(time.Second), fmt.Errorf("unable to get the image from the source: %w", err)
+	}
+
+	if imgHash, err := newImageHash(img); err == nil {
+		if imgOldHash, ok := d.ImageHash.Swap(elName, imgHash); ok {
+			if imgHash == imgOldHash {
+				return nil, nextUpdateAt, ErrNotChanged
+			}
+		}
 	}
 
 	for _, filter := range el.Filters {
@@ -132,9 +149,13 @@ func (d *StreamD) initImageTaker(ctx context.Context) error {
 						}
 					}
 
-					imgBytes, nextUpdateAt, err = getOBSImageBytes(ctx, obsServer, el, &d.OBSState)
+					imgBytes, nextUpdateAt, err = d.getOBSImageBytes(ctx, obsServer, elName, el, &d.OBSState)
 					if err != nil {
-						logger.Errorf(ctx, "unable to get the image of '%s': %v", elName, err)
+						if err != ErrNotChanged {
+							logger.Tracef(ctx, "the image have not changed of '%s'", elName)
+						} else {
+							logger.Errorf(ctx, "unable to get the image of '%s': %v", elName, err)
+						}
 						if !waitUntilNextIteration() {
 							return
 						}
