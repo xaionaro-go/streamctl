@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	child_process_manager "github.com/AgustinSRG/go-child-process-manager"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
@@ -60,11 +61,20 @@ func main() {
 	}
 	mediaPath := pflag.Arg(0)
 
+	err := child_process_manager.InitializeChildProcessManager()
+	if err != nil {
+		logger.Fatal(ctx, err)
+	}
+	defer child_process_manager.DisposeChildProcessManager()
+
 	m := player.NewManager(types.OptionPathToMPV(*mpvPath))
 	p, err := m.NewPlayer(ctx, "player demonstration", player.Backend(*backend))
 	assertNoError(ctx, err)
 
-	assertNoError(ctx, p.OpenURL(ctx, mediaPath))
+	err = p.OpenURL(ctx, mediaPath)
+	if err != nil {
+		logger.Fatalf(ctx, "unable to open the url '%s': %v", mediaPath, err)
+	}
 
 	app := fyneapp.New()
 

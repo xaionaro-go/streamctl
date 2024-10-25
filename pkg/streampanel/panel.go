@@ -414,7 +414,7 @@ func (p *Panel) initStreamDConfig(
 		}
 		platCfg := cfg.Backends[platName]
 		if platCfg != nil && platCfg.Enable != nil && !*platCfg.Enable {
-			logger.Debugf(ctx, "platform '%s' is explicitly disabled")
+			logger.Debugf(ctx, "platform '%s' is explicitly disabled", platName)
 			continue
 		}
 		logger.Debugf(ctx, "'%s' is not initialized: %#+v, fixing", platName, platCfg)

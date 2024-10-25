@@ -18,12 +18,8 @@ const (
 	lockTypeRead
 )
 
-func (lt *lockType) String() string {
-	if lt == nil {
-		return "null"
-	}
-
-	switch *lt {
+func (lt lockType) String() string {
+	switch lt {
 	case lockTypeUndefined:
 		return "<undefined>"
 	case lockTypeWrite:
@@ -31,7 +27,7 @@ func (lt *lockType) String() string {
 	case lockTypeRead:
 		return "RLock"
 	default:
-		return fmt.Sprintf("<unexpected_value_%d>", uint(*lt))
+		return fmt.Sprintf("<unexpected_value_%d>", uint(lt))
 	}
 }
 

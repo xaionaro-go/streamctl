@@ -5,7 +5,6 @@ package player
 
 import (
 	"fmt"
-	"log"
 	"net/url"
 	"sync/atomic"
 	"time"
@@ -37,8 +36,9 @@ func NewVLC(title string) (*VLC, error) {
 	if atomic.AddInt64(&vlcPlayerCounter, 1) != 1 {
 		return nil, fmt.Errorf("currently we do not support more than one VLC player at once")
 	}
-	if err := vlc.Init(fmt.Sprintf("--video-title=%s", title)); err != nil {
-		log.Fatal(err)
+	args := []string{fmt.Sprintf("--video-title=%s", title)}
+	if err := vlc.Init(args...); err != nil {
+		return nil, fmt.Errorf("unable to initialize VLC with arguments: %v", args)
 	}
 
 	p := &VLC{

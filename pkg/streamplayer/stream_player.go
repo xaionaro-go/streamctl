@@ -88,14 +88,7 @@ func (sp *StreamPlayers) Create(
 ) (_ret *StreamPlayerHandler, _err error) {
 	logger.Debugf(ctx, "StreamPlayers.Create(ctx, '%s', %#+v)", streamID, opts)
 	defer func() {
-		logger.Debugf(
-			ctx,
-			"/StreamPlayers.Create(ctx, '%s', %#+v): (%v, %v)",
-			streamID,
-			opts,
-			_ret,
-			_err,
-		)
+		logger.Debugf(ctx, "/StreamPlayers.Create(ctx, '%s', %#+v): (%v, %v)", streamID, opts, _ret, _err)
 	}()
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -209,7 +202,7 @@ func (p *StreamPlayerHandler) startU(ctx context.Context) error {
 		return fmt.Errorf("unable to run a video player '%s': %w", playerType, err)
 	}
 	p.Player = player
-	logger.Debugf(ctx, "initialized player #%+v", player)
+	logger.Debugf(ctx, "initialized player %#+v", player)
 
 	observability.Go(ctx, func() { p.controllerLoop(ctx, cancelFn) })
 	return nil

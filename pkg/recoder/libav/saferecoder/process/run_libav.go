@@ -16,6 +16,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/recoder"
 	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/saferecoder/process/client"
+	"github.com/xaionaro-go/streamctl/pkg/xpath"
 )
 
 type InputID = client.InputID
@@ -37,7 +38,11 @@ type Recoder struct {
 func Run(
 	ctx context.Context,
 ) (*Recoder, error) {
-	cmd := exec.Command(os.Args[0])
+	execPath, err := xpath.GetExecPath(os.Args[0])
+	if err != nil {
+		return nil, fmt.Errorf("unable to get self-path: %w", err)
+	}
+	cmd := exec.Command(execPath)
 	cmd.Stderr = os.Stderr
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

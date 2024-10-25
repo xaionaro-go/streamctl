@@ -15,6 +15,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/player/vlcserver/client"
+	"github.com/xaionaro-go/streamctl/pkg/xpath"
 )
 
 type VLC struct {
@@ -26,7 +27,11 @@ func Run(
 	ctx context.Context,
 	title string,
 ) (*VLC, error) {
-	cmd := exec.Command(os.Args[0])
+	execPath, err := xpath.GetExecPath(os.Args[0])
+	if err != nil {
+		return nil, fmt.Errorf("unable to get self-path: %w", err)
+	}
+	cmd := exec.Command(execPath)
 	cmd.Stderr = os.Stderr
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -37,7 +42,7 @@ func Run(
 	errmon.ObserveErrorCtx(ctx, err)
 	err = cmd.Start()
 	if err != nil {
-		return nil, fmt.Errorf("unable to start mpv: %w", err)
+		return nil, fmt.Errorf("unable to start a subprocess to isolate VLC: %w", err)
 	}
 	err = child_process_manager.AddChildProcess(cmd.Process)
 	errmon.ObserveErrorCtx(ctx, err)
