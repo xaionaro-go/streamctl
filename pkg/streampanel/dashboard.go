@@ -68,7 +68,7 @@ type dashboardWindow struct {
 }
 
 func (p *Panel) newDashboardWindow(
-	context.Context,
+	ctx context.Context,
 ) *dashboardWindow {
 	w := &dashboardWindow{
 		Window: p.app.NewWindow("Dashboard"),
@@ -136,9 +136,6 @@ func (w *dashboardWindow) startUpdatingNoLock(
 		logger.Errorf(ctx, "updating is already started")
 		return
 	}
-	w.Window.SetOnClosed(func() {
-		w.stopUpdating(ctx)
-	})
 
 	ctx, cancelFunc := context.WithCancel(ctx)
 	w.stopUpdatingFunc = cancelFunc
@@ -204,6 +201,10 @@ func (p *Panel) openDashboardWindowNoLock(
 	}
 	w := p.dashboardWindow
 	w.startUpdating(ctx)
+	w.Window.SetOnClosed(func() {
+		w.stopUpdating(ctx)
+		p.dashboardWindow = nil
+	})
 	return nil
 }
 
