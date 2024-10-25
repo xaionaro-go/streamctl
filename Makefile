@@ -254,5 +254,9 @@ player-windows:
 	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "-a '-extldflags=$(WINDOWS_LINKER_FLAGS)'" -o build/windows-amd64/player.exe ./pkg/player/cmd/player/
 	cp -av 3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/*.dll 3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/plugins build/windows-amd64/
 
+streamplayer-windows:
+	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "-a '-extldflags=$(WINDOWS_LINKER_FLAGS)'" -o build/windows-amd64/streamplayer.exe ./pkg/streamplayer/cmd/streamplayer/
+	cp -av 3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/*.dll 3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/plugins build/windows-amd64/
+
 builddir:
 	mkdir -p build

@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	child_process_manager "github.com/AgustinSRG/go-child-process-manager"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
@@ -62,10 +63,22 @@ func main() {
 		log.Fatal("exactly zero arguments expected")
 	}
 
+	err := child_process_manager.InitializeChildProcessManager()
+	if err != nil {
+		logger.Fatal(ctx, err)
+	}
+	defer child_process_manager.DisposeChildProcessManager()
+
 	m := player.NewManager(ptypes.OptionPathToMPV(*mpvPath))
 	ss := streamserver.New(
 		&sstypes.Config{
 			PortServers: []streamportserver.Config{{
+				ProtocolSpecificConfig: streamportserver.ProtocolSpecificConfig{
+					IsTLS:          false,
+					WriteQueueSize: 600,
+					WriteTimeout:   10 * time.Second,
+					ReadTimeout:    10 * time.Second,
+				},
 				Type:       streamtypes.ServerTypeRTMP,
 				ListenAddr: *rtmpListenAddr,
 			}},
@@ -75,7 +88,8 @@ func main() {
 		},
 		dummyPlatformsController{},
 	)
-	err := ss.Init(ctx)
+
+	err = ss.Init(ctx)
 	assertNoError(ctx, err)
 	sp := streamplayer.New(ss, m)
 	p, err := sp.Create(ctx, api.StreamID(*streamID))

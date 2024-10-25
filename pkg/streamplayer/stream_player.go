@@ -18,6 +18,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/player/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
+	"github.com/xaionaro-go/streamctl/pkg/xcontext"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
@@ -264,6 +265,12 @@ func (p *StreamPlayerHandler) getInternalURL(ctx context.Context) (*url.URL, err
 	var u url.URL
 	u.Scheme = portSrv.Type.String()
 	u.Host = portSrv.ListenAddr
+	switch u.Hostname() {
+	case "0.0.0.0":
+		u.Host = "127.0.0.1"
+	case "::":
+		u.Host = "::1"
+	}
 	u.Path = string(p.StreamID)
 	return &u, nil
 }
@@ -272,20 +279,23 @@ func (p *StreamPlayerHandler) openStream(ctx context.Context) (_err error) {
 	logger.Debugf(ctx, "openStream")
 	defer func() { logger.Debugf(ctx, "/openStream: %v", _err) }()
 
+	openURLTimeout := p.Config.StartTimeout
+
 	u, err := p.getURL(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to get URL: %w", err)
 	}
 	logger.Debugf(ctx, "opening '%s'", u.String())
 	err = p.withPlayer(ctx, func(ctx context.Context, player types.Player) {
-		ctx, cancelFn := context.WithTimeout(ctx, 1*time.Second)
+		ctx, cancelFn := context.WithTimeout(ctx, openURLTimeout)
 		defer cancelFn()
 		var once sync.Once
 		observability.Go(ctx, func() {
 			<-ctx.Done()
 			once.Do(func() {
-				err := player.Close(ctx)
-				logger.Debugf(ctx, "closing player error: %v", err)
+				logger.Errorf(ctx, "timed out, unable to open the URL '%s' within the timeout of %s", u, openURLTimeout)
+				err := player.Close(xcontext.DetachDone(ctx))
+				logger.Debugf(ctx, "closing timed-out player result: %v", err)
 			})
 		})
 		err = player.OpenURL(ctx, u.String())
