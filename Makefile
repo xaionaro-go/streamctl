@@ -60,22 +60,39 @@ $(GOPATH)/bin/pkg-config-wrapper:
 	sh -c 'cd 3rdparty/amd64/windows/mpv && wget https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20241025/mpv-x86_64-20241025-git-5c59f8a.7z && 7z -y x mpv-x86_64-20241025-git-5c59f8a.7z && rm -f mpv-x86_64-20241025-git-5c59f8a.7z'
 	touch 3rdparty/amd64/windows/ready
 
-windows-builddir: build/windows-amd64
+windows-builddir: build/streampanel-windows-amd64
 
-build/windows-amd64:
-	mkdir -p build/windows-amd64
+build/streampanel-windows-amd64:
+	mkdir -p build/streampanel-windows-amd64
 
-windows-deps: build/windows-amd64/libvlc.dll build/windows-amd64/avdevice-61.dll build/windows-amd64/mpv/mpv.exe
+windows-debug-builddir: build/streampanel-windows-debug-amd64
 
-build/windows-amd64/libvlc.dll: windows-builddir 3rdparty/amd64/windows/ready
-	cp -av 3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/*.dll 3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/plugins build/windows-amd64/
+build/streampanel-windows-debug-amd64:
+	mkdir -p build/streampanel-windows-debug-amd64
 
-build/windows-amd64/avdevice-61.dll:
-	cp -av 3rdparty/amd64/windows/ffmpeg*/bin/*.dll build/windows-amd64/
+windows-deps: build/streampanel-windows-amd64/libvlc.dll build/streampanel-windows-amd64/avdevice-61.dll build/streampanel-windows-amd64/mpv/mpv.exe
 
-build/windows-amd64/mpv/mpv.exe: windows-builddir 3rdparty/amd64/windows/ready
-	mkdir -p build/windows-amd64/mpv
-	cp -av 3rdparty/amd64/windows/mpv/*.exe 3rdparty/amd64/windows/mpv/*.dll build/windows-amd64/mpv/
+windows-debug-deps: build/streampanel-windows-debug-amd64/libvlc.dll build/streampanel-windows-debug-amd64/avdevice-61.dll build/streampanel-windows-debug-amd64/mpv/mpv.exe
+
+build/streampanel-windows-amd64/libvlc.dll: windows-builddir 3rdparty/amd64/windows/ready
+	cp -av 3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/*.dll 3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/plugins build/streampanel-windows-amd64/
+
+build/streampanel-windows-amd64/avdevice-61.dll: windows-builddir 3rdparty/amd64/windows/ready
+	cp -av 3rdparty/amd64/windows/ffmpeg*/bin/*.dll build/streampanel-windows-amd64/
+
+build/streampanel-windows-amd64/mpv/mpv.exe: windows-builddir 3rdparty/amd64/windows/ready
+	mkdir -p build/streampanel-windows-amd64/mpv
+	cp -av 3rdparty/amd64/windows/mpv/*.exe 3rdparty/amd64/windows/mpv/*.dll build/streampanel-windows-amd64/mpv/
+
+build/streampanel-windows-debug-amd64/libvlc.dll: windows-debug-builddir 3rdparty/amd64/windows/ready
+	cp -av 3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/*.dll 3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/plugins build/streampanel-windows-debug-amd64/
+
+build/streampanel-windows-debug-amd64/avdevice-61.dll: windows-debug-builddir 3rdparty/amd64/windows/ready
+	cp -av 3rdparty/amd64/windows/ffmpeg*/bin/*.dll build/streampanel-windows-debug-amd64/
+
+build/streampanel-windows-debug-amd64/mpv/mpv.exe: windows-debug-builddir 3rdparty/amd64/windows/ready
+	mkdir -p build/streampanel-windows-debug-amd64/mpv
+	cp -av 3rdparty/amd64/windows/mpv/*.exe 3rdparty/amd64/windows/mpv/*.dll build/streampanel-windows-debug-amd64/mpv/
 
 streampanel-linux-amd64: builddir
 	$(eval INSTALL_DEST?=build/streampanel-linux-amd64)
@@ -175,6 +192,7 @@ dockerbuild-streampanel-android-arm64: 3rdparty/arm64/termux-packages/environmen
 	cd 3rdparty/arm64/termux-packages && \
 	./scripts/run-docker.sh make ENABLE_VLC="$(ENABLE_VLC)" ENABLE_LIBAV="$(ENABLE_LIBAV)" FORCE_DEBUG="$(FORCE_DEBUG)" -C /project streampanel-android-arm64-in-docker
 
+
 checkconfig-android-in-docker:
 	@if [ "$(ENABLE_VLC)" != 'false' ]; then \
 		echo "VLC is not supported for Android builds, yet, please disable it with ENABLE_VLC=false."; \
@@ -254,10 +272,10 @@ streampanel-ios: builddir
 	cd cmd/streampanel && fyne package $(GOBUILD_FLAGS) -release -os ios && mv streampanel.ipa ../../build/
 
 streampanel-windows: windows-builddir windows-deps
-	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "-H windowsgui '-extldflags=$(WINDOWS_LINKER_FLAGS)'" -o build/windows-amd64/streampanel.exe ./cmd/streampanel/
+	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "-H windowsgui '-extldflags=$(WINDOWS_LINKER_FLAGS)'" -o build/streampanel-windows-amd64/streampanel.exe ./cmd/streampanel/
 
-streampanel-windows-debug: windows-builddir windows-deps
-	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "-a '-extldflags=$(WINDOWS_LINKER_FLAGS)'" -o build/windows-amd64/streampanel-debug.exe ./cmd/streampanel/
+streampanel-windows-debug: windows-builddir windows-debug-deps
+	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "-a '-extldflags=$(WINDOWS_LINKER_FLAGS)'" -o build/streampanel-windows-debug-amd64/streampanel-debug.exe ./cmd/streampanel/
 
 streamd-linux-amd64: builddir
 	CGO_ENABLED=1 CGO_LDFLAGS="-static" GOOS=linux GOARCH=amd64 go build -o build/streamd-linux-amd64 ./cmd/streamd
@@ -269,10 +287,16 @@ streamcli-linux-arm64: builddir
 	CGO_ENABLED=0 CGO_LDFLAGS="-static" GOOS=linux GOARCH=arm64 go build -o build/streamcli-linux-arm64 ./cmd/streamcli
 
 player-windows: windows-builddir windows-deps
-	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "-a '-extldflags=$(WINDOWS_LINKER_FLAGS)'" -o build/windows-amd64/player.exe ./pkg/player/cmd/player/
+	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "-a '-extldflags=$(WINDOWS_LINKER_FLAGS)'" -o build/streampanel-windows-amd64/player.exe ./pkg/player/cmd/player/
 
 streamplayer-windows: windows-builddir windows-deps
-	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "-a '-extldflags=$(WINDOWS_LINKER_FLAGS)'" -o build/windows-amd64/streamplayer.exe ./pkg/streamplayer/cmd/streamplayer/
+	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "-a '-extldflags=$(WINDOWS_LINKER_FLAGS)'" -o build/streampanel-windows-amd64/streamplayer.exe ./pkg/streamplayer/cmd/streamplayer/
 
 builddir:
 	mkdir -p build
+
+streampanel-windows-amd64.zip: streampanel-windows
+	sh -c 'cd build && zip -r streampanel-windows-amd64.zip streampanel-windows-amd64'
+
+streampanel-windows-debug-amd64.zip: streampanel-windows-debug
+	sh -c 'cd build && zip -r streampanel-windows-debug-amd64.zip streampanel-windows-debug-amd64'
