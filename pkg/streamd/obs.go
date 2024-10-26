@@ -107,6 +107,40 @@ func (d *StreamD) getOBSImageBytes(
 }
 
 func (d *StreamD) initImageTaker(ctx context.Context) error {
+	observability.Go(ctx, func() {
+		defer logger.Debugf(ctx, "/imageTaker")
+		ch, err := d.SubscribeToDashboardChanges(ctx)
+		if err != nil {
+			logger.Errorf(ctx, "unable to subscribe to dashboard changes: %v", err)
+			return
+		}
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ch:
+				d.restartImageTaker(ctx)
+			}
+		}
+	})
+
+	return d.restartImageTaker(ctx)
+}
+
+func (d *StreamD) restartImageTaker(ctx context.Context) error {
+	return xsync.DoA1R1(ctx, &d.imageTakerLocker, d.restartImageTakerNoLock, ctx)
+}
+
+func (d *StreamD) restartImageTakerNoLock(ctx context.Context) error {
+	if d.imageTakerCancel != nil {
+		d.imageTakerCancel()
+		d.imageTakerCancel = nil
+		d.imageTakerWG.Wait()
+	}
+
+	ctx, cancelFn := context.WithCancel(ctx)
+	d.imageTakerCancel = cancelFn
+
 	for elName, el := range d.Config.Dashboard.Elements {
 		if el.Source == nil {
 			continue
@@ -117,7 +151,9 @@ func (d *StreamD) initImageTaker(ctx context.Context) error {
 		{
 			elName, el := elName, el
 			_ = el
+			d.imageTakerWG.Add(1)
 			observability.Go(ctx, func() {
+				defer d.imageTakerWG.Done()
 				logger.Debugf(ctx, "taker of image '%s'", elName)
 				defer logger.Debugf(ctx, "/taker of image '%s'", elName)
 

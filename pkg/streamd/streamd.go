@@ -5,6 +5,7 @@ import (
 	"crypto"
 	"fmt"
 	"os"
+	"reflect"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -57,7 +58,7 @@ type StreamD struct {
 	UI ui.UI
 
 	SaveConfigFunc SaveConfigFunc
-	ConfigLock     xsync.Mutex
+	ConfigLock     xsync.Gorex
 	Config         config.Config
 
 	CacheLock xsync.Mutex
@@ -91,6 +92,10 @@ type StreamD struct {
 	Timers       map[api.TimerID]*Timer
 
 	ImageHash xsync.Map[string, imageHash]
+
+	imageTakerLocker xsync.Mutex
+	imageTakerCancel context.CancelFunc
+	imageTakerWG     sync.WaitGroup
 }
 
 type imageHash uint64
@@ -436,7 +441,10 @@ func (d *StreamD) normalizeYoutubeData() {
 }
 
 func (d *StreamD) SaveConfig(ctx context.Context) error {
-	defer d.publishEvent(ctx, api.DiffConfig{})
+	return xsync.DoA1R1(ctx, &d.ConfigLock, d.saveConfig, ctx)
+}
+
+func (d *StreamD) saveConfig(ctx context.Context) error {
 	err := d.SaveConfigFunc(ctx, d.Config)
 	if err != nil {
 		return err
@@ -456,6 +464,27 @@ func (d *StreamD) GetConfig(ctx context.Context) (*config.Config, error) {
 }
 
 func (d *StreamD) SetConfig(ctx context.Context, cfg *config.Config) error {
+	return xsync.DoA2R1(ctx, &d.ConfigLock, d.setConfig, ctx, cfg)
+}
+
+func (d *StreamD) setConfig(ctx context.Context, cfg *config.Config) (_ret error) {
+	dashboardCfgEqual := reflect.DeepEqual(d.Config.Dashboard, cfg.Dashboard)
+	cfgEqual := reflect.DeepEqual(&d.Config, cfg)
+	if cfgEqual {
+		logger.Debugf(ctx, "config have no changed")
+		return nil
+	}
+	defer func() {
+		if _ret != nil {
+			return
+		}
+		if !dashboardCfgEqual {
+			logger.Debugf(ctx, "dashboard config changed")
+			d.publishEvent(ctx, api.DiffDashboard{})
+		}
+		d.publishEvent(ctx, api.DiffConfig{})
+	}()
+
 	logger.Debugf(ctx, "SetConfig: %#+v", *cfg)
 	err := convertConfig(*cfg)
 	if err != nil {

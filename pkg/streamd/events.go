@@ -136,6 +136,12 @@ func eventSubToChan[T any](
 	return r, nil
 }
 
+func (d *StreamD) SubscribeToDashboardChanges(
+	ctx context.Context,
+) (<-chan api.DiffDashboard, error) {
+	return eventSubToChan[api.DiffDashboard](ctx, d)
+}
+
 func (d *StreamD) SubscribeToConfigChanges(
 	ctx context.Context,
 ) (<-chan api.DiffConfig, error) {

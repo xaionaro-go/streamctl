@@ -345,6 +345,7 @@ type RestartUntilYoutubeRecognizesStream = sstypes.RestartUntilYoutubeRecognizes
 type StartAfterYoutubeRecognizedStream = sstypes.StartAfterYoutubeRecognizedStream
 
 type DiffConfig struct{}
+type DiffDashboard struct{}
 type DiffStreams struct{}
 type DiffStreamServers struct{}
 type DiffStreamDestinations struct{}
