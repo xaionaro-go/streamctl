@@ -204,10 +204,12 @@ func (p *Panel) openDashboardWindowNoLock(
 	w := p.dashboardWindow
 	w.startUpdating(ctx)
 	w.Window.SetOnClosed(func() {
-		w.stopUpdating(ctx)
-		p.dashboardShowHideButton.SetText("Open")
-		p.dashboardShowHideButton.SetIcon(theme.ComputerIcon())
-		p.dashboardWindow = nil
+		p.dashboardLocker.Do(ctx, func() {
+			w.stopUpdating(ctx)
+			p.dashboardShowHideButton.SetText("Open")
+			p.dashboardShowHideButton.SetIcon(theme.ComputerIcon())
+			p.dashboardWindow = nil
+		})
 	})
 	return nil
 }
@@ -500,6 +502,13 @@ func (p *Panel) newDashboardSettingsWindow(ctx context.Context) {
 			if err != nil {
 				return fmt.Errorf("unable to save the config: %w", err)
 			}
+
+			p.dashboardLocker.Do(ctx, func() {
+				if p.dashboardWindow != nil {
+					p.dashboardWindow.Window.Close()
+					observability.Go(ctx, func() { p.focusDashboardWindow(ctx) })
+				}
+			})
 
 			return nil
 		}
