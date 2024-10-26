@@ -148,8 +148,8 @@ func seppukuIfMemHugeLeak(
 				runtime.ReadMemStats(&m)
 
 				logger.Tracef(ctx, "memory consumed (in heap): %v", m.HeapInuse)
-				if m.HeapInuse > 1000*1000*1000 {
-					logger.Panicf(ctx, "I consumed almost 1GiB! Seppuku!")
+				if m.HeapInuse > 2*1000*1000*1000 {
+					logger.Panicf(ctx, "I consumed almost 2GiB! Seppuku!")
 				}
 			}
 		}
