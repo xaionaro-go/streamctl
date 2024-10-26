@@ -92,7 +92,8 @@ type Panel struct {
 	streamTitleField       *widget.Entry
 	streamDescriptionField *widget.Entry
 
-	dashboardLocker xsync.Mutex
+	dashboardLocker         xsync.Mutex
+	dashboardShowHideButton *widget.Button
 
 	appStatus     *widget.Label
 	appStatusData struct {
@@ -2031,18 +2032,9 @@ func (p *Panel) initMainWindow(
 		}),
 	)
 
-	dashboardControl := container.NewHBox(
-		widget.NewSeparator(),
-		widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
-			p.newDashboardSettingsWindow(ctx)
-		}),
-	)
-	dashboardControl.Hide()
-
 	topPanel := container.NewHBox(
 		menuButton,
 		profileControl,
-		dashboardControl,
 	)
 
 	for _, button := range selectedProfileButtons {
@@ -2259,6 +2251,24 @@ func (p *Panel) initMainWindow(
 		)
 	}
 
+	p.dashboardShowHideButton = widget.NewButtonWithIcon("Open", theme.ComputerIcon(), func() {
+		p.dashboardLocker.Do(ctx, func() {
+			if p.dashboardWindow == nil {
+				observability.Go(ctx, func() { p.focusDashboardWindow(ctx) })
+			} else {
+				p.dashboardWindow.Window.Close()
+			}
+		})
+	})
+	dashboardPage := container.NewBorder(
+		p.dashboardShowHideButton,
+		widget.NewButtonWithIcon("Settings", theme.SettingsIcon(), func() {
+			p.newDashboardSettingsWindow(ctx)
+		}),
+		nil,
+		nil,
+	)
+
 	var cancelPage context.CancelFunc
 	setPage := func(page consts.Page) {
 		logger.Debugf(ctx, "setPage(%s)", page)
@@ -2278,7 +2288,7 @@ func (p *Panel) initMainWindow(
 			moreControlPage.Hide()
 			chatPage.Hide()
 			profileControl.Show()
-			dashboardControl.Hide()
+			dashboardPage.Hide()
 			timersUI.StopRefreshingFromRemote(ctx)
 			controlPage.Show()
 		case consts.PageMoreControl:
@@ -2286,8 +2296,8 @@ func (p *Panel) initMainWindow(
 			restreamPage.Hide()
 			chatPage.Hide()
 			profileControl.Hide()
-			dashboardControl.Hide()
 			controlPage.Hide()
+			dashboardPage.Hide()
 			moreControlPage.Show()
 			timersUI.StartRefreshingFromRemote(ctx)
 		case consts.PageChat:
@@ -2295,21 +2305,27 @@ func (p *Panel) initMainWindow(
 			restreamPage.Hide()
 			moreControlPage.Hide()
 			profileControl.Hide()
-			dashboardControl.Hide()
 			controlPage.Hide()
+			dashboardPage.Hide()
 			chatPage.Show()
 		case consts.PageDashboard:
 			profileControl.Hide()
-			moreControlPage.Hide()
-			dashboardControl.Show()
-			p.focusDashboardWindow(pageCtx)
-		case consts.PageOBS:
 			controlPage.Hide()
-			profileControl.Hide()
-			dashboardControl.Hide()
+			moreControlPage.Hide()
+			obsPage.Hide()
 			restreamPage.Hide()
 			chatPage.Hide()
 			moreControlPage.Hide()
+			obsPage.Hide()
+			dashboardPage.Show()
+			p.focusDashboardWindow(ctx)
+		case consts.PageOBS:
+			controlPage.Hide()
+			profileControl.Hide()
+			restreamPage.Hide()
+			chatPage.Hide()
+			moreControlPage.Hide()
+			dashboardPage.Hide()
 			timersUI.StopRefreshingFromRemote(ctx)
 			obsPage.Show()
 		case consts.PageRestream:
@@ -2317,8 +2333,8 @@ func (p *Panel) initMainWindow(
 			profileControl.Hide()
 			moreControlPage.Hide()
 			chatPage.Hide()
-			dashboardControl.Hide()
 			obsPage.Hide()
+			dashboardPage.Hide()
 			timersUI.StopRefreshingFromRemote(ctx)
 			restreamPage.Show()
 			p.startRestreamPage(pageCtx)
@@ -2356,7 +2372,7 @@ func (p *Panel) initMainWindow(
 		),
 		nil,
 		nil,
-		container.NewStack(controlPage, moreControlPage, chatPage, obsPage, restreamPage),
+		container.NewStack(controlPage, moreControlPage, chatPage, dashboardPage, obsPage, restreamPage),
 	))
 
 	w.Show()

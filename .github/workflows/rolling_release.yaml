@@ -32,7 +32,7 @@ jobs:
           name: streampanel-windows-debug-amd64.zip
       - name: get the timestamp
         id: date
-        run: echo "::set-output name=date::$(date +'%Y-%m-%d_%H_%M_%S')"
+        run: echo "::set-output name=date::$(date +'%Y-%m-%d_%H%M%S')"
       - uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"

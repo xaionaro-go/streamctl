@@ -194,6 +194,8 @@ func (w *dashboardWindow) stopUpdating(
 func (p *Panel) openDashboardWindowNoLock(
 	ctx context.Context,
 ) error {
+	p.dashboardShowHideButton.SetText("Hide")
+	p.dashboardShowHideButton.SetIcon(theme.WindowCloseIcon())
 	if p.dashboardWindow != nil {
 		p.dashboardWindow.RequestFocus()
 	} else {
@@ -203,6 +205,8 @@ func (p *Panel) openDashboardWindowNoLock(
 	w.startUpdating(ctx)
 	w.Window.SetOnClosed(func() {
 		w.stopUpdating(ctx)
+		p.dashboardShowHideButton.SetText("Open")
+		p.dashboardShowHideButton.SetIcon(theme.ComputerIcon())
 		p.dashboardWindow = nil
 	})
 	return nil
