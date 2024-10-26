@@ -234,7 +234,7 @@ func (w *dashboardWindow) updateImagesNoLock(
 	var orientation fyne.DeviceOrientation
 	switch runtime.GOOS {
 	default:
-		winSize = w.dashboardWindow.Canvas().Size()
+		winSize = w.Canvas().Size()
 		orientation = w.app.Driver().Device().Orientation()
 	}
 	lastWinSize := w.lastWinSize
