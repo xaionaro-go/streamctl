@@ -954,18 +954,20 @@ func (p *Panel) InputTwitchUserInfo(
 	w := p.app.NewWindow(AppName + ": Input Twitch user info")
 	resizeWindow(w, fyne.NewSize(600, 200))
 
+	clientSecretIsBuiltin := buildvars.TwitchClientID != "" && buildvars.TwitchClientSecret != ""
+
 	channelField := widget.NewEntry()
 	channelField.SetPlaceHolder(
 		"channel ID (copy&paste it from the browser: https://www.twitch.tv/<the channel ID is here>)",
 	)
 	clientIDField := widget.NewEntry()
 	clientIDField.SetPlaceHolder("client ID")
-	if buildvars.TwitchClientID != "" {
+	if clientSecretIsBuiltin {
 		clientIDField.Hide()
 	}
 	clientSecretField := widget.NewEntry()
 	clientSecretField.SetPlaceHolder("client secret")
-	if buildvars.TwitchClientSecret != "" {
+	if clientSecretIsBuiltin {
 		clientSecretField.Hide()
 	}
 	instructionText := widget.NewRichText(
