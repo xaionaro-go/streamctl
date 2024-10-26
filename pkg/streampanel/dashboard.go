@@ -647,6 +647,7 @@ func (p *Panel) editDashboardElementWindow(
 	videoSourceNameIsSet := map[string]struct{}{}
 	audioSourceNameIsSet := map[string]struct{}{}
 	for _, scene := range resp.Scenes {
+		videoSourceNames = append(videoSourceNames, *scene.SceneName)
 		resp, err := obsServer.GetSceneItemList(ctx, &obs_grpc.GetSceneItemListRequest{
 			SceneName: scene.SceneName,
 		})
