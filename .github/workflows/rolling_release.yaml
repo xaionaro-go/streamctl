@@ -30,12 +30,15 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: streampanel-windows-debug-amd64.zip
+      - name: get the timestamp
+        id: date
+        run: echo "::set-output name=date::$(date +'%Y-%m-%d_%H_%M_%S')"
       - uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           prerelease: true
           draft: true
-          automatic_release_tag: unstable
+          automatic_release_tag: unstable-${{ steps.date.outputs.date }}
           files: |
             streampanel-linux-amd64
             streampanel-arm64.apk
