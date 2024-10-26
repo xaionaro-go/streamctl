@@ -68,7 +68,7 @@ type dashboardWindow struct {
 }
 
 func (p *Panel) newDashboardWindow(
-	ctx context.Context,
+	context.Context,
 ) *dashboardWindow {
 	w := &dashboardWindow{
 		Window: p.app.NewWindow("Dashboard"),

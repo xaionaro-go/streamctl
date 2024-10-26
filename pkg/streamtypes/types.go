@@ -24,12 +24,8 @@ const (
 	endOfServerType
 )
 
-func (t *ServerType) String() string {
-	if t == nil {
-		return "null"
-	}
-
-	switch *t {
+func (t ServerType) String() string {
+	switch t {
 	case ServerTypeUndefined:
 		return "<undefined>"
 	case ServerTypeRTMP:
