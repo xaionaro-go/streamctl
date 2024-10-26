@@ -603,21 +603,21 @@ func (p *Panel) editDashboardElementWindow(
 	w := p.app.NewWindow("Dashboard element settings")
 	resizeWindow(w, fyne.NewSize(1500, 1000))
 
-	obsVideoSource := &streamdconfig.DashboardSourceOBSVideo{
+	obsVideoSource := &streamdconfig.DashboardSourceImageOBSScreenshot{
 		UpdateInterval: streamdconfig.Duration(200 * time.Millisecond),
 	}
-	obsVolumeSource := &streamdconfig.DashboardSourceOBSVolume{
+	obsVolumeSource := &streamdconfig.DashboardSourceImageOBSVolume{
 		UpdateInterval: streamdconfig.Duration(200 * time.Millisecond),
 		ColorActive:    "00FF00FF",
 		ColorPassive:   "00000000",
 	}
-	dummy := &streamdconfig.DashboardSourceDummy{}
+	dummy := &streamdconfig.DashboardSourceImageDummy{}
 	switch source := cfg.Source.(type) {
-	case *streamdconfig.DashboardSourceOBSVideo:
+	case *streamdconfig.DashboardSourceImageOBSScreenshot:
 		obsVideoSource = source
-	case *streamdconfig.DashboardSourceOBSVolume:
+	case *streamdconfig.DashboardSourceImageOBSVolume:
 		obsVolumeSource = source
-	case *streamdconfig.DashboardSourceDummy:
+	case *streamdconfig.DashboardSourceImageDummy:
 		dummy = source
 	}
 
@@ -1011,35 +1011,35 @@ func (p *Panel) editDashboardElementWindow(
 	)
 
 	sourceTypeSelect := widget.NewSelect([]string{
-		string(streamdconfig.DashboardSourceTypeOBSVideo),
-		string(streamdconfig.DashboardSourceTypeOBSVolume),
-		string(streamdconfig.DashboardSourceTypeDummy),
+		string(streamdconfig.DashboardSourceImageTypeOBSVideo),
+		string(streamdconfig.DashboardSourceImageTypeOBSVolume),
+		string(streamdconfig.DashboardSourceImageTypeDummy),
 	}, func(s string) {
-		switch streamdconfig.DashboardSourceType(s) {
-		case streamdconfig.DashboardSourceTypeOBSVideo:
+		switch streamdconfig.DashboardSourceImageType(s) {
+		case streamdconfig.DashboardSourceImageTypeOBSVideo:
 			sourceOBSVolumeConfig.Hide()
 			sourceOBSVideoConfig.Show()
-		case streamdconfig.DashboardSourceTypeOBSVolume:
+		case streamdconfig.DashboardSourceImageTypeOBSVolume:
 			sourceOBSVideoConfig.Hide()
 			sourceOBSVolumeConfig.Show()
-		case streamdconfig.DashboardSourceTypeDummy:
+		case streamdconfig.DashboardSourceImageTypeDummy:
 			sourceOBSVideoConfig.Hide()
 			sourceOBSVolumeConfig.Hide()
 		}
 	})
-	sourceTypeSelect.SetSelected(string(streamdconfig.DashboardSourceTypeOBSVideo))
+	sourceTypeSelect.SetSelected(string(streamdconfig.DashboardSourceImageTypeOBSVideo))
 
 	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
 		if elementName.Text == "" {
 			p.DisplayError(fmt.Errorf("element name is not set"))
 			return
 		}
-		switch streamdconfig.DashboardSourceType(sourceTypeSelect.Selected) {
-		case streamdconfig.DashboardSourceTypeOBSVideo:
+		switch streamdconfig.DashboardSourceImageType(sourceTypeSelect.Selected) {
+		case streamdconfig.DashboardSourceImageTypeOBSVideo:
 			cfg.Source = obsVideoSource
-		case streamdconfig.DashboardSourceTypeOBSVolume:
+		case streamdconfig.DashboardSourceImageTypeOBSVolume:
 			cfg.Source = obsVolumeSource
-		case streamdconfig.DashboardSourceTypeDummy:
+		case streamdconfig.DashboardSourceImageTypeDummy:
 			cfg.Source = dummy
 		}
 		cfg.Filters = cfg.Filters[:0]

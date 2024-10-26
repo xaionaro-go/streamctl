@@ -11,23 +11,23 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
 
-type DashboardSourceType string
+type DashboardSourceImageType string
 
 const (
-	DashboardSourceTypeUndefined = DashboardSourceType("")
-	DashboardSourceTypeDummy     = DashboardSourceType("dummy")
-	DashboardSourceTypeOBSVideo  = DashboardSourceType("obs_video")
-	DashboardSourceTypeOBSVolume = DashboardSourceType("obs_volume")
+	DashboardSourceImageTypeUndefined = DashboardSourceImageType("")
+	DashboardSourceImageTypeDummy     = DashboardSourceImageType("dummy")
+	DashboardSourceImageTypeOBSVideo  = DashboardSourceImageType("obs_video") // rename to `obs_screenshot`
+	DashboardSourceImageTypeOBSVolume = DashboardSourceImageType("obs_volume")
 )
 
-func (mst DashboardSourceType) New() Source {
+func (mst DashboardSourceImageType) New() SourceImage {
 	switch mst {
-	case DashboardSourceTypeDummy:
-		return &DashboardSourceDummy{}
-	case DashboardSourceTypeOBSVideo:
-		return &DashboardSourceOBSVideo{}
-	case DashboardSourceTypeOBSVolume:
-		return &DashboardSourceOBSVolume{}
+	case DashboardSourceImageTypeDummy:
+		return &DashboardSourceImageDummy{}
+	case DashboardSourceImageTypeOBSVideo:
+		return &DashboardSourceImageOBSScreenshot{}
+	case DashboardSourceImageTypeOBSVolume:
+		return &DashboardSourceImageOBSVolume{}
 	default:
 		return nil
 	}
@@ -78,34 +78,9 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 	}
 }
 
-type DashboardSourceDummy struct{}
+var _ SourceImage = (*DashboardSourceImageDummy)(nil)
 
-func (*DashboardSourceDummy) GetImage(
-	ctx context.Context,
-	obsServer obs_grpc.OBSServer,
-	el DashboardElementConfig,
-	obsState *streamtypes.OBSState,
-) (image.Image, time.Time, error) {
-	img := image.NewRGBA(image.Rectangle{
-		Min: image.Point{
-			X: 0,
-			Y: 0,
-		},
-		Max: image.Point{
-			X: 0,
-			Y: 0,
-		},
-	})
-	return img, time.Time{}, nil
-}
-
-func (*DashboardSourceDummy) SourceType() DashboardSourceType {
-	return DashboardSourceTypeDummy
-}
-
-var _ Source = (*DashboardSourceDummy)(nil)
-
-type Source interface {
+type SourceImage interface {
 	GetImage(
 		ctx context.Context,
 		obsServer obs_grpc.OBSServer,
@@ -113,22 +88,22 @@ type Source interface {
 		obsState *streamtypes.OBSState,
 	) (image.Image, time.Time, error)
 
-	SourceType() DashboardSourceType
+	SourceType() DashboardSourceImageType
 }
 
-type serializableSource struct {
-	Type   DashboardSourceType `yaml:"type"`
-	Config map[string]any      `yaml:"config,omitempty"`
+type serializableSourceImage struct {
+	Type   DashboardSourceImageType `yaml:"type"`
+	Config map[string]any           `yaml:"config,omitempty"`
 }
 
-func (s serializableSource) Unwrap() Source {
+func (s serializableSourceImage) Unwrap() SourceImage {
 	result := s.Type.New()
 	fromMap(s.Config, &result)
 	return result
 }
 
-func wrapSourceForYaml(source Source) serializableSource {
-	return serializableSource{
+func wrapSourceImageForYaml(source SourceImage) serializableSourceImage {
+	return serializableSourceImage{
 		Type:   source.SourceType(),
 		Config: toMap(source),
 	}

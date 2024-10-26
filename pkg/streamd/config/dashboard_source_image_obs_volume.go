@@ -14,16 +14,16 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
-type DashboardSourceOBSVolume struct {
+type DashboardSourceImageOBSVolume struct {
 	Name           string   `yaml:"name"            json:"name"`
 	UpdateInterval Duration `yaml:"update_interval" json:"update_interval"`
 	ColorActive    string   `yaml:"color_active"    json:"color_active"`
 	ColorPassive   string   `yaml:"color_passive"   json:"color_passive"`
 }
 
-var _ Source = (*DashboardSourceOBSVolume)(nil)
+var _ SourceImage = (*DashboardSourceImageOBSVolume)(nil)
 
-func (s *DashboardSourceOBSVolume) GetImage(
+func (s *DashboardSourceImageOBSVolume) GetImage(
 	ctx context.Context,
 	obsServer obs_grpc.OBSServer,
 	el DashboardElementConfig,
@@ -91,6 +91,6 @@ func (s *DashboardSourceOBSVolume) GetImage(
 	return img, time.Now().Add(time.Duration(s.UpdateInterval)), nil
 }
 
-func (*DashboardSourceOBSVolume) SourceType() DashboardSourceType {
-	return DashboardSourceTypeOBSVolume
+func (*DashboardSourceImageOBSVolume) SourceType() DashboardSourceImageType {
+	return DashboardSourceImageTypeOBSVolume
 }

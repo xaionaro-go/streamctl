@@ -145,7 +145,7 @@ func (d *StreamD) restartImageTakerNoLock(ctx context.Context) error {
 		if el.Source == nil {
 			continue
 		}
-		if _, ok := el.Source.(*config.DashboardSourceDummy); ok {
+		if _, ok := el.Source.(*config.DashboardSourceImageDummy); ok {
 			continue
 		}
 		{

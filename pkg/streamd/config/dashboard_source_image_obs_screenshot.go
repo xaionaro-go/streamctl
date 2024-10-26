@@ -1,19 +1,23 @@
 package config
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"image"
+	"image/jpeg"
+	"image/png"
 	"time"
 
+	"github.com/chai2010/webp"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/imgb64"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
 
-type DashboardSourceOBSVideo struct {
+type DashboardSourceImageOBSScreenshot struct {
 	Name           string      `yaml:"name"            json:"name"`
 	Width          float64     `yaml:"width"           json:"width"`
 	Height         float64     `yaml:"height"          json:"height"`
@@ -21,14 +25,44 @@ type DashboardSourceOBSVideo struct {
 	UpdateInterval Duration    `yaml:"update_interval" json:"update_interval"`
 }
 
-var _ Source = (*DashboardSourceOBSVideo)(nil)
-var _ GetImageByteser = (*DashboardSourceOBSVideo)(nil)
+var _ SourceImage = (*DashboardSourceImageOBSScreenshot)(nil)
+var _ GetImageByteser = (*DashboardSourceImageOBSScreenshot)(nil)
 
-func (*DashboardSourceOBSVideo) SourceType() DashboardSourceType {
-	return DashboardSourceTypeOBSVideo
+func (*DashboardSourceImageOBSScreenshot) SourceType() DashboardSourceImageType {
+	return DashboardSourceImageTypeOBSVideo
 }
 
-func (s *DashboardSourceOBSVideo) GetImage(
+func obsGetImage(
+	ctx context.Context,
+	getImageByteser GetImageByteser,
+	obsServer obs_grpc.OBSServer,
+	el DashboardElementConfig,
+	_ *streamtypes.OBSState,
+) (image.Image, time.Time, error) {
+	b, mimeType, nextUpdateTS, err := getImageByteser.GetImageBytes(ctx, obsServer, el)
+	if err != nil {
+		return nil, nextUpdateTS, fmt.Errorf("unable to get the image from OBS: %w", err)
+	}
+
+	var img image.Image
+	switch mimeType {
+	case "image/png":
+		img, err = png.Decode(bytes.NewReader(b))
+	case "image/jpeg", "image/jpg":
+		img, err = jpeg.Decode(bytes.NewReader(b))
+	case "image/webp":
+		img, err = webp.Decode(bytes.NewReader(b))
+	default:
+		return nil, time.Time{}, fmt.Errorf("unexpected MIME type: '%s'", mimeType)
+	}
+	if err != nil {
+		return nil, time.Time{}, fmt.Errorf("unable to parse the image: %w", err)
+	}
+
+	return img, nextUpdateTS, nil
+}
+
+func (s *DashboardSourceImageOBSScreenshot) GetImage(
 	ctx context.Context,
 	obsServer obs_grpc.OBSServer,
 	el DashboardElementConfig,
@@ -37,7 +71,7 @@ func (s *DashboardSourceOBSVideo) GetImage(
 	return obsGetImage(ctx, s, obsServer, el, obsState)
 }
 
-func (s *DashboardSourceOBSVideo) GetImageBytes(
+func (s *DashboardSourceImageOBSScreenshot) GetImageBytes(
 	ctx context.Context,
 	obsServer obs_grpc.OBSServer,
 	el DashboardElementConfig,

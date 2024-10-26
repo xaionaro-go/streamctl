@@ -19,7 +19,7 @@ func TestDashboardElementConfig(t *testing.T) {
 		Rotate:        6,
 		ImageLossless: true,
 		ImageQuality:  7,
-		Source: &DashboardSourceOBSVideo{
+		Source: &DashboardSourceImageOBSScreenshot{
 			Name:           "c",
 			Width:          8,
 			Height:         9,
