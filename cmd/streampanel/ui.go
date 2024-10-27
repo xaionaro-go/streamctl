@@ -50,7 +50,7 @@ func forkUI(preCtx context.Context, mainProcessAddr, password string) {
 
 	logger.Infof(ctx, "running the UI")
 	runPanel(ctx, cancelFunc, flags, mainProcess)
-	err = mainProcess.SendMessage(ctx, ProcessNameMain, MessageQuit{})
+	err = mainProcess.SendMessage(ctx, ProcessNameMain, MessageApplicationQuit{})
 	if err != nil {
 		logger.Error(ctx, "unable to send the Quit message to the main process: %w", err)
 	}
@@ -58,7 +58,10 @@ func forkUI(preCtx context.Context, mainProcessAddr, password string) {
 	time.Sleep(5 * time.Second)
 }
 
-type MessageQuit struct{}
+type MessageApplicationQuit struct{}
+type MessageApplicationPrepareForUpgrade struct{}
+type MessageApplicationRestart struct{}
+type MessageProcessDie struct{}
 type StreamDDied struct{}
 type GetStreamdAddress struct{}
 type GetStreamdAddressResult struct {

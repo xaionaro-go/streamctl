@@ -140,10 +140,16 @@ func runPanel(
 				ctx,
 				func(ctx context.Context, source mainprocess.ProcessName, content any) error {
 					switch msg := content.(type) {
+					case MessageProcessDie:
+						logger.Debugf(ctx, "received a request to kill myself")
+						cancelFunc()
+						os.Exit(0)
+						return fmt.Errorf("this line is supposed to be unreachable (case #0)")
 					case StreamDDied:
 						logger.Errorf(ctx, "streamd died, killing myself as well (to get reborn)")
 						cancelFunc()
 						os.Exit(0)
+						return fmt.Errorf("this line is supposed to be unreachable (case #1)")
 					case UpdateStreamDConfig:
 						logger.Debugf(ctx, "UpdateStreamDConfig: parsing the config")
 						_, err := panel.Config.BuiltinStreamD.ReadFrom(bytes.NewReader([]byte(msg.Config)))
@@ -184,9 +190,16 @@ func runPanel(
 				buildvars.GitCommit,
 				*buildvars.BuildDate,
 				func() {
-					err := panel.Close()
+					err := mainProcess.SendMessage(ctx, ProcessNameMain, MessageApplicationPrepareForUpgrade{})
 					if err != nil {
-						logger.Error(ctx, err)
+						logger.Errorf(ctx, "unable to ask 'main' to prepare for upgrade, might fail to restart after the upgrade: %v", err)
+					}
+				},
+				func() {
+					err := mainProcess.SendMessage(ctx, ProcessNameMain, MessageApplicationRestart{})
+					if err != nil {
+						logger.Errorf(ctx, "unable to send a request to restart the application: %v; closing the panel instead (hoping it will trigger a restart)", err)
+						panel.Close()
 					}
 				},
 			),

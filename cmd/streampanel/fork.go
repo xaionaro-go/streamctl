@@ -44,7 +44,10 @@ func setFork(procName ProcessName, f *exec.Cmd) {
 }
 
 func init() {
-	gob.Register(MessageQuit{})
+	gob.Register(MessageApplicationQuit{})
+	gob.Register(MessageApplicationPrepareForUpgrade{})
+	gob.Register(MessageApplicationRestart{})
+	gob.Register(MessageProcessDie{})
 	gob.Register(StreamDDied{})
 	gob.Register(GetFlags{})
 	gob.Register(GetFlagsResult{})
@@ -154,8 +157,14 @@ func runSplitProcesses(
 				if err != nil {
 					logger.Errorf(ctx, "failed to send message %#+v to '%s': %v", msg, source, err)
 				}
-			case MessageQuit:
+			case MessageApplicationQuit:
 				signalsChan <- os.Interrupt
+			case MessageApplicationPrepareForUpgrade:
+				executablePathBeforeUpdate = getExecutablePath()
+				logger.Debugf(ctx, "executablePathBeforeUpdate = %s", executablePathBeforeUpdate)
+			case MessageApplicationRestart:
+				killChildProcess(ctx, m, ProcessNameStreamd)
+				killChildProcess(ctx, m, ProcessNameUI)
 			}
 			return nil
 		})
@@ -178,6 +187,48 @@ func runSplitProcesses(
 
 const debugDontFork = false
 
+func killChildProcess(
+	ctx context.Context,
+	m *mainprocess.Manager,
+	processName ProcessName,
+) {
+	err := m.SendMessagePreReady(ctx, processName, MessageProcessDie{})
+	if err != nil {
+		logger.Errorf(ctx, "failed to send message MessageProcessDie to '%s': %v", processName, err)
+		forceKill(ctx, processName)
+	}
+}
+
+func forceKill(
+	ctx context.Context,
+	processName ProcessName,
+) {
+	proc := getFork(processName)
+	err := proc.Process.Kill()
+	if err != nil {
+		logger.Errorf(ctx, "unable to kill the child process '%s': %w", string(processName), err)
+	}
+}
+
+var executablePathBeforeUpdate string
+
+func getExecutablePath() (_ret string) {
+	ctx := context.TODO()
+
+	defer func() { logger.Debugf(ctx, "getExecutablePath: %v", _ret) }()
+	if executablePathBeforeUpdate != "" {
+		return executablePathBeforeUpdate
+	}
+
+	execPath, err := os.Executable()
+	if err != nil {
+		logger.Errorf(ctx, "unable to get the path of the executable: %v", err)
+		return os.Args[0]
+	}
+
+	return execPath
+}
+
 func runFork(
 	ctx context.Context,
 	flags Flags,
@@ -190,10 +241,7 @@ func runFork(
 		return fakeFork(ctx, procName, addr, password)
 	}
 
-	execPath, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("unable to get the path of the executable: %w", err)
-	}
+	execPath := getExecutablePath()
 
 	ctx, cancelFn := context.WithCancel(ctx)
 	os.Setenv(EnvPassword, password)
@@ -217,7 +265,7 @@ func runFork(
 		logger.FromCtx(ctx).WithField("log_writer_target", "split"),
 	)
 	cmd.Stdin = os.Stdin
-	err = child_process_manager.ConfigureCommand(cmd)
+	err := child_process_manager.ConfigureCommand(cmd)
 	if err != nil {
 		logger.Errorf(ctx, "unable to configure the command %v to be auto-killed", err)
 	}

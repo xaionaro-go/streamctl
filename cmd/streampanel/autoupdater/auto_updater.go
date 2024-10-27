@@ -11,9 +11,10 @@ import (
 
 type AutoUpdater struct {
 	*autoupdater.AutoUpdater
-	GitCommit    string
-	BuildDate    time.Time
-	CloseAppFunc func()
+	GitCommit     string
+	BuildDate     time.Time
+	BeforeUpgrade func()
+	AfterUpgrade  func()
 }
 
 var _ streampanel.AutoUpdater = (*AutoUpdater)(nil)
@@ -22,12 +23,14 @@ var _ autoupdater.Updater = (*AutoUpdater)(nil)
 func New(
 	gitCommit string,
 	buildDate time.Time,
-	closeApp func(),
+	beforeUpgrade func(),
+	afterUpgrade func(),
 ) *AutoUpdater {
 	u := &AutoUpdater{
-		GitCommit:    gitCommit,
-		BuildDate:    buildDate,
-		CloseAppFunc: closeApp,
+		GitCommit:     gitCommit,
+		BuildDate:     buildDate,
+		BeforeUpgrade: beforeUpgrade,
+		AfterUpgrade:  afterUpgrade,
 	}
 	u.AutoUpdater = autoupdater.New("xaionaro-go", "streamctl", regexp.MustCompile("^unstable-"), assetName, u)
 	return u

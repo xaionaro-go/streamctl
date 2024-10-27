@@ -180,6 +180,11 @@ func runStreamd(
 						content any,
 					) error {
 						switch content.(type) {
+						case MessageProcessDie:
+							logger.Debugf(ctx, "received a request to kill myself")
+							cancelFunc()
+							os.Exit(0)
+							return fmt.Errorf("this line is supposed to be unreachable")
 						case GetStreamdAddress:
 							return mainProcess.SendMessage(ctx, source, GetStreamdAddressResult{
 								Address: listener.Addr().String(),

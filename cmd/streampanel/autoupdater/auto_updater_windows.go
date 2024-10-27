@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -44,6 +43,11 @@ func (u *AutoUpdater) Update(
 	zipReader, err := zip.NewReader(bytes.NewReader(zipBytes), int64(len(zipBytes)))
 	if err != nil {
 		return fmt.Errorf("unable to open the artifact as a zip file: %w", err)
+	}
+
+	if u.BeforeUpgrade != nil {
+		logger.Debugf(ctx, "BeforeUpgrade")
+		u.BeforeUpgrade()
 	}
 
 	me := os.Args[0]
@@ -107,20 +111,11 @@ func (u *AutoUpdater) Update(
 	}
 	progressBar.SetProgress(0.9)
 
-	logger.Infof(ctx, "re-running the application")
-	cmd := exec.Command(os.Args[0], os.Args...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("unable to restart the application: %w", err)
+	if u.AfterUpgrade != nil {
+		logger.Debugf(ctx, "AfterUpgrade")
+		u.AfterUpgrade()
 	}
+
 	progressBar.SetProgress(1)
-
-	if u.CloseAppFunc != nil {
-		logger.Debugf(ctx, "CloseAppFunc")
-		u.CloseAppFunc()
-	}
-
 	return nil
 }

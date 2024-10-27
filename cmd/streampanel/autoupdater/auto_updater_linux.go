@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/autoupdater"
@@ -36,6 +35,11 @@ func (u *AutoUpdater) Update(
 	me := os.Args[0]
 	progressBar.SetProgress(0.2)
 
+	if u.BeforeUpgrade != nil {
+		logger.Debugf(ctx, "BeforeUpgrade")
+		u.BeforeUpgrade()
+	}
+
 	tmpPath := me + "-new"
 	if err = os.WriteFile(tmpPath, b, 0755); err != nil {
 		return fmt.Errorf("unable to write to file '%s': %w", tmpPath, err)
@@ -56,20 +60,11 @@ func (u *AutoUpdater) Update(
 	}
 	progressBar.SetProgress(0.85)
 
-	logger.Infof(ctx, "re-running the application")
-	cmd := exec.Command(os.Args[0], os.Args...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("unable to restart the application: %w", err)
-	}
-	progressBar.SetProgress(1)
-
-	if u.CloseAppFunc != nil {
+	if u.AfterUpgrade != nil {
 		logger.Debugf(ctx, "CloseAppFunc")
-		u.CloseAppFunc()
+		u.AfterUpgrade()
 	}
 
+	progressBar.SetProgress(1)
 	return nil
 }
