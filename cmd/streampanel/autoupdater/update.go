@@ -13,8 +13,11 @@ type Update struct {
 
 var _ streampanel.Update = (*Update)(nil)
 
-func (u *Update) Apply(ctx context.Context) error {
-	return u.Update.Apply(ctx)
+func (u *Update) Apply(
+	ctx context.Context,
+	progressBar streampanel.ProgressBar,
+) error {
+	return u.Update.Apply(ctx, progressBar)
 }
 
 func (u *Update) Cancel() error {

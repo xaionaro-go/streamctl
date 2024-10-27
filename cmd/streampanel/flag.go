@@ -10,7 +10,6 @@ import (
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/spf13/pflag"
-	"github.com/xaionaro-go/streamctl/pkg/buildvars"
 	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 )
@@ -142,7 +141,7 @@ func parseFlags() Flags {
 
 	pflag.Parse()
 	if *version {
-		fmt.Println(buildvars.Version, buildvars.GitCommit, buildvars.BuildDateString, buildvars.BuildDate.Format(time.RFC3339))
+		printBuildInfo(os.Stdout)
 		os.Exit(0)
 	}
 

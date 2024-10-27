@@ -20,7 +20,7 @@ type GitHub interface {
 }
 
 type Updater interface {
-	Update(ctx context.Context, updateInfo *Update, artifact io.Reader) error
+	Update(ctx context.Context, updateInfo *Update, artifact io.Reader, progBar ProgressBar) error
 }
 
 type AutoUpdater struct {

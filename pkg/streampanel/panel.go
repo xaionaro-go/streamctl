@@ -597,6 +597,7 @@ func (p *Panel) checkForUpdates(
 			if !b {
 				return
 			}
+			logger.Debugf(ctx, "update was confirmed")
 			err := p.applyUpdate(ctx, update)
 			if err != nil {
 				p.DisplayError(fmt.Errorf("unable to install the update %s: %w", update.ReleaseName(), err))
@@ -612,7 +613,7 @@ func (p *Panel) applyUpdate(
 	ctx context.Context,
 	update Update,
 ) error {
-	return update.Apply(ctx)
+	return update.Apply(ctx, p.NewUpdateProgressBar())
 }
 
 func (p *Panel) newLoadingWindow(ctx context.Context) fyne.Window {

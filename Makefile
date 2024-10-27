@@ -18,22 +18,28 @@ ifeq ($(FORCE_DEBUG), true)
 endif
 GOTAGS:=$(GOTAGS:,%=%)
 
+GOBUILD_FLAGS?=-buildvcs=true
 ifneq ($(GOTAGS),)
 	GOBUILD_FLAGS+=-tags $(GOTAGS)
 	FYNEBUILD_FLAGS+=--tags $(GOTAGS)
 endif
 
-
 GOPATH?=$(shell go env GOPATH)
 
 WINDOWS_CGO_FLAGS?=-I$(PWD)/3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/sdk/include
-WINDOWS_LINKER_FLAGS?=-L$(PWD)/3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/sdk/lib -L$(PWD)/3rdparty/amd64/windows/ffmpeg-n7.0-21-gfb8f0ea7b3-win64-gpl-shared-7.0/lib
+WINDOWS_EXTLINKER_FLAGS?=-L$(PWD)/3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/sdk/lib -L$(PWD)/3rdparty/amd64/windows/ffmpeg-n7.0-21-gfb8f0ea7b3-win64-gpl-shared-7.0/lib
 WINDOWS_PKG_CONFIG_PATH?=$(PWD)/3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/sdk/lib/pkgconfig
 
 GIT_COMMIT?=$(shell git rev-list -1 HEAD)
 VERSION_STRING?=$(shell git rev-list -1 HEAD)
 BUILD_DATE_STRING?=$(shell date +%s)
-GOBUILD_FLAGS+=-ldflags "-X github.com/xaionaro-go/streamctl/pkg/buildvars.GitCommit=$(GIT_COMMIT) -X github.com/xaionaro-go/streamctl/pkg/buildvars.Version=$(VERSION_STRING) -X github.com/xaionaro-go/streamctl/pkg/buildvars.BuildDateString=$(BUILD_DATE_STRING) -X github.com/xaionaro-go/streamctl/pkg/buildvars.TwitchClientID=$(TWITCH_CLIENT_ID) -X github.com/xaionaro-go/streamctl/pkg/buildvars.TwitchClientSecret=$(TWITCH_CLIENT_SECRET)"
+
+LINKER_FLAGS?=-X github.com/xaionaro-go/streamctl/pkg/buildvars.GitCommit=$(GIT_COMMIT) -X github.com/xaionaro-go/streamctl/pkg/buildvars.Version=$(VERSION_STRING) -X github.com/xaionaro-go/streamctl/pkg/buildvars.BuildDateString=$(BUILD_DATE_STRING) -X github.com/xaionaro-go/streamctl/pkg/buildvars.TwitchClientID=$(TWITCH_CLIENT_ID) -X github.com/xaionaro-go/streamctl/pkg/buildvars.TwitchClientSecret=$(TWITCH_CLIENT_SECRET)
+
+LINKER_FLAGS_ANDROID?=$(LINKER_FLAGS)
+LINKER_FLAGS_DARWIN?=$(LINKER_FLAGS)
+LINKER_FLAGS_LINUX?=$(LINKER_FLAGS)
+LINKER_FLAGS_WINDOWS?=$(LINKER_FLAGS) '-extldflags=$(WINDOWS_EXTLINKER_FLAGS)'
 
 all: streampanel-linux-amd64 streampanel-linux-arm64 streampanel-android-arm64 streampanel-windows
 
@@ -102,19 +108,19 @@ build/streampanel-windows-debug-amd64/mpv/mpv.exe: windows-debug-builddir 3rdpar
 
 streampanel-linux-amd64: builddir
 	$(eval INSTALL_DEST?=build/streampanel-linux-amd64)
-	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build $(GOBUILD_FLAGS) -o "$(INSTALL_DEST)" ./cmd/streampanel
+	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build $(GOBUILD_FLAGS) -ldflags "$(LINKER_FLAGS_LINUX)" -o "$(INSTALL_DEST)" ./cmd/streampanel
 
 streampanel-linux-arm64: builddir
 	$(eval INSTALL_DEST?=build/streampanel-linux-arm64)
-	CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build $(GOBUILD_FLAGS) -o "$(INSTALL_DEST)" ./cmd/streampanel
+	CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build $(GOBUILD_FLAGS) -ldflags "$(LINKER_FLAGS_LINUX)" -o "$(INSTALL_DEST)" ./cmd/streampanel
 
 streampanel-macos-amd64: builddir
 	$(eval INSTALL_DEST?=build/streampanel-macos-amd64)
-	CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build $(GOBUILD_FLAGS) -o "$(INSTALL_DEST)" ./cmd/streampanel
+	CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build $(GOBUILD_FLAGS) -ldflags "$(LINKER_FLAGS_DARWIN)" -o "$(INSTALL_DEST)" ./cmd/streampanel
 
 streampanel-macos-arm64: builddir
 	$(eval INSTALL_DEST?=build/streampanel-macos-arm64)
-	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build $(GOBUILD_FLAGS) -o "$(INSTALL_DEST)" ./cmd/streampanel
+	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build $(GOBUILD_FLAGS) -ldflags "$(LINKER_FLAGS_DARWIN)" -o "$(INSTALL_DEST)" ./cmd/streampanel
 
 DOCKER_IMAGE?=xaionaro2/streampanel-android-builder
 DOCKER_CONTAINER_NAME?=streampanel-android-builder
@@ -165,6 +171,7 @@ build-streampanel-android-arm64-in-docker: checkconfig-android-in-docker builddi
 		CGO_LDFLAGS='-ldl -lc -L$(ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/ -L/data/data/com.termux/files/usr/lib' \
 		ANDROID_NDK_HOME="$(ANDROID_NDK_HOME)" \
 		PATH="${PATH}:${HOME}/go/bin" \
+		GOFLAGS='$(GOBUILD_FLAGS) -ldflags="$(LINKER_FLAGS_ANDROID)"' \
 		fyne package $(FYNEBUILD_FLAGS) -release -os android/arm64 && mv streampanel.apk ../../build/streampanel-arm64.apk
 
 streampanel-android-arm64-static-cgo: build-streampanel-android-arm64-static-cgo check-streampanel-android-arm64-static-cgo
@@ -212,10 +219,10 @@ streampanel-ios: builddir
 	cd cmd/streampanel && fyne package $(GOBUILD_FLAGS) -release -os ios && mv streampanel.ipa ../../build/
 
 streampanel-windows: windows-builddir windows-deps
-	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "-H windowsgui '-extldflags=$(WINDOWS_LINKER_FLAGS)'" -o build/streampanel-windows-amd64/streampanel.exe ./cmd/streampanel/
+	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "-H windowsgui $(LINKER_FLAGS_WINDOWS)" -o build/streampanel-windows-amd64/streampanel.exe ./cmd/streampanel/
 
 streampanel-windows-debug: windows-builddir windows-debug-deps
-	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "-a '-extldflags=$(WINDOWS_LINKER_FLAGS)'" -o build/streampanel-windows-debug-amd64/streampanel-debug.exe ./cmd/streampanel/
+	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags -ldflags "$(LINKER_FLAGS_WINDOWS)" -o build/streampanel-windows-debug-amd64/streampanel-debug.exe ./cmd/streampanel/
 
 streamd-linux-amd64: builddir
 	CGO_ENABLED=1 CGO_LDFLAGS="-static" GOOS=linux GOARCH=amd64 go build -o build/streamd-linux-amd64 ./cmd/streamd
@@ -227,10 +234,10 @@ streamcli-linux-arm64: builddir
 	CGO_ENABLED=0 CGO_LDFLAGS="-static" GOOS=linux GOARCH=arm64 go build -o build/streamcli-linux-arm64 ./cmd/streamcli
 
 player-windows: windows-builddir windows-deps
-	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "-a '-extldflags=$(WINDOWS_LINKER_FLAGS)'" -o build/streampanel-windows-amd64/player.exe ./pkg/player/cmd/player/
+	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "$(LINKER_FLAGS_WINDOWS)" -o build/streampanel-windows-amd64/player.exe ./pkg/player/cmd/player/
 
 streamplayer-windows: windows-builddir windows-deps
-	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "-a '-extldflags=$(WINDOWS_LINKER_FLAGS)'" -o build/streampanel-windows-amd64/streamplayer.exe ./pkg/streamplayer/cmd/streamplayer/
+	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "$(LINKER_FLAGS_WINDOWS)" -o build/streampanel-windows-amd64/streamplayer.exe ./pkg/streamplayer/cmd/streamplayer/
 
 builddir:
 	mkdir -p build

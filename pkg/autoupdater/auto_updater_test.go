@@ -34,11 +34,11 @@ func (g *MockGitHub) DownloadReleaseAsset(ctx context.Context, owner, repo strin
 }
 
 type MockUpdater struct {
-	UpdateFunc func(ctx context.Context, updateInfo *Update, artifact io.Reader) error
+	UpdateFunc func(ctx context.Context, updateInfo *Update, artifact io.Reader, pb ProgressBar) error
 }
 
-func (u *MockUpdater) Update(ctx context.Context, updateInfo *Update, artifact io.Reader) error {
-	return u.UpdateFunc(ctx, updateInfo, artifact)
+func (u *MockUpdater) Update(ctx context.Context, updateInfo *Update, artifact io.Reader, pb ProgressBar) error {
+	return u.UpdateFunc(ctx, updateInfo, artifact, pb)
 }
 
 func TestAutoUpdater(t *testing.T) {
@@ -46,7 +46,7 @@ func TestAutoUpdater(t *testing.T) {
 	t.Run("positive", func(t *testing.T) {
 		updateCallCount := 0
 		u := New("owner", "repository", regexp.MustCompile("^release-channel-.*"), "asset", &MockUpdater{
-			UpdateFunc: func(ctx context.Context, updateInfo *Update, artifact io.Reader) error {
+			UpdateFunc: func(ctx context.Context, updateInfo *Update, artifact io.Reader, _ ProgressBar) error {
 				updateCallCount++
 				return nil
 			},
@@ -91,7 +91,7 @@ func TestAutoUpdater(t *testing.T) {
 			},
 		}, update)
 		require.Zero(t, updateCallCount)
-		err = update.Apply(ctx)
+		err = update.Apply(ctx, nil)
 		require.NoError(t, err)
 	})
 }

@@ -1,4 +1,4 @@
-//go:build !linux && !windows && !darwin && !android
+//go:build android
 
 package autoupdater
 

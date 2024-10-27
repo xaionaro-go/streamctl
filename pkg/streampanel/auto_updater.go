@@ -4,8 +4,12 @@ import (
 	"context"
 )
 
+type ProgressBar interface {
+	SetProgress(v float64)
+}
+
 type Update interface {
-	Apply(ctx context.Context) error
+	Apply(ctx context.Context, pb ProgressBar) error
 	Cancel() error
 	ReleaseName() string
 }

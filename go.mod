@@ -216,6 +216,7 @@ require (
 	github.com/jfreymuth/oggvorbis v1.0.5
 	github.com/jfreymuth/pulse v0.1.1
 	github.com/kbinani/screenshot v0.0.0-20230812210009-b87d31814237
+	github.com/klauspost/compress v1.17.7
 	github.com/lusingander/colorpicker v0.7.3
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.18.0

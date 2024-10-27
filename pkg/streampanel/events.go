@@ -96,9 +96,9 @@ func (es *eventSensor) submitEventWindowFocusChange(
 	ctx context.Context,
 	ev windowmanagerhandler.WindowFocusChange,
 	submitEventer submitEventer,
-) error {
+) (_err error) {
 	logger.Tracef(ctx, "submitEventWindowFocusChange(ctx, %s)", spew.Sdump(ev))
-	defer logger.Tracef(ctx, "/submitEventWindowFocusChange(ctx, %#v)", spew.Sdump(ev))
+	defer func() { logger.Debugf(ctx, "/submitEventWindowFocusChange(ctx, %#v): %v", spew.Sdump(ev), _err) }()
 
 	var err *multierror.Error
 
