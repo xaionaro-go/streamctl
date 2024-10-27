@@ -20,7 +20,7 @@ GOTAGS:=$(GOTAGS:,%=%)
 
 GOBUILD_FLAGS?=-buildvcs=true
 ifneq ($(GOTAGS),)
-	GOBUILD_FLAGS+=-tags $(GOTAGS)
+	GOBUILD_FLAGS+=-tags=$(GOTAGS)
 	FYNEBUILD_FLAGS+=--tags $(GOTAGS)
 endif
 
@@ -34,7 +34,7 @@ GIT_COMMIT?=$(shell git rev-list -1 HEAD)
 VERSION_STRING?=$(shell git rev-list -1 HEAD)
 BUILD_DATE_STRING?=$(shell date +%s)
 
-LINKER_FLAGS?=-X github.com/xaionaro-go/streamctl/pkg/buildvars.GitCommit=$(GIT_COMMIT) -X github.com/xaionaro-go/streamctl/pkg/buildvars.Version=$(VERSION_STRING) -X github.com/xaionaro-go/streamctl/pkg/buildvars.BuildDateString=$(BUILD_DATE_STRING) -X github.com/xaionaro-go/streamctl/pkg/buildvars.TwitchClientID=$(TWITCH_CLIENT_ID) -X github.com/xaionaro-go/streamctl/pkg/buildvars.TwitchClientSecret=$(TWITCH_CLIENT_SECRET)
+LINKER_FLAGS?=-X=github.com/xaionaro-go/streamctl/pkg/buildvars.GitCommit=$(GIT_COMMIT) -X=github.com/xaionaro-go/streamctl/pkg/buildvars.Version=$(VERSION_STRING) -X=github.com/xaionaro-go/streamctl/pkg/buildvars.BuildDateString=$(BUILD_DATE_STRING) -X=github.com/xaionaro-go/streamctl/pkg/buildvars.TwitchClientID=$(TWITCH_CLIENT_ID) -X=github.com/xaionaro-go/streamctl/pkg/buildvars.TwitchClientSecret=$(TWITCH_CLIENT_SECRET)
 
 LINKER_FLAGS_ANDROID?=$(LINKER_FLAGS)
 LINKER_FLAGS_DARWIN?=$(LINKER_FLAGS)
@@ -134,7 +134,7 @@ dockerbuilder-android-arm64:
 			--name $(DOCKER_CONTAINER_NAME) \
 			--volume ".:/project" \
 			--tty \
-			$(DOCKER_IMAGE)
+			$(DOCKER_IMAGE) >/dev/null 2>&1 || /bin/true
 
 dockerbuild-streampanel-android-arm64: dockerbuilder-android-arm64
 	docker exec $(DOCKER_CONTAINER_NAME) make ENABLE_VLC="$(ENABLE_VLC)" ENABLE_LIBAV="$(ENABLE_LIBAV)" FORCE_DEBUG="$(FORCE_DEBUG)" -C /project streampanel-android-arm64-in-docker
@@ -159,6 +159,7 @@ streampanel-android-arm64-in-docker: build-streampanel-android-arm64-in-docker c
 
 build-streampanel-android-arm64-in-docker: checkconfig-android-in-docker builddir $(GOPATH)/bin/pkg-config-wrapper
 	go mod tidy
+	git config --global --add safe.directory /project
 	$(eval ANDROID_NDK_HOME=$(shell ls -d /home/builder/lib/android-ndk-*))
 	cd cmd/streampanel && \
 		PKG_CONFIG_WRAPPER_LOG='/tmp/pkg_config_wrapper.log' \
@@ -171,7 +172,7 @@ build-streampanel-android-arm64-in-docker: checkconfig-android-in-docker builddi
 		CGO_LDFLAGS='-ldl -lc -L$(ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/ -L/data/data/com.termux/files/usr/lib' \
 		ANDROID_NDK_HOME="$(ANDROID_NDK_HOME)" \
 		PATH="${PATH}:${HOME}/go/bin" \
-		GOFLAGS='$(GOBUILD_FLAGS) -ldflags="$(LINKER_FLAGS_ANDROID)"' \
+		GOFLAGS="$(GOBUILD_FLAGS) -ldflags=$(shell echo ${LINKER_FLAGS_ANDROID} | tr " " ",")" \
 		fyne package $(FYNEBUILD_FLAGS) -release -os android/arm64 && mv streampanel.apk ../../build/streampanel-arm64.apk
 
 streampanel-android-arm64-static-cgo: build-streampanel-android-arm64-static-cgo check-streampanel-android-arm64-static-cgo
@@ -222,7 +223,7 @@ streampanel-windows: windows-builddir windows-deps
 	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "-H windowsgui $(LINKER_FLAGS_WINDOWS)" -o build/streampanel-windows-amd64/streampanel.exe ./cmd/streampanel/
 
 streampanel-windows-debug: windows-builddir windows-debug-deps
-	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags -ldflags "$(LINKER_FLAGS_WINDOWS)" -o build/streampanel-windows-debug-amd64/streampanel-debug.exe ./cmd/streampanel/
+	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "-a $(LINKER_FLAGS_WINDOWS)" -o build/streampanel-windows-debug-amd64/streampanel-debug.exe ./cmd/streampanel/
 
 streamd-linux-amd64: builddir
 	CGO_ENABLED=1 CGO_LDFLAGS="-static" GOOS=linux GOARCH=amd64 go build -o build/streamd-linux-amd64 ./cmd/streamd

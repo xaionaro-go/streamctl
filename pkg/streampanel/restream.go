@@ -404,7 +404,7 @@ func (p *Panel) displayIncomingServers(
 		logger.Tracef(ctx, "inStream[%3d] == %#+v", idx, stream)
 		c := container.NewHBox()
 		playButton := widget.NewButtonWithIcon("", theme.MediaPlayIcon(), func() {
-
+			p.DisplayError(fmt.Errorf("playback is not implemented, yet"))
 		})
 		deleteButton := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
 			w := dialog.NewConfirm(
@@ -428,6 +428,7 @@ func (p *Panel) displayIncomingServers(
 		})
 		label := widget.NewLabel(string(stream.StreamID))
 		c.RemoveAll()
+		c.Add(playButton)
 		c.Add(deleteButton)
 		c.Add(label)
 		objs = append(objs, c)
