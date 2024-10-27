@@ -37,7 +37,6 @@ jobs:
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           prerelease: true
-          draft: true
           automatic_release_tag: unstable-${{ steps.date.outputs.date }}
           files: |
             streampanel-linux-amd64
