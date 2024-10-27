@@ -403,7 +403,10 @@ func (p *Panel) displayIncomingServers(
 	for idx, stream := range inStreams {
 		logger.Tracef(ctx, "inStream[%3d] == %#+v", idx, stream)
 		c := container.NewHBox()
-		button := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
+		playButton := widget.NewButtonWithIcon("", theme.MediaPlayIcon(), func() {
+
+		})
+		deleteButton := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
 			w := dialog.NewConfirm(
 				fmt.Sprintf("Delete incoming server %s ?", stream.StreamID),
 				"",
@@ -425,7 +428,7 @@ func (p *Panel) displayIncomingServers(
 		})
 		label := widget.NewLabel(string(stream.StreamID))
 		c.RemoveAll()
-		c.Add(button)
+		c.Add(deleteButton)
 		c.Add(label)
 		objs = append(objs, c)
 	}

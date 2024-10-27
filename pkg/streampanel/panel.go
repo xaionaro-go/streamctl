@@ -2233,7 +2233,7 @@ func (p *Panel) initMainWindow(
 			widget.NewLabel("Servers:"),
 			p.streamServersWidget,
 			addStreamServerButton,
-			widget.NewLabel("Steams:"),
+			widget.NewLabel("Streams:"),
 			p.streamsWidget,
 			addStreamButton,
 			widget.NewLabel("Destinations:"),

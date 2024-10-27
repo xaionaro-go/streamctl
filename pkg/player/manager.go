@@ -21,14 +21,6 @@ func NewManager(opts ...types.Option) *Manager {
 	}
 }
 
-type Backend string
-
-const (
-	BackendUndefined = ""
-	BackendLibVLC    = "libvlc"
-	BackendMPV       = "mpv"
-)
-
 func SupportedBackends() []Backend {
 	var result []Backend
 	if SupportedLibVLC {
@@ -37,6 +29,7 @@ func SupportedBackends() []Backend {
 	if SupportedMPV {
 		result = append(result, BackendMPV)
 	}
+	result = append(result, BackendBuiltin)
 	return result
 }
 
@@ -50,6 +43,8 @@ func (m *Manager) NewPlayer(
 	backend Backend,
 ) (Player, error) {
 	switch backend {
+	case BackendBuiltin:
+		return m.NewBuiltin(ctx, title)
 	case BackendLibVLC:
 		return m.NewLibVLC(ctx, title)
 	case BackendMPV:

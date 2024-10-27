@@ -66,6 +66,7 @@ func main() {
 		logger.Fatal(ctx, err)
 	}
 	defer child_process_manager.DisposeChildProcessManager()
+	app := fyneapp.New()
 
 	m := player.NewManager(types.OptionPathToMPV(*mpvPath))
 	p, err := m.NewPlayer(ctx, "player demonstration", player.Backend(*backend))
@@ -75,8 +76,6 @@ func main() {
 	if err != nil {
 		logger.Fatalf(ctx, "unable to open the url '%s': %v", mediaPath, err)
 	}
-
-	app := fyneapp.New()
 
 	observability.Go(ctx, func() {
 		for {

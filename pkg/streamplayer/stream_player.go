@@ -14,8 +14,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
-	"github.com/xaionaro-go/streamctl/pkg/player"
-	"github.com/xaionaro-go/streamctl/pkg/player/types"
+	player "github.com/xaionaro-go/streamctl/pkg/player/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/streamctl/pkg/xcontext"
@@ -44,13 +43,14 @@ type StreamPlayers struct {
 	StreamPlayers       map[streamtypes.StreamID]*StreamPlayerHandler
 
 	StreamServer   StreamServer
-	PlayerManager  *player.Manager
+	PlayerManager  PlayerManager
 	DefaultOptions Options
 }
 
 type PlayerManager interface {
 	SupportedBackends() []player.Backend
 	NewPlayer(
+		ctx context.Context,
 		title string,
 		backend player.Backend,
 	) (player.Player, error)
@@ -58,7 +58,7 @@ type PlayerManager interface {
 
 func New(
 	streamServer StreamServer,
-	playerManager *player.Manager,
+	playerManager PlayerManager,
 	defaultOptions ...Option,
 ) *StreamPlayers {
 	return &StreamPlayers{
@@ -286,7 +286,7 @@ func (p *StreamPlayerHandler) openStream(ctx context.Context) (_err error) {
 		return fmt.Errorf("unable to get URL: %w", err)
 	}
 	logger.Debugf(ctx, "opening '%s'", u.String())
-	err = p.withPlayer(ctx, func(ctx context.Context, player types.Player) {
+	err = p.withPlayer(ctx, func(ctx context.Context, player player.Player) {
 		ctx, cancelFn := context.WithTimeout(ctx, openURLTimeout)
 		defer cancelFn()
 		var once sync.Once
@@ -422,7 +422,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 						case <-t.C:
 						}
 						logger.Debugf(ctx, "checking if we get get the position")
-						err = p.withPlayer(ctx, func(ctx context.Context, player types.Player) {
+						err = p.withPlayer(ctx, func(ctx context.Context, player player.Player) {
 							var pos time.Duration
 							pos, err = player.GetPosition(ctx)
 							logger.Debugf(ctx, "result of getting the position: %v %v", pos, err)
@@ -460,7 +460,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 					pos time.Duration
 					err error
 				)
-				err = p.withPlayer(ctx, func(ctx context.Context, player types.Player) {
+				err = p.withPlayer(ctx, func(ctx context.Context, player player.Player) {
 					if !triedToFixEmptyLinkViaReopen {
 						if link, _ := player.GetLink(ctx); link == "" {
 							logger.Debugf(ctx, "the link is empty for some reason, reopening the link")
@@ -491,7 +491,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 				}
 				logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: pos == %v", p.StreamID, pos)
 				var l time.Duration
-				err = p.withPlayer(ctx, func(ctx context.Context, player types.Player) {
+				err = p.withPlayer(ctx, func(ctx context.Context, player player.Player) {
 					l, err = player.GetLength(ctx)
 					if err != nil {
 						err = fmt.Errorf("unable to get length: %w", err)
@@ -547,7 +547,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 	default:
 	}
 
-	err := p.withPlayer(ctx, func(ctx context.Context, player types.Player) {
+	err := p.withPlayer(ctx, func(ctx context.Context, player player.Player) {
 		err := player.SetupForStreaming(ctx)
 		if err != nil {
 			logger.Errorf(ctx, "unable to setup the player for streaming: %v", err)
@@ -596,7 +596,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 		case <-t.C:
 		}
 
-		err := p.withPlayer(ctx, func(ctx context.Context, player types.Player) {
+		err := p.withPlayer(ctx, func(ctx context.Context, player player.Player) {
 			now := time.Now()
 			l, err := player.GetLength(ctx)
 			if err != nil {
@@ -740,7 +740,7 @@ func (e ErrNilPlayer) Error() string {
 
 func (p *StreamPlayerHandler) withPlayer(
 	ctx context.Context,
-	fn func(context.Context, types.Player),
+	fn func(context.Context, player.Player),
 ) error {
 	return xsync.DoR1(ctx, &p.PlayerLocker, func() error {
 		if p.Player == nil {

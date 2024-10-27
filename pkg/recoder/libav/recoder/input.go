@@ -6,10 +6,10 @@ import (
 
 	"github.com/asticode/go-astiav"
 	"github.com/asticode/go-astikit"
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	"github.com/xaionaro-go/streamctl/pkg/recoder"
 )
 
-type InputConfig = types.InitConfig
+type InputConfig = recoder.InputConfig
 
 type Input struct {
 	*astikit.Closer
