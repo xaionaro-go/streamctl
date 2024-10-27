@@ -3,15 +3,7 @@
 
 package builtin
 
-import (
-	"context"
-
-	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder"
+const (
+	MediaTypeVideo = 0x00
+	MediaTypeAudio = 0x01
 )
-
-func (p *Player) processFrame(
-	ctx context.Context,
-	frame *recoder.Frame,
-) error {
-	panic("not implemented")
-}
