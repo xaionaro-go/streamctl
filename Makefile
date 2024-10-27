@@ -30,8 +30,10 @@ WINDOWS_CGO_FLAGS?=-I$(PWD)/3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/sd
 WINDOWS_LINKER_FLAGS?=-L$(PWD)/3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/sdk/lib -L$(PWD)/3rdparty/amd64/windows/ffmpeg-n7.0-21-gfb8f0ea7b3-win64-gpl-shared-7.0/lib
 WINDOWS_PKG_CONFIG_PATH?=$(PWD)/3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/sdk/lib/pkgconfig
 
+GIT_COMMIT?=$(shell git rev-list -1 HEAD)
 VERSION_STRING?=$(shell git rev-list -1 HEAD)
-GOBUILD_FLAGS+=-ldflags "-X github.com/xaionaro-go/streamctl/pkg/buildvars.Version=$(VERSION_STRING) -X github.com/xaionaro-go/streamctl/pkg/buildvars.TwitchClientID=$(TWITCH_CLIENT_ID) -X github.com/xaionaro-go/streamctl/pkg/buildvars.TwitchClientSecret=$(TWITCH_CLIENT_SECRET)"
+BUILD_DATE_STRING?=$(shell date +%s)
+GOBUILD_FLAGS+=-ldflags "-X github.com/xaionaro-go/streamctl/pkg/buildvars.GitCommit=$(GIT_COMMIT) -X github.com/xaionaro-go/streamctl/pkg/buildvars.Version=$(VERSION_STRING) -X github.com/xaionaro-go/streamctl/pkg/buildvars.BuildDateString=$(BUILD_DATE_STRING) -X github.com/xaionaro-go/streamctl/pkg/buildvars.TwitchClientID=$(TWITCH_CLIENT_ID) -X github.com/xaionaro-go/streamctl/pkg/buildvars.TwitchClientSecret=$(TWITCH_CLIENT_SECRET)"
 
 all: streampanel-linux-amd64 streampanel-linux-arm64 streampanel-android-arm64 streampanel-windows
 

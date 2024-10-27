@@ -12,6 +12,8 @@ import (
 	child_process_manager "github.com/AgustinSRG/go-child-process-manager"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/cmd/streampanel/autoupdater"
+	"github.com/xaionaro-go/streamctl/pkg/buildvars"
 	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -174,6 +176,23 @@ func runPanel(
 	var loopOpts []streampanel.LoopOption
 	if flags.Page != "" {
 		loopOpts = append(loopOpts, streampanel.LoopOptionStartingPage(flags.Page))
+	}
+	if buildvars.GitCommit != "" && buildvars.BuildDate != nil && autoupdater.Available {
+		logger.Debugf(ctx, "enabling an auto-updater")
+		loopOpts = append(loopOpts, streampanel.LoopOptionAutoUpdater{
+			AutoUpdater: autoupdater.New(
+				buildvars.GitCommit,
+				*buildvars.BuildDate,
+				func() {
+					err := panel.Close()
+					if err != nil {
+						logger.Error(ctx, err)
+					}
+				},
+			),
+		})
+	} else {
+		logger.Debugf(ctx, "not enabling an auto-updater: %v %v %v", buildvars.GitCommit, buildvars.BuildDate, autoupdater.Available)
 	}
 	err := panel.Loop(ctx, loopOpts...)
 	if err != nil {

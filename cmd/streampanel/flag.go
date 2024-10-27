@@ -142,7 +142,7 @@ func parseFlags() Flags {
 
 	pflag.Parse()
 	if *version {
-		fmt.Println(buildvars.Version)
+		fmt.Println(buildvars.Version, buildvars.GitCommit, buildvars.BuildDateString, buildvars.BuildDate.Format(time.RFC3339))
 		os.Exit(0)
 	}
 

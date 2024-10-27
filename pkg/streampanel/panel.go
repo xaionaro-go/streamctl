@@ -29,6 +29,7 @@ import (
 	"github.com/go-ng/xmath"
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
+	"github.com/xaionaro-go/streamctl/pkg/autoupdater"
 	"github.com/xaionaro-go/streamctl/pkg/buildvars"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
@@ -198,32 +199,6 @@ func (p *Panel) SetStatus(msg string) {
 	p.setStatusFunc(msg)
 }
 
-type loopConfig struct {
-	StartingPage consts.Page
-}
-
-type LoopOption interface {
-	apply(*loopConfig)
-}
-
-type loopOptions []LoopOption
-
-func (s loopOptions) Config() loopConfig {
-	cfg := loopConfig{
-		StartingPage: consts.PageControl,
-	}
-	for _, opt := range s {
-		opt.apply(&cfg)
-	}
-	return cfg
-}
-
-type LoopOptionStartingPage string
-
-func (opt LoopOptionStartingPage) apply(cfg *loopConfig) {
-	cfg.StartingPage = consts.Page(opt)
-}
-
 func (p *Panel) dumpConfig(ctx context.Context) {
 	if logger.FromCtx(ctx).Level() < logger.LevelTrace {
 		return
@@ -373,6 +348,12 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
 		}
 
 		logger.Tracef(ctx, "ended stream controllers initialization")
+
+		if initCfg.AutoUpdater != nil {
+			observability.Go(ctx, func() {
+				p.checkForUpdates(ctx, initCfg.AutoUpdater)
+			})
+		}
 	})
 
 	p.app.Run()
@@ -589,6 +570,49 @@ func (p *Panel) startOAuthListenerForRemoteStreamD(
 		}
 	})
 	return nil
+}
+
+func (p *Panel) checkForUpdates(
+	ctx context.Context,
+	autoUpdater AutoUpdater,
+) (_err error) {
+	logger.Debugf(ctx, "checkForUpdates")
+	defer func() { logger.Debugf(ctx, "/checkForUpdates: %v", _err) }()
+
+	update, err := autoUpdater.CheckForUpdates(ctx)
+	switch err {
+	case nil:
+	case autoupdater.ErrNoUpdates{}:
+		logger.Debugf(ctx, "no updates")
+		return
+	default:
+		logger.Errorf(ctx, "unable to check for updates: %v", err)
+		return
+	}
+
+	w := dialog.NewConfirm(
+		"Install an update?",
+		"There is an update for this program, do you want to install it?",
+		func(b bool) {
+			if !b {
+				return
+			}
+			err := p.applyUpdate(ctx, update)
+			if err != nil {
+				p.DisplayError(fmt.Errorf("unable to install the update %s: %w", update.ReleaseName(), err))
+			}
+		},
+		p.mainWindow,
+	)
+	w.Show()
+	return nil
+}
+
+func (p *Panel) applyUpdate(
+	ctx context.Context,
+	update Update,
+) error {
+	return update.Apply(ctx)
 }
 
 func (p *Panel) newLoadingWindow(ctx context.Context) fyne.Window {
