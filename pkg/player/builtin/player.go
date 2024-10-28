@@ -19,6 +19,10 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
+const (
+	BufferSizeAudio = 100 * time.Millisecond
+)
+
 type Player struct {
 	window               fyne.Window
 	lastSeekAt           time.Time
@@ -114,8 +118,10 @@ func (p *Player) processFrame(
 	ctx context.Context,
 	frame *recoder.Frame,
 ) error {
-	logger.Tracef(ctx, "processFrame")
-	defer logger.Tracef(ctx, "/processFrame")
+	logger.Tracef(ctx, "processFrame: pos: %v; dur: %v; pts: %v; time_base: %v", frame.Position(), frame.MaxPosition(), frame.Pts(), frame.DecoderContext.TimeBase())
+	defer func() {
+		logger.Tracef(ctx, "/processFrame; av-desync: %v", p.currentAudioPosition-p.currentVideoPosition)
+	}()
 	return xsync.DoR1(ctx, &p.locker, func() error {
 		switch frame.DecoderContext.MediaType() {
 		case MediaTypeVideo:
@@ -142,12 +148,11 @@ func (p *Player) processVideoFrame(
 	ctx context.Context,
 	frame *recoder.Frame,
 ) error {
-	logger.Tracef(ctx, "processAudioFrame")
-	defer logger.Tracef(ctx, "/processAudioFrame")
+	logger.Tracef(ctx, "processVideoFrame")
+	defer logger.Tracef(ctx, "/processVideoFrame")
 
 	p.currentVideoPosition = frame.Position()
 	p.currentDuration = frame.MaxPosition()
-	logger.Tracef(ctx, "pos: %v; dur: %v; pts: %v; time_base: %v", p.currentVideoPosition, p.currentDuration, frame.Pts(), frame.DecoderContext.TimeBase())
 
 	streamIdx := frame.Packet.StreamIndex()
 
@@ -198,7 +203,7 @@ func (p *Player) processAudioFrame(
 		sampleRate := frame.DecoderContext.SampleRate()
 		channels := frame.DecoderContext.ChannelLayout().Channels()
 		pcmFormat := frame.DecoderContext.SampleFormat()
-		bufferSize := time.Second
+		bufferSize := BufferSizeAudio
 		audioStream, err := p.audio.PlayPCM(
 			uint32(sampleRate),
 			uint16(channels),

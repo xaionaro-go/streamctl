@@ -32,7 +32,10 @@ func (PlayerPCM) PlayPCM(
 ) (types.Stream, error) {
 	// Unfortunately, `oto` does not allow to initialize a context multiple times, so we cannot change the context every time different sampleRate, channels, format or bufferSize are given.
 	// As a result, we've just chosen reasonable values and expect them always :(
-	if sampleRate != SampleRate || channels != Channels || format != Format || bufferSize != BufferSize {
+	if bufferSize != BufferSize {
+		return nil, fmt.Errorf("expected buffer size is %v, but received a request for %v", BufferSize, bufferSize)
+	}
+	if sampleRate != SampleRate || channels != Channels || format != Format {
 		inFmt := resampler.Format{
 			Channels:   channels,
 			SampleRate: sampleRate,
