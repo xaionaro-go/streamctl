@@ -23,6 +23,7 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	child_process_manager "github.com/AgustinSRG/go-child-process-manager"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
@@ -78,6 +79,7 @@ type Panel struct {
 
 	app                   fyne.App
 	Config                Config
+	configLocker          xsync.RWMutex
 	streamMutex           xsync.Mutex
 	updateTimerHandler    *updateTimerHandler
 	profilesOrder         []streamcontrol.ProfileName
@@ -1479,9 +1481,16 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 		return fmt.Errorf("unable to get config: %w", err)
 	}
 
+	return xsync.DoA2R1(ctx, &p.configLocker, p.openSettingsWindowNoLock, ctx, cfg)
+}
+
+func (p *Panel) openSettingsWindowNoLock(
+	ctx context.Context,
+	streamDCfg *streamdconfig.Config,
+) error {
 	{
 		var buf bytes.Buffer
-		_, err := cfg.WriteTo(&buf)
+		_, err := streamDCfg.WriteTo(&buf)
 		if err != nil {
 			logger.Warnf(ctx, "unable to serialize the config: %v", err)
 		} else {
@@ -1506,20 +1515,20 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 	w := p.app.NewWindow(AppName + ": Settings")
 	resizeWindow(w, fyne.NewSize(400, 900))
 
-	if obsCfg, ok := cfg.Backends[obs.ID]; ok {
+	if obsCfg, ok := streamDCfg.Backends[obs.ID]; ok {
 		logger.Debugf(ctx, "current OBS config: %#+v", obsCfg)
 	}
 
-	cmdBeforeStartStream, _ := cfg.Backends[obs.ID].GetCustomString(
+	cmdBeforeStartStream, _ := streamDCfg.Backends[obs.ID].GetCustomString(
 		config.CustomConfigKeyBeforeStreamStart,
 	)
-	cmdBeforeStopStream, _ := cfg.Backends[obs.ID].GetCustomString(
+	cmdBeforeStopStream, _ := streamDCfg.Backends[obs.ID].GetCustomString(
 		config.CustomConfigKeyBeforeStreamStop,
 	)
-	cmdAfterStartStream, _ := cfg.Backends[obs.ID].GetCustomString(
+	cmdAfterStartStream, _ := streamDCfg.Backends[obs.ID].GetCustomString(
 		config.CustomConfigKeyAfterStreamStart,
 	)
-	cmdAfterStopStream, _ := cfg.Backends[obs.ID].GetCustomString(
+	cmdAfterStopStream, _ := streamDCfg.Backends[obs.ID].GetCustomString(
 		config.CustomConfigKeyAfterStreamStop,
 	)
 
@@ -1532,18 +1541,36 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 	afterStopStreamCommandEntry := widget.NewEntry()
 	afterStopStreamCommandEntry.SetText(cmdAfterStopStream)
 
+	afterReceivedChatMessage := widget.NewEntry()
+	afterReceivedChatMessage.SetText(p.Config.Chat.CommandOnReceiveMessage)
+
+	enableChatNotifications := widget.NewCheck(
+		"Enable on-screen notifications for chat messages",
+		func(b bool) {},
+	)
+	enableChatNotifications.SetChecked(p.Config.Chat.NotificationsEnabled())
+	enableChatMessageSoundsAlerts := widget.NewCheck(
+		"Enable sound alerts for chat messages",
+		func(b bool) {},
+	)
+	enableChatMessageSoundsAlerts.SetChecked(p.Config.Chat.ReceiveMessageSoundAlarmEnabled())
+
 	oldScreenshoterEnabled := p.Config.Screenshot.Enabled != nil && *p.Config.Screenshot.Enabled
 
 	mpvPathEntry := widget.NewEntry()
-	mpvPathEntry.SetText(cfg.StreamServer.VideoPlayer.MPV.Path)
+	mpvPathEntry.SetText(streamDCfg.StreamServer.VideoPlayer.MPV.Path)
 	mpvPathEntry.OnChanged = func(s string) {
-		cfg.StreamServer.VideoPlayer.MPV.Path = s
+		streamDCfg.StreamServer.VideoPlayer.MPV.Path = s
 	}
 
 	cancelButton := widget.NewButtonWithIcon("Cancel", theme.CancelIcon(), func() {
 		w.Close()
 	})
 	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
+		p.Config.Chat.CommandOnReceiveMessage = afterReceivedChatMessage.Text
+		p.Config.Chat.EnableNotifications = ptr(enableChatNotifications.Checked)
+		p.Config.Chat.EnableReceiveMessageSoundAlarm = ptr(enableChatMessageSoundsAlerts.Checked)
+
 		if err := p.SaveConfig(ctx); err != nil {
 			p.DisplayError(fmt.Errorf("unable to save the local config: %w", err))
 		} else {
@@ -1553,7 +1580,7 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 			}
 		}
 
-		obsCfg := cfg.Backends[obs.ID]
+		obsCfg := streamDCfg.Backends[obs.ID]
 		obsCfg.SetCustomString(
 			config.CustomConfigKeyBeforeStreamStart, beforeStartStreamCommandEntry.Text)
 		obsCfg.SetCustomString(
@@ -1562,9 +1589,9 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 			config.CustomConfigKeyAfterStreamStart, afterStartStreamCommandEntry.Text)
 		obsCfg.SetCustomString(
 			config.CustomConfigKeyAfterStreamStop, afterStopStreamCommandEntry.Text)
-		cfg.Backends[obs.ID] = obsCfg
+		streamDCfg.Backends[obs.ID] = obsCfg
 
-		if err := p.SetStreamDConfig(ctx, cfg); err != nil {
+		if err := p.SetStreamDConfig(ctx, streamDCfg); err != nil {
 			p.DisplayError(fmt.Errorf("unable to update the remote config: %w", err))
 		} else {
 			if err := p.StreamD.SaveConfig(ctx); err != nil {
@@ -1667,14 +1694,14 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 			widget.NewRichTextFromMarkdown(`# Streaming platforms`),
 			container.NewHBox(
 				widget.NewButtonWithIcon("(Re-)login in OBS", theme.LoginIcon(), func() {
-					if cfg.Backends[obs.ID] == nil {
-						obs.InitConfig(cfg.Backends)
+					if streamDCfg.Backends[obs.ID] == nil {
+						obs.InitConfig(streamDCfg.Backends)
 					}
 
-					cfg.Backends[obs.ID].Enable = nil
-					cfg.Backends[obs.ID].Config = obs.PlatformSpecificConfig{}
+					streamDCfg.Backends[obs.ID].Enable = nil
+					streamDCfg.Backends[obs.ID].Config = obs.PlatformSpecificConfig{}
 
-					if err := p.SetStreamDConfig(ctx, cfg); err != nil {
+					if err := p.SetStreamDConfig(ctx, streamDCfg); err != nil {
 						p.DisplayError(err)
 						return
 					}
@@ -1688,14 +1715,14 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 			),
 			container.NewHBox(
 				widget.NewButtonWithIcon("(Re-)login in Twitch", theme.LoginIcon(), func() {
-					if cfg.Backends[twitch.ID] == nil {
-						twitch.InitConfig(cfg.Backends)
+					if streamDCfg.Backends[twitch.ID] == nil {
+						twitch.InitConfig(streamDCfg.Backends)
 					}
 
-					cfg.Backends[twitch.ID].Enable = nil
-					cfg.Backends[twitch.ID].Config = twitch.PlatformSpecificConfig{}
+					streamDCfg.Backends[twitch.ID].Enable = nil
+					streamDCfg.Backends[twitch.ID].Config = twitch.PlatformSpecificConfig{}
 
-					if err := p.SetStreamDConfig(ctx, cfg); err != nil {
+					if err := p.SetStreamDConfig(ctx, streamDCfg); err != nil {
 						p.DisplayError(err)
 						return
 					}
@@ -1709,14 +1736,14 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 			),
 			container.NewHBox(
 				widget.NewButtonWithIcon("(Re-)login in Kick", theme.LoginIcon(), func() {
-					if cfg.Backends[kick.ID] == nil {
-						kick.InitConfig(cfg.Backends)
+					if streamDCfg.Backends[kick.ID] == nil {
+						kick.InitConfig(streamDCfg.Backends)
 					}
 
-					cfg.Backends[kick.ID].Enable = nil
-					cfg.Backends[kick.ID].Config = kick.PlatformSpecificConfig{}
+					streamDCfg.Backends[kick.ID].Enable = nil
+					streamDCfg.Backends[kick.ID].Config = kick.PlatformSpecificConfig{}
 
-					if err := p.SetStreamDConfig(ctx, cfg); err != nil {
+					if err := p.SetStreamDConfig(ctx, streamDCfg); err != nil {
 						p.DisplayError(err)
 						return
 					}
@@ -1730,13 +1757,13 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 			),
 			container.NewHBox(
 				widget.NewButtonWithIcon("(Re-)login in YouTube", theme.LoginIcon(), func() {
-					if cfg.Backends[youtube.ID] == nil {
-						youtube.InitConfig(cfg.Backends)
+					if streamDCfg.Backends[youtube.ID] == nil {
+						youtube.InitConfig(streamDCfg.Backends)
 					}
 
-					cfg.Backends[youtube.ID].Enable = nil
-					cfg.Backends[youtube.ID].Config = youtube.PlatformSpecificConfig{}
-					if err := p.SetStreamDConfig(ctx, cfg); err != nil {
+					streamDCfg.Backends[youtube.ID].Enable = nil
+					streamDCfg.Backends[youtube.ID].Config = youtube.PlatformSpecificConfig{}
+					if err := p.SetStreamDConfig(ctx, streamDCfg); err != nil {
 						p.DisplayError(err)
 						return
 					}
@@ -1748,6 +1775,11 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 				}),
 				youtubeAlreadyLoggedIn,
 			),
+			widget.NewSeparator(),
+			widget.NewSeparator(),
+			widget.NewRichTextFromMarkdown(`# Chat`),
+			enableChatNotifications,
+			enableChatMessageSoundsAlerts,
 			widget.NewSeparator(),
 			widget.NewSeparator(),
 			widget.NewRichTextFromMarkdown(`# Dashboard`),
@@ -1780,6 +1812,9 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 			beforeStopStreamCommandEntry,
 			widget.NewLabel("Run command on stream stop (after):"),
 			afterStopStreamCommandEntry,
+			widget.NewSeparator(),
+			widget.NewLabel("Run command on receiving a chat message (after):"),
+			afterReceivedChatMessage,
 		),
 		container.NewHBox(
 			cancelButton,
@@ -2457,8 +2492,12 @@ func (p *Panel) getSelectedProfile() Profile {
 	return xsync.DoA2R1(ctx, &p.configCacheLocker, getProfile, p.configCache, *p.selectedProfileName)
 }
 
-func (p *Panel) execCommand(ctx context.Context, cmdString string) {
-	cmdExpanded, err := expandCommand(cmdString)
+func (p *Panel) execCommand(
+	ctx context.Context,
+	cmdString string,
+	execContext any,
+) {
+	cmdExpanded, err := expandCommand(ctx, cmdString, execContext)
 	if err != nil {
 		p.DisplayError(err)
 	}
@@ -2469,12 +2508,21 @@ func (p *Panel) execCommand(ctx context.Context, cmdString string) {
 
 	logger.Infof(ctx, "executing %s with arguments %v", cmdExpanded[0], cmdExpanded[1:])
 	cmd := exec.Command(cmdExpanded[0], cmdExpanded[1:]...)
+	err = child_process_manager.ConfigureCommand(cmd)
+	if err != nil {
+		logger.Errorf(ctx, "unable to configure the command so that the process will die automatically: %v", err)
+	}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	observability.Go(ctx, func() {
 		err := cmd.Run()
-		if err != nil {
+		if err == nil {
+			err = child_process_manager.AddChildProcess(cmd.Process)
+			if err != nil {
+				logger.Errorf(ctx, "unable to add the process to the clean up list: %v", err)
+			}
+		} else {
 			p.DisplayError(err)
 		}
 
@@ -2669,7 +2717,7 @@ func (p *Panel) startStream(ctx context.Context) {
 		platCfg = p.configCache.Backends[obs.ID]
 	})
 	if onStreamStart, ok := platCfg.GetCustomString(config.CustomConfigKeyAfterStreamStart); ok {
-		p.execCommand(ctx, onStreamStart)
+		p.execCommand(ctx, onStreamStart, nil)
 	}
 
 	p.startStopButton.Refresh()
@@ -2736,7 +2784,7 @@ func (p *Panel) stopStreamNoLock(ctx context.Context) {
 		platCfg = p.configCache.Backends[obs.ID]
 	})
 	if onStreamStop, ok := platCfg.GetCustomString(config.CustomConfigKeyAfterStreamStop); ok {
-		p.execCommand(ctx, onStreamStop)
+		p.execCommand(ctx, onStreamStop, nil)
 	}
 
 	p.startStopButton.SetText(startStreamString())

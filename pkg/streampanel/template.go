@@ -1,60 +1,43 @@
 package streampanel
 
 import (
-	"strings"
+	"context"
+	"fmt"
 
+	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/go-andiamo/splitter"
 	"github.com/xaionaro-go/streamctl/pkg/expression"
 )
 
-func splitWithQuotes(s string) []string {
-	var result []string
-	var current string
-	inQuotes := false
-	quoteChar := byte(0)
+var commandSplitter splitter.Splitter
 
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-
-		if inQuotes {
-			if c == quoteChar {
-				inQuotes = false
-				quoteChar = 0
-			} else {
-				current += string(c)
-			}
-		} else {
-			switch c {
-			case ' ', '\t':
-				if len(current) > 0 {
-					result = append(result, current)
-					current = ""
-				}
-			case '\'', '"':
-				inQuotes = true
-				quoteChar = c
-			default:
-				current += string(c)
-			}
-		}
-	}
-
-	if len(current) > 0 {
-		result = append(result, current)
-	}
-
-	return result
+func init() {
+	commandSplitter = splitter.MustCreateSplitter(
+		' ',
+		splitter.DoubleQuotesBackSlashEscaped,
+	).AddDefaultOptions(
+		splitter.Trim(" \t\r\n"),
+		splitter.IgnoreEmpties,
+		splitter.UnescapeQuotes,
+	)
 }
 
-func expandCommand(cmdString string) ([]string, error) {
-	cmdStringExpanded, err := expression.Eval[string](expression.Expression(cmdString), nil)
+func expandCommand(
+	ctx context.Context,
+	cmdString string,
+	context any,
+) ([]string, error) {
+	cmdStringExpanded, err := expression.Eval[string](expression.Expression(cmdString), context)
 	if err != nil {
 		return nil, err
 	}
 
-	cmdStringExpandedClean := strings.Trim(cmdStringExpanded, " \t\r\n")
-	if len(cmdStringExpandedClean) == 0 {
-		return nil, nil
+	logger.Debugf(ctx, "expanded command is: <%s>", cmdStringExpanded)
+
+	args, err := commandSplitter.Split(cmdStringExpanded)
+	if err != nil {
+		return nil, fmt.Errorf("unable to split '%s': %w", cmdStringExpanded, err)
 	}
 
-	return splitWithQuotes(cmdStringExpandedClean), nil
+	return args, nil
 }
