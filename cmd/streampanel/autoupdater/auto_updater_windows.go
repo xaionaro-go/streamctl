@@ -93,6 +93,7 @@ func (u *AutoUpdater) Update(
 		}
 
 		backupPath := filePath + "-old"
+		_ = os.Remove(backupPath)
 		if err := os.Rename(filePath, backupPath); err != nil {
 			return fmt.Errorf("unable to rename '%s' to '%s': %w", filePath, backupPath, err)
 		}
@@ -106,7 +107,7 @@ func (u *AutoUpdater) Update(
 				logger.Debugf(ctx, "unable to remove file '%s': %v", backupPath, err)
 				continue
 			}
-			return fmt.Errorf("unable to remove file '%s': %w", backupPath, err)
+			logger.Warnf(ctx, "unable to remove file '%s': %w", backupPath, err)
 		}
 	}
 	progressBar.SetProgress(0.9)
