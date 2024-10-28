@@ -34,30 +34,30 @@ func (PlayerPCM) PlayPCM(
 	format types.PCMFormat,
 	bufferSize time.Duration,
 	rawReader io.Reader,
-) error {
+) (types.Stream, error) {
 	reader, err := newPulseReader(format, rawReader)
 	if err != nil {
-		return fmt.Errorf("unable to initialize a reader for Pulse: %w", err)
+		return nil, fmt.Errorf("unable to initialize a reader for Pulse: %w", err)
 	}
 
 	c, err := pulse.NewClient()
 	if err != nil {
-		return fmt.Errorf("unable to open a client to Pulse: %w", err)
+		return nil, fmt.Errorf("unable to open a client to Pulse: %w", err)
 	}
 	defer c.Close()
 
 	stream, err := c.NewPlayback(reader, pulse.PlaybackLatency(bufferSize.Seconds()))
 	if err != nil {
-		return fmt.Errorf("unable to initialize a playback: %w", err)
+		return nil, fmt.Errorf("unable to initialize a playback: %w", err)
 	}
 
 	stream.Start()
 	stream.Drain()
 	if stream.Error() != nil {
-		return fmt.Errorf("an error occurred during playback: %w", stream.Error())
+		return nil, fmt.Errorf("an error occurred during playback: %w", stream.Error())
 	}
 	if stream.Underflow() {
-		return fmt.Errorf("underflow")
+		return nil, fmt.Errorf("underflow")
 	}
 	func() {
 		defer func() {
@@ -69,10 +69,10 @@ func (PlayerPCM) PlayPCM(
 		stream.Close()
 	}()
 	if err != nil {
-		return fmt.Errorf("unable to close the stream: %w", err)
+		return nil, fmt.Errorf("unable to close the stream: %w", err)
 	}
 
-	return nil
+	return newStream(stream), nil
 }
 
 type pulseReader struct {

@@ -14,7 +14,13 @@ var longVorbis []byte
 func main() {
 	ctx := context.Background()
 	a := audio.NewAudioAuto(ctx)
-	err := a.PlayVorbis(bytes.NewReader(longVorbis))
+	stream, err := a.PlayVorbis(bytes.NewReader(longVorbis))
+	assertNoError(err)
+	assertNoError(stream.Drain())
+	assertNoError(stream.Close())
+}
+
+func assertNoError(err error) {
 	if err != nil {
 		panic(err)
 	}

@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
+	_ "net/http/pprof"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +18,10 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
 	"github.com/spf13/pflag"
+	_ "github.com/xaionaro-go/streamctl/pkg/audio/backends/oto"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
+
+	//_ "github.com/xaionaro-go/streamctl/pkg/audio/backends/pulseaudio"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/player/types"
@@ -42,15 +48,12 @@ func main() {
 	loggerLevel := logger.LevelInfo
 	pflag.Var(&loggerLevel, "log-level", "Log level")
 	mpvPath := pflag.String("mpv", "mpv", "path to mpv")
-	backend := pflag.String(
-		"backend",
-		backends[0],
-		"player backend, supported values: "+strings.Join(backends, ", "),
-	)
+	backend := pflag.String("backend", backends[0], "player backend, supported values: "+strings.Join(backends, ", "))
+	netPprofAddr := pflag.String("net-pprof-listen-addr", "", "an address to listen for incoming net/pprof connections")
 	pflag.Parse()
 
 	l := logrus.Default().WithLevel(loggerLevel)
-	ctx := logger.CtxWithLogger(context.Background(), l)
+	ctx := xsync.WithNoLogging(logger.CtxWithLogger(context.Background(), l), true)
 	logger.Default = func() logger.Logger {
 		return l
 	}
@@ -60,6 +63,10 @@ func main() {
 		l.Fatal("exactly one argument expected")
 	}
 	mediaPath := pflag.Arg(0)
+
+	if *netPprofAddr != "" {
+		observability.Go(ctx, func() { l.Error(http.ListenAndServe(*netPprofAddr, nil)) })
+	}
 
 	err := child_process_manager.InitializeChildProcessManager()
 	if err != nil {

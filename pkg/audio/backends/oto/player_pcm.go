@@ -5,6 +5,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/xaionaro-go/streamctl/pkg/audio/resampler"
 	"github.com/xaionaro-go/streamctl/pkg/audio/types"
 )
 
@@ -28,45 +29,34 @@ func (PlayerPCM) PlayPCM(
 	format types.PCMFormat,
 	bufferSize time.Duration,
 	reader io.Reader,
-) error {
+) (types.Stream, error) {
 	// Unfortunately, `oto` does not allow to initialize a context multiple times, so we cannot change the context every time different sampleRate, channels, format or bufferSize are given.
 	// As a result, we've just chosen reasonable values and expect them always :(
-	if sampleRate != SampleRate {
-		return fmt.Errorf("the expected sample rate is %d, but received %d", SampleRate, sampleRate)
-	}
-	if channels > Channels {
-		return fmt.Errorf("the expected number of channels is %d, but received %d", Channels, channels)
-	}
-	if channels != Channels {
-		switch channels {
-		case 1:
-			reader = repeatReader(reader, uint(format.Size()), Channels)
-		default:
-			return fmt.Errorf("do not know how to handle %d channels input with %d channels output", channels, Channels)
+	if sampleRate != SampleRate || channels != Channels || format != Format || bufferSize != BufferSize {
+		inFmt := resampler.Format{
+			Channels:   channels,
+			SampleRate: sampleRate,
+			PCMFormat:  format,
 		}
-	}
-	if format != Format {
-		return fmt.Errorf("the expected format is %v, but received %v", Format, format)
-	}
-	if bufferSize != BufferSize {
-		return fmt.Errorf("the expected buffer size is %v, but received %v", BufferSize, bufferSize)
+		outFmt := resampler.Format{
+			Channels:   Channels,
+			SampleRate: SampleRate,
+			PCMFormat:  Format,
+		}
+		var err error
+		reader, err = resampler.NewResampler(inFmt, reader, outFmt)
+		if err != nil {
+			return nil, fmt.Errorf("unable to initialize a resampler from %#+v to %#+v: %w", inFmt, outFmt, err)
+		}
 	}
 
 	otoCtx, err := getOtoContext()
 	if err != nil {
-		return fmt.Errorf("unable to get an oto context: %w", err)
+		return nil, fmt.Errorf("unable to get an oto context: %w", err)
 	}
 
 	player := otoCtx.NewPlayer(reader)
 	player.Play()
-	for player.IsPlaying() {
-		time.Sleep(100 * time.Millisecond)
-	}
 
-	err = player.Close()
-	if err != nil {
-		return fmt.Errorf("unable to close the player: %w", err)
-	}
-
-	return nil
+	return newStream(player), nil
 }

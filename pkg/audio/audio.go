@@ -64,13 +64,13 @@ func NewAudioAuto(
 	}
 }
 
-func (a *Audio) PlayVorbis(rawReader io.Reader) error {
+func (a *Audio) PlayVorbis(rawReader io.Reader) (Stream, error) {
 	oggReader, err := oggvorbis.NewReader(rawReader)
 	if err != nil {
-		return fmt.Errorf("unable to initialize a vorbis reader: %w", err)
+		return nil, fmt.Errorf("unable to initialize a vorbis reader: %w", err)
 	}
 
-	err = a.PlayerPCM.PlayPCM(
+	stream, err := a.PlayerPCM.PlayPCM(
 		uint32(oggReader.SampleRate()),
 		uint16(oggReader.Channels()),
 		PCMFormatFloat32LE,
@@ -78,7 +78,23 @@ func (a *Audio) PlayVorbis(rawReader io.Reader) error {
 		newReaderFromFloat32Reader(oggReader),
 	)
 	if err != nil {
-		return fmt.Errorf("unable to playback as PCM: %w", err)
+		return nil, fmt.Errorf("unable to playback as PCM: %w", err)
 	}
-	return nil
+	return stream, nil
+}
+
+func (a *Audio) PlayPCM(
+	sampleRate uint32,
+	channels uint16,
+	pcmFormat PCMFormat,
+	bufferSize time.Duration,
+	pcmReader io.Reader,
+) (Stream, error) {
+	return a.PlayerPCM.PlayPCM(
+		sampleRate,
+		channels,
+		pcmFormat,
+		bufferSize,
+		pcmReader,
+	)
 }

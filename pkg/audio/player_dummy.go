@@ -19,6 +19,18 @@ func (PlayerPCMDummy) PlayPCM(
 	format PCMFormat,
 	bufferSize time.Duration,
 	reader io.Reader,
-) error {
+) (Stream, error) {
+	return StreamDummy{}, nil
+}
+
+type StreamDummy struct{}
+
+var _ Stream = StreamDummy{}
+
+func (StreamDummy) Drain() error {
+	return nil
+}
+
+func (StreamDummy) Close() error {
 	return nil
 }

@@ -6,27 +6,32 @@ import (
 	"fmt"
 	"image"
 	"io"
+	"math"
+	"sync/atomic"
 	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/audio"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
-	"github.com/xaionaro-go/typing/ordered"
 )
 
 type Player struct {
 	window               fyne.Window
+	audio                *audio.Audio
+	audioWriter          io.WriteCloser
+	audioStream          audio.Stream
 	locker               xsync.Mutex
 	currentURL           string
 	currentImage         image.Image
 	currentDuration      time.Duration
 	currentVideoPosition time.Duration
 	currentAudioPosition time.Duration
-	videoStreamIndex     ordered.Optional[int]
-	audioStreamIndex     ordered.Optional[int]
+	videoStreamIndex     atomic.Uint32
+	audioStreamIndex     atomic.Uint32
 	canvasImage          *canvas.Image
 	endChan              chan struct{}
 }
@@ -36,9 +41,14 @@ func New(
 	title string,
 ) *Player {
 	w := fyne.CurrentApp().NewWindow(title)
-	return &Player{
-		window: w,
+	audio := audio.NewAudioAuto(ctx)
+	p := &Player{
+		window:  w,
+		audio:   audio,
+		endChan: make(chan struct{}),
 	}
+	p.onEnd()
+	return p
 }
 
 func (*Player) SetupForStreaming(
@@ -86,7 +96,7 @@ func (p *Player) openURL(
 				continue
 			case errors.Is(err, io.EOF):
 			default:
-				logger.Errorf(ctx, "got an error while reading the streams from '%s': %w", link, err)
+				logger.Errorf(ctx, "got an error while reading the streams from '%s': %v", link, err)
 			}
 			p.onEnd()
 			return
@@ -102,6 +112,8 @@ func (p *Player) processFrame(
 	ctx context.Context,
 	frame *recoder.Frame,
 ) error {
+	logger.Tracef(ctx, "processFrame")
+	defer logger.Tracef(ctx, "/processFrame")
 	return xsync.DoR1(ctx, &p.locker, func() error {
 		switch frame.DecoderContext.MediaType() {
 		case MediaTypeVideo:
@@ -119,20 +131,24 @@ func (p *Player) processVideoFrame(
 	ctx context.Context,
 	frame *recoder.Frame,
 ) error {
+	logger.Tracef(ctx, "processAudioFrame")
+	defer logger.Tracef(ctx, "/processAudioFrame")
+
 	p.currentVideoPosition = frame.Position()
 	p.currentDuration = frame.Duration()
 	logger.Tracef(ctx, "pos: %v; dur: %v", p.currentVideoPosition, p.currentDuration)
 
 	streamIdx := frame.Packet.StreamIndex()
-	if p.videoStreamIndex.IsSet() {
-		if p.videoStreamIndex.Get() != streamIdx {
-			return fmt.Errorf("the index of the video stream have changed from %d to %d; the support of dynamic/multiple video tracks is not implemented, yet", p.videoStreamIndex.Get(), streamIdx)
-		}
-	} else {
+
+	if p.videoStreamIndex.CompareAndSwap(math.MaxUint32, uint32(streamIdx)) { // atomics are not really needed because all of this happens while holding p.locker
 		if err := p.initImageFor(ctx, frame); err != nil {
 			return fmt.Errorf("unable to initialize an image variable for the frame: %w", err)
 		}
-		p.videoStreamIndex.Set(streamIdx)
+	} else {
+		oldStreamIdx := int(p.videoStreamIndex.Load())
+		if oldStreamIdx != streamIdx {
+			return fmt.Errorf("the index of the video stream have changed from %d to %d; the support of dynamic/multiple video tracks is not implemented, yet", oldStreamIdx, streamIdx)
+		}
 	}
 
 	frame.Data().ToImage(p.currentImage)
@@ -158,22 +174,70 @@ func (p *Player) processAudioFrame(
 	ctx context.Context,
 	frame *recoder.Frame,
 ) error {
+	logger.Tracef(ctx, "processAudioFrame")
+	defer logger.Tracef(ctx, "/processAudioFrame")
+
 	p.currentAudioPosition = frame.Position()
 	streamIdx := frame.Packet.StreamIndex()
 
-	if p.audioStreamIndex.IsSet() && p.audioStreamIndex.Get() != streamIdx {
-		return fmt.Errorf("the index of the audio stream have changed from %d to %d; the support of dynamic/multiple audio tracks is not implemented, yet", p.audioStreamIndex.Get(), streamIdx)
+	if p.audioStreamIndex.CompareAndSwap(math.MaxUint32, uint32(streamIdx)) { // atomics are not really needed because all of this happens while holding p.locker
+		r, w := io.Pipe()
+		p.audioWriter = w
+		sampleRate := frame.DecoderContext.SampleRate()
+		channels := frame.DecoderContext.ChannelLayout().Channels()
+		pcmFormat := frame.DecoderContext.SampleFormat()
+		bufferSize := time.Second
+		audioStream, err := p.audio.PlayPCM(
+			uint32(sampleRate),
+			uint16(channels),
+			pcmFormatToAudio(pcmFormat),
+			bufferSize,
+			r,
+		)
+		if err != nil {
+			return fmt.Errorf("unable to initialize an audio playback: %w", err)
+		}
+		p.audioStream = audioStream
+	} else {
+		oldStreamIdx := int(p.audioStreamIndex.Load())
+		if oldStreamIdx != streamIdx {
+			return fmt.Errorf("the index of the audio stream have changed from %d to %d; the support of dynamic/multiple audio tracks is not implemented, yet", oldStreamIdx, streamIdx)
+		}
 	}
 
-	logger.Errorf(ctx, "the support of audio is not implemented")
+	align := 1
+	frameBytes, err := frame.Data().Bytes(int(align))
+	if err != nil {
+		return fmt.Errorf("unable to get the audio frame data: %w", err)
+	}
+
+	n, err := p.audioWriter.Write(frameBytes)
+	if err != nil {
+		return fmt.Errorf("unable to write the audio frame into the playback subsystem: %w", err)
+	}
+	if n != len(frameBytes) {
+		return fmt.Errorf("unable to write the full audio frame: %d != %d", n, len(frameBytes))
+	}
 
 	return nil
 }
 
 func (p *Player) onEnd() {
 	ctx := context.TODO()
+	logger.Debugf(ctx, "onEnd")
+	defer logger.Debugf(ctx, "/onEnd")
 	p.locker.Do(ctx, func() {
+		p.videoStreamIndex.Store(math.MaxUint32)
+		p.audioStreamIndex.Store(math.MaxUint32)
 		p.currentURL = ""
+		if p.audioWriter != nil {
+			p.audioWriter.Close()
+			p.audioWriter = nil
+		}
+		if p.audioStream != nil {
+			p.audioStream.Close()
+			p.audioStream = nil
+		}
 
 		var oldEndChan chan struct{}
 		p.endChan, oldEndChan = make(chan struct{}), p.endChan
