@@ -172,8 +172,10 @@ func (d *Decoder) ReadFrame(
 	}
 
 	frame := Frame{
-		DecoderContext: decoderCtx,
-		Packet:         d.Packet,
+		InputStream:        streamDecoder.InputStream(),
+		InputFormatContext: input.FormatContext,
+		DecoderContext:     decoderCtx,
+		Packet:             d.Packet,
 	}
 	for {
 		select {

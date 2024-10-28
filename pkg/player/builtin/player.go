@@ -21,6 +21,7 @@ import (
 
 type Player struct {
 	window               fyne.Window
+	lastSeekAt           time.Time
 	audio                *audio.Audio
 	audioWriter          io.WriteCloser
 	audioStream          audio.Stream
@@ -83,6 +84,7 @@ func (p *Player) openURL(
 	if err != nil {
 		return fmt.Errorf("unable to start reading the streams from '%s': %w", link, err)
 	}
+	p.onSeek(ctx)
 	observability.Go(ctx, func() {
 		for {
 			select {
@@ -127,6 +129,15 @@ func (p *Player) processFrame(
 	})
 }
 
+func (p *Player) onSeek(
+	ctx context.Context,
+) {
+	logger.Tracef(ctx, "onSeek")
+	defer logger.Tracef(ctx, "/onSeek")
+
+	p.lastSeekAt = time.Now()
+}
+
 func (p *Player) processVideoFrame(
 	ctx context.Context,
 	frame *recoder.Frame,
@@ -135,8 +146,8 @@ func (p *Player) processVideoFrame(
 	defer logger.Tracef(ctx, "/processAudioFrame")
 
 	p.currentVideoPosition = frame.Position()
-	p.currentDuration = frame.Duration()
-	logger.Tracef(ctx, "pos: %v; dur: %v", p.currentVideoPosition, p.currentDuration)
+	p.currentDuration = frame.MaxPosition()
+	logger.Tracef(ctx, "pos: %v; dur: %v; pts: %v; time_base: %v", p.currentVideoPosition, p.currentDuration, frame.Pts(), frame.DecoderContext.TimeBase())
 
 	streamIdx := frame.Packet.StreamIndex()
 
@@ -157,10 +168,11 @@ func (p *Player) processVideoFrame(
 		return fmt.Errorf("unable to render the picture: %w", err)
 	}
 
-	// DELETE ME: {
-	logger.Errorf(ctx, "DELETE ME")
-	time.Sleep(time.Millisecond * 1000 / 30)
-	// }
+	sinceStart := time.Since(p.lastSeekAt)
+	nextExpectedPosition := p.currentVideoPosition + frame.FrameDuration()
+	waitIntervalForNextFrame := nextExpectedPosition - sinceStart
+	logger.Tracef(ctx, "sleeping for %v (%v - %v)", waitIntervalForNextFrame, nextExpectedPosition, sinceStart)
+	time.Sleep(waitIntervalForNextFrame)
 
 	return nil
 }
@@ -201,7 +213,8 @@ func (p *Player) processAudioFrame(
 	} else {
 		oldStreamIdx := int(p.audioStreamIndex.Load())
 		if oldStreamIdx != streamIdx {
-			return fmt.Errorf("the index of the audio stream have changed from %d to %d; the support of dynamic/multiple audio tracks is not implemented, yet", oldStreamIdx, streamIdx)
+			logger.Tracef(ctx, "we do not support multiple audio streams, yet; so we ignore this new stream, index: %d (which is not %d)", streamIdx, oldStreamIdx)
+			return nil
 		}
 	}
 

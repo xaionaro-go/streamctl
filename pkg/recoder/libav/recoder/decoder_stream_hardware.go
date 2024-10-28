@@ -20,6 +20,10 @@ func (d *decoderStreamHardware) CodecContext() *astiav.CodecContext {
 	return d.codecContext
 }
 
+func (d *decoderStreamHardware) InputStream() *astiav.Stream {
+	return d.inputStream
+}
+
 func (d *decoderStreamHardware) Close() error {
 	d.codecContext.Free()
 	return nil

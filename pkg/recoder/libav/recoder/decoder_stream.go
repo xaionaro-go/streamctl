@@ -6,4 +6,5 @@ import (
 
 type decoderStream interface {
 	CodecContext() *astiav.CodecContext
+	InputStream() *astiav.Stream
 }
