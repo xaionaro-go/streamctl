@@ -27,12 +27,27 @@ type OAuthConfig struct {
 	} `yaml:"listen_ports"`
 }
 
+type ChatConfig struct {
+	CommandOnReceiveMessage        string `yaml:"command_on_receive_message,omitempty"`
+	EnableNotifications            *bool  `yaml:"enable_notifications,omitempty"`
+	EnableReceiveMessageSoundAlarm *bool  `yaml:"enable_receive_message_sound_alarm,omitempty"`
+}
+
+func (cfg ChatConfig) NotificationsEnabled() bool {
+	return cfg.EnableNotifications == nil || *cfg.EnableNotifications
+}
+
+func (cfg ChatConfig) ReceiveMessageSoundAlarmEnabled() bool {
+	return cfg.EnableReceiveMessageSoundAlarm == nil || *cfg.EnableReceiveMessageSoundAlarm
+}
+
 type Config struct {
 	RemoteStreamDAddr string           `yaml:"streamd_remote"`
 	BuiltinStreamD    streamd.Config   `yaml:"streamd_builtin"`
 	Screenshot        ScreenshotConfig `yaml:"screenshot"`
 	Browser           BrowserConfig    `yaml:"browser"`
 	OAuth             OAuthConfig      `yaml:"oauth"`
+	Chat              ChatConfig       `yaml:"chat"`
 }
 
 func DefaultConfig() Config {

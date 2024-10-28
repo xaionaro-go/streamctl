@@ -21,6 +21,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
+	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
 type chatUI struct {
@@ -153,6 +154,26 @@ func (ui *chatUI) onReceiveMessage(
 		ui.List.Refresh()
 	})
 	observability.Go(ctx, func() {
+		notificationsEnabled := xsync.DoR1(ctx, &ui.Panel.configLocker, func() bool {
+			return ui.Panel.Config.Chat.NotificationsEnabled()
+		})
+		if !notificationsEnabled {
+			return
+		}
+		logger.Debugf(ctx, "SendNotification")
+		defer logger.Debugf(ctx, "/SendNotification")
+		ui.Panel.app.SendNotification(&fyne.Notification{
+			Title:   string(msg.Platform) + " chat message",
+			Content: msg.Username + ": " + msg.Message,
+		})
+	})
+	observability.Go(ctx, func() {
+		soundEnabled := xsync.DoR1(ctx, &ui.Panel.configLocker, func() bool {
+			return ui.Panel.Config.Chat.ReceiveMessageSoundAlarmEnabled()
+		})
+		if !soundEnabled {
+			return
+		}
 		concurrentCount := atomic.AddInt32(&ui.CurrentlyPlayingChatMessageSoundCount, 1)
 		defer atomic.AddInt32(&ui.CurrentlyPlayingChatMessageSoundCount, -1)
 		logger.Debugf(ctx, "PlayChatMessage (count: %d)", concurrentCount)
@@ -165,6 +186,18 @@ func (ui *chatUI) onReceiveMessage(
 		if err != nil {
 			logger.Errorf(ctx, "unable to playback the chat message sound: %v", err)
 		}
+	})
+	observability.Go(ctx, func() {
+		commandTemplate := xsync.DoR1(ctx, &ui.Panel.configLocker, func() string {
+			return ui.Panel.Config.Chat.CommandOnReceiveMessage
+		})
+		if commandTemplate == "" {
+			return
+		}
+		logger.Debugf(ctx, "CommandOnReceiveMessage: <%s>", commandTemplate)
+		defer logger.Debugf(ctx, "/CommandOnReceiveMessage")
+
+		ui.Panel.execCommand(ctx, commandTemplate, msg)
 	})
 }
 

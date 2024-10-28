@@ -205,6 +205,7 @@ require (
 	github.com/dustin/go-humanize v1.0.1
 	github.com/ebitengine/oto/v3 v3.3.1
 	github.com/getsentry/sentry-go v0.28.1
+	github.com/go-andiamo/splitter v1.2.5
 	github.com/go-git/go-git/v5 v5.12.0
 	github.com/go-ng/xmath v0.0.0-20230704233441-028f5ea62335
 	github.com/go-yaml/yaml v2.1.0+incompatible
