@@ -2,24 +2,26 @@ package audio
 
 import (
 	"bytes"
+	"context"
 
 	audioSubsystem "github.com/xaionaro-go/streamctl/pkg/audio"
+	_ "github.com/xaionaro-go/streamctl/pkg/audio/backends/oto"
 	"github.com/xaionaro-go/streamctl/pkg/audiotheme"
 	"github.com/xaionaro-go/streamctl/pkg/audiotheme/defaultaudiotheme"
 )
 
 type Audio struct {
-	playbacker *audioSubsystem.Audio
-	audioTheme audiotheme.AudioTheme
+	Playbacker *audioSubsystem.Audio
+	AudioTheme audiotheme.AudioTheme
 }
 
-func NewAudio() *Audio {
+func NewAudio(ctx context.Context) *Audio {
 	return &Audio{
-		playbacker: audioSubsystem.NewAudioAuto(),
-		audioTheme: defaultaudiotheme.AudioTheme(),
+		Playbacker: audioSubsystem.NewAudioAuto(ctx),
+		AudioTheme: defaultaudiotheme.AudioTheme(),
 	}
 }
 
 func (a *Audio) PlayChatMessage() error {
-	return a.playbacker.PlayVorbis(bytes.NewReader(a.audioTheme.ChatMessage))
+	return a.Playbacker.PlayVorbis(bytes.NewReader(a.AudioTheme.ChatMessage))
 }

@@ -1,4 +1,4 @@
-package audio
+package pulseaudio
 
 import (
 	"fmt"
@@ -7,31 +7,31 @@ import (
 
 	"github.com/jfreymuth/pulse"
 	"github.com/jfreymuth/pulse/proto"
+	"github.com/xaionaro-go/streamctl/pkg/audio/types"
 )
 
-type PlayerPulse struct {
+type PlayerPCM struct {
 }
 
-var _ PlayerPCM = (*PlayerPulse)(nil)
+var _ types.PlayerPCM = (*PlayerPCM)(nil)
 
-func NewPlayerPulse() PlayerPCM {
-	return PlayerPulse{}
+func NewPlayerPCM() PlayerPCM {
+	return PlayerPCM{}
 }
 
-func (PlayerPulse) Ping() error {
+func (PlayerPCM) Ping() error {
 	c, err := pulse.NewClient()
 	if err != nil {
 		return fmt.Errorf("unable to open a client to Pulse: %w", err)
 	}
 	defer c.Close()
-
 	return nil
 }
 
-func (PlayerPulse) PlayPCM(
+func (PlayerPCM) PlayPCM(
 	sampleRate uint32,
 	channels uint16,
-	format PCMFormat,
+	format types.PCMFormat,
 	bufferSize time.Duration,
 	rawReader io.Reader,
 ) error {
@@ -80,10 +80,10 @@ type pulseReader struct {
 	io.Reader
 }
 
-func newPulseReader(pcmFormat PCMFormat, reader io.Reader) (*pulseReader, error) {
+func newPulseReader(pcmFormat types.PCMFormat, reader io.Reader) (*pulseReader, error) {
 	var pulseFormat byte
 	switch pcmFormat {
-	case PCMFormatFloat32LE:
+	case types.PCMFormatFloat32LE:
 		pulseFormat = proto.FormatFloat32LE
 	default:
 		return nil, fmt.Errorf("received an unexpected format: %v", pcmFormat)

@@ -1,14 +1,18 @@
 package audio
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
+	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/jfreymuth/oggvorbis"
+	"github.com/xaionaro-go/streamctl/pkg/audio/registry"
 )
 
-const BufferSize = 20 * time.Second
+const BufferSize = 100 * time.Millisecond
 
 type Audio struct {
 	PlayerPCM
@@ -20,22 +24,43 @@ func NewAudio(playerPCM PlayerPCM) *Audio {
 	}
 }
 
-func NewAudioAuto() *Audio {
-	for _, factory := range []func() PlayerPCM{
-		NewPlayerPulse,
-		NewPlayerOto,
-	} {
-		player := factory()
-		if player.Ping() == nil {
-			return &Audio{
-				PlayerPCM: player,
-			}
+var (
+	lastSuccessfulFactory       registry.PlayerPCMFactory
+	lastSuccessfulFactoryLocker sync.Mutex
+)
+
+func getLastSuccessfulFactory() registry.PlayerPCMFactory {
+	lastSuccessfulFactoryLocker.Lock()
+	defer lastSuccessfulFactoryLocker.Unlock()
+	return lastSuccessfulFactory
+}
+
+func NewAudioAuto(
+	ctx context.Context,
+) *Audio {
+	factory := getLastSuccessfulFactory()
+	if factory != nil {
+		player := factory.NewPlayerPCM()
+		if err := player.Ping(); err == nil {
+			return NewAudio(player)
 		}
 	}
 
-	// the default backend:
+	for _, factory := range registry.Factories() {
+		player := factory.NewPlayerPCM()
+		err := player.Ping()
+		logger.Debugf(ctx, "pinging PCM player %T result is %v", player, err)
+		if err == nil {
+			lastSuccessfulFactoryLocker.Lock()
+			defer lastSuccessfulFactoryLocker.Unlock()
+			lastSuccessfulFactory = factory
+			return NewAudio(player)
+		}
+	}
+
+	logger.Infof(ctx, "was unable to initialize any PCM player")
 	return &Audio{
-		PlayerPCM: NewPlayerOto(),
+		PlayerPCM: PlayerPCMDummy{},
 	}
 }
 

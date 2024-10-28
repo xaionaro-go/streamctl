@@ -120,8 +120,10 @@ func (p *Player) processVideoFrame(
 	frame *recoder.Frame,
 ) error {
 	p.currentVideoPosition = frame.Position()
-	streamIdx := frame.Packet.StreamIndex()
+	p.currentDuration = frame.Duration()
+	logger.Tracef(ctx, "pos: %v; dur: %v", p.currentVideoPosition, p.currentDuration)
 
+	streamIdx := frame.Packet.StreamIndex()
 	if p.videoStreamIndex.IsSet() {
 		if p.videoStreamIndex.Get() != streamIdx {
 			return fmt.Errorf("the index of the video stream have changed from %d to %d; the support of dynamic/multiple video tracks is not implemented, yet", p.videoStreamIndex.Get(), streamIdx)
@@ -131,7 +133,6 @@ func (p *Player) processVideoFrame(
 			return fmt.Errorf("unable to initialize an image variable for the frame: %w", err)
 		}
 		p.videoStreamIndex.Set(streamIdx)
-		p.currentDuration = frame.Duration()
 	}
 
 	frame.Data().ToImage(p.currentImage)

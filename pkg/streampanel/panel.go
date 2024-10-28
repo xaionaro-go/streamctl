@@ -174,8 +174,12 @@ func New(
 		return nil, fmt.Errorf("unable to read the config from path '%s': %w", configPath, err)
 	}
 
+	ctx := context.TODO()
+	audio := audio.NewAudio(ctx)
+	logger.Infof(ctx, "audio backend is %T", audio.Playbacker.PlayerPCM)
+
 	p := &Panel{
-		Audio:               audio.NewAudio(),
+		Audio:               audio,
 		configPath:          configPath,
 		Config:              Options(opts).ApplyOverrides(cfg),
 		Screenshoter:        screenshoter.New(screenshot.Implementation{}),

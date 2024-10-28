@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -28,6 +29,8 @@ type chatUI struct {
 	List                  *widget.List
 	MessagesHistoryLocker sync.Mutex
 	MessagesHistory       []api.ChatMessage
+
+	CurrentlyPlayingChatMessageSoundCount int32
 
 	// TODO: do not store ctx in a struct:
 	ctx context.Context
@@ -150,6 +153,14 @@ func (ui *chatUI) onReceiveMessage(
 		ui.List.Refresh()
 	})
 	observability.Go(ctx, func() {
+		concurrentCount := atomic.AddInt32(&ui.CurrentlyPlayingChatMessageSoundCount, 1)
+		defer atomic.AddInt32(&ui.CurrentlyPlayingChatMessageSoundCount, -1)
+		logger.Debugf(ctx, "PlayChatMessage (count: %d)", concurrentCount)
+		if concurrentCount != 1 {
+			logger.Debugf(ctx, "/PlayChatMessage: skipped (count == %d)", concurrentCount)
+			return
+		}
+		defer logger.Debugf(ctx, "/PlayChatMessage: (attempted to) played")
 		err := ui.Panel.Audio.PlayChatMessage()
 		if err != nil {
 			logger.Errorf(ctx, "unable to playback the chat message sound: %v", err)

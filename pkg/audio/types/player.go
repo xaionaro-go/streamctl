@@ -1,8 +1,9 @@
-package audio
+package types
 
 import (
 	"fmt"
 	"io"
+	"math"
 	"time"
 )
 
@@ -24,17 +25,24 @@ const (
 	PCMFormatFloat32LE
 )
 
-func (f *PCMFormat) String() string {
-	if f == nil {
-		return "null"
+func (f PCMFormat) Size() uint32 {
+	switch f {
+	case PCMFormatUndefined:
+		return math.MaxUint32
+	case PCMFormatFloat32LE:
+		return 4
+	default:
+		return math.MaxUint32
 	}
+}
 
-	switch *f {
+func (f PCMFormat) String() string {
+	switch f {
 	case PCMFormatUndefined:
 		return "<undefined>"
 	case PCMFormatFloat32LE:
 		return "f32le"
 	default:
-		return fmt.Sprintf("<unexpected_value_%d>", *f)
+		return fmt.Sprintf("<unexpected_value_%d>", f)
 	}
 }

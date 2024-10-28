@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
 
 	"github.com/xaionaro-go/streamctl/pkg/audio"
@@ -11,7 +12,8 @@ import (
 var longVorbis []byte
 
 func main() {
-	a := audio.NewAudioAuto()
+	ctx := context.Background()
+	a := audio.NewAudioAuto(ctx)
 	err := a.PlayVorbis(bytes.NewReader(longVorbis))
 	if err != nil {
 		panic(err)
