@@ -15,6 +15,8 @@ ifeq ($(ENABLE_VLC), true)
 endif
 ifeq ($(FORCE_DEBUG), true)
 	GOTAGS:=$(GOTAGS),force_debug
+else
+	GOTAGS:=$(GOTAGS),release
 endif
 GOTAGS:=$(GOTAGS:,%=%)
 
@@ -219,11 +221,24 @@ install-android-arm64:
 streampanel-ios: builddir
 	cd cmd/streampanel && fyne package $(GOBUILD_FLAGS) -release -os ios && mv streampanel.ipa ../../build/
 
-streampanel-windows: windows-builddir windows-deps
+streampanel-windows-using-gobuild: windows-builddir windows-deps
 	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "-H windowsgui $(LINKER_FLAGS_WINDOWS)" -o build/streampanel-windows-amd64/streampanel.exe ./cmd/streampanel/
 
-streampanel-windows-debug: windows-builddir windows-debug-deps
+streampanel-windows-debug-using-gobuild: windows-builddir windows-debug-deps
 	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "-a $(LINKER_FLAGS_WINDOWS)" -o build/streampanel-windows-debug-amd64/streampanel-debug.exe ./cmd/streampanel/
+
+streampanel-windows: windows-builddir windows-deps
+	cd cmd/streampanel && \
+		PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) \
+		CGO_ENABLED=1 \
+		CGO_LDFLAGS="-static $(WINDOWS_EXTLINKER_FLAGS)" \
+		CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" \
+		CC=x86_64-w64-mingw32-gcc \
+		GOFLAGS="$(GOBUILD_FLAGS) -ldflags=$(shell echo ${LINKER_FLAGS_WINDOWS} | tr " " ",")" \
+		fyne package $(FYNEBUILD_FLAGS) -release -os windows && \
+			mv streampanel.exe ../../build/streampanel-windows-amd64/streampanel.exe
+
+streampanel-windows-debug: streampanel-windows-debug-using-gobuild
 
 streamd-linux-amd64: builddir
 	CGO_ENABLED=1 CGO_LDFLAGS="-static" GOOS=linux GOARCH=amd64 go build -o build/streamd-linux-amd64 ./cmd/streamd

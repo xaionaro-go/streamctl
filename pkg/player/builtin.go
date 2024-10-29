@@ -1,3 +1,6 @@
+//go:build !android
+// +build !android
+
 package player
 
 import (
@@ -6,7 +9,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/player/builtin"
 )
 
-const SupportedBuiltin = false
+const SupportedBuiltin = true
 
 type Builtin = builtin.Player
 
