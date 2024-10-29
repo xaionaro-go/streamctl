@@ -26,10 +26,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: streampanel-windows-amd64.zip
-      - name: download streampanel-windows-debug-amd64.zip
-        uses: actions/download-artifact@v4
-        with:
-          name: streampanel-windows-debug-amd64.zip
       - name: get the timestamp
         id: date
         run: echo "::set-output name=date::$(date +'%Y-%m-%d_%H%M%S')"
@@ -42,4 +38,3 @@ jobs:
             streampanel-linux-amd64
             streampanel-arm64.apk
             streampanel-windows-amd64.zip
-            streampanel-windows-debug-amd64.zip

@@ -14,8 +14,6 @@ jobs:
             artifact: streampanel-arm64.apk
           - name: streampanel-windows-amd64.zip
             artifact: streampanel-windows-amd64.zip
-          - name: streampanel-windows-debug-amd64.zip
-            artifact: streampanel-windows-debug-amd64.zip
     name: build
     steps:
       - uses: actions/checkout@v4
@@ -27,6 +25,8 @@ jobs:
         with:
           go-version: '1.23'
           check-latest: true
+      #- name: add ffmpeg7 repo
+      #  run: sudo add-apt-repository -y ppa:ubuntuhandbook1/ffmpeg7
       - name: install fyne
         run: go install fyne.io/fyne/v2/cmd/fyne@latest
       - name: apt install
@@ -47,7 +47,7 @@ jobs:
             libasound2-dev \
             libxxf86vm-dev \
       - name: apt install
-        if: ${{ matrix.target.name == 'streampanel-windows-amd64.zip' || matrix.target.name == 'streampanel-windows-debug-amd64.zip' }}
+        if: ${{ matrix.target.name == 'streampanel-windows-amd64.zip' }}
         run: |
           sudo apt install -fy \
             gcc-mingw-w64-x86-64-win32 \

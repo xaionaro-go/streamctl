@@ -29,7 +29,9 @@ func SupportedBackends() []Backend {
 	if SupportedMPV {
 		result = append(result, BackendMPV)
 	}
-	result = append(result, BackendBuiltin)
+	if SupportedBuiltin {
+		result = append(result, BackendBuiltin)
+	}
 	return result
 }
 

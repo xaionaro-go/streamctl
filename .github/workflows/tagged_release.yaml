@@ -25,10 +25,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: streampanel-windows-amd64.zip
-      - name: download streampanel-windows-debug-amd64.zip
-        uses: actions/download-artifact@v4
-        with:
-          name: streampanel-windows-debug-amd64.zip
       - uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
@@ -37,4 +33,3 @@ jobs:
             build/streampanel-linux-amd64
             build/streampanel-arm64.apk
             build/streampanel-windows-amd64.zip
-            build/streampanel-windows-debug-amd64.zip
