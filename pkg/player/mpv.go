@@ -168,7 +168,14 @@ func (p *MPV) execMPV(ctx context.Context) (_err error) {
 		return fmt.Errorf("unable to start mpv: %w", err)
 	}
 	err = child_process_manager.AddChildProcess(cmd.Process)
-	errmon.ObserveErrorCtx(ctx, err)
+	if err != nil {
+		if runtime.GOOS == "windows" {
+			// this is actually an error, but I have no idea how to fix it, so demoting to a debug message
+			logger.Debugf(ctx, "unable to register the command %v to be auto-killed: %v", args, err)
+		} else {
+			logger.Errorf(ctx, "unable to register the command %v to be auto-killed: %v", args, err)
+		}
+	}
 	logger.Debugf(ctx, "started command '%s %s'", args[0], strings.Join(args[1:], " "))
 
 	logger.Debugf(ctx, "waiting for the socket '%s' to get ready", socketPath)

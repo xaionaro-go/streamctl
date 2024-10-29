@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -277,7 +278,12 @@ func runFork(
 	}
 	err = child_process_manager.AddChildProcess(cmd.Process)
 	if err != nil {
-		logger.Errorf(ctx, "unable to register the command %v to be auto-killed", err)
+		if runtime.GOOS == "windows" {
+			// this is actually an error, but I have no idea how to fix it, so demoting to a debug message
+			logger.Debugf(ctx, "unable to register the command %v to be auto-killed: %v", args, err)
+		} else {
+			logger.Errorf(ctx, "unable to register the command %v to be auto-killed: %v (GOOS: %v)", args, err, runtime.GOOS)
+		}
 	}
 	observability.Go(ctx, func() {
 		err := cmd.Wait()

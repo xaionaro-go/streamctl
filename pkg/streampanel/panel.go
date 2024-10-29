@@ -450,40 +450,35 @@ func (p *Panel) inputUserInfo(
 	platCfg := cfg.Backends[platName]
 
 	var status BackendStatusCode
-	var err error
 	switch platName {
 	case youtube.ID:
 		platCfg := streamcontrol.ConvertPlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile](
 			ctx,
 			platCfg,
 		)
-		status, err = p.InputYouTubeUserInfo(ctx, platCfg)
+		status = p.InputYouTubeUserInfo(ctx, platCfg)
 		cfg.Backends[platName] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
 	case twitch.ID:
 		platCfg := streamcontrol.ConvertPlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile](
 			ctx,
 			platCfg,
 		)
-		status, err = p.InputTwitchUserInfo(ctx, platCfg)
+		status = p.InputTwitchUserInfo(ctx, platCfg)
 		cfg.Backends[platName] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
 	case kick.ID:
 		platCfg := streamcontrol.ConvertPlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile](
 			ctx,
 			platCfg,
 		)
-		status, err = p.InputKickUserInfo(ctx, platCfg)
+		status = p.InputKickUserInfo(ctx, platCfg)
 		cfg.Backends[platName] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
 	case obs.ID:
 		platCfg := streamcontrol.ConvertPlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile](
 			ctx,
 			platCfg,
 		)
-		status, err = p.InputOBSConnectInfo(ctx, platCfg)
+		status = p.InputOBSConnectInfo(ctx, platCfg)
 		cfg.Backends[platName] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
-	}
-
-	if err != nil {
-		return fmt.Errorf("unable to input the config for %s: %w", platName, err)
 	}
 
 	switch status {
@@ -735,7 +730,7 @@ func removeNonDigits(input string) string {
 func (p *Panel) InputOBSConnectInfo(
 	ctx context.Context,
 	cfg *streamcontrol.PlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile],
-) (BackendStatusCode, error) {
+) BackendStatusCode {
 	w := p.app.NewWindow(AppName + ": Input OBS connection info")
 	resizeWindow(w, fyne.NewSize(600, 200))
 
@@ -805,17 +800,17 @@ func (p *Panel) InputOBSConnectInfo(
 	w.Hide()
 
 	if disable {
-		return BackendStatusCodeDisable, nil
+		return BackendStatusCodeDisable
 	}
 	if notNow {
-		return BackendStatusCodeNotNow, nil
+		return BackendStatusCodeNotNow
 	}
 
 	cfg.Config.Host = hostField.Text
 	cfg.Config.Port = uint16(port)
 	cfg.Config.Password.Set(passField.Text)
 
-	return BackendStatusCodeReady, nil
+	return BackendStatusCodeReady
 }
 
 func (p *Panel) OnSubmittedOAuthCode(
@@ -981,7 +976,7 @@ var twitchAppsCreateLink, _ = url.Parse("https://dev.twitch.tv/console/apps/crea
 func (p *Panel) InputTwitchUserInfo(
 	ctx context.Context,
 	cfg *streamcontrol.PlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile],
-) (BackendStatusCode, error) {
+) BackendStatusCode {
 	w := p.app.NewWindow(AppName + ": Input Twitch user info")
 	resizeWindow(w, fyne.NewSize(600, 200))
 
@@ -1046,10 +1041,10 @@ func (p *Panel) InputTwitchUserInfo(
 	w.Hide()
 
 	if disable {
-		return BackendStatusCodeDisable, nil
+		return BackendStatusCodeDisable
 	}
 	if notNow {
-		return BackendStatusCodeNotNow, nil
+		return BackendStatusCodeNotNow
 	}
 
 	cfg.Config.AuthType = "user"
@@ -1058,13 +1053,13 @@ func (p *Panel) InputTwitchUserInfo(
 	cfg.Config.ClientID = clientIDField.Text
 	cfg.Config.ClientSecret.Set(clientSecretField.Text)
 
-	return BackendStatusCodeReady, nil
+	return BackendStatusCodeReady
 }
 
 func (p *Panel) InputKickUserInfo(
 	ctx context.Context,
 	cfg *streamcontrol.PlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile],
-) (BackendStatusCode, error) {
+) BackendStatusCode {
 	w := p.app.NewWindow(AppName + ": Input Kick user info")
 	resizeWindow(w, fyne.NewSize(600, 200))
 
@@ -1105,16 +1100,16 @@ func (p *Panel) InputKickUserInfo(
 	w.Hide()
 
 	if disable {
-		return BackendStatusCodeDisable, nil
+		return BackendStatusCodeDisable
 	}
 	if notNow {
-		return BackendStatusCodeNotNow, nil
+		return BackendStatusCodeNotNow
 	}
 
 	channelWords := strings.Split(channelField.Text, "/")
 	cfg.Config.Channel = channelWords[len(channelWords)-1]
 
-	return BackendStatusCodeReady, nil
+	return BackendStatusCodeReady
 }
 
 var youtubeCredentialsCreateLink, _ = url.Parse(
@@ -1124,7 +1119,7 @@ var youtubeCredentialsCreateLink, _ = url.Parse(
 func (p *Panel) InputYouTubeUserInfo(
 	ctx context.Context,
 	cfg *streamcontrol.PlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile],
-) (BackendStatusCode, error) {
+) BackendStatusCode {
 	w := p.app.NewWindow(AppName + ": Input YouTube user info")
 	resizeWindow(w, fyne.NewSize(600, 200))
 
@@ -1187,16 +1182,16 @@ func (p *Panel) InputYouTubeUserInfo(
 	w.Hide()
 
 	if disable {
-		return BackendStatusCodeDisable, nil
+		return BackendStatusCodeDisable
 	}
 	if notNow {
-		return BackendStatusCodeNotNow, nil
+		return BackendStatusCodeNotNow
 	}
 
 	cfg.Config.ClientID = clientIDField.Text
 	cfg.Config.ClientSecret.Set(clientSecretField.Text)
 
-	return BackendStatusCodeReady, nil
+	return BackendStatusCodeReady
 }
 
 func (p *Panel) profileCreateOrUpdate(ctx context.Context, profile Profile) error {
@@ -1608,31 +1603,60 @@ func (p *Panel) openSettingsWindowNoLock(
 	templateInstruction.Wrapping = fyne.TextWrapWord
 
 	obsAlreadyLoggedIn := widget.NewLabel("")
-	if !backendEnabled[obs.ID] {
-		obsAlreadyLoggedIn.SetText("(not logged in)")
-	} else {
-		obsAlreadyLoggedIn.SetText("(already logged in)")
-	}
-
 	twitchAlreadyLoggedIn := widget.NewLabel("")
-	if !backendEnabled[twitch.ID] {
-		twitchAlreadyLoggedIn.SetText("(not logged in)")
-	} else {
-		twitchAlreadyLoggedIn.SetText("(already logged in)")
-	}
-
 	kickAlreadyLoggedIn := widget.NewLabel("")
-	if !backendEnabled[kick.ID] {
-		kickAlreadyLoggedIn.SetText("(not logged in)")
-	} else {
-		kickAlreadyLoggedIn.SetText("(already logged in)")
-	}
-
 	youtubeAlreadyLoggedIn := widget.NewLabel("")
-	if !backendEnabled[youtube.ID] {
-		youtubeAlreadyLoggedIn.SetText("(not logged in)")
-	} else {
-		youtubeAlreadyLoggedIn.SetText("(already logged in)")
+
+	updateLoggedInLabels := func() {
+		if !backendEnabled[obs.ID] {
+			obsAlreadyLoggedIn.SetText("(not logged in)")
+		} else {
+			obsAlreadyLoggedIn.SetText("(already logged in)")
+		}
+		if !backendEnabled[twitch.ID] {
+			twitchAlreadyLoggedIn.SetText("(not logged in)")
+		} else {
+			twitchAlreadyLoggedIn.SetText("(already logged in)")
+		}
+		if !backendEnabled[kick.ID] {
+			kickAlreadyLoggedIn.SetText("(not logged in)")
+		} else {
+			kickAlreadyLoggedIn.SetText("(already logged in)")
+		}
+		if !backendEnabled[youtube.ID] {
+			youtubeAlreadyLoggedIn.SetText("(not logged in)")
+		} else {
+			youtubeAlreadyLoggedIn.SetText("(already logged in)")
+		}
+	}
+	updateLoggedInLabels()
+
+	onUpdateBackendConfig := func(platID streamcontrol.PlatformName, enable bool) {
+		logger.Debugf(ctx, "backend '%s', enabled:%v", platID, enable)
+		streamDCfg.Backends[platID].Enable = ptr(enable)
+
+		if err := p.SetStreamDConfig(ctx, streamDCfg); err != nil {
+			p.DisplayError(fmt.Errorf("unable to set the config: %w", err))
+			return
+		}
+
+		if err := p.StreamD.SaveConfig(ctx); err != nil {
+			p.DisplayError(fmt.Errorf("unable to save the remote config: %w", err))
+			return
+		}
+
+		if err := p.StreamD.EXPERIMENTAL_ReinitStreamControllers(ctx); err != nil {
+			p.DisplayError(err)
+			return
+		}
+
+		isEnabled, err := p.StreamD.IsBackendEnabled(ctx, platID)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to get info if backend '%s' is enabled: %w", platID, err))
+			return
+		}
+		backendEnabled[platID] = isEnabled
+		updateLoggedInLabels()
 	}
 
 	numDisplays := p.Screenshoter.Engine().NumActiveDisplays()
@@ -1694,84 +1718,49 @@ func (p *Panel) openSettingsWindowNoLock(
 			widget.NewRichTextFromMarkdown(`# Streaming platforms`),
 			container.NewHBox(
 				widget.NewButtonWithIcon("(Re-)login in OBS", theme.LoginIcon(), func() {
-					if streamDCfg.Backends[obs.ID] == nil {
-						obs.InitConfig(streamDCfg.Backends)
-					}
-
-					streamDCfg.Backends[obs.ID].Enable = nil
-					streamDCfg.Backends[obs.ID].Config = obs.PlatformSpecificConfig{}
-
-					if err := p.SetStreamDConfig(ctx, streamDCfg); err != nil {
-						p.DisplayError(err)
+					platCfg := streamcontrol.GetPlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile](ctx, streamDCfg.Backends, obs.ID)
+					s := p.InputOBSConnectInfo(ctx, platCfg)
+					if s == BackendStatusCodeNotNow {
 						return
 					}
-
-					if err := p.StreamD.EXPERIMENTAL_ReinitStreamControllers(ctx); err != nil {
-						p.DisplayError(err)
-						return
-					}
+					streamDCfg.Backends[obs.ID] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
+					onUpdateBackendConfig(obs.ID, s == BackendStatusCodeReady)
 				}),
 				obsAlreadyLoggedIn,
 			),
 			container.NewHBox(
 				widget.NewButtonWithIcon("(Re-)login in Twitch", theme.LoginIcon(), func() {
-					if streamDCfg.Backends[twitch.ID] == nil {
-						twitch.InitConfig(streamDCfg.Backends)
-					}
-
-					streamDCfg.Backends[twitch.ID].Enable = nil
-					streamDCfg.Backends[twitch.ID].Config = twitch.PlatformSpecificConfig{}
-
-					if err := p.SetStreamDConfig(ctx, streamDCfg); err != nil {
-						p.DisplayError(err)
+					platCfg := streamcontrol.GetPlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile](ctx, streamDCfg.Backends, twitch.ID)
+					s := p.InputTwitchUserInfo(ctx, platCfg)
+					if s == BackendStatusCodeNotNow {
 						return
 					}
-
-					if err := p.StreamD.EXPERIMENTAL_ReinitStreamControllers(ctx); err != nil {
-						p.DisplayError(err)
-						return
-					}
+					streamDCfg.Backends[twitch.ID] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
+					onUpdateBackendConfig(twitch.ID, s == BackendStatusCodeReady)
 				}),
 				twitchAlreadyLoggedIn,
 			),
 			container.NewHBox(
 				widget.NewButtonWithIcon("(Re-)login in Kick", theme.LoginIcon(), func() {
-					if streamDCfg.Backends[kick.ID] == nil {
-						kick.InitConfig(streamDCfg.Backends)
-					}
-
-					streamDCfg.Backends[kick.ID].Enable = nil
-					streamDCfg.Backends[kick.ID].Config = kick.PlatformSpecificConfig{}
-
-					if err := p.SetStreamDConfig(ctx, streamDCfg); err != nil {
-						p.DisplayError(err)
+					platCfg := streamcontrol.GetPlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile](ctx, streamDCfg.Backends, kick.ID)
+					s := p.InputKickUserInfo(ctx, platCfg)
+					if s == BackendStatusCodeNotNow {
 						return
 					}
-
-					if err := p.StreamD.EXPERIMENTAL_ReinitStreamControllers(ctx); err != nil {
-						p.DisplayError(err)
-						return
-					}
+					streamDCfg.Backends[kick.ID] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
+					onUpdateBackendConfig(kick.ID, s == BackendStatusCodeReady)
 				}),
 				kickAlreadyLoggedIn,
 			),
 			container.NewHBox(
 				widget.NewButtonWithIcon("(Re-)login in YouTube", theme.LoginIcon(), func() {
-					if streamDCfg.Backends[youtube.ID] == nil {
-						youtube.InitConfig(streamDCfg.Backends)
-					}
-
-					streamDCfg.Backends[youtube.ID].Enable = nil
-					streamDCfg.Backends[youtube.ID].Config = youtube.PlatformSpecificConfig{}
-					if err := p.SetStreamDConfig(ctx, streamDCfg); err != nil {
-						p.DisplayError(err)
+					platCfg := streamcontrol.GetPlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile](ctx, streamDCfg.Backends, youtube.ID)
+					s := p.InputYouTubeUserInfo(ctx, platCfg)
+					if s == BackendStatusCodeNotNow {
 						return
 					}
-
-					if err := p.StreamD.EXPERIMENTAL_ReinitStreamControllers(ctx); err != nil {
-						p.DisplayError(err)
-						return
-					}
+					streamDCfg.Backends[youtube.ID] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
+					onUpdateBackendConfig(youtube.ID, s == BackendStatusCodeReady)
 				}),
 				youtubeAlreadyLoggedIn,
 			),
@@ -2520,7 +2509,12 @@ func (p *Panel) execCommand(
 		if err == nil {
 			err = child_process_manager.AddChildProcess(cmd.Process)
 			if err != nil {
-				logger.Errorf(ctx, "unable to add the process to the clean up list: %v", err)
+				if runtime.GOOS == "windows" {
+					// this is actually an error, but I have no idea how to fix it, so demoting to a debug message
+					logger.Debugf(ctx, "unable to register the command to be auto-killed: %v", err)
+				} else {
+					logger.Errorf(ctx, "unable to register the command to be auto-killed: %v", err)
+				}
 			}
 		} else {
 			p.DisplayError(err)

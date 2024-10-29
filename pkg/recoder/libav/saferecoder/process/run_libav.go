@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 
 	child_process_manager "github.com/AgustinSRG/go-child-process-manager"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
@@ -56,7 +57,14 @@ func Run(
 		return nil, fmt.Errorf("unable to start a forked process of a libav-recoder: %w", err)
 	}
 	err = child_process_manager.AddChildProcess(cmd.Process)
-	errmon.ObserveErrorCtx(ctx, err)
+	if err != nil {
+		if runtime.GOOS == "windows" {
+			// this is actually an error, but I have no idea how to fix it, so demoting to a debug message
+			logger.Debugf(ctx, "unable to register the command to be auto-killed: %v", err)
+		} else {
+			logger.Errorf(ctx, "unable to register the command to be auto-killed: %v", err)
+		}
+	}
 
 	decoder := json.NewDecoder(stdout)
 	var d ReturnedData
