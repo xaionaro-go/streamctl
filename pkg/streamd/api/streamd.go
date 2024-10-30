@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"crypto"
+	"net"
 	"time"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
@@ -289,6 +290,12 @@ type StreamD interface {
 		reason string,
 		deadline time.Time,
 	) error
+
+	DialContext(
+		ctx context.Context,
+		network string,
+		addr string,
+	) (net.Conn, error)
 }
 
 type StreamPlayer = sstypes.StreamPlayer

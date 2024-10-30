@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto"
 	"fmt"
+	"net"
 	"os"
 	"reflect"
 	"sort"
@@ -1740,4 +1741,12 @@ func (d *StreamD) SendChatMessage(
 	}
 
 	return nil
+}
+
+func (d *StreamD) DialContext(
+	ctx context.Context,
+	network string,
+	addr string,
+) (net.Conn, error) {
+	return net.Dial(network, addr)
 }

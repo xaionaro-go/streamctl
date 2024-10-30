@@ -1,8 +1,6 @@
 module github.com/xaionaro-go/streamctl
 
-go 1.23
-
-toolchain go1.23.2
+go 1.23.2
 
 // The original go-yaml is very slow, using the improved version instead
 replace github.com/goccy/go-yaml v1.11.3 => github.com/yoelsusanto/go-yaml v0.0.0-20240324162521-2018c1ab915b
@@ -177,7 +175,7 @@ require (
 	golang.org/x/time v0.6.0 // indirect
 	golang.org/x/tools v0.22.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240730163845-b1a4ccb954bf // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240814211410-ddb44dafa142 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	lukechampine.com/blake3 v1.2.1 // indirect
@@ -229,6 +227,7 @@ require (
 	github.com/xaionaro-go/datacounter v1.0.4
 	github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42
 	github.com/xaionaro-go/gorex v0.0.0-20241010205749-bcd59d639c4d
+	github.com/xaionaro-go/grpcproxy v0.0.0-20241030215807-d4204b934e10
 	github.com/xaionaro-go/kickcom v0.0.0-20241022142825-25a234cc8628
 	github.com/xaionaro-go/lockmap v0.0.0-20240901172806-e17aea364748
 	github.com/xaionaro-go/mediamtx v0.0.0-20241009124606-94c22c603970
@@ -240,8 +239,8 @@ require (
 	github.com/yutopp/go-flv v0.3.1
 	golang.org/x/crypto v0.28.0
 	golang.org/x/net v0.30.0
-	google.golang.org/grpc v1.65.0
-	google.golang.org/protobuf v1.34.2
+	google.golang.org/grpc v1.67.1
+	google.golang.org/protobuf v1.35.1
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
 )

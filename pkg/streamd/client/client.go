@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"runtime"
 	"strings"
 	"sync/atomic"
@@ -17,6 +18,8 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
 	"github.com/hashicorp/go-multierror"
+	"github.com/xaionaro-go/grpcproxy/grpchttpproxy"
+	"github.com/xaionaro-go/grpcproxy/protobuf/go/proxy_grpc"
 	"github.com/xaionaro-go/obs-grpc-proxy/pkg/obsgrpcproxy"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
@@ -2754,4 +2757,39 @@ func (c *Client) SendChatMessage(
 		return fmt.Errorf("unable to submit the event: %w", err)
 	}
 	return nil
+}
+
+func (c *Client) DialContext(
+	ctx context.Context,
+	network string,
+	addr string,
+) (net.Conn, error) {
+	conn, err := c.connect(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to initialize a gRPC client: %w", err)
+	}
+
+	proxyClient := proxy_grpc.NewNetworkProxyClient(conn)
+
+	netConn, err := grpchttpproxy.NewDialer(proxyClient).DialContext(ctx, network, addr)
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("unable to establish a proxied connection: %w", err)
+	}
+	return &proxiedConn{
+		Conn:           netConn,
+		grpcClientConn: conn,
+	}, nil
+}
+
+type proxiedConn struct {
+	net.Conn
+	grpcClientConn *grpc.ClientConn
+}
+
+func (conn *proxiedConn) Close() error {
+	var result *multierror.Error
+	result = multierror.Append(result, conn.Conn.Close())
+	result = multierror.Append(result, conn.grpcClientConn.Close())
+	return result.ErrorOrNil()
 }

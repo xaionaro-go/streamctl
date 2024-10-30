@@ -596,11 +596,7 @@ func (grpc *GRPCServer) SubscribeToOAuthRequests(
 	})
 
 	for _, req := range unansweredRequests {
-		logger.Tracef(
-			ctx,
-			"re-sending an unanswered request to a new client: %#+v",
-			*req,
-		)
+		logger.Tracef(ctx, "re-sending an unanswered request to a new client: %#+v", req)
 		err := sender.Send(req)
 		errmon.ObserveErrorCtx(ctx, err)
 	}
@@ -669,22 +665,18 @@ func (grpc *GRPCServer) openBrowser(
 	ctx context.Context,
 	url string,
 ) (_ret error) {
-	req := streamd_grpc.OAuthRequest{
+	req := &streamd_grpc.OAuthRequest{
 		PlatID:  string("<OpenBrowser>"),
 		AuthURL: url,
 	}
 
 	count := 0
 	for _, handlers := range grpc.OAuthURLHandlers {
-		logger.Debugf(
-			ctx,
-			"OpenOAuthURL() sending %#+v",
-			req,
-		)
+		logger.Debugf(ctx, "OpenOAuthURL() sending %#+v", req)
 		var resultErr *multierror.Error
 		for _, handler := range handlers {
 			count++
-			err := handler.Sender.Send(&req)
+			err := handler.Sender.Send(req)
 			if err != nil {
 				err = multierror.Append(
 					resultErr,
@@ -737,7 +729,7 @@ func (grpc *GRPCServer) openOAuthURL(
 			Port: listenPort,
 		}
 	}
-	req := streamd_grpc.OAuthRequest{
+	req := &streamd_grpc.OAuthRequest{
 		PlatID:  string(platID),
 		AuthURL: authURL,
 	}
@@ -745,12 +737,12 @@ func (grpc *GRPCServer) openOAuthURL(
 		if grpc.UnansweredOAuthRequests[platID] == nil {
 			grpc.UnansweredOAuthRequests[platID] = map[uint16]*streamd_grpc.OAuthRequest{}
 		}
-		grpc.UnansweredOAuthRequests[platID][listenPort] = &req
+		grpc.UnansweredOAuthRequests[platID][listenPort] = req
 	})
 	logger.Debugf(ctx, "OpenOAuthURL() sending %#+v", req)
 	var resultErr *multierror.Error
 	for _, handler := range handlers {
-		err := handler.Sender.Send(&req)
+		err := handler.Sender.Send(req)
 		if err != nil {
 			err = multierror.Append(
 				resultErr,
@@ -1944,3 +1936,18 @@ func (grpc *GRPCServer) BanUser(
 	}
 	return &streamd_grpc.BanUserReply{}, nil
 }
+
+/*func (grpc *GRPCServer) ProxyConnect(
+	req *streamd_grpc.ProxyConnectRequest,
+	srv streamd_grpc.StreamD_ProxyConnectServer,
+) error {
+	grpc.StreamD.ProxyConnect(
+		ctx,
+	)
+}
+
+func (grpc *GRPCServer) ProxyPackets(
+	streamd_grpc.StreamD_ProxyPacketsServer,
+) error {
+
+}*/

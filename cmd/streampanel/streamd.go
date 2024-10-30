@@ -14,6 +14,8 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
+	"github.com/xaionaro-go/grpcproxy/grpcproxyserver"
+	"github.com/xaionaro-go/grpcproxy/protobuf/go/proxy_grpc"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/streamctl/cmd/streamd/ui"
 	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
@@ -279,6 +281,7 @@ func initGRPCServers(
 	streamdGRPC := server.NewGRPCServer(streamD)
 	streamd_grpc.RegisterStreamDServer(grpcServer, streamdGRPC)
 	obs_grpc.RegisterOBSServer(grpcServer, obsGRPC)
+	proxy_grpc.RegisterNetworkProxyServer(grpcServer, grpcproxyserver.New())
 
 	// start the server:
 	observability.Go(ctx, func() {

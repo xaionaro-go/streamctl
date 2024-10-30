@@ -31,10 +31,10 @@ func (d *StreamD) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context) (_er
 func (d *StreamD) reinitStreamControllers(ctx context.Context) error {
 	var result *multierror.Error
 	for _, platName := range []streamcontrol.PlatformName{
-		youtube.ID,
 		twitch.ID,
 		kick.ID,
 		obs.ID,
+		youtube.ID,
 	} {
 		platCfg := d.Config.Backends[platName]
 		if platCfg == nil {
@@ -168,8 +168,8 @@ func newKick(
 	ctx context.Context,
 	cfg *streamcontrol.AbstractPlatformConfig,
 	saveCfgFunc func(*streamcontrol.AbstractPlatformConfig) error,
-	customOAuthHandler kick.OAuthHandler,
-	getOAuthListenPorts func() []uint16,
+	_ kick.OAuthHandler,
+	_ func() []uint16,
 ) (
 	*kick.Kick,
 	error,
