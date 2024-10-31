@@ -334,14 +334,15 @@ func (grpc *GRPCServer) GetBackendInfo(
 			err,
 		)
 	}
-	data, err := grpc.StreamD.GetBackendData(ctx, platID)
+	info, err := grpc.StreamD.GetBackendInfo(ctx, platID)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"unable to get the backend info: %w",
 			err,
 		)
 	}
-	dataSerialized, err := json.Marshal(data)
+
+	dataSerialized, err := json.Marshal(info.Data)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"unable to serialize the backend info: %w",
@@ -352,6 +353,7 @@ func (grpc *GRPCServer) GetBackendInfo(
 	return &streamd_grpc.GetBackendInfoReply{
 		IsInitialized: isEnabled,
 		Data:          string(dataSerialized),
+		Capabilities:  goconv.CapabilitiesGo2GRPC(ctx, info.Capabilities),
 	}, nil
 }
 

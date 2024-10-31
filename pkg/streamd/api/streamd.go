@@ -66,10 +66,10 @@ type StreamD interface {
 		profile streamcontrol.AbstractStreamProfile,
 		customArgs ...any,
 	) error
-	GetBackendData(
+	GetBackendInfo(
 		ctx context.Context,
 		platID streamcontrol.PlatformName,
-	) (any, error)
+	) (*BackendInfo, error)
 	EXPERIMENTAL_ReinitStreamControllers(ctx context.Context) error
 	GetStreamStatus(
 		ctx context.Context,

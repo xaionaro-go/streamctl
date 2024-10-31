@@ -284,3 +284,10 @@ func (obs *OBS) BanUser(
 ) error {
 	return fmt.Errorf("not implemented, yet")
 }
+
+func (obs *OBS) IsCapable(
+	ctx context.Context,
+	cap streamcontrol.Capability,
+) bool {
+	return false
+}

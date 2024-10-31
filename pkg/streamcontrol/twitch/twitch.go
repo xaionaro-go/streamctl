@@ -903,3 +903,18 @@ func (t *Twitch) BanUser(
 	})
 	return err
 }
+
+func (t *Twitch) IsCapable(
+	ctx context.Context,
+	cap streamcontrol.Capability,
+) bool {
+	switch cap {
+	case streamcontrol.CapabilitySendChatMessage:
+		return true
+	case streamcontrol.CapabilityDeleteChatMessage:
+		return true
+	case streamcontrol.CapabilityBanUser:
+		return true
+	}
+	return false
+}

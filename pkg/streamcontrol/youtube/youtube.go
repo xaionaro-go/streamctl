@@ -1400,3 +1400,18 @@ func (yt *YouTube) BanUser(
 ) error {
 	return fmt.Errorf("not implemented, yet")
 }
+
+func (yt *YouTube) IsCapable(
+	ctx context.Context,
+	cap streamcontrol.Capability,
+) bool {
+	switch cap {
+	case streamcontrol.CapabilitySendChatMessage:
+		return true
+	case streamcontrol.CapabilityDeleteChatMessage:
+		return true
+	case streamcontrol.CapabilityBanUser:
+		return false
+	}
+	return false
+}

@@ -160,12 +160,19 @@ message GetBackendInfoRequest {
 message GetBackendInfoReply {
     bool isInitialized = 1;
     string data = 2;
+    repeated Capability capabilities = 3;
 }
 message IsBackendEnabledRequest {
     string platID = 1;
 }
 message IsBackendEnabledReply {
     bool isInitialized = 1;
+}
+enum Capability {
+    capabilityUndefined = 0;
+    SendChatMessage = 1;
+	DeleteChatMessage = 2;
+	BanUser = 3;
 }
 message RestartRequest {}
 message RestartReply {}

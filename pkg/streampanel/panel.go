@@ -3222,14 +3222,14 @@ func (p *Panel) profileWindow(
 		}
 		backendEnabled[backendID] = isEnabled
 
-		data, err := p.StreamD.GetBackendData(ctx, backendID)
+		info, err := p.StreamD.GetBackendInfo(ctx, backendID)
 		if err != nil {
 			w.Close()
 			p.DisplayError(fmt.Errorf("unable to get data of backend '%s': %w", backendID, err))
 			return nil
 		}
 
-		backendData[backendID] = data
+		backendData[backendID] = info.Data
 	}
 	_ = backendData[obs.ID].(api.BackendDataOBS)
 	dataTwitch := backendData[twitch.ID].(api.BackendDataTwitch)

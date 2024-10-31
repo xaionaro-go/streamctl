@@ -179,3 +179,18 @@ func (k *Kick) StartStream(
 	logger.Warnf(ctx, "not implemented yet")
 	return nil
 }
+
+func (k *Kick) IsCapable(
+	ctx context.Context,
+	cap streamcontrol.Capability,
+) bool {
+	switch cap {
+	case streamcontrol.CapabilitySendChatMessage:
+		return false
+	case streamcontrol.CapabilityDeleteChatMessage:
+		return false
+	case streamcontrol.CapabilityBanUser:
+		return false
+	}
+	return false
+}

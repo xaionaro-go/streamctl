@@ -31,6 +31,9 @@ type chatUI struct {
 	MessagesHistoryLocker sync.Mutex
 	MessagesHistory       []api.ChatMessage
 
+	CapabilitiesCacheLocker sync.Mutex
+	CapabilitiesCache       map[streamcontrol.PlatformName]map[streamcontrol.Capability]struct{}
+
 	CurrentlyPlayingChatMessageSoundCount int32
 
 	// TODO: do not store ctx in a struct:
@@ -42,8 +45,9 @@ func newChatUI(
 	panel *Panel,
 ) (*chatUI, error) {
 	ui := &chatUI{
-		Panel: panel,
-		ctx:   ctx,
+		Panel:             panel,
+		CapabilitiesCache: make(map[streamcontrol.PlatformName]map[streamcontrol.Capability]struct{}),
+		ctx:               ctx,
 	}
 	if err := ui.init(ctx); err != nil {
 		return nil, err
@@ -224,6 +228,28 @@ func (ui *chatUI) listCreateItem() fyne.CanvasObject {
 	)
 }
 
+func (ui *chatUI) getPlatformCapabilities(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+) (_ret map[streamcontrol.Capability]struct{}, _err error) {
+	logger.Debugf(ctx, "getPlatformCapabilities(ctx, '%s')", platID)
+	defer func() { logger.Debugf(ctx, "/getPlatformCapabilities(ctx, '%s'): %#+v, %v", platID, _ret, _err) }()
+	ui.CapabilitiesCacheLocker.Lock()
+	defer ui.CapabilitiesCacheLocker.Unlock()
+
+	if m, ok := ui.CapabilitiesCache[platID]; ok {
+		return m, nil
+	}
+
+	info, err := ui.Panel.StreamD.GetBackendInfo(ctx, platID)
+	if err != nil {
+		return nil, fmt.Errorf("GetBackendInfo returned error: %w", err)
+	}
+
+	ui.CapabilitiesCache[platID] = info.Capabilities
+	return info.Capabilities, nil
+}
+
 func (ui *chatUI) listUpdateItem(
 	rowID int,
 	obj fyne.CanvasObject,
@@ -233,6 +259,12 @@ func (ui *chatUI) listUpdateItem(
 	defer ui.MessagesHistoryLocker.Unlock()
 	entryID := len(ui.MessagesHistory) - 1 - rowID
 	msg := ui.MessagesHistory[entryID]
+
+	platCaps, err := ui.getPlatformCapabilities(ctx, msg.Platform)
+	if err != nil {
+		ui.Panel.ReportError(fmt.Errorf("unable to get capabilities of platform '%s': %w", msg.Platform, err))
+		platCaps = map[streamcontrol.Capability]struct{}{}
+	}
 
 	containerPtr := obj.(*fyne.Container)
 	objs := containerPtr.Objects
@@ -252,6 +284,11 @@ func (ui *chatUI) listUpdateItem(
 		)
 		w.Show()
 	}
+	if _, ok := platCaps[streamcontrol.CapabilityBanUser]; !ok {
+		banUserButton.Disable()
+	} else {
+		banUserButton.Enable()
+	}
 	removeMsgButton := subContainer.Objects[1].(*widget.Button)
 	removeMsgButton.OnTapped = func() {
 		w := dialog.NewConfirm(
@@ -266,6 +303,11 @@ func (ui *chatUI) listUpdateItem(
 			ui.Panel.mainWindow,
 		)
 		w.Show()
+	}
+	if _, ok := platCaps[streamcontrol.CapabilityDeleteChatMessage]; !ok {
+		removeMsgButton.Disable()
+	} else {
+		removeMsgButton.Enable()
 	}
 	label.SetText(fmt.Sprintf(
 		"%s: %s: %s: %s",

@@ -26,9 +26,6 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/player/protobuf/go/player_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
-	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
-	obs "github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs/types"
-	twitch "github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/types"
 	youtube "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	streamdconfig "github.com/xaionaro-go/streamctl/pkg/streamd/config"
@@ -710,10 +707,10 @@ func (c *Client) EndStream(
 	return err
 }
 
-func (c *Client) GetBackendData(
+func (c *Client) GetBackendInfo(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
-) (any, error) {
+) (*api.BackendInfo, error) {
 	reply, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
@@ -735,50 +732,17 @@ func (c *Client) GetBackendData(
 		)
 	}
 
-	var data any
-	switch platID {
-	case obs.ID:
-		_data := api.BackendDataOBS{}
-		err = json.Unmarshal(
-			[]byte(reply.GetData()),
-			&_data,
-		)
-		data = _data
-	case twitch.ID:
-		_data := api.BackendDataTwitch{}
-		err = json.Unmarshal(
-			[]byte(reply.GetData()),
-			&_data,
-		)
-		data = _data
-	case kick.ID:
-		_data := api.BackendDataKick{}
-		err = json.Unmarshal(
-			[]byte(reply.GetData()),
-			&_data,
-		)
-		data = _data
-	case youtube.ID:
-		_data := api.BackendDataYouTube{}
-		err = json.Unmarshal(
-			[]byte(reply.GetData()),
-			&_data,
-		)
-		data = _data
-	default:
-		return nil, fmt.Errorf(
-			"unknown platform: '%s'",
-			platID,
-		)
+	caps := goconv.CapabilitiesGRPC2Go(ctx, reply.Capabilities)
+
+	data, err := goconv.BackendDataGRPC2Go(platID, reply.GetData())
+	if err != nil {
+		return nil, fmt.Errorf("unable to deserialize data: %w", err)
 	}
 
-	if err != nil {
-		return nil, fmt.Errorf(
-			"unable to deserialize data: %w",
-			err,
-		)
-	}
-	return data, nil
+	return &api.BackendInfo{
+		Data:         data,
+		Capabilities: caps,
+	}, nil
 }
 
 func (c *Client) Restart(ctx context.Context) error {

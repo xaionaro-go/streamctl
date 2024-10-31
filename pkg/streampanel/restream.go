@@ -406,6 +406,7 @@ func (p *Panel) displayIncomingServers(
 		playButton := widget.NewButtonWithIcon("", theme.MediaPlayIcon(), func() {
 			p.DisplayError(fmt.Errorf("playback is not implemented, yet"))
 		})
+		playButton.Hide() // TODO: unhide when it will be implemented
 		deleteButton := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
 			w := dialog.NewConfirm(
 				fmt.Sprintf("Delete incoming server %s ?", stream.StreamID),

@@ -131,6 +131,8 @@ type StreamControllerCommons interface {
 	SendChatMessage(ctx context.Context, message string) error
 	RemoveChatMessage(ctx context.Context, messageID ChatMessageID) error
 	BanUser(ctx context.Context, userID ChatUserID, reason string, deadline time.Time) error
+
+	IsCapable(context.Context, Capability) bool
 }
 
 type StreamController[ProfileType StreamProfile] interface {
@@ -240,6 +242,9 @@ func (c *abstractStreamController) RemoveChatMessage(ctx context.Context, messag
 }
 func (c *abstractStreamController) BanUser(ctx context.Context, userID ChatUserID, reason string, deadline time.Time) error {
 	return c.StreamController.BanUser(ctx, userID, reason, deadline)
+}
+func (c *abstractStreamController) IsCapable(ctx context.Context, cap Capability) bool {
+	return c.StreamController.IsCapable(ctx, cap)
 }
 
 func ToAbstract[T StreamProfile](c StreamController[T]) AbstractStreamController {

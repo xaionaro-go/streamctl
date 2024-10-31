@@ -680,8 +680,36 @@ func (d *StreamD) EndStream(ctx context.Context, platID streamcontrol.PlatformNa
 	})
 }
 
-func (d *StreamD) GetBackendData(
+func (d *StreamD) GetBackendInfo(
 	ctx context.Context,
+	platID streamcontrol.PlatformName,
+) (*api.BackendInfo, error) {
+	ctrl, err := d.streamController(ctx, platID)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get stream controller for platform '%s': %w", platID, err)
+	}
+
+	caps := map[streamcontrol.Capability]struct{}{}
+	for cap := streamcontrol.CapabilityUndefined + 1; cap < streamcontrol.EndOfCapability; cap++ {
+		isCapable := ctrl.IsCapable(ctx, cap)
+		if isCapable {
+			caps[cap] = struct{}{}
+		}
+	}
+
+	data, err := d.getBackendData(ctx, platID)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get backend data: %w", err)
+	}
+
+	return &api.BackendInfo{
+		Data:         data,
+		Capabilities: caps,
+	}, nil
+}
+
+func (d *StreamD) getBackendData(
+	_ context.Context,
 	platID streamcontrol.PlatformName,
 ) (any, error) {
 	switch platID {
