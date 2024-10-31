@@ -381,16 +381,19 @@ func (p *Panel) initStreamDConfig(
 	if err != nil {
 		return fmt.Errorf("unable to get the config: %w", err)
 	}
+	if cfg.Backends == nil {
+		cfg.Backends = make(streamcontrol.Config)
+	}
 
 	configHasChanged := false
 
 	// TODO: move the 'git' configuration here as well.
 
 	for _, platName := range []streamcontrol.PlatformName{
-		youtube.ID,
 		twitch.ID,
 		kick.ID,
 		obs.ID,
+		youtube.ID,
 	} {
 		if streamcontrol.IsInitialized(cfg.Backends, platName) {
 			continue

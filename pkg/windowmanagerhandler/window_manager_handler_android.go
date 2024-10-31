@@ -1,5 +1,5 @@
-//go:build !linux && !android
-// +build !linux,!android
+//go:build android
+// +build android
 
 package windowmanagerhandler
 
