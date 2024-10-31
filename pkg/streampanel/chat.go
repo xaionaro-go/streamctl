@@ -276,9 +276,10 @@ func (ui *chatUI) listUpdateItem(
 			"Banning an user",
 			fmt.Sprintf("Are you sure you want to ban user '%s' on '%s'", msg.UserID, msg.Platform),
 			func(b bool) {
-				if b {
-					ui.onBanClicked(msg.Platform, msg.UserID)
+				if !b {
+					return
 				}
+				ui.onBanClicked(msg.Platform, msg.UserID)
 			},
 			ui.Panel.mainWindow,
 		)
@@ -295,10 +296,11 @@ func (ui *chatUI) listUpdateItem(
 			"Removing a message",
 			fmt.Sprintf("Are you sure you want to remove the message from '%s' on '%s'", msg.UserID, msg.Platform),
 			func(b bool) {
-				if b {
-					// TODO: think of consistency with onBanClicked
-					ui.onRemoveClicked(entryID)
+				if !b {
+					return
 				}
+				// TODO: think of consistency with onBanClicked
+				ui.onRemoveClicked(entryID)
 			},
 			ui.Panel.mainWindow,
 		)
@@ -337,18 +339,15 @@ func (p *Panel) chatUserBan(
 	userID streamcontrol.ChatUserID,
 ) error {
 	// TODO: add controls for the reason and deadline
-	return p.StreamD.BanUser(
-		ctx,
-		platID,
-		userID,
-		"",
-		time.Time{},
-	)
+	return p.StreamD.BanUser(ctx, platID, userID, "", time.Time{})
 }
 
 func (ui *chatUI) onRemoveClicked(
 	itemID int,
 ) {
+	ctx := context.TODO()
+	logger.Debugf(ctx, "onRemoveClicked(%s)", itemID)
+	defer func() { logger.Debugf(ctx, "/onRemoveClicked(%s)", itemID) }()
 	ui.MessagesHistoryLocker.Lock()
 	defer ui.MessagesHistoryLocker.Unlock()
 	if itemID < 0 || itemID >= len(ui.MessagesHistory) {
@@ -357,10 +356,10 @@ func (ui *chatUI) onRemoveClicked(
 	msg := ui.MessagesHistory[itemID]
 	ui.MessagesHistory = append(ui.MessagesHistory[:itemID], ui.MessagesHistory[itemID+1:]...)
 	err := ui.Panel.chatMessageRemove(ui.ctx, msg.Platform, msg.MessageID)
-	ui.CanvasObject.Refresh()
 	if err != nil {
 		ui.Panel.DisplayError(err)
 	}
+	observability.Go(ctx, func() { ui.CanvasObject.Refresh() })
 }
 
 func (p *Panel) chatMessageRemove(
