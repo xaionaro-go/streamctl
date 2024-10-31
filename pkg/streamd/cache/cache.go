@@ -10,8 +10,11 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
 	"github.com/nicklaw5/helix/v2"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 )
+
+type Kick = kick.Cache
 
 type Twitch struct {
 	Categories []helix.Game
@@ -22,6 +25,7 @@ type YouTube struct {
 }
 
 type Cache struct {
+	Kick    Kick
 	Twitch  Twitch
 	Youtube YouTube
 }

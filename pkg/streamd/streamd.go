@@ -455,8 +455,7 @@ func (d *StreamD) saveConfig(ctx context.Context) error {
 }
 
 func (d *StreamD) ResetCache(ctx context.Context) error {
-	d.Cache.Twitch = cache.Twitch{}
-	d.Cache.Youtube = cache.YouTube{}
+	d.Cache = &cache.Cache{}
 	return nil
 }
 
@@ -718,7 +717,7 @@ func (d *StreamD) getBackendData(
 	case twitch.ID:
 		return api.BackendDataTwitch{Cache: d.Cache.Twitch}, nil
 	case kick.ID:
-		return api.BackendDataKick{}, nil
+		return api.BackendDataKick{Cache: d.Cache.Kick}, nil
 	case youtube.ID:
 		return api.BackendDataYouTube{Cache: d.Cache.Youtube}, nil
 	default:

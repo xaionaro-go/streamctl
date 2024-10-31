@@ -45,27 +45,31 @@ func New(
 		return nil, fmt.Errorf("channel is not set")
 	}
 
-	var err error
-	var client *kickcom.Kick
-	var channel *kickcom.ChannelV1
-	for i := 0; i < 10; i++ {
-
-		client, err = kickcom.New()
-		if err != nil {
-			err = fmt.Errorf("unable to initialize a client to Kick: %w", err)
-			time.Sleep(time.Second)
-			continue
-		}
-
-		channel, err = client.GetChannelV1(ctx, cfg.Config.Channel)
-		if err != nil {
-			err = fmt.Errorf("unable to obtain channel info: %w", err)
-			time.Sleep(time.Second)
-			continue
-		}
-	}
+	client, err := kickcom.New()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to initialize a client to Kick: %w", err)
+	}
+
+	var channel *kickcom.ChannelV1
+	cache := CacheFromCtx(ctx)
+	if chanInfo := cache.GetChanInfo(); chanInfo != nil && chanInfo.Slug == cfg.Config.Channel {
+		channel = cache.ChanInfo
+		logger.Debugf(ctx, "reuse the cache, instead of querying channel info")
+	} else {
+		for i := 0; i < 10; i++ {
+			channel, err = client.GetChannelV1(ctx, cfg.Config.Channel)
+			if err != nil {
+				err = fmt.Errorf("unable to obtain channel info: %w", err)
+				time.Sleep(time.Second)
+				continue
+			}
+		}
+		if err != nil {
+			return nil, err
+		}
+		if cache != nil {
+			cache.SetChanInfo(channel)
+		}
 	}
 
 	ctx, closeFn := context.WithCancel(ctx)

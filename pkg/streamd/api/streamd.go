@@ -307,6 +307,7 @@ type BackendDataTwitch struct {
 }
 
 type BackendDataKick struct {
+	Cache cache.Kick
 }
 
 type BackendDataYouTube struct {

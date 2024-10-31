@@ -12,6 +12,7 @@ import (
 	"github.com/andreykaipov/goobs/api/events/subscriptions"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
+	"github.com/xaionaro-go/object"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
@@ -345,8 +346,9 @@ func (d *StreamD) initTwitchBackend(ctx context.Context) error {
 }
 
 func (d *StreamD) initKickBackend(ctx context.Context) error {
+	cacheHashBeforeInit, _ := object.CalcCryptoHash(d.Cache.Kick)
 	kick, err := newKick(
-		ctx,
+		kick.CtxWithCache(ctx, &d.Cache.Kick),
 		d.Config.Backends[kick.ID],
 		func(cfg *streamcontrol.AbstractPlatformConfig) error {
 			return d.setPlatformConfig(ctx, kick.ID, cfg)
@@ -356,6 +358,13 @@ func (d *StreamD) initKickBackend(ctx context.Context) error {
 	)
 	if err != nil {
 		return err
+	}
+	cacheHashAfterInit, _ := object.CalcCryptoHash(d.Cache.Kick)
+	if len(cacheHashAfterInit) == 0 || !cacheHashAfterInit.Equals(cacheHashBeforeInit) {
+		err := d.writeCache(ctx)
+		if err != nil {
+			logger.Errorf(ctx, "unable to write cache: %w", err)
+		}
 	}
 	d.StreamControllers.Kick = kick
 	return nil

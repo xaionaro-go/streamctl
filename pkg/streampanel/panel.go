@@ -2418,6 +2418,7 @@ func (p *Panel) initMainWindow(
 
 	p.statusPanel = widget.NewLabel("")
 	p.statusPanel.Wrapping = fyne.TextWrapWord
+	p.statusPanel.Truncation = fyne.TextTruncateEllipsis
 
 	w.SetContent(container.NewBorder(
 		container.NewVBox(
