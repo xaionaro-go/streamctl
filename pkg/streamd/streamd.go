@@ -339,7 +339,7 @@ func (d *StreamD) InitCache(ctx context.Context) error {
 	if changedCache {
 		err := d.writeCache(ctx)
 		if err != nil {
-			logger.Errorf(ctx, "unable to write cache into '%s': %w", *d.Config.CachePath, err)
+			logger.Errorf(ctx, "unable to write cache into '%s': %v", *d.Config.CachePath, err)
 		}
 	}
 	return nil

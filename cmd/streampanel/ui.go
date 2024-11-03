@@ -52,7 +52,7 @@ func forkUI(preCtx context.Context, mainProcessAddr, password string) {
 	runPanel(ctx, cancelFunc, flags, mainProcess)
 	err = mainProcess.SendMessage(ctx, ProcessNameMain, MessageApplicationQuit{})
 	if err != nil {
-		logger.Error(ctx, "unable to send the Quit message to the main process: %w", err)
+		logger.Error(ctx, "unable to send the Quit message to the main process: %v", err)
 	}
 	<-ctx.Done() // wait for get killed by the main process (should happen in matter of milliseconds)
 	time.Sleep(5 * time.Second)

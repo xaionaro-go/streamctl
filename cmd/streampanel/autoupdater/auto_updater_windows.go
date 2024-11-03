@@ -107,7 +107,7 @@ func (u *AutoUpdater) Update(
 				logger.Debugf(ctx, "unable to remove file '%s': %v", backupPath, err)
 				continue
 			}
-			logger.Warnf(ctx, "unable to remove file '%s': %w", backupPath, err)
+			logger.Warnf(ctx, "unable to remove file '%s': %v", backupPath, err)
 		}
 	}
 	progressBar.SetProgress(0.9)

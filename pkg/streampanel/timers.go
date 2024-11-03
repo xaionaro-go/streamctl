@@ -268,7 +268,7 @@ func (ui *timersUI) kickOffRemotely(
 	}
 
 	if err := ui.stopRemoteTimer(ctx); err != nil {
-		logger.Errorf(ctx, "unable to stop the remote timers (on cleanup): %w", err)
+		logger.Errorf(ctx, "unable to stop the remote timers (on cleanup): %v", err)
 	}
 
 	return result
@@ -425,7 +425,7 @@ func (ui *timersUI) doStop(
 
 		err := ui.stopRemoteTimer(ctx)
 		if err != nil {
-			logger.Errorf(ctx, "unable to stop the remote timers: %w", err)
+			logger.Errorf(ctx, "unable to stop the remote timers: %v", err)
 		}
 	})
 }

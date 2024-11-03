@@ -67,7 +67,7 @@ func (r *Recoder) NewInputFromURL(
 		if _err != nil {
 			err := inClient.Close()
 			if err != nil {
-				logger.Errorf(ctx, "unable to close the client for the input endpoint: %w", err)
+				logger.Errorf(ctx, "unable to close the client for the input endpoint: %v", err)
 			}
 		}
 	}()

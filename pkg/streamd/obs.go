@@ -47,7 +47,7 @@ func (d *StreamD) OBS(
 			return client, func() {
 				err := client.Disconnect()
 				if err != nil {
-					logger.Errorf(ctx, "unable to disconnect from OBS: %w", err)
+					logger.Errorf(ctx, "unable to disconnect from OBS: %v", err)
 				} else {
 					logger.Tracef(ctx, "disconnected from OBS")
 				}
@@ -162,7 +162,7 @@ func (d *StreamD) restartImageTakerNoLock(ctx context.Context) error {
 					defer obsServerClose()
 				}
 				if err != nil {
-					logger.Errorf(ctx, "unable to init connection with OBS: %w", err)
+					logger.Errorf(ctx, "unable to init connection with OBS: %v", err)
 					return
 				}
 
@@ -200,7 +200,7 @@ func (d *StreamD) restartImageTakerNoLock(ctx context.Context) error {
 
 					err = d.SetVariable(ctx, consts.VarKeyImage(consts.ImageID(elName)), imgBytes)
 					if err != nil {
-						logger.Errorf(ctx, "unable to save the image of '%s': %w", elName, err)
+						logger.Errorf(ctx, "unable to save the image of '%s': %v", elName, err)
 						if !waitUntilNextIteration() {
 							return
 						}

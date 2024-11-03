@@ -1985,7 +1985,7 @@ func (p *Panel) getUpdatedStatus_startStopStreamButton_noLock(ctx context.Contex
 	if obsIsEnabled {
 		obsStreamStatus, err := p.StreamD.GetStreamStatus(ctx, obs.ID)
 		if err != nil {
-			logger.Error(ctx, fmt.Errorf("unable to get stream status from OBS: %w", err))
+			logger.Error(ctx, fmt.Errorf("unable to get stream status from OBS: %v", err))
 			return
 		}
 		logger.Tracef(ctx, "obsStreamStatus == %#+v", obsStreamStatus)
@@ -2017,7 +2017,7 @@ func (p *Panel) getUpdatedStatus_startStopStreamButton_noLock(ctx context.Contex
 
 	ytIsEnabled, err := p.StreamD.IsBackendEnabled(ctx, youtube.ID)
 	if err != nil {
-		logger.Error(ctx, fmt.Errorf("unable to check if YouTube is enabled: %w", err))
+		logger.Error(ctx, fmt.Errorf("unable to check if YouTube is enabled: %v", err))
 		return
 	}
 
@@ -2030,7 +2030,7 @@ func (p *Panel) getUpdatedStatus_startStopStreamButton_noLock(ctx context.Contex
 
 	ytStreamStatus, err := p.StreamD.GetStreamStatus(ctx, youtube.ID)
 	if err != nil {
-		logger.Error(ctx, fmt.Errorf("unable to get stream status from YouTube: %w", err))
+		logger.Error(ctx, fmt.Errorf("unable to get stream status from YouTube: %v", err))
 		return
 	}
 	logger.Tracef(ctx, "ytStreamStatus == %#+v", ytStreamStatus)
@@ -3756,12 +3756,12 @@ func (p *Panel) localConfigCacheUpdater(ctx context.Context) (_err error) {
 			case <-cfgChangeCh:
 				newCfg, err := p.StreamD.GetConfig(ctx)
 				if err != nil {
-					logger.Errorf(ctx, "unable to get the new config: %w", err)
+					logger.Errorf(ctx, "unable to get the new config: %v", err)
 					continue
 				}
 				err = newCfg.Convert()
 				if err != nil {
-					logger.Errorf(ctx, "unable to convert the config: %w", err)
+					logger.Errorf(ctx, "unable to convert the config: %v", err)
 					continue
 				}
 				p.configCacheLocker.Do(ctx, func() {

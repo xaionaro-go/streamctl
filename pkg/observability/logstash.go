@@ -16,13 +16,13 @@ func CtxWithLogstash(
 ) context.Context {
 	addr, err := url.Parse(logstashAddr)
 	if err != nil {
-		logger.Errorf(ctx, "unable to parse '%s' as URL: %w", logstashAddr, err)
+		logger.Errorf(ctx, "unable to parse '%s' as URL: %v", logstashAddr, err)
 		return ctx
 	}
 
 	hook, err := logrustash.NewHook(addr.Scheme, addr.Host, appName)
 	if err != nil {
-		logger.Errorf(ctx, "unable to initialize the hook: %w", err)
+		logger.Errorf(ctx, "unable to initialize the hook: %v", err)
 		return ctx
 	}
 

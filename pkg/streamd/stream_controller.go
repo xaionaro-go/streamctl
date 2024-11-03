@@ -77,7 +77,7 @@ func (d *StreamD) reinitStreamControllers(ctx context.Context) error {
 		}
 		err = d.startListeningForChatMessages(ctx, platName)
 		if err != nil {
-			logger.Errorf(ctx, "unable to initialize the reader of chat messages for '%s': %w", string(platName), err)
+			logger.Errorf(ctx, "unable to initialize the reader of chat messages for '%s': %v", string(platName), err)
 			continue
 		}
 	}
@@ -363,7 +363,7 @@ func (d *StreamD) initKickBackend(ctx context.Context) error {
 	if len(cacheHashAfterInit) == 0 || !cacheHashAfterInit.Equals(cacheHashBeforeInit) {
 		err := d.writeCache(ctx)
 		if err != nil {
-			logger.Errorf(ctx, "unable to write cache: %w", err)
+			logger.Errorf(ctx, "unable to write cache: %v", err)
 		}
 	}
 	d.StreamControllers.Kick = kick

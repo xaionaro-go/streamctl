@@ -105,7 +105,7 @@ func New(
 				},
 			})
 			if err != nil {
-				logger.Errorf(ctx, "the token is apparently invalid: %w", err)
+				logger.Errorf(ctx, "the token is apparently invalid: %v", err)
 			}
 		}
 		logger.Debugf(ctx, "saving the new tokens")

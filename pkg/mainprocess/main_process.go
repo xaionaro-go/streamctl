@@ -407,7 +407,7 @@ func (m *Manager) sendMessage(
 		) // TODO: Delete this horrible hack (that is introduced to avoid erasing messages in the buffer)
 		err = gob.NewEncoder(conn).Encode(message)
 		if err != nil {
-			logger.Errorf(ctx, "%v", fmt.Errorf("unable to encode&send message: %w", err))
+			logger.Errorf(ctx, "%v", fmt.Errorf("unable to encode&send message: %v", err))
 			return
 		}
 	})

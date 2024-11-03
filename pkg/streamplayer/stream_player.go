@@ -466,7 +466,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 							logger.Debugf(ctx, "the link is empty for some reason, reopening the link")
 							observability.Go(ctx, func() {
 								if err := p.openStream(ctx); err != nil {
-									logger.Errorf(ctx, "unable to open link '%s': %w", link, err)
+									logger.Errorf(ctx, "unable to open link '%s': %v", link, err)
 								}
 							})
 							triedToFixEmptyLinkViaReopen = true

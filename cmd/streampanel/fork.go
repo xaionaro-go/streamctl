@@ -207,7 +207,7 @@ func forceKill(
 	proc := getFork(processName)
 	err := proc.Process.Kill()
 	if err != nil {
-		logger.Errorf(ctx, "unable to kill the child process '%s': %w", string(processName), err)
+		logger.Errorf(ctx, "unable to kill the child process '%s': %v", string(processName), err)
 	}
 }
 

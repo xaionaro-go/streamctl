@@ -654,7 +654,7 @@ func (yt *YouTube) StartStream(
 		return err
 	})
 	if err != nil {
-		logger.Error(ctx, "unable to delete other upcoming streams: %w", err)
+		logger.Error(ctx, "unable to delete other upcoming streams: %v", err)
 	}
 
 	var broadcasts []*youtube.LiveBroadcast
@@ -969,7 +969,7 @@ func (yt *YouTube) StartStream(
 			yt.currentLiveBroadcasts = append(yt.currentLiveBroadcasts, newBroadcast)
 			err = yt.startChatListener(ctx, newBroadcast.Id)
 			if err != nil {
-				logger.Errorf(ctx, "unable to start a chat listener for video '%s': %w", newBroadcast.Id, err)
+				logger.Errorf(ctx, "unable to start a chat listener for video '%s': %v", newBroadcast.Id, err)
 			}
 		}
 
@@ -1007,7 +1007,7 @@ func (yt *YouTube) startChatListener(
 	observability.Go(ctx, func() {
 		err := yt.processChatListener(ctx, chatListener)
 		if err != nil && !errors.Is(err, context.Canceled) {
-			logger.Errorf(ctx, "unable to process the chat listener for '%s': %w", videoID, err)
+			logger.Errorf(ctx, "unable to process the chat listener for '%s': %v", videoID, err)
 		}
 	})
 	return nil
@@ -1261,12 +1261,12 @@ func (yt *YouTube) fixError(ctx context.Context, err error, counterPtr *int) boo
 		logger.Debugf(ctx, "trying to get a new token")
 		_, tErr := yt.getNewToken(ctx)
 		if tErr != nil {
-			logger.Errorf(ctx, "unable to get a new token: %w", err)
+			logger.Errorf(ctx, "unable to get a new token: %v", err)
 			return false
 		}
 		iErr := yt.init(ctx)
 		if iErr != nil {
-			logger.Errorf(ctx, "unable to re-initialize the YouTube client: %w", err)
+			logger.Errorf(ctx, "unable to re-initialize the YouTube client: %v", err)
 			return false
 		}
 		return true

@@ -103,7 +103,7 @@ func ReadOrCreateConfigFile(
 		data := NewConfig()
 		err := WriteConfigToPath(ctx, dataPath, data)
 		if err != nil {
-			logger.Errorf(ctx, "unable to write config to path '%s': %w", dataPath, err)
+			logger.Errorf(ctx, "unable to write config to path '%s': %v", dataPath, err)
 		}
 		return &data, nil
 	default:

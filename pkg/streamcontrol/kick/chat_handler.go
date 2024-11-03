@@ -58,7 +58,7 @@ func NewChatHandler(
 		}()
 		err := h.iterate(ctx)
 		if err != nil {
-			logger.Errorf(ctx, "unable to perform an iteration: %w", err)
+			logger.Errorf(ctx, "unable to perform an iteration: %v", err)
 			return
 		}
 

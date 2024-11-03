@@ -87,7 +87,7 @@ func NewOutputFromURL(
 		output.Closer.Add(func() {
 			err := proxy.Close()
 			if err != nil {
-				logger.Errorf(ctx, "unable to close the TLS-proxy: %w", err)
+				logger.Errorf(ctx, "unable to close the TLS-proxy: %v", err)
 			}
 		})
 		url.Scheme = needUnwrapTLSFor

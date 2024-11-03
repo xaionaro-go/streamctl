@@ -79,7 +79,7 @@ func (es *eventSensor) Loop(
 			return
 		case ev := <-windowFocusChangeChan:
 			if err := es.submitEventWindowFocusChange(ctx, ev, eventSubmitter); err != nil {
-				logger.Errorf(ctx, "unable to submit the WindowFocusChange event %#+v: %w", ev, err)
+				logger.Errorf(ctx, "unable to submit the WindowFocusChange event %#+v: %v", ev, err)
 			}
 		}
 	}

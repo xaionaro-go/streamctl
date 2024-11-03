@@ -104,12 +104,12 @@ func (t *Timer) trigger(ctx context.Context) {
 	observability.Go(ctx, func() {
 		err := t.StreamD.RemoveTimer(ctx, t.Timer.ID)
 		if err != nil {
-			logger.Error(ctx, "unable to remove timer %d: %w", t.Timer.ID, err)
+			logger.Error(ctx, "unable to remove timer %d: %v", t.Timer.ID, err)
 		}
 	})
 
 	err := t.StreamD.doAction(ctx, t.Timer.Action, nil)
 	if err != nil {
-		logger.Errorf(ctx, "unable to perform action %#+v: %w", t.Timer.Action, err)
+		logger.Errorf(ctx, "unable to perform action %#+v: %v", t.Timer.Action, err)
 	}
 }
