@@ -14,7 +14,7 @@ import (
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
-	"github.com/xaionaro-go/streamctl/pkg/streampanel"
+	"github.com/xaionaro-go/streamctl/pkg/consts"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
 )
 
@@ -39,7 +39,7 @@ func getFlagsAndroidFromSysprop(flags *Flags) {
 	for i := 0; i < sv.NumField(); i++ {
 		f := sv.Field(i)
 		t := st.Field(i)
-		sysPropName := "streaming." + strings.ToLower(streampanel.AppName) + ".flags." + t.Name
+		sysPropName := "streaming." + strings.ToLower(consts.AppName) + ".flags." + t.Name
 		value, err := getSystemProperty(sysPropName)
 		if err != nil {
 			logger.Errorf(ctx, "unable to get sysprop '%s': %v", sysPropName, err)

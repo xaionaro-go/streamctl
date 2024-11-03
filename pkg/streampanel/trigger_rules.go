@@ -10,6 +10,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/consts"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/serializable"
 	"github.com/xaionaro-go/streamctl/pkg/serializable/registry"
@@ -45,7 +46,7 @@ func NewTriggerRulesUI(
 }
 
 func (ui *triggerRulesUI) openSetupWindow(ctx context.Context) {
-	w := ui.panel.app.NewWindow(AppName + ": Setup trigger rules")
+	w := ui.panel.app.NewWindow(consts.AppName + ": Setup trigger rules")
 	resizeWindow(w, fyne.NewSize(1000, 1000))
 
 	var refreshContent func() bool
@@ -142,7 +143,7 @@ func (ui *triggerRulesUI) openAddOrEditSceneRuleWindow(
 	triggerRule config.TriggerRule,
 	commitFn func(context.Context, *config.TriggerRule) error,
 ) {
-	w := ui.panel.app.NewWindow(AppName + ": " + title)
+	w := ui.panel.app.NewWindow(consts.AppName + ": " + title)
 	resizeWindow(w, fyne.NewSize(1000, 1000))
 
 	var triggerQueryTypeList []string

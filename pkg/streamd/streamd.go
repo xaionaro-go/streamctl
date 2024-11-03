@@ -586,7 +586,7 @@ func (d *StreamD) StartStream(
 				*profile,
 				customArgs...)
 			if err != nil {
-				return fmt.Errorf("unable to start the stream on Twitch: %w", err)
+				return fmt.Errorf("unable to start the stream on Kick: %w", err)
 			}
 			return nil
 		case youtube.ID:

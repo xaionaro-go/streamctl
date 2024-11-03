@@ -1,0 +1,20 @@
+syntax = "proto3";
+package p2p;
+option go_package = "github.com/xaionaro-go/streamctl/pkg/p2p/implementations/weron/protobuf/go/p2p_grpc";
+
+service Peer {
+    rpc GetName(GetNameRequest) returns (GetNameReply) {}
+    rpc Ping(PingRequest) returns (PingReply) {}
+}
+
+message PingRequest {
+    string payload = 1;
+}
+message PingReply {
+    string payload = 1;
+}
+
+message GetNameRequest {}
+message GetNameReply {
+    string name = 1;
+}

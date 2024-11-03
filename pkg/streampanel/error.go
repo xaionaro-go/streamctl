@@ -12,6 +12,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/consts"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
@@ -140,7 +141,7 @@ func (p *Panel) DisplayError(err error) {
 			p.displayErrorWindow.SetContent(textWidget)
 			return
 		}
-		w := p.app.NewWindow(AppName + ": Got an error: " + err.Error())
+		w := p.app.NewWindow(consts.AppName + ": Got an error: " + err.Error())
 		resizeWindow(w, fyne.NewSize(400, 300))
 		w.SetContent(textWidget)
 

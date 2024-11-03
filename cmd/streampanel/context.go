@@ -18,10 +18,12 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	xlogrus "github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
 	"github.com/getsentry/sentry-go"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/sirupsen/logrus"
+	"github.com/xaionaro-go/streamctl/pkg/consts"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/secret"
-	"github.com/xaionaro-go/streamctl/pkg/streampanel"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
 )
 
@@ -159,11 +161,11 @@ func getContext(
 		ctx = observability.CtxWithLogstash(
 			ctx,
 			flags.LogstashAddr,
-			strings.ToLower(streampanel.AppName),
+			strings.ToLower(consts.AppName),
 		)
 	}
 
-	ctx = belt.WithField(ctx, "program", strings.ToLower(streampanel.AppName))
+	ctx = belt.WithField(ctx, "program", strings.ToLower(consts.AppName))
 
 	if hostname, err := os.Hostname(); err == nil {
 		ctx = belt.WithField(ctx, "hostname", strings.ToLower(hostname))
@@ -184,6 +186,7 @@ func getContext(
 	logger.Default = func() logger.Logger {
 		return l
 	}
+	log.Logger = &zerolog.Logger{Logger: logger.FromCtx(ctx)}
 
 	return ctx
 }

@@ -32,6 +32,7 @@ import (
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/autoupdater"
 	"github.com/xaionaro-go/streamctl/pkg/buildvars"
+	gconsts "github.com/xaionaro-go/streamctl/pkg/consts"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/screenshot"
@@ -54,7 +55,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-const AppName = "StreamPanel"
 const youtubeTitleLength = 90
 
 type Profile struct {
@@ -624,7 +624,7 @@ func (p *Panel) newLoadingWindow(ctx context.Context) fyne.Window {
 	logger.FromCtx(ctx).Debugf("newLoadingWindow")
 	defer logger.FromCtx(ctx).Debugf("endof newLoadingWindow")
 
-	w := p.app.NewWindow(AppName + ": Loading...")
+	w := p.app.NewWindow(gconsts.AppName + ": Loading...")
 	w.Show()
 
 	return w
@@ -634,7 +634,7 @@ func (p *Panel) newConnectingWindow(ctx context.Context) fyne.Window {
 	logger.FromCtx(ctx).Debugf("newConnectingWindow")
 	defer logger.FromCtx(ctx).Debugf("endof newConnectingWindow")
 
-	w := p.app.NewWindow(AppName + ": Connecting...")
+	w := p.app.NewWindow(gconsts.AppName + ": Connecting...")
 	w.Show()
 
 	return w
@@ -734,7 +734,7 @@ func (p *Panel) InputOBSConnectInfo(
 	ctx context.Context,
 	cfg *streamcontrol.PlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile],
 ) BackendStatusCode {
-	w := p.app.NewWindow(AppName + ": Input OBS connection info")
+	w := p.app.NewWindow(gconsts.AppName + ": Input OBS connection info")
 	resizeWindow(w, fyne.NewSize(600, 200))
 
 	hostField := widget.NewEntry()
@@ -930,7 +930,7 @@ func (p *Panel) openBrowser(
 
 	waitCh := make(chan struct{})
 
-	w := p.app.NewWindow(AppName + ": Browser selection window")
+	w := p.app.NewWindow(gconsts.AppName + ": Browser selection window")
 	resizeWindow(w, fyne.NewSize(600, 400))
 	if reason != "" {
 		reason += ". "
@@ -980,7 +980,7 @@ func (p *Panel) InputTwitchUserInfo(
 	ctx context.Context,
 	cfg *streamcontrol.PlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile],
 ) BackendStatusCode {
-	w := p.app.NewWindow(AppName + ": Input Twitch user info")
+	w := p.app.NewWindow(gconsts.AppName + ": Input Twitch user info")
 	resizeWindow(w, fyne.NewSize(600, 200))
 
 	clientSecretIsBuiltin := buildvars.TwitchClientID != "" && buildvars.TwitchClientSecret != ""
@@ -1063,7 +1063,7 @@ func (p *Panel) InputKickUserInfo(
 	ctx context.Context,
 	cfg *streamcontrol.PlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile],
 ) BackendStatusCode {
-	w := p.app.NewWindow(AppName + ": Input Kick user info")
+	w := p.app.NewWindow(gconsts.AppName + ": Input Kick user info")
 	resizeWindow(w, fyne.NewSize(600, 200))
 
 	channelField := widget.NewEntry()
@@ -1123,7 +1123,7 @@ func (p *Panel) InputYouTubeUserInfo(
 	ctx context.Context,
 	cfg *streamcontrol.PlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile],
 ) BackendStatusCode {
-	w := p.app.NewWindow(AppName + ": Input YouTube user info")
+	w := p.app.NewWindow(gconsts.AppName + ": Input YouTube user info")
 	resizeWindow(w, fyne.NewSize(600, 200))
 
 	clientIDField := widget.NewEntry()
@@ -1510,7 +1510,7 @@ func (p *Panel) openSettingsWindowNoLock(
 		backendEnabled[backendID] = isEnabled
 	}
 
-	w := p.app.NewWindow(AppName + ": Settings")
+	w := p.app.NewWindow(gconsts.AppName + ": Settings")
 	resizeWindow(w, fyne.NewSize(400, 900))
 
 	if obsCfg, ok := streamDCfg.Backends[obs.ID]; ok {
@@ -2055,7 +2055,7 @@ func (p *Panel) initMainWindow(
 	logger.Debugf(ctx, "initMainWindow")
 	defer logger.Debugf(ctx, "/initMainWindow")
 
-	w := p.app.NewWindow(AppName)
+	w := p.app.NewWindow(gconsts.AppName)
 	p.mainWindow = w
 	w.SetMaster()
 	resizeWindow(w, fyne.NewSize(400, 600))
@@ -2880,7 +2880,7 @@ func (p *Panel) cloneProfileWindow(ctx context.Context) fyne.Window {
 }
 
 func (p *Panel) deleteProfileWindow(ctx context.Context) fyne.Window {
-	w := p.app.NewWindow(AppName + ": Delete the profile?")
+	w := p.app.NewWindow(gconsts.AppName + ": Delete the profile?")
 
 	yesButton := widget.NewButton("YES", func() {
 		err := p.profileDelete(ctx, *p.selectedProfileName)

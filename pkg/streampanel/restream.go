@@ -16,6 +16,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/dustin/go-humanize"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/consts"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
@@ -154,7 +155,7 @@ func (p *Panel) initRestreamPage(
 }
 
 func (p *Panel) openAddStreamServerWindow(ctx context.Context) {
-	w := p.app.NewWindow(AppName + ": Add Stream Server")
+	w := p.app.NewWindow(consts.AppName + ": Add Stream Server")
 	resizeWindow(w, fyne.NewSize(400, 300))
 
 	currentProtocol := streamtypes.ServerTypeRTMP
@@ -353,7 +354,7 @@ func bwString(
 }
 
 func (p *Panel) openAddStreamWindow(ctx context.Context) {
-	w := p.app.NewWindow(AppName + ": Add incoming stream")
+	w := p.app.NewWindow(consts.AppName + ": Add incoming stream")
 	resizeWindow(w, fyne.NewSize(400, 300))
 
 	streamIDEntry := widget.NewEntry()
@@ -470,7 +471,7 @@ func (p *Panel) openAddOrEditDestinationWindow(
 		streamKey string,
 	) error,
 ) {
-	w := p.app.NewWindow(AppName + ": " + title)
+	w := p.app.NewWindow(consts.AppName + ": " + title)
 	resizeWindow(w, fyne.NewSize(400, 300))
 
 	destinationIDEntry := widget.NewEntry()
@@ -637,7 +638,7 @@ func (p *Panel) openAddOrEditPlayerWindow(
 		streamPlaybackConfig sptypes.Config,
 	) error,
 ) {
-	w := p.app.NewWindow(AppName + ": " + title)
+	w := p.app.NewWindow(consts.AppName + ": " + title)
 	resizeWindow(w, fyne.NewSize(400, 300))
 
 	var playerStrs []string
@@ -1008,7 +1009,7 @@ func (p *Panel) openAddOrEditRestreamWindow(
 		dstID,
 		fwd,
 	)
-	w := p.app.NewWindow(AppName + ": " + title)
+	w := p.app.NewWindow(consts.AppName + ": " + title)
 	resizeWindow(w, fyne.NewSize(400, 300))
 
 	enabledCheck := widget.NewCheck("Enable", func(b bool) {})

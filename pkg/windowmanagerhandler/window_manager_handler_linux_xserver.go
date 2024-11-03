@@ -56,7 +56,7 @@ func (wmh *XWindowManagerHandler) WindowFocusChangeChan(ctx context.Context) <-c
 
 			clientID, err := ewmh.ActiveWindowGet(wmh.XUtil)
 			if err != nil {
-				logger.Errorf(ctx, "unable to get active window: %w", err)
+				logger.Errorf(ctx, "unable to get active window: %v", err)
 				continue
 			}
 
