@@ -33,6 +33,7 @@ WINDOWS_EXTLINKER_FLAGS?=-L$(PWD)/3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSI
 WINDOWS_PKG_CONFIG_PATH?=$(PWD)/3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/sdk/lib/pkgconfig
 
 GIT_COMMIT?=$(shell git rev-list -1 HEAD)
+GOVERSION_GE_1_23=$(shell go run ./tools/goversion/ ge 1.23.0)
 VERSION_STRING?=$(shell git rev-list -1 HEAD)
 BUILD_DATE_STRING?=$(shell date +%s)
 
@@ -42,6 +43,10 @@ LINKER_FLAGS_ANDROID?=$(LINKER_FLAGS)
 LINKER_FLAGS_DARWIN?=$(LINKER_FLAGS)
 LINKER_FLAGS_LINUX?=$(LINKER_FLAGS)
 LINKER_FLAGS_WINDOWS?=$(LINKER_FLAGS) '-extldflags=$(WINDOWS_EXTLINKER_FLAGS)'
+
+ifeq ($(GOVERSION_GE_1_23),true) # see https://github.com/wlynxg/anet/?tab=readme-ov-file#how-to-build-with-go-1230-or-later
+	LINKER_FLAGS_ANDROID+=-checklinkname=0
+endif
 
 all: streampanel-linux-amd64 streampanel-linux-arm64 streampanel-android-arm64 streampanel-windows
 

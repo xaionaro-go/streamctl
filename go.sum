@@ -116,8 +116,6 @@ github.com/abhinavxd/youtube-live-chat-downloader/v2 v2.0.3 h1:rJRsl52IhgD5yaUBV
 github.com/abhinavxd/youtube-live-chat-downloader/v2 v2.0.3/go.mod h1:TrUogg8mrebgMD/JU094CmSXn3yKrt+CZjiDL3YtmMw=
 github.com/adeithe/go-twitch v0.3.1 h1:vGvnS3zq8fYl1sCK0I5dUozlb24eHUp1j2zZXxaBchU=
 github.com/adeithe/go-twitch v0.3.1/go.mod h1:hjUvA7PIUsv2oqi34mExy/clwQz026bjotsqXQOFVJY=
-github.com/alecthomas/kong v1.2.1 h1:E8jH4Tsgv6wCRX2nGrdPyHDUCSG83WH2qE4XLACD33Q=
-github.com/alecthomas/kong v1.2.1/go.mod h1:rKTSFhbdp3Ryefn8x5MOEprnRFQ7nlmMC01GKhehhBM=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf/go.mod h1:ybxpYRFXyAe+OPACYpWeL0wqObRcbAqCMya13uyzqw0=
@@ -291,8 +289,6 @@ github.com/gen2brain/shm v0.0.0-20230802011745-f2460f5984f7/go.mod h1:uF6rMu/1nv
 github.com/getsentry/sentry-go v0.28.1 h1:zzaSm/vHmGllRM6Tpx1492r0YDzauArdBfkJRtY6P5k=
 github.com/getsentry/sentry-go v0.28.1/go.mod h1:1fQZ+7l7eeJ3wYi82q5Hg8GqAPgefRq+FP/QhafYVgg=
 github.com/ghodss/yaml v1.0.0/go.mod h1:4dBDuWmgqj2HViK6kFavaiC9ZROes6MMH2rRYeMEF04=
-github.com/gin-contrib/pprof v1.5.0 h1:E/Oy7g+kNw94KfdCy3bZxQFtyDnAX2V7axRS7sNYVrU=
-github.com/gin-contrib/pprof v1.5.0/go.mod h1:GqFL6LerKoCQ/RSWnkYczkTJ+tOAUVN/8sbnEtaqOKs=
 github.com/gin-contrib/sse v0.1.0 h1:Y/yl/+YNO8GZSjAhjMsSuLt29uWRFHdHYUb5lYOV9qE=
 github.com/gin-contrib/sse v0.1.0/go.mod h1:RHrZQHXnP2xjPF+u1gW/2HnVO7nvIa9PG3Gm+fLHvGI=
 github.com/gin-gonic/gin v1.10.0 h1:nTuyha1TYqgedzytsKYqna+DfLos46nTv2ygFy86HFU=
@@ -530,6 +526,8 @@ github.com/hashicorp/go-sockaddr v1.0.0/go.mod h1:7Xibr9yA9JjQq1JpNB2Vw7kxv8xerX
 github.com/hashicorp/go-syslog v1.0.0/go.mod h1:qPfqrKkXGihmCqbJM2mZgkZGvKG1dFdvsLplgctolz4=
 github.com/hashicorp/go-uuid v1.0.0/go.mod h1:6SBZvOh/SIDV7/2o3Jml5SYk/TvGqwFJ/bN7x4byOro=
 github.com/hashicorp/go-uuid v1.0.1/go.mod h1:6SBZvOh/SIDV7/2o3Jml5SYk/TvGqwFJ/bN7x4byOro=
+github.com/hashicorp/go-version v1.7.0 h1:5tqGy27NaOTB8yJKUZELlFAS/LTKJkrmONwQKeRZfjY=
+github.com/hashicorp/go-version v1.7.0/go.mod h1:fltr4n8CU8Ke44wwGCBoEymUuxUHl09ZGVZPK5anwXA=
 github.com/hashicorp/go.net v0.0.1/go.mod h1:hjKkEWcCURg++eb33jQU7oqQcI9XDCnUzHA0oac0k90=
 github.com/hashicorp/golang-lru v0.5.0/go.mod h1:/m3WP610KZHVQ1SGc6re/UDhFvYD7pJ4Ao+sR/qLZy8=
 github.com/hashicorp/golang-lru v0.5.1/go.mod h1:/m3WP610KZHVQ1SGc6re/UDhFvYD7pJ4Ao+sR/qLZy8=
@@ -782,6 +780,8 @@ github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRI
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/pojntfx/go-auth-utils v0.1.0 h1:nM19hBX3zIs/tTv1ZAJN+m5occkUPQUKJtWG6sk66WY=
 github.com/pojntfx/go-auth-utils v0.1.0/go.mod h1:0GYzRzRxJ+sbMl1sJ3Ko0M4GAHJF2sWkL/MAqQmf5yc=
+github.com/pojntfx/weron v0.2.7 h1:RfKKeh8KviM5aKoYVFNkVGCEvFMw7wShyG6FciloFtI=
+github.com/pojntfx/weron v0.2.7/go.mod h1:5eMoN3Au5UWECwS/wCd/Fmmyy0qouqSkOMz1u+Fehl0=
 github.com/posener/complete v1.1.1/go.mod h1:em0nMJCgc9GFtwrmVmEMR/ZL6WyhyjMBndrE9hABlRI=
 github.com/posener/complete v1.2.3/go.mod h1:WZIdtGGp+qx0sLrYKtIRAruyNpv6hFCicSgv7Sy7s/s=
 github.com/poy/onpar v1.1.2 h1:QaNrNiZx0+Nar5dLgTVp5mXkyoVFIbepjyEoGSnhbAY=
@@ -932,12 +932,12 @@ github.com/xaionaro-go/fyne/v2 v2.0.0-20241020235352-fd61e4920f24 h1:eewdCRMkJmK
 github.com/xaionaro-go/fyne/v2 v2.0.0-20241020235352-fd61e4920f24/go.mod h1:NdxEG8L7EVWo06/cYbXW11uA0X7UG8Q8j5CLebvTZi8=
 github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42 h1:izCjREd+62HDF9FRYqUI7dgJNdUxAIysEuqed8lBcDY=
 github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42/go.mod h1:IuQWd+hy/tLuvuqFX0N9SMZrzOprM8Jvvdu+42RJwk4=
-github.com/xaionaro-go/goobs v0.0.0-20241025144519-45ebde014c09 h1:NGu2p1ACunAJk4s7TMNHQkKfsLSGKp6kB6g0+v2U8sQ=
-github.com/xaionaro-go/goobs v0.0.0-20241025144519-45ebde014c09/go.mod h1:yE6JutVAl1vLcABwfX7OcPcShTG9eABUUfoUj/y5Xc0=
+github.com/xaionaro-go/goobs v0.0.0-20241103210141-030e538ac440 h1:hzQ+65oWq54XAqheyJ9E6wt+WH75051w+eLP5zWlD68=
+github.com/xaionaro-go/goobs v0.0.0-20241103210141-030e538ac440/go.mod h1:Fhk0SWHxZ1atNEIm3tUlB93HHRl/v6hWulG/B7BkIOk=
 github.com/xaionaro-go/gorex v0.0.0-20241010205749-bcd59d639c4d h1:9DyH0lboWWzKUwiqGmp9sTZ3bSPhgJHiiWgV+hqY9Uo=
 github.com/xaionaro-go/gorex v0.0.0-20241010205749-bcd59d639c4d/go.mod h1:yI0EvHC6Ir5WIZp3tEk7o42/QqeTb9pkII+T8p4FlPo=
-github.com/xaionaro-go/grpcproxy v0.0.0-20241030215807-d4204b934e10 h1:Y3ttqM++h0JJqRoiEBciOS9bT1O1xgjvR8deXePJxHs=
-github.com/xaionaro-go/grpcproxy v0.0.0-20241030215807-d4204b934e10/go.mod h1:CMAXpustI+zscUtsMhoLXq91uIv+gVnH5Ponk9fvoBI=
+github.com/xaionaro-go/grpcproxy v0.0.0-20241103205849-a8fef42e72f9 h1:epEpV8x9ANTBnFPeb8oki9thl13tR/ZolbLL1lCh6vk=
+github.com/xaionaro-go/grpcproxy v0.0.0-20241103205849-a8fef42e72f9/go.mod h1:2Q+/D11JlgTmBylj7QPCYsuDfSYYlHs3NnYp3/T9XSs=
 github.com/xaionaro-go/kickcom v0.0.0-20241022142825-25a234cc8628 h1:/ohdYrl4nFgEJJTQqP8hSzXqXxyetiB07jnQu5pcvNo=
 github.com/xaionaro-go/kickcom v0.0.0-20241022142825-25a234cc8628/go.mod h1:gzKL0qgtR13PXl4woI3nvxVhQ9Z6lHtGL5tk9HmITxA=
 github.com/xaionaro-go/libvlc-go/v3 v3.0.0-20241011194409-0fe4e2a9d901 h1:HX0CO6h5oDQfp9NquzQT0xWH4Gn9Z5BZ0IFJrYFl88k=
@@ -946,8 +946,6 @@ github.com/xaionaro-go/lockmap v0.0.0-20240901172806-e17aea364748 h1:SlB3zLAuLgR
 github.com/xaionaro-go/lockmap v0.0.0-20240901172806-e17aea364748/go.mod h1:UO+SYZ5JAJGOnNkDycFrFwkaaPeSqAEQUM0TUp9Vb24=
 github.com/xaionaro-go/logrustash v0.0.0-20240804141650-d48034780a5f h1:mMrVrYtH9MyCUzBwPvuEntvqdCJ0zifCfqV6bHU6z1M=
 github.com/xaionaro-go/logrustash v0.0.0-20240804141650-d48034780a5f/go.mod h1:aszOZHoPPSgKwdbJUgonps3MSODqctkNhwQDDwlw0Eg=
-github.com/xaionaro-go/mediamtx v0.0.0-20241009124606-94c22c603970 h1:QmbvVR2Jt+I2TTeGef79xhfmlnvvXl+FYEHoYpe7mUY=
-github.com/xaionaro-go/mediamtx v0.0.0-20241009124606-94c22c603970/go.mod h1:3J9s+wGt6CV4MDnoXApKEdY3kdc5sd6AYEndLJSAIYI=
 github.com/xaionaro-go/mediamtx v0.0.0-20241103200202-882a99e8df73 h1:jbk3K9iAcSAjHIPQJIL86qFvT2Qh6TjhPNPf6A/wAd4=
 github.com/xaionaro-go/mediamtx v0.0.0-20241103200202-882a99e8df73/go.mod h1:51ZkkNz6TfqqbQyPbxmQO9vwQE4eCg8WndDyee5kiUo=
 github.com/xaionaro-go/object v0.0.0-20241026212449-753ce10ec94c h1:2CIIxTRox9auImHyfbfrqSyrvPaWrw5w2Yw5TkOioZw=
