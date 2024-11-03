@@ -28,6 +28,7 @@ type config struct {
 	StreamServer    streamserver.Config `yaml:"stream_server"`
 	Dashboard       DashboardConfig     `yaml:"monitor"` // TODO: rename to `dashboard`
 	TriggerRules    TriggerRules        `yaml:"trigger_rules"`
+	P2PNetwork      P2PNetwork          `yaml:"p2p_network"`
 }
 
 type Config config
@@ -45,6 +46,7 @@ func NewConfig() Config {
 		Dashboard: DashboardConfig{
 			Elements: map[string]DashboardElementConfig{},
 		},
+		P2PNetwork: GetRandomP2PConfig(),
 	}
 }
 

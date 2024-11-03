@@ -18,6 +18,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/streamctl/pkg/p2p"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/repository"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -58,6 +59,8 @@ type OBSState = streamtypes.OBSState
 type StreamD struct {
 	UI ui.UI
 
+	P2PNetwork p2p.P2P
+
 	SaveConfigFunc SaveConfigFunc
 	ConfigLock     xsync.Gorex
 	Config         config.Config
@@ -94,6 +97,8 @@ type StreamD struct {
 
 	ImageHash xsync.Map[string, imageHash]
 
+	closeCallback []closeCallback
+
 	imageTakerLocker xsync.Mutex
 	imageTakerCancel context.CancelFunc
 	imageTakerWG     sync.WaitGroup
@@ -104,7 +109,7 @@ type imageHash uint64
 var _ api.StreamD = (*StreamD)(nil)
 
 func New(
-	config config.Config,
+	cfg config.Config,
 	ui ui.UI,
 	saveCfgFunc SaveConfigFunc,
 	b *belt.Belt,
@@ -114,14 +119,15 @@ func New(
 	logger.Debugf(ctx, "New()")
 	defer func() { logger.Debugf(ctx, "/New(): %#+v %v", _ret, _ret) }()
 
-	err := convertConfig(config)
+	err := convertConfig(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("unable to convert the config: %w", err)
 	}
+
 	d := &StreamD{
 		UI:                ui,
 		SaveConfigFunc:    saveCfgFunc,
-		Config:            config,
+		Config:            cfg,
 		Cache:             &cache.Cache{},
 		OAuthListenPorts:  map[uint16]struct{}{},
 		StreamStatusCache: memoize.NewMemoizeData(),
@@ -178,6 +184,11 @@ func (d *StreamD) Run(ctx context.Context) (_ret error) { // TODO: delete the fe
 	d.UI.SetStatus("Starting the image taker...")
 	if err := d.initImageTaker(ctx); err != nil {
 		d.UI.DisplayError(fmt.Errorf("unable to initialize the image taker: %w", err))
+	}
+
+	d.UI.SetStatus("P2P network...")
+	if err := d.initP2P(ctx); err != nil {
+		d.UI.DisplayError(fmt.Errorf("unable to initialize the P2P network: %w", err))
 	}
 
 	d.UI.SetStatus("Initializing UI...")
@@ -1776,4 +1787,52 @@ func (d *StreamD) DialContext(
 	addr string,
 ) (net.Conn, error) {
 	return net.Dial(network, addr)
+}
+
+func (d *StreamD) initP2P(
+	ctx context.Context,
+) error {
+	if d.Config.P2PNetwork.IsZero() {
+		d.Config.P2PNetwork = config.GetRandomP2PConfig()
+		if err := d.saveConfig(ctx); err != nil {
+			logger.Errorf(ctx, "unable to save the config: %v", err)
+		}
+	}
+
+	privKey, err := d.Config.P2PNetwork.PrivateKey.Get()
+	if err != nil {
+		return fmt.Errorf("unable to get the private key: %w", err)
+	}
+
+	p2p, err := p2p.NewP2P(
+		ctx,
+		privKey,
+		d.Config.P2PNetwork.PeerName,
+		d.Config.P2PNetwork.NetworkID,
+		[]byte(d.Config.P2PNetwork.PSK.Get()),
+		d.Config.P2PNetwork.VPN.Network,
+	)
+	if err != nil {
+		return fmt.Errorf("unable to initialize a P2P network handler: %w", err)
+	}
+
+	err = p2p.Start(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to start a P2P network handler: %w", err)
+	}
+	d.addCloseCallback(p2p.Close, "P2P network")
+
+	d.P2PNetwork = p2p
+	return nil
+}
+
+func (p *StreamD) addCloseCallback(callback func() error, name string) {
+	p.closeCallback = append(p.closeCallback, closeCallback{
+		Callback: callback,
+		Name:     name,
+	})
+}
+
+func (d *StreamD) P2P() p2p.P2P {
+	return d.P2PNetwork
 }

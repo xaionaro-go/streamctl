@@ -2,6 +2,7 @@ package weron
 
 import (
 	"context"
+	"crypto"
 	"crypto/aes"
 	"crypto/ed25519"
 	"crypto/sha512"
@@ -72,7 +73,7 @@ var p2pCount atomic.Uint32
 
 func NewP2P(
 	ctx context.Context,
-	privKey ed25519.PrivateKey,
+	privKey crypto.PrivateKey,
 	peerName string,
 	networkID string,
 	psk []byte,
@@ -82,6 +83,14 @@ func NewP2P(
 		return nil, fmt.Errorf("expected a Pre-Shared-Key of size 16, received %d", len(psk))
 	}
 
+	ed25519PrivKey, ok := privKey.(ed25519.PrivateKey)
+	if !ok {
+		return nil, fmt.Errorf("we currently support only ED25519 private keys, but received %T", privKey)
+	}
+	if len(ed25519PrivKey) == 0 {
+		return nil, fmt.Errorf("the private key is empty")
+	}
+
 	h := sha512.New512_256()
 	h.Write(psk)
 	h.Write([]byte(salt))
@@ -89,7 +98,7 @@ func NewP2P(
 
 	p := &P2P{
 		networkID: networkID,
-		privKey:   secret.New(privKey),
+		privKey:   secret.New(ed25519PrivKey),
 		peerName:  peerName,
 		peers:     map[string]*Peer{},
 	}
@@ -365,6 +374,10 @@ func (p *P2P) onVPNPeerDisconnected(peerID string) {
 }
 
 func (p *P2P) GetPeerID() types.PeerID {
+	privKey := p.privKey.Get()
+	if privKey == nil {
+		return nil
+	}
 	return types.PeerID(p.privKey.Get().Public().(ed25519.PublicKey))
 }
 

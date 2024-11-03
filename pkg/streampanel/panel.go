@@ -1850,6 +1850,9 @@ func (p *Panel) openMenuWindow(ctx context.Context) {
 			)
 			w.Show()
 		}),
+		fyne.NewMenuItem("Link a device", func() {
+			p.showLinkDeviceQRWindow(ctx)
+		}),
 		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem("Show errors", func() {
 			p.ShowErrorReports()
