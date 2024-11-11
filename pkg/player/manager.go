@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/player/types"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
@@ -44,6 +45,7 @@ func (m *Manager) NewPlayer(
 	title string,
 	backend Backend,
 ) (Player, error) {
+	logger.Debugf(ctx, "NewPlayer: '%s' '%s'", title, backend)
 	switch backend {
 	case BackendBuiltin:
 		return m.NewBuiltin(ctx, title)

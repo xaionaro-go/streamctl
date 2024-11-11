@@ -1792,6 +1792,7 @@ func (d *StreamD) DialContext(
 func (d *StreamD) initP2P(
 	ctx context.Context,
 ) error {
+	return nil
 	if d.Config.P2PNetwork.IsZero() {
 		d.Config.P2PNetwork = config.GetRandomP2PConfig()
 		if err := d.saveConfig(ctx); err != nil {

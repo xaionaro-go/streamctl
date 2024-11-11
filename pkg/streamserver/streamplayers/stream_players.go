@@ -189,6 +189,7 @@ func setupStreamPlayers(
 		_, err := s.StreamPlayers.Create(
 			xcontext.DetachDone(ctx),
 			streamID,
+			playerCfg.Player,
 			ssOpts...,
 		)
 		if err != nil {

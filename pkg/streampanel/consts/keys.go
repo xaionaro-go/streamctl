@@ -25,4 +25,5 @@ const (
 	PageDashboard   = Page("Dashboard")
 	PageOBS         = Page("OBS")
 	PageRestream    = Page("Restream")
+	PageCamera      = Page("Camera")
 )

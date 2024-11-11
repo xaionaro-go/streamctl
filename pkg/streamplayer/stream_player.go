@@ -73,6 +73,7 @@ type StreamPlayer struct {
 	PlayerLocker xsync.Mutex
 	Player       player.Player
 	StreamID     streamtypes.StreamID
+	Backend      player.Backend
 	Config       Config
 }
 
@@ -85,6 +86,7 @@ type StreamPlayerHandler struct {
 func (sp *StreamPlayers) Create(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
+	backend player.Backend,
 	opts ...Option,
 ) (_ret *StreamPlayerHandler, _err error) {
 	logger.Debugf(ctx, "StreamPlayers.Create(ctx, '%s', %#+v)", streamID, opts)
@@ -101,6 +103,7 @@ func (sp *StreamPlayers) Create(
 		Parent: sp,
 		Cancel: cancel,
 		StreamPlayer: StreamPlayer{
+			Backend:  backend,
 			Config:   resultingOpts.Config(),
 			StreamID: streamID,
 		},
@@ -191,7 +194,7 @@ func (p *StreamPlayerHandler) startU(ctx context.Context) error {
 
 	instanceCtx, cancelFn := context.WithCancel(ctx)
 
-	playerType := p.Parent.PlayerManager.SupportedBackends()[0]
+	playerType := p.Backend
 	player, err := p.Parent.PlayerManager.NewPlayer(
 		instanceCtx,
 		StreamID2Title(p.StreamID),
@@ -201,6 +204,11 @@ func (p *StreamPlayerHandler) startU(ctx context.Context) error {
 		errmon.ObserveErrorCtx(ctx, p.Close())
 		cancelFn()
 		return fmt.Errorf("unable to run a video player '%s': %w", playerType, err)
+	}
+	if player == nil {
+		errmon.ObserveErrorCtx(ctx, p.Close())
+		cancelFn()
+		return fmt.Errorf("player == nil")
 	}
 	p.Player = player
 	logger.Debugf(ctx, "initialized player %#+v", player)
@@ -212,6 +220,9 @@ func (p *StreamPlayerHandler) startU(ctx context.Context) error {
 func (p *StreamPlayerHandler) stopU(ctx context.Context) error {
 	logger.Debugf(ctx, "StreamPlayers.stopU(ctx): '%s'", p.StreamID)
 	defer logger.Debugf(ctx, "/StreamPlayers.stopU(ctx): '%s'", p.StreamID)
+	defer func(){
+		p.Player = nil
+	}()
 
 	if p.Player == nil {
 		return fmt.Errorf("p.Player == nil")
@@ -230,7 +241,7 @@ func (p *StreamPlayerHandler) restartU(ctx context.Context) error {
 	defer logger.Debugf(ctx, "/StreamPlayers.restartU(ctx): '%s'", p.StreamID)
 
 	if err := p.stopU(ctx); err != nil {
-		return fmt.Errorf("unable to stop the stream player: %w", err)
+		logger.Errorf(ctx, "unable to stop the stream player: %v", err)
 	}
 	if err := p.startU(ctx); err != nil {
 		return fmt.Errorf("unable to start the stream player: %w", err)
@@ -358,12 +369,14 @@ func (p *StreamPlayerHandler) controllerLoop(
 		}
 		isClosed = true
 		observability.Go(ctx, func() {
-			err := p.restartU(ctx)
-			errmon.ObserveErrorCtx(ctx, err)
-			if err != nil {
-				err := p.Parent.Remove(ctx, p.StreamID)
+			p.PlayerLocker.Do(ctx, func() {
+				err := p.restartU(ctx)
 				errmon.ObserveErrorCtx(ctx, err)
-			}
+				if err != nil {
+					err := p.Parent.Remove(ctx, p.StreamID)
+					errmon.ObserveErrorCtx(ctx, err)
+				}
+			})
 		})
 	}
 
