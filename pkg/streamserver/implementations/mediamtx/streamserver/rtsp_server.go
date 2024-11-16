@@ -8,52 +8,68 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/bluenviron/gortsplib/v4"
+	"github.com/bluenviron/gortsplib/v4/pkg/auth"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/mediamtx/pkg/conf"
 	mediamtxlogger "github.com/xaionaro-go/mediamtx/pkg/logger"
 	"github.com/xaionaro-go/mediamtx/pkg/pathmanager"
-	"github.com/xaionaro-go/mediamtx/pkg/servers/rtmp"
+	"github.com/xaionaro-go/mediamtx/pkg/servers/rtsp"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
-type RTMPServer struct {
-	*rtmp.Server
+type RTSPServer struct {
+	*rtsp.Server
 
 	locker         xsync.Mutex
 	originalConfig streamportserver.Config
 	isInitialized  bool
 }
 
-func newRTMPServer(
+func newRTSPServer(
 	pathManager *pathmanager.PathManager,
 	listenAddr string,
 	logger mediamtxlogger.Writer,
 	opts ...streamportserver.Option,
-) (*RTMPServer, error) {
+) (*RTSPServer, error) {
 	psCfg := streamportserver.Options(opts).ProtocolSpecificConfig(context.Background())
-	srv := &RTMPServer{
-		originalConfig: streamportserver.Config{
-			ProtocolSpecificConfig: psCfg,
-			Type:                   streamtypes.ServerTypeRTMP,
-			ListenAddr:             listenAddr,
-		},
-		Server: &rtmp.Server{
-			Address:             listenAddr,
-			ReadTimeout:         conf.StringDuration(psCfg.ReadTimeout),
-			WriteTimeout:        conf.StringDuration(psCfg.WriteTimeout),
-			IsTLS:               psCfg.IsTLS,
-			ServerCert:          "",
-			ServerKey:           "",
-			RTSPAddress:         "",
+	srv := &RTSPServer{
+		Server: &rtsp.Server{
+			Address:           listenAddr,
+			AuthMethods:       []auth.ValidateMethod{},
+			ReadTimeout:       conf.StringDuration(psCfg.ReadTimeout),
+			WriteTimeout:      conf.StringDuration(psCfg.WriteTimeout),
+			WriteQueueSize:    int(psCfg.WriteQueueSize),
+			UseUDP:            false,
+			UseMulticast:      false,
+			RTPAddress:        "", // in mediamtx the original value: ":8000"
+			RTCPAddress:       "", // in mediamtx the original value: ":8001"
+			MulticastIPRange:  "", // in mediamtx the original value: "224.1.0.0/16"
+			MulticastRTPPort:  0,  // in mediamtx the original value: 8002
+			MulticastRTCPPort: 0,  // in mediamtx the original value: 8003
+			IsTLS:             psCfg.IsTLS,
+			ServerCert:        "",
+			ServerKey:         "",
+			RTSPAddress:       listenAddr,
+			Protocols: map[conf.Protocol]struct{}{
+				conf.Protocol(gortsplib.TransportUDP):          {},
+				conf.Protocol(gortsplib.TransportUDPMulticast): {},
+				conf.Protocol(gortsplib.TransportTCP):          {},
+			},
 			RunOnConnect:        "",
 			RunOnConnectRestart: false,
 			RunOnDisconnect:     "",
 			ExternalCmdPool:     nil,
 			PathManager:         pathManager,
 			Parent:              logger,
+		},
+		originalConfig: streamportserver.Config{
+			ProtocolSpecificConfig: psCfg,
+			Type:                   streamtypes.ServerTypeRTSP,
+			ListenAddr:             listenAddr,
 		},
 	}
 	if err := srv.init(srv.originalConfig); err != nil {
@@ -62,7 +78,7 @@ func newRTMPServer(
 	return srv, nil
 }
 
-func (srv *RTMPServer) init(
+func (srv *RTSPServer) init(
 	cfg streamportserver.Config,
 ) (_err error) {
 	defer func() {
@@ -105,7 +121,7 @@ func (srv *RTMPServer) init(
 }
 
 // Note! It create temporary files that should be cleaned up afterwards.
-func (srv *RTMPServer) generateServerCertificate() (_err error) {
+func (srv *RTSPServer) generateServerCertificate() (_err error) {
 	certificate, privateKey, err := generateServerTLSCertificate()
 	if err != nil {
 		return fmt.Errorf("unable to generate the certificate: %w", err)
@@ -120,7 +136,7 @@ func (srv *RTMPServer) generateServerCertificate() (_err error) {
 }
 
 // Note! It create temporary files that should be cleaned up afterwards.
-func (srv *RTMPServer) setServerCertificate(
+func (srv *RTSPServer) setServerCertificate(
 	cert x509.Certificate,
 	key crypto.PrivateKey,
 ) (_err error) {
@@ -137,7 +153,7 @@ func (srv *RTMPServer) setServerCertificate(
 	}()
 
 	var err error
-	certFile, err = os.CreateTemp("", "rtmps-server-cert-*.pem")
+	certFile, err = os.CreateTemp("", "rtsps-server-cert-*.pem")
 	if err != nil {
 		return fmt.Errorf("unable to create a temporary file for a server certificate: %w", err)
 	}
@@ -155,7 +171,7 @@ func (srv *RTMPServer) setServerCertificate(
 		)
 	}
 
-	keyFile, err = os.CreateTemp("", "rtmps-server-certkey-*.pem")
+	keyFile, err = os.CreateTemp("", "rtsps-server-certkey-*.pem")
 	if err != nil {
 		return fmt.Errorf("unable to create a temporary file for a server certificate: %w", err)
 	}
@@ -183,13 +199,13 @@ func (srv *RTMPServer) setServerCertificate(
 	return nil
 }
 
-var _ streamportserver.Server = (*RTMPServer)(nil)
+var _ streamportserver.Server = (*RTSPServer)(nil)
 
-func (srv *RTMPServer) ProtocolSpecificConfig() streamportserver.ProtocolSpecificConfig {
+func (srv *RTSPServer) ProtocolSpecificConfig() streamportserver.ProtocolSpecificConfig {
 	return srv.originalConfig.ProtocolSpecificConfig
 }
 
-func (srv *RTMPServer) Close() error {
+func (srv *RTSPServer) Close() error {
 	ctx := context.TODO()
 	return xsync.DoR1(ctx, &srv.locker, func() error {
 		if srv.Server == nil {
@@ -213,13 +229,13 @@ func (srv *RTMPServer) Close() error {
 		return result.ErrorOrNil()
 	})
 }
-func (srv *RTMPServer) Type() streamtypes.ServerType {
-	return streamtypes.ServerTypeRTMP
+func (srv *RTSPServer) Type() streamtypes.ServerType {
+	return streamtypes.ServerTypeRTSP
 }
-func (srv *RTMPServer) ListenAddr() string {
+func (srv *RTSPServer) ListenAddr() string {
 	return srv.Server.Address
 }
-func (srv *RTMPServer) NumBytesConsumerWrote() uint64 {
+func (srv *RTSPServer) NumBytesConsumerWrote() uint64 {
 	result := uint64(0)
 	list, err := srv.Server.APIConnsList()
 	for _, item := range list.Items {
@@ -230,7 +246,7 @@ func (srv *RTMPServer) NumBytesConsumerWrote() uint64 {
 	}
 	return result
 }
-func (srv *RTMPServer) NumBytesProducerRead() uint64 {
+func (srv *RTSPServer) NumBytesProducerRead() uint64 {
 	result := uint64(0)
 	list, err := srv.Server.APIConnsList()
 	for _, item := range list.Items {

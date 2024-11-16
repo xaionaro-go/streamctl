@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	fyneapp "fyne.io/fyne/v2/app"
@@ -36,6 +37,14 @@ func assertNoError(ctx context.Context, err error) {
 	logger.Fatal(ctx, err)
 }
 
+func backendsToStrings(backends []player.Backend) []string {
+	result := make([]string, 0, len(backends))
+	for _, s := range backends {
+		result = append(result, string(s))
+	}
+	return result
+}
+
 func main() {
 	loggerLevel := logger.LevelWarning
 	pflag.Var(&loggerLevel, "log-level", "Log level")
@@ -50,6 +59,8 @@ func main() {
 		"the path of the stream in rtmp://address/path",
 	)
 	mpvPath := pflag.String("mpv", "mpv", "path to mpv")
+	backends := backendsToStrings(player.SupportedBackends())
+	backend := pflag.String("backend", backends[0], "player backend, supported values: "+strings.Join(backends, ", "))
 	pflag.Parse()
 
 	l := logrus.Default().WithLevel(loggerLevel)
@@ -92,7 +103,7 @@ func main() {
 	err = ss.Init(ctx)
 	assertNoError(ctx, err)
 	sp := streamplayer.New(ss, m)
-	p, err := sp.Create(ctx, api.StreamID(*streamID))
+	p, err := sp.Create(ctx, api.StreamID(*streamID), ptypes.Backend(*backend))
 	assertNoError(ctx, err)
 
 	app := fyneapp.New()

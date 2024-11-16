@@ -167,16 +167,16 @@ streampanel-android-arm64-in-docker: build-streampanel-android-arm64-in-docker c
 build-streampanel-android-arm64-in-docker: checkconfig-android-in-docker builddir $(GOPATH)/bin/pkg-config-wrapper
 	go mod tidy
 	git config --global --add safe.directory /project
-	$(eval ANDROID_NDK_HOME=$(shell ls -d /home/builder/lib/android-ndk-*))
+	$(eval ANDROID_NDK_HOME=$(shell ls -d /home/builder/lib/android-ndk-* | tail -1))
 	cd cmd/streampanel && \
 		PKG_CONFIG_WRAPPER_LOG='/tmp/pkg_config_wrapper.log' \
 		PKG_CONFIG_WRAPPER_LOG_LEVEL='trace' \
 		PKG_CONFIG_LIBS_FORCE_STATIC='libav*,libvlc' \
-		PKG_CONFIG_ERASE="-fopenmp=*,-landroid" \
+		PKG_CONFIG_ERASE="-fopenmp=*,-landroid,-lcamera2ndk,-lmediandk" \
 		PKG_CONFIG='$(GOPATH)/bin/pkg-config-wrapper' \
 		PKG_CONFIG_PATH='/data/data/com.termux/files/usr/lib/pkgconfig' \
 		CGO_CFLAGS='-I$(ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/ -I/data/data/com.termux/files/usr/include -Wno-incompatible-function-pointer-types -Wno-unused-result -Wno-xor-used-as-pow' \
-		CGO_LDFLAGS='-ldl -lc -L$(ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/ -L/data/data/com.termux/files/usr/lib' \
+		CGO_LDFLAGS='-v -Wl,-Bdynamic -ldl -lc -lcamera2ndk -lmediandk -L$(ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/ -L$(ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24/ -L/data/data/com.termux/files/usr/lib' \
 		ANDROID_NDK_HOME="$(ANDROID_NDK_HOME)" \
 		PATH="${PATH}:${HOME}/go/bin" \
 		GOFLAGS="$(GOBUILD_FLAGS) -ldflags=$(shell echo ${LINKER_FLAGS_ANDROID} | tr " " ",")" \
@@ -268,3 +268,10 @@ streampanel-windows-amd64.zip: streampanel-windows
 
 streampanel-windows-debug-amd64.zip: streampanel-windows-debug
 	sh -c 'cd build && zip -r streampanel-windows-debug-amd64.zip streampanel-windows-debug-amd64'
+
+priv/android-apk.keystore:
+	mkdir -p priv
+	keytool -genkey -v -keystore priv/android-apk.keystore -alias streampanel -keyalg RSA -keysize 2048 -validity 36500
+
+signer-sign-streampanel-arm64-apk: priv/android-apk.keystore
+	jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore priv/android-apk.keystore build/streampanel-arm64.apk streampanel

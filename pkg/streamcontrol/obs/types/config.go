@@ -1,6 +1,8 @@
 package types
 
 import (
+	"time"
+
 	"github.com/xaionaro-go/streamctl/pkg/secret"
 	streamctl "github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 )
@@ -8,9 +10,13 @@ import (
 const ID = streamctl.PlatformName("obs")
 
 type PlatformSpecificConfig struct {
-	Host     string
-	Port     uint16
-	Password secret.String `yaml:"pass" json:"pass"`
+	Host             string
+	Port             uint16
+	Password         secret.String `yaml:"pass" json:"pass"`
+	SceneAfterStream struct {
+		Name     string        `yaml:"name" json:"name"`
+		Duration time.Duration `yaml:"duration" json:"duration"`
+	} `yaml:"scene_after_stream" json:"scene_after_stream"`
 }
 
 type Config = streamctl.PlatformConfig[PlatformSpecificConfig, StreamProfile]

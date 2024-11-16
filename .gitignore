@@ -10,3 +10,4 @@ rcc*.cpp
 *.qrc
 .vscode
 termux-packages
+priv

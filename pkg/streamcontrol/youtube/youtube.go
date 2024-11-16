@@ -265,6 +265,9 @@ func getToken(ctx context.Context, cfg Config) (*oauth2.Token, error) {
 						if err != nil {
 							return fmt.Errorf("unable to get a token: %w", err)
 						}
+						if _tok == nil {
+							return fmt.Errorf("internal error (was supposed to be impossible): token == nil")
+						}
 						tok = _tok
 						cancelFn()
 						return nil
@@ -320,7 +323,7 @@ func getToken(ctx context.Context, cfg Config) (*oauth2.Token, error) {
 
 	if tok == nil {
 		errWg.Wait()
-		return nil, resultErr
+		return nil, fmt.Errorf("resulting token is nil, error: %w", resultErr)
 	}
 
 	return tok, nil
@@ -1073,9 +1076,9 @@ func (yt *YouTube) GetStreamStatus(
 	// TODO: try to use yt.currentLiveBroadcasts instead of re-requesting the list to
 	//       save some API quota points.
 
-	logger.Tracef(ctx, "GetStreamStatus")
+	logger.Debugf(ctx, "GetStreamStatus")
 	defer func() {
-		logger.Tracef(ctx, "/GetStreamStatus: err:%v; ret:%#+v", _err, _ret)
+		logger.Debugf(ctx, "/GetStreamStatus: err:%v; ret:%#+v", _err, _ret)
 	}()
 	if err := yt.Ping(ctx); err != nil {
 		return nil, fmt.Errorf("connection to YouTube is broken: %w", err)

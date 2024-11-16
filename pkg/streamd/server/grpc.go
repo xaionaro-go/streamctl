@@ -625,6 +625,18 @@ func (grpc *GRPCServer) SubscribeToOAuthRequests(
 	return nil
 }
 
+type ErrNoOAuthHandler struct {
+	Err error
+}
+
+func (err ErrNoOAuthHandler) Error() string {
+	return fmt.Sprintf("no oauth handler: %v", err.Err)
+}
+
+func (err ErrNoOAuthHandler) Unwrap() error {
+	return err.Err
+}
+
 type ErrNoOAuthHandlerForPort struct {
 	Port uint16
 }
@@ -638,14 +650,7 @@ func (grpc *GRPCServer) OpenBrowser(
 	url string,
 ) (_ret error) {
 	logger.Debugf(ctx, "OpenBrowser(ctx, '%s')", url)
-	defer func() {
-		logger.Debugf(
-			ctx,
-			"/OpenBrowser(ctx, '%s'): %v",
-			url,
-			_ret,
-		)
-	}()
+	defer func() { logger.Debugf(ctx, "/OpenBrowser(ctx, '%s'): %v", url, _ret) }()
 
 	// TODO: Stop abusing the function for OAuthURLs here! Implement a separate function, or
 	//       at least rename the old one.
@@ -672,28 +677,28 @@ func (grpc *GRPCServer) openBrowser(
 		AuthURL: url,
 	}
 
-	count := 0
+	var resultErr *multierror.Error
+	successCount := 0
 	for _, handlers := range grpc.OAuthURLHandlers {
-		logger.Debugf(ctx, "OpenOAuthURL() sending %#+v", req)
-		var resultErr *multierror.Error
+		logger.Debugf(ctx, "openBrowser: OpenOAuthURL() sending %#+v", req)
 		for _, handler := range handlers {
-			count++
 			err := handler.Sender.Send(req)
 			if err != nil {
-				err = multierror.Append(
-					resultErr,
-					fmt.Errorf(
-						"unable to send oauth request: %w",
-						err,
-					),
-				)
+				resultErr = multierror.Append(resultErr, fmt.Errorf("unable to send oauth request: %w", err))
+				continue
 			}
+			successCount++
 		}
 	}
 
-	if count == 0 {
-		return ErrNoOAuthHandlerForPort{}
+	if successCount == 0 {
+		err := resultErr.ErrorOrNil()
+		if err == nil {
+			err = fmt.Errorf("no handlers available")
+		}
+		return ErrNoOAuthHandler{Err: err}
 	}
+
 	return nil
 }
 
@@ -726,7 +731,7 @@ func (grpc *GRPCServer) openOAuthURL(
 	authURL string,
 ) (_ret error) {
 	handlers := grpc.OAuthURLHandlers[listenPort]
-	if handlers == nil {
+	if len(handlers) == 0 {
 		return ErrNoOAuthHandlerForPort{
 			Port: listenPort,
 		}
@@ -741,18 +746,12 @@ func (grpc *GRPCServer) openOAuthURL(
 		}
 		grpc.UnansweredOAuthRequests[platID][listenPort] = req
 	})
-	logger.Debugf(ctx, "OpenOAuthURL() sending %#+v", req)
+	logger.Debugf(ctx, "openOAuthURL: OpenOAuthURL() sending %#+v", req)
 	var resultErr *multierror.Error
 	for _, handler := range handlers {
 		err := handler.Sender.Send(req)
 		if err != nil {
-			err = multierror.Append(
-				resultErr,
-				fmt.Errorf(
-					"unable to send oauth request: %w",
-					err,
-				),
-			)
+			resultErr = multierror.Append(resultErr, fmt.Errorf("unable to send oauth request: %w", err))
 		}
 	}
 	return resultErr.ErrorOrNil()

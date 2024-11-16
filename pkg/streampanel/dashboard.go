@@ -65,6 +65,78 @@ type dashboardWindow struct {
 	lastOrientation     fyne.DeviceOrientation
 	screenshotContainer *fyne.Container
 	layersContainer     *fyne.Container
+	streamStatus        map[streamcontrol.PlatformName]*widget.Label
+	streamStatusLocker  xsync.Mutex
+}
+
+func (w *dashboardWindow) renderStreamStatus(ctx context.Context) {
+	w.streamStatusLocker.Do(ctx, func() {
+		streamDClient, ok := w.StreamD.(*client.Client)
+		if !ok {
+			return
+		}
+		now := time.Now()
+		appBytesIn := atomic.LoadUint64(&streamDClient.Stats.BytesIn)
+		appBytesOut := atomic.LoadUint64(&streamDClient.Stats.BytesOut)
+		if !w.appStatusData.prevUpdateTS.IsZero() {
+			tsDiff := now.Sub(w.appStatusData.prevUpdateTS)
+			bytesInDiff := appBytesIn - w.appStatusData.prevBytesIn
+			bytesOutDiff := appBytesOut - w.appStatusData.prevBytesOut
+			bwIn := float64(bytesInDiff) * 8 / tsDiff.Seconds() / 1000
+			bwOut := float64(bytesOutDiff) * 8 / tsDiff.Seconds() / 1000
+			w.appStatus.SetText(fmt.Sprintf("%4.0fKb/s | %4.0fKb/s", bwIn, bwOut))
+		}
+		w.appStatusData.prevUpdateTS = now
+		w.appStatusData.prevBytesIn = appBytesIn
+		w.appStatusData.prevBytesOut = appBytesOut
+	})
+
+	w.Panel.streamStatusLocker.Do(ctx, func() {
+		w.streamStatusLocker.Do(ctx, func() {
+			for platID, dst := range w.streamStatus {
+				observability.CallSafe(ctx, func() {
+					src := w.Panel.streamStatus[platID]
+					if src == nil {
+						logger.Debugf(ctx, "status for '%s' is not set", platID)
+						return
+					}
+					defer dst.Refresh()
+
+					if !src.BackendIsEnabled {
+						dst.SetText("disabled")
+						return
+					}
+
+					if src.BackendError != nil {
+						dst.Importance = widget.LowImportance
+						dst.SetText("error")
+						return
+					}
+
+					if !src.IsActive {
+						dst.Importance = widget.DangerImportance
+						dst.SetText("stopped")
+						return
+					}
+
+					dst.Importance = widget.SuccessImportance
+					if src.StartedAt == nil {
+						dst.SetText("started")
+						return
+					}
+
+					duration := time.Since(*src.StartedAt)
+
+					viewerCountString := ""
+					if src.ViewersCount != nil {
+						viewerCountString = fmt.Sprintf(" (%d)", *src.ViewersCount)
+					}
+
+					dst.SetText(fmt.Sprintf("%s%s", duration.Truncate(time.Second).String(), viewerCountString))
+				})
+			}
+		})
+	})
 }
 
 func (p *Panel) newDashboardWindow(
@@ -73,6 +145,12 @@ func (p *Panel) newDashboardWindow(
 	w := &dashboardWindow{
 		Window: p.app.NewWindow("Dashboard"),
 		Panel:  p,
+		streamStatus: map[streamcontrol.PlatformName]*widget.Label{
+			obs.ID:     widget.NewLabel(""),
+			twitch.ID:  widget.NewLabel(""),
+			kick.ID:    widget.NewLabel(""),
+			youtube.ID: widget.NewLabel(""),
+		},
 	}
 
 	bg := image.NewGray(image.Rect(0, 0, 1, 1))
@@ -83,26 +161,26 @@ func (p *Panel) newDashboardWindow(
 	p.appStatus = widget.NewLabel("")
 	obsLabel := widget.NewLabel("OBS:")
 	obsLabel.Importance = widget.HighImportance
-	p.streamStatus[obs.ID] = widget.NewLabel("")
+	p.streamStatus[obs.ID] = &streamStatus{}
 	twLabel := widget.NewLabel("TW:")
 	twLabel.Importance = widget.HighImportance
-	p.streamStatus[twitch.ID] = widget.NewLabel("")
+	p.streamStatus[twitch.ID] = &streamStatus{}
 	kcLabel := widget.NewLabel("Kc:")
 	kcLabel.Importance = widget.HighImportance
-	p.streamStatus[kick.ID] = widget.NewLabel("")
+	p.streamStatus[kick.ID] = &streamStatus{}
 	ytLabel := widget.NewLabel("YT:")
 	ytLabel.Importance = widget.HighImportance
-	p.streamStatus[youtube.ID] = widget.NewLabel("")
+	p.streamStatus[youtube.ID] = &streamStatus{}
 	streamInfoItems := container.NewVBox()
 	if _, ok := p.StreamD.(*client.Client); ok {
 		appLabel := widget.NewLabel("App:")
 		appLabel.Importance = widget.HighImportance
 		streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), appLabel, p.appStatus))
 	}
-	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), obsLabel, p.streamStatus[obs.ID]))
-	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), twLabel, p.streamStatus[twitch.ID]))
-	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), kcLabel, p.streamStatus[kick.ID]))
-	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), ytLabel, p.streamStatus[youtube.ID]))
+	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), obsLabel, w.streamStatus[obs.ID]))
+	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), twLabel, w.streamStatus[twitch.ID]))
+	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), kcLabel, w.streamStatus[kick.ID]))
+	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), ytLabel, w.streamStatus[youtube.ID]))
 	streamInfoContainer := container.NewBorder(
 		nil,
 		nil,
@@ -149,6 +227,7 @@ func (w *dashboardWindow) startUpdatingNoLock(
 	observability.Go(ctx, func() {
 		w.updateImages(ctx, cfg.Dashboard)
 		w.updateStreamStatus(ctx)
+		w.renderStreamStatus(ctx)
 
 		observability.Go(ctx, func() {
 			t := time.NewTicker(200 * time.Millisecond)
@@ -173,6 +252,7 @@ func (w *dashboardWindow) startUpdatingNoLock(
 				}
 
 				w.updateStreamStatus(ctx)
+				w.renderStreamStatus(ctx)
 			}
 		})
 	})
@@ -393,86 +473,6 @@ func (w *dashboardWindow) updateImagesNoLock(
 		w.layersContainer.Objects[idx] = el.NewImage
 	}
 	w.layersContainer.Refresh()
-}
-
-func (w *dashboardWindow) updateStreamStatus(
-	ctx context.Context,
-) {
-	logger.Tracef(ctx, "updateStreamStatus")
-	defer logger.Tracef(ctx, "/updateStreamStatus")
-
-	if streamDClient, ok := w.StreamD.(*client.Client); ok {
-		now := time.Now()
-		appBytesIn := atomic.LoadUint64(&streamDClient.Stats.BytesIn)
-		appBytesOut := atomic.LoadUint64(&streamDClient.Stats.BytesOut)
-		if !w.appStatusData.prevUpdateTS.IsZero() {
-			tsDiff := now.Sub(w.appStatusData.prevUpdateTS)
-			bytesInDiff := appBytesIn - w.appStatusData.prevBytesIn
-			bytesOutDiff := appBytesOut - w.appStatusData.prevBytesOut
-			bwIn := float64(bytesInDiff) * 8 / tsDiff.Seconds() / 1000
-			bwOut := float64(bytesOutDiff) * 8 / tsDiff.Seconds() / 1000
-			w.appStatus.SetText(fmt.Sprintf("%4.0fKb/s | %4.0fKb/s", bwIn, bwOut))
-		}
-		w.appStatusData.prevUpdateTS = now
-		w.appStatusData.prevBytesIn = appBytesIn
-		w.appStatusData.prevBytesOut = appBytesOut
-	}
-
-	var wg sync.WaitGroup
-	for _, platID := range []streamcontrol.PlatformName{
-		obs.ID,
-		youtube.ID,
-		twitch.ID,
-		kick.ID,
-	} {
-		wg.Add(1)
-		observability.Go(ctx, func() {
-			defer wg.Done()
-
-			dst := w.streamStatus[platID]
-
-			ok, err := w.StreamD.IsBackendEnabled(ctx, platID)
-			if err != nil {
-				logger.Error(ctx, err)
-				dst.Importance = widget.LowImportance
-				dst.SetText("error")
-				return
-			}
-
-			if !ok {
-				dst.SetText("disabled")
-				return
-			}
-
-			streamStatus, err := w.StreamD.GetStreamStatus(ctx, platID)
-			if err != nil {
-				logger.Error(ctx, err)
-				dst.SetText("error")
-				return
-			}
-
-			if !streamStatus.IsActive {
-				dst.Importance = widget.DangerImportance
-				dst.SetText("stopped")
-				return
-			}
-			dst.Importance = widget.SuccessImportance
-			if streamStatus.StartedAt == nil {
-				dst.SetText("started")
-				return
-			}
-			duration := time.Since(*streamStatus.StartedAt)
-
-			viewerCountString := ""
-			if streamStatus.ViewersCount != nil {
-				viewerCountString = fmt.Sprintf(" (%d)", *streamStatus.ViewersCount)
-			}
-
-			dst.SetText(fmt.Sprintf("%s%s", duration.Truncate(time.Second).String(), viewerCountString))
-		})
-	}
-
-	wg.Wait()
 }
 
 func (p *Panel) newDashboardSettingsWindow(ctx context.Context) {

@@ -519,3 +519,21 @@ func (s *StreamServer) newServerRTMP(
 	}
 	return rtmpSrv, nil
 }
+
+func (s *StreamServer) newServerRTSP(
+	ctx context.Context,
+	listenAddr string,
+	opts ...streamportserver.Option,
+) (_ streamportserver.Server, _ret error) {
+	logger.Tracef(ctx, "newServerRTSP(ctx, '%s', %#+v)", listenAddr, opts)
+	rtspSrv, err := newRTSPServer(
+		s.pathManager,
+		listenAddr,
+		newMediamtxLogger(logger.FromCtx(ctx)),
+		opts...,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("unable to construct the RTSP server: %w", err)
+	}
+	return rtspSrv, nil
+}

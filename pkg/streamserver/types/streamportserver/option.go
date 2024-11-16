@@ -45,7 +45,7 @@ var DefaultConfig = func(
 ) ProtocolSpecificConfig {
 	return ProtocolSpecificConfig{
 		IsTLS:          false,
-		WriteQueueSize: 60 * 10, // 60 FPS * 10 secs
+		WriteQueueSize: 1024, // <60 FPS * 10 secs> rounded up to the next power of 2
 		WriteTimeout:   10 * time.Second,
 		ReadTimeout:    10 * time.Second,
 		ServerCert:     nil,

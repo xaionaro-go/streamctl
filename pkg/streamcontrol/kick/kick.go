@@ -114,6 +114,9 @@ func (k *Kick) EndStream(ctx context.Context) error {
 	return nil
 }
 func (k *Kick) GetStreamStatus(ctx context.Context) (*streamcontrol.StreamStatus, error) {
+	logger.Debugf(ctx, "GetStreamStatus")
+	defer logger.Debugf(ctx, "/GetStreamStatus")
+
 	info, err := k.Client.GetLivestreamV2(ctx, k.Channel.Slug)
 	if err != nil {
 		return nil, fmt.Errorf("unable to request stream status: %w", err)

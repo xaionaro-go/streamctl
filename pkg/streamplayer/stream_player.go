@@ -220,7 +220,7 @@ func (p *StreamPlayerHandler) startU(ctx context.Context) error {
 func (p *StreamPlayerHandler) stopU(ctx context.Context) error {
 	logger.Debugf(ctx, "StreamPlayers.stopU(ctx): '%s'", p.StreamID)
 	defer logger.Debugf(ctx, "/StreamPlayers.stopU(ctx): '%s'", p.StreamID)
-	defer func(){
+	defer func() {
 		p.Player = nil
 	}()
 

@@ -589,6 +589,7 @@ func (p *Panel) openAddPlayerWindow(ctx context.Context) {
 		ctx,
 		"Add player",
 		false,
+		"",
 		sptypes.DefaultConfig(ctx),
 		nil,
 		p.StreamD.AddStreamPlayer,
@@ -618,6 +619,7 @@ func (p *Panel) openEditPlayerWindow(
 		ctx,
 		"Edit player",
 		!playerCfg.Disabled,
+		playerCfg.Player,
 		playerCfg.StreamPlayback,
 		&streamID,
 		p.StreamD.UpdateStreamPlayer,
@@ -628,6 +630,7 @@ func (p *Panel) openAddOrEditPlayerWindow(
 	ctx context.Context,
 	title string,
 	isEnabled bool,
+	backend player.Backend,
 	cfg sptypes.Config,
 	forceStreamID *api.StreamID,
 	addOrEditStreamPlayer func(
@@ -650,7 +653,11 @@ func (p *Panel) openAddOrEditPlayerWindow(
 		return
 	}
 	playerSelect := widget.NewSelect(playerStrs, func(s string) {})
-	playerSelect.SetSelectedIndex(0)
+	if backend != "" {
+		playerSelect.SetSelected(string(backend))
+	} else {
+		playerSelect.SetSelectedIndex(0)
+	}
 
 	inStreams, err := p.StreamD.ListIncomingStreams(ctx)
 	if err != nil {

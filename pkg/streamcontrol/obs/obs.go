@@ -7,6 +7,7 @@ import (
 
 	"github.com/andreykaipov/goobs"
 	"github.com/andreykaipov/goobs/api/requests/scenes"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -199,7 +200,10 @@ func (obs *OBS) EndStream(
 
 func (obs *OBS) GetStreamStatus(
 	ctx context.Context,
-) (*streamcontrol.StreamStatus, error) {
+) (_ret *streamcontrol.StreamStatus, _err error) {
+	logger.Debugf(ctx, "GetStreamStatus")
+	defer func() { logger.Debugf(ctx, "/GetStreamStatus: %s %v", spew.Sdump(_ret), _err) }()
+
 	client, err := obs.GetClient()
 	if err != nil {
 		return nil, fmt.Errorf("unable to initialize client to OBS: %w", err)
