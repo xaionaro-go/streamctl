@@ -8,6 +8,7 @@ import (
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
+	p2ptypes "github.com/xaionaro-go/streamctl/pkg/p2p/types"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/cache"
@@ -290,6 +291,12 @@ type StreamD interface {
 		reason string,
 		deadline time.Time,
 	) error
+
+	GetPeerIDs(ctx context.Context) ([]p2ptypes.PeerID, error)
+	DialPeerByID(
+		ctx context.Context,
+		peerID p2ptypes.PeerID,
+	) (StreamD, error)
 
 	DialContext(
 		ctx context.Context,

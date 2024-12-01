@@ -7,6 +7,7 @@ import (
 
 	"github.com/pojntfx/weron/pkg/wrtcconn"
 	"github.com/xaionaro-go/streamctl/pkg/p2p/types"
+	"google.golang.org/grpc"
 )
 
 type Peer struct {
@@ -67,4 +68,8 @@ func (p *Peer) DialContext(
 		return nil, fmt.Errorf("the client connection is not initialized yet")
 	}
 	return p.peerClient.DialContext(ctx, network, addr)
+}
+
+func (p *Peer) GRPCClient() *grpc.ClientConn {
+	return p.peerClient.grpcConn
 }

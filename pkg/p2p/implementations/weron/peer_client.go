@@ -64,6 +64,11 @@ func (p *peerClient) init(
 
 	p.proxyClient = proxy_grpc.NewNetworkProxyClient(grpcConn)
 	p.peerClient = p2p_grpc.NewPeerClient(grpcConn)
+	if p.peer.network.setupClient != nil {
+		if err := p.peer.network.setupClient(grpcConn); err != nil {
+			return fmt.Errorf("unable to setup the client connection: %w", err)
+		}
+	}
 
 	nameReply, err := p.peerClient.GetName(ctx, &p2p_grpc.GetNameRequest{})
 	if err != nil {

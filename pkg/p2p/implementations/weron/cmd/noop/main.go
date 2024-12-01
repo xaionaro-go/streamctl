@@ -34,6 +34,8 @@ func main() {
 		"xaionaro-void-test",
 		[]byte("test"),
 		"",
+		nil,
+		nil,
 	)
 	assertNoError(err)
 

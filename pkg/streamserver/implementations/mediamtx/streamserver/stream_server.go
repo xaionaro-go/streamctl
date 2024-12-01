@@ -100,7 +100,7 @@ func (s *StreamServer) init(
 		"",
 		conf.StringDuration(10*time.Second),
 		conf.StringDuration(10*time.Second),
-		512, // a power of 2, that is close to 10 seconds * 60 FPS
+		1024, // a rounded-up power of 2 value, that is close to 10 seconds * 60 FPS (600 -> 1024)
 		1472,
 		make(map[string]*conf.Path),
 		externalcmd.NewPool(),

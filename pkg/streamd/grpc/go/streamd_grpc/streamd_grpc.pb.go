@@ -91,6 +91,7 @@ type StreamDClient interface {
 	SendChatMessage(ctx context.Context, in *SendChatMessageRequest, opts ...grpc.CallOption) (*SendChatMessageReply, error)
 	RemoveChatMessage(ctx context.Context, in *RemoveChatMessageRequest, opts ...grpc.CallOption) (*RemoveChatMessageReply, error)
 	BanUser(ctx context.Context, in *BanUserRequest, opts ...grpc.CallOption) (*BanUserReply, error)
+	GetPeerIDs(ctx context.Context, in *GetPeerIDsRequest, opts ...grpc.CallOption) (*GetPeerIDsReply, error)
 }
 
 type streamDClient struct {
@@ -1020,6 +1021,15 @@ func (c *streamDClient) BanUser(ctx context.Context, in *BanUserRequest, opts ..
 	return out, nil
 }
 
+func (c *streamDClient) GetPeerIDs(ctx context.Context, in *GetPeerIDsRequest, opts ...grpc.CallOption) (*GetPeerIDsReply, error) {
+	out := new(GetPeerIDsReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/GetPeerIDs", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // StreamDServer is the server API for StreamD service.
 // All implementations must embed UnimplementedStreamDServer
 // for forward compatibility
@@ -1098,6 +1108,7 @@ type StreamDServer interface {
 	SendChatMessage(context.Context, *SendChatMessageRequest) (*SendChatMessageReply, error)
 	RemoveChatMessage(context.Context, *RemoveChatMessageRequest) (*RemoveChatMessageReply, error)
 	BanUser(context.Context, *BanUserRequest) (*BanUserReply, error)
+	GetPeerIDs(context.Context, *GetPeerIDsRequest) (*GetPeerIDsReply, error)
 	mustEmbedUnimplementedStreamDServer()
 }
 
@@ -1326,6 +1337,9 @@ func (UnimplementedStreamDServer) RemoveChatMessage(context.Context, *RemoveChat
 }
 func (UnimplementedStreamDServer) BanUser(context.Context, *BanUserRequest) (*BanUserReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BanUser not implemented")
+}
+func (UnimplementedStreamDServer) GetPeerIDs(context.Context, *GetPeerIDsRequest) (*GetPeerIDsReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetPeerIDs not implemented")
 }
 func (UnimplementedStreamDServer) mustEmbedUnimplementedStreamDServer() {}
 
@@ -2705,6 +2719,24 @@ func _StreamD_BanUser_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
+func _StreamD_GetPeerIDs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPeerIDsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).GetPeerIDs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/GetPeerIDs",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).GetPeerIDs(ctx, req.(*GetPeerIDsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _StreamD_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "streamd.StreamD",
 	HandlerType: (*StreamDServer)(nil),
@@ -2960,6 +2992,10 @@ var _StreamD_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "BanUser",
 			Handler:    _StreamD_BanUser_Handler,
+		},
+		{
+			MethodName: "GetPeerIDs",
+			Handler:    _StreamD_GetPeerIDs_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

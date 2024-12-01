@@ -97,6 +97,8 @@ type StreamD struct {
 
 	ImageHash xsync.Map[string, imageHash]
 
+	Options OptionsAggregated
+
 	closeCallback []closeCallback
 
 	imageTakerLocker xsync.Mutex
@@ -113,6 +115,7 @@ func New(
 	ui ui.UI,
 	saveCfgFunc SaveConfigFunc,
 	b *belt.Belt,
+	options ...Option,
 ) (_ret *StreamD, _err error) {
 	ctx := belt.CtxWithBelt(context.TODO(), b)
 
@@ -135,7 +138,8 @@ func New(
 		OBSState: OBSState{
 			VolumeMeters: map[string][][3]float64{},
 		},
-		Timers: map[api.TimerID]*Timer{},
+		Timers:  map[api.TimerID]*Timer{},
+		Options: Options(options).Aggregate(),
 	}
 
 	err = d.readCache(ctx)
@@ -1789,51 +1793,9 @@ func (d *StreamD) DialContext(
 	return net.Dial(network, addr)
 }
 
-func (d *StreamD) initP2P(
-	ctx context.Context,
-) error {
-	return nil
-	if d.Config.P2PNetwork.IsZero() {
-		d.Config.P2PNetwork = config.GetRandomP2PConfig()
-		if err := d.saveConfig(ctx); err != nil {
-			logger.Errorf(ctx, "unable to save the config: %v", err)
-		}
-	}
-
-	privKey, err := d.Config.P2PNetwork.PrivateKey.Get()
-	if err != nil {
-		return fmt.Errorf("unable to get the private key: %w", err)
-	}
-
-	p2p, err := p2p.NewP2P(
-		ctx,
-		privKey,
-		d.Config.P2PNetwork.PeerName,
-		d.Config.P2PNetwork.NetworkID,
-		[]byte(d.Config.P2PNetwork.PSK.Get()),
-		d.Config.P2PNetwork.VPN.Network,
-	)
-	if err != nil {
-		return fmt.Errorf("unable to initialize a P2P network handler: %w", err)
-	}
-
-	err = p2p.Start(ctx)
-	if err != nil {
-		return fmt.Errorf("unable to start a P2P network handler: %w", err)
-	}
-	d.addCloseCallback(p2p.Close, "P2P network")
-
-	d.P2PNetwork = p2p
-	return nil
-}
-
 func (p *StreamD) addCloseCallback(callback func() error, name string) {
 	p.closeCallback = append(p.closeCallback, closeCallback{
 		Callback: callback,
 		Name:     name,
 	})
-}
-
-func (d *StreamD) P2P() p2p.P2P {
-	return d.P2PNetwork
 }

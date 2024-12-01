@@ -42,9 +42,9 @@ func GetRandomP2PConfig() P2PNetwork {
 		NetworkID: randomNetworkID(),
 		PeerName:  thisHostName(),
 		PrivateKey: P2PPrivateKey{
-			ED25519: secret.New(string(randomED25519())),
+			ED25519: secret.New([]byte(randomED25519())),
 		},
-		PSK: secret.New(string(randomPSK())),
+		PSK: secret.New(randomPSK()),
 		VPN: P2PVPNConfig{
 			Network: "fd51:2eaf:7a4e::/64",
 		},

@@ -2,6 +2,7 @@ package weron
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"sync"
 
@@ -50,6 +51,12 @@ func (p *peerServer) init(
 	proxyServer := grpcproxyserver.New()
 	proxy_grpc.RegisterNetworkProxyServer(grpcServer, proxyServer)
 	p2p_grpc.RegisterPeerServer(grpcServer, p)
+	if p.peer.network.setupServer != nil {
+		if err := p.peer.network.setupServer(grpcServer); err != nil {
+			cancelFn()
+			return fmt.Errorf("unable to setup the client connection: %w", err)
+		}
+	}
 
 	p.waitGroup.Add(1)
 	observability.Go(ctx, func() {

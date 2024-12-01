@@ -16,6 +16,10 @@ func (id PeerID) Less(cmp PeerID) bool {
 	return id.String() < cmp.String()
 }
 
+func (id PeerID) Equal(cmp PeerID) bool {
+	return id.String() == cmp.String()
+}
+
 func ParsePeerID(s string) (PeerID, error) {
 	peerIDBytes, err := base64.StdEncoding.DecodeString(s)
 	if err != nil {

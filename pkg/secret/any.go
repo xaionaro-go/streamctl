@@ -1,6 +1,7 @@
 package secret
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 
@@ -73,7 +74,11 @@ func (s Any[T]) MarshalYAML() (_ret []byte, _err error) {
 		}
 	}()
 
-	b, err := yaml.Marshal(s.Get())
+	var v any = s.Get()
+	if b, ok := v.([]byte); ok {
+		v = base64.StdEncoding.EncodeToString(b)
+	}
+	b, err := yaml.Marshal(v)
 	return b, err
 }
 
@@ -85,10 +90,23 @@ func (s *Any[T]) UnmarshalYAML(b []byte) (_err error) {
 	}()
 
 	var v T
-	err := yaml.Unmarshal(b, &v)
-	if err != nil {
-		return err
+	if _, ok := any(v).([]byte); ok {
+		var str string
+		err := yaml.Unmarshal(b, &str)
+		if err != nil {
+			return fmt.Errorf("unable to yaml.Unmarshal: %w", err)
+		}
+		b, err := base64.StdEncoding.DecodeString(str)
+		if err != nil {
+			return fmt.Errorf("unable to decode '%s' as base64: %w", str, err)
+		}
+		s.Set(any(b).(T))
+	} else {
+		err := yaml.Unmarshal(b, &v)
+		if err != nil {
+			return fmt.Errorf("unable to yaml.Unmarshal: %w", err)
+		}
+		s.Set(v)
 	}
-	s.Set(v)
 	return nil
 }

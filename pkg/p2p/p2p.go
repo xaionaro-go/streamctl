@@ -18,6 +18,8 @@ func NewP2P(
 	networkID string,
 	psk []byte,
 	networkCIDR string,
+	setupServer types.FuncSetupServer,
+	setupClient types.FuncSetupClient,
 ) (P2P, error) {
 	pskHash := sha1.Sum(psk)
 	return weron.NewP2P(
@@ -27,5 +29,7 @@ func NewP2P(
 		networkID,
 		pskHash[:16], // TODO; fix this
 		networkCIDR,
+		setupServer,
+		setupClient,
 	)
 }

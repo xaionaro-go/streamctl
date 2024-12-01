@@ -100,7 +100,11 @@ func runStreamd(
 	var streamdGRPCLocker sync.Mutex
 	streamdGRPCLocker.Lock()
 
-	var streamdGRPC *server.GRPCServer
+	var (
+		streamdGRPC *server.GRPCServer
+		obsGRPC     obs_grpc.OBSServer
+		proxyGRPC   proxy_grpc.NetworkProxyServer
+	)
 	ui := ui.NewUI(
 		ctx,
 		func(ctx context.Context, url string) error {
@@ -159,13 +163,20 @@ func runStreamd(
 			panic("not implemented")
 		},
 		belt.CtxBelt(ctx),
+		streamd.OptionP2PSetupServer(func(grpcServer *grpc.Server) error {
+			registerGRPCServices(grpcServer, streamdGRPC, obsGRPC, proxyGRPC)
+			return nil
+		}),
+		streamd.OptionP2PSetupClient(func(clientConn *grpc.ClientConn) error {
+			return nil
+		}),
 	)
 	if err != nil {
 		logger.Panicf(ctx, "unable to initialize streamd: %v", err)
 	}
 
 	var listener net.Listener
-	listener, _, streamdGRPC, _ = initGRPCServers(ctx, streamD, flags.ListenAddr)
+	listener, _, streamdGRPC, obsGRPC, proxyGRPC = initGRPCServers(ctx, streamD, flags.ListenAddr)
 	streamdGRPCLocker.Unlock()
 
 	var configLocker xsync.Mutex
@@ -240,7 +251,7 @@ func initGRPCServers(
 	ctx context.Context,
 	streamD api.StreamD,
 	listenAddr string,
-) (net.Listener, *grpc.Server, *server.GRPCServer, obs_grpc.OBSServer) {
+) (net.Listener, *grpc.Server, *server.GRPCServer, obs_grpc.OBSServer, proxy_grpc.NetworkProxyServer) {
 	logger.Debugf(ctx, "initGRPCServers")
 	defer logger.Debugf(ctx, "/initGRPCServers")
 	listener, err := net.Listen("tcp", listenAddr)
@@ -279,9 +290,8 @@ func initGRPCServers(
 		),
 	)
 	streamdGRPC := server.NewGRPCServer(streamD)
-	streamd_grpc.RegisterStreamDServer(grpcServer, streamdGRPC)
-	obs_grpc.RegisterOBSServer(grpcServer, obsGRPC)
-	proxy_grpc.RegisterNetworkProxyServer(grpcServer, grpcproxyserver.New())
+	proxyGRPC := grpcproxyserver.New()
+	registerGRPCServices(grpcServer, streamdGRPC, obsGRPC, proxyGRPC)
 
 	// start the server:
 	observability.Go(ctx, func() {
@@ -297,5 +307,16 @@ func initGRPCServers(
 		}
 	})
 
-	return listener, grpcServer, streamdGRPC, obsGRPC
+	return listener, grpcServer, streamdGRPC, obsGRPC, proxyGRPC
+}
+
+func registerGRPCServices(
+	grpcServer *grpc.Server,
+	streamdGRPC *server.GRPCServer,
+	obsGRPC obs_grpc.OBSServer,
+	proxyGRPC proxy_grpc.NetworkProxyServer,
+) {
+	streamd_grpc.RegisterStreamDServer(grpcServer, streamdGRPC)
+	obs_grpc.RegisterOBSServer(grpcServer, obsGRPC)
+	proxy_grpc.RegisterNetworkProxyServer(grpcServer, proxyGRPC)
 }

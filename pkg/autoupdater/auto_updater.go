@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -63,6 +64,18 @@ func (u *AutoUpdater) CheckForUpdates(
 	if err != nil {
 		return nil, fmt.Errorf("unable to get the list of releases of github.com/%s/%s: %w", u.Owner, u.Repository, err)
 	}
+
+	// This sort is unnecessary (it should be already presorted this way), but we do it just in case:
+	sort.Slice(releases, func(i, j int) bool {
+		if releases[i].CreatedAt == nil {
+			return false
+		}
+		if releases[j].CreatedAt == nil {
+			return true
+		}
+		return releases[i].CreatedAt.Time.After(releases[j].CreatedAt.Time)
+	})
+
 	for _, release := range releases {
 		if release.Name == nil {
 			continue

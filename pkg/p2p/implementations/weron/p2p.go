@@ -36,6 +36,8 @@ type P2P struct {
 	waitGroup    sync.WaitGroup
 	networkID    string
 	peerName     string
+	setupServer  types.FuncSetupServer
+	setupClient  types.FuncSetupClient
 	vpnAdapter   *wrtcip.Adapter
 	conn0Adapter *wrtcconn.Adapter
 	conn1Adapter *wrtcconn.Adapter
@@ -78,6 +80,8 @@ func NewP2P(
 	networkID string,
 	psk []byte,
 	networkCIDR string,
+	setupServer types.FuncSetupServer,
+	setupClient types.FuncSetupClient,
 ) (*P2P, error) {
 	if len(psk) != aes.BlockSize {
 		return nil, fmt.Errorf("expected a Pre-Shared-Key of size 16, received %d", len(psk))

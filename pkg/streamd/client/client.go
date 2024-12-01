@@ -23,6 +23,7 @@ import (
 	"github.com/xaionaro-go/obs-grpc-proxy/pkg/obsgrpcproxy"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
+	p2ptypes "github.com/xaionaro-go/streamctl/pkg/p2p/types"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/player/protobuf/go/player_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -77,6 +78,24 @@ func New(
 		return nil, err
 	}
 	return c, nil
+}
+
+func WrapConn(
+	ctx context.Context,
+	clientConn *grpc.ClientConn,
+	opts ...Option,
+) *Client {
+	cfg := Options(opts).Config(ctx)
+	cfg.UsePersistentConnection = true
+	c := &Client{
+		Config:               cfg,
+		PersistentConnection: clientConn,
+		PersistentStreamDClient: streamd_grpc.NewStreamDClient(
+			clientConn,
+		),
+		PersistentOBSClient: obs_grpc.NewOBSClient(clientConn),
+	}
+	return c
 }
 
 func (c *Client) init(ctx context.Context) error {
@@ -2742,4 +2761,35 @@ func (conn *proxiedConn) Close() error {
 	result = multierror.Append(result, conn.Conn.Close())
 	result = multierror.Append(result, conn.grpcClientConn.Close())
 	return result.ErrorOrNil()
+}
+
+func (c *Client) GetPeerIDs(ctx context.Context) ([]p2ptypes.PeerID, error) {
+	resp, err := withStreamDClient(ctx, c, func(
+		ctx context.Context,
+		client streamd_grpc.StreamDClient,
+		conn io.Closer,
+	) (*streamd_grpc.GetPeerIDsReply, error) {
+		return callWrapper(
+			ctx,
+			c,
+			client.GetPeerIDs,
+			&streamd_grpc.GetPeerIDsRequest{},
+		)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("unable to submit the event: %w", err)
+	}
+
+	r := make([]p2ptypes.PeerID, 0, len(resp.GetPeerIDs()))
+	for _, peerID := range resp.GetPeerIDs() {
+		r = append(r, p2ptypes.PeerID(peerID))
+	}
+	return r, nil
+}
+
+func (c *Client) DialPeerByID(
+	ctx context.Context,
+	peerID p2ptypes.PeerID,
+) (api.StreamD, error) {
+	return nil, fmt.Errorf("not implemented, yet")
 }

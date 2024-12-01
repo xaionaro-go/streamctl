@@ -87,6 +87,8 @@ service StreamD {
     rpc SendChatMessage(SendChatMessageRequest) returns (SendChatMessageReply) {}
     rpc RemoveChatMessage(RemoveChatMessageRequest) returns (RemoveChatMessageReply) {}
     rpc BanUser(BanUserRequest) returns (BanUserReply) {}
+
+    rpc GetPeerIDs(GetPeerIDsRequest) returns (GetPeerIDsReply) {}
 }
 
 message PingRequest {
@@ -710,3 +712,9 @@ message BanUserRequest {
 	optional int64 deadlineUnixNano  = 4;
 }
 message BanUserReply {}
+
+message GetPeerIDsRequest {}
+message GetPeerIDsReply {
+    repeated string peerIDs = 1;
+}
+

@@ -106,7 +106,7 @@ func runPanel(
 		}
 
 		assert(ctx, panel.StreamD != nil)
-		listener, grpcServer, streamdGRPC, _ := initGRPCServers(
+		listener, grpcServer, streamdGRPC, _, _ := initGRPCServers(
 			ctx,
 			panel.StreamD,
 			flags.ListenAddr,

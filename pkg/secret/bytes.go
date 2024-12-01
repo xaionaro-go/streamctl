@@ -1,3 +1,3 @@
 package secret
 
-type Bytes = Any[string]
+type Bytes = Any[[]byte]

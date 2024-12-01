@@ -105,6 +105,8 @@ func TestE2E(t *testing.T) {
 		networkID,
 		[]byte(psk),
 		networkCIDR,
+		nil,
+		nil,
 	)
 	require.NoError(t, err)
 
@@ -118,6 +120,8 @@ func TestE2E(t *testing.T) {
 		networkID,
 		[]byte(psk),
 		networkCIDR,
+		nil,
+		nil,
 	)
 	require.NoError(t, err)
 
