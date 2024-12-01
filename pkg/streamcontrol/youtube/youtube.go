@@ -1231,23 +1231,79 @@ type LiveBroadcast = youtube.LiveBroadcast
 
 func (yt *YouTube) ListBroadcasts(
 	ctx context.Context,
-) ([]*youtube.LiveBroadcast, error) {
+	limit uint,
+	continueFunc func(*youtube.LiveBroadcastListResponse) bool,
+) (_ret []*youtube.LiveBroadcast, _err error) {
+	logger.Debugf(ctx, "ListBroadcasts(ctx, %d)", limit)
+	defer func() {
+		logger.Debugf(ctx, "/ListBroadcasts(ctx, %d): len(result):%d; err:%v", limit, len(_ret), _err)
+	}()
+
+	var items []*youtube.LiveBroadcast
+	var pageToken string
+	for receivedCount := uint(0); receivedCount < limit; {
+		maxResults := uint(limit - receivedCount)
+		if maxResults > 50 {
+			maxResults = 50
+		}
+
+		resp, err := yt.listBroadcastsPage(ctx, maxResults, pageToken)
+		if err != nil {
+			return nil, fmt.Errorf("listBroadcastsPage: %w", err)
+		}
+
+		if len(resp.Items) == 0 {
+			break
+		}
+
+		oldCount := receivedCount
+		pageToken = resp.NextPageToken
+		receivedCount += uint(len(resp.Items))
+		items = append(items, resp.Items...)
+
+		if pageToken == "" {
+			break
+		}
+		if uint(len(resp.Items)) < maxResults {
+			logger.Errorf(ctx, "received less than expected: %d < %d; breaking the loop", resp.PageInfo.TotalResults, maxResults)
+		}
+		if continueFunc != nil && !continueFunc(resp) {
+			break
+		}
+		logger.Debugf(ctx, "ListBroadcasts: count %d -> %d...", oldCount, receivedCount)
+	}
+
+	return items, nil
+}
+
+func (yt *YouTube) listBroadcastsPage(
+	ctx context.Context,
+	limit uint,
+	pageToken string,
+) (*youtube.LiveBroadcastListResponse, error) {
+	logger.Debugf(ctx, "listBroadcastsPage(ctx, %d, '%s')", limit, pageToken)
+	if limit > 50 {
+		return nil, fmt.Errorf("one page may return only 50 items max, see 'maxResults' in https://developers.google.com/youtube/v3/live/docs/liveBroadcasts/list")
+	}
 	counter := 0
 	for {
-		response, err := yt.YouTubeService.
+		query := yt.YouTubeService.
 			LiveBroadcasts.
 			List([]string{"id", "snippet", "contentDetails", "monetizationDetails", "status"}).
 			Mine(true).
-			MaxResults(1000).
-			Context(ctx).Do()
-		logger.Debugf(ctx, "YouTube.LiveBroadcasts result: %v", err)
+			MaxResults(int64(limit))
+		if pageToken != "" {
+			query = query.PageToken(pageToken)
+		}
+		response, err := query.Context(ctx).Do()
+		logger.Debugf(ctx, "YouTube.LiveBroadcasts result: %v (counter: %d)", err, counter)
 		if err != nil {
 			if yt.fixError(ctx, err, &counter) {
 				continue
 			}
 			return nil, fmt.Errorf("unable to query the list of broadcasts: %w", err)
 		}
-		return response.Items, nil
+		return response, nil
 	}
 }
 

@@ -415,47 +415,6 @@ func (d *StreamD) normalizeTwitchData() {
 	})
 }
 
-func (d *StreamD) initYoutubeData(ctx context.Context) bool {
-	logger.FromCtx(ctx).Debugf("initializing Youtube data")
-	defer logger.FromCtx(ctx).Debugf("endof initializing Youtube data")
-
-	if c := len(d.Cache.Youtube.Broadcasts); c != 0 {
-		logger.FromCtx(ctx).Debugf("already have broadcasts (count: %d)", c)
-		return false
-	}
-
-	youtube := d.StreamControllers.YouTube
-	if youtube == nil {
-		logger.FromCtx(ctx).Debugf("youtube controller is not initialized")
-		return false
-	}
-
-	broadcasts, err := youtube.ListBroadcasts(d.ctxForController(ctx))
-	if err != nil {
-		d.UI.DisplayError(err)
-		return false
-	}
-
-	logger.FromCtx(ctx).Debugf("got broadcasts: %#+v", broadcasts)
-
-	func() {
-		d.CacheLock.Do(ctx, func() {
-			d.Cache.Youtube.Broadcasts = broadcasts
-		})
-	}()
-
-	err = d.SaveConfig(ctx)
-	errmon.ObserveErrorCtx(ctx, err)
-	return true
-}
-
-func (d *StreamD) normalizeYoutubeData() {
-	s := d.Cache.Youtube.Broadcasts
-	sort.Slice(s, func(i, j int) bool {
-		return s[i].Snippet.Title < s[j].Snippet.Title
-	})
-}
-
 func (d *StreamD) SaveConfig(ctx context.Context) error {
 	return xsync.DoA1R1(ctx, &d.ConfigLock, d.saveConfig, ctx)
 }
