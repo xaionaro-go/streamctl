@@ -28,6 +28,7 @@ import (
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/autoupdater"
 	"github.com/xaionaro-go/streamctl/pkg/buildvars"
+	"github.com/xaionaro-go/streamctl/pkg/command"
 	gconsts "github.com/xaionaro-go/streamctl/pkg/consts"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
@@ -1739,7 +1740,7 @@ func (p *Panel) execCommand(
 	cmdString string,
 	execContext any,
 ) {
-	cmdExpanded, err := expandCommand(ctx, cmdString, execContext)
+	cmdExpanded, err := command.Expand(ctx, cmdString, execContext)
 	if err != nil {
 		p.DisplayError(err)
 	}

@@ -1,4 +1,4 @@
-package streampanel
+package command
 
 import (
 	"context"
@@ -22,7 +22,7 @@ func init() {
 	)
 }
 
-func expandCommand(
+func Expand(
 	ctx context.Context,
 	cmdString string,
 	context any,

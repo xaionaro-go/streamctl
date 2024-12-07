@@ -1,6 +1,9 @@
 package kick
 
 import (
+	"context"
+
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	streamctl "github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	kick "github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick/types"
 )
@@ -18,4 +21,11 @@ func init() {
 
 func InitConfig(cfg streamctl.Config) {
 	kick.InitConfig(cfg)
+}
+
+func GetConfig(
+	ctx context.Context,
+	cfg streamcontrol.Config,
+) *Config {
+	return streamcontrol.GetPlatformConfig[PlatformSpecificConfig, StreamProfile](ctx, cfg, ID)
 }

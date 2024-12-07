@@ -17,6 +17,10 @@ type PlatformSpecificConfig struct {
 		Name     string        `yaml:"name" json:"name"`
 		Duration time.Duration `yaml:"duration" json:"duration"`
 	} `yaml:"scene_after_stream" json:"scene_after_stream"`
+	RestartOnUnavailable struct {
+		Enable      bool   `yaml:"bool" json:"bool"`
+		ExecCommand string `yaml:"exec_command" json:"exec_command"`
+	} `yaml:"restart_on_unavailable" json:"restart_on_unavailable"`
 }
 
 type Config = streamctl.PlatformConfig[PlatformSpecificConfig, StreamProfile]

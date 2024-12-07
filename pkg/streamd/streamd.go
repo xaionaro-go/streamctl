@@ -104,6 +104,8 @@ type StreamD struct {
 	imageTakerLocker xsync.Mutex
 	imageTakerCancel context.CancelFunc
 	imageTakerWG     sync.WaitGroup
+
+	obsRestarter *obsRestarter
 }
 
 type imageHash uint64
@@ -193,6 +195,11 @@ func (d *StreamD) Run(ctx context.Context) (_ret error) { // TODO: delete the fe
 	d.UI.SetStatus("P2P network...")
 	if err := d.initP2P(ctx); err != nil {
 		d.UI.DisplayError(fmt.Errorf("unable to initialize the P2P network: %w", err))
+	}
+
+	d.UI.SetStatus("OBS restarter...")
+	if err := d.initOBSRestarter(ctx); err != nil {
+		d.UI.DisplayError(fmt.Errorf("unable to initialize the OBS restarter: %w", err))
 	}
 
 	d.UI.SetStatus("Initializing UI...")
@@ -465,7 +472,38 @@ func (d *StreamD) setConfig(ctx context.Context, cfg *config.Config) (_ret error
 		return fmt.Errorf("unable to convert the config: %w", err)
 	}
 	d.Config = *cfg
+
+	if err := d.onUpdateConfig(ctx); err != nil {
+		logger.Errorf(ctx, "onUpdateConfig: %v", err)
+	}
 	return nil
+}
+
+func (d *StreamD) onUpdateConfig(
+	ctx context.Context,
+) error {
+	var wg sync.WaitGroup
+	errCh := make(chan error, 1)
+
+	wg.Add(1)
+	observability.Go(ctx, func() {
+		defer wg.Done()
+		errCh <- d.updateOBSRestarterConfig(ctx)
+	})
+
+	observability.Go(ctx, func() {
+		wg.Wait()
+		close(errCh)
+	})
+
+	var mErr *multierror.Error
+	for err := range errCh {
+		if err == nil {
+			continue
+		}
+		mErr = multierror.Append(mErr, err)
+	}
+	return mErr.ErrorOrNil()
 }
 
 func (d *StreamD) IsBackendEnabled(

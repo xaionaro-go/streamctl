@@ -286,14 +286,36 @@ func (p *Panel) openSettingsWindowNoLock(
 				}
 				obsCfg.Config.SceneAfterStream.Duration = time.Duration(float64(time.Second) * v)
 			}
+
+			obsExecCommand := widget.NewEntry()
+			obsExecCommand.SetPlaceHolder("command to exec OBS")
+			obsExecCommand.SetText(obsCfg.Config.RestartOnUnavailable.ExecCommand)
+			if !obsCfg.Config.RestartOnUnavailable.Enable {
+				obsExecCommand.Hide()
+			}
+			obsExecCommand.OnChanged = func(s string) {
+				obsCfg.Config.RestartOnUnavailable.ExecCommand = s
+			}
+
+			autoRestartEnable := widget.NewCheck("Auto-restart (if OBS is hanging or not started)", func(b bool) {
+				obsCfg.Config.RestartOnUnavailable.Enable = b
+				if obsCfg.Config.RestartOnUnavailable.Enable {
+					obsExecCommand.Show()
+				} else {
+					obsExecCommand.Hide()
+				}
+			})
+			autoRestartEnable.SetChecked(obsCfg.Config.RestartOnUnavailable.Enable)
+
 			obsSettings.Add(container.NewVBox(
 				widget.NewRichTextFromMarkdown(`# OBS`),
 				widget.NewLabel("Switch to scene after streaming:"),
 				sceneAfterStreamingSelector,
 				widget.NewLabel("Hold the scene for (seconds):"),
 				sceneAfterStreamingDuration,
+				autoRestartEnable,
+				obsExecCommand,
 			))
-
 		}
 	}
 
