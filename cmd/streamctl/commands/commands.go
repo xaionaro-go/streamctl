@@ -508,7 +508,7 @@ func youTubeListBroadcasts(cmd *cobra.Command, args []string) {
 		logger.Panic(ctx, "no youtube configuration provided")
 	}
 
-	broadcasts, err := youTube.ListBroadcasts(ctx)
+	broadcasts, err := youTube.ListBroadcasts(ctx, 100, nil)
 	if err != nil {
 		logger.Panic(ctx, err)
 	}
