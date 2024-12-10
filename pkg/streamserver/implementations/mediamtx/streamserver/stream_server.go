@@ -416,12 +416,7 @@ func (s *StreamServer) WaitPublisherChan(
 				logger.Debugf(ctx, "WaitPublisherChan('%s', %v): cancelled", appKey, waitForNext)
 				return
 			case <-waitCh:
-				logger.Debugf(
-					ctx,
-					"WaitPublisherChan('%s', %v): an event happened, rechecking",
-					appKey,
-					waitForNext,
-				)
+				logger.Debugf(ctx, "WaitPublisherChan('%s', %v): an event happened, rechecking", appKey, waitForNext)
 			}
 		}
 	})

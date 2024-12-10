@@ -344,6 +344,11 @@ func (yt *YouTube) Ping(ctx context.Context) (_err error) {
 		if yt.YouTubeService.I18nLanguages == nil {
 			return fmt.Errorf("yt.YouTubeService.I18nLanguages == nil")
 		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 		_, err := yt.YouTubeService.I18nLanguages.List(nil).Context(ctx).Do()
 		logger.Debugf(ctx, "YouTube.I18nLanguages result: %v", err)
 		if err != nil {
@@ -351,7 +356,7 @@ func (yt *YouTube) Ping(ctx context.Context) (_err error) {
 				continue
 			}
 		}
-		return err
+		return fmt.Errorf("unable to query: %w", err)
 	}
 }
 
@@ -365,6 +370,10 @@ func (yt *YouTube) IterateUpcomingBroadcasts(
 	callback func(broadcast *youtube.LiveBroadcast) error,
 	parts ...string,
 ) error {
+	if err := checkCtx(ctx); err != nil {
+		return err
+	}
+
 	var broadcasts *youtube.LiveBroadcastListResponse
 	counter := 0
 	for {
@@ -396,6 +405,10 @@ func (yt *YouTube) IterateActiveBroadcasts(
 	callback func(broadcast *youtube.LiveBroadcast) error,
 	parts ...string,
 ) error {
+	if err := checkCtx(ctx); err != nil {
+		return err
+	}
+
 	var broadcasts *youtube.LiveBroadcastListResponse
 	counter := 0
 	for {
@@ -426,6 +439,10 @@ func (yt *YouTube) updateActiveBroadcasts(
 	updateBroadcast func(broadcast *youtube.LiveBroadcast) error,
 	parts ...string,
 ) error {
+	if err := checkCtx(ctx); err != nil {
+		return err
+	}
+
 	return yt.IterateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
 		if err := updateBroadcast(broadcast); err != nil {
 			return fmt.Errorf("unable to update broadcast %v: %w", broadcast.Id, err)
@@ -493,6 +510,10 @@ func (yt *YouTube) InsertAdsCuePoint(
 	ts time.Time,
 	duration time.Duration,
 ) error {
+	if err := checkCtx(ctx); err != nil {
+		return err
+	}
+
 	return yt.IterateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
 		_, err := yt.YouTubeService.LiveBroadcasts.InsertCuepoint(&youtube.Cuepoint{
 			CueType:      "cueTypeAd",
@@ -507,6 +528,10 @@ func (yt *YouTube) InsertAdsCuePoint(
 func (yt *YouTube) DeleteActiveBroadcasts(
 	ctx context.Context,
 ) error {
+	if err := checkCtx(ctx); err != nil {
+		return err
+	}
+
 	return yt.IterateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
 		logger.Debugf(ctx, "deleting broadcast %v", broadcast.Id)
 		err := yt.YouTubeService.LiveBroadcasts.Delete(broadcast.Id).Context(ctx).Do()
@@ -603,6 +628,10 @@ func (yt *YouTube) StartStream(
 	customArgs ...any,
 ) (_err error) {
 	// TODO: split this function!
+
+	if err := checkCtx(ctx); err != nil {
+		return err
+	}
 
 	err := xsync.DoR1(ctx, &yt.currentLiveBroadcastsLocker, func() error {
 		if len(yt.currentLiveBroadcasts) != 0 {
@@ -1281,6 +1310,10 @@ func (yt *YouTube) listBroadcastsPage(
 	limit uint,
 	pageToken string,
 ) (*youtube.LiveBroadcastListResponse, error) {
+	if err := checkCtx(ctx); err != nil {
+		return nil, err
+	}
+
 	logger.Debugf(ctx, "listBroadcastsPage(ctx, %d, '%s')", limit, pageToken)
 	if limit > 50 {
 		return nil, fmt.Errorf("one page may return only 50 items max, see 'maxResults' in https://developers.google.com/youtube/v3/live/docs/liveBroadcasts/list")

@@ -74,6 +74,7 @@ func (r *Recoder) StartRecoding(
 
 	r.WaiterChan = make(chan struct{})
 	setResultingError := func(err error) {
+		logger.Debugf(ctx, "setResultingError(%v)", err)
 		r.Result = err
 		close(r.WaiterChan)
 	}
@@ -130,6 +131,7 @@ func (r *Recoder) StartRecoding(
 			return
 		}
 
+		logger.Debugf(ctx, "finished re-encoding")
 		setResultingError(nil)
 	})
 

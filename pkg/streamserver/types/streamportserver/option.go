@@ -45,7 +45,7 @@ var DefaultConfig = func(
 ) ProtocolSpecificConfig {
 	return ProtocolSpecificConfig{
 		IsTLS:          false,
-		WriteQueueSize: 1024, // <60 FPS * 10 secs> rounded up to the next power of 2
+		WriteQueueSize: 10240, // 1024 was not enough to avoid error '[RTSP] [session XXXXXXXX] write queue is full'
 		WriteTimeout:   10 * time.Second,
 		ReadTimeout:    10 * time.Second,
 		ServerCert:     nil,
