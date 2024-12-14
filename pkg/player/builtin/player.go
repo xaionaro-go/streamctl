@@ -12,8 +12,8 @@ import (
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/audio"
+	"github.com/xaionaro-go/streamctl/pkg/encoder/libav/encoder"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
-	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
 
@@ -71,15 +71,15 @@ func (p *Player) openURL(
 	ctx context.Context,
 	link string,
 ) error {
-	decoderCfg := recoder.DecoderConfig{}
-	decoder, err := recoder.NewDecoder(decoderCfg)
+	decoderCfg := encoder.DecoderConfig{}
+	decoder, err := encoder.NewDecoder(decoderCfg)
 	logger.Tracef(ctx, "NewDecoder(%#+v): %v", decoderCfg, err)
 	if err != nil {
 		return fmt.Errorf("unable to initialize a decoder: %w", err)
 	}
 
-	inputCfg := recoder.InputConfig{}
-	input, err := recoder.NewInputFromURL(ctx, link, "", inputCfg)
+	inputCfg := encoder.InputConfig{}
+	input, err := encoder.NewInputFromURL(ctx, link, "", inputCfg)
 	logger.Tracef(ctx, "NewInputFromURL(ctx, '%s', '', %#+v): %v", link, inputCfg, err)
 	if err != nil {
 		return fmt.Errorf("unable to open '%s': %w", link, err)
@@ -123,7 +123,7 @@ func (p *Player) openURL(
 
 func (p *Player) processFrame(
 	ctx context.Context,
-	frame *recoder.Frame,
+	frame *encoder.Frame,
 ) error {
 	logger.Tracef(ctx, "processFrame: pos: %v; dur: %v; pts: %v; time_base: %v", frame.Position(), frame.MaxPosition(), frame.Pts(), frame.DecoderContext.TimeBase())
 	defer func() {
@@ -153,7 +153,7 @@ func (p *Player) onSeek(
 
 func (p *Player) processVideoFrame(
 	ctx context.Context,
-	frame *recoder.Frame,
+	frame *encoder.Frame,
 ) error {
 	logger.Tracef(ctx, "processVideoFrame")
 	defer logger.Tracef(ctx, "/processVideoFrame")
@@ -198,7 +198,7 @@ func (p *Player) renderCurrentPicture() error {
 
 func (p *Player) processAudioFrame(
 	ctx context.Context,
-	frame *recoder.Frame,
+	frame *encoder.Frame,
 ) error {
 	logger.Tracef(ctx, "processAudioFrame")
 	defer logger.Tracef(ctx, "/processAudioFrame")

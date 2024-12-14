@@ -11,8 +11,8 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
+	recoder "github.com/xaionaro-go/streamctl/pkg/encoder"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
-	"github.com/xaionaro-go/streamctl/pkg/recoder"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
@@ -34,13 +34,13 @@ type ActiveStreamForwarding struct {
 	DestinationStreamKey string
 	ReadCount            atomic.Uint64
 	WriteCount           atomic.Uint64
-	RecoderFactory       recoder.Factory
+	EncoderFactory       recoder.Factory
 	PauseFunc            func(ctx context.Context, fwd *ActiveStreamForwarding)
 
 	cancelFunc context.CancelFunc
 
 	locker             xsync.Mutex
-	recoder            recoder.Recoder
+	recoder            recoder.Encoder
 	recodingCancelFunc context.CancelFunc
 }
 
@@ -74,7 +74,7 @@ func (fwds *StreamForwards) NewActiveStreamForward(
 		return nil, fmt.Errorf("unable to parse URL '%s': %w", urlString, err)
 	}
 	fwd := &ActiveStreamForwarding{
-		RecoderFactory:       fwds.RecoderFactory,
+		EncoderFactory:       fwds.EncoderFactory,
 		StreamForwards:       fwds,
 		StreamID:             streamID,
 		DestinationURL:       urlParsed,
@@ -215,7 +215,7 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 		})
 	}()
 
-	recoderInstance, err := fwd.RecoderFactory.New(ctx, recoder.Config{})
+	recoderInstance, err := fwd.EncoderFactory.New(ctx, recoder.Config{})
 	if err != nil {
 		return fmt.Errorf("unable to initialize a recoder: %w", err)
 	}
@@ -324,7 +324,7 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 
 func (fwd *ActiveStreamForwarding) openInputFor(
 	ctx context.Context,
-	recoderInstance recoder.Recoder,
+	recoderInstance recoder.Encoder,
 	publisher types.Publisher,
 ) (recoder.Input, error) {
 	inputURL, err := fwd.getLocalhostEndpoint(ctx)
@@ -350,7 +350,7 @@ func (fwd *ActiveStreamForwarding) openInputFor(
 
 func (fwd *ActiveStreamForwarding) openOutputFor(
 	ctx context.Context,
-	recoderInstance recoder.Recoder,
+	recoderInstance recoder.Encoder,
 ) (recoder.Output, error) {
 	output, err := recoderInstance.NewOutputFromURL(
 		ctx,

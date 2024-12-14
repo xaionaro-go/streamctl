@@ -16,10 +16,10 @@ type VideoConvertConfig struct {
 
 type VideoTrackConfig struct {
 	InputVideoTrackIDs []uint
-	RecodeVideoConfig
+	EncodeVideoConfig
 }
 
-type RecodeVideoConfig struct {
+type EncodeVideoConfig struct {
 	Enable  bool            `json:"enable,omitempty"  yaml:"enable,omitempty"`
 	FlipV   bool            `json:"flip_v,omitempty"  yaml:"flip_v,omitempty"`
 	FlipH   bool            `json:"flip_h,omitempty"  yaml:"flip_h,omitempty"`
@@ -29,7 +29,7 @@ type RecodeVideoConfig struct {
 	Quality VideoQuality    `json:"quality,omitempty" yaml:"quality,omitempty"`
 }
 
-func (c *RecodeVideoConfig) UnmarshalJSON(b []byte) (_err error) {
+func (c *EncodeVideoConfig) UnmarshalJSON(b []byte) (_err error) {
 	c.Quality = videoQualitySerializable{}
 	err := json.Unmarshal(b, c)
 	if err != nil {
@@ -44,7 +44,7 @@ func (c *RecodeVideoConfig) UnmarshalJSON(b []byte) (_err error) {
 	return nil
 }
 
-func (c *RecodeVideoConfig) UnmarshalYAML(b []byte) (_err error) {
+func (c *EncodeVideoConfig) UnmarshalYAML(b []byte) (_err error) {
 	c.Quality = videoQualitySerializable{}
 	err := yaml.Unmarshal(b, c)
 	if err != nil {
@@ -61,16 +61,16 @@ func (c *RecodeVideoConfig) UnmarshalYAML(b []byte) (_err error) {
 
 type AudioTrackConfig struct {
 	InputAudioTrackIDs []uint
-	Recode             RecodeAudioConfig
+	Encode             EncodeAudioConfig
 }
 
-type RecodeAudioConfig struct {
+type EncodeAudioConfig struct {
 	Enable  bool         `json:"enable,omitempty"  yaml:"enable,omitempty"`
 	Codec   AudioCodec   `json:"codec,omitempty"   yaml:"codec,omitempty"`
 	Quality AudioQuality `json:"quality,omitempty" yaml:"quality,omitempty"`
 }
 
-func (c *RecodeAudioConfig) UnmarshalJSON(b []byte) (_err error) {
+func (c *EncodeAudioConfig) UnmarshalJSON(b []byte) (_err error) {
 	c.Quality = audioQualitySerializable{}
 	err := json.Unmarshal(b, c)
 	if err != nil {
@@ -85,7 +85,7 @@ func (c *RecodeAudioConfig) UnmarshalJSON(b []byte) (_err error) {
 	return nil
 }
 
-func (c *RecodeAudioConfig) UnmarshalYAML(b []byte) (_err error) {
+func (c *EncodeAudioConfig) UnmarshalYAML(b []byte) (_err error) {
 	c.Quality = audioQualitySerializable{}
 	err := yaml.Unmarshal(b, c)
 	if err != nil {

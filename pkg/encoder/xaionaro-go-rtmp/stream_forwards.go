@@ -1,7 +1,6 @@
-package streamforward
+package xaionarogortmp
 
 import (
-	xaionarogortmp "github.com/xaionaro-go/streamctl/pkg/encoder/xaionaro-go-rtmp"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/streamforward"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 )
@@ -12,9 +11,5 @@ func NewStreamForwards(
 	s StreamServer,
 	platformsController types.PlatformsController,
 ) *StreamForwards {
-	return streamforward.NewStreamForwards(
-		s,
-		xaionarogortmp.NewEncoderFactory(),
-		platformsController,
-	)
+	return streamforward.NewStreamForwards(s, NewEncoderFactory(), platformsController)
 }

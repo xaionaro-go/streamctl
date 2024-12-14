@@ -127,7 +127,7 @@ func (r *speechRecognizer) addTranscript(
 	return nil
 }
 
-func (r *speechRecognizer) Erender(
+func (r *speechRecognizer) render(
 	ctx context.Context,
 ) {
 	logger.Debugf(ctx, "render(ctx)")
