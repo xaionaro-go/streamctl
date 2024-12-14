@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 
 	"github.com/asticode/go-astiav"
@@ -11,6 +12,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/encoder"
 	"github.com/xaionaro-go/streamctl/pkg/encoder/libav/encoder/types"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
 
 type EncoderConfig = encoder.Config
@@ -24,16 +26,28 @@ type EncoderStats struct {
 type Encoder struct {
 	WaiterChan chan struct{}
 	Result     error
-	EncoderConfig
 	EncoderStats
+	cfg       EncoderConfig
+	cfgLocker sync.Mutex
 }
 
-func New(
-	cfg EncoderConfig,
-) *Encoder {
+func New() *Encoder {
 	result := &Encoder{
-		WaiterChan:    make(chan struct{}),
-		EncoderConfig: cfg,
+		WaiterChan: make(chan struct{}),
+		cfg: EncoderConfig{
+			OutputAudioTracks: []streamtypes.AudioTrackConfig{{
+				InputAudioTrackIDs: []uint{0},
+				EncodeAudioConfig: streamtypes.EncodeAudioConfig{
+					Codec: streamtypes.AudioCodecCopy,
+				},
+			}},
+			OutputVideoTracks: []streamtypes.VideoTrackConfig{{
+				InputVideoTrackIDs: []uint{0},
+				EncodeVideoConfig: streamtypes.EncodeVideoConfig{
+					Codec: streamtypes.VideoCodecCopy,
+				},
+			}},
+		},
 	}
 	close(
 		result.WaiterChan,
@@ -41,11 +55,25 @@ func New(
 	return result
 }
 
-func (r *Encoder) StartRecoding(
+func (r *Encoder) SetConfig(cfg EncoderConfig) error {
+	r.cfgLocker.Lock()
+	defer r.cfgLocker.Unlock()
+	r.cfg = cfg
+	return nil
+}
+
+func (r *Encoder) StartEncoding(
 	ctx context.Context,
 	input *Input,
 	output *Output,
-) error {
+) (_err error) {
+	ctx, cancelFn := context.WithCancel(ctx)
+	defer func() {
+		if _err != nil {
+			cancelFn()
+		}
+	}()
+
 	inputStreams := make(map[int]*astiav.Stream)
 	outputStreams := make(map[int]*astiav.Stream)
 	for _, inputStream := range input.FormatContext.Streams() {
@@ -147,12 +175,12 @@ func (r *Encoder) Wait(ctx context.Context) error {
 	return r.Result
 }
 
-func (r *Encoder) Recode(
+func (r *Encoder) Encode(
 	ctx context.Context,
 	input *Input,
 	output *Output,
 ) error {
-	err := r.StartRecoding(ctx, input, output)
+	err := r.StartEncoding(ctx, input, output)
 	if err != nil {
 		return fmt.Errorf("got an error while starting the recording: %w", err)
 	}

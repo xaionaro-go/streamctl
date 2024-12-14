@@ -10,8 +10,8 @@ import (
 )
 
 type VideoConvertConfig struct {
-	OutputAudioTrack []AudioTrackConfig
-	OutputVideoTrack []VideoTrackConfig
+	OutputAudioTracks []AudioTrackConfig
+	OutputVideoTracks []VideoTrackConfig
 }
 
 type VideoTrackConfig struct {
@@ -20,13 +20,12 @@ type VideoTrackConfig struct {
 }
 
 type EncodeVideoConfig struct {
-	Enable  bool            `json:"enable,omitempty"  yaml:"enable,omitempty"`
-	FlipV   bool            `json:"flip_v,omitempty"  yaml:"flip_v,omitempty"`
-	FlipH   bool            `json:"flip_h,omitempty"  yaml:"flip_h,omitempty"`
-	Crop    image.Rectangle `json:"crop,omitempty"    yaml:"crop,omitempty"`
-	Scale   image.Point     `json:"scale,omitempty"   yaml:"scale,omitempty"`
-	Codec   VideoCodec      `json:"codec,omitempty"   yaml:"codec,omitempty"`
-	Quality VideoQuality    `json:"quality,omitempty" yaml:"quality,omitempty"`
+	FlipV   bool             `json:"flip_v,omitempty"  yaml:"flip_v,omitempty"`
+	FlipH   bool             `json:"flip_h,omitempty"  yaml:"flip_h,omitempty"`
+	Crop    *image.Rectangle `json:"crop,omitempty"    yaml:"crop,omitempty"`
+	Scale   *image.Point     `json:"scale,omitempty"   yaml:"scale,omitempty"`
+	Codec   VideoCodec       `json:"codec,omitempty"   yaml:"codec,omitempty"`
+	Quality VideoQuality     `json:"quality,omitempty" yaml:"quality,omitempty"`
 }
 
 func (c *EncodeVideoConfig) UnmarshalJSON(b []byte) (_err error) {
@@ -61,11 +60,10 @@ func (c *EncodeVideoConfig) UnmarshalYAML(b []byte) (_err error) {
 
 type AudioTrackConfig struct {
 	InputAudioTrackIDs []uint
-	Encode             EncodeAudioConfig
+	EncodeAudioConfig
 }
 
 type EncodeAudioConfig struct {
-	Enable  bool         `json:"enable,omitempty"  yaml:"enable,omitempty"`
 	Codec   AudioCodec   `json:"codec,omitempty"   yaml:"codec,omitempty"`
 	Quality AudioQuality `json:"quality,omitempty" yaml:"quality,omitempty"`
 }
@@ -179,6 +177,7 @@ type AudioCodec uint
 
 const (
 	AudioCodecUndefined = AudioCodec(iota)
+	AudioCodecCopy
 	AudioCodecAAC
 	AudioCodecVorbis
 	AudioCodecOpus
@@ -193,6 +192,8 @@ func (ac *AudioCodec) String() string {
 	switch *ac {
 	case AudioCodecUndefined:
 		return "<undefined>"
+	case AudioCodecCopy:
+		return "<copy>"
 	case AudioCodecAAC:
 		return "aac"
 	case AudioCodecVorbis:
@@ -330,8 +331,10 @@ type VideoCodec uint
 
 const (
 	VideoCodecUndefined = VideoCodec(iota)
+	VideoCodecCopy
 	VideoCodecH264
 	VideoCodecHEVC
+	VideoCodecAV1
 	EndOfVideoCodec
 )
 
@@ -343,10 +346,14 @@ func (vc *VideoCodec) String() string {
 	switch *vc {
 	case VideoCodecUndefined:
 		return "<undefined>"
+	case VideoCodecCopy:
+		return "<copy>"
 	case VideoCodecH264:
 		return "h264"
 	case VideoCodecHEVC:
 		return "hevc"
+	case VideoCodecAV1:
+		return "av1"
 	}
 	return fmt.Sprintf("unexpected_video_codec_id_%d", uint(*vc))
 }

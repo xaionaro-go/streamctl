@@ -25,7 +25,7 @@ func (EncoderFactory) New(
 		return nil, fmt.Errorf("unable to initialize the process: %w", err)
 	}
 
-	recoderInstance, err := process.NewEncoder(cfg)
+	recoderInstance, err := process.NewEncoder(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to initialize the recoder: %w", err)
 	}

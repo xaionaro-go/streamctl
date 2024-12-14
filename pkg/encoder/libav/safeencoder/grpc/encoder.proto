@@ -7,6 +7,7 @@ service Encoder {
     rpc NewInput(NewInputRequest) returns (NewInputReply) {}
     rpc NewOutput(NewOutputRequest) returns (NewOutputReply) {}
     rpc NewEncoder(NewEncoderRequest) returns (NewEncoderReply) {}
+    rpc SetEncoderConfig(SetEncoderConfigRequest) returns (SetEncoderConfigReply) {}
     rpc CloseInput(CloseInputRequest) returns (CloseInputReply) {}
     rpc CloseOutput(CloseOutputRequest) returns (CloseOutputReply) {}
     rpc GetEncoderStats(GetEncoderStatsRequest) returns (GetEncoderStatsReply) {}
@@ -69,10 +70,66 @@ message NewOutputReply {
     uint64 id = 1;
 }
 
-message EncoderConfig {}
+message EncoderConfig {
+    repeated OutputAudioTrack outputAudioTracks = 1;
+	repeated OutputVideoTrack outputVideoTracks = 2;
+}
+
+message OutputAudioTrack {
+    repeated uint64 inputTrackIDs = 1;
+    EncodeAudioConfig encode = 2;
+}
+
+message EncodeAudioConfig {
+    AudioCodec codec = 1;
+    AudioQuality quality = 2;
+}
+
+enum AudioCodec {
+	AudioCodecCopy = 0;
+	AudioCodecAAC = 1;
+	AudioCodecVorbis = 2;
+	AudioCodecOpus = 3;
+}
+
+message AudioQuality {
+    oneof AudioQuality {
+        uint32 constantBitrate = 1;
+    }
+}
+
+message OutputVideoTrack {
+    repeated uint64 inputTrackIDs = 1;
+    EncodeVideoConfig encode = 2;
+}
+
+message EncodeVideoConfig {
+    VideoCodec codec = 1;
+    VideoQuality quality = 2;
+}
+
+enum VideoCodec {
+	VideoCodecCopy = 0;
+	VideoCodecH264 = 1;
+	VideoCodecHEVC = 2;
+	VideoCodecAV1 = 3;
+}
+
+message VideoQuality {
+    oneof VideoQuality {
+        uint32 constantBitrate = 1;
+        uint32 constantQuality = 2;
+    }
+}
+
+message SetEncoderConfigRequest {
+    EncoderConfig config = 1;
+}
+
+message SetEncoderConfigReply {
+}
 
 message NewEncoderRequest {
-    EncoderConfig config = 1;
 }
 
 message NewEncoderReply {

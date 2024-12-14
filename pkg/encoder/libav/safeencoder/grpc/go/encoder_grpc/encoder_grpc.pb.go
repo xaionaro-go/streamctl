@@ -21,6 +21,7 @@ type EncoderClient interface {
 	NewInput(ctx context.Context, in *NewInputRequest, opts ...grpc.CallOption) (*NewInputReply, error)
 	NewOutput(ctx context.Context, in *NewOutputRequest, opts ...grpc.CallOption) (*NewOutputReply, error)
 	NewEncoder(ctx context.Context, in *NewEncoderRequest, opts ...grpc.CallOption) (*NewEncoderReply, error)
+	SetEncoderConfig(ctx context.Context, in *SetEncoderConfigRequest, opts ...grpc.CallOption) (*SetEncoderConfigReply, error)
 	CloseInput(ctx context.Context, in *CloseInputRequest, opts ...grpc.CallOption) (*CloseInputReply, error)
 	CloseOutput(ctx context.Context, in *CloseOutputRequest, opts ...grpc.CallOption) (*CloseOutputReply, error)
 	GetEncoderStats(ctx context.Context, in *GetEncoderStatsRequest, opts ...grpc.CallOption) (*GetEncoderStatsReply, error)
@@ -66,6 +67,15 @@ func (c *encoderClient) NewOutput(ctx context.Context, in *NewOutputRequest, opt
 func (c *encoderClient) NewEncoder(ctx context.Context, in *NewEncoderRequest, opts ...grpc.CallOption) (*NewEncoderReply, error) {
 	out := new(NewEncoderReply)
 	err := c.cc.Invoke(ctx, "/encoder_grpc.Encoder/NewEncoder", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *encoderClient) SetEncoderConfig(ctx context.Context, in *SetEncoderConfigRequest, opts ...grpc.CallOption) (*SetEncoderConfigReply, error) {
+	out := new(SetEncoderConfigReply)
+	err := c.cc.Invoke(ctx, "/encoder_grpc.Encoder/SetEncoderConfig", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -148,6 +158,7 @@ type EncoderServer interface {
 	NewInput(context.Context, *NewInputRequest) (*NewInputReply, error)
 	NewOutput(context.Context, *NewOutputRequest) (*NewOutputReply, error)
 	NewEncoder(context.Context, *NewEncoderRequest) (*NewEncoderReply, error)
+	SetEncoderConfig(context.Context, *SetEncoderConfigRequest) (*SetEncoderConfigReply, error)
 	CloseInput(context.Context, *CloseInputRequest) (*CloseInputReply, error)
 	CloseOutput(context.Context, *CloseOutputRequest) (*CloseOutputReply, error)
 	GetEncoderStats(context.Context, *GetEncoderStatsRequest) (*GetEncoderStatsReply, error)
@@ -171,6 +182,9 @@ func (UnimplementedEncoderServer) NewOutput(context.Context, *NewOutputRequest) 
 }
 func (UnimplementedEncoderServer) NewEncoder(context.Context, *NewEncoderRequest) (*NewEncoderReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method NewEncoder not implemented")
+}
+func (UnimplementedEncoderServer) SetEncoderConfig(context.Context, *SetEncoderConfigRequest) (*SetEncoderConfigReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetEncoderConfig not implemented")
 }
 func (UnimplementedEncoderServer) CloseInput(context.Context, *CloseInputRequest) (*CloseInputReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CloseInput not implemented")
@@ -268,6 +282,24 @@ func _Encoder_NewEncoder_Handler(srv interface{}, ctx context.Context, dec func(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(EncoderServer).NewEncoder(ctx, req.(*NewEncoderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Encoder_SetEncoderConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetEncoderConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EncoderServer).SetEncoderConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/encoder_grpc.Encoder/SetEncoderConfig",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EncoderServer).SetEncoderConfig(ctx, req.(*SetEncoderConfigRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -384,6 +416,10 @@ var _Encoder_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "NewEncoder",
 			Handler:    _Encoder_NewEncoder_Handler,
+		},
+		{
+			MethodName: "SetEncoderConfig",
+			Handler:    _Encoder_SetEncoderConfig_Handler,
 		},
 		{
 			MethodName: "CloseInput",

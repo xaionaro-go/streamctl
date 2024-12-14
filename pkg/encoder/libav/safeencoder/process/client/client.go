@@ -9,6 +9,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/encoder"
 	"github.com/xaionaro-go/streamctl/pkg/encoder/libav/safeencoder/grpc/go/encoder_grpc"
+	"github.com/xaionaro-go/streamctl/pkg/encoder/libav/safeencoder/grpc/goconv"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -168,7 +169,6 @@ type EncoderConfig = encoder.Config
 
 func (c *Client) NewEncoder(
 	ctx context.Context,
-	config EncoderConfig,
 ) (EncoderID, error) {
 	client, conn, err := c.grpcClient()
 	if err != nil {
@@ -176,14 +176,32 @@ func (c *Client) NewEncoder(
 	}
 	defer conn.Close()
 
-	resp, err := client.NewEncoder(ctx, &encoder_grpc.NewEncoderRequest{
-		Config: &encoder_grpc.EncoderConfig{},
-	})
+	resp, err := client.NewEncoder(ctx, &encoder_grpc.NewEncoderRequest{})
 	if err != nil {
 		return 0, fmt.Errorf("query error: %w", err)
 	}
 
 	return EncoderID(resp.GetId()), nil
+}
+
+func (c *Client) SetEncoderConfig(
+	ctx context.Context,
+	config EncoderConfig,
+) error {
+	client, conn, err := c.grpcClient()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = client.SetEncoderConfig(ctx, &encoder_grpc.SetEncoderConfigRequest{
+		Config: goconv.EncoderConfigToThrift(config),
+	})
+	if err != nil {
+		return fmt.Errorf("query error: %w", err)
+	}
+
+	return nil
 }
 
 func (c *Client) StartEncoding(

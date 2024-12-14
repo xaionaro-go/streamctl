@@ -64,8 +64,8 @@ func main() {
 		l.Fatal(err)
 	}
 
-	l.Debugf("starting the recoding...")
-	err = encoder.New(encoder.EncoderConfig{}).Recode(ctx, input, output)
+	l.Debugf("starting the encoding...")
+	err = encoder.New().Encode(ctx, input, output)
 	if err != nil {
 		l.Fatal(err)
 	}

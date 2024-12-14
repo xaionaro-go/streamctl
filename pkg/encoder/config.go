@@ -1,3 +1,7 @@
 package encoder
 
-type Config struct{}
+import (
+	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
+)
+
+type Config = streamtypes.VideoConvertConfig

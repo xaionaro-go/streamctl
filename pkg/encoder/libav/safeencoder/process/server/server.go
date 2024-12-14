@@ -210,8 +210,7 @@ func (srv *GRPCServer) NewEncoder(
 	req *encoder_grpc.NewEncoderRequest,
 ) (*encoder_grpc.NewEncoderReply, error) {
 	ctx = srv.ctx(ctx)
-	config := encoder.EncoderConfig{}
-	recoderInstance := encoder.New(config)
+	recoderInstance := encoder.New()
 	recoderID := xsync.DoR1(ctx, &srv.EncoderLocker, func() EncoderID {
 		recoderID := EncoderID(srv.EncoderNextID.Add(1))
 		srv.Encoder[recoderID] = recoderInstance
@@ -266,27 +265,23 @@ func (srv *GRPCServer) StartRecoding(
 		return nil, fmt.Errorf("the output with ID '%v' does not exist", outputID)
 	}
 
-	ctx, cancelFunc := context.WithCancel(xcontext.DetachDone(ctx))
-	err := recoder.StartRecoding(ctx, input, output)
+	err := recoder.StartEncoding(xcontext.DetachDone(ctx), input, output)
 	if err != nil {
-		cancelFunc()
 		return nil, fmt.Errorf("unable to start recoding")
 	}
 
 	return &encoder_grpc.StartEncodingReply{}, nil
 }
 
-func (srv *GRPCServer) RecodingEndedChan(
+func (srv *GRPCServer) EncodingEndedChan(
 	req *encoder_grpc.EncodingEndedChanRequest,
 	streamSrv encoder_grpc.Encoder_EncodingEndedChanServer,
 ) (_ret error) {
 	ctx := srv.ctx(streamSrv.Context())
 	recoderID := EncoderID(req.GetEncoderID())
 
-	logger.Tracef(ctx, "RecodingEndedChan(%v)", recoderID)
-	defer func() {
-		logger.Tracef(ctx, "/RecodingEndedChan(%v): %v", recoderID, _ret)
-	}()
+	logger.Tracef(ctx, "EncodingEndedChan(%v)", recoderID)
+	defer func() { logger.Tracef(ctx, "/EncodingEndedChan(%v): %v", recoderID, _ret) }()
 
 	recoder := xsync.DoR1(ctx, &srv.EncoderLocker, func() *encoder.Encoder {
 		return srv.Encoder[recoderID]

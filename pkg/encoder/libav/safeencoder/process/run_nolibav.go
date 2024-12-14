@@ -64,7 +64,6 @@ func (c *Client) StartEncoding(
 
 func (c *Client) NewEncoder(
 	ctx context.Context,
-	config EncoderConfig,
 ) (EncoderID, error) {
 	return 0, fmt.Errorf("not compiled with libav support")
 }

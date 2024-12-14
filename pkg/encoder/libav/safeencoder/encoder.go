@@ -20,9 +20,9 @@ type Encoder struct {
 }
 
 func (p *Process) NewEncoder(
-	cfg EncoderConfig,
+	ctx context.Context,
 ) (*Encoder, error) {
-	recoderID, err := p.processBackend.Client.NewEncoder(context.TODO(), cfg)
+	recoderID, err := p.processBackend.Client.NewEncoder(ctx)
 	if err != nil {
 		return nil, err
 	}
