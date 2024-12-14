@@ -17,7 +17,7 @@ func NewBuiltin(
 	ctx context.Context,
 	title string,
 ) (*Builtin, error) {
-	return builtin.New(ctx, title), nil
+	return builtin.NewWindow(ctx, title), nil
 }
 
 func (m *Manager) NewBuiltin(

@@ -71,8 +71,8 @@ func (a *Audio) PlayVorbis(rawReader io.Reader) (Stream, error) {
 	}
 
 	stream, err := a.PlayerPCM.PlayPCM(
-		uint32(oggReader.SampleRate()),
-		uint16(oggReader.Channels()),
+		SampleRate(oggReader.SampleRate()),
+		Channel(oggReader.Channels()),
 		PCMFormatFloat32LE,
 		BufferSize,
 		newReaderFromFloat32Reader(oggReader),
@@ -84,8 +84,8 @@ func (a *Audio) PlayVorbis(rawReader io.Reader) (Stream, error) {
 }
 
 func (a *Audio) PlayPCM(
-	sampleRate uint32,
-	channels uint16,
+	sampleRate SampleRate,
+	channels Channel,
 	pcmFormat PCMFormat,
 	bufferSize time.Duration,
 	pcmReader io.Reader,

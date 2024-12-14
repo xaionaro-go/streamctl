@@ -1048,7 +1048,9 @@ func (d *StreamD) ListStreamServers(
 	defer logger.Debugf(ctx, "/ListStreamServers")
 
 	return xsync.DoR2(ctx, &d.StreamServerLocker, func() ([]api.StreamServer, error) {
-		assert(d.StreamServer != nil)
+		if d.StreamServer == nil {
+			return nil, fmt.Errorf("stream server is not initialized")
+		}
 
 		servers := d.StreamServer.ListServers(ctx)
 
@@ -1085,6 +1087,9 @@ func (d *StreamD) StartStreamServer(
 	defer d.publishEvent(ctx, api.DiffStreamServers{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
+		if d.StreamServer == nil {
+			return fmt.Errorf("stream server is not initialized")
+		}
 		_, err := d.StreamServer.StartServer(
 			resetContextCancellers(ctx),
 			serverType,
@@ -1126,6 +1131,9 @@ func (d *StreamD) StopStreamServer(
 	defer d.publishEvent(ctx, api.DiffStreamServers{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
+		if d.StreamServer == nil {
+			return fmt.Errorf("stream server is not initialized")
+		}
 		srv := d.getStreamServerByListenAddr(ctx, listenAddr)
 		if srv == nil {
 			return fmt.Errorf("have not found any stream listeners at %s", listenAddr)
@@ -1154,6 +1162,9 @@ func (d *StreamD) AddIncomingStream(
 	defer d.publishEvent(ctx, api.DiffIncomingStreams{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
+		if d.StreamServer == nil {
+			return fmt.Errorf("stream server is not initialized")
+		}
 		err := d.StreamServer.AddIncomingStream(ctx, sstypes.StreamID(streamID))
 		if err != nil {
 			return fmt.Errorf("unable to add an incoming stream: %w", err)
@@ -1177,6 +1188,9 @@ func (d *StreamD) RemoveIncomingStream(
 	defer d.publishEvent(ctx, api.DiffIncomingStreams{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
+		if d.StreamServer == nil {
+			return fmt.Errorf("stream server is not initialized")
+		}
 		err := d.StreamServer.RemoveIncomingStream(ctx, sstypes.StreamID(streamID))
 		if err != nil {
 			return fmt.Errorf("unable to remove an incoming stream: %w", err)
@@ -1198,6 +1212,9 @@ func (d *StreamD) ListIncomingStreams(
 	defer logger.Debugf(ctx, "/ListIncomingStreams")
 
 	return xsync.DoR2(ctx, &d.StreamServerLocker, func() ([]api.IncomingStream, error) {
+		if d.StreamServer == nil {
+			return nil, fmt.Errorf("stream server is not initialized")
+		}
 		var result []api.IncomingStream
 		for _, src := range d.StreamServer.ListIncomingStreams(ctx) {
 			result = append(result, api.IncomingStream{
@@ -1215,6 +1232,9 @@ func (d *StreamD) ListStreamDestinations(
 	defer logger.Debugf(ctx, "/ListStreamDestinations")
 
 	return xsync.DoR2(ctx, &d.StreamServerLocker, func() ([]api.StreamDestination, error) {
+		if d.StreamServer == nil {
+			return nil, fmt.Errorf("stream server is not initialized")
+		}
 		streamDestinations, err := d.StreamServer.ListStreamDestinations(ctx)
 		if err != nil {
 			return nil, err
@@ -1242,6 +1262,9 @@ func (d *StreamD) AddStreamDestination(
 	defer d.publishEvent(ctx, api.DiffStreamDestinations{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
+		if d.StreamServer == nil {
+			return fmt.Errorf("stream server is not initialized")
+		}
 		err := d.StreamServer.AddStreamDestination(
 			resetContextCancellers(ctx),
 			sstypes.DestinationID(destinationID),
@@ -1272,6 +1295,9 @@ func (d *StreamD) UpdateStreamDestination(
 	defer d.publishEvent(ctx, api.DiffStreamDestinations{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
+		if d.StreamServer == nil {
+			return fmt.Errorf("stream server is not initialized")
+		}
 		err := d.StreamServer.UpdateStreamDestination(
 			resetContextCancellers(ctx),
 			sstypes.DestinationID(destinationID),
@@ -1300,6 +1326,9 @@ func (d *StreamD) RemoveStreamDestination(
 	defer d.publishEvent(ctx, api.DiffStreamDestinations{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
+		if d.StreamServer == nil {
+			return fmt.Errorf("stream server is not initialized")
+		}
 		err := d.StreamServer.RemoveStreamDestination(ctx, sstypes.DestinationID(destinationID))
 		if err != nil {
 			return fmt.Errorf("unable to remove stream destination server: %w", err)
@@ -1357,6 +1386,9 @@ func (d *StreamD) AddStreamForward(
 	defer d.publishEvent(ctx, api.DiffStreamForwards{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
+		if d.StreamServer == nil {
+			return fmt.Errorf("stream server is not initialized")
+		}
 		_, err := d.StreamServer.AddStreamForward(
 			resetContextCancellers(ctx),
 			sstypes.StreamID(streamID),
@@ -1389,6 +1421,9 @@ func (d *StreamD) UpdateStreamForward(
 	defer d.publishEvent(ctx, api.DiffStreamForwards{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
+		if d.StreamServer == nil {
+			return fmt.Errorf("stream server is not initialized")
+		}
 		_, err := d.StreamServer.UpdateStreamForward(
 			resetContextCancellers(ctx),
 			sstypes.StreamID(streamID),
@@ -1419,6 +1454,9 @@ func (d *StreamD) RemoveStreamForward(
 	defer d.publishEvent(ctx, api.DiffStreamForwards{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
+		if d.StreamServer == nil {
+			return fmt.Errorf("stream server is not initialized")
+		}
 		err := d.StreamServer.RemoveStreamForward(
 			ctx,
 			sstypes.StreamID(streamID),
@@ -1445,20 +1483,25 @@ func (d *StreamD) WaitForStreamPublisher(
 	ctx context.Context,
 	streamID api.StreamID,
 ) (<-chan struct{}, error) {
-	pubCh, err := d.StreamServer.WaitPublisherChan(ctx, streamID, false)
-	if err != nil {
-		return nil, err
-	}
-
-	ch := make(chan struct{})
-	observability.Go(ctx, func() {
-		select {
-		case <-pubCh:
-			close(ch)
-		case <-ctx.Done():
+	return xsync.DoR2(ctx, &d.StreamServerLocker, func() (<-chan struct{}, error) {
+		if d.StreamServer == nil {
+			return nil, fmt.Errorf("stream server is not initialized")
 		}
+		pubCh, err := d.StreamServer.WaitPublisherChan(ctx, streamID, false)
+		if err != nil {
+			return nil, err
+		}
+
+		ch := make(chan struct{})
+		observability.Go(ctx, func() {
+			select {
+			case <-pubCh:
+				close(ch)
+			case <-ctx.Done():
+			}
+		})
+		return ch, nil
 	})
-	return ch, nil
 }
 
 func (d *StreamD) AddStreamPlayer(
@@ -1468,18 +1511,23 @@ func (d *StreamD) AddStreamPlayer(
 	disabled bool,
 	streamPlaybackConfig sptypes.Config,
 ) error {
-	defer d.publishEvent(ctx, api.DiffStreamPlayers{})
-	var result *multierror.Error
-	result = multierror.Append(result, d.StreamServer.AddStreamPlayer(
-		ctx,
-		streamID,
-		playerType,
-		disabled,
-		streamPlaybackConfig,
-		sstypes.StreamPlayerOptionDefaultOptions(d.streamPlayerOptions()),
-	))
-	result = multierror.Append(result, d.SaveConfig(ctx))
-	return result.ErrorOrNil()
+	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
+		if d.StreamServer == nil {
+			return fmt.Errorf("stream server is not initialized")
+		}
+		defer d.publishEvent(ctx, api.DiffStreamPlayers{})
+		var result *multierror.Error
+		result = multierror.Append(result, d.StreamServer.AddStreamPlayer(
+			ctx,
+			streamID,
+			playerType,
+			disabled,
+			streamPlaybackConfig,
+			sstypes.StreamPlayerOptionDefaultOptions(d.streamPlayerOptions()),
+		))
+		result = multierror.Append(result, d.SaveConfig(ctx))
+		return result.ErrorOrNil()
+	})
 }
 
 func (d *StreamD) UpdateStreamPlayer(
@@ -1508,59 +1556,84 @@ func (d *StreamD) UpdateStreamPlayer(
 			_err,
 		)
 	}()
-	defer d.publishEvent(ctx, api.DiffStreamPlayers{})
-	var result *multierror.Error
-	result = multierror.Append(result, d.StreamServer.UpdateStreamPlayer(
-		ctx,
-		streamID,
-		playerType,
-		disabled,
-		streamPlaybackConfig,
-		sstypes.StreamPlayerOptionDefaultOptions(d.streamPlayerOptions()),
-	))
-	result = multierror.Append(result, d.SaveConfig(ctx))
-	return result.ErrorOrNil()
+	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
+		if d.StreamServer == nil {
+			return fmt.Errorf("stream server is not initialized")
+		}
+		defer d.publishEvent(ctx, api.DiffStreamPlayers{})
+		var result *multierror.Error
+		result = multierror.Append(result, d.StreamServer.UpdateStreamPlayer(
+			ctx,
+			streamID,
+			playerType,
+			disabled,
+			streamPlaybackConfig,
+			sstypes.StreamPlayerOptionDefaultOptions(d.streamPlayerOptions()),
+		))
+		result = multierror.Append(result, d.SaveConfig(ctx))
+		return result.ErrorOrNil()
+	})
 }
 
 func (d *StreamD) RemoveStreamPlayer(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 ) error {
-	defer d.publishEvent(ctx, api.DiffStreamPlayers{})
-	var result *multierror.Error
-	result = multierror.Append(result, d.StreamServer.RemoveStreamPlayer(
-		ctx,
-		streamID,
-	))
-	result = multierror.Append(result, d.SaveConfig(ctx))
-	return result.ErrorOrNil()
+	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
+		if d.StreamServer == nil {
+			return fmt.Errorf("stream server is not initialized")
+		}
+		defer d.publishEvent(ctx, api.DiffStreamPlayers{})
+		var result *multierror.Error
+		result = multierror.Append(result, d.StreamServer.RemoveStreamPlayer(
+			ctx,
+			streamID,
+		))
+		result = multierror.Append(result, d.SaveConfig(ctx))
+		return result.ErrorOrNil()
+	})
 }
 
 func (d *StreamD) ListStreamPlayers(
 	ctx context.Context,
 ) ([]api.StreamPlayer, error) {
-	result, err := d.StreamServer.ListStreamPlayers(ctx)
-	if err != nil {
-		return nil, err
-	}
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].StreamID < result[j].StreamID
+	return xsync.DoR2(ctx, &d.StreamServerLocker, func() ([]api.StreamPlayer, error) {
+		if d.StreamServer == nil {
+			return nil, fmt.Errorf("stream server is not initialized")
+		}
+		result, err := d.StreamServer.ListStreamPlayers(ctx)
+		if err != nil {
+			return nil, err
+		}
+		sort.Slice(result, func(i, j int) bool {
+			return result[i].StreamID < result[j].StreamID
+		})
+		return result, nil
 	})
-	return result, nil
 }
 
 func (d *StreamD) GetStreamPlayer(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 ) (*api.StreamPlayer, error) {
-	return d.StreamServer.GetStreamPlayer(ctx, streamID)
+	return xsync.DoR2(ctx, &d.StreamServerLocker, func() (*api.StreamPlayer, error) {
+		if d.StreamServer == nil {
+			return nil, fmt.Errorf("stream server is not initialized")
+		}
+		return d.StreamServer.GetStreamPlayer(ctx, streamID)
+	})
 }
 
 func (d *StreamD) getActiveStreamPlayer(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 ) (player.Player, error) {
-	return d.StreamServer.GetActiveStreamPlayer(ctx, streamID)
+	return xsync.DoR2(ctx, &d.StreamServerLocker, func() (player.Player, error) {
+		if d.StreamServer == nil {
+			return nil, fmt.Errorf("stream server is not initialized")
+		}
+		return d.StreamServer.GetActiveStreamPlayer(ctx, streamID)
+	})
 }
 
 func (d *StreamD) StreamPlayerProcessTitle(

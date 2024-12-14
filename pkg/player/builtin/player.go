@@ -10,8 +10,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/canvas"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/audio"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
@@ -24,12 +22,12 @@ const (
 )
 
 type Player struct {
-	window               fyne.Window
+	ImageRenderer
+	AudioRenderer
 	lastSeekAt           time.Time
-	audio                *audio.Audio
 	audioWriter          io.WriteCloser
 	audioStream          audio.Stream
-	locker               xsync.Mutex
+	locker               xsync.Gorex
 	currentURL           string
 	currentImage         image.Image
 	currentDuration      time.Duration
@@ -37,20 +35,18 @@ type Player struct {
 	currentAudioPosition time.Duration
 	videoStreamIndex     atomic.Uint32
 	audioStreamIndex     atomic.Uint32
-	canvasImage          *canvas.Image
 	endChan              chan struct{}
 }
 
 func New(
 	ctx context.Context,
-	title string,
+	imageRenderer ImageRenderer,
+	audioRenderer AudioRenderer,
 ) *Player {
-	w := fyne.CurrentApp().NewWindow(title)
-	audio := audio.NewAudioAuto(ctx)
 	p := &Player{
-		window:  w,
-		audio:   audio,
-		endChan: make(chan struct{}),
+		ImageRenderer: imageRenderer,
+		AudioRenderer: audioRenderer,
+		endChan:       make(chan struct{}),
 	}
 	p.onEnd()
 	return p
@@ -65,7 +61,9 @@ func (*Player) SetupForStreaming(
 func (p *Player) OpenURL(
 	ctx context.Context,
 	link string,
-) error {
+) (_err error) {
+	logger.Debugf(ctx, "OpenURL(ctx, '%s')", link)
+	defer func() { logger.Debugf(ctx, "/OpenURL(ctx, '%s'): %v", link, _err) }()
 	return xsync.DoA2R1(ctx, &p.locker, p.openURL, ctx, link)
 }
 
@@ -73,18 +71,23 @@ func (p *Player) openURL(
 	ctx context.Context,
 	link string,
 ) error {
-	decoder, err := recoder.NewDecoder(recoder.DecoderConfig{})
+	decoderCfg := recoder.DecoderConfig{}
+	decoder, err := recoder.NewDecoder(decoderCfg)
+	logger.Tracef(ctx, "NewDecoder(%#+v): %v", decoderCfg, err)
 	if err != nil {
 		return fmt.Errorf("unable to initialize a decoder: %w", err)
 	}
 
-	input, err := recoder.NewInputFromURL(ctx, link, "", recoder.InputConfig{})
+	inputCfg := recoder.InputConfig{}
+	input, err := recoder.NewInputFromURL(ctx, link, "", inputCfg)
+	logger.Tracef(ctx, "NewInputFromURL(ctx, '%s', '', %#+v): %v", link, inputCfg, err)
 	if err != nil {
 		return fmt.Errorf("unable to open '%s': %w", link, err)
 	}
 
 	fr := p.newFrameReader(ctx)
 	err = decoder.ReadFrame(ctx, input, fr)
+	logger.Tracef(ctx, "ReadFrame(ctx, input, frameReader): %v", err)
 	if err != nil {
 		return fmt.Errorf("unable to start reading the streams from '%s': %w", link, err)
 	}
@@ -110,7 +113,11 @@ func (p *Player) openURL(
 	})
 
 	p.currentURL = link
-	p.window.Show()
+	if p.ImageRenderer != nil {
+		if err := p.ImageRenderer.SetVisible(true); err != nil {
+			return fmt.Errorf("unable to make the image renderer visible: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -150,6 +157,9 @@ func (p *Player) processVideoFrame(
 ) error {
 	logger.Tracef(ctx, "processVideoFrame")
 	defer logger.Tracef(ctx, "/processVideoFrame")
+	if p.ImageRenderer == nil {
+		return nil
+	}
 
 	p.currentVideoPosition = frame.Position()
 	p.currentDuration = frame.MaxPosition()
@@ -183,8 +193,7 @@ func (p *Player) processVideoFrame(
 }
 
 func (p *Player) renderCurrentPicture() error {
-	p.canvasImage.Refresh()
-	return nil
+	return p.ImageRenderer.Render()
 }
 
 func (p *Player) processAudioFrame(
@@ -193,6 +202,9 @@ func (p *Player) processAudioFrame(
 ) error {
 	logger.Tracef(ctx, "processAudioFrame")
 	defer logger.Tracef(ctx, "/processAudioFrame")
+	if p.AudioRenderer == nil {
+		return nil
+	}
 
 	p.currentAudioPosition = frame.Position()
 	streamIdx := frame.Packet.StreamIndex()
@@ -203,10 +215,12 @@ func (p *Player) processAudioFrame(
 		sampleRate := frame.DecoderContext.SampleRate()
 		channels := frame.DecoderContext.ChannelLayout().Channels()
 		pcmFormat := frame.DecoderContext.SampleFormat()
+		codecID := frame.DecoderContext.CodecID()
+		logger.Debugf(ctx, "codecID == %v, sampleRate == %v, channels == %v, pcmFormat == %v", codecID, sampleRate, channels, pcmFormat)
 		bufferSize := BufferSizeAudio
-		audioStream, err := p.audio.PlayPCM(
-			uint32(sampleRate),
-			uint16(channels),
+		audioStream, err := p.AudioRenderer.PlayPCM(
+			audio.SampleRate(sampleRate),
+			audio.Channel(channels),
 			pcmFormatToAudio(pcmFormat),
 			bufferSize,
 			r,
@@ -260,7 +274,11 @@ func (p *Player) onEnd() {
 		var oldEndChan chan struct{}
 		p.endChan, oldEndChan = make(chan struct{}), p.endChan
 		close(oldEndChan)
-		p.window.Hide()
+		if p.ImageRenderer != nil {
+			if err := p.ImageRenderer.SetVisible(false); err != nil {
+				logger.Errorf(ctx, "unable to close ImageRenderer: %v", err)
+			}
+		}
 	})
 }
 
@@ -307,7 +325,10 @@ func (p *Player) GetLength(
 func (p *Player) ProcessTitle(
 	ctx context.Context,
 ) (string, error) {
-	return p.window.Title(), nil
+	if titler, ok := p.ImageRenderer.(interface{ Title() string }); ok {
+		return titler.Title(), nil
+	}
+	return "", nil
 }
 
 func (p *Player) GetLink(
@@ -358,5 +379,5 @@ func (*Player) Stop(
 }
 
 func (*Player) Close(ctx context.Context) error {
-	panic("not implemented, yet")
+	return fmt.Errorf("not implemented, yet")
 }

@@ -78,6 +78,7 @@ func (d *Decoder) newHardwareDecoder(
 		d.HardwareDeviceType,
 		string(d.Config.HardwareDeviceTypeName),
 		nil,
+		0,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create hardware device context: %w", err)

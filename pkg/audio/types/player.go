@@ -4,14 +4,15 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"strings"
 	"time"
 )
 
 type PlayerPCM interface {
 	Ping() error
 	PlayPCM(
-		sampleRate uint32,
-		channels uint16,
+		sampleRate SampleRate,
+		channels Channel,
 		format PCMFormat,
 		bufferSize time.Duration,
 		reader io.Reader,
@@ -61,9 +62,38 @@ func (f PCMFormat) String() string {
 	switch f {
 	case PCMFormatUndefined:
 		return "<undefined>"
+	case PCMFormatS16LE:
+		return "s16le"
 	case PCMFormatFloat32LE:
 		return "f32le"
 	default:
 		return fmt.Sprintf("<unexpected_value_%d>", f)
 	}
+}
+
+func PCMFormatFromString(in string) PCMFormat {
+	in = strings.ToLower(in)
+	for fmt := PCMFormatUndefined + 1; fmt < EndOfPCMFormat; fmt++ {
+		if strings.ToLower(fmt.String()) == in {
+			return fmt
+		}
+	}
+	return PCMFormatUndefined
+}
+
+type SampleRate uint32
+
+type Channel uint32
+
+type Encoding interface {
+	BytesPerAudioFrame() uint
+}
+
+type EncodingPCM struct {
+	PCMFormat
+	SampleRate
+}
+
+func (pcm EncodingPCM) BytesPerAudioFrame() uint {
+	panic("not implemented, yet")
 }

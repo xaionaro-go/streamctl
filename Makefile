@@ -275,3 +275,11 @@ priv/android-apk.keystore:
 
 signer-sign-streampanel-arm64-apk: priv/android-apk.keystore
 	jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 -keystore priv/android-apk.keystore build/streampanel-arm64.apk streampanel
+
+subtitleswindow-linux-amd64: builddir
+	$(eval INSTALL_DEST?=build/subtitleswindow-linux-amd64)
+	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build $(GOBUILD_FLAGS) -ldflags "$(LINKER_FLAGS_LINUX)" -o "$(INSTALL_DEST)" ./pkg/subtitleswindow/cmd/subtitleswindow
+
+subtitleswindow-windows-amd64: builddir windows-deps
+	$(eval INSTALL_DEST?=build/subtitleswindow-windows-amd64.exe)
+	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "$(LINKER_FLAGS_WINDOWS)" -o "$(INSTALL_DEST)" ./pkg/subtitleswindow/cmd/subtitleswindow

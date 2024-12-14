@@ -355,8 +355,9 @@ func (yt *YouTube) Ping(ctx context.Context) (_err error) {
 			if yt.fixError(ctx, err, &counter) {
 				continue
 			}
+			return fmt.Errorf("unable to query: %w", err)
 		}
-		return fmt.Errorf("unable to query: %w", err)
+		return nil
 	}
 }
 

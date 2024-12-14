@@ -29,8 +29,8 @@ func (PlayerPCM) Ping() error {
 }
 
 func (PlayerPCM) PlayPCM(
-	sampleRate uint32,
-	channels uint16,
+	sampleRate types.SampleRate,
+	channels types.Channel,
 	format types.PCMFormat,
 	bufferSize time.Duration,
 	rawReader io.Reader,

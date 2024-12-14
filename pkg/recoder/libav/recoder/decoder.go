@@ -154,7 +154,10 @@ func (d *Decoder) ReadFrame(
 	d.Locker.Lock()
 	defer d.Locker.Unlock()
 
-	if err := input.FormatContext.ReadFrame(d.Packet); err != nil {
+	logger.Tracef(ctx, "ReadFrame")
+	err := input.FormatContext.ReadFrame(d.Packet)
+	logger.Tracef(ctx, "/ReadFrame: %v", err)
+	if err != nil {
 		if errors.Is(err, astiav.ErrEof) {
 			return io.EOF
 		}

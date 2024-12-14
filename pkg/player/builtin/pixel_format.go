@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"fyne.io/fyne/v2/canvas"
 	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder"
 )
 
@@ -17,7 +16,9 @@ func (p *Player) initImageFor(
 	if err != nil {
 		return fmt.Errorf("unable to guess the image format: %w", err)
 	}
-	p.canvasImage = canvas.NewImageFromImage(p.currentImage)
-	p.window.SetContent(p.canvasImage)
+	err = p.ImageRenderer.SetImage(p.currentImage)
+	if err != nil {
+		return fmt.Errorf("unable to render the image: %w", err)
+	}
 	return nil
 }

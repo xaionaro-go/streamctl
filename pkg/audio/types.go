@@ -25,3 +25,8 @@ const (
 	PCMFormatS64LE     = types.PCMFormatS64LE
 	PCMFormatS64BE     = types.PCMFormatS64BE
 )
+
+type Encoding = types.Encoding
+type EncodingPCM = types.EncodingPCM
+type SampleRate = types.SampleRate
+type Channel = types.Channel
