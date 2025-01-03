@@ -1,0 +1,190 @@
+syntax = "proto3";
+package recoder_grpc;
+option go_package = "go/recoder_grpc";
+
+service Recoder {
+    rpc SetLoggingLevel(SetLoggingLevelRequest) returns(SetLoggingLevelReply) {}
+    rpc NewRecoder(NewRecoderRequest) returns (NewRecoderReply) {}
+    rpc NewEncoder(NewEncoderRequest) returns (NewEncoderReply) {}
+    rpc NewInput(NewInputRequest) returns (NewInputReply) {}
+    rpc NewOutput(NewOutputRequest) returns (NewOutputReply) {}
+    rpc SetEncoderConfig(SetEncoderConfigRequest) returns (SetEncoderConfigReply) {}
+    rpc CloseRecoder(CloseRecoderRequest) returns (CloseRecoderReply) {}
+    rpc CloseEncoder(CloseEncoderRequest) returns (CloseEncoderReply) {}
+    rpc CloseInput(CloseInputRequest) returns (CloseInputReply) {}
+    rpc CloseOutput(CloseOutputRequest) returns (CloseOutputReply) {}
+    rpc GetRecoderStats(GetRecoderStatsRequest) returns (GetRecoderStatsReply) {}
+    rpc StartRecoding(StartRecodingRequest) returns (StartRecodingReply) {}
+	rpc RecodingEndedChan(RecodingEndedChanRequest) returns (stream RecodingEndedChanReply) {}
+}
+
+enum LoggingLevel {
+	LoggingLevelNone = 0;
+	LoggingLevelFatal = 1;
+	LoggingLevelPanic = 2;
+	LoggingLevelError = 3;
+	LoggingLevelWarn = 4;
+	LoggingLevelInfo = 5;
+	LoggingLevelDebug = 6;
+	LoggingLevelTrace = 7;
+}
+
+message SetLoggingLevelRequest {
+    LoggingLevel level = 1;
+}
+
+message SetLoggingLevelReply {}
+
+message Error {
+    uint64 code = 1;
+    string message = 2;
+}
+
+message ResourcePathURL {
+    string url = 1;
+    string authKey = 2;
+}
+
+message ResourcePath {
+    oneof ResourcePath {
+        ResourcePathURL url = 1;
+    }
+}
+
+message InputConfig {}
+
+message NewInputRequest {
+    ResourcePath path = 1;
+    InputConfig config = 2;
+}
+
+message NewInputReply {
+    uint64 id = 1;
+}
+
+message OutputConfig {}
+
+message NewOutputRequest {
+    ResourcePath path = 1;
+    OutputConfig config = 2;
+}
+
+message NewOutputReply {
+    uint64 id = 1;
+}
+
+message EncoderConfig {
+    repeated OutputAudioTrack outputAudioTracks = 1;
+	repeated OutputVideoTrack outputVideoTracks = 2;
+}
+
+message OutputAudioTrack {
+    uint64 inputID = 1;
+    repeated uint64 inputTrackIDs = 2;
+    EncodeAudioConfig encode = 3;
+}
+
+message EncodeAudioConfig {
+    AudioCodec codec = 1;
+    AudioQuality quality = 2;
+}
+
+enum AudioCodec {
+	AudioCodecCopy = 0;
+	AudioCodecAAC = 1;
+	AudioCodecVorbis = 2;
+	AudioCodecOpus = 3;
+}
+
+message AudioQuality {
+    oneof AudioQuality {
+        uint32 constantBitrate = 1;
+    }
+}
+
+message OutputVideoTrack {
+    uint64 inputID = 1;
+    repeated uint64 inputTrackIDs = 2;
+    EncodeVideoConfig encode = 3;
+}
+
+message EncodeVideoConfig {
+    VideoCodec codec = 1;
+    VideoQuality quality = 2;
+}
+
+enum VideoCodec {
+	VideoCodecCopy = 0;
+	VideoCodecH264 = 1;
+	VideoCodecHEVC = 2;
+	VideoCodecAV1 = 3;
+}
+
+message VideoQuality {
+    oneof VideoQuality {
+        uint32 constantBitrate = 1;
+        uint32 constantQuality = 2;
+    }
+}
+
+message SetEncoderConfigRequest {
+    uint64 encoderID = 1;
+    EncoderConfig config = 2;
+}
+
+message SetEncoderConfigReply {
+}
+
+message NewRecoderRequest {
+}
+
+message NewRecoderReply {
+    uint64 id = 1;
+}
+
+message NewEncoderRequest {}
+
+message NewEncoderReply {
+    uint64 id = 1;
+}
+
+message CloseRecoderRequest {
+    uint64 recoderID = 1;
+}
+message CloseRecoderReply {}
+
+message CloseEncoderRequest {
+    uint64 encoderID = 1;
+}
+message CloseEncoderReply {}
+
+message CloseInputRequest {
+    uint64 inputID = 1;
+}
+message CloseInputReply {}
+message CloseOutputRequest {
+    uint64 outputID = 2;
+}
+message CloseOutputReply {}
+
+message GetRecoderStatsRequest {
+    uint64 recoderID = 1;
+}
+
+message GetRecoderStatsReply {
+    uint64 bytesCountRead = 1;
+    uint64 bytesCountWrote = 2;
+}
+
+message StartRecodingRequest {
+    uint64 recoderID = 1;
+    uint64 encoderID = 2;
+    uint64 inputID = 3;
+    uint64 outputID = 4;
+}
+message StartRecodingReply {}
+
+message RecodingEndedChanRequest {
+    uint64 recoderID = 1;
+}
+message RecodingEndedChanReply {}

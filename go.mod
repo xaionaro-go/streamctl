@@ -221,7 +221,7 @@ require (
 	github.com/andreykaipov/goobs v1.4.1
 	github.com/anthonynsimon/bild v0.14.0
 	github.com/asaskevich/EventBus v0.0.0-20200907212545-49d423059eef
-	github.com/asticode/go-astiav v0.24.1-0.20241130152247-ca1f6cd7957b
+	github.com/asticode/go-astiav v0.29.0
 	github.com/asticode/go-astikit v0.42.0
 	github.com/bamiaux/rez v0.0.0-20170731184118-29f4463c688b
 	github.com/blang/mpv v0.0.0-20160810175505-d56d7352e068

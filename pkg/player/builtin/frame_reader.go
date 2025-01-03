@@ -3,7 +3,7 @@ package builtin
 import (
 	"context"
 
-	"github.com/xaionaro-go/streamctl/pkg/encoder/libav/encoder"
+	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder"
 )
 
 type frameReader struct {
@@ -18,6 +18,6 @@ func (p *Player) newFrameReader(ctx context.Context) *frameReader {
 	}
 }
 
-func (fr *frameReader) ReadFrame(frame *encoder.Frame) error {
+func (fr *frameReader) ReadFrame(frame *recoder.Frame) error {
 	return fr.Player.processFrame(fr.Context, frame)
 }

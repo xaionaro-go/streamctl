@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/xaionaro-go/streamctl/pkg/encoder/libav/encoder"
+	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder"
 )
 
 func (p *Player) initImageFor(
 	_ context.Context,
-	frame *encoder.Frame,
+	frame *recoder.Frame,
 ) error {
 	var err error
 	p.currentImage, err = frame.Data().GuessImageFormat()

@@ -16,3 +16,9 @@ func assert(
 
 	logger.Panicf(ctx, "an assertion failed")
 }
+
+func assertNoError(err error) {
+	if err != nil {
+		panic(err)
+	}
+}

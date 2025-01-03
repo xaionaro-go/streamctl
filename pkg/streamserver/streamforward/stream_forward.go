@@ -11,8 +11,8 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
-	recoder "github.com/xaionaro-go/streamctl/pkg/encoder"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
+	recoder "github.com/xaionaro-go/streamctl/pkg/recoder"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/xsync"
 )
@@ -34,13 +34,13 @@ type ActiveStreamForwarding struct {
 	DestinationStreamKey string
 	ReadCount            atomic.Uint64
 	WriteCount           atomic.Uint64
-	EncoderFactory       recoder.Factory
+	RecoderFactory       recoder.Factory
 	PauseFunc            func(ctx context.Context, fwd *ActiveStreamForwarding)
 
 	cancelFunc context.CancelFunc
 
 	locker             xsync.Mutex
-	recoder            recoder.Encoder
+	recoder            recoder.Recoder
 	recodingCancelFunc context.CancelFunc
 }
 
@@ -74,7 +74,7 @@ func (fwds *StreamForwards) NewActiveStreamForward(
 		return nil, fmt.Errorf("unable to parse URL '%s': %w", urlString, err)
 	}
 	fwd := &ActiveStreamForwarding{
-		EncoderFactory:       fwds.EncoderFactory,
+		RecoderFactory:       fwds.RecoderFactory,
 		StreamForwards:       fwds,
 		StreamID:             streamID,
 		DestinationURL:       urlParsed,
@@ -215,7 +215,7 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 		})
 	}()
 
-	recoderInstance, err := fwd.EncoderFactory.New(ctx, recoder.Config{})
+	recoderInstance, err := fwd.RecoderFactory.New(ctx, recoder.EncoderConfig{})
 	if err != nil {
 		return fmt.Errorf("unable to initialize a recoder: %w", err)
 	}
@@ -225,6 +225,18 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 		return ctx.Err()
 	default:
 	}
+
+	encoder, err := fwd.newEncoderFor(ctx, recoderInstance)
+	if err != nil {
+		errmon.ObserveErrorCtx(ctx, recoderInstance.Close())
+		return fmt.Errorf("unable to open the input: %w", err)
+	}
+	defer func() {
+		err := encoder.Close()
+		if err != nil {
+			logger.Errorf(ctx, "unable to close the encoder: %v", err)
+		}
+	}()
 
 	input, err := fwd.openInputFor(ctx, recoderInstance, publisher)
 	if err != nil {
@@ -283,7 +295,7 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 		default:
 		}
 
-		err = recoderInstance.StartRecoding(ctx, input, output)
+		err = recoderInstance.StartRecoding(ctx, encoder, input, output)
 		if err != nil {
 			select {
 			case <-ctx.Done():
@@ -319,12 +331,19 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 		}
 	})
 
-	return recoderInstance.WaitForRecordingEnd(ctx)
+	return recoderInstance.WaitForRecodingEnd(ctx)
+}
+
+func (fwd *ActiveStreamForwarding) newEncoderFor(
+	ctx context.Context,
+	recoderInstance recoder.Recoder,
+) (recoder.Encoder, error) {
+	return recoderInstance.NewEncoder(ctx, recoder.EncoderConfig{})
 }
 
 func (fwd *ActiveStreamForwarding) openInputFor(
 	ctx context.Context,
-	recoderInstance recoder.Encoder,
+	recoderInstance recoder.Recoder,
 	publisher types.Publisher,
 ) (recoder.Input, error) {
 	inputURL, err := fwd.getLocalhostEndpoint(ctx)
@@ -350,7 +369,7 @@ func (fwd *ActiveStreamForwarding) openInputFor(
 
 func (fwd *ActiveStreamForwarding) openOutputFor(
 	ctx context.Context,
-	recoderInstance recoder.Encoder,
+	recoderInstance recoder.Recoder,
 ) (recoder.Output, error) {
 	output, err := recoderInstance.NewOutputFromURL(
 		ctx,

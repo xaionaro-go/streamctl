@@ -10,8 +10,8 @@ import (
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/lockmap"
-	"github.com/xaionaro-go/streamctl/pkg/encoder"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/streamctl/pkg/recoder"
 	"github.com/xaionaro-go/streamctl/pkg/secret"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/memoize"
@@ -40,17 +40,17 @@ type StreamForwards struct {
 	DestinationStreamingLocker *lockmap.LockMap
 	ActiveStreamForwardings    map[ForwardingKey]*ActiveStreamForwarding
 	StreamDestinations         []types.StreamDestination
-	EncoderFactory             encoder.Factory
+	RecoderFactory             recoder.Factory
 }
 
 func NewStreamForwards(
 	s StreamServer,
-	encoderFactory encoder.Factory,
+	recoderFactory recoder.Factory,
 	pc types.PlatformsController,
 ) *StreamForwards {
 	return &StreamForwards{
 		StreamServer:               s,
-		EncoderFactory:             encoderFactory,
+		RecoderFactory:             recoderFactory,
 		PlatformsController:        pc,
 		DestinationStreamingLocker: lockmap.NewLockMap(),
 		ActiveStreamForwardings:    map[ForwardingKey]*ActiveStreamForwarding{},

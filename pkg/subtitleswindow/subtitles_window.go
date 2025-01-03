@@ -39,7 +39,7 @@ func New(
 	w.Container = container.NewStack()
 	w.Window = app.NewWindow(title)
 	w.Window.SetContent(container.NewVScroll(w.Container))
-	w.Window.Resize(fyne.NewSize(1920, 300))
+	w.Window.Resize(fyne.NewSize(1200, 600))
 
 	var err error
 	w.speechRecognizer, err = newSpeechRecognizer(ctx, whisperSrvAddr, w)

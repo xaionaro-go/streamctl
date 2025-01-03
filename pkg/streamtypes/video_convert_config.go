@@ -15,7 +15,8 @@ type VideoConvertConfig struct {
 }
 
 type VideoTrackConfig struct {
-	InputVideoTrackIDs []uint
+	InputID       uint
+	InputTrackIDs []int
 	EncodeVideoConfig
 }
 
@@ -59,7 +60,8 @@ func (c *EncodeVideoConfig) UnmarshalYAML(b []byte) (_err error) {
 }
 
 type AudioTrackConfig struct {
-	InputAudioTrackIDs []uint
+	InputID       uint
+	InputTrackIDs []int
 	EncodeAudioConfig
 }
 
