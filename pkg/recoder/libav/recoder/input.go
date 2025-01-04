@@ -6,6 +6,7 @@ import (
 
 	"github.com/asticode/go-astiav"
 	"github.com/asticode/go-astikit"
+	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/recoder"
 )
 
@@ -42,11 +43,14 @@ func NewInputFromURL(
 	}
 	input.Closer.Add(input.FormatContext.Free)
 
-	input.Dictionary = astiav.NewDictionary()
-	input.Closer.Add(input.Dictionary.Free)
+	if len(cfg.CustomOptions) > 0 {
+		input.Dictionary = astiav.NewDictionary()
+		input.Closer.Add(input.Dictionary.Free)
 
-	for _, opt := range cfg.CustomOptions {
-		input.Dictionary.Set(opt.Key, opt.Key, 0)
+		for _, opt := range cfg.CustomOptions {
+			logger.Debugf(ctx, "input.Dictionary['%s'] = '%s'", opt.Key, opt.Value)
+			input.Dictionary.Set(opt.Key, opt.Value, 0)
+		}
 	}
 
 	if err := input.FormatContext.OpenInput(url, nil, input.Dictionary); err != nil {

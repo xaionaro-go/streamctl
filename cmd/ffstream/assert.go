@@ -1,7 +1,16 @@
 package main
 
-func assertNoError(err error) {
+import (
+	"context"
+
+	"github.com/facebookincubator/go-belt/tool/logger"
+)
+
+func assertNoError(
+	ctx context.Context,
+	err error,
+) {
 	if err != nil {
-		panic(err)
+		logger.Fatal(ctx, err)
 	}
 }

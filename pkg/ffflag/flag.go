@@ -24,6 +24,9 @@ type Option[V any, W Wrapped[V]] struct {
 }
 
 func (opt Option[V, W]) Value() V {
+	if w, ok := opt.GenericOption.Wrapped.(abstractWrapper[V]); ok {
+		return w.Wrapped.Value()
+	}
 	return opt.GenericOption.Wrapped.(Valuer[V]).Value()
 }
 

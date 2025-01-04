@@ -1,0 +1,166 @@
+syntax = "proto3";
+package ffstream_grpc;
+option go_package = "go/ffstream_grpc";
+
+service FFStream {
+  rpc SetLoggingLevel(SetLoggingLevelRequest) returns (SetLoggingLevelReply) {}
+  rpc AddInput(AddInputRequest) returns (AddInputReply) {}
+  rpc AddOutput(AddOutputRequest) returns (AddOutputReply) {}
+  rpc ConfigureEncoder(ConfigureEncoderRequest) returns (ConfigureEncoderReply) {}
+  rpc Start(StartRequest) returns (StartReply) {}
+  rpc GetEncoderStats(GetEncoderStatsRequest) returns (GetEncoderStatsReply) {}
+  rpc GetOutputSRTStats(GetOutputSRTStatsRequest) returns (GetOutputSRTStatsReply) {}
+  rpc WaitChan(WaitRequest) returns (stream WaitReply) {}
+  rpc End(EndRequest) returns (EndReply) {}
+}
+
+enum LoggingLevel {
+  LoggingLevelNone = 0;
+  LoggingLevelFatal = 1;
+  LoggingLevelPanic = 2;
+  LoggingLevelError = 3;
+  LoggingLevelWarn = 4;
+  LoggingLevelInfo = 5;
+  LoggingLevelDebug = 6;
+  LoggingLevelTrace = 7;
+}
+
+message SetLoggingLevelRequest {
+  LoggingLevel level = 1;
+}
+
+message SetLoggingLevelReply {}
+
+message customOption {
+  string key = 1;
+  string value = 2;
+}
+
+message AddInputRequest {
+  string url = 1;
+  repeated customOption customOptions = 2;
+}
+message AddInputReply {}
+message AddOutputRequest {
+  string url = 1;
+  repeated customOption customOptions = 2;
+}
+message AddOutputReply {}
+
+message CodecConfig {
+  string codecName = 1;
+  uint64 bitRateAveragerBufferSizeInBits = 2;
+  uint64 AverageBitRate = 3;
+  repeated customOption customOptions = 4;
+}
+message ConfigureEncoderRequest {
+  CodecConfig audio = 1;
+  CodecConfig video = 2;
+}
+message ConfigureEncoderReply {}
+message StartRequest {}
+message StartReply {}
+message GetEncoderStatsRequest {}
+message GetEncoderStatsReply {
+  uint64 BytesCountRead = 1;
+  uint64 BytesCountWrote = 2;
+  uint64 FramesReadUnparsed = 3;
+  uint64 FramesReadVideoUnprocessed = 4;
+  uint64 FramesReadAudioUnprocessed = 5;
+  uint64 FramesReadVideoProcessed = 6;
+  uint64 FramesReadAudioProcessed = 7;
+  uint64 FramesWroteUnparsed = 8;
+  uint64 FramesWroteVideoUnprocessed = 9;
+  uint64 FramesWroteAudioUnprocessed = 10;
+  uint64 FramesWroteVideoProcessed = 11;
+  uint64 FramesWroteAudioProcessed = 12;
+}
+message GetOutputSRTStatsRequest {}
+message GetOutputSRTStatsReply {
+  int64 msTimeStamp = 1;
+  int64 pktSentTotal = 2;
+  int64 pktRecvTotal = 3;
+  int64 pktSndLossTotal = 4;
+  int64 pktRcvLossTotal = 5;
+  int64 pktRetransTotal = 6;
+  int64 pktSentACKTotal = 7;
+  int64 pktRecvACKTotal = 8;
+  int64 pktSentNAKTotal = 9;
+  int64 pktRecvNAKTotal = 10;
+  int64 usSndDurationTotal = 11;
+  int64 pktSndDropTotal = 12;
+  int64 pktRcvDropTotal = 13;
+  int64 pktRcvUndecryptTotal = 14;
+  uint64 byteSentTotal = 15;
+  uint64 byteRecvTotal = 16;
+  uint64 byteRcvLossTotal = 17;
+  uint64 byteRetransTotal = 18;
+  uint64 byteSndDropTotal = 19;
+  uint64 byteRcvDropTotal = 20;
+  uint64 byteRcvUndecryptTotal = 21;
+  int64 pktSent = 22;
+  int64 pktRecv = 23;
+  int64 pktSndLoss = 24;
+  int64 pktRcvLoss = 25;
+  int64 pktRetrans = 26;
+  int64 pktRcvRetrans = 27;
+  int64 pktSentACK = 28;
+  int64 pktRecvACK = 29;
+  int64 pktSentNAK = 30;
+  int64 pktRecvNAK = 31;
+  double mbpsSendRate = 32;
+  double mbpsRecvRate = 33;
+  int64 usSndDuration = 34;
+  int64 pktReorderDistance = 35;
+  double pktRcvAvgBelatedTime = 36;
+  int64 pktRcvBelated = 37;
+  int64 pktSndDrop = 38;
+  int64 pktRcvDrop = 39;
+  int64 pktRcvUndecrypt = 40;
+  uint64 byteSent = 41;
+  uint64 byteRecv = 42;
+  uint64 byteRcvLoss = 43;
+  uint64 byteRetrans = 44;
+  uint64 byteSndDrop = 45;
+  uint64 byteRcvDrop = 46;
+  int64 byteRcvUndecrypt = 47;
+  double usPktSndPeriod = 48;
+  int64 pktFlowWindow = 49;
+  int64 pktCongestionWindow = 50;
+  int64 pktFlightSize = 51;
+  double msRTT = 52;
+  double mbpsBandwidth = 53;
+  int64 byteAvailSndBuf = 54;
+  int64 byteAvailRcvBuf = 55;
+  double mbpsMaxBW = 56;
+  int64 byteMSS = 57;
+  int64 pktSndBuf = 58;
+  int64 byteSndBuf = 59;
+  int64 msSndBuf = 60;
+  int64 msSndTsbPdDelay = 61;
+  int64 pktRcvBuf = 62;
+  int64 byteRcvBuf = 63;
+  int64 msRcvBuf = 64;
+  int64 msRcvTsbPdDelay = 65;
+  int64 pktSndFilterExtraTotal = 66;
+  int64 pktRcvFilterExtraTotal = 67;
+  int64 pktRcvFilterSupplyTotal = 68;
+  int64 pktRcvFilterLossTotal = 69;
+  int64 pktSndFilterExtra = 70;
+  int64 pktRcvFilterExtra = 71;
+  int64 pktRcvFilterSupply = 72;
+  int64 pktRcvFilterLoss = 73;
+  int64 pktReorderTolerance = 74;
+  int64 pktSentUniqueTotal = 75;
+  int64 pktRecvUniqueTotal = 76;
+  uint64 byteSentUniqueTotal = 77;
+  uint64 byteRecvUniqueTotal = 78;
+  int64 pktSentUnique = 79;
+  int64 pktRecvUnique = 80;
+  uint64 byteSentUnique = 81;
+  uint64 byteRecvUnique = 82;
+}
+message WaitRequest {}
+message WaitReply {}
+message EndRequest {}
+message EndReply {}

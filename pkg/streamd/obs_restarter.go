@@ -117,7 +117,7 @@ func (r *obsRestarter) checkOBSAndRestartIfNeeded(
 
 	_, err = obsServer.GetStats(ctx, &obs_grpc.GetStatsRequest{})
 	if err != nil {
-		logger.Error(ctx, "unable to get stats from the OBS server: %v", err)
+		logger.Errorf(ctx, "unable to get stats from the OBS server: %v", err)
 		r.restartOBS(ctx, execCmd)
 		return
 	}

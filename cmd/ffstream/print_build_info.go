@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"runtime/debug"
@@ -40,10 +41,13 @@ func getBuildInfo() buildInfo {
 	return result
 }
 
-func printBuildInfo(out io.Writer) {
+func printBuildInfo(
+	ctx context.Context,
+	out io.Writer,
+) {
 	bi := getBuildInfo()
 	enc := json.NewEncoder(out)
 	enc.SetIndent("", " ")
 	err := enc.Encode(bi)
-	assertNoError(err)
+	assertNoError(ctx, err)
 }

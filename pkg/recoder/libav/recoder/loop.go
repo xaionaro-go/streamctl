@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 
 	"github.com/asticode/go-astiav"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
@@ -17,10 +18,9 @@ import (
 )
 
 const (
-	maxInputs        = 256
-	maxOutputs       = 256
-	maxOutputStreams = 256
-	outputQueueLen   = 1024
+	maxInputs      = 256
+	maxOutputs     = 256
+	outputQueueLen = 1024
 )
 
 type LoopConfig struct{}
@@ -32,6 +32,7 @@ type LoopStats struct {
 }
 
 type loopOutput struct {
+	Streams      map[int]*astiav.Stream
 	Output       *Output
 	OutputChan   chan *EncoderOutput
 	FinishedChan chan struct{}
@@ -121,22 +122,69 @@ func (l *Loop) writerLoopForOutput(
 	defer func() {
 		close(output.FinishedChan)
 		l.removeOutput(ctx, output)
-		for outputItem := range output.OutputChan {
-			outputItem.refCounter.Done()
-		}
+		observability.Go(ctx, func() {
+			for outputItem := range output.OutputChan {
+				outputItem.refCounter.Done()
+			}
+		})
 	}()
 
 	for outputItem := range output.OutputChan {
-		err := output.Output.FormatContext.WriteInterleavedFrame(outputItem.Packet)
-		if err != nil {
-			outputItem.refCounter.Done()
-			logger.Errorf(ctx, "unable to write the frame: %v", err)
-			return
-		}
-		l.BytesCountRead.Add(uint64(outputItem.Packet.Size()))
-		logger.Tracef(ctx, "wrote a frame: %#+v", outputItem.Packet)
+		err := l.writePacket(ctx, output, outputItem)
 		outputItem.refCounter.Done()
+		if err != nil {
+			return err
+		}
 	}
+	return nil
+}
+
+func (l *Loop) writePacket(
+	ctx context.Context,
+	output *loopOutput,
+	outputItem *EncoderOutput,
+) error {
+	streamIdx := outputItem.Packet.StreamIndex()
+
+	packet := outputItem.Packet
+	if packet == nil {
+		return fmt.Errorf("packet == nil")
+	}
+
+	sampleStream := outputItem.Stream
+	if sampleStream == nil {
+		return fmt.Errorf("sampleStream == nil")
+	}
+
+	outputStream := output.Streams[streamIdx]
+	if outputStream == nil {
+		logger.Debugf(
+			ctx,
+			"new output stream: %s: %s: %s",
+			sampleStream.CodecParameters().MediaType(),
+			sampleStream.CodecParameters().CodecID(),
+			spew.Sdump(sampleStream.CodecParameters()),
+		)
+		outputStream = output.Output.FormatContext.NewStream(nil)
+		if outputStream == nil {
+			return fmt.Errorf("unable to initialize an output stream")
+		}
+		if err := sampleStream.CodecParameters().Copy(outputStream.CodecParameters()); err != nil {
+			return fmt.Errorf("unable to copy the codec parameters of stream #%d: %w", packet.StreamIndex(), err)
+		}
+		if err := output.Output.FormatContext.WriteHeader(nil); err != nil {
+			return fmt.Errorf("unable to write the header: %w", err)
+		}
+		output.Streams[streamIdx] = outputStream
+	}
+	assert(ctx, outputStream != nil)
+	packet.SetStreamIndex(outputStream.Index())
+	err := output.Output.FormatContext.WriteInterleavedFrame(packet)
+	if err != nil {
+		return fmt.Errorf("unable to write the frame: %w", err)
+	}
+	l.BytesCountRead.Add(uint64(packet.Size()))
+	logger.Tracef(ctx, "wrote a frame: %#+v", packet)
 	return nil
 }
 
@@ -167,7 +215,7 @@ func (l *Loop) readerLoopForInput(
 			err := readIntoPacket(ctx, input, packet)
 			switch err {
 			case nil:
-				logger.Tracef(ctx, "received a frame: %#+v", packet)
+				logger.Tracef(ctx, "received a frame, data: %X", packet.Data())
 				l.BytesCountRead.Add(uint64(packet.Size()))
 				packetOutput <- EncoderInput{
 					Input:  input,
@@ -220,6 +268,7 @@ func (l *Loop) Start(
 			for {
 				select {
 				case packet := <-packetsChan:
+					packet.Packet.Unref()
 					packet.Packet.Free()
 				case packet := <-packetsPool:
 					packet.Free()
@@ -236,6 +285,7 @@ func (l *Loop) Start(
 			input *Input,
 		) {
 			readersCount.Add(1)
+			logger.Tracef(ctx, "amount of inputs: +1: %d", readersCount.Load())
 			observability.Go(ctx, func() {
 				defer func() {
 					readersCountLocker.Lock()
@@ -244,6 +294,7 @@ func (l *Loop) Start(
 						logger.Infof(ctx, "no more inputs left")
 						close(inputsEnded)
 					}
+					logger.Tracef(ctx, "amount of inputs: -1: %d", readersCount.Load())
 				}()
 				err := l.readerLoopForInput(ctx, input, packetsChan, packetsPool)
 				if err != nil {
@@ -278,9 +329,11 @@ func (l *Loop) Start(
 				Output:       output,
 				OutputChan:   make(chan *EncoderOutput, outputQueueLen),
 				FinishedChan: make(chan struct{}),
+				Streams:      make(map[int]*astiav.Stream),
 			}
 			l.outputs[out] = struct{}{}
 			writersCount.Add(1)
+			logger.Tracef(ctx, "amount of outputs: +1: %d", writersCount.Load())
 			observability.Go(ctx, func() {
 				defer func() {
 					writersCountLocker.Lock()
@@ -289,6 +342,7 @@ func (l *Loop) Start(
 						logger.Infof(ctx, "no more outputs left")
 						close(outputsEnded)
 					}
+					logger.Tracef(ctx, "amount of outputs: -1: %d", writersCount.Load())
 				}()
 				err := l.writerLoopForOutput(ctx, out)
 				if err != nil {
@@ -334,6 +388,7 @@ func (l *Loop) Start(
 			for {
 				select {
 				case packet := <-packetsChan:
+					packet.Packet.Unref()
 					packet.Packet.Free()
 				case packet := <-packetsPool:
 					packet.Free()
@@ -390,10 +445,6 @@ func (l *Loop) processInputPacket(
 	if outputPacket == nil {
 		return nil
 	}
-	defer func() {
-		outputPacket.refCounter.Wait()
-		outputPacket.Free()
-	}()
 
 	for output := range l.outputs {
 		outputPacket.refCounter.Add(1)
@@ -402,6 +453,7 @@ func (l *Loop) processInputPacket(
 			output.OutputChanCloseOnce.Do(func() {
 				close(output.OutputChan)
 			})
+			outputPacket.refCounter.Done()
 			continue
 		default:
 		}
@@ -412,6 +464,12 @@ func (l *Loop) processInputPacket(
 			logger.Errorf(ctx, "the queue is full, cannot send a packet to the Output")
 		}
 	}
+
+	observability.Go(ctx, func() {
+		outputPacket.refCounter.Wait()
+		outputPacket.UnrefAndFree()
+	})
+
 	return nil
 }
 

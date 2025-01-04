@@ -1,26 +1,21 @@
 package main
 
 import (
-	"fmt"
-	"strings"
-
-	"github.com/xaionaro-go/streamctl/pkg/encoder/libav/encoder"
+	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder"
 )
 
 func convertUnknownOptionsToCustomOptions(
 	unknownOpts []string,
-) []encoder.CustomOption {
-	var result []encoder.CustomOption
+) []recoder.CustomOption {
+	var result []recoder.CustomOption
 
 	for idx := 0; idx < len(unknownOpts)-1; idx++ {
 		arg := unknownOpts[idx]
-		if !strings.HasPrefix(arg, "-") {
-			panic(fmt.Errorf("expected an option, and options start with '-', but received '%s'", arg))
-		}
-		opt := arg[1:]
+
+		opt := arg
 		value := unknownOpts[idx+1]
 
-		result = append(result, encoder.CustomOption{
+		result = append(result, recoder.CustomOption{
 			Key:   opt,
 			Value: value,
 		})

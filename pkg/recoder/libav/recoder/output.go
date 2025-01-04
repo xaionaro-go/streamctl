@@ -32,6 +32,8 @@ func formatFromScheme(scheme string) string {
 	switch scheme {
 	case "rtmp", "rtmps":
 		return "flv"
+	case "srt":
+		return "mpegts"
 	default:
 		return scheme
 	}
@@ -99,10 +101,26 @@ func NewOutputFromURL(
 		url.Host = proxyAddr.String()
 	}
 
+	formatName := formatFromScheme(url.Scheme)
+
+	if len(cfg.CustomOptions) > 0 {
+		output.Dictionary = astiav.NewDictionary()
+		output.Closer.Add(output.Dictionary.Free)
+
+		for _, opt := range cfg.CustomOptions {
+			if opt.Key == "f" {
+				formatName = opt.Value
+				continue
+			}
+			logger.Debugf(ctx, "output.Dictionary['%s'] = '%s'", opt.Key, opt.Value)
+			output.Dictionary.Set(opt.Key, opt.Value, 0)
+		}
+	}
+
 	logger.Debugf(observability.OnInsecureDebug(ctx), "URL: %s", url)
 	formatContext, err := astiav.AllocOutputFormatContext(
 		nil,
-		formatFromScheme(url.Scheme),
+		formatName,
 		url.String(),
 	)
 	if err != nil {
@@ -120,13 +138,6 @@ func NewOutputFromURL(
 		return output, nil
 	}
 	logger.Tracef(ctx, "destination '%s' is a file", url)
-
-	output.Dictionary = astiav.NewDictionary()
-	output.Closer.Add(output.Dictionary.Free)
-
-	for _, opt := range cfg.CustomOptions {
-		output.Dictionary.Set(opt.Key, opt.Key, 0)
-	}
 
 	ioContext, err := astiav.OpenIOContext(
 		url.String(),

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
@@ -38,7 +39,7 @@ type Resource struct {
 func parseFlags(args []string) Flags {
 	p := flag.NewParser()
 	inputsFlag := flag.AddParameter(p, "i", true, ptr(flag.StringsAsSeparateFlags(nil)))
-	encoderBothFlag := flag.AddParameter(p, "c", true, ptr(flag.String("")))
+	encoderBothFlag := flag.AddParameter(p, "c", true, ptr(flag.String("copy")))
 	encoderVideoFlag := flag.AddParameter(p, "c:v", true, ptr(flag.String("")))
 	encoderAudioFlag := flag.AddParameter(p, "c:a", true, ptr(flag.String("")))
 	listenControlSocket := flag.AddParameter(p, "listen_control", false, ptr(flag.String("")))
@@ -52,11 +53,15 @@ func parseFlags(args []string) Flags {
 	removeSecretsFromLogs := flag.AddParameter(p, "remove_secrets_from_logs", false, ptr(flag.Bool(false)))
 	version := flag.AddFlag(p, "version", false)
 
-	err := p.Parse(args)
-	assertNoError(err)
+	err := p.Parse(args[1:])
+	assertNoError(context.TODO(), err)
 
-	if len(p.CollectedNonFlags) != 1 {
-		panic(fmt.Errorf("expected exactly one output, but received %d", len(p.CollectedNonFlags)))
+	if len(p.CollectedNonFlags) == 0 {
+		panic(fmt.Errorf("expected one output, but have not received any"))
+	}
+	if len(p.CollectedNonFlags) > 1 {
+		p.CollectedUnknownOptions = append(p.CollectedUnknownOptions, p.CollectedNonFlags[:len(p.CollectedNonFlags)-1]...)
+		p.CollectedNonFlags = p.CollectedNonFlags[len(p.CollectedNonFlags)-1:]
 	}
 	output := Resource{
 		URL:     p.CollectedNonFlags[0],
@@ -73,7 +78,7 @@ func parseFlags(args []string) Flags {
 	}
 
 	if version.Value() {
-		printBuildInfo(os.Stdout)
+		printBuildInfo(context.TODO(), os.Stdout)
 		os.Exit(0)
 	}
 
@@ -96,11 +101,11 @@ func parseFlags(args []string) Flags {
 	if v := encoderBothFlag.Value(); v != "" {
 		flags.AudioEncoder = Encoder{
 			Codec:   v,
-			Options: encoderBothFlag.CollectedUnknownOptions[0],
+			Options: indexSafe(encoderBothFlag.CollectedUnknownOptions, 0),
 		}
 		flags.VideoEncoder = Encoder{
 			Codec:   v,
-			Options: encoderBothFlag.CollectedUnknownOptions[0],
+			Options: indexSafe(encoderBothFlag.CollectedUnknownOptions, 0),
 		}
 	}
 
