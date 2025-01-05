@@ -9,6 +9,7 @@ import (
 
 	"github.com/asticode/go-astiav"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/ffstream/types"
 	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder"
 )
 
@@ -26,17 +27,8 @@ type Encoder struct {
 
 var _ recoder.Encoder = (*Encoder)(nil)
 
-type CodecConfig struct {
-	CodecName       string
-	AveragingPeriod time.Duration
-	AverageBitRate  uint64
-	CustomOptions   []recoder.CustomOption
-}
-
-type EncoderConfig struct {
-	Audio CodecConfig
-	Video CodecConfig
-}
+type CodecConfig = types.CodecConfig
+type EncoderConfig = types.EncoderConfig
 
 func NewEncoder() *Encoder {
 	return &Encoder{

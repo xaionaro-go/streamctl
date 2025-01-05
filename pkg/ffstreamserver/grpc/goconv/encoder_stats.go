@@ -2,11 +2,11 @@ package goconv
 
 import (
 	"github.com/xaionaro-go/streamctl/pkg/ffstreamserver/grpc/go/ffstream_grpc"
-	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder"
+	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder/types"
 )
 
 func EncoderStatsToGRPC(
-	req *recoder.EncoderStatistics,
+	req *types.EncoderStatistics,
 ) *ffstream_grpc.GetEncoderStatsReply {
 	return &ffstream_grpc.GetEncoderStatsReply{
 		BytesCountRead:              req.BytesCountRead,
@@ -26,18 +26,18 @@ func EncoderStatsToGRPC(
 
 func EncoderStatsFromGRPC(
 	req *ffstream_grpc.GetEncoderStatsReply,
-) *recoder.EncoderStatistics {
-	result := &recoder.EncoderStatistics{
+) *types.EncoderStatistics {
+	result := &types.EncoderStatistics{
 		BytesCountRead:  req.GetBytesCountRead(),
 		BytesCountWrote: req.GetBytesCountWrote(),
-		FramesRead: recoder.EncoderFramesStatistics{
+		FramesRead: types.EncoderFramesStatistics{
 			Unparsed:         req.GetFramesReadUnparsed(),
 			VideoUnprocessed: req.GetFramesReadVideoUnprocessed(),
 			AudioUnprocessed: req.GetFramesReadAudioUnprocessed(),
 			VideoProcessed:   req.GetFramesReadVideoProcessed(),
 			AudioProcessed:   req.GetFramesReadAudioProcessed(),
 		},
-		FramesWrote: recoder.EncoderFramesStatistics{
+		FramesWrote: types.EncoderFramesStatistics{
 			Unparsed:         req.GetFramesWroteUnparsed(),
 			VideoUnprocessed: req.GetFramesWroteVideoUnprocessed(),
 			AudioUnprocessed: req.GetFramesWroteAudioUnprocessed(),

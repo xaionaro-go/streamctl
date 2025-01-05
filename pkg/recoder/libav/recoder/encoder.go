@@ -6,6 +6,7 @@ import (
 
 	"github.com/asticode/go-astiav"
 	"github.com/xaionaro-go/streamctl/pkg/recoder"
+	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder/types"
 )
 
 type EncoderInput struct {
@@ -32,20 +33,8 @@ func (o *EncoderOutput) UnrefAndFree() {
 	o.Packet.Free()
 }
 
-type EncoderFramesStatistics struct {
-	Unparsed         uint64
-	VideoUnprocessed uint64
-	AudioUnprocessed uint64
-	VideoProcessed   uint64
-	AudioProcessed   uint64
-}
-
-type EncoderStatistics struct {
-	BytesCountRead  uint64
-	BytesCountWrote uint64
-	FramesRead      EncoderFramesStatistics
-	FramesWrote     EncoderFramesStatistics
-}
+type EncoderFramesStatistics = types.EncoderFramesStatistics
+type EncoderStatistics = types.EncoderStatistics
 
 type CommonsEncoderFramesStatistics struct {
 	Unparsed         atomic.Uint64

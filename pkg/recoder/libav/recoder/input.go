@@ -17,7 +17,6 @@ type InputConfig struct {
 	CustomOptions []CustomOption
 }
 
-type InputID uint64
 
 type Input struct {
 	ID InputID

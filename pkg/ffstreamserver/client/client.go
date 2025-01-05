@@ -8,11 +8,11 @@ import (
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/libsrt"
-	"github.com/xaionaro-go/streamctl/pkg/ffstream"
+	ffstreamtypes "github.com/xaionaro-go/streamctl/pkg/ffstream/types"
 	"github.com/xaionaro-go/streamctl/pkg/ffstreamserver/grpc/go/ffstream_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/ffstreamserver/grpc/goconv"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
-	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder"
+	recodertypes "github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -81,8 +81,8 @@ func (c *Client) SetLoggingLevel(
 func (c *Client) AddInput(
 	ctx context.Context,
 	url string,
-	customOptions []recoder.CustomOption,
-) (_ recoder.InputID, _err error) {
+	customOptions []recodertypes.CustomOption,
+) (_ recodertypes.InputID, _err error) {
 	client, conn, err := c.grpcClient()
 	if err != nil {
 		return 0, err
@@ -100,14 +100,14 @@ func (c *Client) AddInput(
 		return 0, fmt.Errorf("query error: %w", err)
 	}
 
-	return recoder.InputID(resp.GetId()), nil
+	return recodertypes.InputID(resp.GetId()), nil
 }
 
 func (c *Client) AddOutput(
 	ctx context.Context,
 	url string,
-	customOptions []recoder.CustomOption,
-) (recoder.OutputID, error) {
+	customOptions []recodertypes.CustomOption,
+) (recodertypes.OutputID, error) {
 	client, conn, err := c.grpcClient()
 	if err != nil {
 		return 0, err
@@ -122,12 +122,12 @@ func (c *Client) AddOutput(
 		return 0, fmt.Errorf("query error: %w", err)
 	}
 
-	return recoder.OutputID(resp.GetId()), nil
+	return recodertypes.OutputID(resp.GetId()), nil
 }
 
 func (c *Client) RemoveOutput(
 	ctx context.Context,
-	outputID recoder.OutputID,
+	outputID recodertypes.OutputID,
 ) error {
 	client, conn, err := c.grpcClient()
 	if err != nil {
@@ -147,7 +147,7 @@ func (c *Client) RemoveOutput(
 
 func (c *Client) GetEncoderConfig(
 	ctx context.Context,
-) (*ffstream.EncoderConfig, error) {
+) (*ffstreamtypes.EncoderConfig, error) {
 	client, conn, err := c.grpcClient()
 	if err != nil {
 		return nil, err
@@ -164,7 +164,7 @@ func (c *Client) GetEncoderConfig(
 
 func (c *Client) SetEncoderConfig(
 	ctx context.Context,
-	cfg ffstream.EncoderConfig,
+	cfg ffstreamtypes.EncoderConfig,
 ) error {
 	client, conn, err := c.grpcClient()
 	if err != nil {
@@ -218,7 +218,7 @@ func (c *Client) End(
 
 func (c *Client) GetEncoderStats(
 	ctx context.Context,
-) (*recoder.EncoderStatistics, error) {
+) (*recodertypes.EncoderStatistics, error) {
 	client, conn, err := c.grpcClient()
 	if err != nil {
 		return nil, err

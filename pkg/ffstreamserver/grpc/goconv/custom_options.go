@@ -2,16 +2,16 @@ package goconv
 
 import (
 	"github.com/xaionaro-go/streamctl/pkg/ffstreamserver/grpc/go/ffstream_grpc"
-	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder"
+	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder/types"
 )
 
 func CustomOptionsFromGRPC(
 	opts []*ffstream_grpc.CustomOption,
-) []recoder.CustomOption {
-	result := make([]recoder.CustomOption, 0, len(opts))
+) []types.CustomOption {
+	result := make([]types.CustomOption, 0, len(opts))
 
 	for _, opt := range opts {
-		result = append(result, recoder.CustomOption{
+		result = append(result, types.CustomOption{
 			Key:   opt.GetKey(),
 			Value: opt.GetValue(),
 		})
@@ -21,7 +21,7 @@ func CustomOptionsFromGRPC(
 }
 
 func CustomOptionsToGRPC(
-	opts []recoder.CustomOption,
+	opts []types.CustomOption,
 ) []*ffstream_grpc.CustomOption {
 	result := make([]*ffstream_grpc.CustomOption, 0, len(opts))
 

@@ -67,6 +67,8 @@ func (out *loopOutput) writerLoopForOutput(
 	return nil
 }
 
+var firstTime = false
+
 func (out *loopOutput) writePacket(
 	ctx context.Context,
 	outputItem *EncoderOutput,
@@ -157,7 +159,7 @@ func (out *loopOutput) writePacket(
 
 	packet.SetStreamIndex(outputStream.Index())
 	if sampleStream.TimeBase() != outputStream.TimeBase() {
-		logger.Debugf(ctx, "timebase does not match between the sample and the output: %v != %v; correcting the output stream", sampleStream.TimeBase(), outputStream.TimeBase())
+		logger.Debugf(ctx, "timebase does not match between the sample and the output: %v != %v; correcting the output stream", outputStream.TimeBase(), sampleStream.TimeBase())
 		outputStream.SetTimeBase(sampleStream.TimeBase())
 	}
 	dts := packet.Dts()

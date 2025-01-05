@@ -76,7 +76,7 @@ $(GOPATH)/bin/pkg-config-wrapper:
 	sh -c 'cd 3rdparty/amd64/windows && wget https://get.videolan.org/vlc/$(WINDOWS_VLC_VERSION)/win64/vlc-$(WINDOWS_VLC_VERSION)-win64.7z && 7z -y x vlc-$(WINDOWS_VLC_VERSION)-win64.7z && rm -f vlc-$(WINDOWS_VLC_VERSION)-win64.7z'
 	sh -c 'cd 3rdparty/amd64/windows && wget https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2024-04-30-12-51/ffmpeg-n7.0-21-gfb8f0ea7b3-win64-gpl-shared-7.0.zip && unzip -o ffmpeg-n7.0-21-gfb8f0ea7b3-win64-gpl-shared-7.0.zip && rm -f ffmpeg-n7.0-21-gfb8f0ea7b3-win64-gpl-shared-7.0.zip'
 	mkdir 3rdparty/amd64/windows/mpv
-	sh -c 'cd 3rdparty/amd64/windows/mpv && wget https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20241025/mpv-x86_64-20241025-git-5c59f8a.7z && 7z -y x mpv-x86_64-20241025-git-5c59f8a.7z && rm -f mpv-x86_64-20241025-git-5c59f8a.7z'
+	sh -c 'cd 3rdparty/amd64/windows/mpv && wget https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20250105/mpv-x86_64-20250105-git-996e58a.7z && 7z -y x mpv-x86_64-20250105-git-996e58a.7z && rm -f mpv-x86_64-20250105-git-996e58a.7z'
 	touch 3rdparty/amd64/windows/ready
 
 windows-builddir: build/streampanel-windows-amd64
@@ -171,7 +171,7 @@ build-streampanel-android-arm64-in-docker: checkconfig-android-in-docker builddi
 	cd cmd/streampanel && \
 		PKG_CONFIG_WRAPPER_LOG='/tmp/pkg_config_wrapper.log' \
 		PKG_CONFIG_WRAPPER_LOG_LEVEL='trace' \
-		PKG_CONFIG_LIBS_FORCE_STATIC='libav*,libvlc' \
+		PKG_CONFIG_LIBS_FORCE_STATIC='libav*,libvlc,libsrt' \
 		PKG_CONFIG_ERASE="-fopenmp=*,-landroid,-lcamera2ndk,-lmediandk" \
 		PKG_CONFIG='$(GOPATH)/bin/pkg-config-wrapper' \
 		PKG_CONFIG_PATH='/data/data/com.termux/files/usr/lib/pkgconfig' \
@@ -187,7 +187,7 @@ streampanel-android-arm64-static-cgo: build-streampanel-android-arm64-static-cgo
 build-streampanel-android-arm64-static-cgo: builddir $(GOPATH)/bin/pkg-config-wrapper 3rdparty/arm64/android-ndk-$(ANDROID_NDK_VERSION) 3rdparty/arm64/termux
 	$(eval ANDROID_NDK_HOME=$(PWD)/3rdparty/arm64/android-ndk-$(ANDROID_NDK_VERSION))
 	cd cmd/streampanel && \
-		PKG_CONFIG_LIBS_FORCE_STATIC='libav*,libvlc' \
+		PKG_CONFIG_LIBS_FORCE_STATIC='libav*,libvlc,libsrt' \
 		PKG_CONFIG_ERASE="-fopenmp=*,-landroid" \
 		PKG_CONFIG='$(GOPATH)/bin/pkg-config-wrapper' \
 		PKG_CONFIG_PATH='$(PWD)/3rdparty/arm64/termux/data/data/com.termux/files/usr/lib/pkgconfig' \
@@ -283,3 +283,15 @@ subtitleswindow-linux-amd64: builddir
 subtitleswindow-windows-amd64: builddir windows-deps
 	$(eval INSTALL_DEST?=build/subtitleswindow-windows-amd64.exe)
 	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "$(LINKER_FLAGS_WINDOWS)" -o "$(INSTALL_DEST)" ./pkg/subtitleswindow/cmd/subtitleswindow
+
+ffstream-linux-amd64: builddir
+	GOOS=linux GOARCH=amd64 go build -o build/ffstream-linux-amd64 ./cmd/ffstream
+
+ffstream-linux-arm64: builddir
+	GOOS=linux GOARCH=arm64 go build -o build/ffstream-linux-arm64 ./cmd/ffstream
+
+ffstreamctl-linux-amd64: builddir
+	GOOS=linux GOARCH=amd64 go build -o build/ffstreamctl-linux-amd64 ./cmd/ffstreamctl
+
+ffstreamctl-linux-arm64: builddir
+	GOOS=linux GOARCH=arm64 go build -o build/ffstreamctl-linux-arm64 ./cmd/ffstreamctl

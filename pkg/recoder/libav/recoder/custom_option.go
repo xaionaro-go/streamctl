@@ -1,6 +1,5 @@
 package recoder
 
-type CustomOption struct {
-	Key   string
-	Value string
-}
+import "github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder/types"
+
+type CustomOption = types.CustomOption

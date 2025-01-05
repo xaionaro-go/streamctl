@@ -19,7 +19,7 @@ replace github.com/rs/zerolog v1.33.0 => github.com/xaionaro-go/zerolog2belt v0.
 
 replace github.com/bluenviron/gortsplib/v4 v4.11.0 => github.com/xaionaro-go/gortsplib/v4 v4.0.0-20241123213409-7279dabb7de6
 
-replace github.com/asticode/go-astiav v0.29.0 => github.com/xaionaro-go/astiav v0.0.0-20250105041745-aec6a5526b2d
+replace github.com/asticode/go-astiav v0.29.0 => github.com/xaionaro-go/astiav v0.0.0-20250106205037-a1605f324663
 
 require (
 	github.com/facebookincubator/go-belt v0.0.0-20240804203001-846c4409d41c

@@ -23,7 +23,6 @@ type OutputConfig struct {
 	CustomOptions []CustomOption
 }
 
-type OutputID uint64
 
 type Output struct {
 	ID OutputID

@@ -28,8 +28,8 @@ jobs:
         with:
           go-version: '1.23'
           check-latest: true
-      #- name: add ffmpeg7 repo
-      #  run: sudo add-apt-repository -y ppa:ubuntuhandbook1/ffmpeg7
+      - name: add ffmpeg7 repo
+        run: sudo add-apt-repository -y ppa:ubuntuhandbook1/ffmpeg7
       - name: install fyne
         run: go install fyne.io/fyne/v2/cmd/fyne@latest
       - name: apt install
@@ -49,6 +49,9 @@ jobs:
             libglfw3-dev \
             libasound2-dev \
             libxxf86vm-dev \
+            libsrt-gnutls-dev \
+            libgnutls28-dev \
+            nettle-dev \
       - name: apt install
         if: ${{ matrix.target.name == 'streampanel-windows-amd64.zip' }}
         run: |
