@@ -4,6 +4,7 @@ import (
 	"os"
 
 	child_process_manager "github.com/AgustinSRG/go-child-process-manager"
+	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/ffstream"
 	"github.com/xaionaro-go/streamctl/pkg/ffstreamserver"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
@@ -26,6 +27,17 @@ func main() {
 
 	s := ffstream.New()
 
+	if flags.ListenControlSocket != "" {
+		logger.Debugf(ctx, "flags.ListenControlSocket == '%s'", flags.ListenControlSocket)
+		listener, err := getListener(ctx, flags.ListenControlSocket)
+		assertNoError(ctx, err)
+
+		observability.Go(ctx, func() {
+			logger.Infof(ctx, "listening for gRPC clients at %s (%T)", listener.Addr(), listener)
+			ffstreamserver.New(s).ServeContext(ctx, listener)
+		})
+	}
+
 	for _, input := range flags.Inputs {
 		input, err := recoder.NewInputFromURL(ctx, input.URL, "", recoder.InputConfig{
 			CustomOptions: convertUnknownOptionsToCustomOptions(input.Options),
@@ -40,7 +52,7 @@ func main() {
 	assertNoError(ctx, err)
 	s.AddOutput(ctx, output)
 
-	err = s.ConfigureEncoder(ctx, ffstream.EncoderConfig{
+	err = s.SetEncoderConfig(ctx, ffstream.EncoderConfig{
 		Audio: ffstream.CodecConfig{
 			CodecName:     flags.AudioEncoder.Codec,
 			CustomOptions: convertUnknownOptionsToCustomOptions(flags.AudioEncoder.Options),
@@ -51,15 +63,6 @@ func main() {
 		},
 	})
 	assertNoError(ctx, err)
-
-	if flags.ListenControlSocket != "" {
-		listener, err := getListener(ctx, flags.ListenControlSocket)
-		assertNoError(ctx, err)
-
-		observability.Go(ctx, func() {
-			ffstreamserver.New(s).ServeContext(ctx, listener)
-		})
-	}
 
 	err = s.Start(ctx)
 	assertNoError(ctx, err)

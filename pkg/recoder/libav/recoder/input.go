@@ -3,6 +3,7 @@ package recoder
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/asticode/go-astiav"
 	"github.com/asticode/go-astikit"
@@ -16,11 +17,16 @@ type InputConfig struct {
 	CustomOptions []CustomOption
 }
 
+type InputID uint64
+
 type Input struct {
+	ID InputID
 	*astikit.Closer
 	*astiav.FormatContext
 	*astiav.Dictionary
 }
+
+var nextInputID atomic.Uint64
 
 func NewInputFromURL(
 	ctx context.Context,
@@ -33,6 +39,7 @@ func NewInputFromURL(
 	}
 
 	input := &Input{
+		ID:     InputID(nextInputID.Add(1)),
 		Closer: astikit.NewCloser(),
 	}
 
@@ -61,7 +68,7 @@ func NewInputFromURL(
 	}
 	input.Closer.Add(input.FormatContext.CloseInput)
 
-	if err := input.FormatContext.FindStreamInfo(input.Dictionary); err != nil {
+	if err := input.FormatContext.FindStreamInfo(nil); err != nil {
 		return nil, fmt.Errorf("unable to get stream info: %w", err)
 	}
 	return input, nil

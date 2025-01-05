@@ -155,12 +155,14 @@ func (e *Encoder) encodeVideoPacket(
 
 	if e.videoAveragerBufferConsumed+int64(pktSize)*8 > int64(e.Config.Audio.BitRateAveragerBufferSizeInBits) {
 		e.skippedVideoFrame = true
+		logger.Tracef(ctx, "skipping a frame to reduce the bitrate")
 		return nil, nil
 	}
 
 	if e.skippedVideoFrame {
 		isKeyFrame := input.Packet.Flags().Has(astiav.PacketFlagKey)
 		if !isKeyFrame {
+			logger.Tracef(ctx, "skipping a non-key frame")
 			return nil, nil
 		}
 	}

@@ -60,6 +60,11 @@ func parseFlags(args []string) Flags {
 	err := p.Parse(args[1:])
 	assertNoError(context.TODO(), err)
 
+	if version.Value() {
+		printBuildInfo(context.TODO(), os.Stdout)
+		os.Exit(0)
+	}
+
 	if len(p.CollectedUnknownOptions) == 0 && len(p.CollectedNonFlags) == 0 {
 		fatal(ctx, "expected one output, but have not received any")
 	}
@@ -82,11 +87,6 @@ func parseFlags(args []string) Flags {
 			URL:     input,
 			Options: collectedOptions,
 		})
-	}
-
-	if version.Value() {
-		printBuildInfo(context.TODO(), os.Stdout)
-		os.Exit(0)
 	}
 
 	if len(mapFlag.Value()) != 0 {

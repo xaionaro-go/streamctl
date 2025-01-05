@@ -264,6 +264,7 @@ require (
 	github.com/xaionaro-go/gorex v0.0.0-20241010205749-bcd59d639c4d
 	github.com/xaionaro-go/grpcproxy v0.0.0-20241103205849-a8fef42e72f9
 	github.com/xaionaro-go/kickcom v0.0.0-20241022142825-25a234cc8628
+	github.com/xaionaro-go/libsrt v0.0.0-20250105221133-977cb871b11c
 	github.com/xaionaro-go/lockmap v0.0.0-20240901172806-e17aea364748
 	github.com/xaionaro-go/mediamtx v0.0.0-20241103200202-882a99e8df73
 	github.com/xaionaro-go/object v0.0.0-20241026212449-753ce10ec94c

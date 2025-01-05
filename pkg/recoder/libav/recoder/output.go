@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync/atomic"
 
 	"github.com/asticode/go-astiav"
 	"github.com/asticode/go-astikit"
@@ -22,7 +23,10 @@ type OutputConfig struct {
 	CustomOptions []CustomOption
 }
 
+type OutputID uint64
+
 type Output struct {
+	ID OutputID
 	*astikit.Closer
 	*astiav.FormatContext
 	*astiav.Dictionary
@@ -38,6 +42,8 @@ func formatFromScheme(scheme string) string {
 		return scheme
 	}
 }
+
+var nextOutputID atomic.Uint64
 
 func NewOutputFromURL(
 	ctx context.Context,
@@ -80,6 +86,7 @@ func NewOutputFromURL(
 	}
 
 	output := &Output{
+		ID:     OutputID(nextOutputID.Add(1)),
 		Closer: astikit.NewCloser(),
 	}
 

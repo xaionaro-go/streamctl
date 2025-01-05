@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/xaionaro-go/libsrt/threadsafe"
 	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder"
 )
 
@@ -49,7 +50,31 @@ func (s *FFStream) AddOutput(
 	return s.RecoderLoop.AddOutput(ctx, output)
 }
 
-func (s *FFStream) ConfigureEncoder(
+func (s *FFStream) RemoveOutput(
+	ctx context.Context,
+	outputID recoder.OutputID,
+) error {
+	s.locker.Lock()
+	defer s.locker.Unlock()
+	if s.Output == nil {
+		return fmt.Errorf("there are no outputs right now")
+	}
+	if s.Output.ID != outputID {
+		return fmt.Errorf("there are no outputs with ID %d", outputID)
+	}
+	err := s.RecoderLoop.RemoveOutput(ctx, outputID)
+	s.Output.Close()
+	s.Output = nil
+	return err
+}
+
+func (s *FFStream) GetEncoderConfig(
+	ctx context.Context,
+) EncoderConfig {
+	return s.Encoder.Config
+}
+
+func (s *FFStream) SetEncoderConfig(
 	ctx context.Context,
 	cfg EncoderConfig,
 ) error {
@@ -62,10 +87,16 @@ func (s *FFStream) GetEncoderStats(
 	return s.Encoder.GetStats()
 }
 
-func (s *FFStream) GetOutputSRTStats(
-	ctx context.Context,
-) (*recoder.SRTStats, error) {
-	return s.Output.GetSRTStats()
+func (s *FFStream) WithSRTOutput(
+	_ context.Context,
+	callback func(*threadsafe.Socket) error,
+) error {
+	sock, err := s.Output.SRT()
+	if err != nil {
+		return fmt.Errorf("unable to get the SRT socket handler: %w", err)
+	}
+
+	return callback(sock)
 }
 
 func (s *FFStream) Start(

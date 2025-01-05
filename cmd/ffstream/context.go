@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"os/user"
-	"runtime"
 	"strings"
 	"time"
 
@@ -34,29 +33,7 @@ func init() {
 }
 
 func setDefaultCallerPCFilter() {
-	xruntime.DefaultCallerPCFilter = func(pc uintptr) bool {
-		if !originalPCFilter(pc) {
-			return false
-		}
-		fn := runtime.FuncForPC(pc)
-		funcName := fn.Name()
-		switch {
-		case strings.Contains(funcName, "pkg/xsync"):
-			return false
-		}
-		file, _ := fn.FileLine(pc)
-		switch {
-		case strings.Contains(file, "context.go"):
-			return false
-		case strings.Contains(file, "log_writer.go"):
-			return false
-		case strings.Contains(file, "logger.go"):
-			return false
-		case strings.Contains(file, "ffstream/runtime.go"):
-			return false
-		}
-		return true
-	}
+	xruntime.DefaultCallerPCFilter = observability.CallerPCFilter(originalPCFilter)
 }
 
 func getContext(

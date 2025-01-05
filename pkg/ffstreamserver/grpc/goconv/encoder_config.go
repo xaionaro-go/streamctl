@@ -6,7 +6,7 @@ import (
 )
 
 func EncoderConfigFromGRPC(
-	req *ffstream_grpc.ConfigureEncoderRequest,
+	req *ffstream_grpc.EncoderConfig,
 ) ffstream.EncoderConfig {
 	return ffstream.EncoderConfig{
 		Audio: ffstream.CodecConfig{
@@ -20,6 +20,25 @@ func EncoderConfigFromGRPC(
 			BitRateAveragerBufferSizeInBits: req.GetVideo().GetBitRateAveragerBufferSizeInBits(),
 			AverageBitRate:                  req.GetVideo().GetAverageBitRate(),
 			CustomOptions:                   CustomOptionsFromGRPC(req.GetVideo().GetCustomOptions()),
+		},
+	}
+}
+
+func EncoderConfigToGRPC(
+	cfg ffstream.EncoderConfig,
+) *ffstream_grpc.EncoderConfig {
+	return &ffstream_grpc.EncoderConfig{
+		Audio: &ffstream_grpc.CodecConfig{
+			CodecName:                       cfg.Audio.CodecName,
+			BitRateAveragerBufferSizeInBits: cfg.Audio.BitRateAveragerBufferSizeInBits,
+			AverageBitRate:                  cfg.Audio.AverageBitRate,
+			CustomOptions:                   CustomOptionsToGRPC(cfg.Audio.CustomOptions),
+		},
+		Video: &ffstream_grpc.CodecConfig{
+			CodecName:                       cfg.Video.CodecName,
+			BitRateAveragerBufferSizeInBits: cfg.Video.BitRateAveragerBufferSizeInBits,
+			AverageBitRate:                  cfg.Video.AverageBitRate,
+			CustomOptions:                   CustomOptionsToGRPC(cfg.Video.CustomOptions),
 		},
 	}
 }

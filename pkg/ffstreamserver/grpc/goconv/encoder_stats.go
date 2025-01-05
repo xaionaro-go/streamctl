@@ -23,3 +23,22 @@ func EncoderStatsToGRPC(
 		FramesWroteAudioProcessed:   req.FramesWrote.AudioProcessed.Load(),
 	}
 }
+
+func EncoderStatsFromGRPC(
+	req *ffstream_grpc.GetEncoderStatsReply,
+) *recoder.CommonsEncoderStatistics {
+	result := &recoder.CommonsEncoderStatistics{}
+	result.BytesCountRead.Store(req.BytesCountRead)
+	result.BytesCountWrote.Store(req.BytesCountWrote)
+	result.FramesRead.Unparsed.Store(req.FramesReadUnparsed)
+	result.FramesRead.VideoUnprocessed.Store(req.FramesReadVideoUnprocessed)
+	result.FramesRead.AudioUnprocessed.Store(req.FramesReadAudioUnprocessed)
+	result.FramesRead.VideoProcessed.Store(req.FramesReadVideoProcessed)
+	result.FramesRead.AudioProcessed.Store(req.FramesReadAudioProcessed)
+	result.FramesWrote.Unparsed.Store(req.FramesWroteUnparsed)
+	result.FramesWrote.VideoUnprocessed.Store(req.FramesWroteVideoUnprocessed)
+	result.FramesWrote.AudioUnprocessed.Store(req.FramesWroteAudioUnprocessed)
+	result.FramesWrote.VideoProcessed.Store(req.FramesWroteVideoProcessed)
+	result.FramesWrote.AudioProcessed.Store(req.FramesWroteAudioProcessed)
+	return result
+}

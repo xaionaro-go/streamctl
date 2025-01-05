@@ -10,7 +10,6 @@ import (
 	"sync/atomic"
 
 	"github.com/asticode/go-astiav"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
@@ -31,33 +30,26 @@ type LoopStats struct {
 	BytesCountWrote atomic.Uint64
 }
 
-type loopOutput struct {
-	Streams      map[*astiav.Stream]*astiav.Stream
-	Output       *Output
-	OutputChan   chan *EncoderOutput
-	FinishedChan chan struct{}
-
-	OutputChanCloseOnce sync.Once
-}
-
 type Loop struct {
 	WaiterChan chan struct{}
 	Result     error
 	LoopStats
-	cfg           LoopConfig
-	locker        sync.Mutex
-	newInputChan  chan *Input
-	newOutputChan chan *Output
-	outputs       map[*loopOutput]struct{}
+	cfg              LoopConfig
+	locker           sync.Mutex
+	newInputChan     chan *Input
+	newOutputChan    chan *Output
+	removeOutputChan chan OutputID
+	outputs          map[*loopOutput]struct{}
 }
 
 func NewLoop() *Loop {
 	l := &Loop{
-		WaiterChan:    make(chan struct{}),
-		cfg:           LoopConfig{},
-		newInputChan:  make(chan *Input, maxInputs),
-		newOutputChan: make(chan *Output, maxOutputs),
-		outputs:       make(map[*loopOutput]struct{}),
+		WaiterChan:       make(chan struct{}),
+		cfg:              LoopConfig{},
+		newInputChan:     make(chan *Input, maxInputs),
+		newOutputChan:    make(chan *Output, maxOutputs),
+		removeOutputChan: make(chan OutputID, maxOutputs),
+		outputs:          make(map[*loopOutput]struct{}),
 	}
 	close(
 		l.WaiterChan,
@@ -96,6 +88,18 @@ func (l *Loop) AddOutput(
 	return nil
 }
 
+func (l *Loop) RemoveOutput(
+	ctx context.Context,
+	outputID OutputID,
+) error {
+	select {
+	case l.removeOutputChan <- outputID:
+	default:
+		return fmt.Errorf("too many new outputs already queued")
+	}
+	return nil
+}
+
 func readIntoPacket(
 	_ context.Context,
 	input *Input,
@@ -110,159 +114,6 @@ func readIntoPacket(
 	default:
 		return fmt.Errorf("unable to read a frame: %w", err)
 	}
-}
-
-func (l *Loop) writerLoopForOutput(
-	ctx context.Context,
-	output *loopOutput,
-) (_err error) {
-	logger.Debugf(ctx, "writerLoopForOutput")
-	defer func() { logger.Debugf(ctx, "/writerLoopForOutput: %v", _err) }()
-
-	defer func() {
-		close(output.FinishedChan)
-		l.removeOutput(ctx, output)
-		observability.Go(ctx, func() {
-			for outputItem := range output.OutputChan {
-				PacketPool.Put(outputItem.Packet)
-				outputItem.Packet = nil
-			}
-		})
-	}()
-
-	for outputItem := range output.OutputChan {
-		err := l.writePacket(ctx, output, outputItem)
-		PacketPool.Put(outputItem.Packet)
-		outputItem.Packet = nil
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (l *Loop) writePacket(
-	ctx context.Context,
-	output *loopOutput,
-	outputItem *EncoderOutput,
-) (_err error) {
-	logger.Tracef(ctx,
-		"writePacket (pos:%d, pts:%d, dts:%d, dur:%d)",
-		outputItem.Packet.Pos(), outputItem.Packet.Pts(), outputItem.Packet.Dts(), outputItem.Packet.Duration(),
-	)
-	defer func() { logger.Tracef(ctx, "/writePacket: %v", _err) }()
-
-	packet := outputItem.Packet
-	if packet == nil {
-		return fmt.Errorf("packet == nil")
-	}
-
-	sampleStream := outputItem.Stream
-	if sampleStream == nil {
-		return fmt.Errorf("sampleStream == nil")
-	}
-
-	outputStream := output.Streams[sampleStream]
-	if outputStream == nil {
-		logger.Debugf(
-			ctx,
-			"new output stream: %s: %s: %s: %s: %s",
-			sampleStream.CodecParameters().MediaType(),
-			sampleStream.CodecParameters().CodecID(),
-			sampleStream.TimeBase(),
-			spew.Sdump(sampleStream),
-			spew.Sdump(sampleStream.CodecParameters()),
-		)
-		sampleStream.CodecParameters()
-		outputStream = output.Output.FormatContext.NewStream(nil)
-		if outputStream == nil {
-			return fmt.Errorf("unable to initialize an output stream")
-		}
-		if err := sampleStream.CodecParameters().Copy(outputStream.CodecParameters()); err != nil {
-			return fmt.Errorf("unable to copy the codec parameters of stream #%d: %w", packet.StreamIndex(), err)
-		}
-		outputStream.SetDiscard(sampleStream.Discard())
-		outputStream.SetAvgFrameRate(sampleStream.AvgFrameRate())
-		outputStream.SetRFrameRate(sampleStream.RFrameRate())
-		outputStream.SetSampleAspectRatio(sampleStream.SampleAspectRatio())
-		outputStream.SetTimeBase(sampleStream.TimeBase())
-		outputStream.SetStartTime(sampleStream.StartTime())
-		outputStream.SetEventFlags(sampleStream.EventFlags())
-		outputStream.SetPTSWrapBits(sampleStream.PTSWrapBits())
-
-		logger.Tracef(
-			ctx,
-			"resulting output stream: %s: %s: %s: %s: %s",
-			outputStream.CodecParameters().MediaType(),
-			outputStream.CodecParameters().CodecID(),
-			outputStream.TimeBase(),
-			spew.Sdump(outputStream),
-			spew.Sdump(outputStream.CodecParameters()),
-		)
-		output.Streams[sampleStream] = outputStream
-		if len(output.Streams) < 2 {
-			return nil
-		}
-		if err := output.Output.FormatContext.WriteHeader(nil); err != nil {
-			return fmt.Errorf("unable to write the header: %w", err)
-		}
-	}
-	if len(output.Streams) < 2 {
-		return nil
-	}
-	assert(ctx, outputStream != nil)
-	if logger.FromCtx(ctx).Level() >= logger.LevelTrace {
-		logger.Tracef(
-			ctx,
-			"unmodified packet with pos:%v (pts:%v, dts:%v, dur: %v) for %s stream %d (->%d) with flags 0x%016X",
-			packet.Pos(), packet.Pts(), packet.Dts(), packet.Duration(),
-			outputStream.CodecParameters().MediaType(),
-			packet.StreamIndex(),
-			outputStream.Index(),
-			packet.Flags(),
-		)
-	}
-	packet.SetStreamIndex(outputStream.Index())
-	if sampleStream.TimeBase() != outputStream.TimeBase() {
-		logger.Debugf(ctx, "timebase does not match between the sample and the output: %v != %v; correcting the output stream", sampleStream.TimeBase(), outputStream.TimeBase())
-		outputStream.SetTimeBase(sampleStream.TimeBase())
-	}
-	if logger.FromCtx(ctx).Level() >= logger.LevelTrace {
-		logger.Tracef(
-			ctx,
-			"writing packet with pos:%v (pts:%v, dts:%v, dur:%v) for %s stream %d (sample_rate: %v, time_base: %v) with flags 0x%016X and data 0x %X",
-			packet.Pos(), packet.Pts(), packet.Pts(), packet.Duration(),
-			outputStream.CodecParameters().MediaType(),
-			packet.StreamIndex(), outputStream.CodecParameters().SampleRate(), outputStream.TimeBase(),
-			packet.Flags(),
-			packet.Data(),
-		)
-	}
-	err := output.Output.FormatContext.WriteInterleavedFrame(packet)
-	if err != nil {
-		return fmt.Errorf("unable to write the frame: %w", err)
-	}
-	l.BytesCountRead.Add(uint64(packet.Size()))
-	if logger.FromCtx(ctx).Level() >= logger.LevelTrace {
-		logger.Tracef(
-			ctx,
-			"wrote a frame: %s: %s: %#+v",
-			outputStream.CodecParameters().MediaType(),
-			outputStream.CodecParameters().CodecID(),
-			packet,
-		)
-	}
-	return nil
-}
-
-func (l *Loop) removeOutput(
-	ctx context.Context,
-	output *loopOutput,
-) {
-	logger.Debugf(ctx, "removeOutput: %p", output)
-	l.locker.Lock()
-	defer l.locker.Unlock()
-	delete(l.outputs, output)
 }
 
 func (l *Loop) readerLoopForInput(
@@ -396,12 +247,7 @@ func (l *Loop) Start(
 		startWriterLoopForOutput := func(
 			output *Output,
 		) {
-			out := &loopOutput{
-				Output:       output,
-				OutputChan:   make(chan *EncoderOutput, outputQueueLen),
-				FinishedChan: make(chan struct{}),
-				Streams:      make(map[*astiav.Stream]*astiav.Stream),
-			}
+			out := newLoopOutput(l, output)
 			l.outputs[out] = struct{}{}
 			writersCount.Add(1)
 			logger.Tracef(ctx, "amount of outputs: +1: %d", writersCount.Load())
@@ -415,7 +261,7 @@ func (l *Loop) Start(
 					}
 					logger.Tracef(ctx, "amount of outputs: -1: %d", writersCount.Load())
 				}()
-				err := l.writerLoopForOutput(ctx, out)
+				err := out.writerLoopForOutput(ctx)
 				if err != nil {
 					setResultingError(fmt.Errorf("unable to process one iteration: %w", err))
 					return
@@ -432,6 +278,11 @@ func (l *Loop) Start(
 					return
 				case output := <-l.newOutputChan:
 					startWriterLoopForOutput(output)
+				case outputID := <-l.removeOutputChan:
+					if len(l.newOutputChan) != 0 {
+						continue
+					}
+					l.removeOutputByID(ctx, outputID)
 				default:
 					return
 				}
@@ -450,6 +301,11 @@ func (l *Loop) Start(
 				startReaderLoopForInput(input)
 			case output := <-l.newOutputChan:
 				startWriterLoopForOutput(output)
+			case outputID := <-l.removeOutputChan:
+				if len(l.newOutputChan) != 0 {
+					continue
+				}
+				l.removeOutputByID(ctx, outputID)
 			}
 		}
 	})

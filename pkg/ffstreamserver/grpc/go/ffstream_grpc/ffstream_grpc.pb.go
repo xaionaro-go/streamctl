@@ -20,10 +20,14 @@ type FFStreamClient interface {
 	SetLoggingLevel(ctx context.Context, in *SetLoggingLevelRequest, opts ...grpc.CallOption) (*SetLoggingLevelReply, error)
 	AddInput(ctx context.Context, in *AddInputRequest, opts ...grpc.CallOption) (*AddInputReply, error)
 	AddOutput(ctx context.Context, in *AddOutputRequest, opts ...grpc.CallOption) (*AddOutputReply, error)
-	ConfigureEncoder(ctx context.Context, in *ConfigureEncoderRequest, opts ...grpc.CallOption) (*ConfigureEncoderReply, error)
+	RemoveOutput(ctx context.Context, in *RemoveOutputRequest, opts ...grpc.CallOption) (*RemoveOutputReply, error)
+	GetEncoderConfig(ctx context.Context, in *GetEncoderConfigRequest, opts ...grpc.CallOption) (*GetEncoderConfigReply, error)
+	SetEncoderConfig(ctx context.Context, in *SetEncoderConfigRequest, opts ...grpc.CallOption) (*SetEncoderConfigReply, error)
 	Start(ctx context.Context, in *StartRequest, opts ...grpc.CallOption) (*StartReply, error)
 	GetEncoderStats(ctx context.Context, in *GetEncoderStatsRequest, opts ...grpc.CallOption) (*GetEncoderStatsReply, error)
 	GetOutputSRTStats(ctx context.Context, in *GetOutputSRTStatsRequest, opts ...grpc.CallOption) (*GetOutputSRTStatsReply, error)
+	GetFlagInt(ctx context.Context, in *GetFlagIntRequest, opts ...grpc.CallOption) (*GetFlagIntReply, error)
+	SetFlagInt(ctx context.Context, in *SetFlagIntRequest, opts ...grpc.CallOption) (*SetFlagIntReply, error)
 	WaitChan(ctx context.Context, in *WaitRequest, opts ...grpc.CallOption) (FFStream_WaitChanClient, error)
 	End(ctx context.Context, in *EndRequest, opts ...grpc.CallOption) (*EndReply, error)
 }
@@ -63,9 +67,27 @@ func (c *fFStreamClient) AddOutput(ctx context.Context, in *AddOutputRequest, op
 	return out, nil
 }
 
-func (c *fFStreamClient) ConfigureEncoder(ctx context.Context, in *ConfigureEncoderRequest, opts ...grpc.CallOption) (*ConfigureEncoderReply, error) {
-	out := new(ConfigureEncoderReply)
-	err := c.cc.Invoke(ctx, "/ffstream_grpc.FFStream/ConfigureEncoder", in, out, opts...)
+func (c *fFStreamClient) RemoveOutput(ctx context.Context, in *RemoveOutputRequest, opts ...grpc.CallOption) (*RemoveOutputReply, error) {
+	out := new(RemoveOutputReply)
+	err := c.cc.Invoke(ctx, "/ffstream_grpc.FFStream/RemoveOutput", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fFStreamClient) GetEncoderConfig(ctx context.Context, in *GetEncoderConfigRequest, opts ...grpc.CallOption) (*GetEncoderConfigReply, error) {
+	out := new(GetEncoderConfigReply)
+	err := c.cc.Invoke(ctx, "/ffstream_grpc.FFStream/GetEncoderConfig", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fFStreamClient) SetEncoderConfig(ctx context.Context, in *SetEncoderConfigRequest, opts ...grpc.CallOption) (*SetEncoderConfigReply, error) {
+	out := new(SetEncoderConfigReply)
+	err := c.cc.Invoke(ctx, "/ffstream_grpc.FFStream/SetEncoderConfig", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -93,6 +115,24 @@ func (c *fFStreamClient) GetEncoderStats(ctx context.Context, in *GetEncoderStat
 func (c *fFStreamClient) GetOutputSRTStats(ctx context.Context, in *GetOutputSRTStatsRequest, opts ...grpc.CallOption) (*GetOutputSRTStatsReply, error) {
 	out := new(GetOutputSRTStatsReply)
 	err := c.cc.Invoke(ctx, "/ffstream_grpc.FFStream/GetOutputSRTStats", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fFStreamClient) GetFlagInt(ctx context.Context, in *GetFlagIntRequest, opts ...grpc.CallOption) (*GetFlagIntReply, error) {
+	out := new(GetFlagIntReply)
+	err := c.cc.Invoke(ctx, "/ffstream_grpc.FFStream/GetFlagInt", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fFStreamClient) SetFlagInt(ctx context.Context, in *SetFlagIntRequest, opts ...grpc.CallOption) (*SetFlagIntReply, error) {
+	out := new(SetFlagIntReply)
+	err := c.cc.Invoke(ctx, "/ffstream_grpc.FFStream/SetFlagInt", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -147,10 +187,14 @@ type FFStreamServer interface {
 	SetLoggingLevel(context.Context, *SetLoggingLevelRequest) (*SetLoggingLevelReply, error)
 	AddInput(context.Context, *AddInputRequest) (*AddInputReply, error)
 	AddOutput(context.Context, *AddOutputRequest) (*AddOutputReply, error)
-	ConfigureEncoder(context.Context, *ConfigureEncoderRequest) (*ConfigureEncoderReply, error)
+	RemoveOutput(context.Context, *RemoveOutputRequest) (*RemoveOutputReply, error)
+	GetEncoderConfig(context.Context, *GetEncoderConfigRequest) (*GetEncoderConfigReply, error)
+	SetEncoderConfig(context.Context, *SetEncoderConfigRequest) (*SetEncoderConfigReply, error)
 	Start(context.Context, *StartRequest) (*StartReply, error)
 	GetEncoderStats(context.Context, *GetEncoderStatsRequest) (*GetEncoderStatsReply, error)
 	GetOutputSRTStats(context.Context, *GetOutputSRTStatsRequest) (*GetOutputSRTStatsReply, error)
+	GetFlagInt(context.Context, *GetFlagIntRequest) (*GetFlagIntReply, error)
+	SetFlagInt(context.Context, *SetFlagIntRequest) (*SetFlagIntReply, error)
 	WaitChan(*WaitRequest, FFStream_WaitChanServer) error
 	End(context.Context, *EndRequest) (*EndReply, error)
 	mustEmbedUnimplementedFFStreamServer()
@@ -169,8 +213,14 @@ func (UnimplementedFFStreamServer) AddInput(context.Context, *AddInputRequest) (
 func (UnimplementedFFStreamServer) AddOutput(context.Context, *AddOutputRequest) (*AddOutputReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddOutput not implemented")
 }
-func (UnimplementedFFStreamServer) ConfigureEncoder(context.Context, *ConfigureEncoderRequest) (*ConfigureEncoderReply, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ConfigureEncoder not implemented")
+func (UnimplementedFFStreamServer) RemoveOutput(context.Context, *RemoveOutputRequest) (*RemoveOutputReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveOutput not implemented")
+}
+func (UnimplementedFFStreamServer) GetEncoderConfig(context.Context, *GetEncoderConfigRequest) (*GetEncoderConfigReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetEncoderConfig not implemented")
+}
+func (UnimplementedFFStreamServer) SetEncoderConfig(context.Context, *SetEncoderConfigRequest) (*SetEncoderConfigReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetEncoderConfig not implemented")
 }
 func (UnimplementedFFStreamServer) Start(context.Context, *StartRequest) (*StartReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Start not implemented")
@@ -180,6 +230,12 @@ func (UnimplementedFFStreamServer) GetEncoderStats(context.Context, *GetEncoderS
 }
 func (UnimplementedFFStreamServer) GetOutputSRTStats(context.Context, *GetOutputSRTStatsRequest) (*GetOutputSRTStatsReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetOutputSRTStats not implemented")
+}
+func (UnimplementedFFStreamServer) GetFlagInt(context.Context, *GetFlagIntRequest) (*GetFlagIntReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetFlagInt not implemented")
+}
+func (UnimplementedFFStreamServer) SetFlagInt(context.Context, *SetFlagIntRequest) (*SetFlagIntReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetFlagInt not implemented")
 }
 func (UnimplementedFFStreamServer) WaitChan(*WaitRequest, FFStream_WaitChanServer) error {
 	return status.Errorf(codes.Unimplemented, "method WaitChan not implemented")
@@ -254,20 +310,56 @@ func _FFStream_AddOutput_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
-func _FFStream_ConfigureEncoder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ConfigureEncoderRequest)
+func _FFStream_RemoveOutput_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveOutputRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(FFStreamServer).ConfigureEncoder(ctx, in)
+		return srv.(FFStreamServer).RemoveOutput(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/ffstream_grpc.FFStream/ConfigureEncoder",
+		FullMethod: "/ffstream_grpc.FFStream/RemoveOutput",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FFStreamServer).ConfigureEncoder(ctx, req.(*ConfigureEncoderRequest))
+		return srv.(FFStreamServer).RemoveOutput(ctx, req.(*RemoveOutputRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FFStream_GetEncoderConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetEncoderConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FFStreamServer).GetEncoderConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ffstream_grpc.FFStream/GetEncoderConfig",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FFStreamServer).GetEncoderConfig(ctx, req.(*GetEncoderConfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FFStream_SetEncoderConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetEncoderConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FFStreamServer).SetEncoderConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ffstream_grpc.FFStream/SetEncoderConfig",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FFStreamServer).SetEncoderConfig(ctx, req.(*SetEncoderConfigRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -322,6 +414,42 @@ func _FFStream_GetOutputSRTStats_Handler(srv interface{}, ctx context.Context, d
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(FFStreamServer).GetOutputSRTStats(ctx, req.(*GetOutputSRTStatsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FFStream_GetFlagInt_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetFlagIntRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FFStreamServer).GetFlagInt(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ffstream_grpc.FFStream/GetFlagInt",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FFStreamServer).GetFlagInt(ctx, req.(*GetFlagIntRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FFStream_SetFlagInt_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetFlagIntRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FFStreamServer).SetFlagInt(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ffstream_grpc.FFStream/SetFlagInt",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FFStreamServer).SetFlagInt(ctx, req.(*SetFlagIntRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -382,8 +510,16 @@ var _FFStream_serviceDesc = grpc.ServiceDesc{
 			Handler:    _FFStream_AddOutput_Handler,
 		},
 		{
-			MethodName: "ConfigureEncoder",
-			Handler:    _FFStream_ConfigureEncoder_Handler,
+			MethodName: "RemoveOutput",
+			Handler:    _FFStream_RemoveOutput_Handler,
+		},
+		{
+			MethodName: "GetEncoderConfig",
+			Handler:    _FFStream_GetEncoderConfig_Handler,
+		},
+		{
+			MethodName: "SetEncoderConfig",
+			Handler:    _FFStream_SetEncoderConfig_Handler,
 		},
 		{
 			MethodName: "Start",
@@ -396,6 +532,14 @@ var _FFStream_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetOutputSRTStats",
 			Handler:    _FFStream_GetOutputSRTStats_Handler,
+		},
+		{
+			MethodName: "GetFlagInt",
+			Handler:    _FFStream_GetFlagInt_Handler,
+		},
+		{
+			MethodName: "SetFlagInt",
+			Handler:    _FFStream_SetFlagInt_Handler,
 		},
 		{
 			MethodName: "End",

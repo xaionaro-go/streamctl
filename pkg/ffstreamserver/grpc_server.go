@@ -4,6 +4,8 @@ import (
 	"context"
 	"sync"
 
+	"github.com/xaionaro-go/libsrt"
+	"github.com/xaionaro-go/libsrt/threadsafe"
 	"github.com/xaionaro-go/streamctl/pkg/ffstream"
 	"github.com/xaionaro-go/streamctl/pkg/ffstreamserver/grpc/go/ffstream_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/ffstreamserver/grpc/goconv"
@@ -49,7 +51,9 @@ func (srv *GRPCServer) AddInput(
 		return nil, status.Errorf(codes.Internal, "unable to add the input: %v", err)
 	}
 
-	return &ffstream_grpc.AddInputReply{}, nil
+	return &ffstream_grpc.AddInputReply{
+		Id: int64(input.ID),
+	}, nil
 }
 
 func (srv *GRPCServer) AddOutput(
@@ -68,18 +72,42 @@ func (srv *GRPCServer) AddOutput(
 		return nil, status.Errorf(codes.Internal, "unable to add the output: %v", err)
 	}
 
-	return &ffstream_grpc.AddOutputReply{}, nil
+	return &ffstream_grpc.AddOutputReply{
+		Id: uint64(output.ID),
+	}, nil
 }
 
-func (srv *GRPCServer) ConfigureEncoder(
+func (srv *GRPCServer) RemoveOutput(
 	ctx context.Context,
-	req *ffstream_grpc.ConfigureEncoderRequest,
-) (*ffstream_grpc.ConfigureEncoderReply, error) {
-	err := srv.FFStream.ConfigureEncoder(ctx, goconv.EncoderConfigFromGRPC(req))
+	req *ffstream_grpc.RemoveOutputRequest,
+) (*ffstream_grpc.RemoveOutputReply, error) {
+	err := srv.FFStream.RemoveOutput(ctx, recoder.OutputID(req.GetId()))
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "unable to remove the output %d: %v", req.GetId(), err)
+	}
+
+	return &ffstream_grpc.RemoveOutputReply{}, nil
+}
+
+func (srv *GRPCServer) GetEncoderConfig(
+	ctx context.Context,
+	req *ffstream_grpc.GetEncoderConfigRequest,
+) (*ffstream_grpc.GetEncoderConfigReply, error) {
+	cfg := srv.FFStream.GetEncoderConfig(ctx)
+	return &ffstream_grpc.GetEncoderConfigReply{
+		Config: goconv.EncoderConfigToGRPC(cfg),
+	}, nil
+}
+
+func (srv *GRPCServer) SetEncoderConfig(
+	ctx context.Context,
+	req *ffstream_grpc.SetEncoderConfigRequest,
+) (*ffstream_grpc.SetEncoderConfigReply, error) {
+	err := srv.FFStream.SetEncoderConfig(ctx, goconv.EncoderConfigFromGRPC(req.GetConfig()))
 	if err != nil {
 		return nil, status.Errorf(codes.Unknown, "unable to configure the encoder: %v", err)
 	}
-	return &ffstream_grpc.ConfigureEncoderReply{}, nil
+	return &ffstream_grpc.SetEncoderConfigReply{}, nil
 }
 
 func (srv *GRPCServer) Start(
@@ -94,6 +122,7 @@ func (srv *GRPCServer) Start(
 	ctx, cancelFn := context.WithCancel(xcontext.DetachDone(ctx))
 	err := srv.FFStream.Start(ctx)
 	if err != nil {
+		cancelFn()
 		return nil, status.Errorf(codes.Unknown, "unable to start the recoding: %v", err)
 	}
 	srv.stopRecodingFunc = cancelFn
@@ -116,12 +145,61 @@ func (srv *GRPCServer) GetOutputSRTStats(
 	ctx context.Context,
 	req *ffstream_grpc.GetOutputSRTStatsRequest,
 ) (*ffstream_grpc.GetOutputSRTStatsReply, error) {
-	stats, err := srv.FFStream.GetOutputSRTStats(ctx)
+	var stats *libsrt.Tracebstats
+	err := srv.FFStream.WithSRTOutput(ctx, func(sock *threadsafe.Socket) error {
+		result, err := sock.Bistats(false, true)
+		if err == nil {
+			stats = ptr(result.Convert())
+		}
+		return err
+	})
 	if err != nil {
 		return nil, status.Errorf(codes.Unknown, "unable to get the output SRT statistics: %v", err)
 	}
 
 	return goconv.OutputSRTStatsToGRPC(stats), nil
+}
+
+func (srv *GRPCServer) GetFlagInt(
+	ctx context.Context,
+	req *ffstream_grpc.GetFlagIntRequest,
+) (*ffstream_grpc.GetFlagIntReply, error) {
+	sockOpt, ok := goconv.SockoptIntFromGRPC(req.GetFlag())
+	if !ok {
+		return nil, status.Errorf(codes.Unknown, "unknown SRT socket option: %d", req.GetFlag())
+	}
+
+	var v libsrt.BlobInt
+	err := srv.FFStream.WithSRTOutput(ctx, func(sock *threadsafe.Socket) error {
+		return sock.Getsockflag(sockOpt, &v)
+	})
+	if err != nil {
+		return nil, status.Errorf(codes.Unknown, "unable to set the SRT socket option: %v", err)
+	}
+
+	return &ffstream_grpc.GetFlagIntReply{
+		Value: int64(v),
+	}, nil
+}
+
+func (srv *GRPCServer) SetFlagInt(
+	ctx context.Context,
+	req *ffstream_grpc.SetFlagIntRequest,
+) (*ffstream_grpc.SetFlagIntReply, error) {
+	sockOpt, ok := goconv.SockoptIntFromGRPC(req.GetFlag())
+	if !ok {
+		return nil, status.Errorf(codes.Unknown, "unknown SRT socket option: %d", req.GetFlag())
+	}
+
+	err := srv.FFStream.WithSRTOutput(ctx, func(sock *threadsafe.Socket) error {
+		v := libsrt.BlobInt(req.GetValue())
+		return sock.Setsockflag(sockOpt, &v)
+	})
+	if err != nil {
+		return nil, status.Errorf(codes.Unknown, "unable to set the SRT socket option: %v", err)
+	}
+
+	return &ffstream_grpc.SetFlagIntReply{}, nil
 }
 
 func (srv *GRPCServer) WaitChan(

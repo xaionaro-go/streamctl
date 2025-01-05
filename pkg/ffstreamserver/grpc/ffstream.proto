@@ -6,10 +6,14 @@ service FFStream {
   rpc SetLoggingLevel(SetLoggingLevelRequest) returns (SetLoggingLevelReply) {}
   rpc AddInput(AddInputRequest) returns (AddInputReply) {}
   rpc AddOutput(AddOutputRequest) returns (AddOutputReply) {}
-  rpc ConfigureEncoder(ConfigureEncoderRequest) returns (ConfigureEncoderReply) {}
+  rpc RemoveOutput(RemoveOutputRequest) returns (RemoveOutputReply) {}
+  rpc GetEncoderConfig(GetEncoderConfigRequest) returns (GetEncoderConfigReply) {}
+  rpc SetEncoderConfig(SetEncoderConfigRequest) returns (SetEncoderConfigReply) {}
   rpc Start(StartRequest) returns (StartReply) {}
   rpc GetEncoderStats(GetEncoderStatsRequest) returns (GetEncoderStatsReply) {}
   rpc GetOutputSRTStats(GetOutputSRTStatsRequest) returns (GetOutputSRTStatsReply) {}
+  rpc GetFlagInt(GetFlagIntRequest) returns (GetFlagIntReply) {}
+  rpc SetFlagInt(SetFlagIntRequest) returns (SetFlagIntReply) {}
   rpc WaitChan(WaitRequest) returns (stream WaitReply) {}
   rpc End(EndRequest) returns (EndReply) {}
 }
@@ -40,12 +44,21 @@ message AddInputRequest {
   string url = 1;
   repeated customOption customOptions = 2;
 }
-message AddInputReply {}
+message AddInputReply {
+  int64 id = 1;
+}
 message AddOutputRequest {
   string url = 1;
   repeated customOption customOptions = 2;
 }
-message AddOutputReply {}
+message AddOutputReply {
+  uint64 id = 1;
+}
+
+message RemoveOutputRequest {
+  uint64 id = 1;
+}
+message RemoveOutputReply {}
 
 message CodecConfig {
   string codecName = 1;
@@ -53,11 +66,18 @@ message CodecConfig {
   uint64 AverageBitRate = 3;
   repeated customOption customOptions = 4;
 }
-message ConfigureEncoderRequest {
+message EncoderConfig {
   CodecConfig audio = 1;
   CodecConfig video = 2;
 }
-message ConfigureEncoderReply {}
+message GetEncoderConfigRequest {}
+message GetEncoderConfigReply {
+  EncoderConfig config = 1;
+}
+message SetEncoderConfigRequest {
+  EncoderConfig config = 1;
+}
+message SetEncoderConfigReply {}
 message StartRequest {}
 message StartReply {}
 message GetEncoderStatsRequest {}
@@ -123,7 +143,7 @@ message GetOutputSRTStatsReply {
   uint64 byteRetrans = 44;
   uint64 byteSndDrop = 45;
   uint64 byteRcvDrop = 46;
-  int64 byteRcvUndecrypt = 47;
+  uint64 byteRcvUndecrypt = 47;
   double usPktSndPeriod = 48;
   int64 pktFlowWindow = 49;
   int64 pktCongestionWindow = 50;
@@ -160,6 +180,24 @@ message GetOutputSRTStatsReply {
   uint64 byteSentUnique = 81;
   uint64 byteRecvUnique = 82;
 }
+
+enum FlagInt {
+  undefined = 0;
+  Latency = 1;
+}
+
+message GetFlagIntRequest {
+  FlagInt flag = 1;
+}
+message GetFlagIntReply {
+  int64 value = 1;
+}
+message SetFlagIntRequest {
+  FlagInt flag = 1;
+  int64 value = 2;
+}
+message SetFlagIntReply {}
+
 message WaitRequest {}
 message WaitReply {}
 message EndRequest {}
