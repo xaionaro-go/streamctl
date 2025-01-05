@@ -50,7 +50,7 @@ func (e *EncoderCopy) Encode(
 		return nil, fmt.Errorf("unable to find a stream with index #%d", inputStreamIdx)
 	}
 	return &EncoderOutput{
-		Packet: input.Packet.Clone(),
+		Packet: ClonePacketAsWritable(input.Packet),
 		Stream: inputStream,
 	}, nil
 }

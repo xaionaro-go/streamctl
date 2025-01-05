@@ -136,12 +136,17 @@ func (e *Encoder) encodeVideoPacket(
 	ctx context.Context,
 	input recoder.EncoderInput,
 	inputStream *astiav.Stream,
-) (*recoder.EncoderOutput, error) {
-	logger.Tracef(ctx, "a video packet")
+) (_ret *recoder.EncoderOutput, _err error) {
+	logger.Tracef(
+		ctx,
+		"a video packet (pos:%d, pts:%d, dur:%d)",
+		input.Packet.Pos(), input.Packet.Pts(), input.Packet.Duration(),
+	)
+	defer func() { logger.Tracef(ctx, "a video packet: %v", _err) }()
 	if e.Config.Video.AverageBitRate == 0 {
 		e.videoAveragerBufferConsumed = 0
 		return &recoder.EncoderOutput{
-			Packet: input.Packet.Clone(),
+			Packet: recoder.ClonePacketAsWritable(input.Packet),
 			Stream: inputStream,
 		}, nil
 	}
@@ -163,7 +168,7 @@ func (e *Encoder) encodeVideoPacket(
 	e.skippedVideoFrame = false
 	e.videoAveragerBufferConsumed += int64(pktSize) * 8
 	return &recoder.EncoderOutput{
-		Packet: input.Packet.Clone(),
+		Packet: recoder.ClonePacketAsWritable(input.Packet),
 		Stream: inputStream,
 	}, nil
 }
@@ -172,10 +177,15 @@ func (e *Encoder) encodeAudioPacket(
 	ctx context.Context,
 	input recoder.EncoderInput,
 	inputStream *astiav.Stream,
-) (*recoder.EncoderOutput, error) {
-	logger.Tracef(ctx, "an audio packet")
+) (_ret *recoder.EncoderOutput, _err error) {
+	logger.Tracef(
+		ctx,
+		"an audio packet (pos:%d, pts:%d, dts:%d, dur:%d)",
+		input.Packet.Pos(), input.Packet.Pts(), input.Packet.Dts(), input.Packet.Duration(),
+	)
+	defer func() { logger.Tracef(ctx, "an audio packet: %v", _err) }()
 	return &recoder.EncoderOutput{
-		Packet: input.Packet.Clone(),
+		Packet: recoder.ClonePacketAsWritable(input.Packet),
 		Stream: inputStream,
 	}, nil
 }

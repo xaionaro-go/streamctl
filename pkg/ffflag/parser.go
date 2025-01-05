@@ -63,12 +63,12 @@ func (p *Parser) Parse(args []string) error {
 	for idx := 0; idx < len(args); idx++ {
 		arg := args[idx]
 		if !strings.HasPrefix(arg, "-") || arg == "-" {
-			p.CollectedNonFlags = append(p.CollectedNonFlags, arg)
+			p.nextCollectorOfUnknownOptions = append(p.nextCollectorOfUnknownOptions, arg)
 			continue
 		}
 
 		if arg == "--" {
-			p.CollectedNonFlags = append(p.CollectedNonFlags, args[idx+1:]...)
+			p.CollectedNonFlags = args[idx+1:]
 			break
 		}
 

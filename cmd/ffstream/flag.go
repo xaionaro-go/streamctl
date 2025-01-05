@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"time"
 
@@ -37,6 +36,8 @@ type Resource struct {
 }
 
 func parseFlags(args []string) Flags {
+	ctx := context.TODO()
+
 	p := flag.NewParser()
 	inputsFlag := flag.AddParameter(p, "i", true, ptr(flag.StringsAsSeparateFlags(nil)))
 	encoderBothFlag := flag.AddParameter(p, "c", true, ptr(flag.String("copy")))
@@ -51,17 +52,23 @@ func parseFlags(args []string) Flags {
 	lockTimeout := flag.AddParameter(p, "lock_timeout", false, ptr(flag.Duration(time.Minute)))
 	insecureDebug := flag.AddParameter(p, "insecure_debug", false, ptr(flag.Bool(false)))
 	removeSecretsFromLogs := flag.AddParameter(p, "remove_secrets_from_logs", false, ptr(flag.Bool(false)))
+	filterFlag := flag.AddParameter(p, "filter", false, ptr(flag.StringsAsSeparateFlags(nil)))
+	filterComplexFlag := flag.AddParameter(p, "filter_complex", false, ptr(flag.StringsAsSeparateFlags(nil)))
+	mapFlag := flag.AddParameter(p, "map", false, ptr(flag.StringsAsSeparateFlags(nil)))
 	version := flag.AddFlag(p, "version", false)
 
 	err := p.Parse(args[1:])
 	assertNoError(context.TODO(), err)
 
-	if len(p.CollectedNonFlags) == 0 {
-		panic(fmt.Errorf("expected one output, but have not received any"))
+	if len(p.CollectedUnknownOptions) == 0 && len(p.CollectedNonFlags) == 0 {
+		fatal(ctx, "expected one output, but have not received any")
 	}
 	if len(p.CollectedNonFlags) > 1 {
-		p.CollectedUnknownOptions = append(p.CollectedUnknownOptions, p.CollectedNonFlags[:len(p.CollectedNonFlags)-1]...)
-		p.CollectedNonFlags = p.CollectedNonFlags[len(p.CollectedNonFlags)-1:]
+		fatal(ctx, "expected one output, but received %d", len(p.CollectedNonFlags))
+	}
+	if len(p.CollectedNonFlags) == 0 {
+		p.CollectedNonFlags = p.CollectedUnknownOptions[len(p.CollectedUnknownOptions)-1:]
+		p.CollectedUnknownOptions = p.CollectedUnknownOptions[:len(p.CollectedUnknownOptions)-1]
 	}
 	output := Resource{
 		URL:     p.CollectedNonFlags[0],
@@ -80,6 +87,18 @@ func parseFlags(args []string) Flags {
 	if version.Value() {
 		printBuildInfo(context.TODO(), os.Stdout)
 		os.Exit(0)
+	}
+
+	if len(mapFlag.Value()) != 0 {
+		fatal(ctx, "mapping is not supported yet")
+	}
+
+	if len(filterFlag.Value()) != 0 {
+		fatal(ctx, "filters are not supported yet")
+	}
+
+	if len(filterComplexFlag.Value()) != 0 {
+		fatal(ctx, "filters are not supported yet")
 	}
 
 	flags := Flags{

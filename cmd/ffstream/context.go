@@ -52,6 +52,8 @@ func setDefaultCallerPCFilter() {
 			return false
 		case strings.Contains(file, "logger.go"):
 			return false
+		case strings.Contains(file, "ffstream/runtime.go"):
+			return false
 		}
 		return true
 	}

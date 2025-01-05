@@ -2,7 +2,6 @@ package recoder
 
 import (
 	"context"
-	"sync"
 	"sync/atomic"
 
 	"github.com/asticode/go-astiav"
@@ -26,17 +25,9 @@ type Encoder interface {
 type EncoderOutput struct {
 	*astiav.Packet
 	*astiav.Stream
-	refCounter sync.WaitGroup
-
-	OverrideUnrefAndFreeFunc func()
 }
 
 func (o *EncoderOutput) UnrefAndFree() {
-	if o.OverrideUnrefAndFreeFunc != nil {
-		o.OverrideUnrefAndFreeFunc()
-		return
-	}
-
 	o.Packet.Unref()
 	o.Packet.Free()
 }

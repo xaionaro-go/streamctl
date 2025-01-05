@@ -4,8 +4,6 @@ import (
 	"os"
 
 	child_process_manager "github.com/AgustinSRG/go-child-process-manager"
-	"github.com/asticode/go-astiav"
-	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/ffstream"
 	"github.com/xaionaro-go/streamctl/pkg/ffstreamserver"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
@@ -25,8 +23,6 @@ func main() {
 
 	ctx, cancelFunc := initRuntime(ctx, flags)
 	defer cancelFunc()
-
-	astiav.SetLogLevel(recoder.LogLevelToAstiav(logger.FromCtx(ctx).Level()))
 
 	s := ffstream.New()
 

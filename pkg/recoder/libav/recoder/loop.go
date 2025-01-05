@@ -32,7 +32,7 @@ type LoopStats struct {
 }
 
 type loopOutput struct {
-	Streams      map[int]*astiav.Stream
+	Streams      map[*astiav.Stream]*astiav.Stream
 	Output       *Output
 	OutputChan   chan *EncoderOutput
 	FinishedChan chan struct{}
@@ -124,14 +124,16 @@ func (l *Loop) writerLoopForOutput(
 		l.removeOutput(ctx, output)
 		observability.Go(ctx, func() {
 			for outputItem := range output.OutputChan {
-				outputItem.refCounter.Done()
+				PacketPool.Put(outputItem.Packet)
+				outputItem.Packet = nil
 			}
 		})
 	}()
 
 	for outputItem := range output.OutputChan {
 		err := l.writePacket(ctx, output, outputItem)
-		outputItem.refCounter.Done()
+		PacketPool.Put(outputItem.Packet)
+		outputItem.Packet = nil
 		if err != nil {
 			return err
 		}
@@ -143,8 +145,12 @@ func (l *Loop) writePacket(
 	ctx context.Context,
 	output *loopOutput,
 	outputItem *EncoderOutput,
-) error {
-	streamIdx := outputItem.Packet.StreamIndex()
+) (_err error) {
+	logger.Tracef(ctx,
+		"writePacket (pos:%d, pts:%d, dts:%d, dur:%d)",
+		outputItem.Packet.Pos(), outputItem.Packet.Pts(), outputItem.Packet.Dts(), outputItem.Packet.Duration(),
+	)
+	defer func() { logger.Tracef(ctx, "/writePacket: %v", _err) }()
 
 	packet := outputItem.Packet
 	if packet == nil {
@@ -156,15 +162,18 @@ func (l *Loop) writePacket(
 		return fmt.Errorf("sampleStream == nil")
 	}
 
-	outputStream := output.Streams[streamIdx]
+	outputStream := output.Streams[sampleStream]
 	if outputStream == nil {
 		logger.Debugf(
 			ctx,
-			"new output stream: %s: %s: %s",
+			"new output stream: %s: %s: %s: %s: %s",
 			sampleStream.CodecParameters().MediaType(),
 			sampleStream.CodecParameters().CodecID(),
+			sampleStream.TimeBase(),
+			spew.Sdump(sampleStream),
 			spew.Sdump(sampleStream.CodecParameters()),
 		)
+		sampleStream.CodecParameters()
 		outputStream = output.Output.FormatContext.NewStream(nil)
 		if outputStream == nil {
 			return fmt.Errorf("unable to initialize an output stream")
@@ -172,19 +181,77 @@ func (l *Loop) writePacket(
 		if err := sampleStream.CodecParameters().Copy(outputStream.CodecParameters()); err != nil {
 			return fmt.Errorf("unable to copy the codec parameters of stream #%d: %w", packet.StreamIndex(), err)
 		}
+		outputStream.SetDiscard(sampleStream.Discard())
+		outputStream.SetAvgFrameRate(sampleStream.AvgFrameRate())
+		outputStream.SetRFrameRate(sampleStream.RFrameRate())
+		outputStream.SetSampleAspectRatio(sampleStream.SampleAspectRatio())
+		outputStream.SetTimeBase(sampleStream.TimeBase())
+		outputStream.SetStartTime(sampleStream.StartTime())
+		outputStream.SetEventFlags(sampleStream.EventFlags())
+		outputStream.SetPTSWrapBits(sampleStream.PTSWrapBits())
+
+		logger.Tracef(
+			ctx,
+			"resulting output stream: %s: %s: %s: %s: %s",
+			outputStream.CodecParameters().MediaType(),
+			outputStream.CodecParameters().CodecID(),
+			outputStream.TimeBase(),
+			spew.Sdump(outputStream),
+			spew.Sdump(outputStream.CodecParameters()),
+		)
+		output.Streams[sampleStream] = outputStream
+		if len(output.Streams) < 2 {
+			return nil
+		}
 		if err := output.Output.FormatContext.WriteHeader(nil); err != nil {
 			return fmt.Errorf("unable to write the header: %w", err)
 		}
-		output.Streams[streamIdx] = outputStream
+	}
+	if len(output.Streams) < 2 {
+		return nil
 	}
 	assert(ctx, outputStream != nil)
+	if logger.FromCtx(ctx).Level() >= logger.LevelTrace {
+		logger.Tracef(
+			ctx,
+			"unmodified packet with pos:%v (pts:%v, dts:%v, dur: %v) for %s stream %d (->%d) with flags 0x%016X",
+			packet.Pos(), packet.Pts(), packet.Dts(), packet.Duration(),
+			outputStream.CodecParameters().MediaType(),
+			packet.StreamIndex(),
+			outputStream.Index(),
+			packet.Flags(),
+		)
+	}
 	packet.SetStreamIndex(outputStream.Index())
+	if sampleStream.TimeBase() != outputStream.TimeBase() {
+		logger.Debugf(ctx, "timebase does not match between the sample and the output: %v != %v; correcting the output stream", sampleStream.TimeBase(), outputStream.TimeBase())
+		outputStream.SetTimeBase(sampleStream.TimeBase())
+	}
+	if logger.FromCtx(ctx).Level() >= logger.LevelTrace {
+		logger.Tracef(
+			ctx,
+			"writing packet with pos:%v (pts:%v, dts:%v, dur:%v) for %s stream %d (sample_rate: %v, time_base: %v) with flags 0x%016X and data 0x %X",
+			packet.Pos(), packet.Pts(), packet.Pts(), packet.Duration(),
+			outputStream.CodecParameters().MediaType(),
+			packet.StreamIndex(), outputStream.CodecParameters().SampleRate(), outputStream.TimeBase(),
+			packet.Flags(),
+			packet.Data(),
+		)
+	}
 	err := output.Output.FormatContext.WriteInterleavedFrame(packet)
 	if err != nil {
 		return fmt.Errorf("unable to write the frame: %w", err)
 	}
 	l.BytesCountRead.Add(uint64(packet.Size()))
-	logger.Tracef(ctx, "wrote a frame: %#+v", packet)
+	if logger.FromCtx(ctx).Level() >= logger.LevelTrace {
+		logger.Tracef(
+			ctx,
+			"wrote a frame: %s: %s: %#+v",
+			outputStream.CodecParameters().MediaType(),
+			outputStream.CodecParameters().CodecID(),
+			packet,
+		)
+	}
 	return nil
 }
 
@@ -202,7 +269,6 @@ func (l *Loop) readerLoopForInput(
 	ctx context.Context,
 	input *Input,
 	packetOutput chan<- EncoderInput,
-	packetsPool <-chan *astiav.Packet,
 ) (_err error) {
 	logger.Debugf(ctx, "readerLoopForInput")
 	defer func() { logger.Debugf(ctx, "/readerLoopForInput: %v", _err) }()
@@ -211,22 +277,32 @@ func (l *Loop) readerLoopForInput(
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case packet := <-packetsPool:
-			err := readIntoPacket(ctx, input, packet)
-			switch err {
-			case nil:
-				logger.Tracef(ctx, "received a frame, data: %X", packet.Data())
-				l.BytesCountRead.Add(uint64(packet.Size()))
-				packetOutput <- EncoderInput{
-					Input:  input,
-					Packet: packet,
-				}
-			case io.EOF:
-				return nil
-			default:
-				return fmt.Errorf("unable to process one iteration: %w", err)
-			}
+		default:
 		}
+
+		packet := PacketPool.Get()
+		err := readIntoPacket(ctx, input, packet)
+		switch err {
+		case nil:
+			logger.Tracef(
+				ctx,
+				"received a frame (pos:%d, pts:%d, dts:%d, dur:%d), data: 0x %X",
+				packet.Pos(), packet.Pts(), packet.Dts(), packet.Duration(),
+				packet.Data(),
+			)
+			l.BytesCountRead.Add(uint64(packet.Size()))
+			packetOutput <- EncoderInput{
+				Input:  input,
+				Packet: packet,
+			}
+		case io.EOF:
+			packet.Free()
+			return nil
+		default:
+			packet.Free()
+			return fmt.Errorf("unable to process one iteration: %w", err)
+		}
+
 	}
 }
 
@@ -253,11 +329,6 @@ func (l *Loop) Start(
 	}
 
 	const packetsPoolSize = 100
-	packetsPool := make(chan *astiav.Packet, packetsPoolSize)
-	for range packetsPoolSize {
-		packet := astiav.AllocPacket()
-		packetsPool <- packet
-	}
 	packetsChan := make(chan EncoderInput, packetsPoolSize)
 
 	inputsEnded := make(chan struct{})
@@ -265,13 +336,13 @@ func (l *Loop) Start(
 
 	observability.Go(ctx, func() {
 		defer func() {
+			logger.Debugf(ctx, "flushing packet buffers")
+			defer logger.Tracef(ctx, "/flushing packet buffers")
 			for {
 				select {
 				case packet := <-packetsChan:
-					packet.Packet.Unref()
-					packet.Packet.Free()
-				case packet := <-packetsPool:
-					packet.Free()
+					PacketPool.Put(packet.Packet)
+					packet.Packet = nil
 				default:
 					return
 				}
@@ -296,7 +367,7 @@ func (l *Loop) Start(
 					}
 					logger.Tracef(ctx, "amount of inputs: -1: %d", readersCount.Load())
 				}()
-				err := l.readerLoopForInput(ctx, input, packetsChan, packetsPool)
+				err := l.readerLoopForInput(ctx, input, packetsChan)
 				if err != nil {
 					setResultingError(fmt.Errorf("unable to process one iteration: %w", err))
 					return
@@ -329,7 +400,7 @@ func (l *Loop) Start(
 				Output:       output,
 				OutputChan:   make(chan *EncoderOutput, outputQueueLen),
 				FinishedChan: make(chan struct{}),
-				Streams:      make(map[int]*astiav.Stream),
+				Streams:      make(map[*astiav.Stream]*astiav.Stream),
 			}
 			l.outputs[out] = struct{}{}
 			writersCount.Add(1)
@@ -385,13 +456,13 @@ func (l *Loop) Start(
 
 	observability.Go(ctx, func() {
 		defer func() {
+			logger.Debugf(ctx, "flushing packet buffers")
+			defer logger.Tracef(ctx, "/flushing packet buffers")
 			for {
 				select {
 				case packet := <-packetsChan:
-					packet.Packet.Unref()
-					packet.Packet.Free()
-				case packet := <-packetsPool:
-					packet.Free()
+					PacketPool.Put(packet.Packet)
+					packet.Packet = nil
 				default:
 					return
 				}
@@ -410,8 +481,8 @@ func (l *Loop) Start(
 				break iterationsLoop
 			case packet := <-packetsChan:
 				err := l.processInputPacket(ctx, encoder, packet)
-				packet.Packet.Unref()
-				packetsPool <- packet.Packet
+				PacketPool.Put(packet.Packet)
+				packet.Packet = nil
 				switch err {
 				case nil:
 				default:
@@ -437,7 +508,15 @@ func (l *Loop) processInputPacket(
 	ctx context.Context,
 	encoder Encoder,
 	inputPacket EncoderInput,
-) error {
+) (_err error) {
+	logger.Tracef(
+		ctx,
+		"encoding packet (pos:%d, pts:%d, dts:%d, dur:%d), data: 0x %X",
+		inputPacket.Packet.Pos(), inputPacket.Packet.Pts(), inputPacket.Packet.Dts(), inputPacket.Packet.Duration(),
+		inputPacket.Packet.Data(),
+	)
+	defer func() { logger.Tracef(ctx, "encoding result: %v", _err) }()
+
 	outputPacket, err := encoder.Encode(ctx, inputPacket)
 	if err != nil {
 		return fmt.Errorf("unable to encode: %w", err)
@@ -445,30 +524,36 @@ func (l *Loop) processInputPacket(
 	if outputPacket == nil {
 		return nil
 	}
+	defer func(outputPacket *EncoderOutput) {
+		PacketPool.Put(outputPacket.Packet)
+		outputPacket.Packet = nil
+	}(outputPacket)
 
 	for output := range l.outputs {
-		outputPacket.refCounter.Add(1)
 		select {
 		case <-output.FinishedChan:
 			output.OutputChanCloseOnce.Do(func() {
 				close(output.OutputChan)
 			})
-			outputPacket.refCounter.Done()
 			continue
 		default:
 		}
+		clonedOutput := &EncoderOutput{
+			Packet: ClonePacketAsWritable(outputPacket.Packet),
+			Stream: outputPacket.Stream,
+		}
+		logger.Tracef(
+			ctx,
+			"queueing packet (pos:%d, pts:%d, dts:%d, dur:%d), data: 0x %X",
+			inputPacket.Packet.Pos(), inputPacket.Packet.Pts(), inputPacket.Packet.Dts(), inputPacket.Packet.Duration(),
+			inputPacket.Packet.Data(),
+		)
 		select {
-		case output.OutputChan <- outputPacket:
+		case output.OutputChan <- clonedOutput:
 		default:
-			outputPacket.refCounter.Done()
 			logger.Errorf(ctx, "the queue is full, cannot send a packet to the Output")
 		}
 	}
-
-	observability.Go(ctx, func() {
-		outputPacket.refCounter.Wait()
-		outputPacket.UnrefAndFree()
-	})
 
 	return nil
 }
@@ -480,7 +565,8 @@ func (l *Loop) finalize(
 	for output := range l.outputs {
 		// waiting until nobody else writing to the output:
 		for outputItem := range output.OutputChan {
-			outputItem.refCounter.Done()
+			PacketPool.Put(outputItem.Packet)
+			outputItem.Packet = nil
 		}
 
 		// writing the trailer

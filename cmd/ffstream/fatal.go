@@ -14,3 +14,11 @@ func assertNoError(
 		logger.Fatal(ctx, err)
 	}
 }
+
+func fatal(
+	ctx context.Context,
+	format string,
+	args ...any,
+) {
+	logger.Fatalf(ctx, format, args...)
+}

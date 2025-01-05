@@ -5,10 +5,13 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 
+	"github.com/asticode/go-astiav"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/xaionaro-go/streamctl/pkg/astiavlogger"
 	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder"
 )
 
 func initRuntime(
@@ -30,6 +33,9 @@ func initRuntime(
 			l.Error(http.ListenAndServe(flags.ListenNetPprof, nil))
 		})
 	}
+
+	astiav.SetLogLevel(recoder.LogLevelToAstiav(logger.FromCtx(ctx).Level()))
+	astiav.SetLogCallback(astiavlogger.Callback(l))
 
 	ctx, cancelFn := context.WithCancel(ctx)
 	return ctx, func() {

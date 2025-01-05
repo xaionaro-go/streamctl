@@ -7,7 +7,7 @@ import (
 )
 
 func getListener(
-	ctx context.Context,
+	_ context.Context,
 	addr string,
 ) (net.Listener, error) {
 	parts := strings.SplitN(addr, ":", 2)

@@ -48,6 +48,9 @@ func NewInputFromURL(
 		input.Closer.Add(input.Dictionary.Free)
 
 		for _, opt := range cfg.CustomOptions {
+			if opt.Key == "f" {
+				return nil, fmt.Errorf("overriding input format is not supported, yet")
+			}
 			logger.Debugf(ctx, "input.Dictionary['%s'] = '%s'", opt.Key, opt.Value)
 			input.Dictionary.Set(opt.Key, opt.Value, 0)
 		}
