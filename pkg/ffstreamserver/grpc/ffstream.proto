@@ -62,7 +62,7 @@ message RemoveOutputReply {}
 
 message CodecConfig {
   string codecName = 1;
-  uint64 bitRateAveragerBufferSizeInBits = 2;
+  uint64 averagingPeriod = 2;
   uint64 AverageBitRate = 3;
   repeated customOption customOptions = 4;
 }

@@ -218,7 +218,7 @@ func (c *Client) End(
 
 func (c *Client) GetEncoderStats(
 	ctx context.Context,
-) (*recoder.CommonsEncoderStatistics, error) {
+) (*recoder.EncoderStatistics, error) {
 	client, conn, err := c.grpcClient()
 	if err != nil {
 		return nil, err

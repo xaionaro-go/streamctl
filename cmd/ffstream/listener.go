@@ -13,7 +13,7 @@ func getListener(
 	parts := strings.SplitN(addr, ":", 2)
 
 	if len(parts) == 1 {
-		return net.Listen("unixpacket", addr)
+		return net.Listen("unix", addr)
 	}
 
 	switch parts[0] {

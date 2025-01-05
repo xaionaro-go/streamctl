@@ -83,15 +83,15 @@ func (s *FFStream) SetEncoderConfig(
 
 func (s *FFStream) GetEncoderStats(
 	ctx context.Context,
-) *recoder.CommonsEncoderStatistics {
+) *recoder.EncoderStatistics {
 	return s.Encoder.GetStats()
 }
 
 func (s *FFStream) WithSRTOutput(
-	_ context.Context,
+	ctx context.Context,
 	callback func(*threadsafe.Socket) error,
 ) error {
-	sock, err := s.Output.SRT()
+	sock, err := s.Output.SRT(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to get the SRT socket handler: %w", err)
 	}

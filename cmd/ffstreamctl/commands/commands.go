@@ -173,7 +173,7 @@ func flagIntGet(cmd *cobra.Command, args []string) {
 	value, err := client.GetFlagInt(ctx, flagID)
 	assertNoError(ctx, err)
 
-	fmt.Fprintf(cmd.OutOrStdout(), "%d", value)
+	fmt.Fprintf(cmd.OutOrStdout(), "%d\n", value)
 }
 
 func flagIntSet(cmd *cobra.Command, args []string) {

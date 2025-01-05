@@ -6,39 +6,44 @@ import (
 )
 
 func EncoderStatsToGRPC(
-	req *recoder.CommonsEncoderStatistics,
+	req *recoder.EncoderStatistics,
 ) *ffstream_grpc.GetEncoderStatsReply {
 	return &ffstream_grpc.GetEncoderStatsReply{
-		BytesCountRead:              req.BytesCountRead.Load(),
-		BytesCountWrote:             req.BytesCountWrote.Load(),
-		FramesReadUnparsed:          req.FramesRead.Unparsed.Load(),
-		FramesReadVideoUnprocessed:  req.FramesRead.VideoUnprocessed.Load(),
-		FramesReadAudioUnprocessed:  req.FramesRead.AudioUnprocessed.Load(),
-		FramesReadVideoProcessed:    req.FramesRead.VideoProcessed.Load(),
-		FramesReadAudioProcessed:    req.FramesRead.AudioProcessed.Load(),
-		FramesWroteUnparsed:         req.FramesWrote.Unparsed.Load(),
-		FramesWroteVideoUnprocessed: req.FramesWrote.VideoUnprocessed.Load(),
-		FramesWroteAudioUnprocessed: req.FramesWrote.AudioUnprocessed.Load(),
-		FramesWroteVideoProcessed:   req.FramesWrote.VideoProcessed.Load(),
-		FramesWroteAudioProcessed:   req.FramesWrote.AudioProcessed.Load(),
+		BytesCountRead:              req.BytesCountRead,
+		BytesCountWrote:             req.BytesCountWrote,
+		FramesReadUnparsed:          req.FramesRead.Unparsed,
+		FramesReadVideoUnprocessed:  req.FramesRead.VideoUnprocessed,
+		FramesReadAudioUnprocessed:  req.FramesRead.AudioUnprocessed,
+		FramesReadVideoProcessed:    req.FramesRead.VideoProcessed,
+		FramesReadAudioProcessed:    req.FramesRead.AudioProcessed,
+		FramesWroteUnparsed:         req.FramesWrote.Unparsed,
+		FramesWroteVideoUnprocessed: req.FramesWrote.VideoUnprocessed,
+		FramesWroteAudioUnprocessed: req.FramesWrote.AudioUnprocessed,
+		FramesWroteVideoProcessed:   req.FramesWrote.VideoProcessed,
+		FramesWroteAudioProcessed:   req.FramesWrote.AudioProcessed,
 	}
 }
 
 func EncoderStatsFromGRPC(
 	req *ffstream_grpc.GetEncoderStatsReply,
-) *recoder.CommonsEncoderStatistics {
-	result := &recoder.CommonsEncoderStatistics{}
-	result.BytesCountRead.Store(req.BytesCountRead)
-	result.BytesCountWrote.Store(req.BytesCountWrote)
-	result.FramesRead.Unparsed.Store(req.FramesReadUnparsed)
-	result.FramesRead.VideoUnprocessed.Store(req.FramesReadVideoUnprocessed)
-	result.FramesRead.AudioUnprocessed.Store(req.FramesReadAudioUnprocessed)
-	result.FramesRead.VideoProcessed.Store(req.FramesReadVideoProcessed)
-	result.FramesRead.AudioProcessed.Store(req.FramesReadAudioProcessed)
-	result.FramesWrote.Unparsed.Store(req.FramesWroteUnparsed)
-	result.FramesWrote.VideoUnprocessed.Store(req.FramesWroteVideoUnprocessed)
-	result.FramesWrote.AudioUnprocessed.Store(req.FramesWroteAudioUnprocessed)
-	result.FramesWrote.VideoProcessed.Store(req.FramesWroteVideoProcessed)
-	result.FramesWrote.AudioProcessed.Store(req.FramesWroteAudioProcessed)
+) *recoder.EncoderStatistics {
+	result := &recoder.EncoderStatistics{
+		BytesCountRead:  req.GetBytesCountRead(),
+		BytesCountWrote: req.GetBytesCountWrote(),
+		FramesRead: recoder.EncoderFramesStatistics{
+			Unparsed:         req.GetFramesReadUnparsed(),
+			VideoUnprocessed: req.GetFramesReadVideoUnprocessed(),
+			AudioUnprocessed: req.GetFramesReadAudioUnprocessed(),
+			VideoProcessed:   req.GetFramesReadVideoProcessed(),
+			AudioProcessed:   req.GetFramesReadAudioProcessed(),
+		},
+		FramesWrote: recoder.EncoderFramesStatistics{
+			Unparsed:         req.GetFramesWroteUnparsed(),
+			VideoUnprocessed: req.GetFramesWroteVideoUnprocessed(),
+			AudioUnprocessed: req.GetFramesWroteAudioUnprocessed(),
+			VideoProcessed:   req.GetFramesWroteVideoProcessed(),
+			AudioProcessed:   req.GetFramesWroteAudioProcessed(),
+		},
+	}
 	return result
 }

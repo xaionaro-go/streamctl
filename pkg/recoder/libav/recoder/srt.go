@@ -1,23 +1,23 @@
 package recoder
 
 import (
-	"fmt"
-	"unsafe"
+	"context"
 
 	"github.com/asticode/go-astiav"
+	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/libsrt/extras/xastiav"
 	"github.com/xaionaro-go/libsrt/threadsafe"
-	"github.com/xaionaro-go/unsafetools"
 )
 
-func formatContextToSRTSocket(fmtCtx *astiav.FormatContext) (*threadsafe.Socket, error) {
-	privData := fmtCtx.PrivateData()
-	if privData == nil {
-		return nil, fmt.Errorf("failed to get 'priv_data'")
-	}
+func formatContextToSRTSocket(
+	ctx context.Context,
+	fmtCtx *astiav.FormatContext,
+) (_ret *threadsafe.Socket, _err error) {
+	logger.Tracef(ctx, "formatContextToSRTSocket")
+	defer func() { logger.Tracef(ctx, "/formatContextToSRTSocket: %v %v", _ret, _err) }()
 
-	privDataCP := *unsafetools.FieldByName(privData, "c").(*unsafe.Pointer)
-	privDataC := int32(uintptr(privDataCP))
-
-	sock := threadsafe.SocketFromC(privDataC)
+	sockC := xastiav.GetFDFromFormatContext(fmtCtx)
+	logger.Debugf(ctx, "SRT file descriptor: %d", sockC)
+	sock := threadsafe.SocketFromC(int32(sockC))
 	return sock, nil
 }
