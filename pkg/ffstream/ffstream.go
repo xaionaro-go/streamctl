@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/xaionaro-go/libsrt/threadsafe"
-	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder"
+	"github.com/xaionaro-go/recoder/libav/recoder"
 )
 
 type FFStream struct {

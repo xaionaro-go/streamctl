@@ -1,7 +1,7 @@
 package streamforward
 
 import (
-	"github.com/xaionaro-go/streamctl/pkg/recoder/libav"
+	"github.com/xaionaro-go/recoder/libav"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/streamforward"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 )

@@ -13,7 +13,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	xlogrus "github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
 	"github.com/stretchr/testify/require"
-	"github.com/xaionaro-go/streamctl/pkg/xpath"
+	"github.com/xaionaro-go/xpath"
 )
 
 func TestGetFlagsAndroidFromFiles(t *testing.T) {

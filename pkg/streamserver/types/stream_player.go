@@ -1,7 +1,7 @@
 package types
 
 import (
-	player "github.com/xaionaro-go/streamctl/pkg/player/types"
+	player "github.com/xaionaro-go/player/pkg/player/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 )

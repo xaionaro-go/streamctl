@@ -10,8 +10,8 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/xaionaro-go/observability"
+	"github.com/xaionaro-go/recoder/libav/recoder"
 	"github.com/xaionaro-go/streamctl/pkg/astiavlogger"
-	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder"
 )
 
 func initRuntime(

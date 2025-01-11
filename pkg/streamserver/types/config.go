@@ -3,7 +3,7 @@ package types
 import (
 	"time"
 
-	player "github.com/xaionaro-go/streamctl/pkg/player/types"
+	player "github.com/xaionaro-go/player/pkg/player/types"
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"

@@ -1,7 +1,7 @@
 package goconv
 
 import (
-	"github.com/xaionaro-go/streamctl/pkg/player"
+	"github.com/xaionaro-go/player/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 )

@@ -20,7 +20,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	streamdconfig "github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/config"
-	"github.com/xaionaro-go/streamctl/pkg/xfyne"
+	"github.com/xaionaro-go/xfyne/widget"
 )
 
 func (p *Panel) openSettingsWindowNoLock(

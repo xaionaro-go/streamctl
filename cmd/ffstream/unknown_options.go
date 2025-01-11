@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder"
+	"github.com/xaionaro-go/recoder/libav/recoder"
 )
 
 func convertUnknownOptionsToCustomOptions(

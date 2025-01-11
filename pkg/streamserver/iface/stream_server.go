@@ -3,7 +3,7 @@ package iface
 import (
 	"context"
 
-	"github.com/xaionaro-go/streamctl/pkg/player"
+	"github.com/xaionaro-go/player/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/streamforward"

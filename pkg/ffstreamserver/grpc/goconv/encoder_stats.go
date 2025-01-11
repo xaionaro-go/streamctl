@@ -1,8 +1,8 @@
 package goconv
 
 import (
+	"github.com/xaionaro-go/recoder/libav/recoder/types"
 	"github.com/xaionaro-go/streamctl/pkg/ffstreamserver/grpc/go/ffstream_grpc"
-	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder/types"
 )
 
 func EncoderStatsToGRPC(

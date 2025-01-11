@@ -20,8 +20,8 @@ import (
 	twitch "github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/types"
 	youtube "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config/action"
-	"github.com/xaionaro-go/streamctl/pkg/xcontext"
-	"github.com/xaionaro-go/streamctl/pkg/xfyne"
+	"github.com/xaionaro-go/xcontext"
+	"github.com/xaionaro-go/xfyne/widget"
 	"github.com/xaionaro-go/xsync"
 )
 

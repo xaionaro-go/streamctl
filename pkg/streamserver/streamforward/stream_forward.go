@@ -12,7 +12,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/observability"
-	recoder "github.com/xaionaro-go/streamctl/pkg/recoder"
+	recoder "github.com/xaionaro-go/recoder"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/xsync"
 )
@@ -215,7 +215,7 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 		})
 	}()
 
-	recoderInstance, err := fwd.RecoderFactory.New(ctx, recoder.EncoderConfig{})
+	recoderInstance, err := fwd.RecoderFactory.New(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to initialize a recoder: %w", err)
 	}

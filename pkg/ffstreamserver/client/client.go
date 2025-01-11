@@ -9,10 +9,10 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/libsrt"
 	"github.com/xaionaro-go/observability"
+	recodertypes "github.com/xaionaro-go/recoder/libav/recoder/types"
 	ffstreamtypes "github.com/xaionaro-go/streamctl/pkg/ffstream/types"
 	"github.com/xaionaro-go/streamctl/pkg/ffstreamserver/grpc/go/ffstream_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/ffstreamserver/grpc/goconv"
-	recodertypes "github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )

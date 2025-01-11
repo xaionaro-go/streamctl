@@ -35,7 +35,7 @@ import (
 	streamdconfig "github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	streamdconsts "github.com/xaionaro-go/streamctl/pkg/streamd/consts"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
-	"github.com/xaionaro-go/streamctl/pkg/xfyne"
+	xfyne "github.com/xaionaro-go/xfyne/widget"
 	"github.com/xaionaro-go/xsync"
 )
 

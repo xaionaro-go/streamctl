@@ -6,7 +6,7 @@ import (
 
 	"github.com/asticode/go-astiav"
 	logger "github.com/facebookincubator/go-belt/tool/logger/types"
-	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder"
+	"github.com/xaionaro-go/recoder/libav/recoder"
 )
 
 func Callback(l logger.Logger) astiav.LogCallback {

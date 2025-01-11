@@ -1,7 +1,7 @@
 package streamforward
 
 import (
-	xaionarogortmp "github.com/xaionaro-go/streamctl/pkg/recoder/xaionaro-go-rtmp"
+	xaionarogortmp "github.com/xaionaro-go/recoder/xaionaro-go-rtmp"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/streamforward"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 )

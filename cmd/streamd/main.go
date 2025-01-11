@@ -30,7 +30,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/server"
 	uiiface "github.com/xaionaro-go/streamctl/pkg/streamd/ui"
-	"github.com/xaionaro-go/streamctl/pkg/xpath"
+	"github.com/xaionaro-go/xpath"
 	"google.golang.org/grpc"
 )
 
@@ -156,7 +156,7 @@ func main() {
 		var cfg config.Config
 		err := config.ReadConfigFromPath(ctx, configPathExpanded, &cfg)
 		if err != nil {
-			l.Fatal(cfg)
+			l.Fatal(err)
 		}
 
 		ctx, _cancelFunc := context.WithCancel(ctx)

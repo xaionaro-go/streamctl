@@ -1,6 +1,7 @@
 package types
 
 import (
+	"github.com/xaionaro-go/recoder/xaionaro-go-rtmp/yutoppgortmp"
 	"github.com/xaionaro-go/streamctl/pkg/secret"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
@@ -15,7 +16,7 @@ type StreamID = streamtypes.StreamID
 
 type DestinationID = streamtypes.DestinationID
 
-type AppKey string
+type AppKey = yutoppgortmp.AppKey
 
 type AppKeys []AppKey
 

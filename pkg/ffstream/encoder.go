@@ -9,8 +9,8 @@ import (
 
 	"github.com/asticode/go-astiav"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/recoder/libav/recoder"
 	"github.com/xaionaro-go/streamctl/pkg/ffstream/types"
-	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder"
 )
 
 type Encoder struct {

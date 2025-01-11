@@ -6,11 +6,11 @@ import (
 
 	"github.com/xaionaro-go/libsrt"
 	"github.com/xaionaro-go/libsrt/threadsafe"
+	"github.com/xaionaro-go/recoder/libav/recoder"
 	"github.com/xaionaro-go/streamctl/pkg/ffstream"
 	"github.com/xaionaro-go/streamctl/pkg/ffstreamserver/grpc/go/ffstream_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/ffstreamserver/grpc/goconv"
-	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder"
-	"github.com/xaionaro-go/streamctl/pkg/xcontext"
+	"github.com/xaionaro-go/xcontext"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

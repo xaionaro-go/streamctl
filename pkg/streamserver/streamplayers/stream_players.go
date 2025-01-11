@@ -8,13 +8,13 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/observability"
-	"github.com/xaionaro-go/streamctl/pkg/player"
+	"github.com/xaionaro-go/player/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
-	"github.com/xaionaro-go/streamctl/pkg/xcontext"
+	"github.com/xaionaro-go/xcontext"
 	"github.com/xaionaro-go/xsync"
 )
 

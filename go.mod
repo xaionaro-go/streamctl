@@ -1,6 +1,8 @@
 module github.com/xaionaro-go/streamctl
 
-go 1.22.2
+go 1.23.2
+
+toolchain go1.23.4
 
 // The original go-yaml is very slow, using the improved version instead
 replace github.com/goccy/go-yaml v1.11.3 => github.com/yoelsusanto/go-yaml v0.0.0-20240324162521-2018c1ab915b
@@ -19,12 +21,12 @@ replace github.com/rs/zerolog v1.33.0 => github.com/xaionaro-go/zerolog2belt v0.
 
 replace github.com/bluenviron/gortsplib/v4 v4.11.0 => github.com/xaionaro-go/gortsplib/v4 v4.0.0-20241123213409-7279dabb7de6
 
-replace github.com/asticode/go-astiav v0.29.0 => github.com/xaionaro-go/astiav v0.0.0-20250106205037-a1605f324663
+replace github.com/asticode/go-astiav v0.30.0 => github.com/xaionaro-go/astiav v0.0.0-20250106205037-a1605f324663
 
 require (
 	github.com/facebookincubator/go-belt v0.0.0-20240804203001-846c4409d41c
 	github.com/go-git/go-billy/v5 v5.5.0
-	github.com/goccy/go-yaml v1.11.3
+	github.com/goccy/go-yaml v1.15.13
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/nicklaw5/helix/v2 v2.30.1-0.20240715193454-0151ccccf980
 	github.com/spf13/cobra v1.8.1
@@ -51,10 +53,13 @@ require (
 	github.com/ProtonMail/go-crypto v1.0.0 // indirect
 	github.com/RomainMichau/cloudscraper_go v0.4.1 // indirect
 	github.com/abema/go-mp4 v1.2.0 // indirect
+	github.com/adrg/libvlc-go/v3 v3.1.6 // indirect
 	github.com/andybalholm/brotli v1.1.0 // indirect
+	github.com/asticode/go-astikit v0.51.1 // indirect
 	github.com/asticode/go-astits v1.13.0 // indirect
 	github.com/benburkert/openpgp v0.0.0-20160410205803-c2471f86866c // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/blang/mpv v0.0.0-20160810175505-d56d7352e068 // indirect
 	github.com/bluenviron/gohlslib/v2 v2.0.0 // indirect
 	github.com/bluenviron/mediacommon v1.13.1 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
@@ -67,18 +72,18 @@ require (
 	github.com/coreos/go-oidc/v3 v3.11.0 // indirect
 	github.com/cyphar/filepath-securejoin v0.2.4 // indirect
 	github.com/datarhei/gosrt v0.7.0 // indirect
+	github.com/dexterlb/mpvipc v0.0.0-20241005113212-7cdefca0e933 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/dsnet/compress v0.0.1 // indirect
 	github.com/ebitengine/oto/v3 v3.3.2 // indirect
 	github.com/ebitengine/purego v0.8.0 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
-	github.com/fatih/color v1.15.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fredbi/uri v1.1.0 // indirect
 	github.com/friendsofgo/errors v0.9.2 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/fyne-io/gl-js v0.0.0-20230506162202-1fdaa286a934 // indirect
-	github.com/fyne-io/glfw-js v0.0.0-20240101223322-6e1efdc71b7a // indirect
+	github.com/fyne-io/glfw-js v0.0.0-20241126112943-313d8a0fe1d0 // indirect
 	github.com/fyne-io/image v0.0.0-20240417123036-dc0ee9e7c964 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
 	github.com/gen2brain/shm v0.0.0-20230802011745-f2460f5984f7 // indirect
@@ -100,8 +105,8 @@ require (
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.20.0 // indirect
 	github.com/go-redis/redis/v8 v8.11.5 // indirect
-	github.com/go-text/render v0.1.1-0.20240418202334-dd62631dae9b // indirect
-	github.com/go-text/typesetting v0.1.1 // indirect
+	github.com/go-text/render v0.2.0 // indirect
+	github.com/go-text/typesetting v0.2.0 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/gofrs/uuid v4.4.0+incompatible // indirect
@@ -136,7 +141,6 @@ require (
 	github.com/lib/pq v1.10.9 // indirect
 	github.com/lxn/win v0.0.0-20210218163916-a377121e959e // indirect
 	github.com/matthewhartstonge/argon2 v1.0.1 // indirect
-	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mmcloughlin/profile v0.1.1 // indirect
@@ -152,13 +156,14 @@ require (
 	github.com/pion/rtp v1.8.9 // indirect
 	github.com/pion/sdp/v3 v3.0.9 // indirect
 	github.com/pjbgf/sha1cd v0.3.0 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/pojntfx/go-auth-utils v0.1.0 // indirect
 	github.com/prometheus/client_model v0.6.0 // indirect
 	github.com/prometheus/common v0.47.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/rubenv/sql-migrate v1.7.0 // indirect
-	github.com/rymdport/portal v0.2.6 // indirect
+	github.com/rymdport/portal v0.3.0 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
 	github.com/skeema/knownhosts v1.2.2 // indirect
 	github.com/songgao/water v0.0.0-20200317203138-2b4b6d7c09d8 // indirect
@@ -179,6 +184,7 @@ require (
 	github.com/volatiletech/strmangle v0.0.6 // indirect
 	github.com/wlynxg/anet v0.0.4 // indirect
 	github.com/xaionaro-go/gorex v0.0.0-20241010205749-bcd59d639c4d // indirect
+	github.com/xaionaro-go/proxy v0.0.0-20250111150848-1f0e7b262638 // indirect
 	github.com/xaionaro-go/spinlock v0.0.0-20200518175509-30e6d1ce68a1 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	github.com/xo/terminfo v0.0.0-20210125001918-ca9a967f8778 // indirect
@@ -187,9 +193,9 @@ require (
 	github.com/yutopp/go-amf0 v0.1.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.54.0 // indirect
-	go.opentelemetry.io/otel v1.29.0 // indirect
-	go.opentelemetry.io/otel/metric v1.29.0 // indirect
-	go.opentelemetry.io/otel/trace v1.29.0 // indirect
+	go.opentelemetry.io/otel v1.31.0 // indirect
+	go.opentelemetry.io/otel/metric v1.31.0 // indirect
+	go.opentelemetry.io/otel/trace v1.31.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/arch v0.8.0 // indirect
@@ -197,6 +203,7 @@ require (
 	golang.org/x/image v0.18.0 // indirect
 	golang.org/x/mobile v0.0.0-20240404231514-09dbf07665ed // indirect
 	golang.org/x/mod v0.20.0 // indirect
+	golang.org/x/net v0.34.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/sys v0.29.0 // indirect
 	golang.org/x/term v0.28.0 // indirect
@@ -204,7 +211,6 @@ require (
 	golang.org/x/time v0.7.0 // indirect
 	golang.org/x/tools v0.24.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240716161551-93cc26a95ae9 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20241007155032-5fefd90f89a9 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20241015192408-796eee8c2d53 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
@@ -212,20 +218,16 @@ require (
 )
 
 require (
-	fyne.io/fyne/v2 v2.5.0
+	fyne.io/fyne/v2 v2.5.3
 	github.com/AgustinSRG/go-child-process-manager v1.0.1
 	github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802
-	github.com/DexterLB/mpvipc v0.0.0-20230829142118-145d6eabdc37
 	github.com/abhinavxd/youtube-live-chat-downloader/v2 v2.0.3
 	github.com/adeithe/go-twitch v0.3.1
-	github.com/adrg/libvlc-go/v3 v3.1.5
 	github.com/andreykaipov/goobs v1.4.1
 	github.com/anthonynsimon/bild v0.14.0
 	github.com/asaskevich/EventBus v0.0.0-20200907212545-49d423059eef
-	github.com/asticode/go-astiav v0.29.0
-	github.com/asticode/go-astikit v0.42.0
+	github.com/asticode/go-astiav v0.30.0
 	github.com/bamiaux/rez v0.0.0-20170731184118-29f4463c688b
-	github.com/blang/mpv v0.0.0-20160810175505-d56d7352e068
 	github.com/bluenviron/gortsplib/v4 v4.11.0
 	github.com/chai2010/webp v1.1.1
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
@@ -245,7 +247,6 @@ require (
 	github.com/kbinani/screenshot v0.0.0-20230812210009-b87d31814237
 	github.com/klauspost/compress v1.17.7
 	github.com/lusingander/colorpicker v0.7.3
-	github.com/pkg/errors v0.9.1
 	github.com/pojntfx/weron v0.2.7
 	github.com/prometheus/client_golang v1.18.0
 	github.com/rs/zerolog v1.33.0
@@ -262,27 +263,32 @@ require (
 	github.com/xaionaro-go/kickcom v0.0.0-20241022142825-25a234cc8628
 	github.com/xaionaro-go/libsrt v0.0.0-20250105232601-e760c79b2bc3
 	github.com/xaionaro-go/lockmap v0.0.0-20240901172806-e17aea364748
+	github.com/xaionaro-go/logwriter v0.0.0-20250111154941-c3f7a1a2d567
 	github.com/xaionaro-go/mediamtx v0.0.0-20241103200202-882a99e8df73
 	github.com/xaionaro-go/object v0.0.0-20241026212449-753ce10ec94c
 	github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20241018162120-5faf4e7a684a
 	github.com/xaionaro-go/observability v0.0.0-20250111142240-5d72f17a6d12
+	github.com/xaionaro-go/player v0.0.0-20250111155300-087e2c146e06
+	github.com/xaionaro-go/recoder v0.0.0-20250111153658-7e55cef13b0f
 	github.com/xaionaro-go/secret v0.0.0-20250111141743-ced12e1082c2
 	github.com/xaionaro-go/timeapiio v0.0.0-20240915203246-b907cf699af3
 	github.com/xaionaro-go/typing v0.0.0-20221123235249-2229101d38ba
 	github.com/xaionaro-go/unsafetools v0.0.0-20241024014258-a46e1ce3763e
+	github.com/xaionaro-go/xcontext v0.0.0-20250111150717-e70e1f5b299c
+	github.com/xaionaro-go/xfyne v0.0.0-20241018233531-26123724a6c6
+	github.com/xaionaro-go/xlogrus v0.0.0-20250111150201-60557109545a
+	github.com/xaionaro-go/xpath v0.0.0-20250111145115-55f5728f643f
 	github.com/xaionaro-go/xsync v0.0.0-20250111141039-3e7f31b1a2c6
 	github.com/yutopp/go-flv v0.3.1
 	golang.org/x/crypto v0.32.0
-	golang.org/x/net v0.31.0
-	google.golang.org/grpc v1.67.1
-	google.golang.org/protobuf v1.35.1
+	google.golang.org/grpc v1.69.2
+	google.golang.org/protobuf v1.36.2
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
 	github.com/BurntSushi/xgbutil v0.0.0-20190907113008-ad855c713046
-	github.com/onsi/gomega v1.30.0 // indirect
 	github.com/phuslu/goid v1.0.1 // indirect
 	github.com/pion/datachannel v1.5.9 // indirect
 	github.com/pion/dtls/v2 v2.2.12 // indirect

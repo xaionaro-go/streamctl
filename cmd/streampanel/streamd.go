@@ -27,7 +27,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/server"
 	streampanelconfig "github.com/xaionaro-go/streamctl/pkg/streampanel/config"
-	"github.com/xaionaro-go/streamctl/pkg/xpath"
+	"github.com/xaionaro-go/xpath"
 	"github.com/xaionaro-go/xsync"
 	"google.golang.org/grpc"
 )

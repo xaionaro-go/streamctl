@@ -13,17 +13,18 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/go-rtmp"
 	"github.com/xaionaro-go/observability"
-	"github.com/xaionaro-go/streamctl/pkg/player"
-	playertypes "github.com/xaionaro-go/streamctl/pkg/player/types"
-	xaionarogortmp "github.com/xaionaro-go/streamctl/pkg/recoder/xaionaro-go-rtmp"
+	"github.com/xaionaro-go/player/pkg/player"
+	playertypes "github.com/xaionaro-go/player/pkg/player/types"
+	xaionarogortmp "github.com/xaionaro-go/recoder/xaionaro-go-rtmp"
+	"github.com/xaionaro-go/recoder/xaionaro-go-rtmp/yutoppgortmp"
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
-	yutoppgortmp "github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/xaionaro-go-rtmp"
+	xyutoppgortmp "github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/xaionaro-go-rtmp"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/xaionaro-go-rtmp/streamforward"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/streamplayers"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
-	"github.com/xaionaro-go/streamctl/pkg/xlogger"
+	"github.com/xaionaro-go/xlogrus"
 	"github.com/xaionaro-go/xsync"
 	flvtag "github.com/yutopp/go-flv/tag"
 )
@@ -211,7 +212,7 @@ func (s *StreamServer) startServer(
 			err = fmt.Errorf("unable to start listening '%s': %w", listenAddr, err)
 			break
 		}
-		portSrv := &yutoppgortmp.PortServer{
+		portSrv := &xyutoppgortmp.PortServer{
 			Listener: listener,
 		}
 		portSrv.Server = rtmp.NewServer(&rtmp.ServerConfig{
@@ -228,7 +229,7 @@ func (s *StreamServer) startServer(
 					ControlState: rtmp.StreamControlStateConfig{
 						DefaultBandwidthWindowSize: 20 * 1024 * 1024 / 8,
 					},
-					Logger: xlogger.LogrusFieldLoggerFromCtx(ctx),
+					Logger: xlogrus.FieldLoggerFromCtx(ctx),
 				}
 			},
 		})

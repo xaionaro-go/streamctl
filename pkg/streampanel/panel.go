@@ -47,7 +47,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/audio"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/config"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
-	"github.com/xaionaro-go/streamctl/pkg/xpath"
+	"github.com/xaionaro-go/xpath"
 	"github.com/xaionaro-go/xsync"
 )
 

@@ -15,7 +15,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
 	"github.com/xaionaro-go/streamctl/pkg/consts"
-	"github.com/xaionaro-go/streamctl/pkg/xpath"
+	"github.com/xaionaro-go/xpath"
 )
 
 func getSystemProperty(prop string) (string, error) {

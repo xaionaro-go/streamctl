@@ -11,7 +11,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/lockmap"
 	"github.com/xaionaro-go/observability"
-	"github.com/xaionaro-go/streamctl/pkg/recoder"
+	"github.com/xaionaro-go/recoder"
 	"github.com/xaionaro-go/streamctl/pkg/secret"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/memoize"

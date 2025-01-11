@@ -13,8 +13,8 @@ import (
 	child_process_manager "github.com/AgustinSRG/go-child-process-manager"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/logwriter"
 	"github.com/xaionaro-go/observability"
-	"github.com/xaionaro-go/streamctl/pkg/logwriter"
 	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
 	"github.com/xaionaro-go/xsync"
 )
@@ -260,10 +260,12 @@ func runFork(
 		logger.FromCtx(ctx).
 			WithField("log_writer_target", "split").
 			WithField("output_type", "stderr"),
+		logger.LevelTrace,
 	)
 	cmd.Stdout = logwriter.NewLogWriter(
 		ctx,
 		logger.FromCtx(ctx).WithField("log_writer_target", "split"),
+		logger.LevelTrace,
 	)
 	cmd.Stdin = os.Stdin
 	err := child_process_manager.ConfigureCommand(cmd)

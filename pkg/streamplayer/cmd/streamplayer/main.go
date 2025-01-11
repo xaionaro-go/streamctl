@@ -18,8 +18,8 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
 	"github.com/spf13/pflag"
 
-	"github.com/xaionaro-go/streamctl/pkg/player"
-	ptypes "github.com/xaionaro-go/streamctl/pkg/player/types"
+	"github.com/xaionaro-go/player/pkg/player"
+	ptypes "github.com/xaionaro-go/player/pkg/player/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
@@ -27,7 +27,7 @@ import (
 	sstypes "github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
-	"github.com/xaionaro-go/streamctl/pkg/xfyne"
+	"github.com/xaionaro-go/xfyne/widget"
 )
 
 func assertNoError(ctx context.Context, err error) {

@@ -3,7 +3,7 @@ package types
 import (
 	"time"
 
-	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder/types"
+	"github.com/xaionaro-go/recoder/libav/recoder/types"
 )
 
 type CodecConfig struct {

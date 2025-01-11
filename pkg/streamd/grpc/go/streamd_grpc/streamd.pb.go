@@ -7,7 +7,7 @@
 package streamd_grpc
 
 import (
-	player_grpc "github.com/xaionaro-go/streamctl/pkg/player/protobuf/go/player_grpc"
+	player_grpc "github.com/xaionaro-go/player/pkg/player/protobuf/go/player_grpc"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"

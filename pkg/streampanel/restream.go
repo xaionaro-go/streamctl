@@ -17,15 +17,15 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/observability"
+	"github.com/xaionaro-go/player/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/consts"
-	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	sstypes "github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
-	"github.com/xaionaro-go/streamctl/pkg/xcontext"
-	"github.com/xaionaro-go/streamctl/pkg/xfyne"
+	"github.com/xaionaro-go/xcontext"
+	"github.com/xaionaro-go/xfyne/widget"
 )
 
 func (p *Panel) startRestreamPage(

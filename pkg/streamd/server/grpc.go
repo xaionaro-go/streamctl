@@ -14,7 +14,7 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-multierror"
-	"github.com/xaionaro-go/streamctl/pkg/player/protobuf/go/player_grpc"
+	"github.com/xaionaro-go/player/pkg/player/protobuf/go/player_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"

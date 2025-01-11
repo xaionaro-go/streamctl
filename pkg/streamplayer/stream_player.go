@@ -14,10 +14,10 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/observability"
-	player "github.com/xaionaro-go/streamctl/pkg/player/types"
+	player "github.com/xaionaro-go/player/pkg/player/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
-	"github.com/xaionaro-go/streamctl/pkg/xcontext"
+	"github.com/xaionaro-go/xcontext"
 	"github.com/xaionaro-go/xsync"
 )
 
