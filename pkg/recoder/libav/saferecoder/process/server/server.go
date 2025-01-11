@@ -11,7 +11,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder"
 	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/saferecoder/grpc/go/recoder_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/xcontext"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 	"google.golang.org/grpc"
 )
 

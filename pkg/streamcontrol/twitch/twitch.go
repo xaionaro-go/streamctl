@@ -13,12 +13,12 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/nicklaw5/helix/v2"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/buildvars"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/secret"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 )
 
 type Twitch struct {

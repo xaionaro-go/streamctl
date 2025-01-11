@@ -5,9 +5,9 @@ import (
 
 	child_process_manager "github.com/AgustinSRG/go-child-process-manager"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/ffstream"
 	"github.com/xaionaro-go/streamctl/pkg/ffstreamserver"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder"
 	_ "github.com/xaionaro-go/streamctl/pkg/streamserver"
 )

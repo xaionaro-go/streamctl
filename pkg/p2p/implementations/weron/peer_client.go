@@ -9,7 +9,7 @@ import (
 	"github.com/pojntfx/weron/pkg/wrtcconn"
 	"github.com/xaionaro-go/grpcproxy/grpchttpproxy"
 	"github.com/xaionaro-go/grpcproxy/protobuf/go/proxy_grpc"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/p2p/implementations/weron/protobuf/go/p2p_grpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"

@@ -9,9 +9,9 @@ import (
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/widget"
 
-	"github.com/xaionaro-go/streamctl/pkg/observability"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/unsafetools"
+	"github.com/xaionaro-go/xsync"
 )
 
 type HintWidget struct {

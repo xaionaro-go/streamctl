@@ -9,7 +9,7 @@ import (
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"

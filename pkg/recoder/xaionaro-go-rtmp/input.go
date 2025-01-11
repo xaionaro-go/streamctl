@@ -12,7 +12,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/recoder"
 	xaionarogortmp "github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/xaionaro-go-rtmp"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 )
 
 type Input struct {

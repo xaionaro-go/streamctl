@@ -12,12 +12,12 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/obs-grpc-proxy/pkg/obsgrpcproxy"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/consts"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 )
 
 func (d *StreamD) OBS(

@@ -11,10 +11,10 @@ import (
 	"time"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/xaionaro-go/streamctl/pkg/audio"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/audio/pkg/audio"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 )
 
 const (

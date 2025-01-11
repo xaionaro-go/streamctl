@@ -11,7 +11,7 @@ import (
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/colorx"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 )
 
 type DashboardSourceImageOBSVolume struct {

@@ -14,7 +14,7 @@ import (
 	child_process_manager "github.com/AgustinSRG/go-child-process-manager"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/recoder"
 	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/saferecoder/process/client"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"

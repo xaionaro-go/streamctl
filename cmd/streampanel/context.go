@@ -20,9 +20,9 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/sirupsen/logrus"
+	"github.com/xaionaro-go/observability"
+	"github.com/xaionaro-go/secret"
 	"github.com/xaionaro-go/streamctl/pkg/consts"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
-	"github.com/xaionaro-go/streamctl/pkg/secret"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
 )
 

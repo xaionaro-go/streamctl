@@ -12,7 +12,7 @@ import (
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/go-rtmp"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	playertypes "github.com/xaionaro-go/streamctl/pkg/player/types"
 	xaionarogortmp "github.com/xaionaro-go/streamctl/pkg/recoder/xaionaro-go-rtmp"
@@ -24,7 +24,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/streamctl/pkg/xlogger"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 	flvtag "github.com/yutopp/go-flv/tag"
 )
 

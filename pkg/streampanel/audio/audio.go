@@ -6,8 +6,8 @@ import (
 	"fmt"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
-	audioSubsystem "github.com/xaionaro-go/streamctl/pkg/audio"
-	_ "github.com/xaionaro-go/streamctl/pkg/audio/backends/oto"
+	audioSubsystem "github.com/xaionaro-go/audio/pkg/audio"
+	_ "github.com/xaionaro-go/audio/pkg/audio/backends/oto"
 	"github.com/xaionaro-go/streamctl/pkg/audiotheme"
 	"github.com/xaionaro-go/streamctl/pkg/audiotheme/defaultaudiotheme"
 )

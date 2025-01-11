@@ -9,7 +9,7 @@ import (
 	"github.com/asticode/go-astiav"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/observability"
 )
 
 type loopStreamOutput struct {

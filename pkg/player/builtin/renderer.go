@@ -5,7 +5,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/xaionaro-go/streamctl/pkg/audio"
+	"github.com/xaionaro-go/audio/pkg/audio"
 )
 
 type ImageRenderer interface {

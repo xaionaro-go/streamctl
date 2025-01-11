@@ -18,6 +18,7 @@ type Encoder struct {
 
 	Config EncoderConfig
 
+	Decoder                     *recoder.Decoder
 	prevEncodeTS                time.Time
 	locker                      sync.Mutex
 	inputStreams                map[*recoder.Input]map[int]*astiav.Stream

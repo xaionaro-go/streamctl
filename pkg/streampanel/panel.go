@@ -26,12 +26,12 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/autoupdater"
 	"github.com/xaionaro-go/streamctl/pkg/buildvars"
 	"github.com/xaionaro-go/streamctl/pkg/command"
 	gconsts "github.com/xaionaro-go/streamctl/pkg/consts"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/screenshot"
 	"github.com/xaionaro-go/streamctl/pkg/screenshoter"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -48,7 +48,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/config"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 )
 
 const youtubeTitleLength = 90

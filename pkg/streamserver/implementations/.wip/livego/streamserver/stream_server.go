@@ -13,13 +13,13 @@ import (
 	"github.com/gwuhaolin/livego/configure"
 	"github.com/gwuhaolin/livego/protocol/rtmp"
 	"github.com/spf13/viper"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 )
 
 type StreamServer struct {

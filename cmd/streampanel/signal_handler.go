@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/observability"
 )
 
 func mainProcessSignalHandler(

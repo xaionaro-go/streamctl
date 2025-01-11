@@ -10,9 +10,9 @@ import (
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/spf13/cobra"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/ffstream/types"
 	"github.com/xaionaro-go/streamctl/pkg/ffstreamserver/client"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
 )
 
 var (

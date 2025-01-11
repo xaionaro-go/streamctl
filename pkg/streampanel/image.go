@@ -15,12 +15,12 @@ import (
 	"github.com/bamiaux/rez"
 	"github.com/chai2010/webp"
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/screenshot"
 	"github.com/xaionaro-go/streamctl/pkg/screenshoter"
 	streamdconsts "github.com/xaionaro-go/streamctl/pkg/streamd/consts"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 )
 
 type Screenshoter interface {

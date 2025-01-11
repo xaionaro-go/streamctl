@@ -15,7 +15,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 )
 
 var (

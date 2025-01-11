@@ -17,7 +17,6 @@ type InputConfig struct {
 	CustomOptions []CustomOption
 }
 
-
 type Input struct {
 	ID InputID
 	*astikit.Closer

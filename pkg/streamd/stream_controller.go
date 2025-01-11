@@ -19,7 +19,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	streamd "github.com/xaionaro-go/streamctl/pkg/streamd/types"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 )
 
 func (d *StreamD) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context) (_err error) {

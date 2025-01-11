@@ -2,7 +2,7 @@ package builtin
 
 import (
 	"github.com/asticode/go-astiav"
-	"github.com/xaionaro-go/streamctl/pkg/audio"
+	"github.com/xaionaro-go/audio/pkg/audio"
 )
 
 func pcmFormatToAudio(libavPCMFormat astiav.SampleFormat) audio.PCMFormat {

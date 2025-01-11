@@ -24,8 +24,8 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/lusingander/colorpicker"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/colorx"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
@@ -36,7 +36,7 @@ import (
 	streamdconsts "github.com/xaionaro-go/streamctl/pkg/streamd/consts"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	"github.com/xaionaro-go/streamctl/pkg/xfyne"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 )
 
 func (p *Panel) focusDashboardWindow(

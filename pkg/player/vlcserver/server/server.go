@@ -13,7 +13,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
 	"github.com/xaionaro-go/streamctl/pkg/player/protobuf/go/player_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/player/vlcserver/player"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 	"google.golang.org/grpc"
 )
 

@@ -13,8 +13,8 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/go-ng/xmath"
+	"github.com/xaionaro-go/observability"
 	gconsts "github.com/xaionaro-go/streamctl/pkg/consts"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
@@ -22,7 +22,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	streamdconfig "github.com/xaionaro-go/streamctl/pkg/streamd/config"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 )
 
 type Profile struct {

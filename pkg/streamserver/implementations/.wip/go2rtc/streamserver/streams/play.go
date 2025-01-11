@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/observability"
 )
 
 func (s *Stream) Play(source string) error {

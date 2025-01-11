@@ -13,10 +13,10 @@ import (
 	child_process_manager "github.com/AgustinSRG/go-child-process-manager"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/logwriter"
 	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 )
 
 type ProcessName = mainprocess.ProcessName

@@ -14,7 +14,7 @@ import (
 	"github.com/BurntSushi/xgbutil/ewmh"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/shirou/gopsutil/process"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/observability"
 )
 
 type XWindowManagerHandler struct {

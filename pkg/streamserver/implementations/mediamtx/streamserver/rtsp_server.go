@@ -18,7 +18,7 @@ import (
 	"github.com/xaionaro-go/mediamtx/pkg/servers/rtsp"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 )
 
 type RTSPServer struct {

@@ -17,9 +17,9 @@ import (
 	"github.com/xaionaro-go/grpcproxy/grpcproxyserver"
 	"github.com/xaionaro-go/grpcproxy/protobuf/go/proxy_grpc"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/cmd/streamd/ui"
 	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
@@ -28,7 +28,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/server"
 	streampanelconfig "github.com/xaionaro-go/streamctl/pkg/streampanel/config"
 	"github.com/xaionaro-go/streamctl/pkg/xpath"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 	"google.golang.org/grpc"
 )
 

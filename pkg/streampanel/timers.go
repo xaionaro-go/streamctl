@@ -13,7 +13,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	obs "github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs/types"
@@ -22,7 +22,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config/action"
 	"github.com/xaionaro-go/streamctl/pkg/xcontext"
 	"github.com/xaionaro-go/streamctl/pkg/xfyne"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 )
 
 type timersUI struct {

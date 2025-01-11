@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"regexp"
 
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 )
 
 func (s *StreamHandler) Get(name string) *Stream {

@@ -14,7 +14,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/spf13/cobra"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	kick "github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick/types"
 	obs "github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs/types"

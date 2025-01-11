@@ -12,7 +12,7 @@ import (
 	"github.com/asticode/go-astiav"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/recoder/libav/recoder/types"
 )
 

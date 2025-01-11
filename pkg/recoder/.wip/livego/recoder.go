@@ -6,7 +6,7 @@ import (
 
 	"github.com/gwuhaolin/livego/protocol/rtmp/rtmprelay"
 	"github.com/xaionaro-go/streamctl/pkg/recoder"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 )
 
 type Encoder struct {

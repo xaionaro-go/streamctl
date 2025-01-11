@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player/protobuf/go/player_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/player/types"
 	"google.golang.org/grpc"

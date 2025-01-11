@@ -13,7 +13,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/consts"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 )
 
 type errorReport struct {

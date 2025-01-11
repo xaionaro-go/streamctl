@@ -12,9 +12,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/xaionaro-go/go-rtmp"
 	rtmpmsg "github.com/xaionaro-go/go-rtmp/message"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 	flvtag "github.com/yutopp/go-flv/tag"
 )
 

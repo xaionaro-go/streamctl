@@ -14,8 +14,8 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/sethvargo/go-password/password"
 	"github.com/xaionaro-go/lockmap"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/observability"
+	"github.com/xaionaro-go/xsync"
 )
 
 func init() {

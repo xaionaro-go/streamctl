@@ -12,7 +12,7 @@ import (
 	vlc "github.com/adrg/libvlc-go/v3"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 	"golang.org/x/net/context"
 )
 

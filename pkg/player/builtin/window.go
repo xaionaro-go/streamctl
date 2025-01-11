@@ -6,7 +6,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
-	"github.com/xaionaro-go/streamctl/pkg/audio"
+	"github.com/xaionaro-go/audio/pkg/audio"
 )
 
 type WindowRenderer struct {

@@ -25,7 +25,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/platcollection"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 	"google.golang.org/grpc"
 )
 

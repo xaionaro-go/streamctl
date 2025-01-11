@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/adeithe/go-twitch/irc"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 )
 

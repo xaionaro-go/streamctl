@@ -6,7 +6,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/observability"
 )
 
 func (p *Panel) initFyneHacks(ctx context.Context) {

@@ -12,7 +12,7 @@ import (
 	"github.com/xaionaro-go/go-rtmp"
 	rtmpmsg "github.com/xaionaro-go/go-rtmp/message"
 	"github.com/xaionaro-go/streamctl/pkg/recoder"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 )
 
 type Output struct {

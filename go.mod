@@ -28,17 +28,15 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/nicklaw5/helix/v2 v2.30.1-0.20240715193454-0151ccccf980
 	github.com/spf13/cobra v1.8.1
-	github.com/xaionaro-go/logrustash v0.0.0-20240804141650-d48034780a5f
-	golang.org/x/oauth2 v0.23.0
+	github.com/xaionaro-go/logrustash v0.0.0-20240804141650-d48034780a5f // indirect
+	golang.org/x/oauth2 v0.25.0
 	google.golang.org/api v0.203.0
 )
 
 require (
-	cloud.google.com/go v0.116.0 // indirect
 	cloud.google.com/go/auth v0.9.9 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.4 // indirect
 	cloud.google.com/go/compute/metadata v0.5.2 // indirect
-	cloud.google.com/go/longrunning v0.6.1 // indirect
 	code.cloudfoundry.org/bytefmt v0.0.0 // indirect
 	dario.cat/mergo v1.0.0 // indirect
 	fyne.io/systray v1.11.0 // indirect
@@ -46,6 +44,7 @@ require (
 	github.com/Danny-Dasilva/CycleTLS/cycletls v0.0.0-20220620102923-c84d740b4757 // indirect
 	github.com/Danny-Dasilva/fhttp v0.0.0-20220524230104-f801520157d6 // indirect
 	github.com/Danny-Dasilva/utls v0.0.0-20220604023528-30cb107b834e // indirect
+	github.com/DataDog/gostackparse v0.7.0 // indirect
 	github.com/MicahParks/jwkset v0.5.20 // indirect
 	github.com/MicahParks/keyfunc/v3 v3.3.5 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
@@ -70,6 +69,7 @@ require (
 	github.com/datarhei/gosrt v0.7.0 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/dsnet/compress v0.0.1 // indirect
+	github.com/ebitengine/oto/v3 v3.3.2 // indirect
 	github.com/ebitengine/purego v0.8.0 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/fatih/color v1.15.0 // indirect
@@ -124,6 +124,8 @@ require (
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/jeandeaual/go-locale v0.0.0-20240223122105-ce5225dcaa49 // indirect
 	github.com/jezek/xgb v1.1.0 // indirect
+	github.com/jfreymuth/oggvorbis v1.0.5 // indirect
+	github.com/jfreymuth/pulse v0.1.1 // indirect
 	github.com/jfreymuth/vorbis v1.0.2 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/jsummers/gobmp v0.0.0-20230614200233-a9de23ed2e25 // indirect
@@ -176,6 +178,7 @@ require (
 	github.com/volatiletech/sqlboiler/v4 v4.16.2 // indirect
 	github.com/volatiletech/strmangle v0.0.6 // indirect
 	github.com/wlynxg/anet v0.0.4 // indirect
+	github.com/xaionaro-go/gorex v0.0.0-20241010205749-bcd59d639c4d // indirect
 	github.com/xaionaro-go/spinlock v0.0.0-20200518175509-30e6d1ce68a1 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	github.com/xo/terminfo v0.0.0-20210125001918-ca9a967f8778 // indirect
@@ -183,7 +186,6 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	github.com/yutopp/go-amf0 v0.1.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
-	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.54.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.54.0 // indirect
 	go.opentelemetry.io/otel v1.29.0 // indirect
 	go.opentelemetry.io/otel/metric v1.29.0 // indirect
@@ -195,14 +197,13 @@ require (
 	golang.org/x/image v0.18.0 // indirect
 	golang.org/x/mobile v0.0.0-20240404231514-09dbf07665ed // indirect
 	golang.org/x/mod v0.20.0 // indirect
-	golang.org/x/sync v0.9.0 // indirect
-	golang.org/x/sys v0.27.0 // indirect
-	golang.org/x/term v0.26.0 // indirect
-	golang.org/x/text v0.20.0 // indirect
+	golang.org/x/sync v0.10.0 // indirect
+	golang.org/x/sys v0.29.0 // indirect
+	golang.org/x/term v0.28.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/time v0.7.0 // indirect
 	golang.org/x/tools v0.24.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240716161551-93cc26a95ae9 // indirect
-	google.golang.org/genproto v0.0.0-20241015192408-796eee8c2d53 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20241007155032-5fefd90f89a9 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20241015192408-796eee8c2d53 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
@@ -211,11 +212,9 @@ require (
 )
 
 require (
-	cloud.google.com/go/speech v1.25.2
 	fyne.io/fyne/v2 v2.5.0
 	github.com/AgustinSRG/go-child-process-manager v1.0.1
 	github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802
-	github.com/DataDog/gostackparse v0.6.0
 	github.com/DexterLB/mpvipc v0.0.0-20230829142118-145d6eabdc37
 	github.com/abhinavxd/youtube-live-chat-downloader/v2 v2.0.3
 	github.com/adeithe/go-twitch v0.3.1
@@ -231,7 +230,6 @@ require (
 	github.com/chai2010/webp v1.1.1
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/dustin/go-humanize v1.0.1
-	github.com/ebitengine/oto/v3 v3.3.1
 	github.com/getsentry/sentry-go v0.28.1
 	github.com/go-andiamo/splitter v1.2.5
 	github.com/go-git/go-git/v5 v5.12.0
@@ -244,8 +242,6 @@ require (
 	github.com/hashicorp/go-version v1.7.0
 	github.com/iancoleman/strcase v0.3.0
 	github.com/immune-gmbh/attestation-sdk v0.0.0-20230711173209-f44e4502aeca
-	github.com/jfreymuth/oggvorbis v1.0.5
-	github.com/jfreymuth/pulse v0.1.1
 	github.com/kbinani/screenshot v0.0.0-20230812210009-b87d31814237
 	github.com/klauspost/compress v1.17.7
 	github.com/lusingander/colorpicker v0.7.3
@@ -258,10 +254,10 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/spf13/pflag v1.0.5
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
+	github.com/xaionaro-go/audio v0.0.0-20250111142716-aa10611bd8a0
 	github.com/xaionaro-go/datacounter v1.0.4
 	github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42
-	github.com/xaionaro-go/gorex v0.0.0-20241010205749-bcd59d639c4d
 	github.com/xaionaro-go/grpcproxy v0.0.0-20241103205849-a8fef42e72f9
 	github.com/xaionaro-go/kickcom v0.0.0-20241022142825-25a234cc8628
 	github.com/xaionaro-go/libsrt v0.0.0-20250105232601-e760c79b2bc3
@@ -269,11 +265,14 @@ require (
 	github.com/xaionaro-go/mediamtx v0.0.0-20241103200202-882a99e8df73
 	github.com/xaionaro-go/object v0.0.0-20241026212449-753ce10ec94c
 	github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20241018162120-5faf4e7a684a
+	github.com/xaionaro-go/observability v0.0.0-20250111142240-5d72f17a6d12
+	github.com/xaionaro-go/secret v0.0.0-20250111141743-ced12e1082c2
 	github.com/xaionaro-go/timeapiio v0.0.0-20240915203246-b907cf699af3
 	github.com/xaionaro-go/typing v0.0.0-20221123235249-2229101d38ba
 	github.com/xaionaro-go/unsafetools v0.0.0-20241024014258-a46e1ce3763e
+	github.com/xaionaro-go/xsync v0.0.0-20250111141039-3e7f31b1a2c6
 	github.com/yutopp/go-flv v0.3.1
-	golang.org/x/crypto v0.29.0
+	golang.org/x/crypto v0.32.0
 	golang.org/x/net v0.31.0
 	google.golang.org/grpc v1.67.1
 	google.golang.org/protobuf v1.35.1

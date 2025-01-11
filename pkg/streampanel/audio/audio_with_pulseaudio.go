@@ -4,5 +4,5 @@
 package audio
 
 import (
-	_ "github.com/xaionaro-go/streamctl/pkg/audio/backends/pulseaudio"
+	_ "github.com/xaionaro-go/audio/pkg/audio/backends/pulseaudio"
 )

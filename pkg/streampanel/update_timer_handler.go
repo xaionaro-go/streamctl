@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2/widget"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/observability"
 )
 
 type updateTimerHandler struct {

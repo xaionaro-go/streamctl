@@ -13,7 +13,7 @@ import (
 	rtmpmsg "github.com/xaionaro-go/go-rtmp/message"
 	recoder "github.com/xaionaro-go/streamctl/pkg/recoder"
 	yutoppgortmp "github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/xaionaro-go-rtmp"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 	flvtag "github.com/yutopp/go-flv/tag"
 )
 

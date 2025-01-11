@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 )
 
 type NumBytesWroter interface {

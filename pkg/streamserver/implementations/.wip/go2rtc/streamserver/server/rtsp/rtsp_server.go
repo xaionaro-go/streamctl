@@ -13,7 +13,7 @@ import (
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/consts"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/implementations/go2rtc/streamserver/streams"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"

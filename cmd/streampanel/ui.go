@@ -7,8 +7,8 @@ import (
 
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
 )
 
 func forkUI(preCtx context.Context, mainProcessAddr, password string) {

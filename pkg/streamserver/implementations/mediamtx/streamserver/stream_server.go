@@ -14,7 +14,7 @@ import (
 	"github.com/xaionaro-go/mediamtx/pkg/defs"
 	"github.com/xaionaro-go/mediamtx/pkg/externalcmd"
 	"github.com/xaionaro-go/mediamtx/pkg/pathmanager"
-	"github.com/xaionaro-go/streamctl/pkg/observability"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/player"
 	playertypes "github.com/xaionaro-go/streamctl/pkg/player/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
@@ -23,7 +23,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
-	"github.com/xaionaro-go/streamctl/pkg/xsync"
+	"github.com/xaionaro-go/xsync"
 )
 
 type BrowserOpener interface {
