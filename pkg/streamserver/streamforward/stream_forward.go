@@ -346,7 +346,7 @@ func (fwd *ActiveStreamForwarding) openInputFor(
 	recoderInstance recoder.Recoder,
 	publisher types.Publisher,
 ) (recoder.Input, error) {
-	inputURL, err := fwd.getLocalhostEndpoint(ctx)
+	inputURL, err := fwd.GetLocalhostEndpoint(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get a localhost endpoint: %w", err)
 	}

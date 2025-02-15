@@ -421,7 +421,7 @@ func (w *dashboardWindow) startUpdatingNoLock(
 		w.renderStreamStatus(ctx)
 
 		observability.Go(ctx, func() {
-			t := time.NewTicker(200 * time.Millisecond)
+			t := time.NewTicker(500 * time.Millisecond)
 			for {
 				select {
 				case <-ctx.Done():

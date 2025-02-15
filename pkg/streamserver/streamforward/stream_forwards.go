@@ -850,8 +850,8 @@ func (s *StreamForwards) findStreamDestinationByID(
 	)
 }
 
-func (s *StreamForwards) getLocalhostEndpoint(ctx context.Context) (_ret *url.URL, _err error) {
-	defer func() { logger.Debugf(ctx, "getLocalhostEndpoint result: %v %v", _ret, _err) }()
+func (s *StreamForwards) GetLocalhostEndpoint(ctx context.Context) (_ret *url.URL, _err error) {
+	defer func() { logger.Debugf(ctx, "GetLocalhostEndpoint result: %v %v", _ret, _err) }()
 
 	portSrvs, err := s.StreamServer.GetPortServers(ctx)
 	if err != nil {

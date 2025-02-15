@@ -8,40 +8,53 @@ import (
 	"github.com/xaionaro-go/recoder"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
+	"github.com/xaionaro-go/xsync"
 )
 
 type imageDataProvider struct {
-	OBSServer obs_grpc.OBSServer
-	OBSState  *OBSState
+	StreamD                *StreamD
+	OBSServer              obs_grpc.OBSServer
+	StreamImageTakerLocker xsync.Mutex
+	StreamImageTakes       map[streamtypes.StreamID]*streamImageTaker
 }
 
 var _ config.ImageDataProvider = (*imageDataProvider)(nil)
 
 func newImageDataProvider(
+	streamD *StreamD,
 	obsServer obs_grpc.OBSServer,
-	obsState *OBSState,
 ) *imageDataProvider {
 	return &imageDataProvider{
+		StreamD:   streamD,
 		OBSServer: obsServer,
-		OBSState:  obsState,
 	}
 }
 
-func (img *imageDataProvider) GetOBSServer(
+func (p *imageDataProvider) GetOBSServer(
 	ctx context.Context,
 ) (obs_grpc.OBSServer, error) {
-	return img.OBSServer, nil
+	return p.OBSServer, nil
 }
 
-func (img *imageDataProvider) GetOBSState(
+func (p *imageDataProvider) GetOBSState(
 	ctx context.Context,
 ) (*streamtypes.OBSState, error) {
-	return img.OBSState, nil
+	return &p.StreamD.OBSState, nil
 }
 
-func (img *imageDataProvider) GetCurrentStreamFrame(
+func (p *imageDataProvider) GetCurrentStreamFrame(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 ) ([]byte, recoder.VideoCodec, error) {
-	return nil, 0, fmt.Errorf("not implemented")
+	return xsync.DoR3(ctx, &p.StreamImageTakerLocker, func() ([]byte, recoder.VideoCodec, error) {
+		streamImageTaker := p.StreamImageTakes[streamID]
+		if streamImageTaker == nil || !streamImageTaker.Keepalive() {
+			var err error
+			streamImageTaker, err = p.newStreamImageTaker(ctx, streamID)
+			if err != nil {
+				return nil, 0, fmt.Errorf("unable to initialize a stream image taker: %w", err)
+			}
+		}
+		return streamImageTaker.GetLastFrame(ctx)
+	})
 }

@@ -120,7 +120,7 @@ func (d *StreamD) restartImageTakerNoLock(ctx context.Context) error {
 					return
 				}
 
-				imageDataProvider := newImageDataProvider(obsServer, &d.OBSState)
+				imageDataProvider := newImageDataProvider(d, obsServer)
 
 				for {
 					var (
