@@ -63,3 +63,7 @@ Flags:
 
 Use "/tmp/go-build2502186757/b001/exe/streamctl [command] --help" for more information about a command.
 ```
+
+# See also
+
+* [OBS Blade](https://github.com/Kounex/obs_blade) is a quick and nice tool to control your OBS remotely.

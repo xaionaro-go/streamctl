@@ -8,23 +8,27 @@ import (
 	"time"
 
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
+	"github.com/xaionaro-go/recoder"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
 
 type DashboardSourceImageType string
 
 const (
-	DashboardSourceImageTypeUndefined = DashboardSourceImageType("")
-	DashboardSourceImageTypeDummy     = DashboardSourceImageType("dummy")
-	DashboardSourceImageTypeOBSVideo  = DashboardSourceImageType("obs_video") // rename to `obs_screenshot`
-	DashboardSourceImageTypeOBSVolume = DashboardSourceImageType("obs_volume")
+	DashboardSourceImageTypeUndefined        = DashboardSourceImageType("")
+	DashboardSourceImageTypeDummy            = DashboardSourceImageType("dummy")
+	DashboardSourceImageTypeStreamScreenshot = DashboardSourceImageType("stream_screenshot")
+	DashboardSourceImageTypeOBSScreenshot    = DashboardSourceImageType("obs_screenshot")
+	DashboardSourceImageTypeOBSVolume        = DashboardSourceImageType("obs_volume")
 )
 
 func (mst DashboardSourceImageType) New() SourceImage {
 	switch mst {
 	case DashboardSourceImageTypeDummy:
 		return &DashboardSourceImageDummy{}
-	case DashboardSourceImageTypeOBSVideo:
+	case DashboardSourceImageTypeStreamScreenshot:
+		return &DashboardSourceImageStreamScreenshot{}
+	case DashboardSourceImageTypeOBSScreenshot:
 		return &DashboardSourceImageOBSScreenshot{}
 	case DashboardSourceImageTypeOBSVolume:
 		return &DashboardSourceImageOBSVolume{}
@@ -41,14 +45,6 @@ const (
 	ImageFormatJPEG      = ImageFormat("jpeg")
 	ImageFormatWebP      = ImageFormat("webp")
 )
-
-type GetImageByteser interface {
-	GetImageBytes(
-		ctx context.Context,
-		obsServer obs_grpc.OBSServer,
-		el DashboardElementConfig,
-	) ([]byte, string, time.Time, error)
-}
 
 type Duration time.Duration
 
@@ -80,15 +76,28 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 
 var _ SourceImage = (*DashboardSourceImageDummy)(nil)
 
+type ImageDataProvider interface {
+	GetOBSServer(context.Context) (obs_grpc.OBSServer, error)
+	GetOBSState(context.Context) (*streamtypes.OBSState, error)
+	GetCurrentStreamFrame(context.Context, streamtypes.StreamID) ([]byte, recoder.VideoCodec, error)
+}
+
 type SourceImage interface {
 	GetImage(
 		ctx context.Context,
-		obsServer obs_grpc.OBSServer,
 		el DashboardElementConfig,
-		obsState *streamtypes.OBSState,
+		imageDataProvider ImageDataProvider,
 	) (image.Image, time.Time, error)
 
 	SourceType() DashboardSourceImageType
+}
+
+type GetImageBytes interface {
+	GetImageBytes(
+		ctx context.Context,
+		el DashboardElementConfig,
+		imageDataProvider ImageDataProvider,
+	) ([]byte, string, time.Time, error)
 }
 
 type serializableSourceImage struct {

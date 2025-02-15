@@ -26,20 +26,21 @@ type DashboardSourceImageOBSScreenshot struct {
 }
 
 var _ SourceImage = (*DashboardSourceImageOBSScreenshot)(nil)
-var _ GetImageByteser = (*DashboardSourceImageOBSScreenshot)(nil)
+var _ GetImageFromOBSer = (*DashboardSourceImageOBSScreenshot)(nil)
+var _ GetImageBytesFromOBSer = (*DashboardSourceImageOBSScreenshot)(nil)
 
 func (*DashboardSourceImageOBSScreenshot) SourceType() DashboardSourceImageType {
-	return DashboardSourceImageTypeOBSVideo
+	return DashboardSourceImageTypeOBSScreenshot
 }
 
 func obsGetImage(
 	ctx context.Context,
-	getImageByteser GetImageByteser,
+	getImageByteser GetImageBytesFromOBSer,
 	obsServer obs_grpc.OBSServer,
 	el DashboardElementConfig,
 	_ *streamtypes.OBSState,
 ) (image.Image, time.Time, error) {
-	b, mimeType, nextUpdateTS, err := getImageByteser.GetImageBytes(ctx, obsServer, el)
+	b, mimeType, nextUpdateTS, err := getImageByteser.GetImageBytesFromOBS(ctx, obsServer, el)
 	if err != nil {
 		return nil, nextUpdateTS, fmt.Errorf("unable to get the image from OBS: %w", err)
 	}
@@ -62,7 +63,7 @@ func obsGetImage(
 	return img, nextUpdateTS, nil
 }
 
-func (s *DashboardSourceImageOBSScreenshot) GetImage(
+func (s *DashboardSourceImageOBSScreenshot) GetImageFromOBS(
 	ctx context.Context,
 	obsServer obs_grpc.OBSServer,
 	el DashboardElementConfig,
@@ -71,7 +72,7 @@ func (s *DashboardSourceImageOBSScreenshot) GetImage(
 	return obsGetImage(ctx, s, obsServer, el, obsState)
 }
 
-func (s *DashboardSourceImageOBSScreenshot) GetImageBytes(
+func (s *DashboardSourceImageOBSScreenshot) GetImageBytesFromOBS(
 	ctx context.Context,
 	obsServer obs_grpc.OBSServer,
 	el DashboardElementConfig,
@@ -132,4 +133,32 @@ func (s *DashboardSourceImageOBSScreenshot) GetImageBytes(
 		len(imgBytes),
 	)
 	return imgBytes, mimeType, time.Now().Add(time.Duration(s.UpdateInterval)), nil
+}
+
+func (s *DashboardSourceImageOBSScreenshot) GetImageBytes(
+	ctx context.Context,
+	el DashboardElementConfig,
+	dataProvider ImageDataProvider,
+) ([]byte, string, time.Time, error) {
+	obsServer, err := dataProvider.GetOBSServer(ctx)
+	if err != nil {
+		return nil, "", time.Time{}, fmt.Errorf("unable to get the OBS server: %w", err)
+	}
+	return s.GetImageBytesFromOBS(ctx, obsServer, el)
+}
+
+func (s *DashboardSourceImageOBSScreenshot) GetImage(
+	ctx context.Context,
+	el DashboardElementConfig,
+	dataProvider ImageDataProvider,
+) (image.Image, time.Time, error) {
+	obsServer, err := dataProvider.GetOBSServer(ctx)
+	if err != nil {
+		return nil, time.Time{}, fmt.Errorf("unable to get the OBS server: %w", err)
+	}
+	obsState, err := dataProvider.GetOBSState(ctx)
+	if err != nil {
+		return nil, time.Time{}, fmt.Errorf("unable to get the OBS state: %w", err)
+	}
+	return s.GetImageFromOBS(ctx, obsServer, el, obsState)
 }

@@ -23,7 +23,7 @@ type DashboardSourceImageOBSVolume struct {
 
 var _ SourceImage = (*DashboardSourceImageOBSVolume)(nil)
 
-func (s *DashboardSourceImageOBSVolume) GetImage(
+func (s *DashboardSourceImageOBSVolume) GetImageFromOBS(
 	ctx context.Context,
 	obsServer obs_grpc.OBSServer,
 	el DashboardElementConfig,
@@ -93,4 +93,20 @@ func (s *DashboardSourceImageOBSVolume) GetImage(
 
 func (*DashboardSourceImageOBSVolume) SourceType() DashboardSourceImageType {
 	return DashboardSourceImageTypeOBSVolume
+}
+
+func (s *DashboardSourceImageOBSVolume) GetImage(
+	ctx context.Context,
+	el DashboardElementConfig,
+	dataProvider ImageDataProvider,
+) (image.Image, time.Time, error) {
+	obsServer, err := dataProvider.GetOBSServer(ctx)
+	if err != nil {
+		return nil, time.Time{}, fmt.Errorf("unable to get the OBS server: %w", err)
+	}
+	obsState, err := dataProvider.GetOBSState(ctx)
+	if err != nil {
+		return nil, time.Time{}, fmt.Errorf("unable to get the OBS state: %w", err)
+	}
+	return s.GetImageFromOBS(ctx, obsServer, el, obsState)
 }

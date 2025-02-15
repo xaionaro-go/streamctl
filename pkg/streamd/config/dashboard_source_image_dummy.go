@@ -4,18 +4,14 @@ import (
 	"context"
 	"image"
 	"time"
-
-	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
-	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
 
 type DashboardSourceImageDummy struct{}
 
 func (*DashboardSourceImageDummy) GetImage(
 	ctx context.Context,
-	obsServer obs_grpc.OBSServer,
 	el DashboardElementConfig,
-	obsState *streamtypes.OBSState,
+	_ ImageDataProvider,
 ) (image.Image, time.Time, error) {
 	img := image.NewRGBA(image.Rectangle{
 		Min: image.Point{

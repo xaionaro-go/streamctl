@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"image/color"
+	"image/draw"
 	"runtime"
 	"sort"
 	"strconv"
@@ -35,6 +36,7 @@ import (
 	streamdconfig "github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	streamdconsts "github.com/xaionaro-go/streamctl/pkg/streamd/consts"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
+	"github.com/xaionaro-go/streamctl/pkg/ximage"
 	xfyne "github.com/xaionaro-go/xfyne/widget"
 	"github.com/xaionaro-go/xsync"
 )
@@ -64,9 +66,18 @@ type dashboardWindow struct {
 	lastWinSize         fyne.Size
 	lastOrientation     fyne.DeviceOrientation
 	screenshotContainer *fyne.Container
-	layersContainer     *fyne.Container
+	imagesLocker        xsync.RWMutex
+	imagesLayerObj      *canvas.Raster
+	images              []imageInfo
+	renderedImagesLayer *image.NRGBA
 	streamStatus        map[streamcontrol.PlatformName]*widget.Label
 	streamStatusLocker  xsync.Mutex
+}
+
+type imageInfo struct {
+	ElementName string
+	streamdconfig.DashboardElementConfig
+	Image *image.NRGBA
 }
 
 func (w *dashboardWindow) renderStreamStatus(ctx context.Context) {
@@ -187,16 +198,196 @@ func (p *Panel) newDashboardWindow(
 		nil,
 		streamInfoItems,
 	)
-	w.layersContainer = container.NewStack()
+	w.imagesLayerObj = canvas.NewRaster(w.imagesLayer)
 
 	w.Window.SetContent(container.NewStack(
 		bgFyne,
 		w.screenshotContainer,
-		w.layersContainer,
+		w.imagesLayerObj,
 		streamInfoContainer,
 	))
 	w.Window.Show()
 	return w
+}
+
+func (w *dashboardWindow) imagesLayer(width, height int) (_ret image.Image) {
+	ctx := context.TODO()
+	logger.Tracef(ctx, "imagesLayer(%d, %d)", width, height)
+	defer func() { logger.Tracef(ctx, "/imagesLayer(%d, %d): size:%v", width, height, _ret.Bounds()) }()
+	return xsync.DoR1(xsync.WithNoLogging(ctx, true), &w.imagesLocker, func() image.Image {
+		return w.renderImagesNoLock(ctx, width, height)
+	})
+}
+
+func (w *dashboardWindow) renderImagesNoLock(
+	ctx context.Context,
+	width, height int,
+) image.Image {
+	if w.renderedImagesLayer == nil {
+		w.renderedImagesLayer = image.NewNRGBA(image.Rectangle{
+			Min: image.Point{},
+			Max: image.Point{
+				X: width,
+				Y: height,
+			},
+		})
+	}
+
+	dstImg := w.renderedImagesLayer
+	size := dstImg.Bounds().Size()
+	if size.X != width || size.Y != height {
+		w.renderedImagesLayer = image.NewNRGBA(image.Rectangle{
+			Min: image.Point{},
+			Max: image.Point{
+				X: width,
+				Y: height,
+			},
+		})
+		dstImg = w.renderedImagesLayer
+		size = dstImg.Bounds().Size()
+	}
+
+	canvasRatio := float64(size.X) / float64(size.Y)
+
+	transformedImages := make([]*ximage.Transform, 0, len(w.images))
+	for idx, img := range w.images {
+		if img.Image == nil {
+			continue
+		}
+		imgSize := img.Image.Bounds().Size()
+		imgRatio := float64(imgSize.X) / float64(imgSize.Y)
+		imgCanvasRatio := imgRatio / canvasRatio
+		imgWidth := img.Width
+		imgHeight := img.Height
+		switch {
+		case imgCanvasRatio == 1:
+		case imgCanvasRatio > 1:
+			imgHeight /= imgCanvasRatio
+		case imgCanvasRatio < 1:
+			imgWidth *= imgCanvasRatio
+		}
+		var xMin, yMin float64
+		switch img.AlignX {
+		case streamdconsts.AlignXLeft:
+			xMin = img.OffsetX
+		case streamdconsts.AlignXMiddle:
+			xMin = (100-imgWidth)/2 + img.OffsetX
+		case streamdconsts.AlignXRight:
+			xMin = (100 - imgWidth) + img.OffsetX
+		}
+		xMax := xMin + imgWidth
+		switch img.AlignY {
+		case streamdconsts.AlignYTop:
+			yMin = img.OffsetY
+		case streamdconsts.AlignYMiddle:
+			yMin = (100-imgHeight)/2 + img.OffsetY
+		case streamdconsts.AlignYBottom:
+			xMin = (100 - imgHeight) + img.OffsetY
+		}
+		yMax := yMin + imgHeight
+		rectangle := ximage.RectangleFloat64{
+			Min: ximage.PointFloat64{
+				X: xMin / 100,
+				Y: yMin / 100,
+			},
+			Max: ximage.PointFloat64{
+				X: xMax / 100,
+				Y: yMax / 100,
+			},
+		}
+		logger.Tracef(ctx, "transformation rectangle for %d (%#+v) is %v", idx, img.DashboardElementConfig, rectangle)
+		transformedImages = append(transformedImages, ximage.NewTransform(img.Image, color.NRGBAModel, rectangle))
+	}
+	for idx := range dstImg.Pix {
+		dstImg.Pix[idx] = 0
+	}
+	for y := 0; y < height; y++ {
+		yF := (float64(y) + 0.5) / float64(height)
+		idxY := (y - dstImg.Rect.Min.Y) * dstImg.Stride
+		var xBoundaries []float64
+		for _, tImg := range transformedImages {
+			xBoundaries = append(
+				xBoundaries,
+				(float64(tImg.To.Min.X)+0.5)/float64(width),
+				(float64(tImg.To.Max.X)+0.5)/float64(width),
+			)
+		}
+		boundaryIdx := -1
+		nextSwitchX := float64(-1)
+		var tImg *ximage.Transform
+		var dup float64
+		for x := 0; x < width; x++ {
+			idxX := (x - dstImg.Rect.Min.X) * 4
+			idx := idxY + idxX
+			if dstImg.Pix[idx+3] != 0 {
+				continue
+			}
+			xF := (float64(x) + 0.5) / float64(width)
+			if xF > nextSwitchX {
+				tImg = nil
+				dup = 0
+				for _, _tImg := range transformedImages {
+					c := _tImg.To.AtFloat64(xF, yF)
+					if c == nil {
+						continue
+					}
+					tImg = _tImg
+					dstSize := dstImg.Bounds().Size()
+					dup = min(
+						(float64(dstSize.X)*tImg.To.Size().X)/(float64(tImg.ImageSize.X)),
+						(float64(dstSize.Y)*tImg.To.Size().Y)/(float64(tImg.ImageSize.Y)),
+					)
+					break
+				}
+				boundaryIdx++
+				if boundaryIdx < len(xBoundaries) {
+					nextSwitchX = xBoundaries[boundaryIdx]
+				}
+			}
+			if tImg == nil {
+				continue
+			}
+			srcX, srcY, ok := tImg.Coords(xF, yF)
+			if !ok {
+				continue
+			}
+			srcImg := tImg.Image.(*image.NRGBA)
+			srcOffset := srcImg.PixOffset(srcX, srcY)
+			if srcOffset < 0 || srcOffset+4 >= len(srcImg.Pix) {
+				continue
+			}
+
+			dstOffset := dstImg.PixOffset(x, y)
+			if dstOffset < 0 || dstOffset+4 >= len(dstImg.Pix) {
+				continue
+			}
+			copy(
+				dstImg.Pix[dstOffset:dstOffset+4:dstOffset+4],
+				srcImg.Pix[srcOffset:srcOffset+4:srcOffset+4],
+			)
+			if dup > 1 {
+				xE := int(float64(x+1)*dup) - int(float64(x)*dup) - 1
+				yE := int(float64(y+1)*dup) - int(float64(y)*dup) - 1
+
+				for i := 0; i <= yE; i++ {
+					for j := 0; j <= xE; j++ {
+						if i == 0 && j == 0 {
+							continue
+						}
+						dstOffset := dstImg.PixOffset(x+j, y+i)
+						if dstOffset < 0 || dstOffset+4 >= len(dstImg.Pix) {
+							continue
+						}
+						copy(
+							dstImg.Pix[dstOffset:dstOffset+4:dstOffset+4],
+							srcImg.Pix[srcOffset:srcOffset+4:srcOffset+4],
+						)
+					}
+				}
+			}
+		}
+	}
+	return dstImg
 }
 
 func (w *dashboardWindow) startUpdating(
@@ -326,15 +517,9 @@ func (w *dashboardWindow) updateImagesNoLock(
 		logger.Debugf(ctx, "window size changed %#+v -> %#+v", lastWinSize, winSize)
 	}
 
-	type elementType struct {
-		ElementName string
-		streamdconfig.DashboardElementConfig
-		NewImage *canvas.Image
-	}
-
-	elements := make([]elementType, 0, len(dashboardCfg.Elements))
+	elements := make([]imageInfo, 0, len(dashboardCfg.Elements))
 	for elName, el := range dashboardCfg.Elements {
-		elements = append(elements, elementType{
+		elements = append(elements, imageInfo{
 			ElementName:            elName,
 			DashboardElementConfig: el,
 		})
@@ -346,16 +531,30 @@ func (w *dashboardWindow) updateImagesNoLock(
 		return elements[i].ElementName < elements[j].ElementName
 	})
 
+	elementsMap := map[string]*imageInfo{}
+	for idx := range elements {
+		item := &elements[idx]
+		elementsMap[item.ElementName] = item
+	}
+
+	for _, item := range w.images {
+		obj := elementsMap[item.ElementName]
+		if obj == nil {
+			continue
+		}
+		obj.Image = item.Image
+	}
+	w.imagesLocker.Do(xsync.WithNoLogging(ctx, true), func() {
+		w.images = elements
+	})
+
+	var changeCount atomic.Uint64
 	var wg sync.WaitGroup
 
 	for idx := range elements {
 		wg.Add(1)
 		{
 			el := &elements[idx]
-			var oldObj fyne.CanvasObject
-			if len(w.layersContainer.Objects) > idx {
-				oldObj = w.layersContainer.Objects[idx]
-			}
 			observability.Go(ctx, func() {
 				defer wg.Done()
 				img, changed, err := w.getImage(ctx, streamdconsts.ImageID(el.ElementName))
@@ -374,33 +573,13 @@ func (w *dashboardWindow) updateImagesNoLock(
 					lastWinSize,
 					winSize,
 				)
-				imgSize := image.Point{
-					X: int(winSize.Width * float32(el.Width) / 100),
-					Y: int(winSize.Height * float32(el.Height) / 100),
-				}
-				offset := image.Point{
-					X: int(winSize.Width * float32(el.OffsetX) / 100),
-					Y: int(winSize.Height * float32(el.OffsetY) / 100),
-				}
-				var oldImg image.Image
-				if oldCanvasImg, ok := oldObj.(*canvas.Image); ok {
-					oldImg = oldCanvasImg.Image
-				}
-				img = imgFillTo(
-					ctx,
-					oldImg,
-					img,
-					image.Point{X: int(winSize.Width), Y: int(winSize.Height)},
-					imgSize,
-					offset,
-					el.AlignX,
-					el.AlignY,
-				)
-				imgFyne := canvas.NewImageFromImage(img)
-				imgFyne.FillMode = canvas.ImageFillContain
-				imgFyne.SetMinSize(fyne.NewSize(1, 1))
-				logger.Tracef(ctx, "image '%s' size: %#+v", el.ElementName, img.Bounds().Size())
-				el.NewImage = imgFyne
+				b := img.Bounds()
+				m := image.NewNRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+				draw.Draw(m, m.Bounds(), img, b.Min, draw.Src)
+				w.imagesLocker.Do(xsync.WithNoLogging(ctx, true), func() {
+					el.Image = m
+				})
+				changeCount.Add(1)
 			})
 		}
 	}
@@ -442,37 +621,19 @@ func (w *dashboardWindow) updateImagesNoLock(
 		)
 		img = adjust.Brightness(img, -0.5)
 		imgFyne := canvas.NewImageFromImage(img)
-		imgFyne.FillMode = canvas.ImageFillContain
+		imgFyne.FillMode = canvas.ImageFillOriginal
 		logger.Tracef(ctx, "screenshot image size: %#+v", img.Bounds().Size())
 
 		w.screenshotContainer.Objects = w.screenshotContainer.Objects[:0]
 		w.screenshotContainer.Objects = append(w.screenshotContainer.Objects, imgFyne)
 		w.screenshotContainer.Refresh()
+		changeCount.Add(1)
 	})
 	wg.Wait()
 
-	if len(w.layersContainer.Objects) != len(elements) {
-		w.layersContainer.Objects = w.layersContainer.Objects[:0]
-		img := image.NewRGBA(image.Rectangle{
-			Max: image.Point{
-				X: 1,
-				Y: 1,
-			},
-		})
-		for len(w.layersContainer.Objects) < len(elements) {
-			w.layersContainer.Objects = append(
-				w.layersContainer.Objects,
-				canvas.NewImageFromImage(img),
-			)
-		}
+	if changeCount.Load() > 0 {
+		w.imagesLayerObj.Refresh()
 	}
-	for idx, el := range elements {
-		if el.NewImage == nil {
-			continue
-		}
-		w.layersContainer.Objects[idx] = el.NewImage
-	}
-	w.layersContainer.Refresh()
 }
 
 func (p *Panel) newDashboardSettingsWindow(ctx context.Context) {
@@ -970,7 +1131,7 @@ func (p *Panel) editDashboardElementWindow(
 
 	var volumeColorActiveParsed color.Color
 	if volumeColorActiveParsed, err = colorx.Parse(obsVolumeSource.ColorActive); err != nil {
-		volumeColorActiveParsed = color.RGBA{R: 0, G: 255, B: 0, A: 255}
+		volumeColorActiveParsed = color.NRGBA{R: 0, G: 255, B: 0, A: 255}
 	}
 	volumeColorActive := colorpicker.NewColorSelectModalRect(
 		w,
@@ -985,7 +1146,7 @@ func (p *Panel) editDashboardElementWindow(
 
 	var volumeColorPassiveParsed color.Color
 	if volumeColorPassiveParsed, err = colorx.Parse(obsVolumeSource.ColorPassive); err != nil {
-		volumeColorPassiveParsed = color.RGBA{R: 0, G: 0, B: 0, A: 0}
+		volumeColorPassiveParsed = color.NRGBA{R: 0, G: 0, B: 0, A: 0}
 	}
 	volumeColorPassive := colorpicker.NewColorSelectModalRect(
 		w,
@@ -1011,12 +1172,13 @@ func (p *Panel) editDashboardElementWindow(
 	)
 
 	sourceTypeSelect := widget.NewSelect([]string{
-		string(streamdconfig.DashboardSourceImageTypeOBSVideo),
+		string(streamdconfig.DashboardSourceImageTypeStreamScreenshot),
+		string(streamdconfig.DashboardSourceImageTypeOBSScreenshot),
 		string(streamdconfig.DashboardSourceImageTypeOBSVolume),
 		string(streamdconfig.DashboardSourceImageTypeDummy),
 	}, func(s string) {
 		switch streamdconfig.DashboardSourceImageType(s) {
-		case streamdconfig.DashboardSourceImageTypeOBSVideo:
+		case streamdconfig.DashboardSourceImageTypeOBSScreenshot:
 			sourceOBSVolumeConfig.Hide()
 			sourceOBSVideoConfig.Show()
 		case streamdconfig.DashboardSourceImageTypeOBSVolume:
@@ -1027,7 +1189,7 @@ func (p *Panel) editDashboardElementWindow(
 			sourceOBSVolumeConfig.Hide()
 		}
 	})
-	sourceTypeSelect.SetSelected(string(streamdconfig.DashboardSourceImageTypeOBSVideo))
+	sourceTypeSelect.SetSelected(string(streamdconfig.DashboardSourceImageTypeOBSScreenshot))
 
 	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
 		if elementName.Text == "" {
@@ -1035,7 +1197,7 @@ func (p *Panel) editDashboardElementWindow(
 			return
 		}
 		switch streamdconfig.DashboardSourceImageType(sourceTypeSelect.Selected) {
-		case streamdconfig.DashboardSourceImageTypeOBSVideo:
+		case streamdconfig.DashboardSourceImageTypeOBSScreenshot:
 			cfg.Source = obsVideoSource
 		case streamdconfig.DashboardSourceImageTypeOBSVolume:
 			cfg.Source = obsVolumeSource

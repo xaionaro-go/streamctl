@@ -11,7 +11,7 @@ replace github.com/andreykaipov/goobs v1.4.1 => github.com/xaionaro-go/goobs v0.
 
 replace github.com/adrg/libvlc-go/v3 v3.1.5 => github.com/xaionaro-go/libvlc-go/v3 v3.0.0-20241011194409-0fe4e2a9d901
 
-replace fyne.io/fyne/v2 v2.5.0 => github.com/xaionaro-go/fyne/v2 v2.0.0-20241020235352-fd61e4920f24
+replace fyne.io/fyne/v2 v2.5.4 => github.com/xaionaro-go/fyne/v2 v2.0.0-20250215180758-399edb421067
 
 replace code.cloudfoundry.org/bytefmt => github.com/cloudfoundry/bytefmt v0.0.0-20211005130812-5bb3c17173e5
 
@@ -146,6 +146,7 @@ require (
 	github.com/mmcloughlin/profile v0.1.1 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
+	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
 	github.com/nicksnyder/go-i18n/v2 v2.4.0 // indirect
 	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
@@ -219,7 +220,7 @@ require (
 )
 
 require (
-	fyne.io/fyne/v2 v2.5.3
+	fyne.io/fyne/v2 v2.5.4
 	github.com/AgustinSRG/go-child-process-manager v1.0.1
 	github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802
 	github.com/abhinavxd/youtube-live-chat-downloader/v2 v2.0.3

@@ -163,7 +163,11 @@ func imgFillTo(
 	offset image.Point,
 	alignX streamdconsts.AlignX,
 	alignY streamdconsts.AlignY,
-) image.Image {
+) (_ret image.Image) {
+	logger.Tracef(ctx, "imgFillTo(ctx, %T, %T, %v, %v, %v, %v, %v)", dstReuse, src, canvasSize, outSize, offset, alignX, alignY)
+	defer func() {
+		logger.Tracef(ctx, "/imgFillTo(ctx, %T, %T, %v, %v, %v, %v, %v): %T:%s", dstReuse, src, canvasSize, outSize, offset, alignX, alignY, _ret, _ret.Bounds())
+	}()
 
 	sizeCur := src.Bounds().Size()
 	ratioCur := float64(sizeCur.X) / float64(sizeCur.Y)
