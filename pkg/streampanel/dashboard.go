@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"image/color"
 	"image/draw"
+	"math"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"sync"
@@ -21,7 +23,7 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"github.com/anthonynsimon/bild/adjust"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/lusingander/colorpicker"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
@@ -65,7 +67,6 @@ type dashboardWindow struct {
 	stopUpdatingFunc    context.CancelFunc
 	lastWinSize         fyne.Size
 	lastOrientation     fyne.DeviceOrientation
-	screenshotContainer *fyne.Container
 	imagesLocker        xsync.RWMutex
 	imagesLayerObj      *canvas.Raster
 	images              []imageInfo
@@ -168,7 +169,6 @@ func (p *Panel) newDashboardWindow(
 	bgFyne := canvas.NewImageFromImage(bg)
 	bgFyne.FillMode = canvas.ImageFillStretch
 
-	w.screenshotContainer = container.NewStack()
 	p.appStatus = widget.NewLabel("")
 	obsLabel := widget.NewLabel("OBS:")
 	obsLabel.Importance = widget.HighImportance
@@ -202,7 +202,6 @@ func (p *Panel) newDashboardWindow(
 
 	w.Window.SetContent(container.NewStack(
 		bgFyne,
-		w.screenshotContainer,
 		w.imagesLayerObj,
 		streamInfoContainer,
 	))
@@ -282,7 +281,7 @@ func (w *dashboardWindow) renderImagesNoLock(
 		case streamdconsts.AlignYMiddle:
 			yMin = (100-imgHeight)/2 + img.OffsetY
 		case streamdconsts.AlignYBottom:
-			xMin = (100 - imgHeight) + img.OffsetY
+			yMin = (100 - imgHeight) + img.OffsetY
 		}
 		yMax := yMin + imgHeight
 		rectangle := ximage.RectangleFloat64{
@@ -295,9 +294,10 @@ func (w *dashboardWindow) renderImagesNoLock(
 				Y: yMax / 100,
 			},
 		}
-		logger.Tracef(ctx, "transformation rectangle for %d (%#+v) is %v", idx, img.DashboardElementConfig, rectangle)
+		logger.Tracef(ctx, "transformation rectangle for %d (%s) is %v", idx, spew.Sdump(img.DashboardElementConfig), rectangle)
 		transformedImages = append(transformedImages, ximage.NewTransform(img.Image, color.NRGBAModel, rectangle))
 	}
+	slices.Reverse(transformedImages)
 	for idx := range dstImg.Pix {
 		dstImg.Pix[idx] = 0
 	}
@@ -306,6 +306,9 @@ func (w *dashboardWindow) renderImagesNoLock(
 		idxY := (y - dstImg.Rect.Min.Y) * dstImg.Stride
 		var xBoundaries []float64
 		for _, tImg := range transformedImages {
+			if yF < tImg.To.Min.Y || yF > tImg.To.Max.Y {
+				continue
+			}
 			xBoundaries = append(
 				xBoundaries,
 				(float64(tImg.To.Min.X)+0.5)/float64(width),
@@ -327,8 +330,12 @@ func (w *dashboardWindow) renderImagesNoLock(
 				tImg = nil
 				dup = 0
 				for _, _tImg := range transformedImages {
-					c := _tImg.To.AtFloat64(xF, yF)
+					c := _tImg.AtFloat64(xF, yF)
 					if c == nil {
+						continue
+					}
+					_, _, _, a := c.RGBA()
+					if a == 0 {
 						continue
 					}
 					tImg = _tImg
@@ -517,7 +524,17 @@ func (w *dashboardWindow) updateImagesNoLock(
 		logger.Debugf(ctx, "window size changed %#+v -> %#+v", lastWinSize, winSize)
 	}
 
-	elements := make([]imageInfo, 0, len(dashboardCfg.Elements))
+	elements := make([]imageInfo, 0, 1+len(dashboardCfg.Elements))
+	elements = append(elements, imageInfo{
+		ElementName: "screenshot",
+		DashboardElementConfig: streamdconfig.DashboardElementConfig{
+			Width:  100,
+			Height: 100,
+			AlignX: streamdconsts.AlignXMiddle,
+			AlignY: streamdconsts.AlignYTop,
+			ZIndex: -math.MaxFloat64,
+		},
+	})
 	for elName, el := range dashboardCfg.Elements {
 		elements = append(elements, imageInfo{
 			ElementName:            elName,
@@ -552,6 +569,9 @@ func (w *dashboardWindow) updateImagesNoLock(
 	var wg sync.WaitGroup
 
 	for idx := range elements {
+		if idx == 0 {
+			continue
+		}
 		wg.Add(1)
 		{
 			el := &elements[idx]
@@ -586,6 +606,7 @@ func (w *dashboardWindow) updateImagesNoLock(
 
 	wg.Add(1)
 	observability.Go(ctx, func() {
+		el := &elements[0]
 		defer wg.Done()
 		img, changed, err := w.getImage(ctx, consts.ImageScreenshot)
 		if err != nil {
@@ -608,25 +629,12 @@ func (w *dashboardWindow) updateImagesNoLock(
 			lastWinSize,
 			winSize,
 		)
-		winSize := image.Point{X: int(winSize.Width), Y: int(winSize.Height)}
-		img = imgFillTo(
-			ctx,
-			nil,
-			img,
-			winSize,
-			winSize,
-			image.Point{X: 0, Y: 0},
-			streamdconsts.AlignXLeft,
-			streamdconsts.AlignYTop,
-		)
-		img = adjust.Brightness(img, -0.5)
-		imgFyne := canvas.NewImageFromImage(img)
-		imgFyne.FillMode = canvas.ImageFillOriginal
-		logger.Tracef(ctx, "screenshot image size: %#+v", img.Bounds().Size())
-
-		w.screenshotContainer.Objects = w.screenshotContainer.Objects[:0]
-		w.screenshotContainer.Objects = append(w.screenshotContainer.Objects, imgFyne)
-		w.screenshotContainer.Refresh()
+		b := img.Bounds()
+		m := image.NewNRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+		draw.Draw(m, m.Bounds(), img, b.Min, draw.Src)
+		w.imagesLocker.Do(xsync.WithNoLogging(ctx, true), func() {
+			el.Image = m
+		})
 		changeCount.Add(1)
 	})
 	wg.Wait()
