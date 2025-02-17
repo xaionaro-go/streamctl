@@ -9,5 +9,5 @@ import (
 func main() {
 	ctx := context.Background()
 	a := audio.NewAudio(ctx)
-	a.PlayChatMessage()
+	a.PlayChatMessage(ctx)
 }

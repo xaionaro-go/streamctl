@@ -21,12 +21,12 @@ replace github.com/rs/zerolog v1.33.0 => github.com/xaionaro-go/zerolog2belt v0.
 
 replace github.com/bluenviron/gortsplib/v4 v4.11.0 => github.com/xaionaro-go/gortsplib/v4 v4.0.0-20241123213409-7279dabb7de6
 
-replace github.com/asticode/go-astiav v0.30.0 => github.com/xaionaro-go/astiav v0.0.0-20250106205037-a1605f324663
+replace github.com/asticode/go-astiav v0.33.1 => github.com/xaionaro-go/astiav v0.0.0-20250106205037-a1605f324663
 
 replace github.com/wlynxg/anet => github.com/BieHDC/anet v0.0.6-0.20241226223613-d47f8b766b3c
 
 require (
-	github.com/facebookincubator/go-belt v0.0.0-20240804203001-846c4409d41c
+	github.com/facebookincubator/go-belt v0.0.0-20250201205440-80b5034808e3
 	github.com/go-git/go-billy/v5 v5.5.0
 	github.com/goccy/go-yaml v1.15.13
 	github.com/hashicorp/go-multierror v1.1.1
@@ -57,7 +57,7 @@ require (
 	github.com/abema/go-mp4 v1.2.0 // indirect
 	github.com/adrg/libvlc-go/v3 v3.1.6 // indirect
 	github.com/andybalholm/brotli v1.1.0 // indirect
-	github.com/asticode/go-astikit v0.51.1 // indirect
+	github.com/asticode/go-astikit v0.52.0 // indirect
 	github.com/asticode/go-astits v1.13.0 // indirect
 	github.com/benburkert/openpgp v0.0.0-20160410205803-c2471f86866c // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -148,6 +148,7 @@ require (
 	github.com/mmcloughlin/profile v0.1.1 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
+	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
 	github.com/nicksnyder/go-i18n/v2 v2.4.0 // indirect
 	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d // indirect
@@ -162,9 +163,9 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/pojntfx/go-auth-utils v0.1.0 // indirect
-	github.com/prometheus/client_model v0.6.0 // indirect
-	github.com/prometheus/common v0.47.0 // indirect
-	github.com/prometheus/procfs v0.12.0 // indirect
+	github.com/prometheus/client_model v0.6.1 // indirect
+	github.com/prometheus/common v0.62.0 // indirect
+	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/rubenv/sql-migrate v1.7.0 // indirect
 	github.com/rymdport/portal v0.3.0 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
@@ -230,13 +231,13 @@ require (
 	github.com/andreykaipov/goobs v1.4.1
 	github.com/anthonynsimon/bild v0.14.0
 	github.com/asaskevich/EventBus v0.0.0-20200907212545-49d423059eef
-	github.com/asticode/go-astiav v0.30.0
+	github.com/asticode/go-astiav v0.33.1
 	github.com/bamiaux/rez v0.0.0-20170731184118-29f4463c688b
 	github.com/bluenviron/gortsplib/v4 v4.11.0
 	github.com/chai2010/webp v1.1.1
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/dustin/go-humanize v1.0.1
-	github.com/getsentry/sentry-go v0.28.1
+	github.com/getsentry/sentry-go v0.31.1
 	github.com/go-andiamo/splitter v1.2.5
 	github.com/go-git/go-git/v5 v5.12.0
 	github.com/go-ng/xmath v0.0.0-20230704233441-028f5ea62335
@@ -249,18 +250,19 @@ require (
 	github.com/iancoleman/strcase v0.3.0
 	github.com/immune-gmbh/attestation-sdk v0.0.0-20230711173209-f44e4502aeca
 	github.com/kbinani/screenshot v0.0.0-20230812210009-b87d31814237
-	github.com/klauspost/compress v1.17.7
+	github.com/klauspost/compress v1.17.9
 	github.com/lusingander/colorpicker v0.7.3
 	github.com/pojntfx/weron v0.2.7
-	github.com/prometheus/client_golang v1.18.0
+	github.com/prometheus/client_golang v1.20.5
 	github.com/rs/zerolog v1.33.0
 	github.com/sethvargo/go-password v0.3.1
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/sirupsen/logrus v1.9.3
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
-	github.com/spf13/pflag v1.0.5
+	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0
-	github.com/xaionaro-go/audio v0.0.0-20250111142716-aa10611bd8a0
+	github.com/xaionaro-go/audio v0.0.0-20250210102901-abfced9d5ef3
+	github.com/xaionaro-go/avpipeline v0.0.0-20250217031756-936d572a90d3
 	github.com/xaionaro-go/datacounter v1.0.4
 	github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42
 	github.com/xaionaro-go/grpcproxy v0.0.0-20241103205849-a8fef42e72f9
@@ -271,8 +273,8 @@ require (
 	github.com/xaionaro-go/object v0.0.0-20241026212449-753ce10ec94c
 	github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20241018162120-5faf4e7a684a
 	github.com/xaionaro-go/observability v0.0.0-20250111142240-5d72f17a6d12
-	github.com/xaionaro-go/player v0.0.0-20250111155300-087e2c146e06
-	github.com/xaionaro-go/recoder v0.0.0-20250111153658-7e55cef13b0f
+	github.com/xaionaro-go/player v0.0.0-20250217034724-9a93018082db
+	github.com/xaionaro-go/recoder v0.0.0-20250217034141-2196566ae498
 	github.com/xaionaro-go/secret v0.0.0-20250111141743-ced12e1082c2
 	github.com/xaionaro-go/timeapiio v0.0.0-20240915203246-b907cf699af3
 	github.com/xaionaro-go/typing v0.0.0-20221123235249-2229101d38ba
@@ -281,7 +283,7 @@ require (
 	github.com/xaionaro-go/xfyne v0.0.0-20241018233531-26123724a6c6
 	github.com/xaionaro-go/xlogrus v0.0.0-20250111150201-60557109545a
 	github.com/xaionaro-go/xpath v0.0.0-20250111145115-55f5728f643f
-	github.com/xaionaro-go/xsync v0.0.0-20250111141039-3e7f31b1a2c6
+	github.com/xaionaro-go/xsync v0.0.0-20250113213958-aedf9c8786f5
 	github.com/yutopp/go-flv v0.3.1
 	golang.org/x/crypto v0.32.0
 	google.golang.org/grpc v1.69.2

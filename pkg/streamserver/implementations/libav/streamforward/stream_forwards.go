@@ -1,6 +1,9 @@
 package streamforward
 
 import (
+	"context"
+
+	"github.com/xaionaro-go/recoder"
 	"github.com/xaionaro-go/recoder/libav"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/streamforward"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
@@ -12,5 +15,11 @@ func NewStreamForwards(
 	s StreamServer,
 	platformsController types.PlatformsController,
 ) *StreamForwards {
-	return streamforward.NewStreamForwards(s, libav.NewRecoderFactory(), platformsController)
+	return streamforward.NewStreamForwards(
+		s,
+		func() (recoder.Factory, error) {
+			return libav.NewFactory(context.TODO())
+		},
+		platformsController,
+	)
 }

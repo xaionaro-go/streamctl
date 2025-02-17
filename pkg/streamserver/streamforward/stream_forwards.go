@@ -40,12 +40,12 @@ type StreamForwards struct {
 	DestinationStreamingLocker *lockmap.LockMap
 	ActiveStreamForwardings    map[ForwardingKey]*ActiveStreamForwarding
 	StreamDestinations         []types.StreamDestination
-	RecoderFactory             recoder.Factory
+	RecoderFactory             func() (recoder.Factory, error)
 }
 
 func NewStreamForwards(
 	s StreamServer,
-	recoderFactory recoder.Factory,
+	recoderFactory func() (recoder.Factory, error),
 	pc types.PlatformsController,
 ) *StreamForwards {
 	return &StreamForwards{

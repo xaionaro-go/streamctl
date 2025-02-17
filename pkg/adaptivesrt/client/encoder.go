@@ -8,15 +8,15 @@ import (
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/recoder"
-	"github.com/xaionaro-go/recoder/libav/saferecoder"
+	"github.com/xaionaro-go/recoder/libav"
 	"github.com/xaionaro-go/xsync"
 )
 
 type Encoder struct {
-	encoder            *saferecoder.Encoder
-	input              *saferecoder.Input
+	encoder            *libav.Encoder
+	input              *libav.Input
 	inputLocker        xsync.Mutex
-	output             *saferecoder.Output
+	output             *libav.Output
 	outputLocker       xsync.Mutex
 	listener           *net.UDPConn
 	destinationsLocker xsync.Mutex
@@ -31,7 +31,7 @@ func NewEncoder(
 	logger.Debugf(ctx, "NewEncoder()")
 	defer func() { logger.Debugf(ctx, "/NewEncoder(): %v", _err) }()
 
-	proc, err := saferecoder.NewProcess(ctx)
+	proc, err := libav.NewProcess(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to initialize an encoder host-process: %w", err)
 	}

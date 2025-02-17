@@ -8,7 +8,6 @@ import (
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/recoder"
-	"github.com/xaionaro-go/recoder/libav"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
@@ -17,7 +16,10 @@ func (p *imageDataProvider) newStreamImageTaker(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 ) (_ret *streamImageTaker, _err error) {
-	factory := libav.NewRecoderFactory()
+	/*factory, err := libav.NewFactory(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to initialize a libav factory: %w", err)
+	}
 
 	r, err := factory.New(ctx)
 	if err != nil {
@@ -43,7 +45,7 @@ func (p *imageDataProvider) newStreamImageTaker(
 		if _err != nil {
 			input.Close()
 		}
-	}()
+	}()*/
 
 	return nil, fmt.Errorf("not implemented")
 }

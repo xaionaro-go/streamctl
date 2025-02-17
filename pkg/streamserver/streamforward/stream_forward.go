@@ -29,18 +29,18 @@ type StreamForward struct {
 
 type ActiveStreamForwarding struct {
 	*StreamForwards
-	StreamID             types.StreamID
-	DestinationURL       *url.URL
-	DestinationStreamKey string
-	ReadCount            atomic.Uint64
-	WriteCount           atomic.Uint64
-	RecoderFactory       recoder.Factory
-	PauseFunc            func(ctx context.Context, fwd *ActiveStreamForwarding)
+	StreamID              types.StreamID
+	DestinationURL        *url.URL
+	DestinationStreamKey  string
+	ReadCount             atomic.Uint64
+	WriteCount            atomic.Uint64
+	RecoderFactoryFactory func() (recoder.Factory, error)
+	PauseFunc             func(ctx context.Context, fwd *ActiveStreamForwarding)
 
 	cancelFunc context.CancelFunc
 
 	locker             xsync.Mutex
-	recoder            recoder.Recoder
+	recoderFactory     recoder.Factory
 	recodingCancelFunc context.CancelFunc
 }
 
@@ -74,12 +74,12 @@ func (fwds *StreamForwards) NewActiveStreamForward(
 		return nil, fmt.Errorf("unable to parse URL '%s': %w", urlString, err)
 	}
 	fwd := &ActiveStreamForwarding{
-		RecoderFactory:       fwds.RecoderFactory,
-		StreamForwards:       fwds,
-		StreamID:             streamID,
-		DestinationURL:       urlParsed,
-		DestinationStreamKey: streamKey,
-		PauseFunc:            pauseFunc,
+		RecoderFactoryFactory: fwds.RecoderFactory,
+		StreamForwards:        fwds,
+		StreamID:              streamID,
+		DestinationURL:        urlParsed,
+		DestinationStreamKey:  streamKey,
+		PauseFunc:             pauseFunc,
 	}
 	for _, opt := range opts {
 		opt.apply(fwd)
@@ -215,7 +215,12 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 		})
 	}()
 
-	recoderInstance, err := fwd.RecoderFactory.New(ctx)
+	factoryInstance, err := fwd.RecoderFactoryFactory()
+	if err != nil {
+		return fmt.Errorf("unable to initialize a recoder factory: %w", err)
+	}
+
+	recoderInstance, err := factoryInstance.NewRecoder(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to initialize a recoder: %w", err)
 	}
@@ -226,9 +231,9 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 	default:
 	}
 
-	encoder, err := fwd.newEncoderFor(ctx, recoderInstance)
+	encoder, err := fwd.newEncoderFor(ctx, factoryInstance)
 	if err != nil {
-		errmon.ObserveErrorCtx(ctx, recoderInstance.Close())
+		errmon.ObserveErrorCtx(ctx, factoryInstance.Close())
 		return fmt.Errorf("unable to open the input: %w", err)
 	}
 	defer func() {
@@ -238,9 +243,9 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 		}
 	}()
 
-	input, err := fwd.openInputFor(ctx, recoderInstance, publisher)
+	input, err := fwd.openInputFor(ctx, factoryInstance, publisher)
 	if err != nil {
-		errmon.ObserveErrorCtx(ctx, recoderInstance.Close())
+		errmon.ObserveErrorCtx(ctx, factoryInstance.Close())
 		return fmt.Errorf("unable to open the input: %w", err)
 	}
 	defer func() {
@@ -256,9 +261,9 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 	default:
 	}
 
-	output, err := fwd.openOutputFor(ctx, recoderInstance)
+	output, err := fwd.openOutputFor(ctx, factoryInstance)
 	if err != nil {
-		errmon.ObserveErrorCtx(ctx, recoderInstance.Close())
+		errmon.ObserveErrorCtx(ctx, factoryInstance.Close())
 		return fmt.Errorf("unable to open the output: %w", err)
 	}
 	defer func() {
@@ -279,10 +284,10 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 		close(recodingFinished)
 	}()
 	err = xsync.DoR1(ctx, &fwd.locker, func() error {
-		if fwd.recoder != nil {
+		if fwd.recoderFactory != nil {
 			return fmt.Errorf("recoder process is already initialized")
 		}
-		fwd.recoder = recoderInstance
+		fwd.recoderFactory = factoryInstance
 
 		fwd.recodingCancelFunc = func() {
 			cancelFn()
@@ -295,7 +300,7 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 		default:
 		}
 
-		err = recoderInstance.StartRecoding(ctx, encoder, input, output)
+		err = recoderInstance.Start(ctx, encoder, input, output)
 		if err != nil {
 			select {
 			case <-ctx.Done():
@@ -331,19 +336,19 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 		}
 	})
 
-	return recoderInstance.WaitForRecodingEnd(ctx)
+	return recoderInstance.Wait(ctx)
 }
 
 func (fwd *ActiveStreamForwarding) newEncoderFor(
 	ctx context.Context,
-	recoderInstance recoder.Recoder,
+	factoryInstance recoder.Factory,
 ) (recoder.Encoder, error) {
-	return recoderInstance.NewEncoder(ctx, recoder.EncoderConfig{})
+	return factoryInstance.NewEncoder(ctx, recoder.EncodersConfig{})
 }
 
 func (fwd *ActiveStreamForwarding) openInputFor(
 	ctx context.Context,
-	recoderInstance recoder.Recoder,
+	factoryInstance recoder.Factory,
 	publisher types.Publisher,
 ) (recoder.Input, error) {
 	inputURL, err := fwd.GetLocalhostEndpoint(ctx)
@@ -355,10 +360,10 @@ func (fwd *ActiveStreamForwarding) openInputFor(
 
 	var input recoder.Input
 	inputCfg := recoder.InputConfig{}
-	if newInputFromStreamIDer, ok := recoderInstance.(recoder.NewInputFromPublisherer); ok {
+	if newInputFromStreamIDer, ok := factoryInstance.(recoder.NewInputFromPublisherer); ok {
 		input, err = newInputFromStreamIDer.NewInputFromPublisher(ctx, publisher, inputCfg)
 	} else {
-		input, err = recoderInstance.NewInputFromURL(ctx, inputURL.String(), "", inputCfg)
+		input, err = factoryInstance.NewInputFromURL(ctx, inputURL.String(), "", inputCfg)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("unable to open '%s' as the input: %w", inputURL, err)
@@ -369,9 +374,9 @@ func (fwd *ActiveStreamForwarding) openInputFor(
 
 func (fwd *ActiveStreamForwarding) openOutputFor(
 	ctx context.Context,
-	recoderInstance recoder.Recoder,
+	factoryInstance recoder.Factory,
 ) (recoder.Output, error) {
-	output, err := recoderInstance.NewOutputFromURL(
+	output, err := factoryInstance.NewOutputFromURL(
 		ctx,
 		fwd.DestinationURL.String(),
 		fwd.DestinationStreamKey,
@@ -393,12 +398,12 @@ func (fwd *ActiveStreamForwarding) killRecodingProcess() error {
 		fwd.recodingCancelFunc = nil
 	}
 
-	if fwd.recoder != nil {
-		err := fwd.recoder.Close()
+	if fwd.recoderFactory != nil {
+		err := fwd.recoderFactory.Close()
 		if err != nil {
 			result = multierror.Append(result, fmt.Errorf("unable to close fwd.Client: %v", err))
 		}
-		fwd.recoder = nil
+		fwd.recoderFactory = nil
 	}
 
 	return result.ErrorOrNil()

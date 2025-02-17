@@ -13,19 +13,21 @@ import (
 )
 
 type Audio struct {
-	Playbacker *audioSubsystem.Audio
+	Playbacker *audioSubsystem.Player
 	AudioTheme audiotheme.AudioTheme
 }
 
 func NewAudio(ctx context.Context) *Audio {
 	return &Audio{
-		Playbacker: audioSubsystem.NewAudioAuto(ctx),
+		Playbacker: audioSubsystem.NewPlayerAuto(ctx),
 		AudioTheme: defaultaudiotheme.AudioTheme(),
 	}
 }
 
-func (a *Audio) PlayChatMessage() error {
-	stream, err := a.Playbacker.PlayVorbis(bytes.NewReader(a.AudioTheme.ChatMessage))
+func (a *Audio) PlayChatMessage(
+	ctx context.Context,
+) error {
+	stream, err := a.Playbacker.PlayVorbis(ctx, bytes.NewReader(a.AudioTheme.ChatMessage))
 	if err != nil {
 		return fmt.Errorf("unable to start playback the sound: %w", err)
 	}

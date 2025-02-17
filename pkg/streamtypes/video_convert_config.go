@@ -4,4 +4,4 @@ import (
 	"github.com/xaionaro-go/recoder"
 )
 
-type VideoConvertConfig = recoder.EncoderConfig
+type VideoConvertConfig = recoder.EncodersConfig

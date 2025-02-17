@@ -6,7 +6,7 @@ import (
 
 	"github.com/asticode/go-astiav"
 	logger "github.com/facebookincubator/go-belt/tool/logger/types"
-	"github.com/xaionaro-go/recoder/libav/recoder"
+	"github.com/xaionaro-go/avpipeline"
 )
 
 func Callback(l logger.Logger) astiav.LogCallback {
@@ -17,7 +17,7 @@ func Callback(l logger.Logger) astiav.LogCallback {
 		defer astiavLoggerLocker.Unlock()
 		setClassFunc(c)
 		astiavLogger.Logf(
-			recoder.LogLevelFromAstiav(level),
+			avpipeline.LogLevelFromAstiav(level),
 			"%s", strings.TrimSpace(msg),
 		)
 		setClassFunc(nil)

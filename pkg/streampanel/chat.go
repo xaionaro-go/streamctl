@@ -186,7 +186,7 @@ func (ui *chatUI) onReceiveMessage(
 			return
 		}
 		defer logger.Debugf(ctx, "/PlayChatMessage: (attempted to) played")
-		err := ui.Panel.Audio.PlayChatMessage()
+		err := ui.Panel.Audio.PlayChatMessage(ctx)
 		if err != nil {
 			logger.Errorf(ctx, "unable to playback the chat message sound: %v", err)
 		}
