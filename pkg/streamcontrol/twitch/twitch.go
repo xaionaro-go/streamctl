@@ -173,6 +173,7 @@ func (t *Twitch) prepareNoLock(ctx context.Context) error {
 		}
 		t.broadcasterID, err = getUserID(ctx, t.client, t.config.Config.Channel)
 		if err != nil {
+			logger.Errorf(ctx, "unable to get broadcaster ID: %v", err)
 			return
 		}
 		logger.Debugf(
@@ -731,7 +732,7 @@ func (t *Twitch) getClient(
 		ClientSecret: t.clientSecret.Get(),
 		RedirectURI:  authRedirectURI(oauthListenPort), // TODO: delete this hardcode
 	}
-	client, err := helix.NewClient(options)
+	client, err := helix.NewClientWithContext(ctx, options)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create a helix client object: %w", err)
 	}

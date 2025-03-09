@@ -208,7 +208,9 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 
 	defer func() {
 		fwd.locker.Do(ctx, func() {
-			err := fwd.killRecodingProcess()
+			ctx, cancelFn := context.WithTimeout(ctx, time.Second)
+			defer cancelFn()
+			err := fwd.killRecodingProcess(ctx)
 			if err != nil {
 				logger.Warn(ctx, err)
 			}
@@ -390,23 +392,47 @@ func (fwd *ActiveStreamForwarding) openOutputFor(
 	return output, nil
 }
 
-func (fwd *ActiveStreamForwarding) killRecodingProcess() error {
-	var result *multierror.Error
+func (fwd *ActiveStreamForwarding) killRecodingProcess(
+	ctx context.Context,
+) error {
 
-	if fwd.recodingCancelFunc != nil {
-		fwd.recodingCancelFunc()
-		fwd.recodingCancelFunc = nil
+	recodingCancelFn := fwd.recodingCancelFunc
+	fwd.recodingCancelFunc = nil
+
+	recoderFactory := fwd.recoderFactory
+	fwd.recoderFactory = nil
+
+	if recodingCancelFn == nil || recoderFactory == nil {
+		return nil
 	}
 
-	if fwd.recoderFactory != nil {
-		err := fwd.recoderFactory.Close()
-		if err != nil {
-			result = multierror.Append(result, fmt.Errorf("unable to close fwd.Client: %v", err))
+	resultCh := make(chan error)
+	observability.Go(ctx, func() {
+		defer func() {
+			close(resultCh)
+		}()
+
+		var err error
+		if recodingCancelFn != nil {
+			recodingCancelFn()
 		}
-		fwd.recoderFactory = nil
-	}
 
-	return result.ErrorOrNil()
+		if recoderFactory != nil {
+			err = recoderFactory.Close()
+			if err != nil {
+				err = fmt.Errorf("unable to close fwd.Client: %w", err)
+			}
+		}
+
+		resultCh <- err
+	})
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-resultCh:
+		return err
+	}
 }
 
 func (fwd *ActiveStreamForwarding) Close() error {
@@ -422,8 +448,12 @@ func (fwd *ActiveStreamForwarding) Close() error {
 			fwd.cancelFunc = nil
 		}
 
-		if err := fwd.killRecodingProcess(); err != nil {
-			result = multierror.Append(result, fmt.Errorf("unable to stop recoding: %w", err))
+		{
+			ctx, cancelFn := context.WithTimeout(ctx, time.Second)
+			defer cancelFn()
+			if err := fwd.killRecodingProcess(ctx); err != nil {
+				result = multierror.Append(result, fmt.Errorf("unable to stop recoding: %w", err))
+			}
 		}
 		return result.ErrorOrNil()
 	})

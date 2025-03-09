@@ -691,8 +691,6 @@ github.com/neelance/astrewrite v0.0.0-20160511093645-99348263ae86/go.mod h1:kHJE
 github.com/neelance/sourcemap v0.0.0-20200213170602-2833bce08e4c/go.mod h1:Qr6/a/Q4r9LP1IltGz7tA7iOK1WonHEYhu1HRBA7ZiM=
 github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 h1:zYyBkD/k9seD2A7fsi6Oo2LfFZAehjjQMERAvZLEDnQ=
 github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646/go.mod h1:jpp1/29i3P1S/RLdc7JQKbRpFeM1dOBd8T9ki5s+AY8=
-github.com/nicklaw5/helix/v2 v2.30.1-0.20240715193454-0151ccccf980 h1:PhRVFPI7eXzLajhhZuReQUy2cuViKqkASRKXV7o2G7I=
-github.com/nicklaw5/helix/v2 v2.30.1-0.20240715193454-0151ccccf980/go.mod h1:e1GsZq4NDk9sQlPJ0Nr3+14R9cizqg09VAk7/IonpOU=
 github.com/nicksnyder/go-i18n/v2 v2.4.0 h1:3IcvPOAvnCKwNm0TB0dLDTuawWEj+ax/RERNC+diLMM=
 github.com/nicksnyder/go-i18n/v2 v2.4.0/go.mod h1:nxYSZE9M0bf3Y70gPQjN9ha7XNHX7gMc814+6wVyEI4=
 github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d h1:VhgPp6v9qf9Agr/56bj7Y/xa04UccTW04VP0Qed4vnQ=
@@ -952,6 +950,8 @@ github.com/xaionaro-go/gortsplib/v4 v4.0.0-20241123213409-7279dabb7de6 h1:WXfq9u
 github.com/xaionaro-go/gortsplib/v4 v4.0.0-20241123213409-7279dabb7de6/go.mod h1:mhRfgXoq3TNB+FMp5LEAqexMnbVZAMFuc9UVCfpbhlg=
 github.com/xaionaro-go/grpcproxy v0.0.0-20241103205849-a8fef42e72f9 h1:epEpV8x9ANTBnFPeb8oki9thl13tR/ZolbLL1lCh6vk=
 github.com/xaionaro-go/grpcproxy v0.0.0-20241103205849-a8fef42e72f9/go.mod h1:2Q+/D11JlgTmBylj7QPCYsuDfSYYlHs3NnYp3/T9XSs=
+github.com/xaionaro-go/helix/v2 v2.0.0-20250309182928-f54c9d4c8a29 h1:k7WLDHIK0AlSi8jgkYt9oz0sB4y1E6Zi0E6YyC8rIVY=
+github.com/xaionaro-go/helix/v2 v2.0.0-20250309182928-f54c9d4c8a29/go.mod h1:e1GsZq4NDk9sQlPJ0Nr3+14R9cizqg09VAk7/IonpOU=
 github.com/xaionaro-go/kickcom v0.0.0-20241022142825-25a234cc8628 h1:/ohdYrl4nFgEJJTQqP8hSzXqXxyetiB07jnQu5pcvNo=
 github.com/xaionaro-go/kickcom v0.0.0-20241022142825-25a234cc8628/go.mod h1:gzKL0qgtR13PXl4woI3nvxVhQ9Z6lHtGL5tk9HmITxA=
 github.com/xaionaro-go/libsrt v0.0.0-20250105232601-e760c79b2bc3 h1:OeqZZ9i3KHaTKOxLtrF7nBkao299F5QK4acl9Nd/GrI=

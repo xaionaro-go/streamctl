@@ -25,6 +25,8 @@ replace github.com/asticode/go-astiav v0.33.1 => github.com/xaionaro-go/astiav v
 
 replace github.com/wlynxg/anet => github.com/BieHDC/anet v0.0.6-0.20241226223613-d47f8b766b3c
 
+replace github.com/nicklaw5/helix/v2 v2.30.1-0.20240715193454-0151ccccf980 => github.com/xaionaro-go/helix/v2 v2.0.0-20250309182928-f54c9d4c8a29
+
 require (
 	github.com/facebookincubator/go-belt v0.0.0-20250201205440-80b5034808e3
 	github.com/go-git/go-billy/v5 v5.5.0
