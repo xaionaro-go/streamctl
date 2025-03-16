@@ -25,7 +25,7 @@ type ChatHandler struct {
 	currentCursor   uint64
 	channelID       uint64
 	lastMessageID   string
-	client          Client
+	client          ReverseEngClient
 	cancelFunc      context.CancelFunc
 	messagesOutChan chan streamcontrol.ChatMessage
 }
@@ -34,12 +34,12 @@ func (k *Kick) newChatHandler(
 	ctx context.Context,
 	channelID uint64,
 ) (*ChatHandler, error) {
-	return NewChatHandler(ctx, k.Client, channelID)
+	return NewChatHandler(ctx, k.ReverseEngClient, channelID)
 }
 
 func NewChatHandler(
 	ctx context.Context,
-	chatClient Client,
+	chatClient ReverseEngClient,
 	channelID uint64,
 ) (*ChatHandler, error) {
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
@@ -20,14 +21,41 @@ type Twitch struct {
 	Categories []helix.Game
 }
 
+func (c *Twitch) Clone() *Twitch {
+	return &Twitch{
+		Categories: c.Categories,
+	}
+}
+
 type YouTube struct {
 	Broadcasts []*youtube.LiveBroadcast
+}
+
+func (c *YouTube) Clone() *YouTube {
+	return &YouTube{
+		Broadcasts: c.Broadcasts,
+	}
 }
 
 type Cache struct {
 	Kick    Kick
 	Twitch  Twitch
 	Youtube YouTube
+}
+
+func (c *Cache) Clone() *Cache {
+	_ = (*Kick)(nil).Clone
+	_ = (*Twitch)(nil).Clone
+	_ = (*YouTube)(nil).Clone
+	result := &Cache{}
+	dst := reflect.ValueOf(result)
+	src := reflect.ValueOf(c)
+	for i := 0; i < src.NumField(); i++ {
+		srcField := src.Field(i)
+		dstField := dst.Field(i)
+		dstField.Set(srcField.MethodByName("Clone").Call(nil)[0])
+	}
+	return result
 }
 
 func ReadCacheFromPath(

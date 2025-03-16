@@ -260,7 +260,7 @@ func getToken(ctx context.Context, cfg Config) (*oauth2.Token, error) {
 				oauthHandlerArg := oauthhandler.OAuthHandlerArgument{
 					AuthURL:    oauthCfg.AuthCodeURL("state-token", oauth2.AccessTypeOffline),
 					ListenPort: listenPort,
-					ExchangeFn: func(code string) error {
+					ExchangeFn: func(ctx context.Context, code string) error {
 						_tok, err := oauthCfg.Exchange(ctx, code)
 						if err != nil {
 							return fmt.Errorf("unable to get a token: %w", err)

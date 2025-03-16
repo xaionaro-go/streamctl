@@ -294,10 +294,12 @@ func (d *StreamD) readCache(ctx context.Context) error {
 		return nil
 	}
 
-	err = cache.ReadCacheFromPath(ctx, cachePath, d.Cache)
+	dst := &cache.Cache{}
+	err = cache.ReadCacheFromPath(ctx, cachePath, dst)
 	if err != nil {
 		return fmt.Errorf("unable to read cache file '%s': %w", *d.Config.CachePath, err)
 	}
+	d.Cache = dst
 
 	return nil
 }
@@ -321,7 +323,8 @@ func (d *StreamD) writeCache(ctx context.Context) error {
 		return fmt.Errorf("unable to expand path '%s': %w", *d.Config.CachePath, err)
 	}
 
-	err = cache.WriteCacheToPath(ctx, cachePath, *d.Cache)
+	src := d.Cache.Clone()
+	err = cache.WriteCacheToPath(ctx, cachePath, *src)
 	if err != nil {
 		return fmt.Errorf("unable to write to the cache file '%s': %w", *d.Config.CachePath, err)
 	}
@@ -342,6 +345,16 @@ func (d *StreamD) InitCache(ctx context.Context) error {
 		defer wg.Done()
 		_changedCache := d.initTwitchData(ctx)
 		d.normalizeTwitchData()
+		if _changedCache {
+			changedCache = true
+		}
+	})
+
+	wg.Add(1)
+	observability.Go(ctx, func() {
+		defer wg.Done()
+		_changedCache := d.initKickData(ctx)
+		d.normalizeKickData()
 		if _changedCache {
 			changedCache = true
 		}
@@ -417,6 +430,47 @@ func (d *StreamD) initTwitchData(ctx context.Context) bool {
 
 func (d *StreamD) normalizeTwitchData() {
 	s := d.Cache.Twitch.Categories
+	sort.Slice(s, func(i, j int) bool {
+		return s[i].Name < s[j].Name
+	})
+}
+
+func (d *StreamD) initKickData(ctx context.Context) bool {
+	logger.FromCtx(ctx).Debugf("initializing Kick data")
+	defer logger.FromCtx(ctx).Debugf("endof initializing Kick data")
+
+	if c := len(d.Cache.Kick.GetCategories()); c != 0 {
+		logger.FromCtx(ctx).Debugf("already have categories (count: %d)", c)
+		return false
+	}
+
+	kick := d.StreamControllers.Kick
+	if kick == nil {
+		logger.FromCtx(ctx).Debugf("twitch controller is not initialized")
+		return false
+	}
+
+	allCategories, err := kick.GetAllCategories(d.ctxForController(ctx))
+	if err != nil {
+		d.UI.DisplayError(err)
+		return false
+	}
+
+	logger.FromCtx(ctx).Debugf("got categories: %#+v", allCategories)
+
+	func() {
+		d.CacheLock.Do(ctx, func() {
+			d.Cache.Kick.SetCategories(allCategories)
+		})
+	}()
+
+	err = d.SaveConfig(ctx)
+	errmon.ObserveErrorCtx(ctx, err)
+	return true
+}
+
+func (d *StreamD) normalizeKickData() {
+	s := d.Cache.Kick.GetCategories()
 	sort.Slice(s, func(i, j int) bool {
 		return s[i].Name < s[j].Name
 	})

@@ -17,7 +17,7 @@ import (
 type OAuthHandlerArgument struct {
 	AuthURL    string
 	ListenPort uint16
-	ExchangeFn func(code string) error
+	ExchangeFn func(ctx context.Context, code string) error
 }
 
 func OAuth2HandlerViaCLI(ctx context.Context, arg OAuthHandlerArgument) error {
@@ -32,7 +32,7 @@ func OAuth2HandlerViaCLI(ctx context.Context, arg OAuthHandlerArgument) error {
 	if _, err := fmt.Scan(&code); err != nil {
 		log.Fatalf("Unable to read authorization code %v", err)
 	}
-	return arg.ExchangeFn(code)
+	return arg.ExchangeFn(ctx, code)
 }
 
 func OAuth2HandlerViaBrowser(ctx context.Context, arg OAuthHandlerArgument) error {
@@ -56,7 +56,7 @@ func OAuth2HandlerViaBrowser(ctx context.Context, arg OAuthHandlerArgument) erro
 
 	// Wait for the web server to get the code.
 	code := <-codeCh
-	return arg.ExchangeFn(code)
+	return arg.ExchangeFn(ctx, code)
 }
 
 func NewCodeReceiver(

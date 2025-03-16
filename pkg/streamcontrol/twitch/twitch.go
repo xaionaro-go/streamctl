@@ -257,7 +257,9 @@ func (t *Twitch) ApplyProfile(
 	logger.Debugf(ctx, "ApplyProfile")
 	defer logger.Debugf(ctx, "/ApplyProfile")
 
-	t.prepare(ctx)
+	if err := t.prepare(ctx); err != nil {
+		return fmt.Errorf("unable to get a prepared client: %w", err)
+	}
 
 	if profile.CategoryName != nil {
 		if profile.CategoryID != nil {
@@ -364,7 +366,9 @@ func (t *Twitch) SetTitle(
 	ctx context.Context,
 	title string,
 ) error {
-	t.prepare(ctx)
+	if err := t.prepare(ctx); err != nil {
+		return fmt.Errorf("unable to get a prepared client: %w", err)
+	}
 	return t.editChannelInfo(ctx, &helix.EditChannelInformationParams{
 		Title: title,
 	})
@@ -406,7 +410,9 @@ func (t *Twitch) StartStream(
 	logger.Debugf(ctx, "StartStream")
 	defer func() { logger.Debugf(ctx, "/StartStream: %v", _err) }()
 
-	t.prepare(ctx)
+	if err := t.prepare(ctx); err != nil {
+		return fmt.Errorf("unable to get a prepared client: %w", err)
+	}
 	var result error
 	if err := t.SetTitle(ctx, title); err != nil {
 		result = multierror.Append(result, fmt.Errorf("unable to set title: %w", err))
@@ -436,7 +442,9 @@ func (t *Twitch) GetStreamStatus(
 	logger.Debugf(ctx, "GetStreamStatus")
 	defer logger.Debugf(ctx, "/GetStreamStatus")
 
-	t.prepare(ctx)
+	if err := t.prepare(ctx); err != nil {
+		return nil, fmt.Errorf("unable to get a prepared client: %w", err)
+	}
 	// Twitch ends a stream automatically, nothing to do:
 	reply, err := t.client.GetStreams(&helix.StreamsParams{
 		UserIDs: []string{t.broadcasterID},
@@ -586,7 +594,7 @@ func (t *Twitch) getNewClientCode(
 				arg := oauthhandler.OAuthHandlerArgument{
 					AuthURL:    authURL,
 					ListenPort: listenPort,
-					ExchangeFn: func(code string) (_err error) {
+					ExchangeFn: func(ctx context.Context, code string) (_err error) {
 						logger.Debugf(ctx, "ExchangeFn()")
 						defer func() { logger.Debugf(ctx, "/ExchangeFn(): %v", _err) }()
 						if code == "" {
@@ -770,7 +778,9 @@ func (t *Twitch) GetAllCategories(
 	logger.Debugf(ctx, "GetAllCategories")
 	defer logger.Debugf(ctx, "/GetAllCategories")
 
-	t.prepare(ctx)
+	if err := t.prepare(ctx); err != nil {
+		return nil, fmt.Errorf("unable to get a prepared client: %w", err)
+	}
 	categoriesMap := map[string]helix.Game{}
 	var pagination *helix.Pagination
 	for {
@@ -853,7 +863,9 @@ func (t *Twitch) SendChatMessage(ctx context.Context, message string) (_ret erro
 	logger.Debugf(ctx, "SendChatMessage(ctx, '%s')", message)
 	defer func() { logger.Debugf(ctx, "/SendChatMessage(ctx, '%s'): %v", message, _ret) }()
 
-	t.prepare(ctx)
+	if err := t.prepare(ctx); err != nil {
+		return fmt.Errorf("unable to get a prepared client: %w", err)
+	}
 
 	_, err := t.client.SendChatMessage(&helix.SendChatMessageParams{
 		BroadcasterID: t.broadcasterID,
@@ -869,7 +881,9 @@ func (t *Twitch) RemoveChatMessage(
 	logger.Debugf(ctx, "RemoveChatMessage(ctx, '%s')", messageID)
 	defer func() { logger.Debugf(ctx, "/RemoveChatMessage(ctx, '%s'): %v", messageID, _ret) }()
 
-	t.prepare(ctx)
+	if err := t.prepare(ctx); err != nil {
+		return fmt.Errorf("unable to get a prepared client: %w", err)
+	}
 
 	_, err := t.client.DeleteChatMessage(&helix.DeleteChatMessageParams{
 		BroadcasterID: t.broadcasterID,
@@ -887,7 +901,9 @@ func (t *Twitch) BanUser(
 	logger.Debugf(ctx, "BanUser(ctx, '%s', '%s', %v)", userID, reason, deadline)
 	defer func() { logger.Debugf(ctx, "/BanUser(ctx, '%s', '%s', %v): %v", userID, reason, deadline, _err) }()
 
-	t.prepare(ctx)
+	if err := t.prepare(ctx); err != nil {
+		return fmt.Errorf("unable to get a prepared client: %w", err)
+	}
 
 	duration := 0
 	if !deadline.IsZero() {

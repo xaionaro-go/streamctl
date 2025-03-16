@@ -37,7 +37,7 @@ GOVERSION_GE_1_23=$(shell go run ./tools/goversion/ ge 1.23.0)
 VERSION_STRING?=$(shell git rev-list -1 HEAD)
 BUILD_DATE_STRING?=$(shell date +%s)
 
-LINKER_FLAGS?=-X=github.com/xaionaro-go/streamctl/pkg/buildvars.GitCommit=$(GIT_COMMIT) -X=github.com/xaionaro-go/streamctl/pkg/buildvars.Version=$(VERSION_STRING) -X=github.com/xaionaro-go/streamctl/pkg/buildvars.BuildDateString=$(BUILD_DATE_STRING) -X=github.com/xaionaro-go/streamctl/pkg/buildvars.TwitchClientID=$(TWITCH_CLIENT_ID) -X=github.com/xaionaro-go/streamctl/pkg/buildvars.TwitchClientSecret=$(TWITCH_CLIENT_SECRET)
+LINKER_FLAGS?=-X=github.com/xaionaro-go/streamctl/pkg/buildvars.GitCommit=$(GIT_COMMIT) -X=github.com/xaionaro-go/streamctl/pkg/buildvars.Version=$(VERSION_STRING) -X=github.com/xaionaro-go/streamctl/pkg/buildvars.BuildDateString=$(BUILD_DATE_STRING) -X=github.com/xaionaro-go/streamctl/pkg/buildvars.TwitchClientID=$(TWITCH_CLIENT_ID) -X=github.com/xaionaro-go/streamctl/pkg/buildvars.TwitchClientSecret=$(TWITCH_CLIENT_SECRET) -X=github.com/xaionaro-go/streamctl/pkg/buildvars.KickClientID=$(KICK_CLIENT_ID) -X=github.com/xaionaro-go/streamctl/pkg/buildvars.KickClientSecret=$(KICK_CLIENT_SECRET)
 
 LINKER_FLAGS_ANDROID?=$(LINKER_FLAGS)
 LINKER_FLAGS_DARWIN?=$(LINKER_FLAGS)

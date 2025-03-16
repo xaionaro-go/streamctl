@@ -13,6 +13,9 @@ var (
 
 	TwitchClientID     string
 	TwitchClientSecret string
+
+	KickClientID     string
+	KickClientSecret string
 )
 
 func init() {

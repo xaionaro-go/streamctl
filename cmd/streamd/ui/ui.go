@@ -172,7 +172,7 @@ func (ui *UI) oauth2Handler(
 			if code == "" {
 				return fmt.Errorf("internal error: code is empty in oauth2Handler")
 			}
-			err := arg.ExchangeFn(code)
+			err := arg.ExchangeFn(ctx, code)
 			if err != nil {
 				return fmt.Errorf("ExchangeFn returned an error: %w", err)
 			}

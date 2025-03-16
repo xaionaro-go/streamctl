@@ -11,6 +11,7 @@ import (
 const ID = kick.ID
 
 type Config = kick.Config
+type CustomData = kick.CustomData
 type StreamProfile = kick.StreamProfile
 type PlatformSpecificConfig = kick.PlatformSpecificConfig
 type OAuthHandler = kick.OAuthHandler

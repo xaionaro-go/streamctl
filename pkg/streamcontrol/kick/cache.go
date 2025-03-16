@@ -5,11 +5,20 @@ import (
 	"sync/atomic"
 	"unsafe"
 
+	"github.com/scorfly/gokick"
 	"github.com/xaionaro-go/kickcom"
 )
 
 type Cache struct {
-	ChanInfo *kickcom.ChannelV1
+	ChanInfo   *kickcom.ChannelV1
+	Categories *[]gokick.CategoryResponse
+}
+
+func (c *Cache) Clone() *Cache {
+	return &Cache{
+		ChanInfo:   c.GetChanInfo(),
+		Categories: ptr(c.GetCategories()),
+	}
 }
 
 type ctxKeyCacheT struct{}
@@ -36,4 +45,20 @@ func (cache *Cache) GetChanInfo() *kickcom.ChannelV1 {
 
 func (cache *Cache) SetChanInfo(chanInfo *kickcom.ChannelV1) {
 	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&cache.ChanInfo)), unsafe.Pointer(chanInfo))
+}
+
+func (cache *Cache) GetCategories() []gokick.CategoryResponse {
+	if cache == nil {
+		return nil
+	}
+
+	return *(*[]gokick.CategoryResponse)(
+		atomic.LoadPointer(
+			(*unsafe.Pointer)(unsafe.Pointer(&cache.Categories)),
+		),
+	)
+}
+
+func (cache *Cache) SetCategories(chanInfo []gokick.CategoryResponse) {
+	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&cache.ChanInfo)), unsafe.Pointer(&chanInfo))
 }

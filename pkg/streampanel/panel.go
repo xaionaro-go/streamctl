@@ -722,7 +722,7 @@ func (p *Panel) oauthHandler(
 	// Wait for the web server to get the code.
 	code := <-codeCh
 	logger.Debugf(ctx, "received the auth code")
-	err = arg.ExchangeFn(code)
+	err = arg.ExchangeFn(ctx, code)
 	if err != nil {
 		return fmt.Errorf("unable to exchange the code: %w", err)
 	}
@@ -816,7 +816,7 @@ func (p *Panel) openBrowser(
 	return exec.Command(browserCmd, urlString).Start()
 }
 
-var twitchAppsCreateLink, _ = url.Parse("https://dev.twitch.tv/console/apps/create")
+var twitchAppsCreateLink = must(url.Parse("https://dev.twitch.tv/console/apps/create"))
 
 func (p *Panel) InputTwitchUserInfo(
 	ctx context.Context,
@@ -901,6 +901,8 @@ func (p *Panel) InputTwitchUserInfo(
 	return BackendStatusCodeReady
 }
 
+var kickAppsCreateLink = must(url.Parse("https://kick.com/settings/developer?action=create"))
+
 func (p *Panel) InputKickUserInfo(
 	ctx context.Context,
 	cfg *streamcontrol.PlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile],
@@ -908,10 +910,31 @@ func (p *Panel) InputKickUserInfo(
 	w := p.app.NewWindow(gconsts.AppName + ": Input Kick user info")
 	resizeWindow(w, fyne.NewSize(600, 200))
 
+	clientSecretIsBuiltin := buildvars.KickClientID != "" && buildvars.KickClientSecret != ""
+
 	channelField := widget.NewEntry()
 	channelField.SetPlaceHolder(
-		"channel ID (copy&paste it from the browser: https://kick.com/<the channel ID is here>)",
+		"channel ID (copy&paste it from the browser: https://www.kick.com/<the channel ID is here>)",
 	)
+	clientIDField := widget.NewEntry()
+	clientIDField.SetPlaceHolder("client ID")
+	if clientSecretIsBuiltin {
+		clientIDField.Hide()
+	}
+	clientSecretField := widget.NewEntry()
+	clientSecretField.SetPlaceHolder("client secret")
+	if clientSecretIsBuiltin {
+		clientSecretField.Hide()
+	}
+	instructionText := widget.NewRichText(
+		&widget.TextSegment{Text: "Go to\n", Style: widget.RichTextStyle{Inline: true}},
+		&widget.HyperlinkSegment{Text: kickAppsCreateLink.String(), URL: kickAppsCreateLink},
+		&widget.TextSegment{
+			Text:  `,` + "\n" + `create an application (enter "http://localhost:8091/" as the "OAuth Redirect URLs" value), then click "Manage" then "New Secret", and copy&paste client ID and client secret.`,
+			Style: widget.RichTextStyle{Inline: true},
+		},
+	)
+	instructionText.Wrapping = fyne.TextWrapWord
 
 	waitCh := make(chan struct{})
 
@@ -938,6 +961,9 @@ func (p *Panel) InputKickUserInfo(
 		nil,
 		container.NewVBox(
 			channelField,
+			clientIDField,
+			clientSecretField,
+			instructionText,
 		),
 	))
 	w.Show()
@@ -953,6 +979,8 @@ func (p *Panel) InputKickUserInfo(
 
 	channelWords := strings.Split(channelField.Text, "/")
 	cfg.Config.Channel = channelWords[len(channelWords)-1]
+	cfg.Config.ClientID = clientIDField.Text
+	cfg.Config.ClientSecret.Set(clientSecretField.Text)
 
 	return BackendStatusCodeReady
 }
