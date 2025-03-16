@@ -24,7 +24,14 @@ import (
 
 type ReverseEngClient interface {
 	ChatClient
+	CategoriesClient
 	LivestreamInfoClient
+}
+
+type CategoriesClient interface {
+	GetSubcategoriesV1(
+		ctx context.Context,
+	) (*kickcom.CategoriesV1Reply, error)
 }
 
 type LivestreamInfoClient interface {
@@ -45,7 +52,9 @@ type Kick struct {
 	SaveCfgFn        func(Config) error
 	PrepareLocker    xsync.Mutex
 
-	lazyInitOnce sync.Once
+	lazyInitOnce          sync.Once
+	getAccessTokenLocker  xsync.Mutex
+	lastGetMutexSuccessAt time.Time
 }
 
 var _ streamcontrol.StreamController[StreamProfile] = (*Kick)(nil)
@@ -64,11 +73,12 @@ func New(
 		return nil, fmt.Errorf("unable to initialize a client to Kick: %w", err)
 	}
 
-	client, err := gokick.NewClient(&gokick.ClientOptions{
+	options := &gokick.ClientOptions{
 		UserAccessToken: cfg.Config.UserAccessToken.Get(),
 		ClientID:        cfg.Config.ClientID,
 		ClientSecret:    cfg.Config.ClientSecret.Get(),
-	})
+	}
+	client, err := gokick.NewClient(options)
 	if err != nil {
 		return nil, fmt.Errorf("unable to initialize a client to Kick: %w", err)
 	}
@@ -79,14 +89,7 @@ func New(
 		channel = cache.ChanInfo
 		logger.Debugf(ctx, "reuse the cache, instead of querying channel info")
 	} else {
-		for i := 0; i < 10; i++ {
-			channel, err = reverseEngClient.GetChannelV1(ctx, cfg.Config.Channel)
-			if err != nil {
-				err = fmt.Errorf("unable to obtain channel info: %w", err)
-				time.Sleep(time.Second)
-				continue
-			}
-		}
+		channel, err = reverseEngClient.GetChannelV1(ctx, cfg.Config.Channel)
 		if err != nil {
 			return nil, err
 		}
@@ -116,7 +119,7 @@ func New(
 }
 
 func authRedirectURI(listenPort uint16) string {
-	return fmt.Sprintf("http://localhost:%d/", listenPort)
+	return fmt.Sprintf("http://localhost:%d/oauth/kick/callback", listenPort)
 }
 
 func (k *Kick) oauthHandlerFunc() OAuthHandler {
@@ -131,7 +134,28 @@ func (k *Kick) getAccessToken(
 	ctx context.Context,
 ) (_err error) {
 	logger.Tracef(ctx, "getAccessToken")
-	defer logger.Tracef(ctx, "/getAccessToken: %v", _err)
+	defer func() { logger.Tracef(ctx, "/getAccessToken: %v", _err) }()
+	now := time.Now()
+	return xsync.DoR1(ctx, &k.getAccessTokenLocker, func() error {
+		if k.lastGetMutexSuccessAt.After(now) {
+			return nil
+		}
+		err := k.getAccessTokenNoLock(ctx)
+		return err
+	})
+}
+
+func (k *Kick) getAccessTokenNoLock(
+	ctx context.Context,
+) (_err error) {
+	logger.Tracef(ctx, "getAccessTokenNoLock")
+	defer func() { logger.Tracef(ctx, "/getAccessTokenNoLock: %v", _err) }()
+
+	defer func() {
+		if _err == nil {
+			k.lastGetMutexSuccessAt = time.Now()
+		}
+	}()
 
 	getPortsFn := k.CurrentConfig.Config.GetOAuthListenPorts
 	if getPortsFn == nil {
@@ -150,18 +174,20 @@ func (k *Kick) getAccessToken(
 	if len(oauthPorts) < 2 {
 		// we require two ports, because the first port is used by Twitch
 		// TODO: remove all this ugly hardcodes
-		return fmt.Errorf("the function GetOAuthListenPorts returned less than 2 ports")
+		return fmt.Errorf("the function GetOAuthListenPorts returned less than 2 ports (%d)", len(oauthPorts))
 	}
 
 	listenPort := oauthPorts[1] // TODO: remove this hardcode [1]; it currently exists to use the different port from what we use for Twitch authentication
+
+	redirectURL := authRedirectURI(listenPort)
 
 	codeVerifier := uuid.New().String() // random string
 	codeVerifierSHA256 := sha256.Sum256([]byte(codeVerifier))
 	codeChallenge := base64.URLEncoding.EncodeToString(codeVerifierSHA256[:])
 
-	authURL, err := k.Client.GetAuthorizeEndpoint(
-		authRedirectURI(listenPort),
-		"",
+	authURL, err := k.getClient().GetAuthorizeEndpoint(
+		redirectURL,
+		"EMPTY",
 		codeChallenge,
 		[]gokick.Scope{
 			gokick.ScopeUserRead,
@@ -184,7 +210,7 @@ func (k *Kick) getAccessToken(
 			code string,
 		) error {
 			now := time.Now()
-			token, err := k.Client.GetToken(ctx, authRedirectURI(listenPort), code, codeVerifier)
+			token, err := k.getClient().GetToken(ctx, redirectURL, code, codeVerifier)
 			if err != nil {
 				return fmt.Errorf("unable to get an access token: %w", err)
 			}
@@ -205,10 +231,11 @@ func (k *Kick) setToken(
 	now time.Time,
 ) (_err error) {
 	logger.Tracef(ctx, "setToken")
-	defer logger.Tracef(ctx, "/setToken: %v", _err)
+	defer func() { logger.Tracef(ctx, "/setToken: %v", _err) }()
 	k.CurrentConfig.Config.UserAccessToken.Set(token.AccessToken)
 	k.CurrentConfig.Config.UserAccessTokenExpiresAt = now.Add(time.Second * time.Duration(token.ExpiresIn))
 	k.CurrentConfig.Config.RefreshToken.Set(token.RefreshToken)
+	logger.Tracef(ctx, "'%v' '%v' '%v'", k.CurrentConfig.Config.UserAccessToken.Get(), k.CurrentConfig.Config.UserAccessTokenExpiresAt, k.CurrentConfig.Config.RefreshToken.Get())
 	err := k.SaveCfgFn(k.CurrentConfig)
 	if err != nil {
 		return fmt.Errorf("unable to save the config: %w", err)
@@ -220,13 +247,9 @@ func (k *Kick) refreshAccessToken(
 	ctx context.Context,
 ) (_err error) {
 	logger.Tracef(ctx, "refreshAccessToken")
-	defer logger.Tracef(ctx, "/refreshAccessToken: %v", _err)
-	if k.CurrentConfig.Config.UserAccessTokenExpiresAt.After(time.Now()) {
-		logger.Debugf(ctx, "the refresh token is expired; requesting a new token from scratch")
-		return k.getAccessToken(ctx)
-	}
+	defer func() { logger.Tracef(ctx, "/refreshAccessToken: %v", _err) }()
 	now := time.Now()
-	token, err := k.Client.RefreshToken(ctx, k.CurrentConfig.Config.RefreshToken.Get())
+	token, err := k.getClient().RefreshToken(ctx, k.CurrentConfig.Config.RefreshToken.Get())
 	if err != nil {
 		logger.Errorf(ctx, "unable to refresh the token: %v; so requesting a new token from scratch", err)
 		return k.getAccessToken(ctx)
@@ -237,20 +260,20 @@ func (k *Kick) refreshAccessToken(
 func (k *Kick) Close() (_err error) {
 	ctx := context.Background()
 	logger.Debugf(ctx, "Close(ctx)")
-	defer logger.Debugf(ctx, "/Close(ctx): %v", _err)
+	defer func() { logger.Debugf(ctx, "/Close(ctx): %v", _err) }()
 	k.CloseFn()
 	return nil
 }
 
 func (k *Kick) SetTitle(ctx context.Context, title string) (err error) {
 	logger.Debugf(ctx, "SetTitle(ctx, '%s')", title)
-	defer logger.Debugf(ctx, "/SetTitle(ctx, '%s'): %v", title, err)
+	defer func() { logger.Debugf(ctx, "/SetTitle(ctx, '%s'): %v", title, err) }()
 
 	if err := k.prepare(ctx); err != nil {
 		return fmt.Errorf("unable to get a prepared client: %w", err)
 	}
 
-	_, err = k.Client.UpdateStreamTitle(ctx, title)
+	_, err = k.getClient().UpdateStreamTitle(ctx, title)
 	return
 }
 
@@ -275,7 +298,7 @@ func (k *Kick) EndStream(ctx context.Context) error {
 
 func (k *Kick) GetStreamStatus(ctx context.Context) (_ret *streamcontrol.StreamStatus, _err error) {
 	logger.Debugf(ctx, "GetStreamStatus")
-	defer logger.Debugf(ctx, "/GetStreamStatus: %v, %v", _ret, _err)
+	defer func() { logger.Debugf(ctx, "/GetStreamStatus: %v, %v", _ret, _err) }()
 
 	info, err := k.ReverseEngClient.GetLivestreamV2(ctx, k.Channel.Slug)
 	if err != nil {
@@ -313,9 +336,9 @@ func (k *Kick) getStreamStatusUsingNormalClient(
 	ctx context.Context,
 ) (_ret *streamcontrol.StreamStatus, _err error) {
 	logger.Debugf(ctx, "getStreamStatusUsingNormalClient")
-	defer logger.Debugf(ctx, "/getStreamStatusUsingNormalClient: %v %v", _ret, _err)
+	defer func() { logger.Debugf(ctx, "/getStreamStatusUsingNormalClient: %v %v", _ret, _err) }()
 
-	resp, err := k.Client.GetChannels(
+	resp, err := k.getClient().GetChannels(
 		ctx,
 		gokick.NewChannelListFilter().SetBroadcasterUserIDs([]int{int(k.Channel.ID)}),
 	)
@@ -360,27 +383,23 @@ func (k *Kick) getStreamStatusUsingNormalClient(
 
 func (k *Kick) GetAllCategories(
 	ctx context.Context,
-) (_ret []gokick.CategoryResponse, _err error) {
+) (_ret []kickcom.CategoryV1Short, _err error) {
 	logger.Debugf(ctx, "GetAllCategories")
-	defer logger.Debugf(ctx, "/GetAllCategories: len:%d, %v", len(_ret), _err)
+	defer func() { logger.Debugf(ctx, "/GetAllCategories: len:%d, %v", len(_ret), _err) }()
 
-	if err := k.prepare(ctx); err != nil {
-		return nil, fmt.Errorf("unable to get a prepared client: %w", err)
-	}
-
-	categories, err := k.Client.GetCategories(ctx, gokick.NewCategoryListFilter())
+	reply, err := k.ReverseEngClient.GetSubcategoriesV1(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("unable to get categories: %w", err)
+		return nil, fmt.Errorf("unable to get subcategories: %w", err)
 	}
 
-	return categories.Result, nil
+	return *reply, nil
 }
 
 func (k *Kick) GetChatMessagesChan(
 	ctx context.Context,
 ) (<-chan streamcontrol.ChatMessage, error) {
 	logger.Debugf(ctx, "GetChatMessagesChan")
-	defer logger.Debugf(ctx, "/GetChatMessagesChan")
+	defer func() { logger.Debugf(ctx, "/GetChatMessagesChan") }()
 
 	outCh := make(chan streamcontrol.ChatMessage)
 	observability.Go(ctx, func() {
@@ -431,7 +450,7 @@ func (k *Kick) ApplyProfile(
 	customArgs ...any,
 ) (_err error) {
 	logger.Debugf(ctx, "ApplyProfile")
-	defer logger.Debugf(ctx, "/ApplyProfile: %v", _err)
+	defer func() { logger.Debugf(ctx, "/ApplyProfile: %v", _err) }()
 
 	if err := k.prepare(ctx); err != nil {
 		return fmt.Errorf("unable to get a prepared client: %w", err)
@@ -441,7 +460,7 @@ func (k *Kick) ApplyProfile(
 
 	if profile.CategoryID != nil {
 		logger.Debugf(ctx, "has a CategoryID")
-		_, err := k.Client.UpdateStreamCategory(ctx, *profile.CategoryID)
+		_, err := k.getClient().UpdateStreamCategory(ctx, int(*profile.CategoryID))
 		if err != nil {
 			result = append(result, fmt.Errorf("unable to update the category: %w", err))
 		}
@@ -480,14 +499,14 @@ func (k *Kick) StartStream(
 	return errors.Join(result...)
 }
 
-func (k *Kick) prepare(ctx context.Context) error {
+func (k *Kick) prepare(ctx context.Context) (_err error) {
 	logger.Tracef(ctx, "prepare")
-	defer logger.Tracef(ctx, "/prepare")
+	defer func() { logger.Tracef(ctx, "/prepare: %v", _err) }()
 	return xsync.DoA1R1(ctx, &k.PrepareLocker, k.prepareNoLock, ctx)
 }
 
 func (k *Kick) prepareNoLock(ctx context.Context) error {
-	err := k.getTokenIfNeeded(ctx)
+	err := k.getAccessTokenIfNeeded(ctx)
 	if err != nil {
 		return err
 	}
@@ -498,9 +517,12 @@ func (k *Kick) prepareNoLock(ctx context.Context) error {
 	return err
 }
 
-func (k *Kick) getTokenIfNeeded(
+func (k *Kick) getAccessTokenIfNeeded(
 	ctx context.Context,
-) error {
+) (_err error) {
+	logger.Tracef(ctx, "getAccessTokenIfNeeded")
+	defer func() { logger.Tracef(ctx, "/getAccessTokenIfNeeded: %v", _err) }()
+
 	if k.CurrentConfig.Config.UserAccessToken.Get() != "" {
 		return nil
 	}

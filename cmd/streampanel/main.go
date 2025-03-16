@@ -73,6 +73,7 @@ func runPanel(
 
 	opts := []streampanel.Option{
 		streampanel.OptionOAuthListenPortTwitch(flags.OAuthListenPortTwitch),
+		streampanel.OptionOAuthListenPortKick(flags.OAuthListenPortKick),
 		streampanel.OptionOAuthListenPortYouTube(flags.OAuthListenPortYouTube),
 	}
 	if flags.RemoteAddr != "" {

@@ -289,9 +289,11 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
 			defer closeLoadingWindow()
 			streamD := p.StreamD.(*streamd.StreamD)
 			streamD.AddOAuthListenPort(p.Config.OAuth.ListenPorts.Twitch)
+			streamD.AddOAuthListenPort(p.Config.OAuth.ListenPorts.Kick)
 			observability.Go(ctx, func() {
 				<-ctx.Done()
 				streamD.RemoveOAuthListenPort(p.Config.OAuth.ListenPorts.Twitch)
+				streamD.RemoveOAuthListenPort(p.Config.OAuth.ListenPorts.Kick)
 			})
 			logger.Tracef(ctx, "started oauth listener for the local streamd")
 		}
@@ -474,90 +476,96 @@ func (p *Panel) startOAuthListenerForRemoteStreamD(
 	logger.Debugf(ctx, "startOAuthListenerForRemoteStreamD")
 	defer logger.Debugf(ctx, "/startOAuthListenerForRemoteStreamD")
 
-	ctx, cancelFn := context.WithCancel(ctx)
-	receiver, listenPort, err := oauthhandler.NewCodeReceiver(
-		ctx,
+	for _, listenPort := range []uint16{
 		p.Config.OAuth.ListenPorts.Twitch,
-	)
-	if err != nil {
-		cancelFn()
-		return fmt.Errorf("unable to start listener for OAuth responses: %w", err)
-	}
+		p.Config.OAuth.ListenPorts.Kick,
+		p.Config.OAuth.ListenPorts.YouTube,
+	} {
+		ctx, cancelFn := context.WithCancel(ctx)
+		receiver, listenPort, err := oauthhandler.NewCodeReceiver(
+			ctx,
+			listenPort,
+		)
+		if err != nil {
+			cancelFn()
+			return fmt.Errorf("unable to start listener for OAuth responses: %w", err)
+		}
 
-	oauthURLChan, err := streamD.SubscribeToOAuthURLs(ctx, listenPort)
-	if err != nil {
-		cancelFn()
-		return fmt.Errorf("unable to subscribe to OAuth requests of streamd: %w", err)
-	}
+		oauthURLChan, err := streamD.SubscribeToOAuthURLs(ctx, listenPort)
+		if err != nil {
+			cancelFn()
+			return fmt.Errorf("unable to subscribe to OAuth requests of streamd: %w", err)
+		}
 
-	logger.Debugf(ctx, "started oauth listener for the remote streamd")
-	observability.Go(ctx, func() {
-		logger.Debugf(ctx, "oauthListenerForRemoteStreamD")
-		defer logger.Debugf(ctx, "/oauthListenerForRemoteStreamD")
-		defer cancelFn()
-		defer p.DisplayError(fmt.Errorf("oauth handler was closed"))
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case req, ok := <-oauthURLChan:
-				logger.Debugf(ctx, "<-oauthURLChan")
-				if !ok {
-					logger.Errorf(ctx, "oauth request receiver is closed")
+		logger.Debugf(ctx, "started oauth listener for the remote streamd")
+		observability.Go(ctx, func() {
+			logger.Debugf(ctx, "oauthListenerForRemoteStreamD")
+			defer logger.Debugf(ctx, "/oauthListenerForRemoteStreamD")
+			defer cancelFn()
+			defer p.DisplayError(fmt.Errorf("oauth handler was closed"))
+			for {
+				select {
+				case <-ctx.Done():
 					return
-				}
+				case req, ok := <-oauthURLChan:
+					logger.Debugf(ctx, "<-oauthURLChan")
+					if !ok {
+						logger.Errorf(ctx, "oauth request receiver is closed")
+						return
+					}
 
-				if req == nil || req.AuthURL == "" {
-					logger.Errorf(ctx, "received an empty oauth request")
-					time.Sleep(1 * time.Second)
-					continue
-				}
+					if req == nil || req.AuthURL == "" {
+						logger.Errorf(ctx, "received an empty oauth request")
+						time.Sleep(1 * time.Second)
+						continue
+					}
 
-				if err := p.openBrowser(ctx, req.GetAuthURL(), "It is required to confirm access in Twitch/YouTube using browser"); err != nil {
-					p.DisplayError(
-						fmt.Errorf(
-							"unable to open browser with URL '%s': %w",
-							req.GetAuthURL(),
-							err,
-						),
-					)
-					continue
-				}
+					if err := p.openBrowser(ctx, req.GetAuthURL(), "It is required to confirm access in Twitch/YouTube using browser"); err != nil {
+						p.DisplayError(
+							fmt.Errorf(
+								"unable to open browser with URL '%s': %w",
+								req.GetAuthURL(),
+								err,
+							),
+						)
+						continue
+					}
 
-				if req.PlatID == "<OpenBrowser>" {
-					logger.Debugf(ctx, "this was just a request to open a browser")
-					// TODO: delete me!
-					continue
-				}
+					if req.PlatID == "<OpenBrowser>" {
+						logger.Debugf(ctx, "this was just a request to open a browser")
+						// TODO: delete me!
+						continue
+					}
 
-				logger.Debugf(ctx, "waiting for the authentication code")
-				code, ok := <-receiver
-				if !ok {
-					p.DisplayError(fmt.Errorf("auth code receiver channel is closed"))
-					continue
-				}
-				if code == "" {
-					p.DisplayError(fmt.Errorf("received auth code is empty"))
-					continue
-				}
-				logger.Debugf(ctx, "received oauth code: %s", code)
-				_, err := p.StreamD.SubmitOAuthCode(ctx, &streamd_grpc.SubmitOAuthCodeRequest{
-					PlatID: req.GetPlatID(),
-					Code:   code,
-				})
-				if err != nil {
-					p.DisplayError(
-						fmt.Errorf(
-							"unable to submit the oauth code of '%s': %w",
-							req.GetPlatID(),
-							err,
-						),
-					)
-					continue
+					logger.Debugf(ctx, "waiting for the authentication code")
+					code, ok := <-receiver
+					if !ok {
+						p.DisplayError(fmt.Errorf("auth code receiver channel is closed"))
+						continue
+					}
+					if code == "" {
+						p.DisplayError(fmt.Errorf("received auth code is empty"))
+						continue
+					}
+					logger.Debugf(ctx, "received oauth code: %s", code)
+					_, err := p.StreamD.SubmitOAuthCode(ctx, &streamd_grpc.SubmitOAuthCodeRequest{
+						PlatID: req.GetPlatID(),
+						Code:   code,
+					})
+					if err != nil {
+						p.DisplayError(
+							fmt.Errorf(
+								"unable to submit the oauth code of '%s': %w",
+								req.GetPlatID(),
+								err,
+							),
+						)
+						continue
+					}
 				}
 			}
-		}
-	})
+		})
+	}
 	return nil
 }
 
@@ -930,7 +938,7 @@ func (p *Panel) InputKickUserInfo(
 		&widget.TextSegment{Text: "Go to\n", Style: widget.RichTextStyle{Inline: true}},
 		&widget.HyperlinkSegment{Text: kickAppsCreateLink.String(), URL: kickAppsCreateLink},
 		&widget.TextSegment{
-			Text:  `,` + "\n" + `create an application (enter "http://localhost:8091/" as the "OAuth Redirect URLs" value), then click "Manage" then "New Secret", and copy&paste client ID and client secret.`,
+			Text:  `,` + "\n" + `click "Create new", enter app name and description, enter "http://localhost:8092/" as the RedirectURL, allow all permissions, click "Create App" and copy&paste client ID and client secret.`,
 			Style: widget.RichTextStyle{Inline: true},
 		},
 	)
@@ -1458,7 +1466,7 @@ func (p *Panel) initMainWindow(
 		container.NewBorder(
 			nil,
 			nil,
-			container.NewHBox(p.twitchCheck, p.youtubeCheck, p.setupStreamButton),
+			container.NewHBox(p.twitchCheck, p.kickCheck, p.youtubeCheck, p.setupStreamButton),
 			nil,
 			p.startStopButton,
 		),
@@ -2142,6 +2150,10 @@ func (p *Panel) onStartStopButton(ctx context.Context) {
 }
 
 func cleanTwitchCategoryName(in string) string {
+	return strings.ToLower(strings.Trim(in, " "))
+}
+
+func cleanKickCategoryName(in string) string {
 	return strings.ToLower(strings.Trim(in, " "))
 }
 

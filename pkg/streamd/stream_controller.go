@@ -169,8 +169,8 @@ func newKick(
 	ctx context.Context,
 	cfg *streamcontrol.AbstractPlatformConfig,
 	saveCfgFunc func(*streamcontrol.AbstractPlatformConfig) error,
-	_ kick.OAuthHandler,
-	_ func() []uint16,
+	customOAuthHandler kick.OAuthHandler,
+	getOAuthListenPorts func() []uint16,
 ) (
 	*kick.Kick,
 	error,
@@ -191,6 +191,8 @@ func newKick(
 	}
 
 	logger.Debugf(ctx, "kick config: %#+v", platCfg)
+	platCfg.Config.CustomOAuthHandler = customOAuthHandler
+	platCfg.Config.GetOAuthListenPorts = getOAuthListenPorts
 	kick, err := kick.New(ctx, *platCfg,
 		func(c kick.Config) error {
 			return saveCfgFunc(&streamcontrol.AbstractPlatformConfig{

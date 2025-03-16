@@ -157,7 +157,7 @@ func getUserID(
 
 func (t *Twitch) prepare(ctx context.Context) error {
 	logger.Tracef(ctx, "prepare")
-	defer logger.Tracef(ctx, "/prepare")
+	defer func() { logger.Tracef(ctx, "/prepare") }()
 	return xsync.DoA1R1(ctx, &t.prepareLocker, t.prepareNoLock, ctx)
 }
 
@@ -196,7 +196,7 @@ func (t *Twitch) editChannelInfo(
 	params *helix.EditChannelInformationParams,
 ) error {
 	logger.Debugf(ctx, "editChannelInfo(ctx, %#+v)", params)
-	defer logger.Debugf(ctx, "/editChannelInfo(ctx, %#+v)", params)
+	defer func() { logger.Debugf(ctx, "/editChannelInfo(ctx, %#+v)", params) }()
 
 	if params == nil {
 		return fmt.Errorf("params == nil")
@@ -255,7 +255,7 @@ func (t *Twitch) ApplyProfile(
 	customArgs ...any,
 ) error {
 	logger.Debugf(ctx, "ApplyProfile")
-	defer logger.Debugf(ctx, "/ApplyProfile")
+	defer func() { logger.Debugf(ctx, "/ApplyProfile") }()
 
 	if err := t.prepare(ctx); err != nil {
 		return fmt.Errorf("unable to get a prepared client: %w", err)
@@ -339,9 +339,9 @@ func saveProfile(ctx context.Context, profile StreamProfile, customArgs ...any) 
 func (t *Twitch) getCategoryID(
 	ctx context.Context,
 	categoryName string,
-) (string, error) {
+) (_ret string, _err error) {
 	logger.Debugf(ctx, "getCategoryID")
-	defer logger.Debugf(ctx, "/getCategoryID")
+	defer func() { logger.Debugf(ctx, "/getCategoryID: %s %v") }()
 
 	resp, err := t.client.GetGames(&helix.GamesParams{
 		Names: []string{categoryName},
@@ -440,7 +440,7 @@ func (t *Twitch) GetStreamStatus(
 	ctx context.Context,
 ) (*streamcontrol.StreamStatus, error) {
 	logger.Debugf(ctx, "GetStreamStatus")
-	defer logger.Debugf(ctx, "/GetStreamStatus")
+	defer func() { logger.Debugf(ctx, "/GetStreamStatus") }()
 
 	if err := t.prepare(ctx); err != nil {
 		return nil, fmt.Errorf("unable to get a prepared client: %w", err)
@@ -506,7 +506,7 @@ func (t *Twitch) getNewToken(
 	ctx context.Context,
 ) error {
 	logger.Debugf(ctx, "getNewToken")
-	defer logger.Debugf(ctx, "/getNewToken")
+	defer func() { logger.Debugf(ctx, "/getNewToken") }()
 
 	return xsync.DoR1(ctx, &t.tokenLocker, func() error {
 		switch t.config.Config.AuthType {
@@ -576,7 +576,7 @@ func (t *Twitch) getNewClientCode(
 		{
 			listenPort := listenPort
 			observability.Go(ctx, func() {
-				defer logger.Debugf(ctx, "ended the oauth handler at port %d", listenPort)
+				defer func() { logger.Debugf(ctx, "ended the oauth handler at port %d", listenPort) }()
 				defer wg.Done()
 				authURL := GetAuthorizationURL(
 					&helix.AuthorizationURLParams{
@@ -665,7 +665,7 @@ func (t *Twitch) getNewTokenByUser(
 	ctx context.Context,
 ) error {
 	logger.Debugf(ctx, "getNewTokenByUser")
-	defer logger.Debugf(ctx, "/getNewTokenByUser")
+	defer func() { logger.Debugf(ctx, "/getNewTokenByUser") }()
 
 	if t.config.Config.ClientCode.Get() == "" {
 		err := t.getNewClientCode(ctx)
@@ -706,7 +706,7 @@ func (t *Twitch) getNewTokenByApp(
 	ctx context.Context,
 ) error {
 	logger.Debugf(ctx, "getNewTokenByApp")
-	defer logger.Debugf(ctx, "/getNewTokenByApp")
+	defer func() { logger.Debugf(ctx, "/getNewTokenByApp") }()
 
 	resp, err := t.client.RequestAppAccessToken(nil)
 	if err != nil {
@@ -733,7 +733,7 @@ func (t *Twitch) getClient(
 	oauthListenPort uint16,
 ) (*helix.Client, error) {
 	logger.Debugf(ctx, "getClient(ctx, %#+v, %v)", t.config, oauthListenPort)
-	defer logger.Debugf(ctx, "/getClient")
+	defer func() { logger.Debugf(ctx, "/getClient") }()
 
 	options := &helix.Options{
 		ClientID:     t.clientID,
@@ -776,7 +776,7 @@ func (t *Twitch) GetAllCategories(
 	ctx context.Context,
 ) ([]helix.Game, error) {
 	logger.Debugf(ctx, "GetAllCategories")
-	defer logger.Debugf(ctx, "/GetAllCategories")
+	defer func() { logger.Debugf(ctx, "/GetAllCategories") }()
 
 	if err := t.prepare(ctx); err != nil {
 		return nil, fmt.Errorf("unable to get a prepared client: %w", err)
@@ -834,7 +834,7 @@ func (t *Twitch) GetChatMessagesChan(
 	ctx context.Context,
 ) (<-chan streamcontrol.ChatMessage, error) {
 	logger.Debugf(ctx, "GetChatMessagesChan")
-	defer logger.Debugf(ctx, "/GetChatMessagesChan")
+	defer func() { logger.Debugf(ctx, "/GetChatMessagesChan") }()
 
 	outCh := make(chan streamcontrol.ChatMessage)
 	observability.Go(ctx, func() {

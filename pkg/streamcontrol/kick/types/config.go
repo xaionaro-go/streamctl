@@ -15,13 +15,13 @@ const ID = streamctl.PlatformName("kick")
 type OAuthHandler func(context.Context, oauthhandler.OAuthHandlerArgument) error
 
 type PlatformSpecificConfig struct {
-	Channel      string
-	ClientID     string
-	ClientSecret secret.String
+	Channel      string        `yaml:"channel"`
+	ClientID     string        `yaml:"client_id"`
+	ClientSecret secret.String `yaml:"client_secret"`
 
-	UserAccessToken          secret.String
-	UserAccessTokenExpiresAt time.Time
-	RefreshToken             secret.String
+	UserAccessToken          secret.String `yaml:"user_access_token"`
+	UserAccessTokenExpiresAt time.Time     `yaml:"user_access_token_expires_at,omitempty"`
+	RefreshToken             secret.String `yaml:"refresh_token"`
 
 	CustomOAuthHandler  OAuthHandler    `yaml:"-"`
 	GetOAuthListenPorts func() []uint16 `yaml:"-"`
@@ -42,5 +42,5 @@ func (cfg PlatformSpecificConfig) IsInitialized() bool {
 type StreamProfile struct {
 	streamctl.StreamProfileBase `yaml:",omitempty,inline,alias"`
 
-	CategoryID *int
+	CategoryID *uint64
 }

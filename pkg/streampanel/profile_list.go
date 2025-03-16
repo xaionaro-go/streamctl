@@ -13,6 +13,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/go-ng/xmath"
+	"github.com/xaionaro-go/kickcom"
 	"github.com/xaionaro-go/observability"
 	gconsts "github.com/xaionaro-go/streamctl/pkg/consts"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -332,7 +333,93 @@ func (p *Panel) profileWindow(
 	bottomContent = append(bottomContent, widget.NewSeparator())
 	bottomContent = append(bottomContent, widget.NewRichTextFromMarkdown("# Kick:"))
 	if backendEnabled[kick.ID] {
-		bottomContent = append(bottomContent, widget.NewLabel("Kick configuration is not implemented, yet"))
+		if platProfile := values.PerPlatform[kick.ID]; platProfile != nil {
+			var err error
+			kickProfile, err = streamcontrol.GetStreamProfile[kick.StreamProfile](ctx, platProfile)
+			if err != nil {
+				p.DisplayError(fmt.Errorf("unable to convert the stream profile: %w", err))
+			}
+		} else {
+			kickProfile = &kick.StreamProfile{}
+		}
+
+		kickCategories := dataKick.Cache.GetCategories()
+		catN := map[string]kickcom.CategoryV1Short{}
+		catI := map[uint64]kickcom.CategoryV1Short{}
+		for _, cat := range kickCategories {
+			catN[cleanKickCategoryName(cat.Name)] = cat
+			catI[cat.ID] = cat
+		}
+
+		kickCategory := widget.NewEntry()
+		kickCategory.SetPlaceHolder("kick category")
+
+		selectKickCategoryBox := container.NewHBox()
+		bottomContent = append(bottomContent, selectKickCategoryBox)
+		kickCategory.OnChanged = func(text string) {
+			selectKickCategoryBox.RemoveAll()
+			if text == "" {
+				return
+			}
+			text = cleanKickCategoryName(text)
+			count := 0
+			for _, cat := range kickCategories {
+				if strings.Contains(cleanKickCategoryName(cat.Name), text) {
+					selectedKickCategoryContainer := container.NewHBox()
+					catName := cat.Name
+					tagContainerRemoveButton := widget.NewButtonWithIcon(
+						catName,
+						theme.ContentAddIcon(),
+						func() {
+							kickCategory.OnSubmitted(catName)
+						},
+					)
+					selectedKickCategoryContainer.Add(tagContainerRemoveButton)
+					selectKickCategoryBox.Add(selectedKickCategoryContainer)
+					count++
+					if count > 10 {
+						break
+					}
+				}
+			}
+		}
+
+		selectedKickCategoryBox := container.NewHBox()
+		bottomContent = append(bottomContent, selectedKickCategoryBox)
+
+		setSelectedKickCategory := func(catID uint64) {
+			selectedKickCategoryBox.RemoveAll()
+			selectedKickCategoryContainer := container.NewHBox()
+			tagContainerRemoveButton := widget.NewButtonWithIcon(
+				catI[catID].Name,
+				theme.ContentClearIcon(),
+				func() {
+					selectedKickCategoryBox.Remove(selectedKickCategoryContainer)
+					kickProfile.CategoryID = nil
+				},
+			)
+			selectedKickCategoryContainer.Add(tagContainerRemoveButton)
+			selectedKickCategoryBox.Add(selectedKickCategoryContainer)
+			kickProfile.CategoryID = &catID
+		}
+
+		if kickProfile.CategoryID != nil {
+			setSelectedKickCategory(*kickProfile.CategoryID)
+		}
+
+		kickCategory.OnSubmitted = func(text string) {
+			if text == "" {
+				return
+			}
+			text = cleanKickCategoryName(text)
+			cat := catN[text]
+			setSelectedKickCategory(cat.ID)
+			observability.Go(ctx, func() {
+				time.Sleep(100 * time.Millisecond)
+				kickCategory.SetText("")
+			})
+		}
+		bottomContent = append(bottomContent, kickCategory)
 	} else {
 		bottomContent = append(bottomContent, widget.NewLabel("Kick is disabled"))
 	}

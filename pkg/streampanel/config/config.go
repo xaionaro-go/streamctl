@@ -23,6 +23,7 @@ type BrowserConfig struct {
 type OAuthConfig struct {
 	ListenPorts struct {
 		Twitch  uint16 `yaml:"twitch"`
+		Kick    uint16 `yaml:"kick"`
 		YouTube uint16 `yaml:"youtube"`
 	} `yaml:"listen_ports"`
 }

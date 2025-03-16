@@ -26,7 +26,7 @@ replace github.com/wlynxg/anet => github.com/BieHDC/anet v0.0.6-0.20241226223613
 replace github.com/nicklaw5/helix/v2 v2.30.1-0.20240715193454-0151ccccf980 => github.com/xaionaro-go/helix/v2 v2.0.0-20250309182928-f54c9d4c8a29
 
 require (
-	github.com/facebookincubator/go-belt v0.0.0-20250201205440-80b5034808e3
+	github.com/facebookincubator/go-belt v0.0.0-20250308011339-62fb7027b11f
 	github.com/go-git/go-billy/v5 v5.5.0
 	github.com/goccy/go-yaml v1.15.13
 	github.com/hashicorp/go-multierror v1.1.1
@@ -45,8 +45,7 @@ require (
 	dario.cat/mergo v1.0.0 // indirect
 	fyne.io/systray v1.11.0 // indirect
 	github.com/BurntSushi/toml v1.4.0 // indirect
-	github.com/Danny-Dasilva/CycleTLS/cycletls v0.0.0-20220620102923-c84d740b4757 // indirect
-	github.com/Danny-Dasilva/utls v0.0.0-20220604023528-30cb107b834e // indirect
+	github.com/Danny-Dasilva/CycleTLS/cycletls v1.0.26 // indirect
 	github.com/DataDog/gostackparse v0.7.0 // indirect
 	github.com/MicahParks/jwkset v0.5.20 // indirect
 	github.com/MicahParks/keyfunc/v3 v3.3.5 // indirect
@@ -75,7 +74,6 @@ require (
 	github.com/datarhei/gosrt v0.7.0 // indirect
 	github.com/dexterlb/mpvipc v0.0.0-20241005113212-7cdefca0e933 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
-	github.com/dsnet/compress v0.0.1 // indirect
 	github.com/ebitengine/oto/v3 v3.3.2 // indirect
 	github.com/ebitengine/purego v0.8.0 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
@@ -99,7 +97,6 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ng/slices v0.0.0-20230703171042-6195d35636a2 // indirect
 	github.com/go-ng/sort v0.0.0-20220617173827-2cc7cd04f7c7 // indirect
-	github.com/go-ng/xatomic v0.0.0-20230519181013-85c0ec87e55f // indirect
 	github.com/go-ng/xsort v0.0.0-20220617174223-1d146907bccc // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
@@ -165,6 +162,8 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
+	github.com/quic-go/quic-go v0.41.0 // indirect
+	github.com/refraction-networking/utls v1.6.2 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/rubenv/sql-migrate v1.7.0 // indirect
 	github.com/rymdport/portal v0.3.0 // indirect
@@ -219,6 +218,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20241015192408-796eee8c2d53 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
+	h12.io/socks v1.0.3 // indirect
 	lukechampine.com/blake3 v1.3.0 // indirect
 )
 
@@ -226,7 +226,7 @@ require (
 	fyne.io/fyne/v2 v2.5.4
 	github.com/AgustinSRG/go-child-process-manager v1.0.1
 	github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802
-	github.com/Danny-Dasilva/fhttp v0.0.0-20220524230104-f801520157d6
+	github.com/Danny-Dasilva/fhttp v0.0.0-20240217042913-eeeb0b347ce1
 	github.com/abhinavxd/youtube-live-chat-downloader/v2 v2.0.3
 	github.com/adeithe/go-twitch v0.3.1
 	github.com/andreykaipov/goobs v1.4.1
@@ -241,6 +241,7 @@ require (
 	github.com/getsentry/sentry-go v0.31.1
 	github.com/go-andiamo/splitter v1.2.5
 	github.com/go-git/go-git/v5 v5.12.0
+	github.com/go-ng/xatomic v0.0.0-20230519181013-85c0ec87e55f
 	github.com/go-ng/xmath v0.0.0-20230704233441-028f5ea62335
 	github.com/go-yaml/yaml v2.1.0+incompatible
 	github.com/google/go-github/v66 v66.0.0
@@ -268,7 +269,7 @@ require (
 	github.com/xaionaro-go/datacounter v1.0.4
 	github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42
 	github.com/xaionaro-go/grpcproxy v0.0.0-20241103205849-a8fef42e72f9
-	github.com/xaionaro-go/kickcom v0.0.0-20241022142825-25a234cc8628
+	github.com/xaionaro-go/kickcom v0.0.0-20250316223447-a1fe3d153d96
 	github.com/xaionaro-go/lockmap v0.0.0-20240901172806-e17aea364748
 	github.com/xaionaro-go/logwriter v0.0.0-20250111154941-c3f7a1a2d567
 	github.com/xaionaro-go/mediamtx v0.0.0-20241103200202-882a99e8df73

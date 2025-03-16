@@ -32,6 +32,12 @@ func (o OptionOAuthListenPortTwitch) Apply(cfg *Config) {
 	cfg.OAuth.ListenPorts.Twitch = uint16(o)
 }
 
+type OptionOAuthListenPortKick uint16
+
+func (o OptionOAuthListenPortKick) Apply(cfg *Config) {
+	cfg.OAuth.ListenPorts.Kick = uint16(o)
+}
+
 type OptionOAuthListenPortYouTube uint16
 
 func (o OptionOAuthListenPortYouTube) Apply(cfg *Config) {

@@ -47,6 +47,7 @@ type Flags struct {
 	RemoveSecretsFromLogs bool          `yaml:"RemoveSecretsFromLogs,omitempty"`
 
 	OAuthListenPortTwitch  uint16 `yaml:"OAuthListenPortTwitch,omitempty"`
+	OAuthListenPortKick    uint16 `yaml:"OAuthListenPortKick,omitempty"`
 	OAuthListenPortYouTube uint16 `yaml:"OAuthListenPortYouTube,omitempty"`
 }
 
@@ -121,14 +122,20 @@ func parseFlags() Flags {
 		2*time.Minute,
 		"[debug option] change the timeout for locking, before reporting it as a deadlock",
 	)
+	// TODO: use only one port for callbacks, just use different URIs
 	oauthListenPortTwitch := pflag.Uint16(
 		"oauth-listen-port-twitch",
 		8091,
 		"the port that is used for OAuth callbacks while authenticating in Twitch",
 	)
+	oauthListenPortKick := pflag.Uint16(
+		"oauth-listen-port-kick",
+		8092,
+		"the port that is used for OAuth callbacks while authenticating in Kick",
+	)
 	oauthListenPortYouTube := pflag.Uint16(
 		"oauth-listen-port-youtube",
-		8092,
+		8093,
 		"the port that is used for OAuth callbacks while authenticating in YouTube",
 	)
 	insecureDebug := pflag.Bool("insecure-debug", false, "explicitly enable logging of sensitive data")
@@ -164,6 +171,7 @@ func parseFlags() Flags {
 		LockTimeout:         *lockTimeout,
 
 		OAuthListenPortTwitch:  *oauthListenPortTwitch,
+		OAuthListenPortKick:    *oauthListenPortKick,
 		OAuthListenPortYouTube: *oauthListenPortYouTube,
 
 		InsecureDebug:         *insecureDebug,

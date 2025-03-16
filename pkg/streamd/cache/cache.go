@@ -48,12 +48,12 @@ func (c *Cache) Clone() *Cache {
 	_ = (*Twitch)(nil).Clone
 	_ = (*YouTube)(nil).Clone
 	result := &Cache{}
-	dst := reflect.ValueOf(result)
-	src := reflect.ValueOf(c)
+	dst := reflect.ValueOf(result).Elem()
+	src := reflect.ValueOf(c).Elem()
 	for i := 0; i < src.NumField(); i++ {
-		srcField := src.Field(i)
+		srcField := src.Field(i).Addr()
 		dstField := dst.Field(i)
-		dstField.Set(srcField.MethodByName("Clone").Call(nil)[0])
+		dstField.Set(srcField.MethodByName("Clone").Call(nil)[0].Elem())
 	}
 	return result
 }
