@@ -19,6 +19,9 @@ func (u *Update) Apply(
 	ctx context.Context,
 	progressBar ProgressBar,
 ) error {
+	if progressBar == nil {
+		progressBar = DummyProgressBar{}
+	}
 	progressBar.SetProgress(0)
 	logger.Debugf(ctx, "applying the update %#+v", u.Release)
 

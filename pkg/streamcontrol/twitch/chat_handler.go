@@ -3,6 +3,7 @@ package twitch
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/adeithe/go-twitch/irc"
 	"github.com/xaionaro-go/observability"
@@ -18,6 +19,7 @@ type ChatClient interface {
 type ChatHandler struct {
 	client          ChatClient
 	cancelFunc      context.CancelFunc
+	waitGroup       sync.WaitGroup
 	messagesInChan  chan irc.ChatMessage
 	messagesOutChan chan streamcontrol.ChatMessage
 }
@@ -47,7 +49,9 @@ func newChatHandler(
 		messagesOutChan: make(chan streamcontrol.ChatMessage, 100),
 	}
 
+	h.waitGroup.Add(1)
 	observability.Go(ctx, func() {
+		defer h.waitGroup.Done()
 		defer func() {
 			h.client.Close()
 			// h.Client.Close above waits inside for everything to finish,
@@ -84,6 +88,7 @@ func (h *ChatHandler) onShardMessage(shard int, msg irc.ChatMessage) {
 
 func (h *ChatHandler) Close() error {
 	h.cancelFunc()
+	h.waitGroup.Wait()
 	return nil
 }
 

@@ -19,11 +19,11 @@ replace github.com/rs/zerolog v1.33.0 => github.com/xaionaro-go/zerolog2belt v0.
 
 replace github.com/bluenviron/gortsplib/v4 v4.11.0 => github.com/xaionaro-go/gortsplib/v4 v4.0.0-20241123213409-7279dabb7de6
 
-replace github.com/asticode/go-astiav v0.33.1 => github.com/xaionaro-go/astiav v0.0.0-20250106205037-a1605f324663
-
 replace github.com/wlynxg/anet => github.com/BieHDC/anet v0.0.6-0.20241226223613-d47f8b766b3c
 
 replace github.com/nicklaw5/helix/v2 v2.30.1-0.20240715193454-0151ccccf980 => github.com/xaionaro-go/helix/v2 v2.0.0-20250309182928-f54c9d4c8a29
+
+replace github.com/asticode/go-astiav v0.35.0 => github.com/xaionaro-go/astiav v0.0.0-20250317012930-39df462db826
 
 require (
 	github.com/facebookincubator/go-belt v0.0.0-20250308011339-62fb7027b11f
@@ -232,7 +232,7 @@ require (
 	github.com/andreykaipov/goobs v1.4.1
 	github.com/anthonynsimon/bild v0.14.0
 	github.com/asaskevich/EventBus v0.0.0-20200907212545-49d423059eef
-	github.com/asticode/go-astiav v0.33.1
+	github.com/asticode/go-astiav v0.35.0
 	github.com/bamiaux/rez v0.0.0-20170731184118-29f4463c688b
 	github.com/bluenviron/gortsplib/v4 v4.11.0
 	github.com/chai2010/webp v1.1.1

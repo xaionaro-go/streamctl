@@ -54,6 +54,7 @@ func TestChatHandler(t *testing.T) {
 
 	expectedEvent := streamcontrol.ChatMessage{
 		UserID:    "user-id",
+		Username:  "user-id",
 		MessageID: "message-id",
 		Message:   "some\nmulti line\n message",
 	}
@@ -64,6 +65,7 @@ func TestChatHandler(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for ev := range h.messagesOutChan {
+			ev.CreatedAt = time.Time{}
 			require.Equal(t, expectedEvent, ev)
 			messagesCount++
 		}

@@ -26,7 +26,7 @@ jobs:
       - name: setup go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.24'
           check-latest: true
       - name: add ffmpeg7 repo
         run: sudo add-apt-repository -y ppa:ubuntuhandbook1/ffmpeg7

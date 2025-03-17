@@ -4,7 +4,7 @@ RUN sudo apt update && sudo apt dist-upgrade -fy && sudo apt clean
 
 USER builder
 WORKDIR /home/builder
-RUN git clone -b feat/static_libav https://github.com/xaionaro/termux-packages
+RUN git clone https://github.com/xaionaro/termux-packages
 WORKDIR /home/builder/termux-packages
 
 RUN ./scripts/setup-android-sdk.sh
