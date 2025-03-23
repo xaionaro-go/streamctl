@@ -10,7 +10,6 @@ import (
 )
 
 type ScreenshotEngine interface {
-	NumActiveDisplays() uint
 	Screenshot(cfg screenshot.Config) (*image.RGBA, error)
 }
 

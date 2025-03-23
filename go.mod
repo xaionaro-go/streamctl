@@ -23,7 +23,7 @@ replace github.com/wlynxg/anet => github.com/BieHDC/anet v0.0.6-0.20241226223613
 
 replace github.com/nicklaw5/helix/v2 v2.30.1-0.20240715193454-0151ccccf980 => github.com/xaionaro-go/helix/v2 v2.0.0-20250309182928-f54c9d4c8a29
 
-replace github.com/asticode/go-astiav v0.35.0 => github.com/xaionaro-go/astiav v0.0.0-20250317012930-39df462db826
+replace github.com/asticode/go-astiav v0.35.0 => github.com/xaionaro-go/astiav 9924a3697350dee868c0afbc85d7ff538f7ea9cc
 
 require (
 	github.com/facebookincubator/go-belt v0.0.0-20250308011339-62fb7027b11f
@@ -186,6 +186,7 @@ require (
 	github.com/volatiletech/sqlboiler/v4 v4.16.2 // indirect
 	github.com/volatiletech/strmangle v0.0.6 // indirect
 	github.com/wlynxg/anet v0.0.6-0.20250109065809-5501d401a269 // indirect
+	github.com/xaionaro-go/avmediacodec v0.0.0-20250317164140-f4ce53d9a1cc // indirect
 	github.com/xaionaro-go/gorex v0.0.0-20241010205749-bcd59d639c4d // indirect
 	github.com/xaionaro-go/libsrt v0.0.0-20250105232601-e760c79b2bc3 // indirect
 	github.com/xaionaro-go/proxy v0.0.0-20250111150848-1f0e7b262638 // indirect
@@ -232,7 +233,7 @@ require (
 	github.com/andreykaipov/goobs v1.4.1
 	github.com/anthonynsimon/bild v0.14.0
 	github.com/asaskevich/EventBus v0.0.0-20200907212545-49d423059eef
-	github.com/asticode/go-astiav v0.35.0
+	github.com/asticode/go-astiav v0.35.1
 	github.com/bamiaux/rez v0.0.0-20170731184118-29f4463c688b
 	github.com/bluenviron/gortsplib/v4 v4.11.0
 	github.com/chai2010/webp v1.1.1
@@ -265,7 +266,7 @@ require (
 	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0
 	github.com/xaionaro-go/audio v0.0.0-20250210102901-abfced9d5ef3
-	github.com/xaionaro-go/avpipeline v0.0.0-20250217031756-936d572a90d3
+	github.com/xaionaro-go/avpipeline v0.0.0-20250323223254-8a7a8dc991c4
 	github.com/xaionaro-go/datacounter v1.0.4
 	github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42
 	github.com/xaionaro-go/grpcproxy v0.0.0-20241103205849-a8fef42e72f9
@@ -275,7 +276,7 @@ require (
 	github.com/xaionaro-go/mediamtx v0.0.0-20241103200202-882a99e8df73
 	github.com/xaionaro-go/object v0.0.0-20241026212449-753ce10ec94c
 	github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20241018162120-5faf4e7a684a
-	github.com/xaionaro-go/observability v0.0.0-20250111142240-5d72f17a6d12
+	github.com/xaionaro-go/observability v0.0.0-20250309200059-047fad8d76e4
 	github.com/xaionaro-go/player v0.0.0-20250217034724-9a93018082db
 	github.com/xaionaro-go/recoder v0.0.0-20250217034141-2196566ae498
 	github.com/xaionaro-go/secret v0.0.0-20250111141743-ced12e1082c2

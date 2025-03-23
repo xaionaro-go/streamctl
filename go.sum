@@ -143,6 +143,8 @@ github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5 h1:0CwZNZbxp69SHPd
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5/go.mod h1:wHh0iHkYZB8zMSxRWpUBQtwG5a7fFgvEO+odwuTv2gs=
 github.com/asaskevich/EventBus v0.0.0-20200907212545-49d423059eef h1:2JGTg6JapxP9/R33ZaagQtAM4EkkSYnIAlOG5EI8gkM=
 github.com/asaskevich/EventBus v0.0.0-20200907212545-49d423059eef/go.mod h1:JS7hed4L1fj0hXcyEejnW57/7LCetXggd+vwrRnYeII=
+github.com/asticode/go-astiav v0.35.1 h1:jq27Ihf+GXtOTnhzNTcpKrW1iLNRAuPSoarh7/SapYc=
+github.com/asticode/go-astiav v0.35.1/go.mod h1:K7D8UC6GeQt85FUxk2KVwYxHnotrxuEnp5evkkudc2s=
 github.com/asticode/go-astikit v0.30.0/go.mod h1:h4ly7idim1tNhaVkdVBeXQZEE3L0xblP7fCWbgwipF0=
 github.com/asticode/go-astikit v0.52.0 h1:kTl2XjgiVQhUl1H7kim7NhmTtCMwVBbPrXKqhQhbk8Y=
 github.com/asticode/go-astikit v0.52.0/go.mod h1:fV43j20UZYfXzP9oBn33udkvCvDvCDhzjVqoLFuuYZE=
@@ -1026,12 +1028,12 @@ github.com/volatiletech/sqlboiler/v4 v4.16.2/go.mod h1:B14BPBGTrJ2X6l7lwnvV/iXgY
 github.com/volatiletech/strmangle v0.0.1/go.mod h1:F6RA6IkB5vq0yTG4GQ0UsbbRcl3ni9P76i+JrTBKFFg=
 github.com/volatiletech/strmangle v0.0.6 h1:AdOYE3B2ygRDq4rXDij/MMwq6KVK/pWAYxpC7CLrkKQ=
 github.com/volatiletech/strmangle v0.0.6/go.mod h1:ycDvbDkjDvhC0NUU8w3fWwl5JEMTV56vTKXzR3GeR+0=
-github.com/xaionaro-go/astiav v0.0.0-20250317012930-39df462db826 h1:oVwbZ1xRjLNXkq5VvRULgca280hRAPuaJOvmVo/rFNU=
-github.com/xaionaro-go/astiav v0.0.0-20250317012930-39df462db826/go.mod h1:K7D8UC6GeQt85FUxk2KVwYxHnotrxuEnp5evkkudc2s=
 github.com/xaionaro-go/audio v0.0.0-20250210102901-abfced9d5ef3 h1:LRIpqqC7Gsz5+/EsIWRtdPZZPMpx9yykUVFyUnRaKbE=
 github.com/xaionaro-go/audio v0.0.0-20250210102901-abfced9d5ef3/go.mod h1:i4CntPlryh9HLmA3p3M0CNr1usRkEkuh3N2Ui3HeXQA=
-github.com/xaionaro-go/avpipeline v0.0.0-20250217031756-936d572a90d3 h1:LTRvnANTG31qkDdlQUe5tjqMDgC6hxlPoOgv5dCJTlU=
-github.com/xaionaro-go/avpipeline v0.0.0-20250217031756-936d572a90d3/go.mod h1:lS9JO5wARvinE8inpa7pLZHuIq+XydkRVeK4eWzUa5I=
+github.com/xaionaro-go/avmediacodec v0.0.0-20250317164140-f4ce53d9a1cc h1:w3w0JxQUDWSdrGYdd7SjQ+UukQq5dfE1H9Cq7JgEbD4=
+github.com/xaionaro-go/avmediacodec v0.0.0-20250317164140-f4ce53d9a1cc/go.mod h1:IZ3ZQcDrwrIKV4jmSdUW3PZH9ALcxNKhzmrcIt4jNUY=
+github.com/xaionaro-go/avpipeline v0.0.0-20250323223254-8a7a8dc991c4 h1:XPX2tLoHXCDUnSSIDf6TN5VZEdOjbSCoFyQ16Olp5Uo=
+github.com/xaionaro-go/avpipeline v0.0.0-20250323223254-8a7a8dc991c4/go.mod h1:4CsLGixGAGO8ML2bFQErfHzgikWs3g1dCWNeWuxXHWY=
 github.com/xaionaro-go/datacounter v1.0.4 h1:+QMZLmu73R5WGkQfUPwlXF/JFN+Weo4iuDZkiL2wVm8=
 github.com/xaionaro-go/datacounter v1.0.4/go.mod h1:Sf9vBevuV6w5iE6K3qJ9pWVKcyS60clWBUSQLjt5++c=
 github.com/xaionaro-go/fyne/v2 v2.0.0-20250215180758-399edb421067 h1:58GgTbQcOCjv1ZZ46m6WQ8zqv0KEJe5C6D5Ls1oSHvc=
@@ -1064,8 +1066,8 @@ github.com/xaionaro-go/object v0.0.0-20241026212449-753ce10ec94c h1:2CIIxTRox9au
 github.com/xaionaro-go/object v0.0.0-20241026212449-753ce10ec94c/go.mod h1:vRcA12NWsR0IrS75eqnPBs5aVfCYmJy4bR+6DbJpBCg=
 github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20241018162120-5faf4e7a684a h1:PyX7XpLkj+eAwrPMFMGpvZIG4zBfzAfwNhwTtbORqN0=
 github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20241018162120-5faf4e7a684a/go.mod h1:exSKIlCibB0ww+ABDwH+YG/iNdqVfdzXBBg5LYxkxGw=
-github.com/xaionaro-go/observability v0.0.0-20250111142240-5d72f17a6d12 h1:iy02dGEbIbn8yb/pO/gPpyl2QSk6CPiLl8/JisKsrWg=
-github.com/xaionaro-go/observability v0.0.0-20250111142240-5d72f17a6d12/go.mod h1:j5y9LVYd0v8sJa9Ks7ZyuwFxAUpaNFHBNKBkiYipxPM=
+github.com/xaionaro-go/observability v0.0.0-20250309200059-047fad8d76e4 h1:IhTCWOXWLz7Y45tjm/s6Kcd+jAqV8hbpOYl7IglgEIc=
+github.com/xaionaro-go/observability v0.0.0-20250309200059-047fad8d76e4/go.mod h1:j5y9LVYd0v8sJa9Ks7ZyuwFxAUpaNFHBNKBkiYipxPM=
 github.com/xaionaro-go/player v0.0.0-20250217034724-9a93018082db h1:0FENGHMf6IjsZ8EBrUP+OSekQnDVDxbp69ePDYmL4nU=
 github.com/xaionaro-go/player v0.0.0-20250217034724-9a93018082db/go.mod h1:mGGeA+1sD/mcFxm9lXY5FUSk4TlwjsNl7l5K7CHxIvk=
 github.com/xaionaro-go/proxy v0.0.0-20250111150848-1f0e7b262638 h1:w7Dt6Mpj36S2cWm0PkT2+D4kxrQbfCwjXZs1HqiILpE=

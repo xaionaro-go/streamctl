@@ -34,7 +34,7 @@ type ActiveStreamForwarding struct {
 	DestinationStreamKey  string
 	ReadCount             atomic.Uint64
 	WriteCount            atomic.Uint64
-	RecoderFactoryFactory func() (recoder.Factory, error)
+	RecoderFactoryFactory func(ctx context.Context) (recoder.Factory, error)
 	PauseFunc             func(ctx context.Context, fwd *ActiveStreamForwarding)
 
 	cancelFunc context.CancelFunc
@@ -217,7 +217,7 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 		})
 	}()
 
-	factoryInstance, err := fwd.RecoderFactoryFactory()
+	factoryInstance, err := fwd.RecoderFactoryFactory(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to initialize a recoder factory: %w", err)
 	}

@@ -6,7 +6,6 @@ import (
 	_ "embed"
 	"fmt"
 	"net/url"
-	"os"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -22,7 +21,6 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	child_process_manager "github.com/AgustinSRG/go-child-process-manager"
-	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
@@ -520,7 +518,7 @@ func (p *Panel) startOAuthListenerForRemoteStreamD(
 						continue
 					}
 
-					if err := p.openBrowser(ctx, req.GetAuthURL(), "It is required to confirm access in Twitch/YouTube using browser"); err != nil {
+					if err := p.openBrowser(ctx, req.GetAuthURL(), "It is required to confirm access in Twitch/Kick/YouTube using browser"); err != nil {
 						p.DisplayError(
 							fmt.Errorf(
 								"unable to open browser with URL '%s': %w",
@@ -717,7 +715,7 @@ func (p *Panel) oauthHandler(
 		return fmt.Errorf("unable to make a code receiver: %w", err)
 	}
 
-	if err := p.openBrowser(ctx, arg.AuthURL, "It is required to confirm access in Twitch/YouTube using browser"); err != nil {
+	if err := p.openBrowser(ctx, arg.AuthURL, "It is required to confirm access in Twitch/Kick/YouTube using browser"); err != nil {
 		return fmt.Errorf("unable to open browser with URL '%s': %w", arg.AuthURL, err)
 	}
 
@@ -742,86 +740,12 @@ func (p *Panel) oauthHandler(
 	}
 	return nil
 }
-
 func (p *Panel) openBrowser(
 	ctx context.Context,
 	urlString string,
 	reason string,
 ) (_err error) {
-	logger.Debugf(ctx, "openBrowser(ctx, '%s', '%s')", urlString, reason)
-	defer func() { logger.Debugf(ctx, "/openBrowser(ctx, '%s', '%s'): %v", urlString, reason, _err) }()
-
-	if p.Config.Browser.Command != "" {
-		args := []string{p.Config.Browser.Command, urlString}
-		logger.Debugf(
-			ctx,
-			"the browser command is configured to be '%s', so running '%s'",
-			p.Config.Browser.Command,
-			strings.Join(args, " "),
-		)
-		return exec.Command(args[0], args[1:]...).Start()
-	}
-
-	var browserCmd string
-	switch runtime.GOOS {
-	case "linux":
-		if envBrowser := os.Getenv("BROWSER"); envBrowser != "" {
-			browserCmd = envBrowser
-		} else {
-			browserCmd = "xdg-open"
-		}
-	default:
-		url, err := url.Parse(urlString)
-		if err != nil {
-			return fmt.Errorf("unable to parse URL '%s': %w", urlString, err)
-		}
-		return p.app.OpenURL(url)
-	}
-
-	waitCh := make(chan struct{})
-
-	w := p.app.NewWindow(gconsts.AppName + ": Browser selection window")
-	resizeWindow(w, fyne.NewSize(600, 400))
-	if reason != "" {
-		reason += ". "
-	}
-	promptText := widget.NewRichTextWithText(reason + "Select a browser for that:")
-	promptText.Wrapping = fyne.TextWrapWord
-	browserField := widget.NewEntry()
-	browserField.SetText(browserCmd)
-	browserField.PlaceHolder = "command to execute the browser"
-	browserField.OnSubmitted = func(s string) {
-		close(waitCh)
-	}
-	okButton := widget.NewButton("OK", func() {
-		close(waitCh)
-	})
-	w.SetContent(container.NewBorder(
-		container.NewVBox(
-			promptText,
-			browserField,
-		),
-		okButton,
-		nil,
-		nil,
-		nil,
-	))
-
-	w.Show()
-	<-waitCh
-	w.Hide()
-
-	browserCmd = browserField.Text
-	logger.Debugf(ctx, "chosen browser command is: '%s'", browserCmd)
-	if browserCmd != p.Config.Browser.Command {
-		logger.Debugf(ctx, "updating the browser command in the config")
-		p.Config.Browser.Command = browserCmd
-		err := p.SaveConfig(ctx)
-		errmon.ObserveErrorCtx(ctx, err)
-	}
-
-	logger.Debugf(ctx, "openBrowser(ctx, '%s', '%s'): resulting command '%s %s'", urlString, reason, browserCmd, urlString)
-	return exec.Command(browserCmd, urlString).Start()
+	return newBrowser(p).openBrowser(ctx, urlString, reason)
 }
 
 var twitchAppsCreateLink = must(url.Parse("https://dev.twitch.tv/console/apps/create"))
@@ -1453,7 +1377,7 @@ func (p *Panel) initMainWindow(
 	p.twitchCheck.Disable()
 
 	p.kickCheck = widget.NewCheck("Kick", nil)
-	p.kickCheck.SetChecked(true)
+	p.kickCheck.SetChecked(false)
 	p.kickCheck.Disable()
 
 	p.youtubeCheck = widget.NewCheck("YouTube", nil)
@@ -1889,7 +1813,7 @@ func (p *Panel) setupStreamNoLock(ctx context.Context) {
 			profile.PerPlatform[kick.ID],
 		)
 		if err != nil {
-			p.DisplayError(fmt.Errorf("unable to setup the stream on Twitch: %w", err))
+			p.DisplayError(fmt.Errorf("unable to setup the stream on Kick: %w", err))
 		}
 	}
 

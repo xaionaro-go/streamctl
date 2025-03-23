@@ -109,7 +109,13 @@ func (l *ChatListener) listenLoop(ctx context.Context) (_err error) {
 		case ytchat.ErrLiveStreamOver:
 			return err
 		default:
-			logger.Errorf(ctx, "unable to get a continuation: %v; retrying in %v", chatFetchRetryInterval, err)
+			logger.Errorf(
+				ctx,
+				"unable to get a continuation for %v: %v; retrying in %v",
+				l.videoID,
+				chatFetchRetryInterval,
+				err,
+			)
 			time.Sleep(chatFetchRetryInterval)
 			continue
 		}

@@ -13,6 +13,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	gconsts "github.com/xaionaro-go/streamctl/pkg/consts"
+	"github.com/xaionaro-go/streamctl/pkg/screen"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
@@ -20,7 +21,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	streamdconfig "github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/config"
-	"github.com/xaionaro-go/xfyne/widget"
+	xfyne "github.com/xaionaro-go/xfyne/widget"
 )
 
 func (p *Panel) openSettingsWindowNoLock(
@@ -98,7 +99,7 @@ func (p *Panel) openSettingsWindowNoLock(
 	)
 	enableChatMessageSoundsAlerts.SetChecked(p.Config.Chat.ReceiveMessageSoundAlarmEnabled())
 
-	oldScreenshoterEnabled := p.Config.Screenshot.Enabled != nil && *p.Config.Screenshot.Enabled
+	oldScreenshotConfig := p.Config.Screenshot
 
 	mpvPathEntry := widget.NewEntry()
 	mpvPathEntry.SetText(streamDCfg.StreamServer.VideoPlayer.MPV.Path)
@@ -117,8 +118,7 @@ func (p *Panel) openSettingsWindowNoLock(
 		if err := p.SaveConfig(ctx); err != nil {
 			p.DisplayError(fmt.Errorf("unable to save the local config: %w", err))
 		} else {
-			newScreenshotEnabled := p.Config.Screenshot.Enabled != nil && *p.Config.Screenshot.Enabled
-			if oldScreenshoterEnabled != newScreenshotEnabled {
+			if p.Config.Screenshot != oldScreenshotConfig {
 				p.reinitScreenshoter(ctx)
 			}
 		}
@@ -206,7 +206,56 @@ func (p *Panel) openSettingsWindowNoLock(
 		updateLoggedInLabels()
 	}
 
-	numDisplays := p.Screenshoter.Engine().NumActiveDisplays()
+	screenshotBoundsXEntry := widget.NewEntry()
+	screenshotBoundsXEntry.SetPlaceHolder("x")
+	screenshotBoundsXEntry.SetText(fmt.Sprintf("%d", p.Config.Screenshot.Bounds.Min.Y))
+	screenshotBoundsXEntry.OnSubmitted = func(s string) {
+		v, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to parse screenshot bound 'x': %w", err))
+			return
+		}
+		dx := p.Config.Screenshot.Bounds.Dx()
+		p.Config.Screenshot.Bounds.Min.X = int(v)
+		p.Config.Screenshot.Bounds.Max.X = int(v) + dx
+	}
+	screenshotBoundsYEntry := widget.NewEntry()
+	screenshotBoundsYEntry.SetPlaceHolder("y")
+	screenshotBoundsYEntry.SetText(fmt.Sprintf("%d", p.Config.Screenshot.Bounds.Min.Y))
+	screenshotBoundsYEntry.OnSubmitted = func(s string) {
+		v, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to parse screenshot bound 'y': %w", err))
+			return
+		}
+		dy := p.Config.Screenshot.Bounds.Dy()
+		p.Config.Screenshot.Bounds.Min.Y = int(v)
+		p.Config.Screenshot.Bounds.Max.Y = int(v) + dy
+	}
+	screenshotBoundsWEntry := widget.NewEntry()
+	screenshotBoundsWEntry.SetPlaceHolder("w")
+	screenshotBoundsWEntry.SetText(fmt.Sprintf("%d", p.Config.Screenshot.Bounds.Dx()))
+	screenshotBoundsWEntry.OnSubmitted = func(s string) {
+		v, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to parse screenshot bound 'w': %w", err))
+			return
+		}
+		p.Config.Screenshot.Bounds.Max.X = p.Config.Screenshot.Bounds.Min.X + int(v)
+	}
+	screenshotBoundsHEntry := widget.NewEntry()
+	screenshotBoundsHEntry.SetPlaceHolder("h")
+	screenshotBoundsHEntry.SetText(fmt.Sprintf("%d", p.Config.Screenshot.Bounds.Dy()))
+	screenshotBoundsHEntry.OnSubmitted = func(s string) {
+		v, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to parse screenshot bound 'h': %w", err))
+			return
+		}
+		p.Config.Screenshot.Bounds.Max.Y = p.Config.Screenshot.Bounds.Min.Y + int(v)
+	}
+
+	numDisplays := screen.GetNumber()
 	var displays []string
 	caption2id := map[string]int{}
 	for i := 0; i < int(numDisplays); i++ {
@@ -216,31 +265,30 @@ func (p *Panel) openSettingsWindowNoLock(
 	}
 	displayIDSelector := widget.NewSelect(displays, func(s string) {
 		id := caption2id[s]
-		p.Config.Screenshot.DisplayID = uint(id)
-	})
-	displayIDSelector.SetSelected(fmt.Sprintf("display #%d", p.Config.Screenshot.DisplayID+1))
 
-	screenshotCropXEntry := widget.NewEntry()
-	screenshotCropXEntry.SetPlaceHolder("x")
-	screenshotCropYEntry := widget.NewEntry()
-	screenshotCropYEntry.SetPlaceHolder("y")
-	screenshotCropWEntry := widget.NewEntry()
-	screenshotCropWEntry.SetPlaceHolder("w")
-	screenshotCropHEntry := widget.NewEntry()
-	screenshotCropHEntry.SetPlaceHolder("h")
+		screenBounds := screen.GetBounds(id)
+		screenshotBoundsXEntry.SetText(fmt.Sprintf("%d", screenBounds.Min.X))
+		screenshotBoundsXEntry.OnSubmitted(fmt.Sprintf("%d", screenBounds.Min.X))
+		screenshotBoundsYEntry.SetText(fmt.Sprintf("%d", screenBounds.Min.Y))
+		screenshotBoundsYEntry.OnSubmitted(fmt.Sprintf("%d", screenBounds.Min.Y))
+		screenshotBoundsWEntry.SetText(fmt.Sprintf("%d", screenBounds.Dx()))
+		screenshotBoundsWEntry.OnSubmitted(fmt.Sprintf("%d", screenBounds.Dx()))
+		screenshotBoundsHEntry.SetText(fmt.Sprintf("%d", screenBounds.Dy()))
+		screenshotBoundsHEntry.OnSubmitted(fmt.Sprintf("%d", screenBounds.Dy()))
+	})
 
 	enableDisableScreenshoter := func(b bool) {
 		if b {
-			screenshotCropXEntry.Enable()
-			screenshotCropYEntry.Enable()
-			screenshotCropWEntry.Enable()
-			screenshotCropHEntry.Enable()
+			screenshotBoundsXEntry.Enable()
+			screenshotBoundsYEntry.Enable()
+			screenshotBoundsWEntry.Enable()
+			screenshotBoundsHEntry.Enable()
 			displayIDSelector.Enable()
 		} else {
-			screenshotCropXEntry.Disable()
-			screenshotCropYEntry.Disable()
-			screenshotCropWEntry.Disable()
-			screenshotCropHEntry.Disable()
+			screenshotBoundsXEntry.Disable()
+			screenshotBoundsYEntry.Disable()
+			screenshotBoundsWEntry.Disable()
+			screenshotBoundsHEntry.Disable()
 			displayIDSelector.Disable()
 		}
 	}
@@ -386,10 +434,10 @@ func (p *Panel) openSettingsWindowNoLock(
 						displayIDSelector,
 						widget.NewLabel("Crop to:"),
 						container.NewHBox(
-							screenshotCropXEntry,
-							screenshotCropYEntry,
-							screenshotCropWEntry,
-							screenshotCropHEntry,
+							screenshotBoundsXEntry,
+							screenshotBoundsYEntry,
+							screenshotBoundsWEntry,
+							screenshotBoundsHEntry,
 						),
 					),
 					obsSettings,

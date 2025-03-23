@@ -562,11 +562,11 @@ func (grpc *GRPCServer) SubscribeToOAuthRequests(
 	}
 
 	logger.Tracef(
-		sender.Context(),
+		ctx,
 		"SubscribeToOAuthRequests(): UUID:%s",
 		_uuid,
 	)
-	defer func() { logger.Tracef(sender.Context(), "/SubscribeToOAuthRequests(): UUID:%s: %v", _uuid, _ret) }()
+	defer func() { logger.Tracef(ctx, "/SubscribeToOAuthRequests(): UUID:%s: %v", _uuid, _ret) }()
 
 	listenPort := uint16(req.ListenPort)
 	streamD, _ := grpc.StreamD.(*streamd.StreamD)
@@ -611,7 +611,10 @@ func (grpc *GRPCServer) SubscribeToOAuthRequests(
 		ctx,
 		"waiting for the subscription to be cancelled",
 	)
+
+	// waiting, while normal actual sending happens via grpc.OAuthURLHandlers[listenPort]
 	<-ctx.Done()
+
 	grpc.OAuthURLHandlerLocker.Do(ctx, func() {
 		delete(grpc.OAuthURLHandlers[listenPort], _uuid)
 		if len(grpc.OAuthURLHandlers[listenPort]) == 0 {

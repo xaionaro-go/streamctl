@@ -1,6 +1,8 @@
 package streamforward
 
 import (
+	"context"
+
 	"github.com/xaionaro-go/recoder"
 	xaionarogortmp "github.com/xaionaro-go/recoder/xaionaro-go-rtmp"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/streamforward"
@@ -15,7 +17,7 @@ func NewStreamForwards(
 ) *StreamForwards {
 	return streamforward.NewStreamForwards(
 		s,
-		func() (recoder.Factory, error) {
+		func(context.Context) (recoder.Factory, error) {
 			return xaionarogortmp.NewFactory(), nil
 		},
 		platformsController,

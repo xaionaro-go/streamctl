@@ -5,6 +5,5 @@ import (
 )
 
 type Config struct {
-	DisplayID uint
-	Bounds    image.Rectangle
+	Bounds image.Rectangle
 }

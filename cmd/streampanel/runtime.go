@@ -10,6 +10,7 @@ import (
 	"runtime/pprof"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -147,9 +148,14 @@ func seppukuIfMemHugeLeak(
 				var m runtime.MemStats
 				runtime.ReadMemStats(&m)
 
-				logger.Debugf(ctx, "memory consumed (in heap): %v", m.HeapInuse)
-				if m.HeapInuse > 3*1000*1000*1000 {
-					logger.Panicf(ctx, "I consumed almost 3GiB! Seppuku!")
+				logger.Debugf(
+					ctx,
+					"memory consumed (in heap): %v (%v)",
+					humanize.Bytes(m.HeapInuse),
+					m.HeapInuse,
+				)
+				if m.HeapInuse > 4*1000*1000*1000 {
+					logger.Panicf(ctx, "I consumed almost 4GiB! Seppuku!")
 				}
 			}
 		}

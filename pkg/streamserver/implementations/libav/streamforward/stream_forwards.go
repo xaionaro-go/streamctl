@@ -17,8 +17,8 @@ func NewStreamForwards(
 ) *StreamForwards {
 	return streamforward.NewStreamForwards(
 		s,
-		func() (recoder.Factory, error) {
-			return libav.NewFactory(context.TODO())
+		func(ctx context.Context) (recoder.Factory, error) {
+			return libav.NewFactory(ctx)
 		},
 		platformsController,
 	)
