@@ -42,8 +42,8 @@ func newRTMPServer(
 		},
 		Server: &rtmp.Server{
 			Address:             listenAddr,
-			ReadTimeout:         conf.StringDuration(psCfg.ReadTimeout),
-			WriteTimeout:        conf.StringDuration(psCfg.WriteTimeout),
+			ReadTimeout:         conf.Duration(psCfg.ReadTimeout),
+			WriteTimeout:        conf.Duration(psCfg.WriteTimeout),
 			IsTLS:               psCfg.IsTLS,
 			ServerCert:          "",
 			ServerKey:           "",

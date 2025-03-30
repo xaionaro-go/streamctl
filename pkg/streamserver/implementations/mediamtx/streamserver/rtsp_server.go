@@ -40,8 +40,8 @@ func newRTSPServer(
 		Server: &rtsp.Server{
 			Address:           listenAddr,
 			AuthMethods:       []auth.ValidateMethod{},
-			ReadTimeout:       conf.StringDuration(psCfg.ReadTimeout),
-			WriteTimeout:      conf.StringDuration(psCfg.WriteTimeout),
+			ReadTimeout:       conf.Duration(psCfg.ReadTimeout),
+			WriteTimeout:      conf.Duration(psCfg.WriteTimeout),
 			WriteQueueSize:    int(psCfg.WriteQueueSize),
 			UseUDP:            false,
 			UseMulticast:      false,
@@ -54,10 +54,10 @@ func newRTSPServer(
 			ServerCert:        "",
 			ServerKey:         "",
 			RTSPAddress:       listenAddr,
-			Protocols: map[conf.Protocol]struct{}{
-				conf.Protocol(gortsplib.TransportUDP):          {},
-				conf.Protocol(gortsplib.TransportUDPMulticast): {},
-				conf.Protocol(gortsplib.TransportTCP):          {},
+			Transports: map[gortsplib.Transport]struct{}{
+				gortsplib.Transport(gortsplib.TransportUDP):          {},
+				gortsplib.Transport(gortsplib.TransportUDPMulticast): {},
+				gortsplib.Transport(gortsplib.TransportTCP):          {},
 			},
 			RunOnConnect:        "",
 			RunOnConnectRestart: false,

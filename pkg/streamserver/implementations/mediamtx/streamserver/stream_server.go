@@ -98,12 +98,12 @@ func (s *StreamServer) init(
 		toConfLoggerLevel(logger.Default().Level()),
 		&dummyAuthManager{},
 		"",
-		conf.StringDuration(10*time.Second),
-		conf.StringDuration(10*time.Second),
+		conf.Duration(10*time.Second),
+		conf.Duration(10*time.Second),
 		1024, // a rounded-up power of 2 value, that is close to 10 seconds * 60 FPS (600 -> 1024)
 		1472,
 		make(map[string]*conf.Path),
-		externalcmd.NewPool(),
+		&externalcmd.Pool{},
 		newMediamtxLogger(logger.FromCtx(ctx)),
 	)
 	s.pathManager.Initialize(ctx)
