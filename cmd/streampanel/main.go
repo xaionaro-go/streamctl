@@ -79,7 +79,6 @@ func runPanel(
 	if flags.RemoteAddr != "" {
 		opts = append(opts, streampanel.OptionRemoteStreamDAddr(flags.RemoteAddr))
 	}
-
 	panel, panelErr := streampanel.New(flags.ConfigPath, opts...)
 	if panelErr != nil {
 		logger.Panic(ctx, panelErr)
