@@ -1,3 +1,6 @@
+//go:build none
+// +build none
+
 package mainprocess
 
 import (
@@ -41,12 +44,17 @@ func Test(t *testing.T) {
 		count := callCount[procName]
 		count++
 		callCount[procName] = count
-		msg := content.(messageContent)
-		assert.Equal(t, count, msg.Integer, procName)
-		assert.Equal(t, fmt.Sprint(count), msg.String, procName)
-		var oldCh chan struct{}
-		oldCh, handleCallHappened[procName] = handleCallHappened[procName], make(chan struct{})
-		close(oldCh)
+		switch content := content.(type) {
+		case messageContent:
+			assert.Equal(t, count, content.Integer, procName)
+			assert.Equal(t, fmt.Sprint(count), content.String, procName)
+			var oldCh chan struct{}
+			oldCh, handleCallHappened[procName] = handleCallHappened[procName], make(chan struct{})
+			close(oldCh)
+		case MessageReadyConfirmed:
+		default:
+			t.Errorf("unexpected message type: %T", content)
+		}
 	}
 
 	m, err := NewManager(

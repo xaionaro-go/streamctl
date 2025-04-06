@@ -108,6 +108,15 @@ func (p *Panel) getImage(
 	if err != nil {
 		return nil, false, fmt.Errorf("unable to download image '%s': %w", imageID, err)
 	}
+	if !changed {
+		oldImage, ok := xsync.DoR2(ctx, &p.imageLocker, func() (image.Image, bool) {
+			img, ok := p.imageLastParsed[imageID]
+			return img, ok
+		})
+		if ok {
+			return oldImage, false, nil
+		}
+	}
 
 	mimeType := http.DetectContentType(b)
 
@@ -133,6 +142,9 @@ func (p *Panel) getImage(
 		return nil, false, fmt.Errorf("unable to decode the screenshot: %w", err)
 	}
 
+	p.imageLocker.Do(ctx, func() {
+		p.imageLastParsed[imageID] = img
+	})
 	return img, changed, nil
 }
 

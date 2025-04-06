@@ -5,6 +5,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"image"
 	"net/url"
 	"os/exec"
 	"runtime"
@@ -119,6 +120,7 @@ type Panel struct {
 
 	imageLocker         xsync.Mutex
 	imageLastDownloaded map[consts.ImageID][]byte
+	imageLastParsed     map[consts.ImageID]image.Image
 
 	lastDisplayedError error
 

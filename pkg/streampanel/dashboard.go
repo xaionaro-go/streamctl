@@ -2,6 +2,7 @@ package streampanel
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"image/color"
 	"image/draw"
@@ -26,6 +27,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/lusingander/colorpicker"
+	"github.com/xaionaro-go/iterate"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/colorx"
@@ -77,6 +79,9 @@ type dashboardWindow struct {
 	renderedImagesLayer *image.NRGBA
 	streamStatus        map[streamcontrol.PlatformName]*widget.Label
 	streamStatusLocker  xsync.Mutex
+	changedImages       []*imageInfo
+
+	iteratorReusableBuffer iterate.TwoDReusableBuffers
 }
 
 type imageInfo struct {
@@ -236,6 +241,7 @@ func (w *dashboardWindow) renderImagesNoLock(
 		})
 	}
 
+	sizeChanged := false
 	dstImg := w.renderedImagesLayer
 	dstSize := dstImg.Bounds().Size()
 	if dstSize.X != width || dstSize.Y != height {
@@ -248,14 +254,24 @@ func (w *dashboardWindow) renderImagesNoLock(
 		})
 		dstImg = w.renderedImagesLayer
 		dstSize = dstImg.Bounds().Size()
+		sizeChanged = true
 	}
 
 	canvasRatio := float64(dstSize.X) / float64(dstSize.Y)
 
+	imgIsChanged := map[string]struct{}{}
+	for _, img := range w.changedImages {
+		if dashboardDebug {
+			logger.Tracef(ctx, "changed element: '%s'", img.ElementName)
+		}
+		imgIsChanged[img.ElementName] = struct{}{}
+	}
+
 	type imageT struct {
-		Image   *ximage.Transform
-		Name    string
-		Scaling float64
+		Image     *ximage.Transform
+		Name      string
+		IsChanged bool
+		Scaling   float64
 	}
 	transformedImages := make([]*imageT, 0, len(w.images))
 	for idx, img := range w.images {
@@ -310,9 +326,11 @@ func (w *dashboardWindow) renderImagesNoLock(
 				Y: yMax / 100,
 			},
 		}
+		_, isChanged := imgIsChanged[img.ElementName]
 		logger.Tracef(
 			ctx,
-			"transformation rectangle for '%s' %d (%s) is %v",
+			"transformation rectangle (isChanged:%t) for '%s' %d (%s) is %v",
+			isChanged,
 			img.ElementName,
 			idx,
 			spew.Sdump(img.DashboardElementConfig),
@@ -322,8 +340,9 @@ func (w *dashboardWindow) renderImagesNoLock(
 		transformedImages = append(
 			transformedImages,
 			&imageT{
-				Image: tImg,
-				Name:  img.ElementName,
+				Image:     tImg,
+				Name:      img.ElementName,
+				IsChanged: isChanged,
 				Scaling: min(
 					(float64(dstSize.X)*tImg.To.Size().X)/(float64(tImg.ImageSize.X)),
 					(float64(dstSize.Y)*tImg.To.Size().Y)/(float64(tImg.ImageSize.Y)),
@@ -338,12 +357,63 @@ func (w *dashboardWindow) renderImagesNoLock(
 		}
 	}
 
-	for idx := range dstImg.Pix {
-		dstImg.Pix[idx] = 0
+	var changedAreas []iterate.Area
+	for _, tImg := range transformedImages {
+		x0F := tImg.Image.To.Min.X
+		y0F := tImg.Image.To.Min.Y
+		x1F := tImg.Image.To.Max.X
+		y1F := tImg.Image.To.Max.Y
+		if x1F < x0F {
+			logger.Errorf(ctx, "x1F < x0F: %v < %v", x1F, x0F)
+		}
+		if y1F < y0F {
+			logger.Errorf(ctx, "y1F < y0F: %v < %v", y1F, y0F)
+		}
+		x0 := int(x0F*float64(width) + 0.5)
+		x1 := int(x1F*float64(width) + 0.5)
+		y0 := int(y0F*float64(height) + 0.5)
+		y1 := int(y1F*float64(height) + 0.5)
+		rect := iterate.Rect[string](x0, y0, x1, y1)
+		rect.Data = tImg.Name
+		changedAreas = append(changedAreas, rect)
 	}
+
+	changedPoints := iterate.TwoDPointsCount(&w.iteratorReusableBuffer, changedAreas...)
+	if changedPoints == 0 && !sizeChanged {
+		return dstImg
+	}
+	totalPoints := width * height
+	onlyDelta := !sizeChanged && float32(changedPoints) < float32(totalPoints)*0.75
+
+	if onlyDelta {
+		for y, xSegments := range iterate.TwoDForEachY(&w.iteratorReusableBuffer, changedAreas...) {
+			idx := y * dstImg.Stride
+			for _, xSegment := range xSegments {
+				for x := xSegment.S; x < xSegment.E; x++ {
+					idx := idx + x*4
+					dstImg.Pix[idx+3] = 0 // setting only alpha to zero, as a faster way to erase the picture
+				}
+			}
+		}
+	} else {
+		for i := 3; i < len(dstImg.Pix); i += 4 { // setting only alpha to zero, as a faster way to erase the picture
+			dstImg.Pix[i] = 0
+		}
+		changedAreas = changedAreas[:0]
+		changedAreas = append(changedAreas, iterate.Rect[struct{}](0, 0, width, height))
+	}
+	if dashboardDebug {
+		changedAreasBytes, _ := json.Marshal(changedAreas)
+		logger.Debugf(ctx, "changedPoints: %d/%d; changedAreas: %s", changedPoints, totalPoints, changedAreasBytes)
+	}
+
 	var tImgs []*imageT
 	var xBoundaries []float64
-	for y := range height {
+	for y, xSegments := range iterate.TwoDForEachY(&w.iteratorReusableBuffer, changedAreas...) {
+		if dashboardDebug && y == height/2 {
+			xSegmentsBytes, _ := json.Marshal(xSegments)
+			logger.Tracef(ctx, "y:%d; xSegments:%s", y, xSegmentsBytes)
+		}
 		yF := (float64(y) + 0.5) / float64(height)
 		idxY := (y - dstImg.Rect.Min.Y) * dstImg.Stride
 		xBoundaries = xBoundaries[:0]
@@ -376,99 +446,103 @@ func (w *dashboardWindow) renderImagesNoLock(
 
 		boundaryIdx := -1
 		nextSwitchX := float64(-1)
-		for x := range width {
-			idxX := (x - dstImg.Rect.Min.X) * 4
-			idx := idxY + idxX
-			if dstImg.Pix[idx+3] > 0 { // alpha > 0
-				if dashboardDebug && x == width/2 && y == height/2 {
-					logger.Tracef(ctx, "dst alpha > 0")
+		for _, xSegment := range xSegments {
+			for x := xSegment.S; x < xSegment.E; x++ {
+				idxX := (x - dstImg.Rect.Min.X) * 4
+				idx := idxY + idxX
+				if dstImg.Pix[idx+3] > 0 { // alpha > 0
+					if dashboardDebug && x == width/2 && y == height/2 {
+						logger.Tracef(ctx, "dst alpha > 0")
+					}
+					continue
 				}
-				continue
-			}
-			xF := (float64(x) + 0.5) / float64(width)
-			if dashboardDebug && x == width/2 && y == height/2 {
-				logger.Tracef(ctx, "xF == %f; nextSwitchX == %f", xF, nextSwitchX)
-			}
-			if xF > nextSwitchX {
-				tImgs = tImgs[:0]
-				for tImgIdx, tImg := range transformedImages {
-					c := tImg.Image.AtFloat64(xF, yF)
-					if c == nil {
+				xF := (float64(x) + 0.5) / float64(width)
+				if dashboardDebug && x == width/2 && y == height/2 {
+					logger.Tracef(ctx, "xF == %f; nextSwitchX == %f", xF, nextSwitchX)
+				}
+				if xF > nextSwitchX {
+					tImgs = tImgs[:0]
+					for tImgIdx, tImg := range transformedImages {
+						c := tImg.Image.AtFloat64(xF, yF)
+						if c == nil {
+							if dashboardDebug && x == width/2 && y == height/2 {
+								logger.Tracef(ctx, "transformedImages[%d]: %s: no color", tImgIdx, tImg.Name)
+							}
+							continue
+						}
+						tImgs = append(tImgs, tImg)
+					}
+					boundaryIdx++
+					if boundaryIdx < len(xBoundaries) {
+						nextSwitchX = xBoundaries[boundaryIdx]
+					}
+				}
+				if dashboardDebug && x == width/2 && y == height/2 {
+					logger.Tracef(ctx, "len(tImgs) == %d; xF == %f; yF == %f", len(tImgs), xF, yF)
+				}
+				if len(tImgs) == 0 {
+					continue
+				}
+				dstOffset := dstImg.PixOffset(x, y)
+				if dstOffset < 0 || dstOffset+4 > len(dstImg.Pix) {
+					continue
+				}
+				for tIdx, tImg := range tImgs {
+					if dashboardDebug && x == width/2 && y == height/2 {
+						logger.Tracef(ctx, "tImgs[%d]: name:%s", tIdx, tImg.Name)
+					}
+					srcX, srcY, ok := tImg.Image.Coords(xF, yF)
+					if !ok {
 						if dashboardDebug && x == width/2 && y == height/2 {
-							logger.Tracef(ctx, "transformedImages[%d]: %s: no color", tImgIdx, tImg.Name)
+							logger.Tracef(ctx, "tImgs[%d]: continue: no color", tIdx)
 						}
 						continue
 					}
-					tImgs = append(tImgs, tImg)
-				}
-				boundaryIdx++
-				if boundaryIdx < len(xBoundaries) {
-					nextSwitchX = xBoundaries[boundaryIdx]
-				}
-			}
-			if dashboardDebug && x == width/2 && y == height/2 {
-				logger.Tracef(ctx, "len(tImgs) == %d; xF == %f; yF == %f", len(tImgs), xF, yF)
-			}
-			if len(tImgs) == 0 {
-				continue
-			}
-			dstOffset := dstImg.PixOffset(x, y)
-			if dstOffset < 0 || dstOffset+4 > len(dstImg.Pix) {
-				continue
-			}
-			for tIdx, tImg := range tImgs {
-				if dashboardDebug && x == width/2 && y == height/2 {
-					logger.Tracef(ctx, "tImgs[%d]: name:%s", tIdx, tImg.Name)
-				}
-				srcX, srcY, ok := tImg.Image.Coords(xF, yF)
-				if !ok {
-					if dashboardDebug && x == width/2 && y == height/2 {
-						logger.Tracef(ctx, "tImgs[%d]: continue: no color", tIdx)
-					}
-					continue
-				}
-				srcImg := tImg.Image.Image.(*image.NRGBA)
-				srcOffset := srcImg.PixOffset(srcX, srcY)
-				if srcOffset < 0 || srcOffset+4 >= len(srcImg.Pix) {
-					if dashboardDebug && x == width/2 && y == height/2 {
-						logger.Tracef(ctx, "tImgs[%d]: continue: outside of the bounds", tIdx)
-					}
-					continue
-				}
-				if srcImg.Pix[srcOffset+3] == 0 { // alpha == 0
-					if dashboardDebug && x == width/2 && y == height/2 {
-						logger.Tracef(ctx, "tImgs[%d]: continue: alpha == 0", tIdx)
-					}
-					continue
-				}
-				xE, yE := 0, 0
-				if tIdx == 0 {
-					xE = max(0, int(float64(x+1)*tImg.Scaling)-int(float64(x)*tImg.Scaling)-1)
-					yE = max(0, int(float64(y+1)*tImg.Scaling)-int(float64(y)*tImg.Scaling)-1)
-				}
-				for i := 0; i <= yE; i++ {
-					dstOffset := dstImg.PixOffset(x, y+i)
-					dstOffsetEnd := dstOffset + 4*xE
-					for ; dstOffset <= dstOffsetEnd; dstOffset += 4 {
-						if dstOffset < 0 || dstOffset+4 >= len(dstImg.Pix) {
-							continue
+					srcImg := tImg.Image.Image.(*image.NRGBA)
+					srcOffset := srcImg.PixOffset(srcX, srcY)
+					if srcOffset < 0 || srcOffset+4 >= len(srcImg.Pix) {
+						if dashboardDebug && x == width/2 && y == height/2 {
+							logger.Tracef(ctx, "tImgs[%d]: continue: outside of the bounds", tIdx)
 						}
-						if dstImg.Pix[dstOffset+3] > 0 { // alpha > 0
-							continue
-						}
-						copy(
-							dstImg.Pix[dstOffset:dstOffset+4:dstOffset+4],
-							srcImg.Pix[srcOffset:srcOffset+4:srcOffset+4],
-						)
+						continue
 					}
+					if srcImg.Pix[srcOffset+3] == 0 { // alpha == 0
+						if dashboardDebug && x == width/2 && y == height/2 {
+							logger.Tracef(ctx, "tImgs[%d]: continue: alpha == 0", tIdx)
+						}
+						continue
+					}
+					xE, yE := 0, 0
+					if tIdx == 0 {
+						xE = max(0, int(float64(x+1)*tImg.Scaling)-int(float64(x)*tImg.Scaling)-1)
+						yE = max(0, int(float64(y+1)*tImg.Scaling)-int(float64(y)*tImg.Scaling)-1)
+					}
+					for i := 0; i <= yE; i++ {
+						dstOffset := dstImg.PixOffset(x, y+i)
+						dstOffsetEnd := dstOffset + 4*xE
+						for ; dstOffset <= dstOffsetEnd; dstOffset += 4 {
+							if dstOffset < 0 || dstOffset+4 >= len(dstImg.Pix) {
+								continue
+							}
+							if dstImg.Pix[dstOffset+3] > 0 { // alpha > 0
+								continue
+							}
+							copy(
+								dstImg.Pix[dstOffset:dstOffset+4:dstOffset+4],
+								srcImg.Pix[srcOffset:srcOffset+4:srcOffset+4],
+							)
+						}
+					}
+					if dashboardDebug && x == width/2 && y == height/2 {
+						logger.Tracef(ctx, "tImgs[%d]: break", tIdx)
+					}
+					break
 				}
-				if dashboardDebug && x == width/2 && y == height/2 {
-					logger.Tracef(ctx, "tImgs[%d]: break", tIdx)
-				}
-				break
 			}
 		}
 	}
+
+	w.changedImages = w.changedImages[:0]
 	return dstImg
 }
 
@@ -642,7 +716,7 @@ func (w *dashboardWindow) updateImagesNoLock(
 		w.images = elements
 	})
 
-	var changeCount atomic.Uint64
+	changedElements := make(chan *imageInfo, 10)
 	var wg sync.WaitGroup
 
 	for idx := range elements {
@@ -676,7 +750,7 @@ func (w *dashboardWindow) updateImagesNoLock(
 				w.imagesLocker.Do(xsync.WithNoLogging(ctx, true), func() {
 					el.Image = m
 				})
-				changeCount.Add(1)
+				changedElements <- el
 			})
 		}
 	}
@@ -708,14 +782,25 @@ func (w *dashboardWindow) updateImagesNoLock(
 		b := img.Bounds()
 		m := image.NewNRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
 		draw.Draw(m, m.Bounds(), img, b.Min, draw.Src)
+		var el *imageInfo
 		w.imagesLocker.Do(xsync.WithNoLogging(ctx, true), func() {
-			elementsMap["screenshot"].Image = m
+			el = elementsMap[screenshotElementName]
+			el.Image = m
 		})
-		changeCount.Add(1)
+		changedElements <- el
 	})
+	w.changedImages = w.changedImages[:0]
+	changedCount := 0
+	go func() {
+		for el := range changedElements {
+			changedCount++
+			w.changedImages = append(w.changedImages, el)
+		}
+	}()
 	wg.Wait()
+	close(changedElements)
 
-	if changeCount.Load() > 0 {
+	if changedCount > 0 {
 		w.imagesLayerObj.Refresh()
 	}
 }

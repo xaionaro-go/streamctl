@@ -23,7 +23,7 @@ replace github.com/wlynxg/anet => github.com/BieHDC/anet v0.0.6-0.20241226223613
 
 replace github.com/nicklaw5/helix/v2 v2.30.1-0.20240715193454-0151ccccf980 => github.com/xaionaro-go/helix/v2 v2.0.0-20250309182928-f54c9d4c8a29
 
-replace github.com/asticode/go-astiav v0.35.1 => github.com/xaionaro-go/astiav v0.0.0-20250323164157-9924a3697350
+replace github.com/asticode/go-astiav v0.35.1 => github.com/xaionaro-go/astiav v0.0.0-20250401003159-fe890da0a1a9
 
 require (
 	github.com/facebookincubator/go-belt v0.0.0-20250308011339-62fb7027b11f
@@ -272,19 +272,20 @@ require (
 	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0
 	github.com/xaionaro-go/audio v0.0.0-20250210102901-abfced9d5ef3
-	github.com/xaionaro-go/avpipeline v0.0.0-20250330131938-7f12413a09e7
+	github.com/xaionaro-go/avpipeline v0.0.0-20250331013640-965f27ebf9c5
 	github.com/xaionaro-go/datacounter v1.0.4
 	github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42
 	github.com/xaionaro-go/grpcproxy v0.0.0-20241103205849-a8fef42e72f9
+	github.com/xaionaro-go/iterate v0.0.0-20250406123757-7802d56b52ce
 	github.com/xaionaro-go/kickcom v0.0.0-20250316223447-a1fe3d153d96
 	github.com/xaionaro-go/lockmap v0.0.0-20240901172806-e17aea364748
 	github.com/xaionaro-go/logwriter v0.0.0-20250111154941-c3f7a1a2d567
-	github.com/xaionaro-go/mediamtx v0.0.0-20250330180012-43d6a1618235
+	github.com/xaionaro-go/mediamtx v0.0.0-20250406132618-79ecbc3e138f
 	github.com/xaionaro-go/object v0.0.0-20241026212449-753ce10ec94c
 	github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20241018162120-5faf4e7a684a
 	github.com/xaionaro-go/observability v0.0.0-20250309200059-047fad8d76e4
-	github.com/xaionaro-go/player v0.0.0-20250330140336-14afe7c4baa8
-	github.com/xaionaro-go/recoder v0.0.0-20250330124900-a8fe8bcf696e
+	github.com/xaionaro-go/player v0.0.0-20250406134844-da668a6b387f
+	github.com/xaionaro-go/recoder v0.0.0-20250406135342-078f889afdc2
 	github.com/xaionaro-go/secret v0.0.0-20250111141743-ced12e1082c2
 	github.com/xaionaro-go/timeapiio v0.0.0-20240915203246-b907cf699af3
 	github.com/xaionaro-go/typing v0.0.0-20221123235249-2229101d38ba
