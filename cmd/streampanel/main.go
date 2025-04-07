@@ -183,7 +183,7 @@ func runPanel(
 	if flags.Page != "" {
 		loopOpts = append(loopOpts, streampanel.LoopOptionStartingPage(flags.Page))
 	}
-	if buildvars.GitCommit != "" && buildvars.BuildDate != nil && autoupdater.Available {
+	if !flags.DisableAutoUpdater && buildvars.GitCommit != "" && buildvars.BuildDate != nil && autoupdater.Available {
 		logger.Debugf(ctx, "enabling an auto-updater")
 		loopOpts = append(loopOpts, streampanel.LoopOptionAutoUpdater{
 			AutoUpdater: autoupdater.New(

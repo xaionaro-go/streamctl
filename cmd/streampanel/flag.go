@@ -45,6 +45,7 @@ type Flags struct {
 	LockTimeout           time.Duration `yaml:"LockTimeout,omitempty"`
 	InsecureDebug         bool          `yaml:"InsecureDebug,omitempty"`
 	RemoveSecretsFromLogs bool          `yaml:"RemoveSecretsFromLogs,omitempty"`
+	DisableAutoUpdater    bool          `yaml:"DisableAutoUpdater,omitempty"`
 
 	OAuthListenPortTwitch  uint16 `yaml:"OAuthListenPortTwitch,omitempty"`
 	OAuthListenPortKick    uint16 `yaml:"OAuthListenPortKick,omitempty"`
@@ -144,6 +145,11 @@ func parseFlags() Flags {
 		false,
 		"adds a processing hook to the logger which removes secret/sensitive data from logs; for example if you want to stream how you work with this application or if you want to share the logs somewhere publicly, you may want to be extra careful and enable this flag just in case (it does not provide a guarantee, but good as an additional safeguard)",
 	)
+	disableAutoUpdater := pflag.Bool(
+		"disable-auto-updater",
+		false,
+		"",
+	)
 	version := pflag.Bool("version", false, "display the version")
 
 	pflag.Parse()
@@ -176,6 +182,8 @@ func parseFlags() Flags {
 
 		InsecureDebug:         *insecureDebug,
 		RemoveSecretsFromLogs: *removeSecretsFromLogs,
+
+		DisableAutoUpdater: *disableAutoUpdater,
 	}
 
 	for _, platformGetFlagsFunc := range platformGetFlagsFuncs {
