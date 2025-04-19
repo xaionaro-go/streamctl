@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"runtime/debug"
 	"strings"
@@ -280,11 +281,12 @@ func (p *StreamPlayerHandler) getInternalURL(ctx context.Context) (*url.URL, err
 	var u url.URL
 	u.Scheme = portSrv.Type.String()
 	u.Host = portSrv.ListenAddr
+	_, port, _ := net.SplitHostPort(portSrv.ListenAddr)
 	switch u.Hostname() {
 	case "0.0.0.0":
-		u.Host = "127.0.0.1"
+		u.Host = net.JoinHostPort("127.0.0.1", port)
 	case "::":
-		u.Host = "::1"
+		u.Host = net.JoinHostPort("::1", port)
 	}
 	switch portSrv.Type {
 	case streamtypes.ServerTypeSRT:
