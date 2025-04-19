@@ -8,8 +8,8 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
 
-	"github.com/xaionaro-go/streamctl/pkg/serializable"
-	"github.com/xaionaro-go/streamctl/pkg/serializable/registry"
+	"github.com/xaionaro-go/serializable"
+	"github.com/xaionaro-go/serializable/registry"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config/action"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config/event"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config/event/eventquery"

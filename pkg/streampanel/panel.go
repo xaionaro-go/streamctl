@@ -46,6 +46,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/audio"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/config"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
+	"github.com/xaionaro-go/xcontext"
 	"github.com/xaionaro-go/xpath"
 	"github.com/xaionaro-go/xsync"
 )
@@ -639,7 +640,10 @@ func getExpandedConfigPath(configPath string) (string, error) {
 
 func (p *Panel) SaveConfig(
 	ctx context.Context,
-) error {
+) (_err error) {
+	logger.Debugf(ctx, "SaveConfig")
+	defer func() { logger.Debugf(ctx, "/SaveConfig: %v", _err) }()
+
 	err := config.WriteConfigToPath(ctx, p.configPath, p.Config)
 	if err != nil {
 		return fmt.Errorf("unable to save the config: %w", err)
@@ -1269,7 +1273,7 @@ func (p *Panel) initMainWindow(
 	w := p.newPermanentWindow(ctx, gconsts.AppName)
 	p.mainWindow = w
 	w.SetMaster()
-	resizeWindow(w, fyne.NewSize(400, 600))
+	resizeWindow(w, fyne.NewSize(600, 1000))
 
 	profileFilter := widget.NewEntry()
 	profileFilter.SetPlaceHolder("filter")
@@ -2039,10 +2043,13 @@ func (p *Panel) doStopStream(ctx context.Context) {
 }
 
 func (p *Panel) onSetupStreamButton(ctx context.Context) {
+	ctx = xcontext.DetachDone(ctx)
 	p.setupStream(ctx)
 }
 
 func (p *Panel) onStartStopButton(ctx context.Context) {
+	ctx = xcontext.DetachDone(ctx)
+
 	var shouldStop bool
 	p.streamMutex.Do(ctx, func() {
 		shouldStop = p.updateStreamClockHandler != nil

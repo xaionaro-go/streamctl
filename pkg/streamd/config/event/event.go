@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/xaionaro-go/streamctl/pkg/serializable"
+	"github.com/xaionaro-go/serializable"
 )
 
 func init() {

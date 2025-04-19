@@ -18,6 +18,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/player/pkg/player"
+	"github.com/xaionaro-go/recoder"
 	"github.com/xaionaro-go/streamctl/pkg/consts"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
@@ -25,7 +26,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/xcontext"
-	"github.com/xaionaro-go/xfyne/widget"
+	xfyne "github.com/xaionaro-go/xfyne/widget"
 )
 
 func (p *Panel) startRestreamPage(
@@ -163,6 +164,7 @@ func (p *Panel) openAddStreamServerWindow(ctx context.Context) {
 	protocolSelect := widget.NewSelect([]string{
 		ptr(streamtypes.ServerTypeRTMP).String(),
 		ptr(streamtypes.ServerTypeRTSP).String(),
+		ptr(streamtypes.ServerTypeSRT).String(),
 	}, func(s string) {
 		currentProtocol = streamtypes.ParseServerType(s)
 	})
@@ -997,6 +999,7 @@ func (p *Panel) openAddOrEditRestreamWindow(
 		streamID api.StreamID,
 		dstID api.DestinationID,
 		enabled bool,
+		encode sstypes.EncodeConfig,
 		quirks sstypes.ForwardingQuirks,
 	) error,
 ) {
@@ -1057,6 +1060,124 @@ func (p *Panel) openAddOrEditRestreamWindow(
 		dstSelect.SetSelected(dstMapID2Caption[dstID])
 		dstSelect.Disable()
 	}
+
+	if len(fwd.Encode.OutputVideoTracks) == 0 {
+		fwd.Encode.OutputVideoTracks = append(fwd.Encode.OutputVideoTracks, recoder.VideoTrackEncodingConfig{
+			InputTrackIDs: []int{0, 1, 2, 3, 4, 5, 6, 7},
+			Config: recoder.EncodeVideoConfig{
+				Codec:         recoder.VideoCodecCopy,
+				Quality:       ptr(recoder.VideoQualityConstantBitrate(6000000)), // Twitch has the 6Mbps limitation
+				CustomOptions: nil,
+			},
+		})
+	}
+
+	if len(fwd.Encode.OutputAudioTracks) == 0 {
+		fwd.Encode.OutputAudioTracks = append(fwd.Encode.OutputAudioTracks, recoder.AudioTrackEncodingConfig{
+			InputTrackIDs: []int{0, 1, 2, 3, 4, 5, 6, 7},
+			Config: recoder.EncodeAudioConfig{
+				Codec:         recoder.AudioCodecCopy,
+				Quality:       ptr(recoder.AudioQualityConstantBitrate(128000)), // https://wiki.xiph.org/Opus_Recommended_Settings
+				CustomOptions: nil,
+			},
+		})
+	}
+
+	var videoCodecStrs []string
+	var videoCodecs []recoder.VideoCodec
+	for videoCodec := recoder.VideoCodecCopy; videoCodec < recoder.EndOfVideoCodec; videoCodec++ {
+		videoCodecs = append(videoCodecs, videoCodec)
+		videoCodecStrs = append(videoCodecStrs, ptr(videoCodec).String())
+	}
+
+	var audioCodecStrs []string
+	var audioCodecs []recoder.AudioCodec
+	for audioCodec := recoder.AudioCodecCopy; audioCodec < recoder.EndOfAudioCodec; audioCodec++ {
+		audioCodecs = append(audioCodecs, audioCodec)
+		audioCodecStrs = append(audioCodecStrs, ptr(audioCodec).String())
+	}
+
+	recodingVideoLabel := widget.NewLabel("Video:")
+	recodingAudioLabel := widget.NewLabel("Audio:")
+
+	recodingVideoBitrate := xfyne.NewNumericalEntry()
+	recodingVideoBitrate.OnChanged = func(s string) {
+		v, err := strconv.ParseUint(s, 10, 64)
+		if err != nil {
+			p.DisplayError(err)
+		}
+		fwd.Encode.OutputVideoTracks[0].Config.Quality = ptr(recoder.VideoQualityConstantBitrate(v))
+	}
+	switch q := fwd.Encode.OutputVideoTracks[0].Config.Quality.(type) {
+	case *recoder.VideoQualityConstantBitrate:
+		recodingVideoBitrate.SetText(fmt.Sprintf("%d", uint(*q)))
+	}
+	recodingVideoCodecSelector := widget.NewSelect(videoCodecStrs, func(s string) {
+		if s == ptr(recoder.VideoCodecCopy).String() {
+			recodingVideoBitrate.Disable()
+		} else {
+			recodingVideoBitrate.Enable()
+		}
+		for _, videoCodec := range videoCodecs {
+			if ptr(videoCodec).String() == s {
+				fwd.Encode.OutputVideoTracks[0].Config.Codec = videoCodec
+			}
+		}
+	})
+	if fwd.Encode.OutputVideoTracks[0].Config.Codec == recoder.VideoCodecUndefined {
+		recodingVideoCodecSelector.SetSelectedIndex(0)
+	} else {
+		recodingVideoCodecSelector.SetSelected(fwd.Encode.OutputVideoTracks[0].Config.Codec.String())
+	}
+	recodingAudioBitrate := xfyne.NewNumericalEntry()
+	recodingAudioBitrate.OnChanged = func(s string) {
+		v, err := strconv.ParseUint(s, 10, 64)
+		if err != nil {
+			p.DisplayError(err)
+		}
+		fwd.Encode.OutputAudioTracks[0].Config.Quality = ptr(recoder.AudioQualityConstantBitrate(v))
+	}
+	switch q := fwd.Encode.OutputAudioTracks[0].Config.Quality.(type) {
+	case *recoder.AudioQualityConstantBitrate:
+		recodingAudioBitrate.SetText(fmt.Sprintf("%d", uint(*q)))
+	}
+	recodingAudioCodecSelector := widget.NewSelect(audioCodecStrs, func(s string) {
+		if s == ptr(recoder.AudioCodecCopy).String() {
+			recodingAudioBitrate.Disable()
+		} else {
+			recodingAudioBitrate.Enable()
+		}
+		for _, audioCodec := range audioCodecs {
+			if ptr(audioCodec).String() == s {
+				fwd.Encode.OutputAudioTracks[0].Config.Codec = audioCodec
+			}
+		}
+	})
+	if fwd.Encode.OutputAudioTracks[0].Config.Codec == recoder.AudioCodecUndefined {
+		recodingAudioCodecSelector.SetSelectedIndex(0)
+	} else {
+		recodingAudioCodecSelector.SetSelected(fwd.Encode.OutputAudioTracks[0].Config.Codec.String())
+	}
+	enableRecodingCheckbox := widget.NewCheck("Enable recoding", func(b bool) {
+		fwd.Encode.Enabled = b
+		if b {
+			recodingVideoLabel.Show()
+			recodingAudioLabel.Show()
+			recodingVideoCodecSelector.Enable()
+			recodingVideoCodecSelector.OnChanged(recodingVideoCodecSelector.Selected)
+			recodingAudioCodecSelector.Enable()
+			recodingAudioCodecSelector.OnChanged(recodingAudioCodecSelector.Selected)
+		} else {
+			recodingVideoCodecSelector.Disable()
+			recodingVideoBitrate.Disable()
+			recodingAudioCodecSelector.Disable()
+			recodingAudioBitrate.Disable()
+			recodingVideoLabel.Hide()
+			recodingAudioLabel.Hide()
+		}
+	})
+	enableRecodingCheckbox.SetChecked(fwd.Encode.Enabled)
+	enableRecodingCheckbox.OnChanged(fwd.Encode.Enabled)
 
 	var restartUntilYouTubeStarts *widget.Check
 
@@ -1136,6 +1257,7 @@ func (p *Panel) openAddOrEditRestreamWindow(
 			streamtypes.StreamID(inStreamsSelect.Selected),
 			dstMapCaption2ID[dstSelect.Selected],
 			enabledCheck.Checked,
+			fwd.Encode,
 			sstypes.ForwardingQuirks{
 				RestartUntilYoutubeRecognizesStream: quirksYoutubeRestart,
 				StartAfterYoutubeRecognizedStream:   quirksStartAfterYoutube,
@@ -1160,6 +1282,14 @@ func (p *Panel) openAddOrEditRestreamWindow(
 			dstSelect,
 			widget.NewSeparator(),
 			widget.NewSeparator(),
+			widget.NewRichTextFromMarkdown("## Recode"),
+			enableRecodingCheckbox,
+			recodingVideoLabel,
+			recodingVideoCodecSelector,
+			recodingVideoBitrate,
+			recodingAudioLabel,
+			recodingAudioCodecSelector,
+			recodingAudioBitrate,
 			widget.NewRichTextFromMarkdown("## Quirks"),
 			startAfterYoutubeCheckbox,
 			restartUntilYouTubeStarts,
@@ -1174,6 +1304,7 @@ func (p *Panel) updateStreamForward(
 	streamID api.StreamID,
 	dstID api.DestinationID,
 	enabled bool,
+	encode sstypes.EncodeConfig,
 	quirks sstypes.ForwardingQuirks,
 ) error {
 	logger.Debugf(ctx, "updateStreamForward")
@@ -1183,6 +1314,7 @@ func (p *Panel) updateStreamForward(
 		streamID,
 		dstID,
 		enabled,
+		encode,
 		quirks,
 	)
 }
@@ -1192,6 +1324,7 @@ func (p *Panel) addStreamForward(
 	streamID api.StreamID,
 	dstID api.DestinationID,
 	enabled bool,
+	encode sstypes.EncodeConfig,
 	quirks sstypes.ForwardingQuirks,
 ) error {
 	logger.Debugf(ctx, "addStreamForward")
@@ -1201,6 +1334,7 @@ func (p *Panel) addStreamForward(
 		streamID,
 		dstID,
 		enabled,
+		encode,
 		quirks,
 	)
 }
@@ -1286,6 +1420,7 @@ func (p *Panel) displayStreamForwards(
 						fwd.StreamID,
 						fwd.DestinationID,
 						!fwd.Enabled,
+						fwd.Encode,
 						fwd.Quirks,
 					)
 					if err != nil {
@@ -1304,6 +1439,11 @@ func (p *Panel) displayStreamForwards(
 		}
 		if fwd.Quirks.StartAfterYoutubeRecognizedStream.Enabled {
 			quirksStrings = append(quirksStrings, "after-YT")
+		}
+		if fwd.Encode.Enabled && len(fwd.Encode.OutputVideoTracks) > 0 && len(fwd.Encode.OutputAudioTracks) > 0 {
+			videoTrack := fwd.Encode.OutputVideoTracks[0]
+			audioTrack := fwd.Encode.OutputAudioTracks[0]
+			captionStr += fmt.Sprintf(" [%s/%s]", videoTrack.Config.Codec.String(), audioTrack.Config.Codec.String())
 		}
 		if len(quirksStrings) != 0 {
 			captionStr += fmt.Sprintf(" (%s)", strings.Join(quirksStrings, ","))

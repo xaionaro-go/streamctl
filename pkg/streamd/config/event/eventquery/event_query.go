@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/goccy/go-yaml"
-	"github.com/xaionaro-go/streamctl/pkg/serializable"
-	"github.com/xaionaro-go/streamctl/pkg/serializable/registry"
+	"github.com/xaionaro-go/serializable"
+	"github.com/xaionaro-go/serializable/registry"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config/event"
 )
 

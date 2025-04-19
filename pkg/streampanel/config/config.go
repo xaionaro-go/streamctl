@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/screenshot"
 	streamd "github.com/xaionaro-go/streamctl/pkg/streamd/config"
@@ -87,12 +88,17 @@ func WriteConfigToPath(
 	ctx context.Context,
 	cfgPath string,
 	cfg Config,
-) error {
+) (_err error) {
+	logger.Debugf(ctx, "WriteConfigToPath")
+	defer func() { logger.Debugf(ctx, "/WriteConfigToPath: %v", _err) }()
+
 	pathNew := cfgPath + ".new"
 	f, err := os.OpenFile(pathNew, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0750)
 	if err != nil {
 		return fmt.Errorf("unable to open the data file '%s': %w", pathNew, err)
 	}
+
+	logger.Tracef(ctx, "cfg.WriteTo: %s", spew.Sdump(cfg))
 	_, err = cfg.WriteTo(f)
 	f.Close()
 	if err != nil {

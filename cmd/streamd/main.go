@@ -164,7 +164,9 @@ func main() {
 		streamD, err := streamd.New(
 			cfg,
 			_ui,
-			func(ctx context.Context, c config.Config) error {
+			func(ctx context.Context, c config.Config) (_err error) {
+				logger.Debugf(ctx, "SaveConfig")
+				defer func() { logger.Debugf(ctx, "/SaveConfig: %v", _err) }()
 				return config.WriteConfigToPath(ctx, configPathExpanded, c)
 			},
 			belt.CtxBelt(ctx),

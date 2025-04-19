@@ -153,6 +153,7 @@ func runPanel(
 					case UpdateStreamDConfig:
 						logger.Debugf(ctx, "UpdateStreamDConfig: parsing the config")
 						_, err := panel.Config.BuiltinStreamD.ReadFrom(bytes.NewReader([]byte(msg.Config)))
+						logger.Tracef(ctx, "UpdateStreamDConfig: parsing the config result: %v", err)
 						if err != nil {
 							err := fmt.Errorf("unable to deserialize the updated streamd config: %w", err)
 							logger.Errorf(ctx, "%s", err)

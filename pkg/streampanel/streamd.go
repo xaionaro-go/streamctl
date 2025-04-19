@@ -97,7 +97,9 @@ func (p *Panel) initBuiltinStreamD(ctx context.Context) (_err error) {
 	p.StreamD, err = streamd.New(
 		p.Config.BuiltinStreamD,
 		p,
-		func(ctx context.Context, cfg streamdconfig.Config) error {
+		func(ctx context.Context, cfg streamdconfig.Config) (_err error) {
+			logger.Debugf(ctx, "SaveConfig")
+			defer func() { logger.Debugf(ctx, "/SaveConfig: %v", _err) }()
 			p.Config.BuiltinStreamD = cfg
 			return p.SaveConfig(ctx)
 		},

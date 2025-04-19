@@ -35,6 +35,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	sstypes "github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
@@ -476,7 +477,9 @@ func (d *StreamD) normalizeKickData() {
 	})
 }
 
-func (d *StreamD) SaveConfig(ctx context.Context) error {
+func (d *StreamD) SaveConfig(ctx context.Context) (_err error) {
+	logger.Debugf(ctx, "SaveConfig")
+	defer func() { logger.Debugf(ctx, "/SaveConfig: %v", _err) }()
 	return xsync.DoA1R1(ctx, &d.ConfigLock, d.saveConfig, ctx)
 }
 
@@ -1412,6 +1415,7 @@ func (d *StreamD) listStreamForwards(
 			DestinationID: api.DestinationID(streamFwd.DestinationID),
 			NumBytesWrote: streamFwd.NumBytesWrote,
 			NumBytesRead:  streamFwd.NumBytesRead,
+			Encode:        streamFwd.Encode,
 			Quirks:        streamFwd.Quirks,
 		}
 		result = append(result, item)
@@ -1433,6 +1437,7 @@ func (d *StreamD) AddStreamForward(
 	streamID api.StreamID,
 	destinationID api.DestinationID,
 	enabled bool,
+	encode types.EncodeConfig,
 	quirks api.StreamForwardingQuirks,
 ) error {
 	logger.Debugf(ctx, "AddStreamForward")
@@ -1448,6 +1453,7 @@ func (d *StreamD) AddStreamForward(
 			sstypes.StreamID(streamID),
 			sstypes.DestinationID(destinationID),
 			enabled,
+			encode,
 			quirks,
 		)
 		if err != nil {
@@ -1468,10 +1474,11 @@ func (d *StreamD) UpdateStreamForward(
 	streamID api.StreamID,
 	destinationID api.DestinationID,
 	enabled bool,
+	encode types.EncodeConfig,
 	quirks api.StreamForwardingQuirks,
-) error {
-	logger.Debugf(ctx, "AddStreamForward")
-	defer logger.Debugf(ctx, "/AddStreamForward")
+) (_err error) {
+	logger.Debugf(ctx, "UpdateStreamForward")
+	defer func() { logger.Debugf(ctx, "/UpdateStreamForward: %v", _err) }()
 	defer d.publishEvent(ctx, api.DiffStreamForwards{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
@@ -1483,6 +1490,7 @@ func (d *StreamD) UpdateStreamForward(
 			sstypes.StreamID(streamID),
 			sstypes.DestinationID(destinationID),
 			enabled,
+			encode,
 			quirks,
 		)
 		if err != nil {

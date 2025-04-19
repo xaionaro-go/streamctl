@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/xaionaro-go/streamctl/pkg/expression"
-	"github.com/xaionaro-go/streamctl/pkg/serializable"
+	"github.com/xaionaro-go/serializable"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 )
 

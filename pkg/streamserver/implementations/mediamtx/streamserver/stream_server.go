@@ -6,6 +6,7 @@ package streamserver
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/facebookincubator/go-belt"
@@ -118,13 +119,11 @@ func (s *StreamServer) init(
 				s.mutex.Do(ctx, func() {
 					_, err := s.startServer(ctx, srv.Type, srv.ListenAddr, srv.Options()...)
 					if err != nil {
-						logger.Errorf(
-							ctx,
+						err = fmt.Errorf(
 							"unable to initialize %s server at %s: %w",
-							srv.Type,
-							srv.ListenAddr,
-							err,
+							srv.Type, srv.ListenAddr, err,
 						)
+						logger.Errorf(ctx, "%v", err)
 					}
 				})
 			})
@@ -152,11 +151,11 @@ func (s *StreamServer) PathReady(path defs.Path) {
 	s.streamsStatusLocker.Do(context.Background(), func() {
 		publisher := s.publishers[appKey]
 		if publisher != nil {
-			logger.Errorf(
-				ctx,
+			err := fmt.Errorf(
 				"double-registration of a publisher for '%s' (this is an internal error in the code): %w",
 				appKey,
 			)
+			logger.Errorf(ctx, "%v", err)
 			return
 		}
 		s.publishers[appKey] = newPublisherClosedNotifier()
@@ -224,6 +223,9 @@ func (s *StreamServer) ListServers(
 	return xsync.DoR1(ctx, &s.mutex, func() []streamportserver.Server {
 		c := make([]streamportserver.Server, len(s.serverHandlers))
 		copy(c, s.serverHandlers)
+		sort.Slice(c, func(i, j int) bool {
+			return c[i].Type() < c[j].Type()
+		})
 		return c
 	})
 }
@@ -529,6 +531,25 @@ func (s *StreamServer) newServerRTSP(
 	)
 	if err != nil {
 		return nil, fmt.Errorf("unable to construct the RTSP server: %w", err)
+	}
+	return rtspSrv, nil
+}
+
+func (s *StreamServer) newServerSRT(
+	ctx context.Context,
+	listenAddr string,
+	opts ...streamportserver.Option,
+) (_ streamportserver.Server, _ret error) {
+	logger.Tracef(ctx, "newServerSRT(ctx, '%s', %#+v)", listenAddr, opts)
+	rtspSrv, err := newSRTServer(
+		s.pathManager,
+		listenAddr,
+		1456,
+		newMediamtxLogger(logger.FromCtx(ctx)),
+		opts...,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("unable to construct the SRT server: %w", err)
 	}
 	return rtspSrv, nil
 }

@@ -149,7 +149,9 @@ func runStreamd(
 	streamD, err := streamd.New(
 		cfg.BuiltinStreamD,
 		ui,
-		func(ctx context.Context, cfg config.Config) error {
+		func(ctx context.Context, cfg config.Config) (_err error) {
+			logger.Debugf(ctx, "SaveConfig")
+			defer func() { logger.Debugf(ctx, "/SaveConfig: %v", _err) }()
 			var buf bytes.Buffer
 			_, err := cfg.WriteTo(&buf)
 			if err != nil {

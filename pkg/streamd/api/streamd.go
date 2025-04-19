@@ -18,6 +18,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	sstypes "github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
@@ -142,6 +143,7 @@ type StreamD interface {
 		streamID StreamID,
 		destinationID DestinationID,
 		enabled bool,
+		encode types.EncodeConfig,
 		quirks StreamForwardingQuirks,
 	) error
 	UpdateStreamForward(
@@ -149,6 +151,7 @@ type StreamD interface {
 		streamID StreamID,
 		destinationID DestinationID,
 		enabled bool,
+		encode types.EncodeConfig,
 		quirks StreamForwardingQuirks,
 	) error
 	RemoveStreamForward(
@@ -340,6 +343,7 @@ type StreamForward struct {
 	Enabled       bool
 	StreamID      StreamID
 	DestinationID DestinationID
+	Encode        sstypes.EncodeConfig
 	Quirks        StreamForwardingQuirks
 	NumBytesWrote uint64
 	NumBytesRead  uint64

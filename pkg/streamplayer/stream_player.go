@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
@@ -53,6 +54,7 @@ type PlayerManager interface {
 		ctx context.Context,
 		title string,
 		backend player.Backend,
+		opts ...player.Option,
 	) (player.Player, error)
 }
 
@@ -91,7 +93,7 @@ func (sp *StreamPlayers) Create(
 ) (_ret *StreamPlayerHandler, _err error) {
 	logger.Debugf(ctx, "StreamPlayers.Create(ctx, '%s', %#+v)", streamID, opts)
 	defer func() {
-		logger.Debugf(ctx, "/StreamPlayers.Create(ctx, '%s', %#+v): (%v, %v)", streamID, opts, _ret, _err)
+		logger.Debugf(ctx, "/StreamPlayers.Create(ctx, '%s', %#+v): (%v, %v)", streamID, opts, spew.Sdump(_ret), _err)
 	}()
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -199,6 +201,8 @@ func (p *StreamPlayerHandler) startU(ctx context.Context) error {
 		instanceCtx,
 		StreamID2Title(p.StreamID),
 		playerType,
+		player.OptionLowLatency(true),
+		player.OptionCacheDuration(0),
 	)
 	if err != nil {
 		errmon.ObserveErrorCtx(ctx, p.Close())
@@ -211,7 +215,7 @@ func (p *StreamPlayerHandler) startU(ctx context.Context) error {
 		return fmt.Errorf("player == nil")
 	}
 	p.Player = player
-	logger.Debugf(ctx, "initialized player %#+v", player)
+	logger.Debugf(ctx, "initialized player %#+v", spew.Sdump(player))
 
 	observability.Go(ctx, func() { p.controllerLoop(ctx, cancelFn) })
 	return nil
@@ -282,7 +286,15 @@ func (p *StreamPlayerHandler) getInternalURL(ctx context.Context) (*url.URL, err
 	case "::":
 		u.Host = "::1"
 	}
-	u.Path = string(p.StreamID)
+	switch portSrv.Type {
+	case streamtypes.ServerTypeSRT:
+		u.RawQuery = fmt.Sprintf("streamid=publish:%s&latency=%d",
+			p.StreamID,
+			500_000,
+		)
+	default:
+		u.Path = string(p.StreamID)
+	}
 	return &u, nil
 }
 
@@ -492,6 +504,9 @@ func (p *StreamPlayerHandler) controllerLoop(
 							logger.Errorf(ctx, "unable to unpause: %v", err)
 						}
 					}
+					if err := player.Seek(ctx, time.Second, true, true); err != nil {
+						logger.Errorf(ctx, "unable to seek: %v", err)
+					}
 					pos, err = player.GetPosition(ctx)
 					if err != nil {
 						err = fmt.Errorf("unable to get position: %w", err)
@@ -561,9 +576,29 @@ func (p *StreamPlayerHandler) controllerLoop(
 	}
 
 	err := p.withPlayer(ctx, func(ctx context.Context, player player.Player) {
-		err := player.SetupForStreaming(ctx)
+		closeChan, err := player.EndChan(ctx)
+		if err != nil {
+			logger.Errorf(ctx, "unable to get the EndChan of the player")
+			cancelFn()
+			return
+		} else {
+			observability.Go(ctx, func() {
+				select {
+				case <-closeChan:
+					logger.Warnf(ctx, "the player is apparently closed, restarting it")
+					cancelFn()
+					return
+				default:
+				}
+			})
+		}
+
+		err = player.SetupForStreaming(ctx)
 		if err != nil {
 			logger.Errorf(ctx, "unable to setup the player for streaming: %v", err)
+		}
+		if err := player.Seek(ctx, time.Second, true, true); err != nil {
+			logger.Errorf(ctx, "unable to seek: %v", err)
 		}
 	})
 	if err != nil {
@@ -611,50 +646,66 @@ func (p *StreamPlayerHandler) controllerLoop(
 
 		err := p.withPlayer(ctx, func(ctx context.Context, player player.Player) {
 			now := time.Now()
-			l, err := player.GetLength(ctx)
+			pos, err := player.GetPosition(ctx)
 			if err != nil {
-				logger.Errorf(
-					ctx,
-					"StreamPlayer[%s].controllerLoop: unable to get the current length: %v",
-					p.StreamID,
-					err,
+				logger.Errorf(ctx,
+					"StreamPlayer[%s].controllerLoop: unable to get the current position: %v",
+					p.StreamID, err,
 				)
-				if prevLength != 0 {
-					logger.Debugf(
-						ctx,
-						"previously GetLength worked, so it seems like the player died or something, restarting",
-					)
-					restart()
-					return
-				}
 				time.Sleep(time.Second)
 				return
+			}
+
+			l := time.Duration(-1)
+			if mpv, ok := player.(interface {
+				GetCachedDuration(context.Context) (time.Duration, error)
+			}); ok {
+				dur, err := mpv.GetCachedDuration(ctx)
+				if err != nil {
+					logger.Errorf(ctx,
+						"StreamPlayer[%s].controllerLoop: unable to get the current cache duration: %v",
+						p.StreamID, err,
+					)
+					if prevLength != 0 {
+						logger.Debugf(ctx,
+							"previously GetCachedDuration worked, so it seems like the player died or something, restarting",
+						)
+						restart()
+						return
+					}
+					time.Sleep(time.Second)
+					return
+				}
+				logger.Tracef(ctx, "cached duration: %v", dur)
+				l = pos + dur
+			}
+			if l < 0 {
+				l, err = player.GetLength(ctx)
+				if err != nil {
+					logger.Errorf(ctx,
+						"StreamPlayer[%s].controllerLoop: unable to get the current length: %v",
+						p.StreamID, err,
+					)
+					if prevLength != 0 {
+						logger.Debugf(ctx,
+							"previously GetLength worked, so it seems like the player died or something, restarting",
+						)
+						restart()
+						return
+					}
+					time.Sleep(time.Second)
+					return
+				}
+				logger.Tracef(ctx, "length: %v", l)
 			}
 			prevLength = l
 
-			pos, err := player.GetPosition(ctx)
-			if err != nil {
-				logger.Errorf(
-					ctx,
-					"StreamPlayer[%s].controllerLoop: unable to get the current position: %v",
-					p.StreamID,
-					err,
-				)
-				time.Sleep(time.Second)
-				return
-			}
-			logger.Tracef(
-				ctx,
+			logger.Tracef(ctx,
 				"StreamPlayer[%s].controllerLoop: now == %v, posUpdatedAt == %v, len == %v; pos == %v; readTimeout == %v",
-				p.StreamID,
-				now,
-				posUpdatedAt,
-				l,
-				pos,
-				p.Config.ReadTimeout,
+				p.StreamID, now, posUpdatedAt, l, pos, p.Config.ReadTimeout,
 			)
 
-			if pos < 0 {
+			if pos < -p.Config.ReadTimeout {
 				logger.Debugf(ctx, "negative position: %v", pos)
 				restart()
 				return
@@ -670,6 +721,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 				posUpdatedAt = now
 				prevPos = pos
 			} else {
+				// PUT TRACK SELECTION HERE
 				if now.Sub(posUpdatedAt) > p.Config.ReadTimeout {
 					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: now == %v, posUpdatedAt == %v, len == %v; pos == %v; readTimeout == %v, restarting", p.StreamID, now, posUpdatedAt, l, pos, p.Config.ReadTimeout)
 					restart()
@@ -702,13 +754,10 @@ func (p *StreamPlayerHandler) controllerLoop(
 					(lag.Seconds()-p.Config.JitterBufDuration.Seconds())/
 					(p.Config.MaxCatchupAtLag.Seconds()-p.Config.JitterBufDuration.Seconds())
 
-			speed = float64(
-				uint(speed*10),
-			) / 10 // to avoid flickering (for example between 1.0001 and 1.0)
+			speed = float64(uint(speed*10)) / 10 // to avoid flickering (for example between 1.0001 and 1.0)
 
 			if speed > p.Config.CatchupMaxSpeedFactor {
-				logger.Warnf(
-					ctx,
+				logger.Warnf(ctx,
 					"speed is calculated higher than the maximum: %v > %v: (%v-1)*(%v-%v)/(%v-%v); lag calculation: %v - %v",
 					speed,
 					p.Config.CatchupMaxSpeedFactor,
@@ -717,8 +766,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 					p.Config.JitterBufDuration.Seconds(),
 					p.Config.MaxCatchupAtLag.Seconds(),
 					p.Config.JitterBufDuration.Seconds(),
-					l,
-					pos,
+					l, pos,
 				)
 				speed = p.Config.CatchupMaxSpeedFactor
 			}
@@ -726,9 +774,8 @@ func (p *StreamPlayerHandler) controllerLoop(
 			if speed != curSpeed {
 				logger.Debugf(
 					ctx,
-					"StreamPlayer[%s].controllerLoop: setting the speed to %v",
-					p.StreamID,
-					speed,
+					"StreamPlayer[%s].controllerLoop: setting the speed to %v: lag: %v - %v == %v",
+					p.StreamID, speed, l, pos, lag,
 				)
 				err = player.SetSpeed(ctx, speed)
 				if err != nil {
@@ -755,6 +802,11 @@ func (p *StreamPlayerHandler) withPlayer(
 	ctx context.Context,
 	fn func(context.Context, player.Player),
 ) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
 	return xsync.DoR1(ctx, &p.PlayerLocker, func() error {
 		if p.Player == nil {
 			return ErrNilPlayer{}

@@ -21,6 +21,8 @@ func StreamServerTypeGo2GRPC(t api.StreamServerType) (streamd_grpc.StreamServerT
 		return streamd_grpc.StreamServerType_RTMP, nil
 	case streamtypes.ServerTypeRTSP:
 		return streamd_grpc.StreamServerType_RTSP, nil
+	case streamtypes.ServerTypeSRT:
+		return streamd_grpc.StreamServerType_SRT, nil
 	}
 	return streamd_grpc.StreamServerType_Undefined, fmt.Errorf("unexpected value: %v", t)
 }
@@ -33,6 +35,8 @@ func StreamServerTypeGRPC2Go(t streamd_grpc.StreamServerType) (api.StreamServerT
 		return streamtypes.ServerTypeRTMP, nil
 	case streamd_grpc.StreamServerType_RTSP:
 		return streamtypes.ServerTypeRTSP, nil
+	case streamd_grpc.StreamServerType_SRT:
+		return streamtypes.ServerTypeSRT, nil
 	}
 	return streamtypes.ServerTypeUndefined, fmt.Errorf("unexpected value: %v", t)
 }

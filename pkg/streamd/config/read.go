@@ -7,6 +7,7 @@ import (
 	"io"
 	"runtime/debug"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
 	"github.com/xaionaro-go/observability"
@@ -47,6 +48,7 @@ func (cfg *Config) traceDump() {
 		l.Error(err)
 		return
 	}
+	l.Tracef("streamd dump == %s", spew.Sdump(cfg))
 	l.Tracef("streamd config == %#+v: %s", *cfg, buf.String())
 }
 

@@ -21,6 +21,7 @@ type StreamForward struct {
 	StreamID         types.StreamID
 	DestinationID    types.DestinationID
 	Enabled          bool
+	Encode           types.EncodeConfig
 	Quirks           types.ForwardingQuirks
 	ActiveForwarding *ActiveStreamForwarding
 	NumBytesWrote    uint64
@@ -34,6 +35,7 @@ type ActiveStreamForwarding struct {
 	DestinationStreamKey  string
 	ReadCount             atomic.Uint64
 	WriteCount            atomic.Uint64
+	Encode                types.EncodeConfig
 	RecoderFactoryFactory func(ctx context.Context) (recoder.Factory, error)
 	PauseFunc             func(ctx context.Context, fwd *ActiveStreamForwarding)
 
@@ -49,6 +51,7 @@ func (fwds *StreamForwards) NewActiveStreamForward(
 	streamID types.StreamID,
 	urlString string,
 	streamKey string,
+	encode types.EncodeConfig,
 	pauseFunc func(ctx context.Context, fwd *ActiveStreamForwarding),
 	opts ...Option,
 ) (_ret *ActiveStreamForwarding, _err error) {
@@ -80,6 +83,7 @@ func (fwds *StreamForwards) NewActiveStreamForward(
 		DestinationURL:        urlParsed,
 		DestinationStreamKey:  streamKey,
 		PauseFunc:             pauseFunc,
+		Encode:                encode,
 	}
 	for _, opt := range opts {
 		opt.apply(fwd)
@@ -345,6 +349,11 @@ func (fwd *ActiveStreamForwarding) newEncoderFor(
 	ctx context.Context,
 	factoryInstance recoder.Factory,
 ) (recoder.Encoder, error) {
+	if fwd.Encode.Enabled {
+		logger.Debugf(ctx, "NewEncoder(ctx, %#+v)", fwd.Encode.EncodersConfig)
+		return factoryInstance.NewEncoder(ctx, fwd.Encode.EncodersConfig)
+	}
+	logger.Debugf(ctx, "NewEncoder(ctx, %#+v)", recoder.EncodersConfig{})
 	return factoryInstance.NewEncoder(ctx, recoder.EncodersConfig{})
 }
 

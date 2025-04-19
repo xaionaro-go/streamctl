@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -135,6 +136,7 @@ func seppukuIfMemHugeLeak(
 	seppukuIfMemHugeLeakCanceler = cancelFn
 
 	go func() {
+		var buf bytes.Buffer
 		for {
 			t := time.NewTicker(time.Second)
 			defer t.Stop()
@@ -154,6 +156,15 @@ func seppukuIfMemHugeLeak(
 					humanize.Bytes(m.HeapInuse),
 					m.HeapInuse,
 				)
+				if m.HeapInuse > 1000*1000*1000 {
+					buf.Reset()
+					err := pprof.WriteHeapProfile(&buf)
+					if err == nil {
+						logger.FromCtx(ctx).WithField("heap_profile", base64.StdEncoding.EncodeToString(buf.Bytes())).Debugf("heap profile")
+					} else {
+						logger.Errorf(ctx, "unable to get heap profile: %v", err)
+					}
+				}
 				if m.HeapInuse > 4*1000*1000*1000 {
 					logger.Panicf(ctx, "I consumed almost 4GiB! Seppuku!")
 				}

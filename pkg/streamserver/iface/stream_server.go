@@ -69,6 +69,7 @@ type StreamServer interface {
 		streamID types.StreamID,
 		destinationID types.DestinationID,
 		enabled bool,
+		encode types.EncodeConfig,
 		quirks types.ForwardingQuirks,
 	) (*streamforward.StreamForward, error)
 	ListStreamForwards(
@@ -79,6 +80,7 @@ type StreamServer interface {
 		streamID types.StreamID,
 		destinationID types.DestinationID,
 		enabled bool,
+		encode types.EncodeConfig,
 		quirks types.ForwardingQuirks,
 	) (*streamforward.StreamForward, error)
 	RemoveStreamForward(

@@ -33,6 +33,37 @@ type StreamServer interface {
 	types.GetPortServerser
 }
 
+/* for easier copy&paste
+
+func (srv *) WithConfig(
+	ctx context.Context,
+	callback func(context.Context, *Config),
+) {
+	logger.Tracef(ctx, "WithConfig")
+	defer func(){ logger.Tracef(ctx, "WithConfig") }()
+}
+
+func (srv *) WaitPublisherChan(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+	waitForNext bool,
+) (_ <-chan Publisher, _err error) {
+	logger.Tracef(ctx, "WaitPublisherChan(ctx, '%s', %t)", streamID, waitForNext)
+	defer func(){ logger.Tracef(ctx, "/WaitPublisherChan(ctx, '%s', %t): %v", streamID, waitForNext, _err) }()
+}
+
+func (srv *) PubsubNames() (_ret AppKeys, _err error) {
+	ctx := context.TODO()
+	logger.Tracef(ctx, "PubsubNames()")
+	defer func(){ logger.Tracef(ctx, "/PubsubNames(): %v %v", _ret, _err) }()
+}
+
+func (srv *) GetPortServers(ctx context.Context) (_ret []Config, _err error) {
+	logger.Tracef(ctx, "GetPortServers()")
+	defer func(){ logger.Tracef(ctx, "/GetPortServers(): %v %v", _ret, _err) }()
+}
+*/
+
 type StreamForwards struct {
 	StreamServer
 	types.PlatformsController
@@ -89,7 +120,7 @@ func (s *StreamForwards) init(
 				if fwd.Disabled {
 					continue
 				}
-				_, err := s.newActiveStreamForward(ctx, streamID, dstID, fwd.Quirks)
+				_, err := s.newActiveStreamForward(ctx, streamID, dstID, fwd.Encode, fwd.Quirks)
 				if err != nil {
 					_ret = fmt.Errorf(
 						"unable to launch stream forward from '%s' to '%s': %w",
@@ -110,10 +141,11 @@ func (s *StreamForwards) AddStreamForward(
 	streamID types.StreamID,
 	destinationID types.DestinationID,
 	enabled bool,
+	encode types.EncodeConfig,
 	quirks types.ForwardingQuirks,
 ) (*StreamForward, error) {
 	return xsync.DoR2(ctx, &s.Mutex, func() (*StreamForward, error) {
-		return s.addStreamForward(ctx, streamID, destinationID, enabled, quirks)
+		return s.addStreamForward(ctx, streamID, destinationID, enabled, encode, quirks)
 	})
 }
 
@@ -122,6 +154,7 @@ func (s *StreamForwards) addStreamForward(
 	streamID types.StreamID,
 	destinationID types.DestinationID,
 	enabled bool,
+	encode types.EncodeConfig,
 	quirks types.ForwardingQuirks,
 ) (*StreamForward, error) {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
@@ -148,6 +181,7 @@ func (s *StreamForwards) addStreamForward(
 
 		streamConfig.Forwardings[destinationID] = types.ForwardingConfig{
 			Disabled: !enabled,
+			Encode:   encode,
 			Quirks:   quirks,
 		}
 	})
@@ -156,7 +190,7 @@ func (s *StreamForwards) addStreamForward(
 	}
 
 	if enabled {
-		fwd, err := s.newActiveStreamForward(ctx, streamID, destinationID, quirks)
+		fwd, err := s.newActiveStreamForward(ctx, streamID, destinationID, encode, quirks)
 		if err != nil {
 			return nil, err
 		}
@@ -166,11 +200,12 @@ func (s *StreamForwards) addStreamForward(
 		StreamID:      streamID,
 		DestinationID: destinationID,
 		Enabled:       enabled,
+		Encode:        encode,
 		Quirks:        quirks,
 	}, nil
 }
 
-func (s *StreamForwards) getLocalhostRTMP(ctx context.Context) (*url.URL, error) {
+func (s *StreamForwards) getLocalhostURL(ctx context.Context) (*url.URL, error) {
 	portSrvs, err := s.StreamServer.GetPortServers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get port servers info: %w", err)
@@ -190,6 +225,7 @@ func (s *StreamForwards) newActiveStreamForward(
 	ctx context.Context,
 	streamID types.StreamID,
 	destinationID types.DestinationID,
+	encode types.EncodeConfig,
 	quirks types.ForwardingQuirks,
 	opts ...Option,
 ) (*StreamForward, error) {
@@ -216,7 +252,7 @@ func (s *StreamForwards) newActiveStreamForward(
 	}
 
 	if urlParsed.Host == "" {
-		urlParsed, err = s.getLocalhostRTMP(ctx)
+		urlParsed, err = s.getLocalhostURL(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("unable to get the URL of the output endpoint: %w", err)
 		}
@@ -226,6 +262,7 @@ func (s *StreamForwards) newActiveStreamForward(
 		StreamID:      streamID,
 		DestinationID: destinationID,
 		Enabled:       true,
+		Encode:        encode,
 		Quirks:        quirks,
 		NumBytesWrote: 0,
 		NumBytesRead:  0,
@@ -236,6 +273,7 @@ func (s *StreamForwards) newActiveStreamForward(
 		streamID,
 		urlParsed.String(),
 		dst.StreamKey.Get(),
+		encode,
 		func(
 			ctx context.Context,
 			fwd *ActiveStreamForwarding,
@@ -440,10 +478,15 @@ func (s *StreamForwards) UpdateStreamForward(
 	streamID types.StreamID,
 	destinationID types.DestinationID,
 	enabled bool,
+	encode types.EncodeConfig,
 	quirks types.ForwardingQuirks,
-) (*StreamForward, error) {
+) (_ret *StreamForward, _err error) {
+	logger.Debugf(ctx, "UpdateStreamForward(ctx, '%s', '%s', %t, %#+v, %#+v)", streamID, destinationID, enabled, encode, quirks)
+	defer func() {
+		logger.Debugf(ctx, "/UpdateStreamForward(ctx, '%s', '%s', %t, %#+v, %#+v): %#+v %v", streamID, destinationID, enabled, encode, quirks, _ret, _err)
+	}()
 	return xsync.DoR2(ctx, &s.Mutex, func() (*StreamForward, error) {
-		return s.updateStreamForward(ctx, streamID, destinationID, enabled, quirks)
+		return s.updateStreamForward(ctx, streamID, destinationID, enabled, encode, quirks)
 	})
 }
 
@@ -452,6 +495,7 @@ func (s *StreamForwards) updateStreamForward(
 	streamID types.StreamID,
 	destinationID types.DestinationID,
 	enabled bool,
+	encode types.EncodeConfig,
 	quirks types.ForwardingQuirks,
 ) (_ret *StreamForward, _err error) {
 	s.WithConfig(ctx, func(ctx context.Context, cfg *types.Config) {
@@ -465,7 +509,7 @@ func (s *StreamForwards) updateStreamForward(
 		var fwd *StreamForward
 		if fwdCfg.Disabled && enabled {
 			var err error
-			fwd, err = s.newActiveStreamForward(ctx, streamID, destinationID, quirks)
+			fwd, err = s.newActiveStreamForward(ctx, streamID, destinationID, encode, quirks)
 			if err != nil {
 				_err = fmt.Errorf("unable to active the stream: %w", err)
 				return
@@ -480,6 +524,7 @@ func (s *StreamForwards) updateStreamForward(
 		}
 		streamConfig.Forwardings[destinationID] = types.ForwardingConfig{
 			Disabled: !enabled,
+			Encode:   encode,
 			Quirks:   quirks,
 		}
 
@@ -487,6 +532,7 @@ func (s *StreamForwards) updateStreamForward(
 			StreamID:      streamID,
 			DestinationID: destinationID,
 			Enabled:       enabled,
+			Encode:        encode,
 			Quirks:        quirks,
 			NumBytesWrote: 0,
 			NumBytesRead:  0,
@@ -559,10 +605,12 @@ func (s *StreamForwards) getStreamForwards(
 				if !filterFunc(streamID, ordered.Opt(dstID)) {
 					continue
 				}
+				logger.Tracef(ctx, "stream forwarding '%s->%s': %#+v", streamID, dstID, cfg)
 				item := StreamForward{
 					StreamID:      streamID,
 					DestinationID: dstID,
 					Enabled:       !cfg.Disabled,
+					Encode:        cfg.Encode,
 					Quirks:        cfg.Quirks,
 				}
 				if activeFwd, ok := m[fwdID{
@@ -572,7 +620,7 @@ func (s *StreamForwards) getStreamForwards(
 					item.NumBytesWrote = activeFwd.NumBytesWrote
 					item.NumBytesRead = activeFwd.NumBytesRead
 				}
-				logger.Tracef(ctx, "stream forwarding '%s->%s': %#+v", streamID, dstID, cfg)
+				logger.Tracef(ctx, "stream forwarding '%s->%s': converted %#+v", streamID, dstID, item)
 				result = append(result, item)
 			}
 		}
@@ -589,6 +637,7 @@ func (s *StreamForwards) listActiveStreamForwards(
 			StreamID:      key.StreamID,
 			DestinationID: key.DestinationID,
 			Enabled:       true,
+			Encode:        fwd.Encode,
 			NumBytesWrote: fwd.WriteCount.Load(),
 			NumBytesRead:  fwd.ReadCount.Load(),
 		})

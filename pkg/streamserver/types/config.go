@@ -21,9 +21,9 @@ type Config struct {
 }
 
 type ForwardingConfig struct {
-	Disabled bool               `yaml:"disabled,omitempty"`
-	Quirks   ForwardingQuirks   `yaml:"quirks,omitempty"`
-	Convert  VideoConvertConfig `yaml:"convert,omitempty"`
+	Disabled bool             `yaml:"disabled,omitempty"`
+	Encode   EncodeConfig     `yaml:"encode,omitempty"`
+	Quirks   ForwardingQuirks `yaml:"quirks,omitempty"`
 }
 
 type PlayerConfig struct {
@@ -71,4 +71,7 @@ type ForwardingQuirks struct {
 	StartAfterYoutubeRecognizedStream   StartAfterYoutubeRecognizedStream   `yaml:"start_after_youtube_recognizes_stream"`
 }
 
-type VideoConvertConfig = streamtypes.VideoConvertConfig
+type EncodeConfig struct {
+	Enabled                    bool `yaml:"enabled"`
+	streamtypes.EncodersConfig `yaml:"config"`
+}

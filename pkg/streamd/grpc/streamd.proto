@@ -260,6 +260,7 @@ enum StreamServerType {
     Undefined = 0;
     RTSP = 1;
     RTMP = 2;
+    SRT = 3;
 }
 
 message TLSCertificate {
@@ -375,7 +376,61 @@ message StreamForward {
     string streamID = 1;
     string destinationID = 2;
     bool enabled = 3;
-    StreamForwardQuirks quirks = 4;
+    EncoderConfig encode = 4;
+    StreamForwardQuirks quirks = 5;
+}
+
+message EncoderConfig {
+    bool enable = 1;
+    repeated OutputAudioTrack outputAudioTracks = 2;
+	repeated OutputVideoTrack outputVideoTracks = 3;
+}
+
+message OutputAudioTrack {
+    repeated uint64 inputTrackIDs = 1;
+    EncodeAudioConfig encode = 2;
+}
+
+message EncodeAudioConfig {
+    AudioCodec codec = 1;
+    AudioQuality quality = 2;
+}
+
+enum AudioCodec {
+	AudioCodecCopy = 0;
+	AudioCodecAAC = 1;
+	AudioCodecVorbis = 2;
+	AudioCodecOpus = 3;
+}
+
+message AudioQuality {
+    oneof AudioQuality {
+        uint32 constantBitrate = 1;
+    }
+}
+
+message OutputVideoTrack {
+    repeated uint64 inputTrackIDs = 1;
+    EncodeVideoConfig encode = 2;
+}
+
+message EncodeVideoConfig {
+    VideoCodec codec = 1;
+    VideoQuality quality = 2;
+}
+
+enum VideoCodec {
+	VideoCodecCopy = 0;
+	VideoCodecH264 = 1;
+	VideoCodecHEVC = 2;
+	VideoCodecAV1 = 3;
+}
+
+message VideoQuality {
+    oneof VideoQuality {
+        uint32 constantBitrate = 1;
+        uint32 constantQuality = 2;
+    }
 }
 
 message StreamForwardStatistics {

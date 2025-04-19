@@ -27,7 +27,8 @@ import (
 	sstypes "github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
-	"github.com/xaionaro-go/xfyne/widget"
+	xfyne "github.com/xaionaro-go/xfyne/widget"
+	"github.com/xaionaro-go/xsync"
 )
 
 func assertNoError(ctx context.Context, err error) {
@@ -50,13 +51,23 @@ func main() {
 	pflag.Var(&loggerLevel, "log-level", "Log level")
 	rtmpListenAddr := pflag.String(
 		"rtmp-listen-addr",
-		"127.0.0.1:1935",
+		"127.0.0.1:1937",
 		"the TCP port to serve an RTMP server on",
+	)
+	rtspListenAddr := pflag.String(
+		"rtsp-listen-addr",
+		"127.0.0.1:8556",
+		"the TCP port to serve an RTSP server on",
+	)
+	srtListenAddr := pflag.String(
+		"srt-listen-addr",
+		"127.0.0.1:8892",
+		"the UDP port to serve an SRT server on",
 	)
 	streamID := pflag.String(
 		"stream-id",
 		"test/test",
-		"the path of the stream in rtmp://address/path",
+		"the 'path' of the stream in srt://address/path",
 	)
 	mpvPath := pflag.String("mpv", "mpv", "path to mpv")
 	backends := backendsToStrings(player.SupportedBackends())
@@ -65,6 +76,7 @@ func main() {
 
 	l := logrus.Default().WithLevel(loggerLevel)
 	ctx := logger.CtxWithLogger(context.Background(), l)
+	ctx = xsync.WithNoLogging(ctx, true)
 	logger.Default = func() logger.Logger {
 		return l
 	}
@@ -83,16 +95,38 @@ func main() {
 	m := player.NewManager(ptypes.OptionPathToMPV(*mpvPath))
 	ss := streamserver.New(
 		&sstypes.Config{
-			PortServers: []streamportserver.Config{{
-				ProtocolSpecificConfig: streamportserver.ProtocolSpecificConfig{
-					IsTLS:          false,
-					WriteQueueSize: 600,
-					WriteTimeout:   10 * time.Second,
-					ReadTimeout:    10 * time.Second,
+			PortServers: []streamportserver.Config{
+				{
+					ProtocolSpecificConfig: streamportserver.ProtocolSpecificConfig{
+						IsTLS:          false,
+						WriteQueueSize: 1024,
+						WriteTimeout:   10 * time.Second,
+						ReadTimeout:    10 * time.Second,
+					},
+					Type:       streamtypes.ServerTypeSRT,
+					ListenAddr: *srtListenAddr,
 				},
-				Type:       streamtypes.ServerTypeRTMP,
-				ListenAddr: *rtmpListenAddr,
-			}},
+				{
+					ProtocolSpecificConfig: streamportserver.ProtocolSpecificConfig{
+						IsTLS:          false,
+						WriteQueueSize: 1024,
+						WriteTimeout:   10 * time.Second,
+						ReadTimeout:    10 * time.Second,
+					},
+					Type:       streamtypes.ServerTypeRTSP,
+					ListenAddr: *rtspListenAddr,
+				},
+				{
+					ProtocolSpecificConfig: streamportserver.ProtocolSpecificConfig{
+						IsTLS:          false,
+						WriteQueueSize: 1024,
+						WriteTimeout:   10 * time.Second,
+						ReadTimeout:    10 * time.Second,
+					},
+					Type:       streamtypes.ServerTypeRTMP,
+					ListenAddr: *rtmpListenAddr,
+				},
+			},
 			Streams: map[sstypes.StreamID]*sstypes.StreamConfig{
 				sstypes.StreamID(*streamID): {},
 			},

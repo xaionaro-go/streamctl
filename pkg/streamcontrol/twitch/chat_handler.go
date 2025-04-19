@@ -2,10 +2,13 @@ package twitch
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/adeithe/go-twitch/irc"
+	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 )
@@ -28,7 +31,18 @@ func NewChatHandler(
 	ctx context.Context,
 	channelID string,
 ) (*ChatHandler, error) {
-	return newChatHandler(ctx, newChatClient(), channelID)
+	var errs []error
+	for attempt := 0; attempt < 3; attempt++ {
+		h, err := newChatHandler(ctx, newChatClient(), channelID)
+		if err == nil {
+			return h, nil
+		}
+		err = fmt.Errorf("attempt #%d failed: %w", attempt, err)
+		logger.Errorf(ctx, "%v", err)
+		errs = append(errs, err)
+		time.Sleep(time.Second)
+	}
+	return nil, errors.Join(errs...)
 }
 
 func newChatHandler(

@@ -1485,6 +1485,7 @@ func (c *Client) ListStreamForwards(
 
 	var result []api.StreamForward
 	for _, forward := range reply.GetStreamForwards() {
+		encodeCfg, recodingEnabled := goconv.EncoderConfigFromThrift(forward.GetConfig().GetEncode())
 		item := api.StreamForward{
 			Enabled: forward.Config.Enabled,
 			StreamID: api.StreamID(
@@ -1499,6 +1500,10 @@ func (c *Client) ListStreamForwards(
 			NumBytesRead: uint64(
 				forward.Statistics.NumBytesRead,
 			),
+			Encode: types.EncodeConfig{
+				Enabled:        recodingEnabled,
+				EncodersConfig: encodeCfg,
+			},
 		}
 		restartUntilYoutubeRecognizesStream := forward.GetConfig().
 			GetQuirks().
@@ -1533,6 +1538,7 @@ func (c *Client) AddStreamForward(
 	streamID api.StreamID,
 	destinationID api.DestinationID,
 	enabled bool,
+	encode types.EncodeConfig,
 	quirks api.StreamForwardingQuirks,
 ) error {
 	_, err := withStreamDClient(ctx, c, func(
@@ -1549,6 +1555,7 @@ func (c *Client) AddStreamForward(
 					StreamID:      string(streamID),
 					DestinationID: string(destinationID),
 					Enabled:       enabled,
+					Encode:        goconv.EncoderConfigToThrift(encode.Enabled, encode.EncodersConfig),
 					Quirks: &streamd_grpc.StreamForwardQuirks{
 						RestartUntilYoutubeRecognizesStream: &streamd_grpc.RestartUntilYoutubeRecognizesStream{
 							Enabled:        quirks.RestartUntilYoutubeRecognizesStream.Enabled,
@@ -1571,6 +1578,7 @@ func (c *Client) UpdateStreamForward(
 	streamID api.StreamID,
 	destinationID api.DestinationID,
 	enabled bool,
+	encode types.EncodeConfig,
 	quirks api.StreamForwardingQuirks,
 ) error {
 	_, err := withStreamDClient(ctx, c, func(
@@ -1587,6 +1595,7 @@ func (c *Client) UpdateStreamForward(
 					StreamID:      string(streamID),
 					DestinationID: string(destinationID),
 					Enabled:       enabled,
+					Encode:        goconv.EncoderConfigToThrift(encode.Enabled, encode.EncodersConfig),
 					Quirks: &streamd_grpc.StreamForwardQuirks{
 						RestartUntilYoutubeRecognizesStream: &streamd_grpc.RestartUntilYoutubeRecognizesStream{
 							Enabled:        quirks.RestartUntilYoutubeRecognizesStream.Enabled,

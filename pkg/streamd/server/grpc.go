@@ -24,6 +24,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/memoize"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/platcollection"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/xsync"
 	"google.golang.org/grpc"
@@ -1094,6 +1095,10 @@ func (grpc *GRPCServer) ListStreamForwards(
 				NumBytesRead:  int64(s.NumBytesRead),
 			},
 		}
+		item.Config.Encode = goconv.EncoderConfigToThrift(
+			s.Encode.Enabled,
+			s.Encode.EncodersConfig,
+		)
 		item.Config.Quirks = &streamd_grpc.StreamForwardQuirks{
 			RestartUntilYoutubeRecognizesStream: &streamd_grpc.RestartUntilYoutubeRecognizesStream{
 				Enabled:        s.Quirks.RestartUntilYoutubeRecognizesStream.Enabled,
@@ -1116,6 +1121,7 @@ func (grpc *GRPCServer) AddStreamForward(
 	req *streamd_grpc.AddStreamForwardRequest,
 ) (*streamd_grpc.AddStreamForwardReply, error) {
 	cfg := req.GetConfig()
+	encode, recodingEnabled := goconv.EncoderConfigFromThrift(cfg.Encode)
 	err := grpc.StreamD.AddStreamForward(
 		ctx,
 		api.StreamID(req.GetConfig().GetStreamID()),
@@ -1123,6 +1129,10 @@ func (grpc *GRPCServer) AddStreamForward(
 			req.GetConfig().GetDestinationID(),
 		),
 		cfg.Enabled,
+		types.EncodeConfig{
+			Enabled:        recodingEnabled,
+			EncodersConfig: encode,
+		},
 		api.StreamForwardingQuirks{
 			RestartUntilYoutubeRecognizesStream: api.RestartUntilYoutubeRecognizesStream{
 				Enabled: cfg.Quirks.RestartUntilYoutubeRecognizesStream.Enabled,
@@ -1149,6 +1159,7 @@ func (grpc *GRPCServer) UpdateStreamForward(
 	req *streamd_grpc.UpdateStreamForwardRequest,
 ) (*streamd_grpc.UpdateStreamForwardReply, error) {
 	cfg := req.GetConfig()
+	encode, recodingEnabled := goconv.EncoderConfigFromThrift(cfg.Encode)
 	err := grpc.StreamD.UpdateStreamForward(
 		ctx,
 		api.StreamID(req.GetConfig().GetStreamID()),
@@ -1156,6 +1167,10 @@ func (grpc *GRPCServer) UpdateStreamForward(
 			req.GetConfig().GetDestinationID(),
 		),
 		cfg.Enabled,
+		types.EncodeConfig{
+			Enabled:        recodingEnabled,
+			EncodersConfig: encode,
+		},
 		api.StreamForwardingQuirks{
 			RestartUntilYoutubeRecognizesStream: api.RestartUntilYoutubeRecognizesStream{
 				Enabled: cfg.Quirks.RestartUntilYoutubeRecognizesStream.Enabled,
