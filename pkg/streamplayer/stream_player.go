@@ -11,12 +11,17 @@ import (
 	"sync"
 	"time"
 
+	"github.com/asticode/go-astiav"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
+	"github.com/xaionaro-go/avpipeline/kernel"
+	"github.com/xaionaro-go/avpipeline/packet"
+	"github.com/xaionaro-go/avpipeline/processor"
 	"github.com/xaionaro-go/observability"
 	player "github.com/xaionaro-go/player/pkg/player/types"
+	"github.com/xaionaro-go/secret"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/xcontext"
@@ -84,6 +89,12 @@ type StreamPlayerHandler struct {
 	StreamPlayer
 	Parent *StreamPlayers
 	Cancel context.CancelFunc
+
+	CurrentVideoTrackID int
+	CurrentAudioTrackID int
+
+	NextVideoTrackID      int
+	NextVideoTrackIDCount int
 }
 
 func (sp *StreamPlayers) Create(
@@ -203,7 +214,7 @@ func (p *StreamPlayerHandler) startU(ctx context.Context) error {
 		StreamID2Title(p.StreamID),
 		playerType,
 		player.OptionLowLatency(true),
-		player.OptionCacheDuration(0),
+		//player.OptionCacheDuration(0),
 	)
 	if err != nil {
 		errmon.ObserveErrorCtx(ctx, p.Close())
@@ -290,7 +301,7 @@ func (p *StreamPlayerHandler) getInternalURL(ctx context.Context) (*url.URL, err
 	}
 	switch portSrv.Type {
 	case streamtypes.ServerTypeSRT:
-		u.RawQuery = fmt.Sprintf("streamid=publish:%s&latency=%d",
+		u.RawQuery = fmt.Sprintf("streamid=read:%s&latency=%d",
 			p.StreamID,
 			500_000,
 		)
@@ -300,7 +311,102 @@ func (p *StreamPlayerHandler) getInternalURL(ctx context.Context) (*url.URL, err
 	return &u, nil
 }
 
-func (p *StreamPlayerHandler) openStream(ctx context.Context) (_err error) {
+func (p *StreamPlayerHandler) startObserver(
+	ctx context.Context,
+	url *url.URL,
+	restartFn context.CancelFunc,
+) {
+	observability.Go(ctx, func() {
+		defer restartFn()
+		logger.Debugf(ctx, "observer started")
+		defer func() { logger.Debugf(ctx, "observer ended") }()
+		inputNode, err := processor.NewInputFromURL(ctx, url.String(), secret.New(""), kernel.InputConfig{})
+		if err != nil {
+			logger.Errorf(ctx, "unable initialize the input node: %v", err)
+			return
+		}
+
+		defer func() {
+			err := inputNode.Close(ctx)
+			if err != nil {
+				logger.Errorf(ctx, "unable to close the input: %v", err)
+			}
+		}()
+
+		for {
+			select {
+			case pkt, ok := <-inputNode.OutputPacketCh:
+				if !ok {
+					return
+				}
+				if err := p.acknowledgeInputPacket(ctx, pkt); err != nil {
+					logger.Errorf(ctx, "unable to acknowledge a packet: %v", err)
+					return
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	})
+}
+
+func (p *StreamPlayerHandler) acknowledgeInputPacket(
+	ctx context.Context,
+	pkt packet.Output,
+) (_err error) {
+	logger.Tracef(ctx, "acknowledgeInputPacket")
+	defer func() { logger.Tracef(ctx, "/acknowledgeInputPacket: %v", _err) }()
+	if pkt.Stream.CodecParameters().MediaType() != astiav.MediaTypeVideo {
+		return nil
+	}
+
+	if pkt.Flags().Has(astiav.PacketFlagKey) {
+		return nil
+	}
+
+	var trackID int
+	if pkt.StreamIndex() == 0 {
+		trackID = 1
+	} else {
+		trackID = 2
+	}
+
+	if trackID != p.NextVideoTrackID {
+		p.NextVideoTrackID = trackID
+		p.NextVideoTrackIDCount = 0
+	}
+	p.NextVideoTrackIDCount++
+	if trackID == p.CurrentVideoTrackID {
+		return nil
+	}
+
+	if p.NextVideoTrackIDCount > 10 {
+		p.changeTrackTo(ctx, trackID)
+	}
+	return nil
+}
+
+func (p *StreamPlayerHandler) changeTrackTo(
+	ctx context.Context,
+	trackID int,
+) {
+	p.withPlayer(ctx, func(ctx context.Context, player player.Player) {
+		if err := player.SetVideoTrack(ctx, int64(trackID)); err != nil {
+			logger.Errorf(ctx, "unable to rotate the video track: %w", err)
+		}
+		if err := player.SetAudioTrack(ctx, int64(trackID)); err != nil {
+			logger.Errorf(ctx, "unable to rotate the audio track: %w", err)
+		}
+		p.CurrentVideoTrackID = trackID
+		p.CurrentAudioTrackID = trackID
+		p.NextVideoTrackIDCount = 0
+	})
+}
+
+func (p *StreamPlayerHandler) openStream(
+	ctx context.Context,
+	restartFn context.CancelFunc,
+) (_err error) {
 	logger.Debugf(ctx, "openStream")
 	defer func() { logger.Debugf(ctx, "/openStream: %v", _err) }()
 
@@ -311,6 +417,9 @@ func (p *StreamPlayerHandler) openStream(ctx context.Context) (_err error) {
 		return fmt.Errorf("unable to get URL: %w", err)
 	}
 	logger.Debugf(ctx, "opening '%s'", u.String())
+
+	p.startObserver(ctx, u, restartFn)
+
 	err = p.withPlayer(ctx, func(ctx context.Context, player player.Player) {
 		ctx, cancelFn := context.WithTimeout(ctx, openURLTimeout)
 		defer cancelFn()
@@ -421,7 +530,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 					logger.Debugf(ctx, "a stream started, let's open it in the player")
 				}
 				logger.Debugf(ctx, "opening the stream")
-				err = p.openStream(ctx)
+				err = p.openStream(ctx, restart)
 				logger.Debugf(ctx, "opened the stream: %v", err)
 				errmon.ObserveErrorCtx(ctx, err)
 				time.Sleep(2 * time.Second)
@@ -435,7 +544,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 					case <-t.C:
 					}
 					logger.Debugf(ctx, "opening the external stream")
-					err := p.openStream(ctx)
+					err := p.openStream(ctx, restart)
 					logger.Debugf(ctx, "opened the external stream: %v", err)
 					if err != nil {
 						logger.Debugf(ctx, "unable to open the stream: %v", err)
@@ -492,7 +601,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 						if link, _ := player.GetLink(ctx); link == "" {
 							logger.Debugf(ctx, "the link is empty for some reason, reopening the link")
 							observability.Go(ctx, func() {
-								if err := p.openStream(ctx); err != nil {
+								if err := p.openStream(ctx, restart); err != nil {
 									logger.Errorf(ctx, "unable to open link '%s': %v", link, err)
 								}
 							})
@@ -533,15 +642,15 @@ func (p *StreamPlayerHandler) controllerLoop(
 					restart()
 					return false
 				}
-				if l > time.Hour {
-					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: the length is more than an hour: %v (we expect only like a second, not an hour)", l, p.StreamID)
+				if l > 48*time.Hour {
+					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: the length is more than 48 hours: %v (we expect only like a second, not 2 days)", l, p.StreamID)
 					if triedToFixBadLengthViaReopen {
 						logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: already tried reopening the stream, did not help, so restarting")
 						restart()
 						return false
 					}
 					observability.Go(ctx, func() {
-						if err := p.openStream(ctx); err != nil {
+						if err := p.openStream(ctx, restart); err != nil {
 							logger.Error(ctx, "unable to re-open the stream: %v", err)
 							restart()
 						}
@@ -654,6 +763,11 @@ func (p *StreamPlayerHandler) controllerLoop(
 					"StreamPlayer[%s].controllerLoop: unable to get the current position: %v",
 					p.StreamID, err,
 				)
+				if now.Sub(posUpdatedAt) > p.Config.ReadTimeout {
+					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: now == %v, posUpdatedAt == %v, pos == %v; readTimeout == %v, restarting (cannot even get a position)", p.StreamID, now, posUpdatedAt, pos, p.Config.ReadTimeout)
+					restart()
+					return
+				}
 				time.Sleep(time.Second)
 				return
 			}
@@ -723,7 +837,6 @@ func (p *StreamPlayerHandler) controllerLoop(
 				posUpdatedAt = now
 				prevPos = pos
 			} else {
-				// PUT TRACK SELECTION HERE
 				if now.Sub(posUpdatedAt) > p.Config.ReadTimeout {
 					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: now == %v, posUpdatedAt == %v, len == %v; pos == %v; readTimeout == %v, restarting", p.StreamID, now, posUpdatedAt, l, pos, p.Config.ReadTimeout)
 					restart()
@@ -733,12 +846,35 @@ func (p *StreamPlayerHandler) controllerLoop(
 
 			lag := l - pos
 			logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: lag == %v", p.StreamID, lag)
+			if p.Config.JitterBufDuration > time.Second && lag < p.Config.JitterBufDuration/2 {
+				speed := lag.Seconds() / (p.Config.JitterBufDuration / 2).Seconds()
+				if speed <= 0 {
+					return
+				}
+				speed = float64(uint(speed*10)) / 10 // to avoid flickering (for example between 1.0001 and 1.0)
+				if speed < 0.5 {
+					speed = 0.5
+				}
+				if speed == curSpeed {
+					return
+				}
+				curSpeed = speed
+				logger.Debugf(ctx,
+					"StreamPlayer[%s].controllerLoop: slowing down to %f",
+					p.StreamID, curSpeed,
+				)
+				err := player.SetSpeed(ctx, curSpeed)
+				if err != nil {
+					logger.Errorf(ctx, "unable to slow down to %f: %v", curSpeed, err)
+					return
+				}
+				return
+			}
 			if lag <= p.Config.JitterBufDuration {
 				if curSpeed == 1 {
 					return
 				}
-				logger.Debugf(
-					ctx,
+				logger.Debugf(ctx,
 					"StreamPlayer[%s].controllerLoop: resetting the speed to 1",
 					p.StreamID,
 				)
