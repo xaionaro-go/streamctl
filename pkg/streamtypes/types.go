@@ -16,8 +16,8 @@ type ServerType int
 
 const (
 	ServerTypeUndefined = ServerType(iota)
-	ServerTypeRTSP
 	ServerTypeSRT
+	ServerTypeRTSP
 	ServerTypeRTMP
 	ServerTypeHLS
 	ServerTypeWebRTC

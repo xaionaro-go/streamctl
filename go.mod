@@ -25,6 +25,8 @@ replace github.com/nicklaw5/helix/v2 v2.30.1-0.20240715193454-0151ccccf980 => gi
 
 replace github.com/asticode/go-astiav v0.35.1 => github.com/xaionaro-go/astiav v0.0.0-20250406220418-87d14d2908f9
 
+replace github.com/bluenviron/mediacommon/v2 v2.0.1-0.20250324151931-b8ce69d15d3d => github.com/xaionaro-go/mediacommon/v2 v2.0.0-20250420012906-03d6d69ac3b7
+
 require (
 	github.com/facebookincubator/go-belt v0.0.0-20250308011339-62fb7027b11f
 	github.com/go-git/go-billy/v5 v5.6.2
@@ -273,7 +275,7 @@ require (
 	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0
 	github.com/xaionaro-go/audio v0.0.0-20250210102901-abfced9d5ef3
-	github.com/xaionaro-go/avpipeline v0.0.0-20250419205947-7bb87766fce5
+	github.com/xaionaro-go/avpipeline v0.0.0-20250420145942-aa8f9c9b9d23
 	github.com/xaionaro-go/datacounter v1.0.4
 	github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42
 	github.com/xaionaro-go/grpcproxy v0.0.0-20241103205849-a8fef42e72f9
@@ -284,8 +286,8 @@ require (
 	github.com/xaionaro-go/mediamtx v0.0.0-20250406132618-79ecbc3e138f
 	github.com/xaionaro-go/object v0.0.0-20241026212449-753ce10ec94c
 	github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20241018162120-5faf4e7a684a
-	github.com/xaionaro-go/observability v0.0.0-20250309200059-047fad8d76e4
-	github.com/xaionaro-go/player v0.0.0-20250419161659-14f8c81dc9e3
+	github.com/xaionaro-go/observability v0.0.0-20250420133500-5c4d2e045932
+	github.com/xaionaro-go/player v0.0.0-20250420151227-ba7f6a6f220c
 	github.com/xaionaro-go/recoder v0.0.0-20250419161432-f34684c4ea4a
 	github.com/xaionaro-go/secret v0.0.0-20250111141743-ced12e1082c2
 	github.com/xaionaro-go/serializable v0.0.0-20250412140540-5ac572306599
@@ -296,7 +298,7 @@ require (
 	github.com/xaionaro-go/xfyne v0.0.0-20241018233531-26123724a6c6
 	github.com/xaionaro-go/xlogrus v0.0.0-20250111150201-60557109545a
 	github.com/xaionaro-go/xpath v0.0.0-20250111145115-55f5728f643f
-	github.com/xaionaro-go/xsync v0.0.0-20250113213958-aedf9c8786f5
+	github.com/xaionaro-go/xsync v0.0.0-20250420144932-1e27f4332d4d
 	github.com/yutopp/go-flv v0.3.1
 	golang.org/x/crypto v0.37.0
 	google.golang.org/grpc v1.71.1
