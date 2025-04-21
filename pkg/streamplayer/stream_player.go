@@ -28,6 +28,10 @@ import (
 	"github.com/xaionaro-go/xsync"
 )
 
+const (
+	enableSeekOnStart = false
+)
+
 type Publisher interface {
 	ClosedChan() <-chan struct{}
 }
@@ -615,12 +619,14 @@ func (p *StreamPlayerHandler) controllerLoop(
 							logger.Errorf(ctx, "unable to unpause: %v", err)
 						}
 					}
-					if err := player.Seek(ctx, time.Second, true, true); err != nil {
-						logger.Errorf(ctx, "unable to seek: %v", err)
-					}
 					pos, err = player.GetPosition(ctx)
 					if err != nil {
 						err = fmt.Errorf("unable to get position: %w", err)
+					}
+					if enableSeekOnStart {
+						if err := player.Seek(ctx, -time.Second, true, true); err != nil {
+							logger.Errorf(ctx, "unable to seek: %v", err)
+						}
 					}
 				})
 				if err != nil {
@@ -708,8 +714,10 @@ func (p *StreamPlayerHandler) controllerLoop(
 		if err != nil {
 			logger.Errorf(ctx, "unable to setup the player for streaming: %v", err)
 		}
-		if err := player.Seek(ctx, time.Second, true, true); err != nil {
-			logger.Errorf(ctx, "unable to seek: %v", err)
+		if enableSeekOnStart {
+			if err := player.Seek(ctx, -time.Second, true, true); err != nil {
+				logger.Errorf(ctx, "unable to seek: %v", err)
+			}
 		}
 	})
 	if err != nil {

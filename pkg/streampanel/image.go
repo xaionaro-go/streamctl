@@ -103,7 +103,10 @@ func (p *Panel) downloadImageNoLock(
 func (p *Panel) getImage(
 	ctx context.Context,
 	imageID consts.ImageID,
-) (image.Image, bool, error) {
+) (_ret0 image.Image, _ret1 bool, _err error) {
+	logger.Tracef(ctx, "getImage(ctx, %v)", imageID)
+	defer func() { logger.Tracef(ctx, "/getImage(ctx, %v): %p %v %v", imageID, _ret0, _ret1, _err) }()
+
 	b, changed, err := p.downloadImage(ctx, imageID)
 	if err != nil {
 		return nil, false, fmt.Errorf("unable to download image '%s': %w", imageID, err)

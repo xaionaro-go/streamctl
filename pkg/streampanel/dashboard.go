@@ -222,7 +222,8 @@ func (w *dashboardWindow) imagesLayer(width, height int) (_ret image.Image) {
 	ctx := context.TODO()
 	logger.Tracef(ctx, "imagesLayer(%d, %d)", width, height)
 	defer func() { logger.Tracef(ctx, "/imagesLayer(%d, %d): size:%v", width, height, _ret.Bounds()) }()
-	return xsync.DoR1(xsync.WithNoLogging(ctx, true), &w.imagesLocker, func() image.Image {
+	ctx = xsync.WithNoLogging(ctx, true)
+	return xsync.DoR1(ctx, &w.imagesLocker, func() image.Image {
 		return w.renderImagesNoLock(ctx, width, height)
 	})
 }
@@ -259,6 +260,7 @@ func (w *dashboardWindow) renderImagesNoLock(
 
 	canvasRatio := float64(dstSize.X) / float64(dstSize.Y)
 
+	logger.Tracef(ctx, "len(w.changedImages) == %d", len(w.changedImages))
 	imgIsChanged := map[string]struct{}{}
 	for _, img := range w.changedImages {
 		if dashboardDebug {
@@ -577,7 +579,7 @@ func (w *dashboardWindow) startUpdatingNoLock(
 		w.renderStreamStatus(ctx)
 
 		observability.Go(ctx, func() {
-			t := time.NewTicker(500 * time.Millisecond)
+			t := time.NewTicker(1000 * time.Millisecond)
 			for {
 				select {
 				case <-ctx.Done():
@@ -645,8 +647,8 @@ func (w *dashboardWindow) updateImages(
 	ctx context.Context,
 	dashboardCfg streamdconfig.DashboardConfig,
 ) {
-	logger.Tracef(ctx, "updateImages")
-	defer logger.Tracef(ctx, "/updateImages")
+	logger.Debugf(ctx, "updateImages")
+	defer logger.Debugf(ctx, "/updateImages")
 
 	w.dashboardLocker.Do(ctx, func() {
 		w.updateImagesNoLock(ctx, dashboardCfg)
@@ -772,12 +774,9 @@ func (w *dashboardWindow) updateImagesNoLock(
 		if !changed && lastWinSize == winSize && lastOrientation == orientation {
 			return
 		}
-		logger.Tracef(
-			ctx,
+		logger.Tracef(ctx,
 			"updating the screenshot image: %v %#+v %#+v",
-			changed,
-			lastWinSize,
-			winSize,
+			changed, lastWinSize, winSize,
 		)
 		b := img.Bounds()
 		m := image.NewNRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
@@ -787,18 +786,27 @@ func (w *dashboardWindow) updateImagesNoLock(
 			el = elementsMap[screenshotElementName]
 			el.Image = m
 		})
+		logger.Tracef(ctx, "push screenshot to changedElements")
 		changedElements <- el
 	})
-	w.changedImages = w.changedImages[:0]
+
+	var receiverWG sync.WaitGroup
 	changedCount := 0
-	go func() {
-		for el := range changedElements {
-			changedCount++
-			w.changedImages = append(w.changedImages, el)
-		}
-	}()
+	w.imagesLocker.Do(xsync.WithNoLogging(ctx, true), func() {
+		w.changedImages = w.changedImages[:0]
+		receiverWG.Add(1)
+		go func() {
+			defer receiverWG.Done()
+			for el := range changedElements {
+				logger.Tracef(ctx, "<-changedElement: %s", el.ElementName)
+				changedCount++
+				w.changedImages = append(w.changedImages, el)
+			}
+		}()
+	})
 	wg.Wait()
 	close(changedElements)
+	receiverWG.Wait()
 
 	if changedCount > 0 {
 		w.imagesLayerObj.Refresh()
