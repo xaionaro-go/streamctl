@@ -185,6 +185,7 @@ func New(
 		Config:              Options(opts).ApplyOverrides(cfg),
 		Screenshoter:        screenshoter.New(screenshot.Implementation{}),
 		imageLastDownloaded: map[consts.ImageID][]byte{},
+		imageLastParsed:     map[consts.ImageID]image.Image{},
 		streamStatus:        map[streamcontrol.PlatformName]*streamStatus{},
 		previousNumBytes:    map[any][4]uint64{},
 		previousNumBytesTS:  map[any]time.Time{},

@@ -171,12 +171,12 @@ build-streampanel-android-arm64-in-docker: checkconfig-android-in-docker builddi
 	cd cmd/streampanel && \
 		PKG_CONFIG_WRAPPER_LOG='/tmp/pkg_config_wrapper.log' \
 		PKG_CONFIG_WRAPPER_LOG_LEVEL='trace' \
-		PKG_CONFIG_LIBS_FORCE_STATIC='libav*,libvlc,libsrt' \
+		PKG_CONFIG_LIBS_FORCE_STATIC='libav*,libvlc,libsrt,libcrypto' \
 		PKG_CONFIG_ERASE="-fopenmp=*,-landroid,-lcamera2ndk,-lmediandk" \
 		PKG_CONFIG='$(GOPATH)/bin/pkg-config-wrapper' \
 		PKG_CONFIG_PATH='/data/data/com.termux/files/usr/lib/pkgconfig' \
 		CGO_CFLAGS='-I$(ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include/ -I/data/data/com.termux/files/usr/include -Wno-incompatible-function-pointer-types -Wno-unused-result -Wno-xor-used-as-pow' \
-		CGO_LDFLAGS='-v -Wl,-Bdynamic -ldl -lc -lcamera2ndk -lmediandk -L$(ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/ -L$(ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/24/ -L/data/data/com.termux/files/usr/lib' \
+		CGO_LDFLAGS='-v -Wl,-Bstatic -lcrypto -lv4l2 -lv4lconvert -ljpeg -landroid-posix-semaphore -Wl,-Bdynamic -ldl -lc -lcamera2ndk -lmediandk -L$(ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/ -L$(ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/35/ -L/data/data/com.termux/files/usr/lib' \
 		ANDROID_NDK_HOME="$(ANDROID_NDK_HOME)" \
 		PATH="${PATH}:${HOME}/go/bin" \
 		GOFLAGS="$(GOBUILD_FLAGS) -ldflags=$(shell echo ${LINKER_FLAGS_ANDROID} | tr " " ",")" \
