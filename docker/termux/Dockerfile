@@ -17,6 +17,9 @@ RUN ./build-package.sh -I termux-api || /bin/true
 RUN ./build-package.sh -I xdotool    || /bin/true
 RUN ./build-package.sh -I xdg-utils  || /bin/true
 
+# checkout the version we need
+RUN git fetch && git checkout be9385040dfbbe00cd74fd3889c1dd2126e9eca9
+
 # building what we need	
 RUN rm -f /data/data/.built-packages/liblzma                    && ./build-package.sh -I liblzma
 RUN rm -f /data/data/.built-packages/libiconv                   && ./build-package.sh -I libiconv
@@ -27,8 +30,6 @@ RUN rm -f /data/data/.built-packages/openssl                    && ./build-packa
 RUN rm -f /data/data/.built-packages/libandroid-posix-semaphore && ./build-package.sh -I libandroid-posix-semaphore
 
 # build custom ffmpeg
-RUN git pull
-RUN git checkout ed60a4e10faf33b5c6a0c82edab08537eb00fafb
 COPY ffmpeg_mediacodec_set_parameters.patch /home/builder/termux-packages/packages/ffmpeg/mediacodec_set_parameters.patch
 RUN ./build-package.sh ffmpeg
 

@@ -349,12 +349,12 @@ func (fwd *ActiveStreamForwarding) newEncoderFor(
 	ctx context.Context,
 	factoryInstance recoder.Factory,
 ) (recoder.Encoder, error) {
+	var encodingCfg *recoder.EncodersConfig
 	if fwd.Encode.Enabled {
-		logger.Debugf(ctx, "NewEncoder(ctx, %#+v)", fwd.Encode.EncodersConfig)
-		return factoryInstance.NewEncoder(ctx, fwd.Encode.EncodersConfig)
+		encodingCfg = &fwd.Encode.EncodersConfig
 	}
-	logger.Debugf(ctx, "NewEncoder(ctx, %#+v)", recoder.EncodersConfig{})
-	return factoryInstance.NewEncoder(ctx, recoder.EncodersConfig{})
+	logger.Debugf(ctx, "NewEncoder(ctx, %#+v)", encodingCfg)
+	return factoryInstance.NewEncoder(ctx, encodingCfg)
 }
 
 func (fwd *ActiveStreamForwarding) openInputFor(
@@ -415,7 +415,7 @@ func (fwd *ActiveStreamForwarding) killRecodingProcess(
 		return nil
 	}
 
-	resultCh := make(chan error)
+	resultCh := make(chan error, 1)
 	observability.Go(ctx, func() {
 		defer func() {
 			close(resultCh)

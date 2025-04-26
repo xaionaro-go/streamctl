@@ -1757,6 +1757,9 @@ func (d *StreamD) StreamPlayerGetPosition(
 	if err != nil {
 		return 0, err
 	}
+	if streamPlayer == nil {
+		return 0, fmt.Errorf("streamPlayer == nil")
+	}
 	return streamPlayer.GetPosition(ctx)
 }
 func (d *StreamD) StreamPlayerGetLength(

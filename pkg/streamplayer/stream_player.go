@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"net/url"
 	"runtime/debug"
 	"strings"
@@ -12,7 +11,6 @@ import (
 	"time"
 
 	"github.com/asticode/go-astiav"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
@@ -29,7 +27,9 @@ import (
 )
 
 const (
-	enableSeekOnStart = false
+	enableSeekOnStart    = true
+	enableTracksRotation = false
+	enableSlowDown       = false
 )
 
 type Publisher interface {
@@ -109,7 +109,7 @@ func (sp *StreamPlayers) Create(
 ) (_ret *StreamPlayerHandler, _err error) {
 	logger.Debugf(ctx, "StreamPlayers.Create(ctx, '%s', %#+v)", streamID, opts)
 	defer func() {
-		logger.Debugf(ctx, "/StreamPlayers.Create(ctx, '%s', %#+v): (%v, %v)", streamID, opts, spew.Sdump(_ret), _err)
+		logger.Debugf(ctx, "/StreamPlayers.Create(ctx, '%s', %#+v): (%#+v, %v)", streamID, opts, _ret, _err)
 	}()
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -231,7 +231,7 @@ func (p *StreamPlayerHandler) startU(ctx context.Context) error {
 		return fmt.Errorf("player == nil")
 	}
 	p.Player = player
-	logger.Debugf(ctx, "initialized player %#+v", spew.Sdump(player))
+	logger.Debugf(ctx, "initialized player %#+v", player)
 
 	observability.Go(ctx, func() { p.controllerLoop(ctx, cancelFn) })
 	return nil
@@ -250,7 +250,7 @@ func (p *StreamPlayerHandler) stopU(ctx context.Context) error {
 
 	err := p.Player.Close(ctx)
 	if err != nil {
-		errmon.ObserveErrorCtx(ctx, p.Close())
+		errmon.ObserveErrorCtx(ctx, p.close(ctx))
 		return fmt.Errorf("unable to close the player: %w", err)
 	}
 	return nil
@@ -284,35 +284,7 @@ func (p *StreamPlayerHandler) getOverriddenURL(context.Context) (*url.URL, error
 }
 
 func (p *StreamPlayerHandler) getInternalURL(ctx context.Context) (*url.URL, error) {
-	portSrvs, err := p.Parent.StreamServer.GetPortServers(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get the list of stream server ports: %w", err)
-	}
-	if len(portSrvs) == 0 {
-		return nil, fmt.Errorf("there are no open server ports")
-	}
-	portSrv := portSrvs[0]
-
-	var u url.URL
-	u.Scheme = portSrv.Type.String()
-	u.Host = portSrv.ListenAddr
-	_, port, _ := net.SplitHostPort(portSrv.ListenAddr)
-	switch u.Hostname() {
-	case "0.0.0.0":
-		u.Host = net.JoinHostPort("127.0.0.1", port)
-	case "::":
-		u.Host = net.JoinHostPort("::1", port)
-	}
-	switch portSrv.Type {
-	case streamtypes.ServerTypeSRT:
-		u.RawQuery = fmt.Sprintf("streamid=read:%s&latency=%d",
-			p.StreamID,
-			500_000,
-		)
-	default:
-		u.Path = string(p.StreamID)
-	}
-	return &u, nil
+	return streamportserver.GetURLForStreamID(ctx, p.Parent.StreamServer, p.StreamID)
 }
 
 func (p *StreamPlayerHandler) startObserver(
@@ -360,6 +332,11 @@ func (p *StreamPlayerHandler) acknowledgeInputPacket(
 ) (_err error) {
 	logger.Tracef(ctx, "acknowledgeInputPacket")
 	defer func() { logger.Tracef(ctx, "/acknowledgeInputPacket: %v", _err) }()
+
+	if !enableTracksRotation {
+		return nil
+	}
+
 	if pkt.Stream.CodecParameters().MediaType() != astiav.MediaTypeVideo {
 		return nil
 	}
@@ -396,10 +373,12 @@ func (p *StreamPlayerHandler) changeTrackTo(
 ) {
 	p.withPlayer(ctx, func(ctx context.Context, player player.Player) {
 		if err := player.SetVideoTrack(ctx, int64(trackID)); err != nil {
-			logger.Errorf(ctx, "unable to rotate the video track: %w", err)
+			err = fmt.Errorf("unable to rotate the video track: %w", err)
+			logger.Errorf(ctx, "%v", err)
 		}
 		if err := player.SetAudioTrack(ctx, int64(trackID)); err != nil {
-			logger.Errorf(ctx, "unable to rotate the audio track: %w", err)
+			err = fmt.Errorf("unable to rotate the audio track: %w", err)
+			logger.Errorf(ctx, "%v", err)
 		}
 		p.CurrentVideoTrackID = trackID
 		p.CurrentAudioTrackID = trackID
@@ -593,6 +572,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 
 			triedToFixEmptyLinkViaReopen := false
 			triedToFixBadLengthViaReopen := false
+			triedToSeek := false
 			startedWaitingForBuffering := time.Now()
 			iterationNum := 0
 			for time.Since(startedWaitingForBuffering) <= p.Config.StartTimeout {
@@ -602,8 +582,8 @@ func (p *StreamPlayerHandler) controllerLoop(
 				)
 				err = p.withPlayer(ctx, func(ctx context.Context, player player.Player) {
 					if !triedToFixEmptyLinkViaReopen {
-						if link, _ := player.GetLink(ctx); link == "" {
-							logger.Debugf(ctx, "the link is empty for some reason, reopening the link")
+						if link, err := player.GetLink(ctx); link == "" {
+							logger.Debugf(ctx, "the link is empty for some reason, reopening the link (BTW, err if any is: %v)", err)
 							observability.Go(ctx, func() {
 								if err := p.openStream(ctx, restart); err != nil {
 									logger.Errorf(ctx, "unable to open link '%s': %v", link, err)
@@ -623,9 +603,16 @@ func (p *StreamPlayerHandler) controllerLoop(
 					if err != nil {
 						err = fmt.Errorf("unable to get position: %w", err)
 					}
-					if enableSeekOnStart {
-						if err := player.Seek(ctx, -time.Second, true, true); err != nil {
-							logger.Errorf(ctx, "unable to seek: %v", err)
+					if enableSeekOnStart && !triedToSeek {
+						l, err := player.GetLength(ctx)
+						if err != nil {
+							err = fmt.Errorf("unable to get length: %w", err)
+						}
+						if l > p.Config.JitterBufDuration/2 {
+							if err := player.Seek(ctx, -time.Second, true, true); err != nil {
+								logger.Errorf(ctx, "unable to seek: %v", err)
+							}
+							triedToSeek = true
 						}
 					}
 				})
@@ -854,7 +841,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 
 			lag := l - pos
 			logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: lag == %v", p.StreamID, lag)
-			if p.Config.JitterBufDuration > time.Second && lag < p.Config.JitterBufDuration/2 {
+			if enableSlowDown && p.Config.JitterBufDuration > time.Second && lag < p.Config.JitterBufDuration/2 {
 				speed := lag.Seconds() / (p.Config.JitterBufDuration / 2).Seconds()
 				if speed <= 0 {
 					return
@@ -964,16 +951,18 @@ func (p *StreamPlayerHandler) withPlayer(
 
 func (p *StreamPlayerHandler) Close() error {
 	ctx := context.TODO()
-	return xsync.DoR1(ctx, &p.PlayerLocker, func() error {
-		var err *multierror.Error
-		if p.Cancel != nil {
-			p.Cancel()
-		}
+	return xsync.DoA1R1(ctx, &p.PlayerLocker, p.close, ctx)
+}
 
-		if p.Player != nil {
-			err = multierror.Append(err, p.Player.Close(ctx))
-			p.Player = nil
-		}
-		return err.ErrorOrNil()
-	})
+func (p *StreamPlayerHandler) close(ctx context.Context) error {
+	var err *multierror.Error
+	if p.Cancel != nil {
+		p.Cancel()
+	}
+
+	if p.Player != nil {
+		err = multierror.Append(err, p.Player.Close(ctx))
+		p.Player = nil
+	}
+	return err.ErrorOrNil()
 }

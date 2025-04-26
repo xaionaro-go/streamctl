@@ -908,7 +908,7 @@ func (p *Panel) displayStreamPlayers(
 		if !player.Disabled {
 			pos, err := p.StreamD.StreamPlayerGetPosition(ctx, player.StreamID)
 			if err != nil {
-				logger.Errorf(
+				logger.Debugf(
 					ctx,
 					"unable to get the current position at player '%s': %v",
 					player.StreamID,

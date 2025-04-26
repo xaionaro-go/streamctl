@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -279,6 +280,7 @@ func initGRPCServers(
 
 	opts := []grpc_recovery.Option{
 		grpc_recovery.WithRecoveryHandler(func(p interface{}) (err error) {
+			ctx = belt.WithField(ctx, "stack_trace", string(debug.Stack()))
 			errmon.ObserveRecoverCtx(ctx, p)
 			return nil
 		}),

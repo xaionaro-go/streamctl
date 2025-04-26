@@ -3,6 +3,7 @@ package streamforward
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/url"
 	"sort"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/memoize"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/typing/ordered"
 	"github.com/xaionaro-go/xsync"
@@ -205,20 +207,8 @@ func (s *StreamForwards) addStreamForward(
 	}, nil
 }
 
-func (s *StreamForwards) getLocalhostURL(ctx context.Context) (*url.URL, error) {
-	portSrvs, err := s.StreamServer.GetPortServers(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get port servers info: %w", err)
-	}
-	portSrv := portSrvs[0]
-
-	urlString := fmt.Sprintf("%s://%s", portSrv.Type, portSrv.ListenAddr)
-	urlParsed, err := url.Parse(urlString)
-	if err != nil {
-		return nil, fmt.Errorf("unable to parse '%s': %w", urlString, err)
-	}
-
-	return urlParsed, nil
+func (s *StreamForwards) getLocalhostURL(ctx context.Context, streamID types.StreamID) (*url.URL, error) {
+	return streamportserver.GetURLForStreamID(ctx, s.StreamServer, streamID)
 }
 
 func (s *StreamForwards) newActiveStreamForward(
@@ -252,7 +242,7 @@ func (s *StreamForwards) newActiveStreamForward(
 	}
 
 	if urlParsed.Host == "" {
-		urlParsed, err = s.getLocalhostURL(ctx)
+		urlParsed, err = s.getLocalhostURL(ctx, types.StreamID(urlParsed.Path))
 		if err != nil {
 			return nil, fmt.Errorf("unable to get the URL of the output endpoint: %w", err)
 		}
@@ -902,6 +892,8 @@ func (s *StreamForwards) findStreamDestinationByID(
 func (s *StreamForwards) GetLocalhostEndpoint(ctx context.Context) (_ret *url.URL, _err error) {
 	defer func() { logger.Debugf(ctx, "GetLocalhostEndpoint result: %v %v", _ret, _err) }()
 
+	// TODO: deduplicate ME with other getlocalhostendpoint functions
+
 	portSrvs, err := s.StreamServer.GetPortServers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get port servers info: %w", err)
@@ -928,5 +920,7 @@ func (s *StreamForwards) GetLocalhostEndpoint(ctx context.Context) (_ret *url.UR
 		return nil, fmt.Errorf("unable to parse '%s': %w", urlString, err)
 	}
 
+	_, port, _ := net.SplitHostPort(urlParsed.Host)
+	urlParsed.Host = net.JoinHostPort("127.0.0.1", port)
 	return urlParsed, nil
 }

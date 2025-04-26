@@ -27,6 +27,10 @@ replace github.com/asticode/go-astiav v0.35.1 => github.com/xaionaro-go/astiav v
 
 replace github.com/bluenviron/mediacommon/v2 v2.0.1-0.20250324151931-b8ce69d15d3d => github.com/xaionaro-go/mediacommon/v2 v2.0.0-20250420012906-03d6d69ac3b7
 
+replace github.com/xaionaro-go/recoder v0.0.0-20250419161432-f34684c4ea4a => ../recoder
+
+replace github.com/xaionaro-go/player v0.0.0-20250420151227-ba7f6a6f220c => ../player
+
 require (
 	github.com/facebookincubator/go-belt v0.0.0-20250308011339-62fb7027b11f
 	github.com/go-git/go-billy/v5 v5.6.2
