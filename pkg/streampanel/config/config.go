@@ -43,6 +43,13 @@ func (cfg ChatConfig) ReceiveMessageSoundAlarmEnabled() bool {
 	return cfg.EnableReceiveMessageSoundAlarm == nil || *cfg.EnableReceiveMessageSoundAlarm
 }
 
+type DashboardConfig struct {
+	Size struct {
+		Width  uint `yaml:"width"`
+		Height uint `yaml:"height"`
+	} `yaml:"size"`
+}
+
 type Config struct {
 	RemoteStreamDAddr string           `yaml:"streamd_remote"`
 	BuiltinStreamD    streamd.Config   `yaml:"streamd_builtin"`
@@ -50,6 +57,7 @@ type Config struct {
 	Browser           BrowserConfig    `yaml:"browser"`
 	OAuth             OAuthConfig      `yaml:"oauth"`
 	Chat              ChatConfig       `yaml:"chat"`
+	Dashboard         DashboardConfig  `yaml:"dashboard"`
 }
 
 func DefaultConfig() Config {

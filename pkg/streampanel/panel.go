@@ -2407,9 +2407,19 @@ func (p *Panel) Close() error {
 }
 
 func (p *Panel) GetStreamDConfig(ctx context.Context) (*streamdconfig.Config, error) {
-	return xsync.DoR1(ctx, &p.configCacheLocker, func() *streamdconfig.Config {
-		return p.configCache
-	}), nil
+	return xsync.DoR2(ctx, &p.configCacheLocker, func() (*streamdconfig.Config, error) {
+		var r streamdconfig.Config
+		var b bytes.Buffer
+		_, err := p.configCache.WriteTo(&b)
+		if err != nil {
+			return nil, fmt.Errorf("unable to serialize the config: %w", err)
+		}
+		_, err = r.ReadFrom(&b)
+		if err != nil {
+			return nil, fmt.Errorf("unable to unserialize the config: %w", err)
+		}
+		return &r, nil
+	})
 }
 
 func (p *Panel) SetStreamDConfig(

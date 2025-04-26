@@ -161,7 +161,7 @@ func (w *dashboardWindow) renderStreamStatus(ctx context.Context) {
 }
 
 func (p *Panel) newDashboardWindow(
-	context.Context,
+	ctx context.Context,
 ) *dashboardWindow {
 	w := &dashboardWindow{
 		Window: p.app.NewWindow("Dashboard"),
@@ -632,12 +632,29 @@ func (p *Panel) openDashboardWindowNoLock(
 	}
 	w := p.dashboardWindow
 	w.startUpdating(ctx)
+	var cfg *Config
+	p.configLocker.Do(ctx, func() {
+		cfg = &p.Config
+		w.Window.Resize(fyne.NewSize(float32(cfg.Dashboard.Size.Width), float32(cfg.Dashboard.Size.Height)))
+	})
 	w.Window.SetOnClosed(func() {
 		p.dashboardLocker.Do(ctx, func() {
 			w.stopUpdating(ctx)
 			p.dashboardShowHideButton.SetText("Open")
 			p.dashboardShowHideButton.SetIcon(theme.ComputerIcon())
 			p.dashboardWindow = nil
+
+			s := w.Window.Canvas().Size()
+			w, h := uint(s.Width), uint(s.Height)
+			if w == cfg.Dashboard.Size.Width && h == cfg.Dashboard.Size.Height {
+				return
+			}
+			cfg.Dashboard.Size.Width = w
+			cfg.Dashboard.Size.Height = h
+			err := p.SaveConfig(ctx)
+			if err != nil {
+				logger.Errorf(ctx, "SaveConfig error: %v", err)
+			}
 		})
 	})
 	return nil
