@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"sort"
 
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
@@ -18,13 +19,30 @@ func GetURLForStreamID(
 	if err != nil {
 		return nil, fmt.Errorf("unable to get the list of stream server ports: %w", err)
 	}
+
+	sort.Slice(portSrvs, func(i, j int) bool {
+		a := &portSrvs[i]
+		b := &portSrvs[j]
+		if a.Type != b.Type {
+			return a.Type < b.Type
+		}
+		if a.IsTLS != b.IsTLS {
+			return b.IsTLS
+		}
+		return false
+	})
 	if len(portSrvs) == 0 {
 		return nil, fmt.Errorf("there are no open server ports")
 	}
 	portSrv := portSrvs[0]
 
+	protoString := portSrv.Type.String()
+	if portSrv.IsTLS {
+		protoString += "s"
+	}
+
 	var u url.URL
-	u.Scheme = portSrv.Type.String()
+	u.Scheme = protoString
 	u.Host = portSrv.ListenAddr
 	_, port, _ := net.SplitHostPort(portSrv.ListenAddr)
 	switch u.Hostname() {

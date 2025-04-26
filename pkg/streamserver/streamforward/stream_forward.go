@@ -14,6 +14,7 @@ import (
 	"github.com/xaionaro-go/observability"
 	recoder "github.com/xaionaro-go/recoder"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/xsync"
 )
 
@@ -362,12 +363,10 @@ func (fwd *ActiveStreamForwarding) openInputFor(
 	factoryInstance recoder.Factory,
 	publisher types.Publisher,
 ) (recoder.Input, error) {
-	inputURL, err := fwd.GetLocalhostEndpoint(ctx)
+	inputURL, err := streamportserver.GetURLForStreamID(ctx, fwd.StreamServer, fwd.StreamID)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get a localhost endpoint: %w", err)
 	}
-
-	inputURL.Path = "/" + string(fwd.StreamID)
 
 	var input recoder.Input
 	inputCfg := recoder.InputConfig{}

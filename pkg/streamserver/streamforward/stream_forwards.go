@@ -3,9 +3,7 @@ package streamforward
 import (
 	"context"
 	"fmt"
-	"net"
 	"net/url"
-	"sort"
 	"time"
 
 	"github.com/facebookincubator/go-belt"
@@ -887,40 +885,4 @@ func (s *StreamForwards) findStreamDestinationByID(
 		"unable to find a stream destination by StreamID '%s'",
 		destinationID,
 	)
-}
-
-func (s *StreamForwards) GetLocalhostEndpoint(ctx context.Context) (_ret *url.URL, _err error) {
-	defer func() { logger.Debugf(ctx, "GetLocalhostEndpoint result: %v %v", _ret, _err) }()
-
-	// TODO: deduplicate ME with other getlocalhostendpoint functions
-
-	portSrvs, err := s.StreamServer.GetPortServers(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get port servers info: %w", err)
-	}
-
-	sort.Slice(portSrvs, func(i, j int) bool {
-		a := &portSrvs[i]
-		b := &portSrvs[j]
-		if a.IsTLS != b.IsTLS {
-			return b.IsTLS
-		}
-		return false
-	})
-	portSrv := portSrvs[0]
-	logger.Debugf(ctx, "getLocalhostEndpoint: chosen portSrv == %#+v", portSrv)
-
-	protoString := portSrv.Type.String()
-	if portSrv.IsTLS {
-		protoString += "s"
-	}
-	urlString := fmt.Sprintf("%s://%s", protoString, portSrv.ListenAddr)
-	urlParsed, err := url.Parse(urlString)
-	if err != nil {
-		return nil, fmt.Errorf("unable to parse '%s': %w", urlString, err)
-	}
-
-	_, port, _ := net.SplitHostPort(urlParsed.Host)
-	urlParsed.Host = net.JoinHostPort("127.0.0.1", port)
-	return urlParsed, nil
 }
