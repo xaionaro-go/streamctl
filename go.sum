@@ -1053,6 +1053,8 @@ github.com/xaionaro-go/avmediacodec v0.0.0-20250421150856-ddd390422c21 h1:afsJFv
 github.com/xaionaro-go/avmediacodec v0.0.0-20250421150856-ddd390422c21/go.mod h1:obX+/HoeX6lzM/Zuzgtm0JdG8CQ58I1isp5xSQEm+kQ=
 github.com/xaionaro-go/avpipeline v0.0.0-20250421151226-691631b82df8 h1:sS+v5XLsCxcTf0mMDqE9r//o7SKhGP9pm7vVsdIeOLU=
 github.com/xaionaro-go/avpipeline v0.0.0-20250421151226-691631b82df8/go.mod h1:Czl84biYuPZeILYiRiziR0yeuXKvrqQfzJ1ItjSq/o0=
+github.com/xaionaro-go/avpipeline v0.0.0-20250426193916-e38f676d278e h1:aHUMT1BQBH5u2gqdx70DYEqpMOKIR1hCkGeU1aL3Kp0=
+github.com/xaionaro-go/avpipeline v0.0.0-20250426193916-e38f676d278e/go.mod h1:Czl84biYuPZeILYiRiziR0yeuXKvrqQfzJ1ItjSq/o0=
 github.com/xaionaro-go/datacounter v1.0.4 h1:+QMZLmu73R5WGkQfUPwlXF/JFN+Weo4iuDZkiL2wVm8=
 github.com/xaionaro-go/datacounter v1.0.4/go.mod h1:Sf9vBevuV6w5iE6K3qJ9pWVKcyS60clWBUSQLjt5++c=
 github.com/xaionaro-go/fyne/v2 v2.0.0-20250215180758-399edb421067 h1:58GgTbQcOCjv1ZZ46m6WQ8zqv0KEJe5C6D5Ls1oSHvc=
@@ -1099,6 +1101,8 @@ github.com/xaionaro-go/pulse v0.0.0-20241023202712-7151fa00d4bb h1:9iHPI27CYbmJD
 github.com/xaionaro-go/pulse v0.0.0-20241023202712-7151fa00d4bb/go.mod h1:cpYspI6YljhkUf1WLXLLDmeaaPFc3CnGLjDZf9dZ4no=
 github.com/xaionaro-go/recoder v0.0.0-20250419161432-f34684c4ea4a h1:1VZhVN2SbIQVBGSPNwPvH0SSsw28uRa9pZghSal4M4Q=
 github.com/xaionaro-go/recoder v0.0.0-20250419161432-f34684c4ea4a/go.mod h1:iwwPWZ9C9zhYaDVZRBjcifODk8Rms++nfg27SwvmKCQ=
+github.com/xaionaro-go/recoder v0.0.0-20250426194050-ce80465f22e8 h1:U3mCHkXfP7wYpOv4UvN8G6q1a9ZiDQqvzVt/p8Lty+o=
+github.com/xaionaro-go/recoder v0.0.0-20250426194050-ce80465f22e8/go.mod h1:Jjw/CfMTflmeN1uXsYXYHaN/UD74PK6E2Jn7wKObiPQ=
 github.com/xaionaro-go/secret v0.0.0-20250111141743-ced12e1082c2 h1:QHpTWfyfmz65cE0MtFXe9fScdi+X0VIYR2wgolSYEUk=
 github.com/xaionaro-go/secret v0.0.0-20250111141743-ced12e1082c2/go.mod h1:XKoHGZ4VKMbVBl8VotLIoWQdrB6Q7jnR++RbkiegZFU=
 github.com/xaionaro-go/serializable v0.0.0-20250412140540-5ac572306599 h1:CzcQd6wLiqgjd8K/6UzR5uyt6sg4ut/kVxi6+FJMbdI=

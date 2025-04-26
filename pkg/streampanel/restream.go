@@ -29,6 +29,10 @@ import (
 	xfyne "github.com/xaionaro-go/xfyne/widget"
 )
 
+const (
+	trackRemove = "<remove>"
+)
+
 func (p *Panel) startRestreamPage(
 	ctx context.Context,
 ) {
@@ -1089,6 +1093,7 @@ func (p *Panel) openAddOrEditRestreamWindow(
 		videoCodecs = append(videoCodecs, videoCodec)
 		videoCodecStrs = append(videoCodecStrs, ptr(videoCodec).String())
 	}
+	videoCodecStrs = append(videoCodecStrs, trackRemove)
 
 	var audioCodecStrs []string
 	var audioCodecs []recoder.AudioCodec
@@ -1096,6 +1101,7 @@ func (p *Panel) openAddOrEditRestreamWindow(
 		audioCodecs = append(audioCodecs, audioCodec)
 		audioCodecStrs = append(audioCodecStrs, ptr(audioCodec).String())
 	}
+	audioCodecStrs = append(audioCodecStrs, trackRemove)
 
 	recodingVideoLabel := widget.NewLabel("Video:")
 	recodingAudioLabel := widget.NewLabel("Audio:")
@@ -1113,14 +1119,21 @@ func (p *Panel) openAddOrEditRestreamWindow(
 		recodingVideoBitrate.SetText(fmt.Sprintf("%d", uint(*q)))
 	}
 	recodingVideoCodecSelector := widget.NewSelect(videoCodecStrs, func(s string) {
-		if s == ptr(recoder.VideoCodecCopy).String() {
+		switch s {
+		case ptr(recoder.VideoCodecCopy).String():
 			recodingVideoBitrate.Disable()
-		} else {
+			fwd.Encode.OutputVideoTracks = fwd.Encode.OutputVideoTracks[:1]
+			fwd.Encode.OutputVideoTracks[0].Config.Codec = recoder.VideoCodecCopy
+		case trackRemove:
+			recodingVideoBitrate.Disable()
+			fwd.Encode.OutputVideoTracks = fwd.Encode.OutputVideoTracks[:0]
+		default:
 			recodingVideoBitrate.Enable()
-		}
-		for _, videoCodec := range videoCodecs {
-			if ptr(videoCodec).String() == s {
-				fwd.Encode.OutputVideoTracks[0].Config.Codec = videoCodec
+			fwd.Encode.OutputVideoTracks = fwd.Encode.OutputVideoTracks[:1]
+			for _, videoCodec := range videoCodecs {
+				if ptr(videoCodec).String() == s {
+					fwd.Encode.OutputVideoTracks[0].Config.Codec = videoCodec
+				}
 			}
 		}
 	})
@@ -1142,14 +1155,21 @@ func (p *Panel) openAddOrEditRestreamWindow(
 		recodingAudioBitrate.SetText(fmt.Sprintf("%d", uint(*q)))
 	}
 	recodingAudioCodecSelector := widget.NewSelect(audioCodecStrs, func(s string) {
-		if s == ptr(recoder.AudioCodecCopy).String() {
+		switch s {
+		case ptr(recoder.AudioCodecCopy).String():
 			recodingAudioBitrate.Disable()
-		} else {
+			fwd.Encode.OutputAudioTracks = fwd.Encode.OutputAudioTracks[:1]
+			fwd.Encode.OutputAudioTracks[0].Config.Codec = recoder.AudioCodecCopy
+		case trackRemove:
+			recodingAudioBitrate.Disable()
+			fwd.Encode.OutputAudioTracks = fwd.Encode.OutputAudioTracks[:0]
+		default:
 			recodingAudioBitrate.Enable()
-		}
-		for _, audioCodec := range audioCodecs {
-			if ptr(audioCodec).String() == s {
-				fwd.Encode.OutputAudioTracks[0].Config.Codec = audioCodec
+			fwd.Encode.OutputAudioTracks = fwd.Encode.OutputAudioTracks[:1]
+			for _, audioCodec := range audioCodecs {
+				if ptr(audioCodec).String() == s {
+					fwd.Encode.OutputAudioTracks[0].Config.Codec = audioCodec
+				}
 			}
 		}
 	})
@@ -1440,10 +1460,16 @@ func (p *Panel) displayStreamForwards(
 		if fwd.Quirks.StartAfterYoutubeRecognizedStream.Enabled {
 			quirksStrings = append(quirksStrings, "after-YT")
 		}
-		if fwd.Encode.Enabled && len(fwd.Encode.OutputVideoTracks) > 0 && len(fwd.Encode.OutputAudioTracks) > 0 {
-			videoTrack := fwd.Encode.OutputVideoTracks[0]
-			audioTrack := fwd.Encode.OutputAudioTracks[0]
-			captionStr += fmt.Sprintf(" [%s/%s]", videoTrack.Config.Codec.String(), audioTrack.Config.Codec.String())
+		if fwd.Encode.Enabled {
+			audioTrackCodecString := "<removed>"
+			videoTrackCodecString := "<removed>"
+			if len(fwd.Encode.OutputVideoTracks) > 0 {
+				videoTrackCodecString = fwd.Encode.OutputVideoTracks[0].Config.Codec.String()
+			}
+			if len(fwd.Encode.OutputAudioTracks) > 0 {
+				audioTrackCodecString = fwd.Encode.OutputAudioTracks[0].Config.Codec.String()
+			}
+			captionStr += fmt.Sprintf(" [%s/%s]", videoTrackCodecString, audioTrackCodecString)
 		}
 		if len(quirksStrings) != 0 {
 			captionStr += fmt.Sprintf(" (%s)", strings.Join(quirksStrings, ","))

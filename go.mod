@@ -27,10 +27,6 @@ replace github.com/asticode/go-astiav v0.35.1 => github.com/xaionaro-go/astiav v
 
 replace github.com/bluenviron/mediacommon/v2 v2.0.1-0.20250324151931-b8ce69d15d3d => github.com/xaionaro-go/mediacommon/v2 v2.0.0-20250420012906-03d6d69ac3b7
 
-replace github.com/xaionaro-go/recoder v0.0.0-20250419161432-f34684c4ea4a => ../recoder
-
-replace github.com/xaionaro-go/player v0.0.0-20250420151227-ba7f6a6f220c => ../player
-
 require (
 	github.com/facebookincubator/go-belt v0.0.0-20250308011339-62fb7027b11f
 	github.com/go-git/go-billy/v5 v5.6.2
@@ -280,7 +276,7 @@ require (
 	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0
 	github.com/xaionaro-go/audio v0.0.0-20250210102901-abfced9d5ef3
-	github.com/xaionaro-go/avpipeline v0.0.0-20250421151226-691631b82df8
+	github.com/xaionaro-go/avpipeline v0.0.0-20250426193916-e38f676d278e
 	github.com/xaionaro-go/datacounter v1.0.4
 	github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42
 	github.com/xaionaro-go/grpcproxy v0.0.0-20241103205849-a8fef42e72f9
@@ -293,7 +289,7 @@ require (
 	github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20241018162120-5faf4e7a684a
 	github.com/xaionaro-go/observability v0.0.0-20250420133500-5c4d2e045932
 	github.com/xaionaro-go/player v0.0.0-20250420151227-ba7f6a6f220c
-	github.com/xaionaro-go/recoder v0.0.0-20250419161432-f34684c4ea4a
+	github.com/xaionaro-go/recoder v0.0.0-20250426194050-ce80465f22e8
 	github.com/xaionaro-go/secret v0.0.0-20250111141743-ced12e1082c2
 	github.com/xaionaro-go/serializable v0.0.0-20250412140540-5ac572306599
 	github.com/xaionaro-go/timeapiio v0.0.0-20240915203246-b907cf699af3
