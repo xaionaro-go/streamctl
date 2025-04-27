@@ -107,6 +107,8 @@ type StreamD struct {
 	imageTakerWG     sync.WaitGroup
 
 	obsRestarter *obsRestarter
+
+	llm *llm
 }
 
 type imageHash uint64
@@ -201,6 +203,11 @@ func (d *StreamD) Run(ctx context.Context) (_ret error) { // TODO: delete the fe
 	d.UI.SetStatus("OBS restarter...")
 	if err := d.initOBSRestarter(ctx); err != nil {
 		d.UI.DisplayError(fmt.Errorf("unable to initialize the OBS restarter: %w", err))
+	}
+
+	d.UI.SetStatus("LLMs...")
+	if err := d.initLLMs(ctx); err != nil {
+		d.UI.DisplayError(fmt.Errorf("unable to initialize the LLMs: %w", err))
 	}
 
 	d.UI.SetStatus("Initializing UI...")

@@ -2805,3 +2805,28 @@ func (c *Client) DialPeerByID(
 ) (api.StreamD, error) {
 	return nil, fmt.Errorf("not implemented, yet")
 }
+
+func (c *Client) LLMGenerate(
+	ctx context.Context,
+	prompt string,
+) (string, error) {
+	resp, err := withStreamDClient(ctx, c, func(
+		ctx context.Context,
+		client streamd_grpc.StreamDClient,
+		conn io.Closer,
+	) (*streamd_grpc.LLMGenerateReply, error) {
+		return callWrapper(
+			ctx,
+			c,
+			client.LLMGenerate,
+			&streamd_grpc.LLMGenerateRequest{
+				Prompt: prompt,
+			},
+		)
+	})
+	if err != nil {
+		return "", fmt.Errorf("unable to submit the event: %w", err)
+	}
+
+	return resp.GetResponse(), nil
+}

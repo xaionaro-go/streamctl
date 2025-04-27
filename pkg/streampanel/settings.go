@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	gconsts "github.com/xaionaro-go/streamctl/pkg/consts"
 	"github.com/xaionaro-go/streamctl/pkg/screen"
@@ -22,6 +23,10 @@ import (
 	streamdconfig "github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/config"
 	xfyne "github.com/xaionaro-go/xfyne/widget"
+)
+
+const (
+	hardcodedLLMEndpointName = "ChatGPT"
 )
 
 func (p *Panel) openSettingsWindowNoLock(
@@ -367,6 +372,24 @@ func (p *Panel) openSettingsWindowNoLock(
 		}
 	}
 
+	chatGPTAPIKeyEntry := widget.NewEntry()
+	chatGPTAPIKeyEntry.OnSubmitted = func(s string) {
+		if streamDCfg.LLM.Endpoints == nil {
+			streamDCfg.LLM.Endpoints = make(streamdconfig.LLMEndpoints)
+		}
+		b := streamDCfg.LLM.Endpoints[hardcodedLLMEndpointName]
+		if b == nil {
+			b = &streamdconfig.LLMEndpoint{
+				Provider:  streamdconfig.LLMProviderChatGPT,
+				ModelName: "gpt-4o",
+			}
+			streamDCfg.LLM.Endpoints[hardcodedLLMEndpointName] = b
+		}
+		b.APIKey = s
+		logger.Debugf(ctx, "LLM config: %#+v", spew.Sdump(streamDCfg.LLM))
+	}
+	chatGPTAPIKeyEntry.SetText(streamDCfg.LLM.Endpoints.GetAPIKey(hardcodedLLMEndpointName))
+
 	w.SetContent(container.NewBorder(
 		container.NewVBox(
 			container.NewHBox(
@@ -461,6 +484,11 @@ func (p *Panel) openSettingsWindowNoLock(
 						afterStopStreamCommandEntry,
 						widget.NewLabel("Run command on receiving a chat message (after):"),
 						afterReceivedChatMessage,
+					),
+					container.NewVBox(
+						widget.NewRichTextFromMarkdown(`# LLM`),
+						widget.NewLabel("ChatGPT API Key:"),
+						chatGPTAPIKeyEntry,
 					),
 				),
 			),

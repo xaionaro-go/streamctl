@@ -307,6 +307,8 @@ type StreamD interface {
 		network string,
 		addr string,
 	) (net.Conn, error)
+
+	LLMGenerate(ctx context.Context, prompt string) (string, error)
 }
 
 type StreamPlayer = sstypes.StreamPlayer

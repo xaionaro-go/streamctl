@@ -89,6 +89,8 @@ service StreamD {
     rpc BanUser(BanUserRequest) returns (BanUserReply) {}
 
     rpc GetPeerIDs(GetPeerIDsRequest) returns (GetPeerIDsReply) {}
+
+    rpc LLMGenerate(LLMGenerateRequest) returns (LLMGenerateReply) {}
 }
 
 message PingRequest {
@@ -775,3 +777,10 @@ message GetPeerIDsReply {
     repeated string peerIDs = 1;
 }
 
+
+message LLMGenerateRequest {
+    string prompt = 1;
+}
+message LLMGenerateReply {
+    string response = 1;
+}

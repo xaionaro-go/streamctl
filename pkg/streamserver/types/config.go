@@ -39,7 +39,7 @@ type StreamConfig struct {
 
 type DestinationConfig struct {
 	URL       string `yaml:"url"`
-	StreamKey string `yaml:"stream_key"`
+	StreamKey string `yaml:"stream_key"` // TODO: this should be secret.String
 }
 
 type RestartUntilYoutubeRecognizesStream struct {

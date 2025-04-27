@@ -29,6 +29,7 @@ type config struct {
 	Dashboard       DashboardConfig     `yaml:"monitor"` // TODO: rename to `dashboard`
 	TriggerRules    TriggerRules        `yaml:"trigger_rules"`
 	P2PNetwork      P2PNetwork          `yaml:"p2p_network"`
+	LLM             LLM                 `yaml:"llm"`
 }
 
 type Config config

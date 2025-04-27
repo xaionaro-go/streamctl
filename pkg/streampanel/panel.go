@@ -1297,6 +1297,40 @@ func (p *Panel) getUpdatedStatus_startStopStreamButton_noLock(ctx context.Contex
 	}
 }
 
+func (p *Panel) generateNewTitle(
+	ctx context.Context,
+) {
+	t, err := p.generateAlternativeTextFor(ctx, fmt.Sprintf("a viral title alternative for the stream, given the current title is '%s'", p.streamTitleField.Text))
+	if err != nil {
+		p.DisplayError(err)
+		return
+	}
+	p.streamTitleField.SetText(t)
+}
+
+func (p *Panel) generateNewDescription(
+	ctx context.Context,
+) {
+	t, err := p.generateAlternativeTextFor(ctx, fmt.Sprintf("a viral description alternative for the stream, given the current description is '%s'", p.streamDescriptionField.Text))
+	if err != nil {
+		p.DisplayError(err)
+		return
+	}
+	p.streamDescriptionField.SetText(t)
+}
+
+func (p *Panel) generateAlternativeTextFor(
+	ctx context.Context,
+	what string,
+) (string, error) {
+	streamD, err := p.GetStreamD(ctx)
+	if err != nil {
+		return "", fmt.Errorf("unable to get StreamD client: %w", err)
+	}
+
+	return streamD.LLMGenerate(ctx, fmt.Sprintf("I'm about to go live on YouTube and Twitch. Suggest %s."))
+}
+
 func (p *Panel) initMainWindow(
 	ctx context.Context,
 	startingPage consts.Page,
@@ -1424,9 +1458,17 @@ func (p *Panel) initMainWindow(
 	p.youtubeCheck.SetChecked(true)
 	p.youtubeCheck.Disable()
 
+	regenerateTitleButton := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
+		p.generateNewTitle(ctx)
+	})
+
+	regenerateDescriptionButton := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
+		p.generateNewDescription(ctx)
+	})
+
 	bottomPanel := container.NewVBox(
-		p.streamTitleField,
-		p.streamDescriptionField,
+		container.NewBorder(nil, nil, regenerateTitleButton, nil, p.streamTitleField),
+		container.NewBorder(nil, nil, regenerateDescriptionButton, nil, p.streamDescriptionField),
 		container.NewBorder(
 			nil,
 			nil,

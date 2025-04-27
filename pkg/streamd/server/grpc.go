@@ -1972,3 +1972,19 @@ func (grpc *GRPCServer) ProxyPackets(
 ) error {
 
 }*/
+
+func (grpc *GRPCServer) LLMGenerate(
+	ctx context.Context,
+	req *streamd_grpc.LLMGenerateRequest,
+) (*streamd_grpc.LLMGenerateReply, error) {
+	response, err := grpc.StreamD.LLMGenerate(
+		ctx,
+		req.GetPrompt(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.LLMGenerateReply{
+		Response: response,
+	}, nil
+}

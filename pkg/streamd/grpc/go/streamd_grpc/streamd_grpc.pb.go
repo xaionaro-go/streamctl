@@ -92,6 +92,7 @@ type StreamDClient interface {
 	RemoveChatMessage(ctx context.Context, in *RemoveChatMessageRequest, opts ...grpc.CallOption) (*RemoveChatMessageReply, error)
 	BanUser(ctx context.Context, in *BanUserRequest, opts ...grpc.CallOption) (*BanUserReply, error)
 	GetPeerIDs(ctx context.Context, in *GetPeerIDsRequest, opts ...grpc.CallOption) (*GetPeerIDsReply, error)
+	LLMGenerate(ctx context.Context, in *LLMGenerateRequest, opts ...grpc.CallOption) (*LLMGenerateReply, error)
 }
 
 type streamDClient struct {
@@ -1030,6 +1031,15 @@ func (c *streamDClient) GetPeerIDs(ctx context.Context, in *GetPeerIDsRequest, o
 	return out, nil
 }
 
+func (c *streamDClient) LLMGenerate(ctx context.Context, in *LLMGenerateRequest, opts ...grpc.CallOption) (*LLMGenerateReply, error) {
+	out := new(LLMGenerateReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/LLMGenerate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // StreamDServer is the server API for StreamD service.
 // All implementations must embed UnimplementedStreamDServer
 // for forward compatibility
@@ -1109,6 +1119,7 @@ type StreamDServer interface {
 	RemoveChatMessage(context.Context, *RemoveChatMessageRequest) (*RemoveChatMessageReply, error)
 	BanUser(context.Context, *BanUserRequest) (*BanUserReply, error)
 	GetPeerIDs(context.Context, *GetPeerIDsRequest) (*GetPeerIDsReply, error)
+	LLMGenerate(context.Context, *LLMGenerateRequest) (*LLMGenerateReply, error)
 	mustEmbedUnimplementedStreamDServer()
 }
 
@@ -1340,6 +1351,9 @@ func (UnimplementedStreamDServer) BanUser(context.Context, *BanUserRequest) (*Ba
 }
 func (UnimplementedStreamDServer) GetPeerIDs(context.Context, *GetPeerIDsRequest) (*GetPeerIDsReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetPeerIDs not implemented")
+}
+func (UnimplementedStreamDServer) LLMGenerate(context.Context, *LLMGenerateRequest) (*LLMGenerateReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method LLMGenerate not implemented")
 }
 func (UnimplementedStreamDServer) mustEmbedUnimplementedStreamDServer() {}
 
@@ -2737,6 +2751,24 @@ func _StreamD_GetPeerIDs_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _StreamD_LLMGenerate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LLMGenerateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).LLMGenerate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/LLMGenerate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).LLMGenerate(ctx, req.(*LLMGenerateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _StreamD_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "streamd.StreamD",
 	HandlerType: (*StreamDServer)(nil),
@@ -2996,6 +3028,10 @@ var _StreamD_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetPeerIDs",
 			Handler:    _StreamD_GetPeerIDs_Handler,
+		},
+		{
+			MethodName: "LLMGenerate",
+			Handler:    _StreamD_LLMGenerate_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
