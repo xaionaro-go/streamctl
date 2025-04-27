@@ -162,6 +162,7 @@ type StreamD interface {
 	WaitForStreamPublisher(
 		ctx context.Context,
 		streamID StreamID,
+		waitForNext bool,
 	) (<-chan struct{}, error)
 
 	AddStreamPlayer(
@@ -351,6 +352,7 @@ type StreamForward struct {
 
 type IncomingStream struct {
 	StreamID StreamID
+	IsActive bool
 }
 
 type StreamID = streamtypes.StreamID

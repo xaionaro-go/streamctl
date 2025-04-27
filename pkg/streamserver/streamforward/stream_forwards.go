@@ -29,7 +29,7 @@ type ForwardingKey struct {
 type StreamServer interface {
 	types.WithConfiger
 	types.WaitPublisherChaner
-	types.PubsubNameser
+	types.ActiveIncomingStreamIDser
 	types.GetPortServerser
 }
 
@@ -52,10 +52,10 @@ func (srv *) WaitPublisherChan(
 	defer func(){ logger.Tracef(ctx, "/WaitPublisherChan(ctx, '%s', %t): %v", streamID, waitForNext, _err) }()
 }
 
-func (srv *) PubsubNames() (_ret AppKeys, _err error) {
+func (srv *) ActiveIncomingStreamIDs() (_ret []StreamID, _err error) {
 	ctx := context.TODO()
-	logger.Tracef(ctx, "PubsubNames()")
-	defer func(){ logger.Tracef(ctx, "/PubsubNames(): %v %v", _ret, _err) }()
+	logger.Tracef(ctx, "ActiveIncomingStreamIDs()")
+	defer func(){ logger.Tracef(ctx, "/ActiveIncomingStreamIDs(): %v %v", _ret, _err) }()
 }
 
 func (srv *) GetPortServers(ctx context.Context) (_ret []Config, _err error) {
@@ -206,7 +206,7 @@ func (s *StreamForwards) addStreamForward(
 }
 
 func (s *StreamForwards) getLocalhostURL(ctx context.Context, streamID types.StreamID) (*url.URL, error) {
-	return streamportserver.GetURLForStreamID(ctx, s.StreamServer, streamID)
+	return streamportserver.GetURLForLocalStreamID(ctx, s.StreamServer, streamID)
 }
 
 func (s *StreamForwards) newActiveStreamForward(

@@ -41,10 +41,10 @@ func (srv *StreamServer) WaitPublisherChan(
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (srv *StreamServer) PubsubNames() (_ret types.AppKeys, _err error) {
+func (srv *StreamServer) ActiveIncomingStreamIDs() (_ret []types.StreamID, _err error) {
 	ctx := context.TODO()
-	logger.Tracef(ctx, "PubsubNames()")
-	defer func() { logger.Tracef(ctx, "/PubsubNames(): %v %v", _ret, _err) }()
+	logger.Tracef(ctx, "ActiveIncomingStreamIDs()")
+	defer func() { logger.Tracef(ctx, "/ActiveIncomingStreamIDs(): %v %v", _ret, _err) }()
 	return nil, fmt.Errorf("not implemented")
 }
 

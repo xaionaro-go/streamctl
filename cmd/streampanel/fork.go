@@ -255,19 +255,21 @@ func runFork(
 	}
 	logger.Infof(ctx, "running '%s %s'", args[0], strings.Join(args[1:], " "))
 	cmd := exec.Command(args[0], args[1:]...)
-	cmd.Stderr = logwriter.NewLogWriter(
+	stderrLogger := logwriter.NewLogWriter(
 		ctx,
 		logger.FromCtx(ctx).
 			WithField("log_writer_target", "split").
 			WithField("output_type", "stderr"),
-		logger.LevelTrace,
+		logger.LevelDebug,
 	)
-	cmd.Stdout = logwriter.NewLogWriter(
+	cmd.Stderr = stderrLogger
+	stdoutLogger := logwriter.NewLogWriter(
 		ctx,
 		logger.FromCtx(ctx).WithField("log_writer_target", "split"),
-		logger.LevelTrace,
+		logger.LevelDebug,
 	)
-	cmd.Stdin = os.Stdin
+	cmd.Stdout = stdoutLogger
+	cmd.Stdin = nil
 	err := child_process_manager.ConfigureCommand(cmd)
 	if err != nil {
 		logger.Errorf(ctx, "unable to configure the command %v to be auto-killed", err)
@@ -289,14 +291,13 @@ func runFork(
 	}
 	observability.Go(ctx, func() {
 		err := cmd.Wait()
+		stderrLogger.Flush()
+		stdoutLogger.Flush()
 		cancelFn()
 		if err != nil {
-			logger.Errorf(
-				ctx,
+			logger.Errorf(ctx,
 				"error running '%s %s': %v",
-				args[0],
-				strings.Join(args[1:], " "),
-				err,
+				args[0], strings.Join(args[1:], " "), err,
 			)
 		}
 	})

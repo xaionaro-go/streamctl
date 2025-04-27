@@ -102,29 +102,41 @@ func (es *eventSensor) submitEventWindowFocusChange(
 
 	var err *multierror.Error
 
-	if es.PreviouslyFocusedWindow != nil {
-		ev := es.PreviouslyFocusedWindow
-		err = multierror.Append(err, submitEventer.SubmitEvent(ctx, &event.WindowFocusChange{
+	constructEvent := func(
+		ev *windowmanagerhandler.WindowFocusChange,
+		isFocused bool,
+	) *event.WindowFocusChange {
+		r := &event.WindowFocusChange{
 			Host:        hostname,
 			WindowID:    (*uint64)(ev.WindowID),
 			WindowTitle: ev.WindowTitle,
-			UserID:      ptr(uint64(*ev.UserID)),
-			ProcessID:   ptr(uint64(*ev.ProcessID)),
 			ProcessName: ev.ProcessName,
-			IsFocused:   ptr(false),
-		}))
+			IsFocused:   &isFocused,
+		}
+		if ev.UserID != nil {
+			r.UserID = ptr(uint64(*ev.UserID))
+		}
+		if ev.ProcessID != nil {
+			r.ProcessID = ptr(uint64(*ev.ProcessID))
+		}
+		return r
+	}
+
+	if es.PreviouslyFocusedWindow != nil {
+		err = multierror.Append(
+			err,
+			submitEventer.SubmitEvent(
+				ctx,
+				constructEvent(es.PreviouslyFocusedWindow, false),
+			),
+		)
 	}
 
 	es.PreviouslyFocusedWindow = &ev
-	err = multierror.Append(err, submitEventer.SubmitEvent(ctx, &event.WindowFocusChange{
-		Host:        hostname,
-		WindowID:    (*uint64)(ev.WindowID),
-		WindowTitle: ev.WindowTitle,
-		UserID:      ptr(uint64(*ev.UserID)),
-		ProcessID:   ptr(uint64(*ev.ProcessID)),
-		ProcessName: ev.ProcessName,
-		IsFocused:   ptr(true),
-	}))
+	err = multierror.Append(
+		err,
+		submitEventer.SubmitEvent(ctx, constructEvent(&ev, true)),
+	)
 
 	return err.ErrorOrNil()
 }

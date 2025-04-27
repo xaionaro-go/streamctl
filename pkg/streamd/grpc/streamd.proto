@@ -340,6 +340,7 @@ message RemoveStreamDestinationReply {}
 
 message IncomingStream {
     string streamID = 1;
+    bool isActive = 2;
 }
 
 message AddIncomingStreamRequest {
@@ -465,6 +466,7 @@ message RemoveStreamForwardReply {}
 
 message WaitForStreamPublisherRequest {
     optional string streamID = 1;
+    bool waitForNext = 2;
 }
 message StreamPublisher {}
 

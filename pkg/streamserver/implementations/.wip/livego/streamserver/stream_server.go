@@ -433,7 +433,7 @@ func buildStreamForward(
 	}
 }
 
-func (a *StreamServer) PubsubNames() types.AppKeys {
+func (a *StreamServer) ActiveIncomingStreamIDs() []types.StreamID {
 }
 
 func (a *StreamServer) WaitPublisherChan(

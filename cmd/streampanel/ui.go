@@ -28,6 +28,7 @@ func forkUI(preCtx context.Context, mainProcessAddr, password string) {
 	logger.Debugf(ctx, "flags == %#+v", flags)
 	ctx, cancelFunc := initRuntime(ctx, flags, procName)
 	defer cancelFunc()
+	defer belt.Flush(ctx)
 	observability.Go(ctx, func() {
 		<-ctx.Done()
 		logger.Debugf(ctx, "context is cancelled")
@@ -50,6 +51,7 @@ func forkUI(preCtx context.Context, mainProcessAddr, password string) {
 
 	logger.Infof(ctx, "running the UI")
 	runPanel(ctx, cancelFunc, flags, mainProcess)
+	logger.Infof(ctx, "UI is closed")
 	err = mainProcess.SendMessage(ctx, ProcessNameMain, MessageApplicationQuit{})
 	if err != nil {
 		logger.Error(ctx, "unable to send the Quit message to the main process: %v", err)

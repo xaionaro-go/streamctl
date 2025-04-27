@@ -1346,6 +1346,7 @@ func (c *Client) ListIncomingStreams(
 	for _, stream := range reply.GetIncomingStreams() {
 		result = append(result, api.IncomingStream{
 			StreamID: api.StreamID(stream.GetStreamID()),
+			IsActive: stream.GetIsActive(),
 		})
 	}
 	return result, nil
@@ -1641,6 +1642,7 @@ func (c *Client) RemoveStreamForward(
 func (c *Client) WaitForStreamPublisher(
 	ctx context.Context,
 	streamID api.StreamID,
+	waitForNext bool,
 ) (<-chan struct{}, error) {
 	return unwrapStreamDChan(
 		ctx,
@@ -1654,7 +1656,8 @@ func (c *Client) WaitForStreamPublisher(
 				c,
 				client.WaitForStreamPublisher,
 				&streamd_grpc.WaitForStreamPublisherRequest{
-					StreamID: ptr(string(streamID)),
+					StreamID:    ptr(string(streamID)),
+					WaitForNext: waitForNext,
 				},
 			)
 		},

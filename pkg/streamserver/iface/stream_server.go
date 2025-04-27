@@ -14,7 +14,7 @@ import (
 
 type StreamServer interface {
 	streamplayer.StreamServer
-	types.PubsubNameser
+	types.ActiveIncomingStreamIDser
 
 	Init(
 		ctx context.Context,

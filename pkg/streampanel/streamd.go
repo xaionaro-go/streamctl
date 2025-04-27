@@ -47,6 +47,15 @@ func (p *Panel) LazyInitStreamD(ctx context.Context) (_err error) {
 	return nil
 }
 
+func (p *Panel) GetStreamD(
+	ctx context.Context,
+) (api.StreamD, error) {
+	if p.StreamD == nil {
+		return nil, fmt.Errorf("not set, yet")
+	}
+	return p.StreamD, nil
+}
+
 func (p *Panel) streamDCallWrapper(
 	ctx context.Context,
 	req any,

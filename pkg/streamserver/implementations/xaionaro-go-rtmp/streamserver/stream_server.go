@@ -149,8 +149,13 @@ func (pubsub *pubsubAdapter) Sub(
 	return pubsub.Pubsub.Sub(conn, callback)
 }
 
-func (s *StreamServer) PubsubNames() (types.AppKeys, error) {
-	return s.RelayService.PubsubNames(), nil
+func (s *StreamServer) ActiveIncomingStreamIDs() ([]types.StreamID, error) {
+	pss := s.RelayService.PubsubNames()
+	r := make([]types.StreamID, 0, len(pss))
+	for _, ps := range pss {
+		r = append(r, types.StreamID(ps))
+	}
+	return r, nil
 }
 
 func (s *StreamServer) ListServers(

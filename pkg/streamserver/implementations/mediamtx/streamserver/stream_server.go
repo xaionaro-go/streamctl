@@ -197,16 +197,16 @@ func (s *StreamServer) WithConfig(
 	})
 }
 
-func (s *StreamServer) PubsubNames() (types.AppKeys, error) {
+func (s *StreamServer) ActiveIncomingStreamIDs() ([]types.StreamID, error) {
 	pathList, err := s.pathManager.APIPathsList()
 	if err != nil {
 		return nil, fmt.Errorf("unable to query the list of available pubsub names: %w", err)
 	}
 
-	var result types.AppKeys
+	var result []types.StreamID
 	for _, item := range pathList.Items {
 		if item.Ready {
-			result = append(result, types.AppKey(item.Name))
+			result = append(result, types.StreamID(item.Name))
 		}
 	}
 
@@ -341,14 +341,23 @@ type IncomingStream = types.IncomingStream
 func (s *StreamServer) ListIncomingStreams(
 	ctx context.Context,
 ) []IncomingStream {
+	logger.Debugf(ctx, "ListIncomingStreams")
+	defer func() { logger.Debugf(ctx, "/ListIncomingStreams") }()
 	ctx = belt.WithField(ctx, "module", "StreamServer")
-	_ = ctx
+	if s == nil {
+		logger.Errorf(ctx, "s == nil")
+		return nil
+	}
 	return xsync.DoA1R1(ctx, &s.mutex, s.listIncomingStreams, ctx)
 }
 
 func (s *StreamServer) listIncomingStreams(
-	_ context.Context,
+	ctx context.Context,
 ) []IncomingStream {
+	if s.config == nil {
+		logger.Errorf(ctx, "s.config == nil")
+		return nil
+	}
 	var result []IncomingStream
 	for streamID := range s.config.Streams {
 		result = append(result, IncomingStream{
@@ -399,12 +408,9 @@ func (s *StreamServer) WaitPublisherChan(
 				},
 			)
 
-			logger.Debugf(
-				ctx,
+			logger.Debugf(ctx,
 				"WaitPublisherChan('%s', %v): publisher==%#+v",
-				appKey,
-				waitForNext,
-				publisher,
+				appKey, waitForNext, publisher,
 			)
 
 			if publisher != nil && publisher != curPublisher {

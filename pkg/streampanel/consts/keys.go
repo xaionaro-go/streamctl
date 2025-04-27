@@ -27,4 +27,5 @@ const (
 	PageRestream     = Page("Restream")
 	PageCamera       = Page("Camera")
 	PageSelectServer = Page("Select server")
+	PageMonitor      = Page("Monitor (local)")
 )

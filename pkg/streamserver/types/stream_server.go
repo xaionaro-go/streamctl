@@ -8,8 +8,8 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 )
 
-type PubsubNameser interface {
-	PubsubNames() (AppKeys, error)
+type ActiveIncomingStreamIDser interface {
+	ActiveIncomingStreamIDs() ([]StreamID, error)
 }
 
 type Publisher = streamplayer.Publisher

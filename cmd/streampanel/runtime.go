@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"fmt"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -156,11 +157,11 @@ func seppukuIfMemHugeLeak(
 					humanize.Bytes(m.HeapInuse),
 					m.HeapInuse,
 				)
-				if m.HeapInuse > 1000*1000*1000 {
+				if m.HeapInuse > 1000*1000*1000 && logger.FromCtx(ctx).Level() >= logger.LevelDebug {
 					buf.Reset()
 					err := pprof.WriteHeapProfile(&buf)
 					if err == nil {
-						logger.FromCtx(ctx).WithField("heap_profile", base64.StdEncoding.EncodeToString(buf.Bytes())).Debugf("heap profile")
+						fmt.Fprintf(os.Stderr, "HEAP-PROFILE: %s\n", base64.StdEncoding.EncodeToString(buf.Bytes()))
 					} else {
 						logger.Errorf(ctx, "unable to get heap profile: %v", err)
 					}

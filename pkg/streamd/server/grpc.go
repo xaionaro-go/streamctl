@@ -1065,6 +1065,7 @@ func (grpc *GRPCServer) ListIncomingStreams(
 			result,
 			&streamd_grpc.IncomingStream{
 				StreamID: string(s.StreamID),
+				IsActive: s.IsActive,
 			},
 		)
 	}
@@ -1231,6 +1232,7 @@ func (grpc *GRPCServer) WaitForStreamPublisher(
 	ch, err := grpc.StreamD.WaitForStreamPublisher(
 		ctx,
 		api.StreamID(req.GetStreamID()),
+		req.GetWaitForNext(),
 	)
 	if err != nil {
 		return fmt.Errorf("streamd returned error: %w", err)

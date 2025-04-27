@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	playertypes "github.com/xaionaro-go/player/pkg/player/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
 
@@ -18,7 +19,9 @@ type Config struct {
 	ReadTimeout           time.Duration
 	NotifierStart         []FuncNotifyStart `yaml:"-"`
 	OverrideURL           string
-	GetRestartChanFunc    GetRestartChanFunc `yaml:"-"`
+	GetRestartChanFunc    GetRestartChanFunc   `yaml:"-"`
+	CustomPlayerOptions   []playertypes.Option `yaml:"-"`
+	ForceWaitForPublisher bool
 }
 
 func (cfg Config) Options() Options {
@@ -43,6 +46,15 @@ func (cfg Config) Options() Options {
 	}
 	if cfg.OverrideURL != "" {
 		opts = append(opts, OptionOverrideURL(cfg.OverrideURL))
+	}
+	if cfg.GetRestartChanFunc != nil {
+		opts = append(opts, OptionGetRestartChanFunc(cfg.GetRestartChanFunc))
+	}
+	if cfg.CustomPlayerOptions != nil {
+		opts = append(opts, OptionCustomPlayerOptions(cfg.CustomPlayerOptions))
+	}
+	if cfg.ForceWaitForPublisher {
+		opts = append(opts, OptionForceWaitForPublisher(cfg.ForceWaitForPublisher))
 	}
 	return opts
 }
@@ -121,4 +133,16 @@ type OptionGetRestartChanFunc func() <-chan struct{}
 
 func (s OptionGetRestartChanFunc) Apply(cfg *Config) {
 	cfg.GetRestartChanFunc = GetRestartChanFunc(s)
+}
+
+type OptionCustomPlayerOptions playertypes.Options
+
+func (s OptionCustomPlayerOptions) Apply(cfg *Config) {
+	cfg.CustomPlayerOptions = playertypes.Options(s)
+}
+
+type OptionForceWaitForPublisher bool
+
+func (s OptionForceWaitForPublisher) Apply(cfg *Config) {
+	cfg.ForceWaitForPublisher = bool(s)
 }

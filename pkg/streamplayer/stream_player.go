@@ -33,7 +33,7 @@ const (
 )
 
 type Publisher interface {
-	ClosedChan() <-chan struct{}
+	ClosedChan() <-chan struct{} // TODO: can I remove this?
 }
 
 type WaitPublisherChaner interface {
@@ -212,13 +212,20 @@ func (p *StreamPlayerHandler) startU(ctx context.Context) error {
 
 	instanceCtx, cancelFn := context.WithCancel(ctx)
 
+	opts := player.Options{
+		player.OptionLowLatency(true),
+		//player.OptionCacheDuration(0),
+	}
+	if p.Config.CustomPlayerOptions != nil {
+		opts = append(opts, p.Config.CustomPlayerOptions...)
+	}
+
 	playerType := p.Backend
 	player, err := p.Parent.PlayerManager.NewPlayer(
 		instanceCtx,
 		StreamID2Title(p.StreamID),
 		playerType,
-		player.OptionLowLatency(true),
-		//player.OptionCacheDuration(0),
+		opts...,
 	)
 	if err != nil {
 		errmon.ObserveErrorCtx(ctx, p.Close())
@@ -284,7 +291,7 @@ func (p *StreamPlayerHandler) getOverriddenURL(context.Context) (*url.URL, error
 }
 
 func (p *StreamPlayerHandler) getInternalURL(ctx context.Context) (*url.URL, error) {
-	return streamportserver.GetURLForStreamID(ctx, p.Parent.StreamServer, p.StreamID)
+	return streamportserver.GetURLForLocalStreamID(ctx, p.Parent.StreamServer, p.StreamID)
 }
 
 func (p *StreamPlayerHandler) startObserver(
@@ -494,7 +501,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 		ch = _ch
 
 		for func() bool {
-			if p.Config.OverrideURL == "" {
+			if p.Config.OverrideURL == "" || p.Config.ForceWaitForPublisher {
 				waitPublisherCtx, waitPublisherCancel := context.WithCancel(ctx)
 				defer waitPublisherCancel()
 

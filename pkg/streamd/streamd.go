@@ -1264,22 +1264,44 @@ func (d *StreamD) RemoveIncomingStream(
 
 func (d *StreamD) ListIncomingStreams(
 	ctx context.Context,
-) ([]api.IncomingStream, error) {
+) (_ret []api.IncomingStream, _err error) {
 	logger.Debugf(ctx, "ListIncomingStreams")
-	defer logger.Debugf(ctx, "/ListIncomingStreams")
+	defer func() { logger.Debugf(ctx, "/ListIncomingStreams: %v", _err) }()
+	if d == nil {
+		return nil, fmt.Errorf("StreamD == nil")
+	}
 
-	return xsync.DoR2(ctx, &d.StreamServerLocker, func() ([]api.IncomingStream, error) {
-		if d.StreamServer == nil {
-			return nil, fmt.Errorf("stream server is not initialized")
-		}
-		var result []api.IncomingStream
-		for _, src := range d.StreamServer.ListIncomingStreams(ctx) {
-			result = append(result, api.IncomingStream{
-				StreamID: api.StreamID(src.StreamID),
-			})
-		}
-		return result, nil
-	})
+	return xsync.DoA1R2(ctx, &d.StreamServerLocker, d.listIncomingStreamsNoLock, ctx)
+}
+
+func (d *StreamD) listIncomingStreamsNoLock(
+	ctx context.Context,
+) (_ret []api.IncomingStream, _err error) {
+	logger.Debugf(ctx, "listIncomingStreamsNoLock")
+	defer func() { logger.Debugf(ctx, "/listIncomingStreamsNoLock: %v", _err) }()
+
+	if d.StreamServer == nil {
+		return nil, fmt.Errorf("stream server is not initialized")
+	}
+
+	activeIncomingStreams, err := d.StreamServer.ActiveIncomingStreamIDs()
+	if err != nil {
+		logger.Errorf(ctx, "unable to get the list of active incoming streams: %w", err)
+	}
+	isActive := map[types.StreamID]struct{}{}
+	for _, streamID := range activeIncomingStreams {
+		isActive[streamID] = struct{}{}
+	}
+
+	var result []api.IncomingStream
+	for _, src := range d.StreamServer.ListIncomingStreams(ctx) {
+		_, isActive := isActive[src.StreamID]
+		result = append(result, api.IncomingStream{
+			StreamID: api.StreamID(src.StreamID),
+			IsActive: isActive,
+		})
+	}
+	return result, nil
 }
 
 func (d *StreamD) ListStreamDestinations(
@@ -1544,12 +1566,13 @@ func resetContextCancellers(ctx context.Context) context.Context {
 func (d *StreamD) WaitForStreamPublisher(
 	ctx context.Context,
 	streamID api.StreamID,
+	waitForNext bool,
 ) (<-chan struct{}, error) {
 	return xsync.DoR2(ctx, &d.StreamServerLocker, func() (<-chan struct{}, error) {
 		if d.StreamServer == nil {
 			return nil, fmt.Errorf("stream server is not initialized")
 		}
-		pubCh, err := d.StreamServer.WaitPublisherChan(ctx, streamID, false)
+		pubCh, err := d.StreamServer.WaitPublisherChan(ctx, streamID, waitForNext)
 		if err != nil {
 			return nil, err
 		}

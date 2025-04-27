@@ -24,6 +24,7 @@ import (
 	child_process_manager "github.com/AgustinSRG/go-child-process-manager"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
+	"github.com/tiendc/go-deepcopy"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/autoupdater"
@@ -131,6 +132,8 @@ type Panel struct {
 	restreamsWidget     *fyne.Container
 	playersWidget       *fyne.Container
 
+	streamsMonitorWidget *fyne.Container
+
 	previousNumBytesLocker xsync.Mutex
 	previousNumBytes       map[any][4]uint64
 	previousNumBytesTS     map[any]time.Time
@@ -158,6 +161,9 @@ type Panel struct {
 
 	streamStartedLocker xsync.Mutex
 	streamStartedWindow fyne.Window
+
+	monitorPage       *monitorPage
+	monitorPageLocker xsync.Mutex
 }
 
 func New(
@@ -212,7 +218,7 @@ func (p *Panel) dumpConfig(ctx context.Context) {
 	}
 
 	var buf bytes.Buffer
-	_, err := p.Config.WriteTo(&buf)
+	_, err := ignoreError(p.GetConfig(ctx)).WriteTo(&buf)
 	if err != nil {
 		logger.Error(ctx, err)
 		return
@@ -228,6 +234,7 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
 	p.dumpConfig(ctx)
 
 	initCfg := loopOptions(opts).Config()
+	cfg := ignoreError(p.GetConfig(ctx))
 
 	p.defaultContext = ctx
 
@@ -240,7 +247,7 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
 	logger.Tracef(ctx, "SetDisableScreenBlanking(true)")
 
 	var loadingWindow fyne.Window
-	if p.Config.RemoteStreamDAddr == "" {
+	if ignoreError(p.GetConfig(ctx)).RemoteStreamDAddr == "" {
 		logger.Tracef(ctx, "is not a remote streamd")
 		loadingWindow = p.newLoadingWindow(ctx)
 		resizeWindow(loadingWindow, fyne.NewSize(600, 600))
@@ -290,12 +297,12 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
 			// TODO: delete this hardcoding of the port
 			defer closeLoadingWindow()
 			streamD := p.StreamD.(*streamd.StreamD)
-			streamD.AddOAuthListenPort(p.Config.OAuth.ListenPorts.Twitch)
-			streamD.AddOAuthListenPort(p.Config.OAuth.ListenPorts.Kick)
+			streamD.AddOAuthListenPort(cfg.OAuth.ListenPorts.Twitch)
+			streamD.AddOAuthListenPort(cfg.OAuth.ListenPorts.Kick)
 			observability.Go(ctx, func() {
 				<-ctx.Done()
-				streamD.RemoveOAuthListenPort(p.Config.OAuth.ListenPorts.Twitch)
-				streamD.RemoveOAuthListenPort(p.Config.OAuth.ListenPorts.Kick)
+				streamD.RemoveOAuthListenPort(cfg.OAuth.ListenPorts.Twitch)
+				streamD.RemoveOAuthListenPort(cfg.OAuth.ListenPorts.Kick)
 			})
 			logger.Tracef(ctx, "started oauth listener for the local streamd")
 		}
@@ -328,7 +335,9 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
 			p.DisplayError(err)
 		}
 
-		logger.Tracef(ctx, "ended stream controllers initialization")
+		if err := p.initMonitorPage(ctx); err != nil {
+			p.DisplayError(fmt.Errorf("unable to initialize the active monitors: %w", err))
+		}
 
 		if initCfg.AutoUpdater != nil {
 			observability.Go(ctx, func() {
@@ -478,10 +487,12 @@ func (p *Panel) startOAuthListenerForRemoteStreamD(
 	logger.Debugf(ctx, "startOAuthListenerForRemoteStreamD")
 	defer logger.Debugf(ctx, "/startOAuthListenerForRemoteStreamD")
 
+	cfg := ignoreError(p.GetConfig(ctx))
+
 	for _, listenPort := range []uint16{
-		p.Config.OAuth.ListenPorts.Twitch,
-		p.Config.OAuth.ListenPorts.Kick,
-		p.Config.OAuth.ListenPorts.YouTube,
+		cfg.OAuth.ListenPorts.Twitch,
+		cfg.OAuth.ListenPorts.Kick,
+		cfg.OAuth.ListenPorts.YouTube,
 	} {
 		ctx, cancelFn := context.WithCancel(ctx)
 		receiver, listenPort, err := oauthhandler.NewCodeReceiver(
@@ -639,17 +650,39 @@ func getExpandedConfigPath(configPath string) (string, error) {
 	return xpath.Expand(configPath)
 }
 
+func (p *Panel) GetConfig(
+	ctx context.Context,
+) (_ret *Config, _err error) {
+	logger.Debugf(ctx, "GetConfig")
+	defer func() { logger.Debugf(ctx, "/GetConfig: %v", _err) }()
+
+	return xsync.DoR2(ctx, &p.configLocker, func() (*Config, error) {
+		var c Config
+		err := deepcopy.Copy(&c, p.Config)
+		if err != nil {
+			return &p.Config, fmt.Errorf("unable copy the config, returning the pointer to the original config (which is unsafe): %w", err)
+		}
+		return &c, nil
+	})
+}
+
 func (p *Panel) SaveConfig(
 	ctx context.Context,
 ) (_err error) {
 	logger.Debugf(ctx, "SaveConfig")
 	defer func() { logger.Debugf(ctx, "/SaveConfig: %v", _err) }()
+	return xsync.DoA1R1(ctx, &p.configLocker, p.saveConfigNoLock, ctx)
+}
 
+func (p *Panel) saveConfigNoLock(
+	ctx context.Context,
+) (_err error) {
+	logger.Debugf(ctx, "saveConfigNoLock")
+	defer func() { logger.Debugf(ctx, "/saveConfigNoLock: %v", _err) }()
 	err := config.WriteConfigToPath(ctx, p.configPath, p.Config)
 	if err != nil {
 		return fmt.Errorf("unable to save the config: %w", err)
 	}
-
 	return nil
 }
 
@@ -1485,6 +1518,17 @@ func (p *Panel) initMainWindow(
 		),
 	))
 
+	p.streamsMonitorWidget = container.NewVBox()
+	monitorPage := container.NewVScroll(container.NewBorder(
+		nil,
+		nil,
+		nil,
+		nil,
+		container.NewVBox(
+			p.streamsMonitorWidget,
+		),
+	))
+
 	selectServerUI := newSelectServerUI(p)
 	selectServerPage := selectServerUI.CanvasObject
 
@@ -1557,6 +1601,7 @@ func (p *Panel) initMainWindow(
 			dashboardPage.Hide()
 			selectServerPage.Hide()
 			timersUI.StopRefreshingFromRemote(ctx)
+			monitorPage.Hide()
 			profileControl.Show()
 			controlPage.Show()
 		case consts.PageMoreControl:
@@ -1567,6 +1612,7 @@ func (p *Panel) initMainWindow(
 			controlPage.Hide()
 			dashboardPage.Hide()
 			selectServerPage.Hide()
+			monitorPage.Hide()
 			moreControlPage.Show()
 			timersUI.StartRefreshingFromRemote(ctx)
 		case consts.PageChat:
@@ -1577,6 +1623,7 @@ func (p *Panel) initMainWindow(
 			controlPage.Hide()
 			dashboardPage.Hide()
 			selectServerPage.Hide()
+			monitorPage.Hide()
 			chatPage.Show()
 		case consts.PageDashboard:
 			profileControl.Hide()
@@ -1588,6 +1635,7 @@ func (p *Panel) initMainWindow(
 			moreControlPage.Hide()
 			obsPage.Hide()
 			selectServerPage.Hide()
+			monitorPage.Hide()
 			dashboardPage.Show()
 			p.focusDashboardWindow(ctx)
 		case consts.PageOBS:
@@ -1599,6 +1647,7 @@ func (p *Panel) initMainWindow(
 			dashboardPage.Hide()
 			selectServerPage.Hide()
 			timersUI.StopRefreshingFromRemote(ctx)
+			monitorPage.Hide()
 			obsPage.Show()
 		case consts.PageRestream:
 			controlPage.Hide()
@@ -1609,6 +1658,7 @@ func (p *Panel) initMainWindow(
 			dashboardPage.Hide()
 			selectServerPage.Hide()
 			timersUI.StopRefreshingFromRemote(ctx)
+			monitorPage.Hide()
 			restreamPage.Show()
 			p.startRestreamPage(pageCtx)
 		case consts.PageSelectServer:
@@ -1620,7 +1670,20 @@ func (p *Panel) initMainWindow(
 			chatPage.Hide()
 			dashboardPage.Hide()
 			timersUI.StopRefreshingFromRemote(ctx)
+			monitorPage.Hide()
 			selectServerPage.Show()
+		case consts.PageMonitor:
+			profileControl.Hide()
+			controlPage.Hide()
+			moreControlPage.Hide()
+			obsPage.Hide()
+			restreamPage.Hide()
+			chatPage.Hide()
+			dashboardPage.Hide()
+			timersUI.StopRefreshingFromRemote(ctx)
+			selectServerPage.Hide()
+			monitorPage.Show()
+			p.startMonitorPage(pageCtx)
 		}
 	}
 
@@ -1632,6 +1695,7 @@ func (p *Panel) initMainWindow(
 			string(consts.PageDashboard),
 			string(consts.PageOBS),
 			string(consts.PageRestream),
+			string(consts.PageMonitor),
 		},
 		func(page string) {
 			setPage(consts.Page(page))
@@ -1656,7 +1720,15 @@ func (p *Panel) initMainWindow(
 		),
 		nil,
 		nil,
-		container.NewStack(controlPage, moreControlPage, chatPage, dashboardPage, obsPage, restreamPage),
+		container.NewStack(
+			controlPage,
+			moreControlPage,
+			chatPage,
+			dashboardPage,
+			obsPage,
+			restreamPage,
+			monitorPage,
+		),
 	))
 
 	w.Show()

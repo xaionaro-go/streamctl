@@ -10,6 +10,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/screenshot"
 	streamd "github.com/xaionaro-go/streamctl/pkg/streamd/config"
+	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
 
 type ScreenshotConfig struct {
@@ -50,6 +51,18 @@ type DashboardConfig struct {
 	} `yaml:"size"`
 }
 
+type StreamMonitor struct {
+	IsEnabled   bool                 `yaml:"is_enabled"`
+	StreamDAddr string               `yaml:"streamd_addr"`
+	StreamID    streamtypes.StreamID `yaml:"stream_id"`
+	VideoTracks []uint               `yaml:"tracks_video,omitempty"`
+	AudioTracks []uint               `yaml:"tracks_audio,omitempty"`
+}
+
+type MonitorsConfig struct {
+	StreamMonitors []StreamMonitor `yaml:"streams"`
+}
+
 type Config struct {
 	RemoteStreamDAddr string           `yaml:"streamd_remote"`
 	BuiltinStreamD    streamd.Config   `yaml:"streamd_builtin"`
@@ -58,6 +71,7 @@ type Config struct {
 	OAuth             OAuthConfig      `yaml:"oauth"`
 	Chat              ChatConfig       `yaml:"chat"`
 	Dashboard         DashboardConfig  `yaml:"dashboard"`
+	Monitors          MonitorsConfig   `yaml:"monitors"`
 }
 
 func DefaultConfig() Config {

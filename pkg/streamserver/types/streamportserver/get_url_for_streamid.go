@@ -7,14 +7,29 @@ import (
 	"net/url"
 	"sort"
 
+	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
 
-func GetURLForStreamID(
+func GetURLForLocalStreamID(
 	ctx context.Context,
 	streamServer GetPortServerser,
 	streamID streamtypes.StreamID,
 ) (*url.URL, error) {
+	return GetURLForRemoveStreamID(ctx, "127.0.0.1", "::1", streamServer, streamID)
+}
+
+func GetURLForRemoveStreamID(
+	ctx context.Context,
+	streamDAddrV4 string,
+	streamDAddrV6 string,
+	streamServer GetPortServerser,
+	streamID streamtypes.StreamID,
+) (_ret *url.URL, _err error) {
+	logger.Debugf(ctx, "GetURLForRemoveStreamID(ctx, '%s', '%s', %T, '%s')", streamDAddrV4, streamDAddrV6, streamServer, streamID)
+	defer func() {
+		logger.Debugf(ctx, "/GetURLForRemoveStreamID(ctx, '%s', '%s', %T, '%s'): %v %v", streamDAddrV4, streamDAddrV6, streamServer, streamID, _ret, _err)
+	}()
 	portSrvs, err := streamServer.GetPortServers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get the list of stream server ports: %w", err)
@@ -47,9 +62,9 @@ func GetURLForStreamID(
 	_, port, _ := net.SplitHostPort(portSrv.ListenAddr)
 	switch u.Hostname() {
 	case "0.0.0.0":
-		u.Host = net.JoinHostPort("127.0.0.1", port)
+		u.Host = net.JoinHostPort(streamDAddrV4, port)
 	case "::":
-		u.Host = net.JoinHostPort("::1", port)
+		u.Host = net.JoinHostPort(streamDAddrV6, port)
 	}
 	switch portSrv.Type {
 	case streamtypes.ServerTypeSRT:
