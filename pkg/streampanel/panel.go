@@ -1328,7 +1328,7 @@ func (p *Panel) generateAlternativeTextFor(
 		return "", fmt.Errorf("unable to get StreamD client: %w", err)
 	}
 
-	return streamD.LLMGenerate(ctx, fmt.Sprintf("I'm about to go live on YouTube and Twitch. Suggest %s."))
+	return streamD.LLMGenerate(ctx, fmt.Sprintf("I'm about to go live on YouTube and Twitch. Suggest %s.", what))
 }
 
 func (p *Panel) initMainWindow(

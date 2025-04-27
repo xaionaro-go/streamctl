@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/facebookincubator/go-belt/tool/logger"
 	llms "github.com/xaionaro-go/streamctl/pkg/llm"
 	llmtypes "github.com/xaionaro-go/streamctl/pkg/llm/types"
 	"github.com/xaionaro-go/streamctl/pkg/secret"
@@ -85,7 +86,9 @@ func (l *llm) updateConfigNoLock(
 func (l *llm) Generate(
 	ctx context.Context,
 	prompt string,
-) (string, error) {
+) (_ret string, _err error) {
+	logger.Debugf(ctx, "Generate(ctx, '%s')", prompt)
+	defer func() { logger.Debugf(ctx, "/Generate(ctx, '%s'): '%s', %v", prompt, _ret, _err) }()
 	return xsync.DoA2R2(ctx, &l.locker, l.generateNoLock, ctx, prompt)
 }
 
