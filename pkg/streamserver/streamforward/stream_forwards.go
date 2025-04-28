@@ -206,7 +206,11 @@ func (s *StreamForwards) addStreamForward(
 }
 
 func (s *StreamForwards) getLocalhostURL(ctx context.Context, streamID types.StreamID) (*url.URL, error) {
-	return streamportserver.GetURLForLocalStreamID(ctx, s.StreamServer, streamID)
+	return streamportserver.GetURLForLocalStreamID(
+		ctx,
+		s.StreamServer, streamID,
+		nil,
+	)
 }
 
 func (s *StreamForwards) newActiveStreamForward(

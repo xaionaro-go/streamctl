@@ -291,7 +291,7 @@ func (p *StreamPlayerHandler) getOverriddenURL(context.Context) (*url.URL, error
 }
 
 func (p *StreamPlayerHandler) getInternalURL(ctx context.Context) (*url.URL, error) {
-	return streamportserver.GetURLForLocalStreamID(ctx, p.Parent.StreamServer, p.StreamID)
+	return streamportserver.GetURLForLocalStreamID(ctx, p.Parent.StreamServer, p.StreamID, nil)
 }
 
 func (p *StreamPlayerHandler) startObserver(

@@ -591,6 +591,7 @@ func (p *monitorPage) startMonitorNoLock(
 		mediaURL, err = streamportserver.GetURLForLocalStreamID(
 			ctx,
 			streamDAsStreamPlayersServer(p.parent()), streamID,
+			nil,
 		)
 	} else {
 		isIPv6 := false
@@ -615,6 +616,7 @@ func (p *monitorPage) startMonitorNoLock(
 			ctx,
 			streamDAddrV4, streamDAddrV6,
 			streamDAsStreamPlayersServer(p.parent()), streamID,
+			nil,
 		)
 	}
 

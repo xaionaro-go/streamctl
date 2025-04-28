@@ -363,7 +363,21 @@ func (fwd *ActiveStreamForwarding) openInputFor(
 	factoryInstance recoder.Factory,
 	publisher types.Publisher,
 ) (recoder.Input, error) {
-	inputURL, err := streamportserver.GetURLForLocalStreamID(ctx, fwd.StreamServer, fwd.StreamID)
+	preferredScheme := fwd.DestinationURL.Scheme
+	inputURL, err := streamportserver.GetURLForLocalStreamID(
+		ctx,
+		fwd.StreamServer, fwd.StreamID,
+		func(a, b *streamportserver.Config) bool {
+			logger.Debugf(ctx, "preferred: '%s', a: '%s', b: '%s'", preferredScheme, a.Type, b.Type)
+			switch {
+			case a.Type == b.Type:
+				return false
+			case b.Type.String() == preferredScheme:
+				return true
+			}
+			return false
+		},
+	)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get a localhost endpoint: %w", err)
 	}
