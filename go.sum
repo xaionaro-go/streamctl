@@ -1163,6 +1163,8 @@ github.com/xaionaro-go/pulse v0.0.0-20241023202712-7151fa00d4bb h1:9iHPI27CYbmJD
 github.com/xaionaro-go/pulse v0.0.0-20241023202712-7151fa00d4bb/go.mod h1:cpYspI6YljhkUf1WLXLLDmeaaPFc3CnGLjDZf9dZ4no=
 github.com/xaionaro-go/recoder v0.0.0-20250428012439-3fc4b32e59a9 h1:744Nrf5lfHG0lOpivgXHDDsENer25zJlr/f5puIWhGs=
 github.com/xaionaro-go/recoder v0.0.0-20250428012439-3fc4b32e59a9/go.mod h1:Twc+NcQQ+afg4RHxwqqo9pRGIaY7+QwpuAiYa7ClSLw=
+github.com/xaionaro-go/recoder v0.0.0-20250503155018-6f353978d332 h1:jB5I8UE9UL6g7qQKaZ/g9wt3lIXxgkDDJX1cV37D5go=
+github.com/xaionaro-go/recoder v0.0.0-20250503155018-6f353978d332/go.mod h1:Twc+NcQQ+afg4RHxwqqo9pRGIaY7+QwpuAiYa7ClSLw=
 github.com/xaionaro-go/secret v0.0.0-20250111141743-ced12e1082c2 h1:QHpTWfyfmz65cE0MtFXe9fScdi+X0VIYR2wgolSYEUk=
 github.com/xaionaro-go/secret v0.0.0-20250111141743-ced12e1082c2/go.mod h1:XKoHGZ4VKMbVBl8VotLIoWQdrB6Q7jnR++RbkiegZFU=
 github.com/xaionaro-go/serializable v0.0.0-20250412140540-5ac572306599 h1:CzcQd6wLiqgjd8K/6UzR5uyt6sg4ut/kVxi6+FJMbdI=
