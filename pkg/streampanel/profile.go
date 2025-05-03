@@ -673,13 +673,13 @@ func (p *Panel) profileCreateOrUpdate(ctx context.Context, profile Profile) erro
 		return fmt.Errorf("unable to get config: %w", err)
 	}
 
-	logger.Tracef(ctx, "profileCreateOrUpdate(%s)", profile.Name)
+	logger.Debugf(ctx, "profileCreateOrUpdate(%s)", profile.Name)
 	for platformName, platformProfile := range profile.PerPlatform {
 		if platformProfile == nil {
 			continue
 		}
 		cfg.Backends[platformName].StreamProfiles[profile.Name] = platformProfile
-		logger.Tracef(
+		logger.Debugf(
 			ctx,
 			"profileCreateOrUpdate(%s): cfg.Backends[%s].StreamProfiles[%s] = %#+v",
 			profile.Name,
@@ -690,7 +690,7 @@ func (p *Panel) profileCreateOrUpdate(ctx context.Context, profile Profile) erro
 	}
 	cfg.ProfileMetadata[profile.Name] = profile.ProfileMetadata
 
-	logger.Tracef(
+	logger.Debugf(
 		ctx,
 		"profileCreateOrUpdate(%s): cfg.Backends == %#+v",
 		profile.Name,
@@ -718,7 +718,7 @@ func (p *Panel) profileDelete(ctx context.Context, profileName streamcontrol.Pro
 		return fmt.Errorf("unable to get config: %w", err)
 	}
 
-	logger.Tracef(p.defaultContext, "onProfileDeleted(%s)", profileName)
+	logger.Debugf(ctx, "onProfileDeleted(%s)", profileName)
 	for platformName := range cfg.Backends {
 		delete(cfg.Backends[platformName].StreamProfiles, profileName)
 	}
@@ -783,10 +783,16 @@ func (p *Panel) rearrangeProfiles(ctx context.Context) error {
 		logger.Tracef(ctx, "rearrangeProfiles(): curProfiles[%s] = %#+v", idx, *profile)
 	}
 
-	sort.Slice(curProfiles, func(i, j int) bool {
+	sort.SliceStable(curProfiles, func(i, j int) bool {
 		aa := curProfiles[i]
 		ab := curProfiles[j]
-		return aa.MaxOrder < ab.MaxOrder
+		if aa.MaxOrder != ab.MaxOrder {
+			return aa.MaxOrder < ab.MaxOrder
+		}
+		if aa.Name != ab.Name {
+			return aa.Name < ab.Name
+		}
+		return false
 	})
 
 	if cap(p.profilesOrder) < len(curProfiles) {
