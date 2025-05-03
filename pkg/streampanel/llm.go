@@ -3,51 +3,17 @@ package streampanel
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
-	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
-	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 )
 
 func (p *Panel) generateNewTitle(
 	ctx context.Context,
 ) {
 	profile := p.getSelectedProfile()
-	tagsCount := map[string]int{}
 
-	ytProfile, err := streamcontrol.GetStreamProfile[youtube.StreamProfile](
-		ctx,
-		profile.PerPlatform[youtube.ID],
-	)
-	if ytProfile != nil {
-		for idx, tag := range ytProfile.Tags {
-			tagsCount[tag] = tagsCount[tag] + 1000 - idx
-		}
-	}
-
-	twProfile, err := streamcontrol.GetStreamProfile[twitch.StreamProfile](
-		ctx,
-		profile.PerPlatform[twitch.ID],
-	)
-	if twProfile != nil {
-		for idx, tag := range twProfile.Tags {
-			tagsCount[tag] = tagsCount[tag] + 1000 - idx
-		}
-	}
-
-	tags := make([]string, 0, len(tagsCount))
-	for tag := range tagsCount {
-		tags = append(tags, tag)
-	}
-
-	sort.Slice(tags, func(i, j int) bool {
-		return tags[i] > tags[j]
-	})
-
-	tagsString := strings.Join(tags, ", ")
+	tagsString := strings.Join(profile.TopicTags, ", ")
 	logger.Debugf(ctx, "tags == %s", tagsString)
 
 	// the prompt is developed by noguri

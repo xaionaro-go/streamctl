@@ -162,6 +162,8 @@ func (p *Panel) profileWindow(
 	defaultStreamDescription.SetPlaceHolder("default stream description")
 	defaultStreamDescription.SetText(values.DefaultStreamDescription)
 
+	commonTagsEditor := newTagsEditor(values.TopicTags, 0, 0)
+
 	backendEnabled := map[streamcontrol.PlatformName]bool{}
 	backendData := map[streamcontrol.PlatformName]any{}
 	for _, backendID := range []streamcontrol.PlatformName{
@@ -195,10 +197,12 @@ func (p *Panel) profileWindow(
 	_ = dataKick // TODO: delete me!
 	dataYouTube := backendData[youtube.ID].(api.BackendDataYouTube)
 
-	var bottomContent []fyne.CanvasObject
+	var bottomContentLeft, bottomContentRight, bottomContentCommon []fyne.CanvasObject
 
-	bottomContent = append(bottomContent, widget.NewSeparator())
-	bottomContent = append(bottomContent, widget.NewRichTextFromMarkdown("# OBS:"))
+	bottomContentLeft = append(bottomContentLeft, widget.NewLabel("Tags for LLM (to re-generate the title):"))
+	bottomContentLeft = append(bottomContentLeft, commonTagsEditor.CanvasObject)
+	bottomContentLeft = append(bottomContentLeft, widget.NewSeparator())
+	bottomContentLeft = append(bottomContentLeft, widget.NewRichTextFromMarkdown("# OBS:"))
 	if backendEnabled[obs.ID] {
 		if platProfile := values.PerPlatform[obs.ID]; platProfile != nil {
 			var err error
@@ -214,12 +218,11 @@ func (p *Panel) profileWindow(
 			obsProfile.EnableRecording = b
 		})
 		enableRecordingCheck.SetChecked(obsProfile.EnableRecording)
-		bottomContent = append(bottomContent, enableRecordingCheck)
+		bottomContentLeft = append(bottomContentLeft, enableRecordingCheck)
 	}
 
 	var getTwitchTags func() []string
-	bottomContent = append(bottomContent, widget.NewSeparator())
-	bottomContent = append(bottomContent, widget.NewRichTextFromMarkdown("# Twitch:"))
+	bottomContentRight = append(bottomContentRight, widget.NewRichTextFromMarkdown("# Twitch:"))
 	if backendEnabled[twitch.ID] {
 		if platProfile := values.PerPlatform[twitch.ID]; platProfile != nil {
 			var err error
@@ -235,7 +238,7 @@ func (p *Panel) profileWindow(
 		twitchCategory.SetPlaceHolder("twitch category")
 
 		selectTwitchCategoryBox := container.NewHBox()
-		bottomContent = append(bottomContent, selectTwitchCategoryBox)
+		bottomContentRight = append(bottomContentRight, selectTwitchCategoryBox)
 		twitchCategory.OnChanged = func(text string) {
 			selectTwitchCategoryBox.RemoveAll()
 			if text == "" {
@@ -265,7 +268,7 @@ func (p *Panel) profileWindow(
 		}
 
 		selectedTwitchCategoryBox := container.NewHBox()
-		bottomContent = append(bottomContent, selectedTwitchCategoryBox)
+		bottomContentRight = append(bottomContentRight, selectedTwitchCategoryBox)
 
 		setSelectedTwitchCategory := func(catName string) {
 			selectedTwitchCategoryBox.RemoveAll()
@@ -312,18 +315,18 @@ func (p *Panel) profileWindow(
 				}
 			}
 		}
-		bottomContent = append(bottomContent, twitchCategory)
+		bottomContentRight = append(bottomContentRight, twitchCategory)
 
 		twitchTagsEditor := newTagsEditor(twitchProfile.Tags[:], 10, 0)
-		bottomContent = append(bottomContent, widget.NewLabel("Tags:"))
-		bottomContent = append(bottomContent, twitchTagsEditor.CanvasObject)
+		bottomContentRight = append(bottomContentRight, widget.NewLabel("Tags:"))
+		bottomContentRight = append(bottomContentRight, twitchTagsEditor.CanvasObject)
 		getTwitchTags = twitchTagsEditor.GetTags
 	} else {
-		bottomContent = append(bottomContent, widget.NewLabel("Twitch is disabled"))
+		bottomContentRight = append(bottomContentRight, widget.NewLabel("Twitch is disabled"))
 	}
 
-	bottomContent = append(bottomContent, widget.NewSeparator())
-	bottomContent = append(bottomContent, widget.NewRichTextFromMarkdown("# Kick:"))
+	bottomContentRight = append(bottomContentRight, widget.NewSeparator())
+	bottomContentRight = append(bottomContentRight, widget.NewRichTextFromMarkdown("# Kick:"))
 	if backendEnabled[kick.ID] {
 		if platProfile := values.PerPlatform[kick.ID]; platProfile != nil {
 			var err error
@@ -347,7 +350,7 @@ func (p *Panel) profileWindow(
 		kickCategory.SetPlaceHolder("kick category")
 
 		selectKickCategoryBox := container.NewHBox()
-		bottomContent = append(bottomContent, selectKickCategoryBox)
+		bottomContentRight = append(bottomContentRight, selectKickCategoryBox)
 		kickCategory.OnChanged = func(text string) {
 			selectKickCategoryBox.RemoveAll()
 			if text == "" {
@@ -377,7 +380,7 @@ func (p *Panel) profileWindow(
 		}
 
 		selectedKickCategoryBox := container.NewHBox()
-		bottomContent = append(bottomContent, selectedKickCategoryBox)
+		bottomContentRight = append(bottomContentRight, selectedKickCategoryBox)
 
 		setSelectedKickCategory := func(catID uint64) {
 			selectedKickCategoryBox.RemoveAll()
@@ -411,14 +414,14 @@ func (p *Panel) profileWindow(
 				kickCategory.SetText("")
 			})
 		}
-		bottomContent = append(bottomContent, kickCategory)
+		bottomContentRight = append(bottomContentRight, kickCategory)
 	} else {
-		bottomContent = append(bottomContent, widget.NewLabel("Kick is disabled"))
+		bottomContentRight = append(bottomContentRight, widget.NewLabel("Kick is disabled"))
 	}
 
 	var getYoutubeTags func() []string
-	bottomContent = append(bottomContent, widget.NewSeparator())
-	bottomContent = append(bottomContent, widget.NewRichTextFromMarkdown("# YouTube:"))
+	bottomContentRight = append(bottomContentRight, widget.NewSeparator())
+	bottomContentRight = append(bottomContentRight, widget.NewRichTextFromMarkdown("# YouTube:"))
 	if backendEnabled[youtube.ID] {
 		if platProfile := values.PerPlatform[youtube.ID]; platProfile != nil {
 			var err error
@@ -438,8 +441,8 @@ func (p *Panel) profileWindow(
 			w,
 			"When enabled, it adds the number of the stream to the stream's title.\n\nFor example 'Watching presidential debate' -> 'Watching presidential debate [#52]'.",
 		)
-		bottomContent = append(
-			bottomContent,
+		bottomContentRight = append(
+			bottomContentRight,
 			container.NewHBox(autoNumerateCheck, autoNumerateHint),
 		)
 
@@ -447,7 +450,7 @@ func (p *Panel) profileWindow(
 		youtubeTemplate.SetPlaceHolder("youtube live recording template")
 
 		selectYoutubeTemplateBox := container.NewHBox()
-		bottomContent = append(bottomContent, selectYoutubeTemplateBox)
+		bottomContentRight = append(bottomContentRight, selectYoutubeTemplateBox)
 		youtubeTemplate.OnChanged = func(text string) {
 			selectYoutubeTemplateBox.RemoveAll()
 			if text == "" {
@@ -477,7 +480,7 @@ func (p *Panel) profileWindow(
 		}
 
 		selectedYoutubeBroadcastBox := container.NewHBox()
-		bottomContent = append(bottomContent, selectedYoutubeBroadcastBox)
+		bottomContentRight = append(bottomContentRight, selectedYoutubeBroadcastBox)
 
 		setSelectedYoutubeBroadcast := func(bc *youtube.LiveBroadcast) {
 			selectedYoutubeBroadcastBox.RemoveAll()
@@ -521,7 +524,7 @@ func (p *Panel) profileWindow(
 				}
 			}
 		}
-		bottomContent = append(bottomContent, youtubeTemplate)
+		bottomContentRight = append(bottomContentRight, youtubeTemplate)
 
 		templateTagsLabel := widget.NewLabel("Template tags:")
 		templateTags := widget.NewSelect(
@@ -559,21 +562,20 @@ func (p *Panel) profileWindow(
 			w,
 			"'ignore' will ignore the tags set in the template; 'use as primary' will put the tags of the template first and then add the profile tags; 'use as additional' will put the tags of the profile first and then add the template tags",
 		)
-		bottomContent = append(
-			bottomContent,
+		bottomContentRight = append(
+			bottomContentRight,
 			container.NewHBox(templateTagsLabel, templateTags, templateTagsHint),
 		)
 
 		youtubeTagsEditor := newTagsEditor(youtubeProfile.Tags, 0, youtube.LimitTagsLength)
-		bottomContent = append(bottomContent, widget.NewLabel("Tags:"))
-		bottomContent = append(bottomContent, youtubeTagsEditor.CanvasObject)
+		bottomContentRight = append(bottomContentRight, widget.NewLabel("Tags:"))
+		bottomContentRight = append(bottomContentRight, youtubeTagsEditor.CanvasObject)
 		getYoutubeTags = youtubeTagsEditor.GetTags
 	} else {
-		bottomContent = append(bottomContent, widget.NewLabel("YouTube is disabled"))
+		bottomContentRight = append(bottomContentRight, widget.NewLabel("YouTube is disabled"))
 	}
 
-	bottomContent = append(bottomContent,
-		widget.NewSeparator(),
+	bottomContentCommon = append(bottomContentCommon,
 		widget.NewButton("Save", func() {
 			profile := Profile{
 				Name:        streamcontrol.ProfileName(profileName.Text),
@@ -598,6 +600,7 @@ func (p *Panel) profileWindow(
 				}
 				return out
 			}
+			profile.TopicTags = sanitizeTags(commonTagsEditor.GetTags())
 			if twitchProfile != nil {
 				if getTwitchTags != nil {
 					twitchTags := sanitizeTags(getTwitchTags())
@@ -635,18 +638,31 @@ func (p *Panel) profileWindow(
 		}),
 	)
 
-	w.SetContent(container.NewBorder(
-		container.NewVBox(
-			profileName,
-			defaultStreamTitle,
+	w.SetContent(
+		container.NewBorder(
+			nil,
+			container.NewVBox(bottomContentCommon...),
+			nil,
+			nil,
+			container.NewHSplit(
+				container.NewBorder(
+					container.NewVBox(
+						profileName,
+						defaultStreamTitle,
+					),
+					container.NewVBox(
+						bottomContentLeft...,
+					),
+					nil,
+					nil,
+					defaultStreamDescription,
+				),
+				container.NewVBox(
+					bottomContentRight...,
+				),
+			),
 		),
-		container.NewVBox(
-			bottomContent...,
-		),
-		nil,
-		nil,
-		defaultStreamDescription,
-	))
+	)
 	w.Show()
 	return w
 }

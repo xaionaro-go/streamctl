@@ -17,6 +17,7 @@ import (
 type ProfileMetadata struct {
 	DefaultStreamTitle       string
 	DefaultStreamDescription string
+	TopicTags                []string
 	MaxOrder                 int
 }
 
