@@ -47,7 +47,7 @@ func (gpt *ChatGPT) Generate(
 	r, err := gpt.Model.Generate(ctx, []*schema.Message{
 		{
 			Role:    schema.System,
-			Content: "You are a generator of viral texts that assists a streaming creator to increase the audience. You need to always answer only the resulting/required text itself that could be easily copy&paste-d.",
+			Content: "You are a generator of texts that assists a streaming creator to increase the audience. You need to always answer only the resulting/required text itself that could be easily copy&paste-d.",
 		},
 		{
 			Role:    schema.User,

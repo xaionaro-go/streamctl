@@ -1115,8 +1115,6 @@ github.com/xaionaro-go/audio v0.0.0-20250210102901-abfced9d5ef3 h1:LRIpqqC7Gsz5+
 github.com/xaionaro-go/audio v0.0.0-20250210102901-abfced9d5ef3/go.mod h1:i4CntPlryh9HLmA3p3M0CNr1usRkEkuh3N2Ui3HeXQA=
 github.com/xaionaro-go/avmediacodec v0.0.0-20250421150856-ddd390422c21 h1:afsJFvZaf4z87n/V9LgXgD6u8MZBesZj8mnHvlfRi2k=
 github.com/xaionaro-go/avmediacodec v0.0.0-20250421150856-ddd390422c21/go.mod h1:obX+/HoeX6lzM/Zuzgtm0JdG8CQ58I1isp5xSQEm+kQ=
-github.com/xaionaro-go/avpipeline v0.0.0-20250426193916-e38f676d278e h1:aHUMT1BQBH5u2gqdx70DYEqpMOKIR1hCkGeU1aL3Kp0=
-github.com/xaionaro-go/avpipeline v0.0.0-20250426193916-e38f676d278e/go.mod h1:Czl84biYuPZeILYiRiziR0yeuXKvrqQfzJ1ItjSq/o0=
 github.com/xaionaro-go/avpipeline v0.0.0-20250428012319-401ac2ebe66c h1:KTQYCAJAofdHnjxYC8VV+oMW2WRnxa8wy2o0fNlfueU=
 github.com/xaionaro-go/avpipeline v0.0.0-20250428012319-401ac2ebe66c/go.mod h1:Czl84biYuPZeILYiRiziR0yeuXKvrqQfzJ1ItjSq/o0=
 github.com/xaionaro-go/datacounter v1.0.4 h1:+QMZLmu73R5WGkQfUPwlXF/JFN+Weo4iuDZkiL2wVm8=
@@ -1163,8 +1161,6 @@ github.com/xaionaro-go/proxy v0.0.0-20250111150848-1f0e7b262638 h1:w7Dt6Mpj36S2c
 github.com/xaionaro-go/proxy v0.0.0-20250111150848-1f0e7b262638/go.mod h1:hOkJBFoMsnCDoZgpSPTHYbnevPgtpD16d9Xga91U+Eo=
 github.com/xaionaro-go/pulse v0.0.0-20241023202712-7151fa00d4bb h1:9iHPI27CYbmJDhzEuCABQthE/DGVNvT60ybWvv3BV8w=
 github.com/xaionaro-go/pulse v0.0.0-20241023202712-7151fa00d4bb/go.mod h1:cpYspI6YljhkUf1WLXLLDmeaaPFc3CnGLjDZf9dZ4no=
-github.com/xaionaro-go/recoder v0.0.0-20250426195256-89ddef145403 h1:b51E70iKtHY9NFbWq5Ki692ZPJezrAA+uOspcfTPFE4=
-github.com/xaionaro-go/recoder v0.0.0-20250426195256-89ddef145403/go.mod h1:Jjw/CfMTflmeN1uXsYXYHaN/UD74PK6E2Jn7wKObiPQ=
 github.com/xaionaro-go/recoder v0.0.0-20250428012439-3fc4b32e59a9 h1:744Nrf5lfHG0lOpivgXHDDsENer25zJlr/f5puIWhGs=
 github.com/xaionaro-go/recoder v0.0.0-20250428012439-3fc4b32e59a9/go.mod h1:Twc+NcQQ+afg4RHxwqqo9pRGIaY7+QwpuAiYa7ClSLw=
 github.com/xaionaro-go/secret v0.0.0-20250111141743-ced12e1082c2 h1:QHpTWfyfmz65cE0MtFXe9fScdi+X0VIYR2wgolSYEUk=

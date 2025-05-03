@@ -46,7 +46,8 @@ import (
 )
 
 const (
-	dashboardDebug = false
+	dashboardDebug               = false
+	dashboardFullUpdatesInterval = 2 * time.Second
 )
 
 func (p *Panel) focusDashboardWindow(
@@ -80,6 +81,7 @@ type dashboardWindow struct {
 	streamStatus        map[streamcontrol.PlatformName]*widget.Label
 	streamStatusLocker  xsync.Mutex
 	changedImages       []*imageInfo
+	lastFullUpdateAt    time.Time
 
 	iteratorReusableBuffer iterate.TwoDReusableBuffers
 }
@@ -387,13 +389,19 @@ func (w *dashboardWindow) renderImagesNoLock(
 	totalPoints := width * height
 	onlyDelta := !sizeChanged && float32(changedPoints) < float32(totalPoints)*0.75
 
+	now := time.Now()
+	if dashboardFullUpdatesInterval > 0 && now.Sub(w.lastFullUpdateAt) < dashboardFullUpdatesInterval {
+		onlyDelta = false
+		w.lastFullUpdateAt = now
+	}
+
 	if onlyDelta {
 		for y, xSegments := range iterate.TwoDForEachY(&w.iteratorReusableBuffer, changedAreas...) {
 			idx := y * dstImg.Stride
 			for _, xSegment := range xSegments {
 				for x := xSegment.S; x < xSegment.E; x++ {
 					idx := idx + x*4
-					dstImg.Pix[idx+3] = 0 // setting only alpha to zero, as a faster way to erase the picture
+					dstImg.Pix[idx+3] = 0 // setting only alpha to zero, as a faster way to erase the picture; TODO: use SIMD instead
 				}
 			}
 		}
