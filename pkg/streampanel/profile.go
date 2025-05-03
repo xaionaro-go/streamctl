@@ -221,19 +221,11 @@ func (p *Panel) profileWindow(
 	bottomContent = append(bottomContent, widget.NewSeparator())
 	bottomContent = append(bottomContent, widget.NewRichTextFromMarkdown("# Twitch:"))
 	if backendEnabled[twitch.ID] {
-		twitchTags := []string{}
-		addTag := func(tagName string) {
-			twitchTags = append(twitchTags, tagName)
-		}
-
 		if platProfile := values.PerPlatform[twitch.ID]; platProfile != nil {
 			var err error
 			twitchProfile, err = streamcontrol.GetStreamProfile[twitch.StreamProfile](ctx, platProfile)
 			if err != nil {
 				p.DisplayError(fmt.Errorf("unable to convert the stream profile: %w", err))
-			}
-			for _, tag := range twitchProfile.Tags {
-				addTag(tag)
 			}
 		} else {
 			twitchProfile = &twitch.StreamProfile{}
@@ -322,7 +314,7 @@ func (p *Panel) profileWindow(
 		}
 		bottomContent = append(bottomContent, twitchCategory)
 
-		twitchTagsEditor := newTagsEditor(twitchTags, 10)
+		twitchTagsEditor := newTagsEditor(twitchProfile.Tags[:], 10)
 		bottomContent = append(bottomContent, widget.NewLabel("Tags:"))
 		bottomContent = append(bottomContent, twitchTagsEditor.CanvasObject)
 		getTwitchTags = twitchTagsEditor.GetTags
@@ -428,18 +420,11 @@ func (p *Panel) profileWindow(
 	bottomContent = append(bottomContent, widget.NewSeparator())
 	bottomContent = append(bottomContent, widget.NewRichTextFromMarkdown("# YouTube:"))
 	if backendEnabled[youtube.ID] {
-		youtubeTags := []string{}
-		addTag := func(tagName string) {
-			youtubeTags = append(youtubeTags, tagName)
-		}
 		if platProfile := values.PerPlatform[youtube.ID]; platProfile != nil {
 			var err error
 			youtubeProfile, err = streamcontrol.GetStreamProfile[youtube.StreamProfile](ctx, platProfile)
 			if err != nil {
 				p.DisplayError(fmt.Errorf("unable to convert the stream profile: %w", err))
-			}
-			for _, tag := range youtubeProfile.Tags {
-				addTag(tag)
 			}
 		} else {
 			youtubeProfile = &youtube.StreamProfile{}
@@ -579,7 +564,7 @@ func (p *Panel) profileWindow(
 			container.NewHBox(templateTagsLabel, templateTags, templateTagsHint),
 		)
 
-		youtubeTagsEditor := newTagsEditor(youtubeTags, 0)
+		youtubeTagsEditor := newTagsEditor(youtubeProfile.Tags, 0)
 		bottomContent = append(bottomContent, widget.NewLabel("Tags:"))
 		bottomContent = append(bottomContent, youtubeTagsEditor.CanvasObject)
 		getYoutubeTags = youtubeTagsEditor.GetTags
