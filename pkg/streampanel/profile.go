@@ -221,10 +221,7 @@ func (p *Panel) profileWindow(
 	bottomContent = append(bottomContent, widget.NewSeparator())
 	bottomContent = append(bottomContent, widget.NewRichTextFromMarkdown("# Twitch:"))
 	if backendEnabled[twitch.ID] {
-		twitchTags := []string{}
-		addTag := func(tagName string) {
-			twitchTags = append(twitchTags, tagName)
-		}
+		var twitchTags string
 
 		if platProfile := values.PerPlatform[twitch.ID]; platProfile != nil {
 			var err error
@@ -232,9 +229,8 @@ func (p *Panel) profileWindow(
 			if err != nil {
 				p.DisplayError(fmt.Errorf("unable to convert the stream profile: %w", err))
 			}
-			for _, tag := range twitchProfile.Tags {
-				addTag(tag)
-			}
+
+			twitchTags = strings.Join(twitchProfile.Tags[:], string(separatorTags)+" ")
 		} else {
 			twitchProfile = &twitch.StreamProfile{}
 		}
@@ -428,19 +424,14 @@ func (p *Panel) profileWindow(
 	bottomContent = append(bottomContent, widget.NewSeparator())
 	bottomContent = append(bottomContent, widget.NewRichTextFromMarkdown("# YouTube:"))
 	if backendEnabled[youtube.ID] {
-		youtubeTags := []string{}
-		addTag := func(tagName string) {
-			youtubeTags = append(youtubeTags, tagName)
-		}
+		var youtubeTags string
 		if platProfile := values.PerPlatform[youtube.ID]; platProfile != nil {
 			var err error
 			youtubeProfile, err = streamcontrol.GetStreamProfile[youtube.StreamProfile](ctx, platProfile)
 			if err != nil {
 				p.DisplayError(fmt.Errorf("unable to convert the stream profile: %w", err))
 			}
-			for _, tag := range youtubeProfile.Tags {
-				addTag(tag)
-			}
+			youtubeTags = strings.Join(youtubeProfile.Tags, string(separatorTags)+" ")
 		} else {
 			youtubeProfile = &youtube.StreamProfile{}
 		}
