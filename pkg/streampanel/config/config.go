@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
@@ -115,9 +116,6 @@ func WriteConfigToPath(
 	logger.Debugf(ctx, "WriteConfigToPath")
 	defer func() { logger.Debugf(ctx, "/WriteConfigToPath: %v", _err) }()
 
-	now := time.Now()
-	pathBackup := fmt.Sprintf("%s-%04d%02d%02d_%02d%02d", cfgPath, now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute())
-
 	pathNew := cfgPath + ".new"
 	f, err := os.OpenFile(pathNew, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0750)
 	if err != nil {
@@ -131,11 +129,27 @@ func WriteConfigToPath(
 		return fmt.Errorf("unable to write data to file '%s': %w", pathNew, err)
 	}
 
-	err = os.Rename(cfgPath, pathBackup)
+	backupDir := fmt.Sprintf("%s-backup", cfgPath)
+	err = os.MkdirAll(backupDir, 0755)
 	if err != nil {
-		logger.Errorf(ctx, "cannot move '%s' to '%s': %w", cfgPath, pathBackup, err)
+		logger.Errorf(ctx, "unable to create directory '%s'", backupDir)
+	} else {
+		now := time.Now()
+		pathBackup := path.Join(
+			backupDir,
+			fmt.Sprintf(
+				"%04d%02d%02d_%02d%02d.yaml",
+				now.Year(), now.Month(), now.Day(),
+				now.Hour(), now.Minute(),
+			),
+		)
+
+		logger.Debugf(ctx, "backup path: '%s'", pathBackup)
+		err = os.Rename(cfgPath, pathBackup)
+		if err != nil {
+			logger.Errorf(ctx, "cannot move '%s' to '%s': %w", cfgPath, pathBackup, err)
+		}
 	}
-	logger.Infof(ctx, "wrote to '%s' the streampanel config %#+v", cfgPath, cfg)
 
 	err = os.Rename(pathNew, cfgPath)
 	if err != nil {
