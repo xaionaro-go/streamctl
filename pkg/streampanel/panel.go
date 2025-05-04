@@ -52,7 +52,8 @@ import (
 	"github.com/xaionaro-go/xsync"
 )
 
-const youtubeTitleLength = 140
+// https://developers.google.com/youtube/v3/docs/videos
+const youtubeTitleLength = 100
 
 type Panel struct {
 	StreamD      api.StreamD

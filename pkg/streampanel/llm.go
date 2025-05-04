@@ -21,15 +21,13 @@ func (p *Panel) generateNewTitle(
 
 Start with a red dot emoji (🔴).
 
-Keep it under 140 characters.
+Keep it under 95 characters.
 
 Use a calm, cozy, aesthetic vibe (not loud, not overhyped).
 
 Make it sound viral and inviting but still relaxed.
 
 Always include the word "Stream" or "Live" naturally in the title.
-
-End with 4-6 high-rated fitting hashtags related to the topic.
 
 My keywords: %s`, tagsString))
 	if err != nil {
