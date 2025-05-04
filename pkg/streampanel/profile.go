@@ -638,8 +638,18 @@ func (p *Panel) profileWindow(
 		}),
 	)
 
-	w.SetContent(
-		container.NewBorder(
+	var content fyne.CanvasObject
+	if isMobile() {
+		content = container.NewVScroll(container.NewVBox(
+			profileName,
+			defaultStreamTitle,
+			defaultStreamDescription,
+			container.NewVBox(bottomContentLeft...),
+			container.NewVBox(bottomContentRight...),
+			container.NewVBox(bottomContentCommon...),
+		))
+	} else {
+		content = container.NewBorder(
 			nil,
 			container.NewVBox(bottomContentCommon...),
 			nil,
@@ -661,8 +671,10 @@ func (p *Panel) profileWindow(
 					bottomContentRight...,
 				),
 			),
-		),
-	)
+		)
+	}
+
+	w.SetContent(content)
 	w.Show()
 	return w
 }
@@ -916,7 +928,9 @@ func (p *Panel) onProfilesListSelect(
 	})
 	p.selectedProfileName = ptrCopy(profileName)
 	p.streamTitleField.SetText(profile.DefaultStreamTitle)
+	p.streamTitleLabel.SetText(profile.DefaultStreamTitle)
 	p.streamDescriptionField.SetText(profile.DefaultStreamDescription)
+	p.streamDescriptionLabel.SetText(profile.DefaultStreamDescription)
 }
 
 func (p *Panel) onProfilesListUnselect(
