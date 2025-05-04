@@ -21,7 +21,7 @@ func (p *Panel) generateNewTitle(
 
 Start with a red dot emoji (🔴).
 
-Keep it under 145 characters.
+Keep it under 140 characters.
 
 Use a calm, cozy, aesthetic vibe (not loud, not overhyped).
 
