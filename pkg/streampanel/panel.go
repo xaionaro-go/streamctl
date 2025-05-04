@@ -84,7 +84,9 @@ type Panel struct {
 	startStopButton        *widget.Button
 	profilesListWidget     *widget.List
 	streamTitleField       *widget.Entry
+	streamTitleLabel       *widget.Label
 	streamDescriptionField *widget.Entry
+	streamDescriptionLabel *widget.Label
 
 	dashboardLocker         xsync.Mutex
 	dashboardShowHideButton *widget.Button
@@ -1127,19 +1129,17 @@ func resizeWindow(w fyne.Window, newSize fyne.Size) {
 }
 
 func setupStreamString() string {
-	switch runtime.GOOS {
-	case "android":
+	if isMobile() {
 		return "Set!"
-	default:
+	} else {
 		return "Setup stream"
 	}
 }
 
 func startStreamString() string {
-	switch runtime.GOOS {
-	case "android":
+	if isMobile() {
 		return "Go!"
-	default:
+	} else {
 		return "Start stream"
 	}
 }
@@ -1400,6 +1400,35 @@ func (p *Panel) initMainWindow(
 		p.startStopButton.OnTapped()
 		p.startStopButton.OnTapped()
 	}
+	p.streamTitleLabel = widget.NewLabel("")
+	p.streamTitleLabel.Wrapping = fyne.TextWrapWord
+	streamTitleButton := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
+		f := widget.NewMultiLineEntry()
+		f.SetText(p.streamTitleField.Text)
+		f.Wrapping = fyne.TextWrapWord
+		w := p.app.NewWindow("title edit")
+		w.SetContent(container.NewBorder(
+			nil,
+			container.NewBorder(
+				nil,
+				nil,
+				widget.NewButtonWithIcon("Cancel", theme.DocumentSaveIcon(), func() {
+					w.Close()
+				}),
+				widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
+					f.Text = strings.ReplaceAll(f.Text, "\n", " ")
+					f.Text = f.Text[:youtubeTitleLength]
+					p.streamTitleField.SetText(f.Text)
+					p.streamTitleLabel.SetText(f.Text)
+					w.Close()
+				}),
+			),
+			nil,
+			nil,
+			f,
+		))
+		w.Show()
+	})
 
 	p.streamDescriptionField = widget.NewMultiLineEntry()
 	p.streamDescriptionField.SetPlaceHolder("stream description")
@@ -1410,6 +1439,41 @@ func (p *Panel) initMainWindow(
 
 		p.startStopButton.OnTapped()
 		p.startStopButton.OnTapped()
+	}
+	p.streamDescriptionLabel = widget.NewLabel("")
+	p.streamDescriptionLabel.Wrapping = fyne.TextWrapWord
+	streamDescriptionButton := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
+		f := widget.NewMultiLineEntry()
+		f.SetText(p.streamDescriptionField.Text)
+		f.Wrapping = fyne.TextWrapWord
+		w := p.app.NewWindow("title edit")
+		w.SetContent(container.NewBorder(
+			nil,
+			container.NewBorder(
+				nil,
+				nil,
+				widget.NewButtonWithIcon("Cancel", theme.DocumentSaveIcon(), func() {
+					w.Close()
+				}),
+				widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
+					p.streamDescriptionField.SetText(f.Text)
+					p.streamDescriptionLabel.SetText(f.Text)
+					w.Close()
+				}),
+			),
+			nil,
+			nil,
+			f,
+		))
+		w.Show()
+	})
+
+	if isMobile() {
+		p.streamTitleField.Hide()
+		p.streamDescriptionField.Hide()
+	} else {
+		p.streamTitleLabel.Hide()
+		p.streamDescriptionLabel.Hide()
 	}
 
 	p.twitchCheck = widget.NewCheck("Twitch", nil)
@@ -1433,8 +1497,27 @@ func (p *Panel) initMainWindow(
 	})
 
 	bottomPanel := container.NewVBox(
-		container.NewBorder(nil, nil, regenerateTitleButton, nil, p.streamTitleField),
-		container.NewBorder(nil, nil, regenerateDescriptionButton, nil, p.streamDescriptionField),
+		container.NewBorder(
+			nil, nil,
+			regenerateTitleButton, nil,
+			container.NewStack(
+				p.streamTitleField,
+				container.NewBorder(
+					nil, nil, streamTitleButton, nil,
+					container.NewHScroll(p.streamTitleLabel),
+				)),
+		),
+		container.NewBorder(
+			nil, nil,
+			regenerateDescriptionButton, nil,
+			container.NewStack(
+				p.streamDescriptionField,
+				container.NewBorder(
+					nil, nil, streamDescriptionButton, nil,
+					container.NewHScroll(p.streamDescriptionLabel),
+				),
+			),
+		),
 		container.NewBorder(
 			nil,
 			nil,
