@@ -37,6 +37,7 @@ My keywords: %s`, tagsString))
 		return
 	}
 	p.streamTitleField.SetText(t)
+	p.streamTitleLabel.SetText(t)
 }
 
 func (p *Panel) generateNewDescription(
@@ -54,6 +55,7 @@ func (p *Panel) generateNewDescription(
 		return
 	}
 	p.streamDescriptionField.SetText(t)
+	p.streamDescriptionLabel.SetText(t)
 }
 
 func (p *Panel) generateAlternativeTextFor(
