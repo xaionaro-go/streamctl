@@ -29,7 +29,7 @@ import (
 const (
 	enableSeekOnStart    = true
 	enableTracksRotation = false
-	enableSlowDown       = false
+	enableSlowDown       = true
 )
 
 type Publisher interface {
@@ -122,7 +122,7 @@ func (sp *StreamPlayers) Create(
 		Cancel: cancel,
 		StreamPlayer: StreamPlayer{
 			Backend:  backend,
-			Config:   resultingOpts.Config(),
+			Config:   resultingOpts.Config(ctx),
 			StreamID: streamID,
 		},
 	}
@@ -286,6 +286,54 @@ func (p *StreamPlayerHandler) getURL(ctx context.Context) (*url.URL, error) {
 	}
 }
 
+func portServerPreferenceFunc(a, b *streamportserver.Config) bool {
+	switch {
+	case a.Type == b.Type:
+		return false
+	case b.Type == streamtypes.ServerTypeRTSP:
+		return true
+	default:
+		return false
+	}
+}
+
+func (p *StreamPlayerHandler) GetProtocol(
+	ctx context.Context,
+) streamtypes.ServerType {
+	if p.Config.OverrideURL == "" {
+		portSrv, err := streamportserver.GetPreferredPortServer(
+			ctx,
+			p.Parent.StreamServer,
+			portServerPreferenceFunc,
+		)
+		if err != nil {
+			logger.Tracef(ctx, "unable to get the port server: %v", err)
+			return streamtypes.ServerTypeUndefined
+		}
+		return portSrv.Type
+	}
+
+	u, err := p.getOverriddenURL(ctx)
+	if err != nil {
+		logger.Tracef(ctx, "unable to get the overridden URL: %v", err)
+		return streamtypes.ServerTypeUndefined
+	}
+
+	switch u.Scheme {
+	case "":
+		logger.Tracef(ctx, "no network scheme")
+		return streamtypes.ServerTypeUndefined
+	case "rtmp", "rtmps", "rtmpt", "rtmpe":
+		return streamtypes.ServerTypeRTMP
+	case "rtsp":
+		return streamtypes.ServerTypeRTSP
+	case "srt":
+		return streamtypes.ServerTypeSRT
+	}
+	logger.Warnf(ctx, "unknown/unexpected protocol scheme: '%s'", u.Scheme)
+	return streamtypes.ServerTypeUndefined
+}
+
 func (p *StreamPlayerHandler) getOverriddenURL(context.Context) (*url.URL, error) {
 	return url.Parse(p.Config.OverrideURL)
 }
@@ -294,16 +342,7 @@ func (p *StreamPlayerHandler) getInternalURL(ctx context.Context) (*url.URL, err
 	return streamportserver.GetURLForLocalStreamID(
 		ctx,
 		p.Parent.StreamServer, p.StreamID,
-		func(a, b *streamportserver.Config) bool {
-			switch {
-			case a.Type == b.Type:
-				return false
-			case b.Type == streamtypes.ServerTypeRTSP:
-				return true
-			default:
-				return false
-			}
-		},
+		portServerPreferenceFunc,
 	)
 }
 
@@ -421,7 +460,9 @@ func (p *StreamPlayerHandler) openStream(
 	}
 	logger.Debugf(ctx, "opening '%s'", u.String())
 
-	p.startObserver(ctx, u, restartFn)
+	if p.Config.EnableObserver {
+		p.startObserver(ctx, u, restartFn)
+	}
 
 	err = p.withPlayer(ctx, func(ctx context.Context, player player.Player) {
 		ctx, cancelFn := context.WithTimeout(ctx, openURLTimeout)
@@ -505,6 +546,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 			})
 		})
 	}
+	protocol := p.GetProtocol(ctx)
 
 	// wait for video to start:
 	{
@@ -623,7 +665,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 					if err != nil {
 						err = fmt.Errorf("unable to get position: %w", err)
 					}
-					if enableSeekOnStart && !triedToSeek {
+					if enableSeekOnStart && protocol != streamtypes.ServerTypeRTMP && !triedToSeek {
 						l, err := player.GetLength(ctx)
 						if err != nil {
 							err = fmt.Errorf("unable to get length: %w", err)
@@ -721,7 +763,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 		if err != nil {
 			logger.Errorf(ctx, "unable to setup the player for streaming: %v", err)
 		}
-		if enableSeekOnStart {
+		if enableSeekOnStart && protocol != streamtypes.ServerTypeRTMP {
 			if err := player.Seek(ctx, -time.Second, true, true); err != nil {
 				logger.Errorf(ctx, "unable to seek: %v", err)
 			}
@@ -861,7 +903,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 
 			lag := l - pos
 			logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: lag == %v", p.StreamID, lag)
-			if enableSlowDown && p.Config.JitterBufDuration > time.Second && lag < p.Config.JitterBufDuration/2 {
+			if enableSlowDown && protocol == streamtypes.ServerTypeRTMP && p.Config.JitterBufDuration > time.Second && lag < p.Config.JitterBufDuration/2 {
 				speed := lag.Seconds() / (p.Config.JitterBufDuration / 2).Seconds()
 				if speed <= 0 {
 					return

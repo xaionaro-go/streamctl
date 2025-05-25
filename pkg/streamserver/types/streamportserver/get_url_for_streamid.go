@@ -11,27 +11,11 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
 
-func GetURLForLocalStreamID(
+func GetPreferredPortServer(
 	ctx context.Context,
 	streamServer GetPortServerser,
-	streamID streamtypes.StreamID,
 	preferenceLessFunc func(*Config, *Config) bool,
-) (*url.URL, error) {
-	return GetURLForRemoveStreamID(ctx, "127.0.0.1", "::1", streamServer, streamID, preferenceLessFunc)
-}
-
-func GetURLForRemoveStreamID(
-	ctx context.Context,
-	streamDAddrV4 string,
-	streamDAddrV6 string,
-	streamServer GetPortServerser,
-	streamID streamtypes.StreamID,
-	preferenceLessFunc func(*Config, *Config) bool,
-) (_ret *url.URL, _err error) {
-	logger.Debugf(ctx, "GetURLForRemoveStreamID(ctx, '%s', '%s', %T, '%s', %p)", streamDAddrV4, streamDAddrV6, streamServer, streamID, preferenceLessFunc)
-	defer func() {
-		logger.Debugf(ctx, "/GetURLForRemoveStreamID(ctx, '%s', '%s', %T, '%s', %p): %v %v", streamDAddrV4, streamDAddrV6, streamServer, streamID, preferenceLessFunc, _ret, _err)
-	}()
+) (*Config, error) {
 	portSrvs, err := streamServer.GetPortServers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get the list of stream server ports: %w", err)
@@ -60,6 +44,35 @@ func GetURLForRemoveStreamID(
 		logger.Debugf(ctx, "resulting slice: %#+v", portSrvs)
 	}
 	portSrv := portSrvs[0]
+	return &portSrv, nil
+}
+
+func GetURLForLocalStreamID(
+	ctx context.Context,
+	streamServer GetPortServerser,
+	streamID streamtypes.StreamID,
+	preferenceLessFunc func(*Config, *Config) bool,
+) (*url.URL, error) {
+	return GetURLForRemoveStreamID(ctx, "127.0.0.1", "::1", streamServer, streamID, preferenceLessFunc)
+}
+
+func GetURLForRemoveStreamID(
+	ctx context.Context,
+	streamDAddrV4 string,
+	streamDAddrV6 string,
+	streamServer GetPortServerser,
+	streamID streamtypes.StreamID,
+	preferenceLessFunc func(*Config, *Config) bool,
+) (_ret *url.URL, _err error) {
+	logger.Debugf(ctx, "GetURLForRemoveStreamID(ctx, '%s', '%s', %T, '%s', %p)", streamDAddrV4, streamDAddrV6, streamServer, streamID, preferenceLessFunc)
+	defer func() {
+		logger.Debugf(ctx, "/GetURLForRemoveStreamID(ctx, '%s', '%s', %T, '%s', %p): %v %v", streamDAddrV4, streamDAddrV6, streamServer, streamID, preferenceLessFunc, _ret, _err)
+	}()
+
+	portSrv, err := GetPreferredPortServer(ctx, streamServer, preferenceLessFunc)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get the port server: %w", err)
+	}
 
 	protoString := portSrv.Type.String()
 	if portSrv.IsTLS {

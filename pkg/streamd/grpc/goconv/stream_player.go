@@ -42,6 +42,8 @@ func StreamPlaybackConfigGo2GRPC(
 		StartTimeoutSecs:      cfg.StartTimeout.Seconds(),
 		ReadTimeoutSecs:       cfg.ReadTimeout.Seconds(),
 		OverriddenURL:         cfg.OverrideURL,
+		ForceWaitForPublisher: cfg.ForceWaitForPublisher,
+		EnableObserver:        cfg.EnableObserver,
 	}
 }
 
@@ -55,5 +57,7 @@ func StreamPlaybackConfigGRPC2Go(
 		StartTimeout:          secsGRPC2Go(cfg.StartTimeoutSecs),
 		ReadTimeout:           secsGRPC2Go(cfg.ReadTimeoutSecs),
 		OverrideURL:           cfg.GetOverriddenURL(),
+		ForceWaitForPublisher: cfg.ForceWaitForPublisher,
+		EnableObserver:        cfg.EnableObserver,
 	}
 }

@@ -22,6 +22,7 @@ type Config struct {
 	GetRestartChanFunc    GetRestartChanFunc   `yaml:"-"`
 	CustomPlayerOptions   []playertypes.Option `yaml:"-"`
 	ForceWaitForPublisher bool
+	EnableObserver        bool
 }
 
 func (cfg Config) Options() Options {
@@ -56,6 +57,9 @@ func (cfg Config) Options() Options {
 	if cfg.ForceWaitForPublisher {
 		opts = append(opts, OptionForceWaitForPublisher(cfg.ForceWaitForPublisher))
 	}
+	if cfg.EnableObserver {
+		opts = append(opts, OptionEnableObserver(cfg.EnableObserver))
+	}
 	return opts
 }
 
@@ -65,8 +69,8 @@ type Option interface {
 
 type Options []Option
 
-func (s Options) Config() Config {
-	cfg := DefaultConfig(context.Background())
+func (s Options) Config(ctx context.Context) Config {
+	cfg := DefaultConfig(ctx)
 	s.apply(&cfg)
 	return cfg
 }
@@ -145,4 +149,10 @@ type OptionForceWaitForPublisher bool
 
 func (s OptionForceWaitForPublisher) Apply(cfg *Config) {
 	cfg.ForceWaitForPublisher = bool(s)
+}
+
+type OptionEnableObserver bool
+
+func (s OptionEnableObserver) Apply(cfg *Config) {
+	cfg.EnableObserver = bool(s)
 }

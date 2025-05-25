@@ -485,6 +485,8 @@ message StreamPlaybackConfig {
 	double StartTimeoutSecs      = 4;
 	double ReadTimeoutSecs       = 5;
     string overriddenURL         = 6;
+    bool   forceWaitForPublisher = 7;
+    bool   enableObserver        = 8;
 }
 message StreamPlayerConfig {
     string streamID = 1;

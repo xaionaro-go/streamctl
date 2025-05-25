@@ -681,12 +681,28 @@ func (p *Panel) openAddOrEditPlayerWindow(
 		inStreamsSelect.Disable()
 	}
 
+	enableObserverCheckbox := widget.NewCheck("Enable stream validator", func(b bool) {
+		cfg.EnableObserver = b
+	})
+	enableObserverCheckbox.SetChecked(cfg.EnableObserver)
+
+	forceWaitForLocalPublisherCheckbox := widget.NewCheck("Force waiting for local publisher", func(b bool) {
+		cfg.ForceWaitForPublisher = b
+	})
+	forceWaitForLocalPublisherCheckbox.SetChecked(cfg.ForceWaitForPublisher)
+
 	overrideURL := widget.NewEntry()
 	overrideURL.SetText(cfg.OverrideURL)
 	overrideURL.SetPlaceHolder("rtmp://127.0.0.1/some/stream")
 	overrideURL.OnChanged = func(s string) {
 		cfg.OverrideURL = s
+		if s == "" {
+			forceWaitForLocalPublisherCheckbox.Disable()
+		} else {
+			forceWaitForLocalPublisherCheckbox.Enable()
+		}
 	}
+	overrideURL.OnChanged(overrideURL.Text)
 
 	jitterBufDuration := xfyne.NewNumericalEntry()
 	jitterBufDuration.SetPlaceHolder("amount of seconds")
@@ -780,10 +796,12 @@ func (p *Panel) openAddOrEditPlayerWindow(
 		container.NewVBox(
 			widget.NewLabel("Player:"),
 			playerSelect,
+			enableObserverCheckbox,
 			widget.NewLabel("Stream:"),
 			inStreamsSelect,
 			widget.NewLabel("Override URL:"),
 			overrideURL,
+			forceWaitForLocalPublisherCheckbox,
 			widget.NewSeparator(),
 			widget.NewSeparator(),
 			widget.NewLabel("Start timeout (seconds):"),
