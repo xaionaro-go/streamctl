@@ -233,10 +233,10 @@ require (
 	golang.org/x/image v0.18.0 // indirect
 	golang.org/x/mobile v0.0.0-20240404231514-09dbf07665ed // indirect
 	golang.org/x/net v0.39.0 // indirect
-	golang.org/x/sync v0.13.0 // indirect
-	golang.org/x/sys v0.32.0 // indirect
-	golang.org/x/term v0.31.0 // indirect
-	golang.org/x/text v0.24.0 // indirect
+	golang.org/x/sync v0.14.0 // indirect
+	golang.org/x/sys v0.33.0 // indirect
+	golang.org/x/term v0.32.0 // indirect
+	golang.org/x/text v0.25.0 // indirect
 	golang.org/x/time v0.9.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240716161551-93cc26a95ae9 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250409194420-de1ac958c67a // indirect
@@ -313,9 +313,9 @@ require (
 	github.com/xaionaro-go/xfyne v0.0.0-20241018233531-26123724a6c6
 	github.com/xaionaro-go/xlogrus v0.0.0-20250111150201-60557109545a
 	github.com/xaionaro-go/xpath v0.0.0-20250111145115-55f5728f643f
-	github.com/xaionaro-go/xsync v0.0.0-20250420144932-1e27f4332d4d
+	github.com/xaionaro-go/xsync v0.0.0-20250614210231-b74f647f859f
 	github.com/yutopp/go-flv v0.3.1
-	golang.org/x/crypto v0.37.0
+	golang.org/x/crypto v0.38.0
 	google.golang.org/grpc v1.71.1
 	google.golang.org/protobuf v1.36.6
 	gopkg.in/yaml.v2 v2.4.0

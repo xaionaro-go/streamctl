@@ -7,10 +7,12 @@ import (
 	"image/color"
 	"image/draw"
 	"math"
+	"os"
 	"runtime"
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -42,6 +44,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	"github.com/xaionaro-go/streamctl/pkg/ximage"
 	xfyne "github.com/xaionaro-go/xfyne/widget"
+	"github.com/xaionaro-go/xpath"
 	"github.com/xaionaro-go/xsync"
 )
 
@@ -49,6 +52,9 @@ const (
 	dashboardDebug               = false
 	dashboardFullUpdatesInterval = 2 * time.Second
 )
+
+// TODO: DELETE ME:
+var qualityFilePath = must(xpath.Expand(`~/quality`))
 
 func (p *Panel) focusDashboardWindow(
 	ctx context.Context,
@@ -90,6 +96,82 @@ type imageInfo struct {
 	ElementName string
 	streamdconfig.DashboardElementConfig
 	Image *image.NRGBA
+}
+
+func (w *dashboardWindow) renderLocalStatus(ctx context.Context) {
+	// TODO: remove the ugly hardcode above, and make it generic (support different use cases)
+
+	b, err := os.ReadFile(qualityFilePath)
+	if err != nil {
+		logger.Debugf(ctx, "unable to open the 'quality' file: %v", err)
+		return
+	}
+	words := strings.Split(strings.Trim(string(b), "\n\r\t"), " ")
+	if len(words) != 3 {
+		logger.Debugf(ctx, "expected 3 words, but received %d", len(words))
+		return
+	}
+
+	aQ, err := strconv.ParseInt(words[0], 10, 64)
+	if err != nil {
+		logger.Debugf(ctx, "unable to parse aQ '%s': %v", words[0], err)
+		return
+	}
+
+	pQ, err := strconv.ParseInt(words[1], 10, 64)
+	if err != nil {
+		logger.Debugf(ctx, "unable to parse pQ '%s': %v", words[0], err)
+		return
+	}
+
+	wQ, err := strconv.ParseInt(words[2], 10, 64)
+	if err != nil {
+		logger.Debugf(ctx, "unable to parse wQ '%s': %v", words[0], err)
+		return
+	}
+
+	qToImportance := func(in int64) widget.Importance {
+		switch {
+		case in <= -5:
+			return widget.DangerImportance
+		case in <= 0:
+			return widget.MediumImportance
+		default:
+			return widget.SuccessImportance
+		}
+	}
+
+	qToStr := func(in int64) string {
+		if in <= -30 {
+			return "DEAD"
+		}
+		if in <= -5 {
+			return "BAD"
+		}
+		if in <= 0 {
+			return "SO-SO"
+		}
+		if in > 0 {
+			return "GOOD"
+		}
+		return "UNKNOWN"
+	}
+
+	qToLabel := func(name string, q int64) *widget.Label {
+		l := widget.NewLabel(name + ":" + qToStr(q))
+		l.Importance = qToImportance(q)
+		l.TextStyle.Bold = true
+		return l
+	}
+
+	w.localStatus.Objects = []fyne.CanvasObject{
+		container.NewHBox(
+			layout.NewSpacer(),
+			qToLabel("A", aQ),
+			qToLabel("P", pQ),
+			qToLabel("W", wQ),
+		),
+	}
 }
 
 func (w *dashboardWindow) renderStreamStatus(ctx context.Context) {
@@ -180,6 +262,7 @@ func (p *Panel) newDashboardWindow(
 	bgFyne := canvas.NewImageFromImage(bg)
 	bgFyne.FillMode = canvas.ImageFillStretch
 
+	p.localStatus = container.NewStack()
 	p.appStatus = widget.NewLabel("")
 	obsLabel := widget.NewLabel("OBS:")
 	obsLabel.Importance = widget.HighImportance
@@ -197,8 +280,13 @@ func (p *Panel) newDashboardWindow(
 	if _, ok := p.StreamD.(*client.Client); ok {
 		appLabel := widget.NewLabel("App:")
 		appLabel.Importance = widget.HighImportance
-		streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), appLabel, p.appStatus))
+		streamInfoItems.Add(container.NewHBox(
+			layout.NewSpacer(),
+			appLabel,
+			p.appStatus,
+		))
 	}
+	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), p.localStatus))
 	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), obsLabel, w.streamStatus[obs.ID]))
 	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), twLabel, w.streamStatus[twitch.ID]))
 	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), kcLabel, w.streamStatus[kick.ID]))
@@ -574,6 +662,20 @@ func (w *dashboardWindow) startUpdatingNoLock(
 
 	ctx, cancelFunc := context.WithCancel(ctx)
 	w.stopUpdatingFunc = cancelFunc
+
+	w.renderLocalStatus(ctx)
+	observability.Go(ctx, func() {
+		t := time.NewTicker(2 * time.Second)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+
+			w.renderLocalStatus(ctx)
+		}
+	})
 
 	cfg, err := w.GetStreamDConfig(ctx)
 	if err != nil {

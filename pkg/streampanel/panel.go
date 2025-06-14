@@ -92,6 +92,7 @@ type Panel struct {
 	dashboardLocker         xsync.Mutex
 	dashboardShowHideButton *widget.Button
 
+	localStatus   *fyne.Container
 	appStatus     *widget.Label
 	appStatusData struct {
 		prevUpdateTS time.Time
