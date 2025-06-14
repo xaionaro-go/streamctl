@@ -745,9 +745,10 @@ message SubmitEventRequest {
 message SubmitEventReply {}
 
 message SubscribeToChatMessagesRequest {
+    uint64 sinceUNIXNano = 1;
 }
 message ChatMessage {
-	uint64 createdAtNano  = 1;
+	uint64 createdAtUNIXNano  = 1;
     string platID = 2;
     string userID = 3;
     string username = 4;

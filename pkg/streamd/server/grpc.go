@@ -300,13 +300,29 @@ func (grpc *GRPCServer) EndStream(
 	return &streamd_grpc.EndStreamReply{}, nil
 }
 
+func (grpc *GRPCServer) GetStreamD() api.StreamD {
+	if grpc.StreamD == nil {
+		panic("grpc.StreamD == nil")
+	}
+	streamD, ok := grpc.StreamD.(*streamd.StreamD)
+	if !ok {
+		return grpc.StreamD
+	}
+
+	<-streamD.ReadyChan
+	return streamD
+}
+
 func (grpc *GRPCServer) IsBackendEnabled(
 	ctx context.Context,
 	req *streamd_grpc.IsBackendEnabledRequest,
-) (*streamd_grpc.IsBackendEnabledReply, error) {
-	enabled, err := grpc.StreamD.IsBackendEnabled(
+) (_ret *streamd_grpc.IsBackendEnabledReply, _err error) {
+	platID := streamcontrol.PlatformName(req.GetPlatID())
+	logger.Tracef(ctx, "IsBackendEnabled(ctx, '%s')", platID)
+	defer func() { logger.Tracef(ctx, "/IsBackendEnabled(ctx, '%s'): %v %v", platID, _ret, _err) }()
+	enabled, err := grpc.GetStreamD().IsBackendEnabled(
 		ctx,
-		streamcontrol.PlatformName(req.GetPlatID()),
+		platID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -323,9 +339,11 @@ func (grpc *GRPCServer) IsBackendEnabled(
 func (grpc *GRPCServer) GetBackendInfo(
 	ctx context.Context,
 	req *streamd_grpc.GetBackendInfoRequest,
-) (*streamd_grpc.GetBackendInfoReply, error) {
+) (_ret *streamd_grpc.GetBackendInfoReply, _err error) {
 	platID := streamcontrol.PlatformName(req.GetPlatID())
-	isEnabled, err := grpc.StreamD.IsBackendEnabled(
+	logger.Tracef(ctx, "GetBackendInfo(ctx, '%s')", platID)
+	defer func() { logger.Tracef(ctx, "/GetBackendInfo(ctx, '%s'): %v %v", platID, _ret, _err) }()
+	isEnabled, err := grpc.GetStreamD().IsBackendEnabled(
 		ctx,
 		platID,
 	)
@@ -1890,17 +1908,24 @@ func (grpc *GRPCServer) SubscribeToChatMessages(
 	req *streamd_grpc.SubscribeToChatMessagesRequest,
 	srv streamd_grpc.StreamD_SubscribeToChatMessagesServer,
 ) error {
+	ts := req.GetSinceUNIXNano()
+	since := time.Unix(
+		int64(ts)/int64(time.Second.Nanoseconds()),
+		int64(ts)%int64(time.Second.Nanoseconds()),
+	)
 	return wrapChan(
-		grpc.StreamD.SubscribeToChatMessages,
+		func(ctx context.Context) (<-chan api.ChatMessage, error) {
+			return grpc.StreamD.SubscribeToChatMessages(ctx, since)
+		},
 		srv,
 		func(input api.ChatMessage) streamd_grpc.ChatMessage {
 			return streamd_grpc.ChatMessage{
-				CreatedAtNano: uint64(input.CreatedAt.UnixNano()),
-				PlatID:        string(input.Platform),
-				UserID:        string(input.UserID),
-				Username:      input.Username,
-				MessageID:     string(input.MessageID),
-				Message:       input.Message,
+				CreatedAtUNIXNano: uint64(input.CreatedAt.UnixNano()),
+				PlatID:            string(input.Platform),
+				UserID:            string(input.UserID),
+				Username:          input.Username,
+				MessageID:         string(input.MessageID),
+				Message:           input.Message,
 			}
 		},
 	)

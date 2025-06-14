@@ -30,6 +30,7 @@ type chatUI struct {
 	List                  *widget.List
 	MessagesHistoryLocker sync.Mutex
 	MessagesHistory       []api.ChatMessage
+	EnableButtons         bool
 
 	CapabilitiesCacheLocker sync.Mutex
 	CapabilitiesCache       map[streamcontrol.PlatformName]map[streamcontrol.Capability]struct{}
@@ -42,10 +43,15 @@ type chatUI struct {
 
 func newChatUI(
 	ctx context.Context,
+	enableButtons bool,
 	panel *Panel,
-) (*chatUI, error) {
+) (_ret *chatUI, _err error) {
+	logger.Debugf(ctx, "newChatUI")
+	defer func() { logger.Debugf(ctx, "/newChatUI: %v %v", _ret, _err) }()
+
 	ui := &chatUI{
 		Panel:             panel,
+		EnableButtons:     enableButtons,
 		CapabilitiesCache: make(map[streamcontrol.PlatformName]map[streamcontrol.Capability]struct{}),
 		ctx:               ctx,
 	}
@@ -57,16 +63,11 @@ func newChatUI(
 
 func (ui *chatUI) init(
 	ctx context.Context,
-) error {
-	ui.List = widget.NewList(ui.listLength, ui.listCreateItem, ui.listUpdateItem)
-	msgCh, err := ui.Panel.StreamD.SubscribeToChatMessages(ctx)
-	if err != nil {
-		return fmt.Errorf("unable to subscribe to chat messages: %w", err)
-	}
+) (_err error) {
+	logger.Debugf(ctx, "init")
+	defer func() { logger.Debugf(ctx, "/init: %v", _err) }()
 
-	observability.Go(ctx, func() {
-		ui.messageReceiverLoop(ctx, msgCh)
-	})
+	ui.List = widget.NewList(ui.listLength, ui.listCreateItem, ui.listUpdateItem)
 
 	messageInputEntry := widget.NewEntry()
 	messageInputEntry.OnSubmitted = func(s string) {
@@ -79,26 +80,43 @@ func (ui *chatUI) init(
 		messageInputEntry.OnSubmitted(messageInputEntry.Text)
 	})
 
-	ui.CanvasObject = container.NewBorder(
-		nil,
-		container.NewBorder(
+	var buttonPanel fyne.CanvasObject
+	if ui.EnableButtons {
+		buttonPanel = container.NewBorder(
 			nil,
 			nil,
 			nil,
 			messageSendButton,
 			messageInputEntry,
-		),
+		)
+	}
+	ui.CanvasObject = container.NewBorder(
+		nil,
+		buttonPanel,
 		nil,
 		nil,
 		ui.List,
 	)
+
+	msgCh, err := ui.Panel.StreamD.SubscribeToChatMessages(ctx, time.Now().Add(-7*24*time.Hour))
+	if err != nil {
+		return fmt.Errorf("unable to subscribe to chat messages: %w", err)
+	}
+
+	observability.Go(ctx, func() {
+		time.Sleep(2 * time.Second) // TODO: delete this ugliness
+		ui.messageReceiverLoop(ctx, msgCh)
+	})
 	return nil
 }
 
 func (ui *chatUI) sendMessage(
 	ctx context.Context,
 	message string,
-) error {
+) (_err error) {
+	logger.Tracef(ctx, "sendMessage")
+	defer func() { logger.Tracef(ctx, "/sendMessage: %v", _err) }()
+
 	var result *multierror.Error
 	panel := ui.Panel
 	streamD := panel.StreamD
@@ -132,6 +150,8 @@ func (ui *chatUI) messageReceiverLoop(
 	ctx context.Context,
 	msgCh <-chan api.ChatMessage,
 ) {
+	logger.Tracef(ctx, "messageReceiverLoop")
+	defer func() { logger.Tracef(ctx, "/messageReceiverLoop") }()
 	for {
 		select {
 		case <-ctx.Done():
@@ -141,7 +161,7 @@ func (ui *chatUI) messageReceiverLoop(
 				logger.Errorf(ctx, "message channel got closed")
 				return
 			}
-			ui.onReceiveMessage(ctx, msg)
+			ui.onReceiveMessage(ctx, msg, false)
 		}
 	}
 }
@@ -149,21 +169,38 @@ func (ui *chatUI) messageReceiverLoop(
 func (ui *chatUI) onReceiveMessage(
 	ctx context.Context,
 	msg api.ChatMessage,
+	muteNotifications bool,
 ) {
 	logger.Debugf(ctx, "onReceiveMessage(ctx, %s)", spew.Sdump(msg))
+	defer func() { logger.Tracef(ctx, "/onReceiveMessage(ctx, %s)", spew.Sdump(msg)) }()
 	ui.MessagesHistoryLocker.Lock()
 	defer ui.MessagesHistoryLocker.Unlock()
 	ui.MessagesHistory = append(ui.MessagesHistory, msg)
 	observability.Go(ctx, func() {
 		ui.List.Refresh()
 	})
-	observability.Go(ctx, func() {
-		notificationsEnabled := xsync.DoR1(ctx, &ui.Panel.configLocker, func() bool {
-			return ui.Panel.Config.Chat.NotificationsEnabled()
+	observability.GoSafe(ctx, func() {
+		commandTemplate := xsync.DoR1(ctx, &ui.Panel.configLocker, func() string {
+			return ui.Panel.Config.Chat.CommandOnReceiveMessage
 		})
-		if !notificationsEnabled {
+		if commandTemplate == "" {
 			return
 		}
+		logger.Debugf(ctx, "CommandOnReceiveMessage: <%s>", commandTemplate)
+		defer logger.Debugf(ctx, "/CommandOnReceiveMessage")
+
+		ui.Panel.execCommand(ctx, commandTemplate, msg)
+	})
+	notificationsEnabled := xsync.DoR1(ctx, &ui.Panel.configLocker, func() bool {
+		return ui.Panel.Config.Chat.NotificationsEnabled()
+	})
+	if muteNotifications {
+		notificationsEnabled = false
+	}
+	if !notificationsEnabled {
+		return
+	}
+	observability.GoSafe(ctx, func() {
 		logger.Debugf(ctx, "SendNotification")
 		defer logger.Debugf(ctx, "/SendNotification")
 		ui.Panel.app.SendNotification(&fyne.Notification{
@@ -171,7 +208,7 @@ func (ui *chatUI) onReceiveMessage(
 			Content: msg.Username + ": " + msg.Message,
 		})
 	})
-	observability.Go(ctx, func() {
+	observability.GoSafe(ctx, func() {
 		soundEnabled := xsync.DoR1(ctx, &ui.Panel.configLocker, func() bool {
 			return ui.Panel.Config.Chat.ReceiveMessageSoundAlarmEnabled()
 		})
@@ -191,18 +228,6 @@ func (ui *chatUI) onReceiveMessage(
 			logger.Errorf(ctx, "unable to playback the chat message sound: %v", err)
 		}
 	})
-	observability.Go(ctx, func() {
-		commandTemplate := xsync.DoR1(ctx, &ui.Panel.configLocker, func() string {
-			return ui.Panel.Config.Chat.CommandOnReceiveMessage
-		})
-		if commandTemplate == "" {
-			return
-		}
-		logger.Debugf(ctx, "CommandOnReceiveMessage: <%s>", commandTemplate)
-		defer logger.Debugf(ctx, "/CommandOnReceiveMessage")
-
-		ui.Panel.execCommand(ctx, commandTemplate, msg)
-	})
 }
 
 func (ui *chatUI) listLength() int {
@@ -216,13 +241,17 @@ func (ui *chatUI) listCreateItem() fyne.CanvasObject {
 	removeMsgButton := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {})
 	label := widget.NewLabel("<...loading...>")
 	label.Wrapping = fyne.TextWrapWord
+	var leftPanel fyne.CanvasObject
+	if ui.EnableButtons {
+		leftPanel = container.NewHBox(
+			banUserButton,
+			removeMsgButton,
+		)
+	}
 	return container.NewBorder(
 		nil,
 		nil,
-		container.NewHBox(
-			banUserButton,
-			removeMsgButton,
-		),
+		leftPanel,
 		nil,
 		label,
 	)
@@ -239,6 +268,10 @@ func (ui *chatUI) getPlatformCapabilities(
 
 	if m, ok := ui.CapabilitiesCache[platID]; ok {
 		return m, nil
+	}
+
+	if ui.Panel.StreamD == nil {
+		return nil, fmt.Errorf("ui.Panel.StreamD == nil")
 	}
 
 	info, err := ui.Panel.StreamD.GetBackendInfo(ctx, platID)
@@ -258,6 +291,10 @@ func (ui *chatUI) listUpdateItem(
 	ui.MessagesHistoryLocker.Lock()
 	defer ui.MessagesHistoryLocker.Unlock()
 	entryID := len(ui.MessagesHistory) - 1 - rowID
+	if entryID < 0 || entryID >= len(ui.MessagesHistory) {
+		logger.Errorf(ctx, "invalid entry ID: %d", entryID)
+		return
+	}
 	msg := ui.MessagesHistory[entryID]
 
 	platCaps, err := ui.getPlatformCapabilities(ctx, msg.Platform)

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"time"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookincubator/go-belt/tool/logger"
@@ -318,7 +319,7 @@ func chatListen(cmd *cobra.Command, args []string) {
 	assertNoError(ctx, err)
 
 	fmt.Println("subscribing...")
-	ch, err := streamD.SubscribeToChatMessages(ctx)
+	ch, err := streamD.SubscribeToChatMessages(ctx, time.Now().Add(-time.Minute))
 	assertNoError(ctx, err)
 
 	fmt.Println("started listening...")

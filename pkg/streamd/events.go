@@ -93,8 +93,12 @@ func (d *StreamD) doAction(
 func eventSubToChan[T any](
 	ctx context.Context,
 	d *StreamD,
+	onReady func(ctx context.Context, outCh chan T),
 ) (<-chan T, error) {
 	var sample T
+	logger.Debugf(ctx, "eventSubToChan[%T]", sample)
+	defer func() { logger.Debugf(ctx, "/eventSubToChan[%T]", sample) }()
+
 	topic := eventTopic(sample)
 
 	var mutex sync.Mutex
@@ -117,9 +121,20 @@ func eventSubToChan[T any](
 		}
 	}
 
+	if onReady != nil {
+		mutex.Lock()
+	}
+
 	err := d.EventBus.SubscribeAsync(topic, callback, true)
 	if err != nil {
 		return nil, fmt.Errorf("unable to subscribe: %w", err)
+	}
+
+	if onReady != nil {
+		observability.Go(ctx, func() {
+			defer mutex.Unlock()
+			onReady(ctx, r)
+		})
 	}
 
 	observability.Go(ctx, func() {
@@ -139,49 +154,49 @@ func eventSubToChan[T any](
 func (d *StreamD) SubscribeToDashboardChanges(
 	ctx context.Context,
 ) (<-chan api.DiffDashboard, error) {
-	return eventSubToChan[api.DiffDashboard](ctx, d)
+	return eventSubToChan[api.DiffDashboard](ctx, d, nil)
 }
 
 func (d *StreamD) SubscribeToConfigChanges(
 	ctx context.Context,
 ) (<-chan api.DiffConfig, error) {
-	return eventSubToChan[api.DiffConfig](ctx, d)
+	return eventSubToChan[api.DiffConfig](ctx, d, nil)
 }
 
 func (d *StreamD) SubscribeToStreamsChanges(
 	ctx context.Context,
 ) (<-chan api.DiffStreams, error) {
-	return eventSubToChan[api.DiffStreams](ctx, d)
+	return eventSubToChan[api.DiffStreams](ctx, d, nil)
 }
 
 func (d *StreamD) SubscribeToStreamServersChanges(
 	ctx context.Context,
 ) (<-chan api.DiffStreamServers, error) {
-	return eventSubToChan[api.DiffStreamServers](ctx, d)
+	return eventSubToChan[api.DiffStreamServers](ctx, d, nil)
 }
 
 func (d *StreamD) SubscribeToStreamDestinationsChanges(
 	ctx context.Context,
 ) (<-chan api.DiffStreamDestinations, error) {
-	return eventSubToChan[api.DiffStreamDestinations](ctx, d)
+	return eventSubToChan[api.DiffStreamDestinations](ctx, d, nil)
 }
 
 func (d *StreamD) SubscribeToIncomingStreamsChanges(
 	ctx context.Context,
 ) (<-chan api.DiffIncomingStreams, error) {
-	return eventSubToChan[api.DiffIncomingStreams](ctx, d)
+	return eventSubToChan[api.DiffIncomingStreams](ctx, d, nil)
 }
 
 func (d *StreamD) SubscribeToStreamForwardsChanges(
 	ctx context.Context,
 ) (<-chan api.DiffStreamForwards, error) {
-	return eventSubToChan[api.DiffStreamForwards](ctx, d)
+	return eventSubToChan[api.DiffStreamForwards](ctx, d, nil)
 }
 
 func (d *StreamD) SubscribeToStreamPlayersChanges(
 	ctx context.Context,
 ) (<-chan api.DiffStreamPlayers, error) {
-	return eventSubToChan[api.DiffStreamPlayers](ctx, d)
+	return eventSubToChan[api.DiffStreamPlayers](ctx, d, nil)
 }
 
 func (d *StreamD) notifyStreamPlayerStart(

@@ -22,6 +22,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	child_process_manager "github.com/AgustinSRG/go-child-process-manager"
+	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/tiendc/go-deepcopy"
@@ -231,7 +232,10 @@ func (p *Panel) dumpConfig(ctx context.Context) {
 	logger.Tracef(ctx, "the current config is: %s", buf.String())
 }
 
-func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
+func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) (_err error) {
+	logger.Debugf(ctx, "Loop")
+	defer func() { logger.Debugf(ctx, "/Loop: %v (ctx:%v)", _err, ctx.Err()) }()
+
 	if p.defaultContext != nil {
 		return fmt.Errorf("Loop was already used, and cannot be used the second time")
 	}
@@ -249,6 +253,7 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
 	p.app = fyneapp.New()
 	p.app.Driver().SetDisableScreenBlanking(true)
 	logger.Tracef(ctx, "SetDisableScreenBlanking(true)")
+	p.createMainWindow(ctx)
 
 	var loadingWindow fyne.Window
 	if ignoreError(p.GetConfig(ctx)).RemoteStreamDAddr == "" {
@@ -353,6 +358,7 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) error {
 	})
 
 	p.app.Run()
+	logger.Infof(ctx, "p.app.Run finished")
 	return nil
 }
 
@@ -1250,15 +1256,30 @@ func (p *Panel) getUpdatedStatus_startStopStreamButton_noLock(ctx context.Contex
 	}
 }
 
+func (p *Panel) createMainWindow(
+	ctx context.Context,
+) {
+	logger.Debugf(ctx, "createMainWindow")
+	defer belt.Flush(ctx)
+	defer func() { logger.Debugf(ctx, "/createMainWindow") }()
+
+	w := p.newPermanentWindow(ctx, gconsts.AppName)
+	w.SetCloseIntercept(func() {
+		logger.Debugf(ctx, "main window 'close' was clicked")
+	})
+	w.SetMaster()
+	p.mainWindow = w
+}
+
 func (p *Panel) initMainWindow(
 	ctx context.Context,
 	startingPage consts.Page,
 ) {
 	logger.Debugf(ctx, "initMainWindow")
-	defer logger.Debugf(ctx, "/initMainWindow")
+	defer belt.Flush(ctx)
+	defer func() { logger.Debugf(ctx, "/initMainWindow") }()
 
-	w := p.newPermanentWindow(ctx, gconsts.AppName)
-	w.SetCloseIntercept(func() {})
+	w := p.mainWindow
 	menu := fyne.NewMainMenu(fyne.NewMenu("Main",
 		fyne.NewMenuItem("Settings", func() {
 			err := p.openSettingsWindow(ctx)
@@ -1301,13 +1322,13 @@ func (p *Panel) initMainWindow(
 		}),
 		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem("Quit", func() {
+			logger.Debugf(ctx, "Quit was clicked")
 			p.app.Quit()
 			w.Close()
 		}),
 	))
+
 	w.SetMainMenu(menu)
-	p.mainWindow = w
-	w.SetMaster()
 	resizeWindow(w, fyne.NewSize(600, 1000))
 
 	profileFilter := widget.NewEntry()
@@ -1637,7 +1658,7 @@ func (p *Panel) initMainWindow(
 	)
 
 	chatPage := container.NewBorder(nil, nil, nil, nil)
-	chatUI, err := newChatUI(ctx, p)
+	chatUI, err := newChatUI(ctx, true, p)
 	if err != nil {
 		logger.Errorf(ctx, "unable to initialize the page for chat: %v", err)
 	} else {
@@ -2320,7 +2341,10 @@ func (p *Panel) showWaitStreamDConnectWindow(ctx context.Context) {
 	})
 }
 
-func (p *Panel) Close() error {
+func (p *Panel) Close() (_err error) {
+	ctx := context.TODO()
+	logger.Debugf(ctx, "Close()")
+	defer func() { logger.Debugf(ctx, "/Close(): %v", _err) }()
 	var err *multierror.Error
 	err = multierror.Append(err, p.eventSensor.Close())
 	// TODO: remove observability.Go, Quit should be executed synchronously,

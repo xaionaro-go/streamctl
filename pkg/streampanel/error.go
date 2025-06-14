@@ -60,10 +60,11 @@ func (p *Panel) getErrorReports() []errorReport {
 func (p *Panel) statusPanelSet(text string) {
 	ctx := context.TODO()
 	p.statusPanelLocker.Do(ctx, func() {
-		if p.statusPanel == nil {
+		panel := p.statusPanel
+		if panel == nil {
 			return
 		}
-		p.statusPanel.SetText("status:  " + text)
+		panel.SetText("status:  " + text)
 	})
 }
 

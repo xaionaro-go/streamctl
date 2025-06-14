@@ -19,6 +19,7 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/player/pkg/player"
+	"github.com/xaionaro-go/streamctl/pkg/chatmessagesstorage"
 	"github.com/xaionaro-go/streamctl/pkg/p2p"
 	"github.com/xaionaro-go/streamctl/pkg/repository"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -65,9 +66,12 @@ type StreamD struct {
 	SaveConfigFunc SaveConfigFunc
 	ConfigLock     xsync.Gorex
 	Config         config.Config
+	ReadyChan      chan struct{}
 
 	CacheLock xsync.Mutex
 	Cache     *cache.Cache
+
+	ChatMessagesStorage ChatMessageStorage
 
 	GitStorage *repository.GIT
 
@@ -133,20 +137,28 @@ func New(
 	}
 
 	d := &StreamD{
-		UI:                ui,
-		SaveConfigFunc:    saveCfgFunc,
-		Config:            cfg,
-		Cache:             &cache.Cache{},
-		OAuthListenPorts:  map[uint16]struct{}{},
-		StreamStatusCache: memoize.NewMemoizeData(),
-		EventBus:          eventbus.New(),
+		UI:                  ui,
+		SaveConfigFunc:      saveCfgFunc,
+		Config:              cfg,
+		ChatMessagesStorage: chatmessagesstorage.New(cfg.GetChatMessageStorage(ctx)),
+		Cache:               &cache.Cache{},
+		OAuthListenPorts:    map[uint16]struct{}{},
+		StreamStatusCache:   memoize.NewMemoizeData(),
+		EventBus:            eventbus.New(),
 		OBSState: OBSState{
 			VolumeMeters: map[string][][3]float64{},
 		},
-		Timers:  map[api.TimerID]*Timer{},
-		Options: Options(options).Aggregate(),
+		Timers:    map[api.TimerID]*Timer{},
+		Options:   Options(options).Aggregate(),
+		ReadyChan: make(chan struct{}),
 	}
 
+	// TODO: move this to Run()
+	if err := d.ChatMessagesStorage.Load(ctx); err != nil {
+		logger.FromBelt(b).Errorf("unable to read the chat messages: %v", err)
+	}
+
+	// TODO: move this to Run()
 	err = d.readCache(ctx)
 	if err != nil {
 		logger.FromBelt(b).Errorf("unable to read cache: %v", err)
@@ -200,6 +212,11 @@ func (d *StreamD) Run(ctx context.Context) (_ret error) { // TODO: delete the fe
 		d.UI.DisplayError(fmt.Errorf("unable to initialize the P2P network: %w", err))
 	}
 
+	d.UI.SetStatus("Initializing chat messages storage...")
+	if err := d.initChatMessagesStorage(ctx); err != nil {
+		d.UI.DisplayError(fmt.Errorf("unable to initialize the chat messages storage: %w", err))
+	}
+
 	d.UI.SetStatus("OBS restarter...")
 	if err := d.initOBSRestarter(ctx); err != nil {
 		d.UI.DisplayError(fmt.Errorf("unable to initialize the OBS restarter: %w", err))
@@ -211,6 +228,32 @@ func (d *StreamD) Run(ctx context.Context) (_ret error) { // TODO: delete the fe
 	}
 
 	d.UI.SetStatus("Initializing UI...")
+	close(d.ReadyChan)
+	return nil
+}
+
+func (d *StreamD) initChatMessagesStorage(ctx context.Context) (_err error) {
+	logger.Debugf(ctx, "initChatMessagesStorage")
+	defer logger.Debugf(ctx, "/initChatMessagesStorage: %v", _err)
+
+	observability.Go(ctx, func() {
+		logger.Debugf(ctx, "initChatMessagesStorage-refresherLoop")
+		defer logger.Debugf(ctx, "/initChatMessagesStorage-refresherLoop")
+		t := time.NewTicker(5 * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+			err := d.ChatMessagesStorage.Store(ctx)
+			if err != nil {
+				d.UI.DisplayError(fmt.Errorf("unable to store the chat messages: %w", err))
+			}
+		}
+	})
+
 	return nil
 }
 
@@ -218,7 +261,7 @@ func (d *StreamD) secretsProviderUpdater(ctx context.Context) (_err error) {
 	logger.Debugf(ctx, "secretsProviderUpdater")
 	defer logger.Debugf(ctx, "/secretsProviderUpdater: %v", _err)
 
-	cfgChangeCh, err := eventSubToChan[api.DiffConfig](ctx, d)
+	cfgChangeCh, err := eventSubToChan[api.DiffConfig](ctx, d, nil)
 	if err != nil {
 		return fmt.Errorf("unable to subscribe to config changes: %w", err)
 	}
@@ -573,8 +616,11 @@ func (d *StreamD) onUpdateConfig(
 func (d *StreamD) IsBackendEnabled(
 	ctx context.Context,
 	id streamcontrol.PlatformName,
-) (bool, error) {
-	return xsync.RDoR2(ctx, &d.ControllersLocker, func() (bool, error) {
+) (_ret bool, _err error) {
+	logger.Tracef(ctx, "IsBackendEnabled(ctx, '%s')", id)
+	defer func() { logger.Tracef(ctx, "/IsBackendEnabled(ctx, '%s'): %v %v", id, _ret, _err) }()
+
+	return xsync.RDoR2(ctx, &d.ControllersLocker, func() (_ret bool, _err error) {
 		switch id {
 		case obs.ID:
 			return d.StreamControllers.OBS != nil, nil
@@ -758,7 +804,10 @@ func (d *StreamD) EndStream(ctx context.Context, platID streamcontrol.PlatformNa
 func (d *StreamD) GetBackendInfo(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
-) (*api.BackendInfo, error) {
+) (_ret *api.BackendInfo, _err error) {
+	logger.Tracef(ctx, "GetBackendInfo(ctx, '%s')", platID)
+	defer func() { logger.Tracef(ctx, "/GetBackendInfo(ctx, '%s'): %v %v", platID, _ret, _err) }()
+
 	ctrl, err := d.streamController(ctx, platID)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get stream controller for platform '%s': %w", platID, err)
@@ -1918,36 +1967,6 @@ func (d *StreamD) listTimers(
 		return result[i].ID < result[j].ID
 	})
 	return result, nil
-}
-
-func (d *StreamD) SubscribeToChatMessages(
-	ctx context.Context,
-) (<-chan api.ChatMessage, error) {
-	return eventSubToChan[api.ChatMessage](ctx, d)
-}
-
-func (d *StreamD) SendChatMessage(
-	ctx context.Context,
-	platID streamcontrol.PlatformName,
-	message string,
-) (_err error) {
-	logger.Debugf(ctx, "SendChatMessage(ctx, '%s', '%s')", platID, message)
-	defer func() { logger.Debugf(ctx, "/SendChatMessage(ctx, '%s', '%s'): %v", platID, message, _err) }()
-	if message == "" {
-		return nil
-	}
-
-	ctrl, err := d.streamController(ctx, platID)
-	if err != nil {
-		return fmt.Errorf("unable to get stream controller for platform '%s': %w", platID, err)
-	}
-
-	err = ctrl.SendChatMessage(ctx, message)
-	if err != nil {
-		return fmt.Errorf("unable to send message '%s' to platform '%s': %w", message, platID, err)
-	}
-
-	return nil
 }
 
 func (d *StreamD) DialContext(

@@ -631,7 +631,10 @@ func (c *Client) SetConfig(
 func (c *Client) IsBackendEnabled(
 	ctx context.Context,
 	id streamcontrol.PlatformName,
-) (bool, error) {
+) (_ret bool, _err error) {
+	logger.Tracef(ctx, "IsBackendEnabled(ctx, '%s')", id)
+	defer func() { logger.Tracef(ctx, "/IsBackendEnabled(ctx, '%s'): %v %v", id, _ret, _err) }()
+
 	reply, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
@@ -715,7 +718,9 @@ func (c *Client) EndStream(
 func (c *Client) GetBackendInfo(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
-) (*api.BackendInfo, error) {
+) (_ret *api.BackendInfo, _err error) {
+	logger.Tracef(ctx, "GetBackendInfo(ctx, '%s')", platID)
+	defer func() { logger.Tracef(ctx, "/GetBackendInfo(ctx, '%s'): %v %v", platID, _ret, _err) }()
 	reply, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
@@ -2618,6 +2623,7 @@ func (c *Client) SubmitEvent(
 
 func (c *Client) SubscribeToChatMessages(
 	ctx context.Context,
+	since time.Time,
 ) (<-chan api.ChatMessage, error) {
 	return unwrapStreamDChan(
 		ctx,
@@ -2630,19 +2636,21 @@ func (c *Client) SubscribeToChatMessages(
 				ctx,
 				c,
 				client.SubscribeToChatMessages,
-				&streamd_grpc.SubscribeToChatMessagesRequest{},
+				&streamd_grpc.SubscribeToChatMessagesRequest{
+					SinceUNIXNano: uint64(since.UnixNano()),
+				},
 			)
 		},
 		func(
 			ctx context.Context,
 			event *streamd_grpc.ChatMessage,
 		) api.ChatMessage {
-			createdAtUnix := event.GetCreatedAtNano()
+			createdAtUNIXNano := event.GetCreatedAtUNIXNano()
 			return api.ChatMessage{
 				ChatMessage: streamcontrol.ChatMessage{
 					CreatedAt: time.Unix(
-						int64(createdAtUnix)/int64(time.Second),
-						(int64(createdAtUnix)%int64(time.Second))/int64(time.Nanosecond),
+						int64(createdAtUNIXNano)/int64(time.Second),
+						(int64(createdAtUNIXNano)%int64(time.Second))/int64(time.Nanosecond),
 					),
 					UserID:    streamcontrol.ChatUserID(event.GetUserID()),
 					Username:  event.GetUsername(),

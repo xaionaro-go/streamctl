@@ -277,6 +277,7 @@ type StreamD interface {
 
 	SubscribeToChatMessages(
 		ctx context.Context,
+		since time.Time,
 	) (<-chan ChatMessage, error)
 	SendChatMessage(
 		ctx context.Context,

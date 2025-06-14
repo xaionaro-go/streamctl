@@ -200,6 +200,7 @@ func runPanel(
 					err := mainProcess.SendMessage(ctx, ProcessNameMain, MessageApplicationRestart{})
 					if err != nil {
 						logger.Errorf(ctx, "unable to send a request to restart the application: %v; closing the panel instead (hoping it will trigger a restart)", err)
+						belt.Flush(ctx)
 						panel.Close()
 					}
 				},
@@ -212,6 +213,8 @@ func runPanel(
 	if err != nil {
 		logger.Panic(ctx, err)
 	}
+	logger.Debugf(ctx, "/panel.Loop")
+	belt.Flush(ctx)
 	err = panel.Close()
 	if err != nil {
 		logger.Error(ctx, err)
