@@ -1077,55 +1077,6 @@ func (p *Panel) resetCache(ctx context.Context) {
 	}
 }
 
-func (p *Panel) openMenuWindow(ctx context.Context) {
-	popupMenu := widget.NewPopUpMenu(fyne.NewMenu("menu",
-		fyne.NewMenuItem("Settings", func() {
-			err := p.openSettingsWindow(ctx)
-			if err != nil {
-				p.DisplayError(fmt.Errorf("unable to handle the settings window: %w", err))
-			}
-		}),
-		fyne.NewMenuItem("Reset cache", func() {
-			w := dialog.NewConfirm(
-				"Resetting the cache",
-				"Are you sure you want to drop the cache and re-download the data (it might take a while)?",
-				func(b bool) {
-					if b {
-						p.resetCache(ctx)
-					}
-				},
-				p.mainWindow,
-			)
-			w.Show()
-		}),
-		fyne.NewMenuItem("Link a device", func() {
-			p.showLinkDeviceQRWindow(ctx)
-		}),
-		fyne.NewMenuItemSeparator(),
-		fyne.NewMenuItem("Show errors", func() {
-			p.ShowErrorReports()
-		}),
-		fyne.NewMenuItem("Panic", func() {
-			w := dialog.NewConfirm(
-				"Panic?",
-				"Are you sure you want the app to panic?",
-				func(b bool) {
-					if b {
-						panic("They said I should panic!")
-					}
-				},
-				p.mainWindow,
-			)
-			w.Show()
-		}),
-		fyne.NewMenuItemSeparator(),
-		fyne.NewMenuItem("Quit", func() {
-			p.app.Quit()
-		}),
-	), p.mainWindow.Canvas())
-	popupMenu.Show()
-}
-
 func resizeWindow(w fyne.Window, newSize fyne.Size) {
 	w.Resize(newSize)
 }
@@ -1307,6 +1258,54 @@ func (p *Panel) initMainWindow(
 	defer logger.Debugf(ctx, "/initMainWindow")
 
 	w := p.newPermanentWindow(ctx, gconsts.AppName)
+	w.SetCloseIntercept(func() {})
+	menu := fyne.NewMainMenu(fyne.NewMenu("Main",
+		fyne.NewMenuItem("Settings", func() {
+			err := p.openSettingsWindow(ctx)
+			if err != nil {
+				p.DisplayError(fmt.Errorf("unable to handle the settings window: %w", err))
+			}
+		}),
+		fyne.NewMenuItem("Reset cache", func() {
+			w := dialog.NewConfirm(
+				"Resetting the cache",
+				"Are you sure you want to drop the cache and re-download the data (it might take a while)?",
+				func(b bool) {
+					if b {
+						p.resetCache(ctx)
+					}
+				},
+				p.mainWindow,
+			)
+			w.Show()
+		}),
+		fyne.NewMenuItem("Link a device", func() {
+			p.showLinkDeviceQRWindow(ctx)
+		}),
+		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem("Show errors", func() {
+			p.ShowErrorReports()
+		}),
+		fyne.NewMenuItem("Panic", func() {
+			w := dialog.NewConfirm(
+				"Panic?",
+				"Are you sure you want the app to panic?",
+				func(b bool) {
+					if b {
+						panic("They said I should panic!")
+					}
+				},
+				p.mainWindow,
+			)
+			w.Show()
+		}),
+		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem("Quit", func() {
+			p.app.Quit()
+			w.Close()
+		}),
+	))
+	w.SetMainMenu(menu)
 	p.mainWindow = w
 	w.SetMaster()
 	resizeWindow(w, fyne.NewSize(600, 1000))
@@ -1329,10 +1328,6 @@ func (p *Panel) initMainWindow(
 		}),
 	}
 
-	menuButton := widget.NewButtonWithIcon("", theme.MenuIcon(), func() {
-		p.openMenuWindow(ctx)
-	})
-
 	profileControl := container.NewHBox(
 		widget.NewSeparator(),
 		widget.NewRichTextWithText("Profile:"),
@@ -1342,7 +1337,6 @@ func (p *Panel) initMainWindow(
 	)
 
 	topPanel := container.NewHBox(
-		menuButton,
 		profileControl,
 	)
 
