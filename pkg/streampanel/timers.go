@@ -21,7 +21,7 @@ import (
 	youtube "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config/action"
 	"github.com/xaionaro-go/xcontext"
-	"github.com/xaionaro-go/xfyne/widget"
+	xfyne "github.com/xaionaro-go/xfyne/widget"
 	"github.com/xaionaro-go/xsync"
 )
 

@@ -249,7 +249,7 @@ func (w *dashboardWindow) renderStreamStatus(ctx context.Context) {
 func (p *Panel) newDashboardWindow(
 	ctx context.Context,
 ) *dashboardWindow {
-	chatUI, err := newChatUI(ctx, false, false, p)
+	chatUI, err := newChatUI(ctx, false, false, true, p)
 	if err != nil {
 		p.DisplayError(fmt.Errorf("unable to start a chat UI: %w", err))
 	}
@@ -333,18 +333,6 @@ func (p *Panel) newDashboardWindow(
 		layers = append(layers,
 			c,
 		)
-		observability.Go(ctx, func() {
-			t := time.NewTicker(time.Second)
-			defer t.Stop()
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case <-t.C:
-					w.chat.OnAdd(ctx, api.ChatMessage{})
-				}
-			}
-		})
 	}
 	layers = append(layers,
 		w.imagesLayerObj,
@@ -712,6 +700,19 @@ func (w *dashboardWindow) startUpdatingNoLock(
 	ctx, cancelFunc := context.WithCancel(ctx)
 	w.stopUpdatingFunc = cancelFunc
 
+	observability.Go(ctx, func() {
+		t := time.NewTicker(time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				w.chat.OnAdd(ctx, api.ChatMessage{})
+			}
+		}
+	})
+
 	w.renderLocalStatus(ctx)
 	observability.Go(ctx, func() {
 		t := time.NewTicker(2 * time.Second)
@@ -782,6 +783,7 @@ func (w *dashboardWindow) stopUpdating(
 func (p *Panel) openDashboardWindowNoLock(
 	ctx context.Context,
 ) error {
+	ctx, cancelFn := context.WithCancel(ctx)
 	p.dashboardShowHideButton.SetText("Hide")
 	p.dashboardShowHideButton.SetIcon(theme.WindowCloseIcon())
 	if p.dashboardWindow != nil {
@@ -798,6 +800,8 @@ func (p *Panel) openDashboardWindowNoLock(
 	})
 	w.Window.SetOnClosed(func() {
 		p.dashboardLocker.Do(ctx, func() {
+			logger.Debugf(ctx, "dashboard.Close")
+			defer logger.Debugf(ctx, "/dashboard.Close")
 			w.stopUpdating(ctx)
 			p.dashboardShowHideButton.SetText("Open")
 			p.dashboardShowHideButton.SetIcon(theme.ComputerIcon())
@@ -814,6 +818,7 @@ func (p *Panel) openDashboardWindowNoLock(
 			if err != nil {
 				logger.Errorf(ctx, "SaveConfig error: %v", err)
 			}
+			cancelFn()
 		})
 	})
 	return nil

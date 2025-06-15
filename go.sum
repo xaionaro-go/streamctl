@@ -1178,8 +1178,8 @@ github.com/xaionaro-go/unsafetools v0.0.0-20241024014258-a46e1ce3763e h1:FV+/FVP
 github.com/xaionaro-go/unsafetools v0.0.0-20241024014258-a46e1ce3763e/go.mod h1:ERewyGVM0zYnWA9nxdHPIC3xc9Yrf5CgAnBITuP3FRE=
 github.com/xaionaro-go/xcontext v0.0.0-20250111150717-e70e1f5b299c h1://sE/WLpO7wpcVsp1FfTNAG9JmL60KfXiogNVKYivTA=
 github.com/xaionaro-go/xcontext v0.0.0-20250111150717-e70e1f5b299c/go.mod h1:MGRT1+2m2adVRc4aAn0RVGysjsSRKN9VCyBJLHvQd4k=
-github.com/xaionaro-go/xfyne v0.0.0-20241018233531-26123724a6c6 h1:UI1MghFC+1yGP1EkDmCOVV7k25fQTL0HM4cHnXLc/uM=
-github.com/xaionaro-go/xfyne v0.0.0-20241018233531-26123724a6c6/go.mod h1:PAiPIoLcqxpi4P0st8qiIK+cWfGQM0iWBE30SH8+xOQ=
+github.com/xaionaro-go/xfyne v0.0.0-20250615190411-4c96281f6e25 h1:zGpt+U8zOCB/gMOpJZ1IzqjfU85fvbL9LUvSL/R/xEk=
+github.com/xaionaro-go/xfyne v0.0.0-20250615190411-4c96281f6e25/go.mod h1:52pwXTJFBlreHnA0sf8EoJvw5MZZNPSRm9kpdSqHOuk=
 github.com/xaionaro-go/xlogrus v0.0.0-20250111150201-60557109545a h1:EoNRdOtBMnZedKfW7/4xtGmGHC+L+jfmLe5UOnF1tqc=
 github.com/xaionaro-go/xlogrus v0.0.0-20250111150201-60557109545a/go.mod h1:RPfWNuwqJykkA2TEvisXqHgy1ypA/1H2HBdIRSeVJ9o=
 github.com/xaionaro-go/xpath v0.0.0-20250111145115-55f5728f643f h1:ofxY1akRlVdJ/AEDj0EakK4Aez8fzeWTTe2mCAZiJ0A=
