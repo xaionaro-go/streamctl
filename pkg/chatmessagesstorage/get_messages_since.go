@@ -30,6 +30,7 @@ func (s *ChatMessagesStorage) getMessagesSinceLocked(
 	}
 
 	if !s.IsSorted {
+		logger.Tracef(ctx, "not sorted, sorting")
 		s.sortAndDeduplicateAndTruncate(ctx)
 	}
 

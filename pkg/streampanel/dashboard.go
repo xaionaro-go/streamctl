@@ -313,6 +313,10 @@ func (p *Panel) newDashboardWindow(
 		c := w.chat.List
 		w.chat.OnAdd = func(ctx context.Context, _ api.ChatMessage) {
 			screenHeight := w.Canvas().Size().Height
+			switch runtime.GOOS {
+			case "android":
+				screenHeight -= 110
+			}
 			demandedHeight := float32(w.chat.TotalListHeight) + c.Theme().Size(theme.SizeNamePadding)*float32(c.Length())
 			logger.Tracef(ctx, "demanded height: %v; screen height: %v", demandedHeight, screenHeight)
 			allowedHeight := math.Min(
@@ -326,6 +330,8 @@ func (p *Panel) newDashboardWindow(
 			c.Resize(size)
 			c.Move(pos)
 
+			c.ScrollToBottom()
+			c.Refresh()
 			c.ScrollToBottom()
 			c.Refresh()
 		}

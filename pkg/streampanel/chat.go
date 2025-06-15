@@ -196,6 +196,9 @@ func (ui *chatUI) onReceiveMessage(
 	defer ui.List.RefreshItem(prevLen)
 	defer ui.MessagesHistoryLocker.ManualUnlock(ctx)
 	ui.MessagesHistory = append(ui.MessagesHistory, msg)
+	if time.Since(msg.CreatedAt) > time.Hour {
+		return
+	}
 	notificationsEnabled := xsync.DoR1(ctx, &ui.Panel.configLocker, func() bool {
 		return ui.Panel.Config.Chat.NotificationsEnabled()
 	})

@@ -9,20 +9,20 @@ import (
 )
 
 func msgLess(ctx context.Context, a *api.ChatMessage, b *api.ChatMessage) bool {
-	if a.CreatedAt.Before(b.CreatedAt) {
-		return true
+	if a.CreatedAt != b.CreatedAt {
+		return a.CreatedAt.Before(b.CreatedAt)
 	}
-	if a.Platform < b.Platform {
-		return true
+	if a.Platform != b.Platform {
+		return a.Platform < b.Platform
 	}
-	if a.Username < b.Username {
-		return true
+	if a.Username != b.Username {
+		return a.Username < b.Username
 	}
-	if a.MessageID < b.MessageID {
-		return true
+	if a.MessageID != b.MessageID {
+		return a.MessageID < b.MessageID
 	}
-	if a.Message < b.Message {
-		return true
+	if a.Message != b.Message {
+		return a.Message < b.Message
 	}
 	if a != b {
 		logger.Errorf(ctx, "msgs A and B look equal, but are not: A:%#+v B:%#+v", a, b)

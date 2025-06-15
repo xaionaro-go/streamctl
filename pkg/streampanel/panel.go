@@ -251,6 +251,7 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) (_err error) {
 	}
 
 	p.app = fyneapp.New()
+	p.app.Settings().SetTheme(theme.DarkTheme())
 	p.app.Driver().SetDisableScreenBlanking(true)
 	logger.Tracef(ctx, "SetDisableScreenBlanking(true)")
 	p.createMainWindow(ctx)

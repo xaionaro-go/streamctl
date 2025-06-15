@@ -27,10 +27,8 @@ func colorForPlatform(platID streamcontrol.PlatformName) fyne.ThemeColorName {
 
 var brightColors = []fyne.ThemeColorName{
 	theme.ColorNameError,
-	theme.ColorNameForeground,
 	theme.ColorNameHyperlink,
 	theme.ColorNamePrimary,
-	theme.ColorNameSelection,
 	theme.ColorNameSuccess,
 	theme.ColorNameWarning,
 }
