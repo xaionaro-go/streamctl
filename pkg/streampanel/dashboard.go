@@ -38,6 +38,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/client"
 	streamdconfig "github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	streamdconsts "github.com/xaionaro-go/streamctl/pkg/streamd/consts"
@@ -88,6 +89,7 @@ type dashboardWindow struct {
 	streamStatusLocker  xsync.Mutex
 	changedImages       []*imageInfo
 	lastFullUpdateAt    time.Time
+	chat                *chatUI
 
 	iteratorReusableBuffer iterate.TwoDReusableBuffers
 }
@@ -247,9 +249,14 @@ func (w *dashboardWindow) renderStreamStatus(ctx context.Context) {
 func (p *Panel) newDashboardWindow(
 	ctx context.Context,
 ) *dashboardWindow {
+	chatUI, err := newChatUI(ctx, false, false, p)
+	if err != nil {
+		p.DisplayError(fmt.Errorf("unable to start a chat UI: %w", err))
+	}
 	w := &dashboardWindow{
 		Window: p.app.NewWindow("Dashboard"),
 		Panel:  p,
+		chat:   chatUI,
 		streamStatus: map[streamcontrol.PlatformName]*widget.Label{
 			obs.ID:     widget.NewLabel(""),
 			twitch.ID:  widget.NewLabel(""),
@@ -294,16 +301,58 @@ func (p *Panel) newDashboardWindow(
 	streamInfoContainer := container.NewBorder(
 		nil,
 		nil,
-		nil,
 		streamInfoItems,
+		nil,
 	)
 	w.imagesLayerObj = canvas.NewRaster(w.imagesLayer)
 
-	w.Window.SetContent(container.NewStack(
+	layers := []fyne.CanvasObject{
 		bgFyne,
+	}
+	if w.chat != nil {
+		c := w.chat.List
+		w.chat.OnAdd = func(ctx context.Context, _ api.ChatMessage) {
+			screenHeight := w.Canvas().Size().Height
+			demandedHeight := float32(w.chat.TotalListHeight) + c.Theme().Size(theme.SizeNamePadding)*float32(c.Length())
+			logger.Tracef(ctx, "demanded height: %v; screen height: %v", demandedHeight, screenHeight)
+			allowedHeight := math.Min(
+				float64(screenHeight),
+				float64(demandedHeight),
+			)
+			logger.Tracef(ctx, "allowed height: %v", allowedHeight)
+			pos := fyne.NewPos(0, screenHeight-float32(allowedHeight))
+			size := fyne.NewSize(w.Canvas().Size().Width, float32(allowedHeight))
+			logger.Tracef(ctx, "resulting size and position: %#+v %#+v", size, pos)
+			c.Resize(size)
+			c.Move(pos)
+
+			c.ScrollToBottom()
+			c.Refresh()
+		}
+		w.chat.OnAdd(ctx, api.ChatMessage{})
+		layers = append(layers,
+			c,
+		)
+		observability.Go(ctx, func() {
+			t := time.NewTicker(time.Second)
+			defer t.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.C:
+					w.chat.OnAdd(ctx, api.ChatMessage{})
+				}
+			}
+		})
+	}
+	layers = append(layers,
 		w.imagesLayerObj,
 		streamInfoContainer,
-	))
+	)
+
+	stack := container.NewStack(layers...)
+	w.Window.SetContent(stack)
 	w.Window.Show()
 	return w
 }

@@ -1658,7 +1658,7 @@ func (p *Panel) initMainWindow(
 	)
 
 	chatPage := container.NewBorder(nil, nil, nil, nil)
-	chatUI, err := newChatUI(ctx, true, p)
+	chatUI, err := newChatUI(ctx, true, true, p)
 	if err != nil {
 		logger.Errorf(ctx, "unable to initialize the page for chat: %v", err)
 	} else {

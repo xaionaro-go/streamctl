@@ -28,9 +28,14 @@ type chatUI struct {
 	CanvasObject          fyne.CanvasObject
 	Panel                 *Panel
 	List                  *widget.List
+	ItemHeight            map[streamcontrol.ChatMessageID]uint
+	TotalListHeight       uint
 	MessagesHistoryLocker sync.Mutex
 	MessagesHistory       []api.ChatMessage
 	EnableButtons         bool
+	ReverseOrder          bool
+	OnAdd                 func(context.Context, api.ChatMessage)
+	OnRemove              func(context.Context, api.ChatMessage)
 
 	CapabilitiesCacheLocker sync.Mutex
 	CapabilitiesCache       map[streamcontrol.PlatformName]map[streamcontrol.Capability]struct{}
@@ -44,6 +49,7 @@ type chatUI struct {
 func newChatUI(
 	ctx context.Context,
 	enableButtons bool,
+	reverseOrder bool,
 	panel *Panel,
 ) (_ret *chatUI, _err error) {
 	logger.Debugf(ctx, "newChatUI")
@@ -52,7 +58,9 @@ func newChatUI(
 	ui := &chatUI{
 		Panel:             panel,
 		EnableButtons:     enableButtons,
+		ReverseOrder:      reverseOrder,
 		CapabilitiesCache: make(map[streamcontrol.PlatformName]map[streamcontrol.Capability]struct{}),
+		ItemHeight:        map[streamcontrol.ChatMessageID]uint{},
 		ctx:               ctx,
 	}
 	if err := ui.init(ctx); err != nil {
@@ -173,6 +181,9 @@ func (ui *chatUI) onReceiveMessage(
 ) {
 	logger.Debugf(ctx, "onReceiveMessage(ctx, %s)", spew.Sdump(msg))
 	defer func() { logger.Tracef(ctx, "/onReceiveMessage(ctx, %s)", spew.Sdump(msg)) }()
+	if onAdd := ui.OnAdd; onAdd != nil {
+		defer onAdd(ctx, msg)
+	}
 	ui.MessagesHistoryLocker.Lock()
 	defer ui.MessagesHistoryLocker.Unlock()
 	ui.MessagesHistory = append(ui.MessagesHistory, msg)
@@ -290,7 +301,12 @@ func (ui *chatUI) listUpdateItem(
 	ctx := context.TODO()
 	ui.MessagesHistoryLocker.Lock()
 	defer ui.MessagesHistoryLocker.Unlock()
-	entryID := len(ui.MessagesHistory) - 1 - rowID
+	var entryID int
+	if ui.ReverseOrder {
+		entryID = len(ui.MessagesHistory) - 1 - rowID
+	} else {
+		entryID = rowID
+	}
 	if entryID < 0 || entryID >= len(ui.MessagesHistory) {
 		logger.Errorf(ctx, "invalid entry ID: %d", entryID)
 		return
@@ -306,51 +322,53 @@ func (ui *chatUI) listUpdateItem(
 	containerPtr := obj.(*fyne.Container)
 	objs := containerPtr.Objects
 	label := objs[0].(*widget.Label)
-	subContainer := objs[1].(*fyne.Container)
-	banUserButton := subContainer.Objects[0].(*widget.Button)
-	banUserButton.OnTapped = func() {
-		w := dialog.NewConfirm(
-			"Banning an user",
-			fmt.Sprintf("Are you sure you want to ban user '%s' on '%s'", msg.UserID, msg.Platform),
-			func(b bool) {
-				if !b {
-					return
-				}
-				ui.onBanClicked(msg.Platform, msg.UserID)
-			},
-			ui.Panel.mainWindow,
-		)
-		w.Show()
-	}
-	if _, ok := platCaps[streamcontrol.CapabilityBanUser]; !ok {
-		banUserButton.Disable()
-	} else {
-		banUserButton.Enable()
-	}
-	removeMsgButton := subContainer.Objects[1].(*widget.Button)
-	removeMsgButton.OnTapped = func() {
-		w := dialog.NewConfirm(
-			"Removing a message",
-			fmt.Sprintf("Are you sure you want to remove the message from '%s' on '%s'", msg.UserID, msg.Platform),
-			func(b bool) {
-				if !b {
-					return
-				}
-				// TODO: think of consistency with onBanClicked
-				ui.onRemoveClicked(entryID)
-			},
-			ui.Panel.mainWindow,
-		)
-		w.Show()
-	}
-	if _, ok := platCaps[streamcontrol.CapabilityDeleteChatMessage]; !ok {
-		removeMsgButton.Disable()
-	} else {
-		removeMsgButton.Enable()
+	if ui.EnableButtons {
+		subContainer := objs[1].(*fyne.Container)
+		banUserButton := subContainer.Objects[0].(*widget.Button)
+		banUserButton.OnTapped = func() {
+			w := dialog.NewConfirm(
+				"Banning an user",
+				fmt.Sprintf("Are you sure you want to ban user '%s' on '%s'", msg.UserID, msg.Platform),
+				func(b bool) {
+					if !b {
+						return
+					}
+					ui.onBanClicked(msg.Platform, msg.UserID)
+				},
+				ui.Panel.mainWindow,
+			)
+			w.Show()
+		}
+		if _, ok := platCaps[streamcontrol.CapabilityBanUser]; !ok {
+			banUserButton.Disable()
+		} else {
+			banUserButton.Enable()
+		}
+		removeMsgButton := subContainer.Objects[1].(*widget.Button)
+		removeMsgButton.OnTapped = func() {
+			w := dialog.NewConfirm(
+				"Removing a message",
+				fmt.Sprintf("Are you sure you want to remove the message from '%s' on '%s'", msg.UserID, msg.Platform),
+				func(b bool) {
+					if !b {
+						return
+					}
+					// TODO: think of consistency with onBanClicked
+					ui.onRemoveClicked(entryID)
+				},
+				ui.Panel.mainWindow,
+			)
+			w.Show()
+		}
+		if _, ok := platCaps[streamcontrol.CapabilityDeleteChatMessage]; !ok {
+			removeMsgButton.Disable()
+		} else {
+			removeMsgButton.Enable()
+		}
 	}
 	label.SetText(fmt.Sprintf(
 		"%s: %s: %s: %s",
-		msg.CreatedAt.Format("15:04"),
+		msg.CreatedAt.Format("15:04:05"),
 		msg.Platform,
 		msg.Username,
 		msg.Message,
@@ -358,6 +376,10 @@ func (ui *chatUI) listUpdateItem(
 
 	requiredHeight := containerPtr.MinSize().Height
 	logger.Tracef(ctx, "%d: requiredHeight == %f", rowID, requiredHeight)
+
+	prevHeight := ui.ItemHeight[msg.MessageID]
+	ui.TotalListHeight += uint(requiredHeight) - prevHeight
+	ui.ItemHeight[msg.MessageID] = uint(requiredHeight)
 
 	// TODO: think of how to get rid of this racy hack:
 	observability.Go(ctx, func() { ui.List.SetItemHeight(rowID, requiredHeight) })
@@ -391,7 +413,13 @@ func (ui *chatUI) onRemoveClicked(
 		return
 	}
 	msg := ui.MessagesHistory[itemID]
+	if onRemove := ui.OnRemove; onRemove != nil {
+		defer onRemove(ctx, msg)
+	}
 	ui.MessagesHistory = append(ui.MessagesHistory[:itemID], ui.MessagesHistory[itemID+1:]...)
+	prevHeight := ui.ItemHeight[msg.MessageID]
+	ui.TotalListHeight -= prevHeight
+	delete(ui.ItemHeight, msg.MessageID)
 	err := ui.Panel.chatMessageRemove(ui.ctx, msg.Platform, msg.MessageID)
 	if err != nil {
 		ui.Panel.DisplayError(err)
