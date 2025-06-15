@@ -21,6 +21,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
+	"github.com/xaionaro-go/unsafetools"
 	"github.com/xaionaro-go/xsync"
 )
 
@@ -28,7 +29,7 @@ type chatUI struct {
 	CanvasObject          fyne.CanvasObject
 	Panel                 *Panel
 	List                  *widget.List
-	MessagesHistoryLocker xsync.Mutex
+	MessagesHistoryLocker xsync.Gorex
 	MessagesHistory       []api.ChatMessage
 	EnableButtons         bool
 	ReverseOrder          bool
@@ -83,6 +84,13 @@ func (ui *chatUI) init(
 	defer func() { logger.Debugf(ctx, "/init: %v", _err) }()
 
 	ui.List = widget.NewList(ui.listLength, ui.listCreateItem, ui.listUpdateItem)
+	themePtr := unsafetools.FieldByName(&ui.List.BaseWidget, "themeCache").(*fyne.Theme)
+	*themePtr = &themeWrapperNoPaddings{
+		Theme: ui.List.BaseWidget.Theme(),
+	}
+	if v := ui.List.Theme().Size(theme.SizeNamePadding); v != 0 {
+		logger.Errorf(ctx, "an internal error: padding is not zero: %d", v)
+	}
 
 	messageInputEntry := widget.NewEntry()
 	messageInputEntry.OnSubmitted = func(s string) {
@@ -191,70 +199,71 @@ func (ui *chatUI) onReceiveMessage(
 	if onAdd := ui.OnAdd; onAdd != nil {
 		defer onAdd(ctx, msg)
 	}
-	ui.MessagesHistoryLocker.ManualLock(ctx)
-	prevLen := len(ui.MessagesHistory)
+	var prevLen int
 	defer ui.List.RefreshItem(prevLen)
-	defer ui.MessagesHistoryLocker.ManualUnlock(ctx)
-	ui.MessagesHistory = append(ui.MessagesHistory, msg)
-	if time.Since(msg.CreatedAt) > time.Hour {
-		return
-	}
-	notificationsEnabled := xsync.DoR1(ctx, &ui.Panel.configLocker, func() bool {
-		return ui.Panel.Config.Chat.NotificationsEnabled()
-	})
-	if muteNotifications {
-		notificationsEnabled = false
-	}
-	if !notificationsEnabled {
-		return
-	}
-	observability.GoSafe(ctx, func() {
-		commandTemplate := xsync.DoR1(ctx, &ui.Panel.configLocker, func() string {
-			return ui.Panel.Config.Chat.CommandOnReceiveMessage
-		})
-		if commandTemplate == "" {
+	ui.MessagesHistoryLocker.Do(ctx, func() {
+		prevLen = len(ui.MessagesHistory)
+		ui.MessagesHistory = append(ui.MessagesHistory, msg)
+		if time.Since(msg.CreatedAt) > time.Hour {
 			return
 		}
-		logger.Debugf(ctx, "CommandOnReceiveMessage: <%s>", commandTemplate)
-		defer logger.Debugf(ctx, "/CommandOnReceiveMessage")
+		notificationsEnabled := xsync.DoR1(ctx, &ui.Panel.configLocker, func() bool {
+			return ui.Panel.Config.Chat.NotificationsEnabled()
+		})
+		if muteNotifications {
+			notificationsEnabled = false
+		}
+		if !notificationsEnabled {
+			return
+		}
+		observability.GoSafe(ctx, func() {
+			commandTemplate := xsync.DoR1(ctx, &ui.Panel.configLocker, func() string {
+				return ui.Panel.Config.Chat.CommandOnReceiveMessage
+			})
+			if commandTemplate == "" {
+				return
+			}
+			logger.Debugf(ctx, "CommandOnReceiveMessage: <%s>", commandTemplate)
+			defer logger.Debugf(ctx, "/CommandOnReceiveMessage")
 
-		ui.Panel.execCommand(ctx, commandTemplate, msg)
-	})
-	observability.GoSafe(ctx, func() {
-		logger.Debugf(ctx, "SendNotification")
-		defer logger.Debugf(ctx, "/SendNotification")
-		ui.Panel.app.SendNotification(&fyne.Notification{
-			Title:   string(msg.Platform) + " chat message",
-			Content: msg.Username + ": " + msg.Message,
+			ui.Panel.execCommand(ctx, commandTemplate, msg)
 		})
-	})
-	observability.GoSafe(ctx, func() {
-		soundEnabled := xsync.DoR1(ctx, &ui.Panel.configLocker, func() bool {
-			return ui.Panel.Config.Chat.ReceiveMessageSoundAlarmEnabled()
+		observability.GoSafe(ctx, func() {
+			logger.Debugf(ctx, "SendNotification")
+			defer logger.Debugf(ctx, "/SendNotification")
+			ui.Panel.app.SendNotification(&fyne.Notification{
+				Title:   string(msg.Platform) + " chat message",
+				Content: msg.Username + ": " + msg.Message,
+			})
 		})
-		if !soundEnabled {
-			return
-		}
-		concurrentCount := atomic.AddInt32(&ui.CurrentlyPlayingChatMessageSoundCount, 1)
-		defer atomic.AddInt32(&ui.CurrentlyPlayingChatMessageSoundCount, -1)
-		logger.Debugf(ctx, "PlayChatMessage (count: %d)", concurrentCount)
-		if concurrentCount != 1 {
-			logger.Debugf(ctx, "/PlayChatMessage: skipped (count == %d)", concurrentCount)
-			return
-		}
-		defer logger.Debugf(ctx, "/PlayChatMessage: (attempted to) played")
-		err := ui.Panel.Audio.PlayChatMessage(ctx)
-		if err != nil {
-			logger.Errorf(ctx, "unable to playback the chat message sound: %v", err)
-		}
+		observability.GoSafe(ctx, func() {
+			soundEnabled := xsync.DoR1(ctx, &ui.Panel.configLocker, func() bool {
+				return ui.Panel.Config.Chat.ReceiveMessageSoundAlarmEnabled()
+			})
+			if !soundEnabled {
+				return
+			}
+			concurrentCount := atomic.AddInt32(&ui.CurrentlyPlayingChatMessageSoundCount, 1)
+			defer atomic.AddInt32(&ui.CurrentlyPlayingChatMessageSoundCount, -1)
+			logger.Debugf(ctx, "PlayChatMessage (count: %d)", concurrentCount)
+			if concurrentCount != 1 {
+				logger.Debugf(ctx, "/PlayChatMessage: skipped (count == %d)", concurrentCount)
+				return
+			}
+			defer logger.Debugf(ctx, "/PlayChatMessage: (attempted to) played")
+			err := ui.Panel.Audio.PlayChatMessage(ctx)
+			if err != nil {
+				logger.Errorf(ctx, "unable to playback the chat message sound: %v", err)
+			}
+		})
 	})
 }
 
 func (ui *chatUI) listLength() int {
 	ctx := context.TODO()
-	ui.MessagesHistoryLocker.ManualLock(ctx)
-	defer ui.MessagesHistoryLocker.ManualUnlock(ctx)
-	return len(ui.MessagesHistory)
+	return xsync.DoR1(ctx, &ui.MessagesHistoryLocker, func() int {
+		return len(ui.MessagesHistory)
+	})
 }
 
 type chatItem struct {
@@ -359,19 +368,23 @@ func (ui *chatUI) listUpdateItem(
 	obj fyne.CanvasObject,
 ) {
 	ctx := context.TODO()
-	ui.MessagesHistoryLocker.ManualLock(ctx)
-	defer ui.MessagesHistoryLocker.ManualUnlock(ctx)
 	var entryID int
-	if ui.ReverseOrder {
-		entryID = len(ui.MessagesHistory) - 1 - rowID
-	} else {
-		entryID = rowID
-	}
-	if entryID < 0 || entryID >= len(ui.MessagesHistory) {
-		logger.Errorf(ctx, "invalid entry ID: %d", entryID)
+	var requiredHeight float32
+	msg := xsync.DoR1(ctx, &ui.MessagesHistoryLocker, func() *api.ChatMessage {
+		if ui.ReverseOrder {
+			entryID = len(ui.MessagesHistory) - 1 - rowID
+		} else {
+			entryID = rowID
+		}
+		if entryID < 0 || entryID >= len(ui.MessagesHistory) {
+			logger.Errorf(ctx, "invalid entry ID: %d", entryID)
+			return nil
+		}
+		return &ui.MessagesHistory[entryID]
+	})
+	if msg == nil {
 		return
 	}
-	msg := ui.MessagesHistory[entryID]
 
 	platCaps, err := ui.getPlatformCapabilities(ctx, msg.Platform)
 	if err != nil {
@@ -433,7 +446,7 @@ func (ui *chatUI) listUpdateItem(
 	item.Text.Refresh()
 	logger.Tracef(ctx, "%d: updated message is: '%s'", rowID, msg.Message)
 
-	requiredHeight := item.Container.MinSize().Height
+	requiredHeight = item.Container.MinSize().Height
 	logger.Tracef(ctx, "%d: requiredHeight == %f", rowID, requiredHeight)
 
 	ui.ItemLocker.Do(ctx, func() {
@@ -441,9 +454,7 @@ func (ui *chatUI) listUpdateItem(
 		ui.TotalListHeight += uint(requiredHeight) - item.Height
 		ui.ItemsByMessageID[msg.MessageID].Height = uint(requiredHeight)
 	})
-
-	// TODO: think of how to get rid of this racy hack:
-	observability.Go(ctx, func() { ui.List.SetItemHeight(rowID, requiredHeight) })
+	ui.List.SetItemHeight(rowID, requiredHeight)
 }
 
 func (ui *chatUI) onBanClicked(
@@ -468,27 +479,27 @@ func (ui *chatUI) onRemoveClicked(
 	ctx := context.TODO()
 	logger.Debugf(ctx, "onRemoveClicked(%s)", itemID)
 	defer func() { logger.Debugf(ctx, "/onRemoveClicked(%s)", itemID) }()
-	ui.MessagesHistoryLocker.ManualLock(ctx)
-	defer ui.MessagesHistoryLocker.ManualUnlock(ctx)
-	if itemID < 0 || itemID >= len(ui.MessagesHistory) {
-		return
-	}
-	msg := ui.MessagesHistory[itemID]
-	if onRemove := ui.OnRemove; onRemove != nil {
-		defer onRemove(ctx, msg)
-	}
-	ui.MessagesHistory = append(ui.MessagesHistory[:itemID], ui.MessagesHistory[itemID+1:]...)
-	ui.ItemLocker.Do(ctx, func() {
-		item := ui.ItemsByMessageID[msg.MessageID]
-		ui.TotalListHeight -= item.Height
-		delete(ui.ItemsByMessageID, msg.MessageID)
-		delete(ui.ItemsByCanvasObject, item.Container)
+	ui.MessagesHistoryLocker.Do(ctx, func() {
+		if itemID < 0 || itemID >= len(ui.MessagesHistory) {
+			return
+		}
+		msg := ui.MessagesHistory[itemID]
+		if onRemove := ui.OnRemove; onRemove != nil {
+			defer onRemove(ctx, msg)
+		}
+		ui.MessagesHistory = append(ui.MessagesHistory[:itemID], ui.MessagesHistory[itemID+1:]...)
+		ui.ItemLocker.Do(ctx, func() {
+			item := ui.ItemsByMessageID[msg.MessageID]
+			ui.TotalListHeight -= item.Height
+			delete(ui.ItemsByMessageID, msg.MessageID)
+			delete(ui.ItemsByCanvasObject, item.Container)
+		})
+		err := ui.Panel.chatMessageRemove(ui.ctx, msg.Platform, msg.MessageID)
+		if err != nil {
+			ui.Panel.DisplayError(err)
+		}
+		observability.Go(ctx, func() { ui.CanvasObject.Refresh() })
 	})
-	err := ui.Panel.chatMessageRemove(ui.ctx, msg.Platform, msg.MessageID)
-	if err != nil {
-		ui.Panel.DisplayError(err)
-	}
-	observability.Go(ctx, func() { ui.CanvasObject.Refresh() })
 }
 
 func (p *Panel) chatMessageRemove(

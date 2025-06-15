@@ -2,6 +2,7 @@ package streampanel
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -91,4 +92,27 @@ type windowDriver interface {
 	RunEventQueue()
 	//DestroyEventQueue()
 	//WaitForEvents()
+}
+
+func fyneTryLoop(ctx context.Context, fn func()) {
+	var r any
+	for i := 0; i < 10; i++ {
+		err := func() (_err error) {
+			defer func() {
+				r = recover()
+				if r == nil {
+					return
+				}
+				_err = fmt.Errorf("got panic: %v", r)
+			}()
+			fn()
+			return nil
+		}()
+		if err == nil {
+			return
+		}
+		logger.Debugf(ctx, "got error: %v", err)
+		time.Sleep(time.Millisecond * 100)
+	}
+	panic(r)
 }

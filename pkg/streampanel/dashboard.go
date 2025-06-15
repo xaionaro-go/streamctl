@@ -315,7 +315,7 @@ func (p *Panel) newDashboardWindow(
 			screenHeight := w.Canvas().Size().Height
 			switch runtime.GOOS {
 			case "android":
-				screenHeight -= 110
+				screenHeight -= 110 // TODO: delete me
 			}
 			demandedHeight := float32(w.chat.TotalListHeight) + c.Theme().Size(theme.SizeNamePadding)*float32(c.Length())
 			logger.Tracef(ctx, "demanded height: %v; screen height: %v", demandedHeight, screenHeight)
@@ -330,10 +330,10 @@ func (p *Panel) newDashboardWindow(
 			c.Resize(size)
 			c.Move(pos)
 
-			c.ScrollToBottom()
-			c.Refresh()
-			c.ScrollToBottom()
-			c.Refresh()
+			fyneTryLoop(ctx, func() { c.ScrollToBottom() })
+			fyneTryLoop(ctx, func() { c.Refresh() })
+			fyneTryLoop(ctx, func() { c.ScrollToBottom() })
+			fyneTryLoop(ctx, func() { c.Refresh() })
 		}
 		w.chat.OnAdd(ctx, api.ChatMessage{})
 		layers = append(layers,
@@ -707,6 +707,7 @@ func (w *dashboardWindow) startUpdatingNoLock(
 	w.stopUpdatingFunc = cancelFunc
 
 	observability.Go(ctx, func() {
+		w.Panel.app.Driver()
 		t := time.NewTicker(time.Second)
 		defer t.Stop()
 		for {
