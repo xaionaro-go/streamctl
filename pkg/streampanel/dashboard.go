@@ -246,7 +246,7 @@ func (w *dashboardWindow) renderStreamStatus(ctx context.Context) {
 func (p *Panel) newDashboardWindow(
 	ctx context.Context,
 ) *dashboardWindow {
-	chatUI, err := newChatUI(ctx, false, false, true, p)
+	chatUI, err := newChatUI(ctx, false, false, true, true, p)
 	if err != nil {
 		p.DisplayError(fmt.Errorf("unable to start a chat UI: %w", err))
 	}
@@ -340,8 +340,11 @@ func (p *Panel) newDashboardWindow(
 
 			fyneTryLoop(ctx, func() { c.ScrollToBottom() })
 			fyneTryLoop(ctx, func() { c.Refresh() })
-			fyneTryLoop(ctx, func() { c.ScrollToBottom() })
-			fyneTryLoop(ctx, func() { c.Refresh() })
+			observability.Go(ctx, func() {
+				time.Sleep(time.Second)
+				fyneTryLoop(ctx, func() { c.ScrollToBottom() })
+				fyneTryLoop(ctx, func() { c.Refresh() })
+			})
 		}
 		w.chat.OnAdd(ctx, api.ChatMessage{})
 		layers = append(layers,
@@ -703,6 +706,14 @@ func (w *dashboardWindow) startUpdating(
 	xsync.DoA1(ctx, &w.locker, w.startUpdatingNoLock, ctx)
 }
 
+func (w *dashboardWindow) onSizeChange(
+	ctx context.Context,
+	oldSize fyne.Size,
+	newSize fyne.Size,
+) {
+	w.chat.OnAdd(ctx, api.ChatMessage{})
+}
+
 func (w *dashboardWindow) startUpdatingNoLock(
 	ctx context.Context,
 ) {
@@ -715,15 +726,19 @@ func (w *dashboardWindow) startUpdatingNoLock(
 	w.stopUpdatingFunc = cancelFunc
 
 	observability.Go(ctx, func() {
-		w.Panel.app.Driver()
 		t := time.NewTicker(time.Second)
 		defer t.Stop()
+		oldSize := w.Window.Canvas().Size()
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-t.C:
-				w.chat.OnAdd(ctx, api.ChatMessage{})
+			}
+
+			newSize := w.Window.Canvas().Size()
+			if newSize != oldSize {
+				w.onSizeChange(ctx, oldSize, newSize)
 			}
 		}
 	})
@@ -731,6 +746,7 @@ func (w *dashboardWindow) startUpdatingNoLock(
 	w.renderLocalStatus(ctx)
 	observability.Go(ctx, func() {
 		t := time.NewTicker(2 * time.Second)
+		defer t.Stop()
 		for {
 			select {
 			case <-ctx.Done():
@@ -755,6 +771,7 @@ func (w *dashboardWindow) startUpdatingNoLock(
 
 		observability.Go(ctx, func() {
 			t := time.NewTicker(1000 * time.Millisecond)
+			defer t.Stop()
 			for {
 				select {
 				case <-ctx.Done():
@@ -768,6 +785,7 @@ func (w *dashboardWindow) startUpdatingNoLock(
 
 		observability.Go(ctx, func() {
 			t := time.NewTicker(2 * time.Second)
+			defer t.Stop()
 			for {
 				select {
 				case <-ctx.Done():

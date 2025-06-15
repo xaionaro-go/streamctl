@@ -21,7 +21,6 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
-	"github.com/xaionaro-go/unsafetools"
 	"github.com/xaionaro-go/xsync"
 )
 
@@ -56,6 +55,7 @@ func newChatUI(
 	enableButtons bool,
 	reverseOrder bool,
 	suppressNotifications bool,
+	compactify bool,
 	panel *Panel,
 ) (_ret *chatUI, _err error) {
 	logger.Debugf(ctx, "newChatUI")
@@ -71,7 +71,7 @@ func newChatUI(
 		ItemsByMessageID:      map[streamcontrol.ChatMessageID]*chatItem{},
 		ctx:                   ctx,
 	}
-	if err := ui.init(ctx); err != nil {
+	if err := ui.init(ctx, compactify); err != nil {
 		return nil, err
 	}
 	return ui, nil
@@ -79,17 +79,19 @@ func newChatUI(
 
 func (ui *chatUI) init(
 	ctx context.Context,
+	compactify bool,
 ) (_err error) {
 	logger.Debugf(ctx, "init")
 	defer func() { logger.Debugf(ctx, "/init: %v", _err) }()
 
 	ui.List = widget.NewList(ui.listLength, ui.listCreateItem, ui.listUpdateItem)
-	themePtr := unsafetools.FieldByName(&ui.List.BaseWidget, "themeCache").(*fyne.Theme)
-	*themePtr = &themeWrapperNoPaddings{
-		Theme: ui.List.BaseWidget.Theme(),
-	}
-	if v := ui.List.Theme().Size(theme.SizeNamePadding); v != 0 {
-		logger.Errorf(ctx, "an internal error: padding is not zero: %d", v)
+	if compactify {
+		container.NewThemeOverride(ui.List,
+			&themeWrapperNoPaddingsAndScrollbar{Theme: theme.Current()},
+		)
+		if v := ui.List.Theme().Size(theme.SizeNamePadding); v != 0 {
+			logger.Errorf(ctx, "an internal error: padding is not zero: %d", v)
+		}
 	}
 
 	messageInputEntry := widget.NewEntry()
