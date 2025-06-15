@@ -54,9 +54,6 @@ const (
 	dashboardFullUpdatesInterval = 2 * time.Second
 )
 
-// TODO: DELETE ME:
-var qualityFilePath = must(xpath.Expand(`~/quality`))
-
 func (p *Panel) focusDashboardWindow(
 	ctx context.Context,
 ) {
@@ -103,7 +100,7 @@ type imageInfo struct {
 func (w *dashboardWindow) renderLocalStatus(ctx context.Context) {
 	// TODO: remove the ugly hardcode above, and make it generic (support different use cases)
 
-	b, err := os.ReadFile(qualityFilePath)
+	b, err := os.ReadFile(must(xpath.Expand(`~/quality`)))
 	if err != nil {
 		logger.Debugf(ctx, "unable to open the 'quality' file: %v", err)
 		return
@@ -254,15 +251,20 @@ func (p *Panel) newDashboardWindow(
 		p.DisplayError(fmt.Errorf("unable to start a chat UI: %w", err))
 	}
 	w := &dashboardWindow{
-		Window: p.app.NewWindow("Dashboard"),
-		Panel:  p,
-		chat:   chatUI,
-		streamStatus: map[streamcontrol.PlatformName]*widget.Label{
-			obs.ID:     widget.NewLabel(""),
-			twitch.ID:  widget.NewLabel(""),
-			kick.ID:    widget.NewLabel(""),
-			youtube.ID: widget.NewLabel(""),
-		},
+		Window:       p.app.NewWindow("Dashboard"),
+		Panel:        p,
+		chat:         chatUI,
+		streamStatus: map[streamcontrol.PlatformName]*widget.Label{},
+	}
+	for _, platID := range []streamcontrol.PlatformName{
+		obs.ID,
+		twitch.ID,
+		kick.ID,
+		youtube.ID,
+	} {
+		l := widget.NewLabel("")
+		l.TextStyle.Bold = true
+		w.streamStatus[platID] = l
 	}
 
 	bg := image.NewGray(image.Rect(0, 0, 1, 1))
@@ -271,33 +273,39 @@ func (p *Panel) newDashboardWindow(
 
 	p.localStatus = container.NewStack()
 	p.appStatus = widget.NewLabel("")
+	p.appStatus.TextStyle.Bold = true
 	obsLabel := widget.NewLabel("OBS:")
 	obsLabel.Importance = widget.HighImportance
+	obsLabel.TextStyle.Bold = true
 	p.streamStatus[obs.ID] = &streamStatus{}
 	twLabel := widget.NewLabel("TW:")
 	twLabel.Importance = widget.HighImportance
+	twLabel.TextStyle.Bold = true
 	p.streamStatus[twitch.ID] = &streamStatus{}
 	kcLabel := widget.NewLabel("Kc:")
 	kcLabel.Importance = widget.HighImportance
+	kcLabel.TextStyle.Bold = true
 	p.streamStatus[kick.ID] = &streamStatus{}
 	ytLabel := widget.NewLabel("YT:")
 	ytLabel.Importance = widget.HighImportance
+	ytLabel.TextStyle.Bold = true
 	p.streamStatus[youtube.ID] = &streamStatus{}
 	streamInfoItems := container.NewVBox()
 	if _, ok := p.StreamD.(*client.Client); ok {
 		appLabel := widget.NewLabel("App:")
 		appLabel.Importance = widget.HighImportance
+		appLabel.TextStyle.Bold = true
 		streamInfoItems.Add(container.NewHBox(
-			layout.NewSpacer(),
 			appLabel,
 			p.appStatus,
+			layout.NewSpacer(),
 		))
 	}
-	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), p.localStatus))
-	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), obsLabel, w.streamStatus[obs.ID]))
-	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), twLabel, w.streamStatus[twitch.ID]))
-	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), kcLabel, w.streamStatus[kick.ID]))
-	streamInfoItems.Add(container.NewHBox(layout.NewSpacer(), ytLabel, w.streamStatus[youtube.ID]))
+	streamInfoItems.Add(container.NewHBox(p.localStatus, layout.NewSpacer()))
+	streamInfoItems.Add(container.NewHBox(obsLabel, w.streamStatus[obs.ID], layout.NewSpacer()))
+	streamInfoItems.Add(container.NewHBox(twLabel, w.streamStatus[twitch.ID], layout.NewSpacer()))
+	streamInfoItems.Add(container.NewHBox(kcLabel, w.streamStatus[kick.ID], layout.NewSpacer()))
+	streamInfoItems.Add(container.NewHBox(ytLabel, w.streamStatus[youtube.ID], layout.NewSpacer()))
 	streamInfoContainer := container.NewBorder(
 		nil,
 		nil,
