@@ -340,9 +340,9 @@ func (grpc *GRPCServer) GetBackendInfo(
 	ctx context.Context,
 	req *streamd_grpc.GetBackendInfoRequest,
 ) (_ret *streamd_grpc.GetBackendInfoReply, _err error) {
-	platID := streamcontrol.PlatformName(req.GetPlatID())
-	logger.Tracef(ctx, "GetBackendInfo(ctx, '%s')", platID)
-	defer func() { logger.Tracef(ctx, "/GetBackendInfo(ctx, '%s'): %v %v", platID, _ret, _err) }()
+	platID, includeData := streamcontrol.PlatformName(req.GetPlatID()), req.GetIncludeData()
+	logger.Tracef(ctx, "GetBackendInfo(ctx, '%s', %t)", platID, includeData)
+	defer func() { logger.Tracef(ctx, "/GetBackendInfo(ctx, '%s', %t): %v %v", platID, includeData, _ret, _err) }()
 	isEnabled, err := grpc.GetStreamD().IsBackendEnabled(
 		ctx,
 		platID,
@@ -353,7 +353,7 @@ func (grpc *GRPCServer) GetBackendInfo(
 			err,
 		)
 	}
-	info, err := grpc.StreamD.GetBackendInfo(ctx, platID)
+	info, err := grpc.StreamD.GetBackendInfo(ctx, platID, includeData)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"unable to get the backend info: %w",
@@ -361,19 +361,23 @@ func (grpc *GRPCServer) GetBackendInfo(
 		)
 	}
 
-	dataSerialized, err := json.Marshal(info.Data)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"unable to serialize the backend info: %w",
-			err,
-		)
+	result := &streamd_grpc.GetBackendInfoReply{
+		IsInitialized: isEnabled,
+		Capabilities:  goconv.CapabilitiesGo2GRPC(ctx, info.Capabilities),
 	}
 
-	return &streamd_grpc.GetBackendInfoReply{
-		IsInitialized: isEnabled,
-		Data:          string(dataSerialized),
-		Capabilities:  goconv.CapabilitiesGo2GRPC(ctx, info.Capabilities),
-	}, nil
+	if includeData {
+		dataSerialized, err := json.Marshal(info.Data)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"unable to serialize the backend info: %w",
+				err,
+			)
+		}
+		result.Data = string(dataSerialized)
+	}
+
+	return result, nil
 }
 
 func (grpc *GRPCServer) SetTitle(

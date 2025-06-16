@@ -246,7 +246,7 @@ func (w *dashboardWindow) renderStreamStatus(ctx context.Context) {
 func (p *Panel) newDashboardWindow(
 	ctx context.Context,
 ) *dashboardWindow {
-	chatUI, err := newChatUI(ctx, false, false, true, true, p)
+	chatUI, err := p.newChatUI(ctx, false, false, true)
 	if err != nil {
 		p.DisplayError(fmt.Errorf("unable to start a chat UI: %w", err))
 	}
@@ -319,7 +319,10 @@ func (p *Panel) newDashboardWindow(
 	}
 	if w.chat != nil {
 		c := w.chat.List
-		w.chat.OnAdd = func(ctx context.Context, _ api.ChatMessage) {
+		w.chat.OnAdd = func(ctx context.Context, msg api.ChatMessage) {
+			logger.Debugf(ctx, "OnAdd(%v)", msg)
+			defer func() { logger.Tracef(ctx, "OnAdd(%v)", msg) }()
+
 			screenHeight := w.Canvas().Size().Height
 			switch runtime.GOOS {
 			case "android":
@@ -335,16 +338,11 @@ func (p *Panel) newDashboardWindow(
 			pos := fyne.NewPos(0, screenHeight-float32(allowedHeight))
 			size := fyne.NewSize(w.Canvas().Size().Width, float32(allowedHeight))
 			logger.Tracef(ctx, "resulting size and position: %#+v %#+v", size, pos)
-			c.Resize(size)
-			c.Move(pos)
-
+			if size.Height != w.chat.List.Size().Height {
+				c.Resize(size)
+				c.Move(pos)
+			}
 			fyneTryLoop(ctx, func() { c.ScrollToBottom() })
-			fyneTryLoop(ctx, func() { c.Refresh() })
-			observability.Go(ctx, func() {
-				time.Sleep(time.Second)
-				fyneTryLoop(ctx, func() { c.ScrollToBottom() })
-				fyneTryLoop(ctx, func() { c.Refresh() })
-			})
 		}
 		w.chat.OnAdd(ctx, api.ChatMessage{})
 		layers = append(layers,
@@ -711,6 +709,7 @@ func (w *dashboardWindow) onSizeChange(
 	oldSize fyne.Size,
 	newSize fyne.Size,
 ) {
+	logger.Debugf(ctx, "dashboard was resized from %v to %v", oldSize, newSize)
 	w.chat.OnAdd(ctx, api.ChatMessage{})
 }
 
@@ -739,6 +738,7 @@ func (w *dashboardWindow) startUpdatingNoLock(
 			newSize := w.Window.Canvas().Size()
 			if newSize != oldSize {
 				w.onSizeChange(ctx, oldSize, newSize)
+				oldSize = newSize
 			}
 		}
 	})

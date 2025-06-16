@@ -3,7 +3,7 @@ package streampanel
 import (
 	"context"
 	"fmt"
-	"sync"
+	"slices"
 	"sync/atomic"
 	"time"
 
@@ -24,22 +24,18 @@ import (
 	"github.com/xaionaro-go/xsync"
 )
 
+const (
+	ChatLogSize = 100
+)
+
 type chatUI struct {
-	CanvasObject          fyne.CanvasObject
-	Panel                 *Panel
-	List                  *widget.List
-	MessagesHistoryLocker xsync.Gorex
-	MessagesHistory       []api.ChatMessage
-	EnableButtons         bool
-	ReverseOrder          bool
-	SuppressNotifications bool
-	OnAdd                 func(context.Context, api.ChatMessage)
-	OnRemove              func(context.Context, api.ChatMessage)
-
-	CapabilitiesCacheLocker sync.Mutex
-	CapabilitiesCache       map[streamcontrol.PlatformName]map[streamcontrol.Capability]struct{}
-
-	CurrentlyPlayingChatMessageSoundCount int32
+	CanvasObject  fyne.CanvasObject
+	Panel         *Panel
+	List          *widget.List
+	EnableButtons bool
+	ReverseOrder  bool
+	OnAdd         func(context.Context, api.ChatMessage)
+	OnRemove      func(context.Context, api.ChatMessage)
 
 	ItemLocker          xsync.Mutex
 	ItemsByCanvasObject map[fyne.CanvasObject]*chatItem
@@ -50,26 +46,22 @@ type chatUI struct {
 	ctx context.Context
 }
 
-func newChatUI(
+func (panel *Panel) newChatUI(
 	ctx context.Context,
 	enableButtons bool,
 	reverseOrder bool,
-	suppressNotifications bool,
 	compactify bool,
-	panel *Panel,
 ) (_ret *chatUI, _err error) {
 	logger.Debugf(ctx, "newChatUI")
 	defer func() { logger.Debugf(ctx, "/newChatUI: %v %v", _ret, _err) }()
 
 	ui := &chatUI{
-		Panel:                 panel,
-		EnableButtons:         enableButtons,
-		ReverseOrder:          reverseOrder,
-		SuppressNotifications: suppressNotifications,
-		CapabilitiesCache:     make(map[streamcontrol.PlatformName]map[streamcontrol.Capability]struct{}),
-		ItemsByCanvasObject:   map[fyne.CanvasObject]*chatItem{},
-		ItemsByMessageID:      map[streamcontrol.ChatMessageID]*chatItem{},
-		ctx:                   ctx,
+		Panel:               panel,
+		EnableButtons:       enableButtons,
+		ReverseOrder:        reverseOrder,
+		ItemsByCanvasObject: map[fyne.CanvasObject]*chatItem{},
+		ItemsByMessageID:    map[streamcontrol.ChatMessageID]*chatItem{},
+		ctx:                 ctx,
 	}
 	if err := ui.init(ctx, compactify); err != nil {
 		return nil, err
@@ -122,17 +114,29 @@ func (ui *chatUI) init(
 		nil,
 		ui.List,
 	)
-
-	msgCh, err := ui.Panel.StreamD.SubscribeToChatMessages(ctx, time.Now().Add(-7*24*time.Hour))
-	if err != nil {
-		return fmt.Errorf("unable to subscribe to chat messages: %w", err)
-	}
-
-	observability.Go(ctx, func() {
-		time.Sleep(2 * time.Second) // TODO: delete this ugliness
-		ui.messageReceiverLoop(ctx, msgCh)
-	})
+	ui.Panel.addChatUI(ctx, ui)
 	return nil
+}
+
+func (p *Panel) addChatUI(ctx context.Context, ui *chatUI) {
+	p.chatUIsLocker.Do(ctx, func() {
+		p.chatUIs = append(p.chatUIs, ui)
+		logger.Debugf(ctx, "len(p.chatUI) == %d", len(p.chatUIs))
+	})
+	observability.Go(ctx, func() {
+		<-ctx.Done()
+		p.chatUIsLocker.Do(ctx, func() {
+			p.chatUIs = slices.DeleteFunc(p.chatUIs, func(cmp *chatUI) bool {
+				return cmp == ui
+			})
+		})
+	})
+}
+
+func (p *Panel) getChatUIs(ctx context.Context) []*chatUI {
+	return xsync.DoR1(ctx, &p.chatUIsLocker, func() []*chatUI {
+		return slices.Clone(p.chatUIs)
+	})
 }
 
 func (ui *chatUI) sendMessage(
@@ -171,7 +175,19 @@ func (ui *chatUI) sendMessage(
 	return result.ErrorOrNil()
 }
 
-func (ui *chatUI) messageReceiverLoop(
+func (p *Panel) initChatMessagesHandler(ctx context.Context) error {
+	msgCh, err := p.StreamD.SubscribeToChatMessages(ctx, time.Now().Add(-7*24*time.Hour))
+	if err != nil {
+		return fmt.Errorf("unable to subscribe to chat messages: %w", err)
+	}
+
+	observability.GoSafe(ctx, func() {
+		p.messageReceiverLoop(ctx, msgCh)
+	})
+	return nil
+}
+
+func (p *Panel) messageReceiverLoop(
 	ctx context.Context,
 	msgCh <-chan api.ChatMessage,
 ) {
@@ -183,44 +199,53 @@ func (ui *chatUI) messageReceiverLoop(
 			return
 		case msg, ok := <-msgCh:
 			if !ok {
-				logger.Errorf(ctx, "message channel got closed")
+				p.DisplayError(fmt.Errorf("message channel got closed; you won't get chat notifications anymore"))
 				return
 			}
-			ui.onReceiveMessage(ctx, msg, ui.SuppressNotifications)
+			p.onReceiveMessage(ctx, msg)
 		}
 	}
 }
 
-func (ui *chatUI) onReceiveMessage(
+func (p *Panel) onReceiveMessage(
 	ctx context.Context,
 	msg api.ChatMessage,
-	muteNotifications bool,
 ) {
 	logger.Debugf(ctx, "onReceiveMessage(ctx, %s)", spew.Sdump(msg))
 	defer func() { logger.Tracef(ctx, "/onReceiveMessage(ctx, %s)", spew.Sdump(msg)) }()
-	if onAdd := ui.OnAdd; onAdd != nil {
-		defer onAdd(ctx, msg)
-	}
 	var prevLen int
-	defer ui.List.RefreshItem(prevLen)
-	ui.MessagesHistoryLocker.Do(ctx, func() {
-		prevLen = len(ui.MessagesHistory)
-		ui.MessagesHistory = append(ui.MessagesHistory, msg)
+	var fullRefresh bool
+	for _, chatUI := range p.getChatUIs(ctx) {
+		if onAdd := chatUI.OnAdd; onAdd != nil {
+			defer onAdd(ctx, msg)
+		}
+		defer func() {
+			if fullRefresh {
+				chatUI.List.Refresh()
+			} else {
+				chatUI.List.RefreshItem(prevLen)
+			}
+		}()
+	}
+	p.MessagesHistoryLocker.Do(ctx, func() {
+		prevLen = len(p.MessagesHistory)
+		p.MessagesHistory = append(p.MessagesHistory, msg)
+		if len(p.MessagesHistory) > ChatLogSize*2 {
+			p.MessagesHistory = p.MessagesHistory[len(p.MessagesHistory)-ChatLogSize:]
+			fullRefresh = true
+		}
 		if time.Since(msg.CreatedAt) > time.Hour {
 			return
 		}
-		notificationsEnabled := xsync.DoR1(ctx, &ui.Panel.configLocker, func() bool {
-			return ui.Panel.Config.Chat.NotificationsEnabled()
+		notificationsEnabled := xsync.DoR1(ctx, &p.configLocker, func() bool {
+			return p.Config.Chat.NotificationsEnabled()
 		})
-		if muteNotifications {
-			notificationsEnabled = false
-		}
 		if !notificationsEnabled {
 			return
 		}
 		observability.GoSafe(ctx, func() {
-			commandTemplate := xsync.DoR1(ctx, &ui.Panel.configLocker, func() string {
-				return ui.Panel.Config.Chat.CommandOnReceiveMessage
+			commandTemplate := xsync.DoR1(ctx, &p.configLocker, func() string {
+				return p.Config.Chat.CommandOnReceiveMessage
 			})
 			if commandTemplate == "" {
 				return
@@ -228,32 +253,32 @@ func (ui *chatUI) onReceiveMessage(
 			logger.Debugf(ctx, "CommandOnReceiveMessage: <%s>", commandTemplate)
 			defer logger.Debugf(ctx, "/CommandOnReceiveMessage")
 
-			ui.Panel.execCommand(ctx, commandTemplate, msg)
+			p.execCommand(ctx, commandTemplate, msg)
 		})
 		observability.GoSafe(ctx, func() {
 			logger.Debugf(ctx, "SendNotification")
 			defer logger.Debugf(ctx, "/SendNotification")
-			ui.Panel.app.SendNotification(&fyne.Notification{
+			p.app.SendNotification(&fyne.Notification{
 				Title:   string(msg.Platform) + " chat message",
 				Content: msg.Username + ": " + msg.Message,
 			})
 		})
 		observability.GoSafe(ctx, func() {
-			soundEnabled := xsync.DoR1(ctx, &ui.Panel.configLocker, func() bool {
-				return ui.Panel.Config.Chat.ReceiveMessageSoundAlarmEnabled()
+			soundEnabled := xsync.DoR1(ctx, &p.configLocker, func() bool {
+				return p.Config.Chat.ReceiveMessageSoundAlarmEnabled()
 			})
 			if !soundEnabled {
 				return
 			}
-			concurrentCount := atomic.AddInt32(&ui.CurrentlyPlayingChatMessageSoundCount, 1)
-			defer atomic.AddInt32(&ui.CurrentlyPlayingChatMessageSoundCount, -1)
+			concurrentCount := atomic.AddInt32(&p.currentlyPlayingChatMessageSoundCount, 1)
+			defer atomic.AddInt32(&p.currentlyPlayingChatMessageSoundCount, -1)
 			logger.Debugf(ctx, "PlayChatMessage (count: %d)", concurrentCount)
 			if concurrentCount != 1 {
 				logger.Debugf(ctx, "/PlayChatMessage: skipped (count == %d)", concurrentCount)
 				return
 			}
 			defer logger.Debugf(ctx, "/PlayChatMessage: (attempted to) played")
-			err := ui.Panel.Audio.PlayChatMessage(ctx)
+			err := p.Audio.PlayChatMessage(ctx)
 			if err != nil {
 				logger.Errorf(ctx, "unable to playback the chat message sound: %v", err)
 			}
@@ -263,8 +288,8 @@ func (ui *chatUI) onReceiveMessage(
 
 func (ui *chatUI) listLength() int {
 	ctx := context.TODO()
-	return xsync.DoR1(ctx, &ui.MessagesHistoryLocker, func() int {
-		return len(ui.MessagesHistory)
+	return xsync.DoR1(ctx, &ui.Panel.MessagesHistoryLocker, func() int {
+		return len(ui.Panel.MessagesHistory)
 	})
 }
 
@@ -281,6 +306,10 @@ type chatItem struct {
 }
 
 func (ui *chatUI) listCreateItem() fyne.CanvasObject {
+	ctx := context.TODO()
+	logger.Debugf(ctx, "listCreateItem")
+	defer func() { logger.Tracef(ctx, "listCreateItem") }()
+
 	item := &chatItem{
 		Container: &fyne.Container{},
 		TimestampSegment: &widget.TextSegment{
@@ -332,36 +361,36 @@ func (ui *chatUI) listCreateItem() fyne.CanvasObject {
 		nil,
 		item.Text,
 	)
-	ctx := context.TODO()
 	ui.ItemLocker.Do(ctx, func() {
 		ui.ItemsByCanvasObject[item.Container] = item
 	})
 	return item.Container
 }
 
-func (ui *chatUI) getPlatformCapabilities(
+func (p *Panel) getPlatformCapabilities(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
 ) (_ret map[streamcontrol.Capability]struct{}, _err error) {
-	logger.Debugf(ctx, "getPlatformCapabilities(ctx, '%s')", platID)
-	defer func() { logger.Debugf(ctx, "/getPlatformCapabilities(ctx, '%s'): %#+v, %v", platID, _ret, _err) }()
-	ui.CapabilitiesCacheLocker.Lock()
-	defer ui.CapabilitiesCacheLocker.Unlock()
+	logger.Tracef(ctx, "getPlatformCapabilities(ctx, '%s')", platID)
+	defer func() { logger.Tracef(ctx, "/getPlatformCapabilities(ctx, '%s'): %#+v, %v", platID, _ret, _err) }()
+	p.capabilitiesCacheLocker.Lock()
+	defer p.capabilitiesCacheLocker.Unlock()
 
-	if m, ok := ui.CapabilitiesCache[platID]; ok {
+	if m, ok := p.capabilitiesCache[platID]; ok {
 		return m, nil
 	}
 
-	if ui.Panel.StreamD == nil {
-		return nil, fmt.Errorf("ui.Panel.StreamD == nil")
+	if p.StreamD == nil {
+		return nil, fmt.Errorf("p.StreamD == nil")
 	}
 
-	info, err := ui.Panel.StreamD.GetBackendInfo(ctx, platID)
+	logger.Debugf(ctx, "GetBackendInfo(ctx, '%s')", platID)
+	info, err := p.StreamD.GetBackendInfo(ctx, platID, false)
 	if err != nil {
 		return nil, fmt.Errorf("GetBackendInfo returned error: %w", err)
 	}
 
-	ui.CapabilitiesCache[platID] = info.Capabilities
+	p.capabilitiesCache[platID] = info.Capabilities
 	return info.Capabilities, nil
 }
 
@@ -370,25 +399,28 @@ func (ui *chatUI) listUpdateItem(
 	obj fyne.CanvasObject,
 ) {
 	ctx := context.TODO()
+	logger.Debugf(ctx, "listUpdateItem(%d, obj)", rowID)
+	defer func() { logger.Tracef(ctx, "listUpdateItem(%d, obj)", rowID) }()
+
 	var entryID int
 	var requiredHeight float32
-	msg := xsync.DoR1(ctx, &ui.MessagesHistoryLocker, func() *api.ChatMessage {
+	msg := xsync.DoR1(ctx, &ui.Panel.MessagesHistoryLocker, func() *api.ChatMessage {
 		if ui.ReverseOrder {
-			entryID = len(ui.MessagesHistory) - 1 - rowID
+			entryID = len(ui.Panel.MessagesHistory) - 1 - rowID
 		} else {
 			entryID = rowID
 		}
-		if entryID < 0 || entryID >= len(ui.MessagesHistory) {
+		if entryID < 0 || entryID >= len(ui.Panel.MessagesHistory) {
 			logger.Errorf(ctx, "invalid entry ID: %d", entryID)
 			return nil
 		}
-		return &ui.MessagesHistory[entryID]
+		return &ui.Panel.MessagesHistory[entryID]
 	})
 	if msg == nil {
 		return
 	}
 
-	platCaps, err := ui.getPlatformCapabilities(ctx, msg.Platform)
+	platCaps, err := ui.Panel.getPlatformCapabilities(ctx, msg.Platform)
 	if err != nil {
 		ui.Panel.ReportError(fmt.Errorf("unable to get capabilities of platform '%s': %w", msg.Platform, err))
 		platCaps = map[streamcontrol.Capability]struct{}{}
@@ -428,7 +460,7 @@ func (ui *chatUI) listUpdateItem(
 						return
 					}
 					// TODO: think of consistency with onBanClicked
-					ui.onRemoveClicked(entryID)
+					ui.Panel.onRemoveChatMessageClicked(entryID)
 				},
 				ui.Panel.mainWindow,
 			)
@@ -475,33 +507,39 @@ func (p *Panel) chatUserBan(
 	return p.StreamD.BanUser(ctx, platID, userID, "", time.Time{})
 }
 
-func (ui *chatUI) onRemoveClicked(
+func (p *Panel) onRemoveChatMessageClicked(
 	itemID int,
 ) {
 	ctx := context.TODO()
-	logger.Debugf(ctx, "onRemoveClicked(%s)", itemID)
-	defer func() { logger.Debugf(ctx, "/onRemoveClicked(%s)", itemID) }()
-	ui.MessagesHistoryLocker.Do(ctx, func() {
-		if itemID < 0 || itemID >= len(ui.MessagesHistory) {
+	logger.Debugf(ctx, "onRemoveChatMessageClicked(%s)", itemID)
+	defer func() { logger.Debugf(ctx, "/onRemoveChatMessageClicked(%s)", itemID) }()
+	var msg *api.ChatMessage
+	p.MessagesHistoryLocker.Do(ctx, func() {
+		if itemID < 0 || itemID >= len(p.MessagesHistory) {
 			return
 		}
-		msg := ui.MessagesHistory[itemID]
-		if onRemove := ui.OnRemove; onRemove != nil {
-			defer onRemove(ctx, msg)
-		}
-		ui.MessagesHistory = append(ui.MessagesHistory[:itemID], ui.MessagesHistory[itemID+1:]...)
-		ui.ItemLocker.Do(ctx, func() {
-			item := ui.ItemsByMessageID[msg.MessageID]
-			ui.TotalListHeight -= item.Height
-			delete(ui.ItemsByMessageID, msg.MessageID)
-			delete(ui.ItemsByCanvasObject, item.Container)
-		})
-		err := ui.Panel.chatMessageRemove(ui.ctx, msg.Platform, msg.MessageID)
-		if err != nil {
-			ui.Panel.DisplayError(err)
-		}
-		observability.Go(ctx, func() { ui.CanvasObject.Refresh() })
+		msg = &p.MessagesHistory[itemID]
+		p.MessagesHistory = append(p.MessagesHistory[:itemID], p.MessagesHistory[itemID+1:]...)
 	})
+	if msg == nil {
+		return
+	}
+	for _, chatUI := range p.getChatUIs(ctx) {
+		if onRemove := chatUI.OnRemove; onRemove != nil {
+			defer onRemove(ctx, *msg)
+		}
+		chatUI.ItemLocker.Do(ctx, func() {
+			item := chatUI.ItemsByMessageID[msg.MessageID]
+			chatUI.TotalListHeight -= item.Height
+			delete(chatUI.ItemsByMessageID, msg.MessageID)
+			delete(chatUI.ItemsByCanvasObject, item.Container)
+		})
+		observability.Go(ctx, func() { chatUI.CanvasObject.Refresh() })
+	}
+	err := p.chatMessageRemove(ctx, msg.Platform, msg.MessageID)
+	if err != nil {
+		p.DisplayError(err)
+	}
 }
 
 func (p *Panel) chatMessageRemove(

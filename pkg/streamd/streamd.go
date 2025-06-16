@@ -804,9 +804,10 @@ func (d *StreamD) EndStream(ctx context.Context, platID streamcontrol.PlatformNa
 func (d *StreamD) GetBackendInfo(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
+	includeData bool,
 ) (_ret *api.BackendInfo, _err error) {
-	logger.Tracef(ctx, "GetBackendInfo(ctx, '%s')", platID)
-	defer func() { logger.Tracef(ctx, "/GetBackendInfo(ctx, '%s'): %v %v", platID, _ret, _err) }()
+	logger.Tracef(ctx, "GetBackendInfo(ctx, '%s', %t)", platID, includeData)
+	defer func() { logger.Tracef(ctx, "/GetBackendInfo(ctx, '%s', %t): %v %v", platID, includeData, _ret, _err) }()
 
 	ctrl, err := d.streamController(ctx, platID)
 	if err != nil {
@@ -821,15 +822,19 @@ func (d *StreamD) GetBackendInfo(
 		}
 	}
 
-	data, err := d.getBackendData(ctx, platID)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get backend data: %w", err)
+	result := &api.BackendInfo{
+		Capabilities: caps,
 	}
 
-	return &api.BackendInfo{
-		Data:         data,
-		Capabilities: caps,
-	}, nil
+	if includeData {
+		data, err := d.getBackendData(ctx, platID)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get backend data: %w", err)
+		}
+		result.Data = data
+	}
+
+	return result, nil
 }
 
 func (d *StreamD) getBackendData(

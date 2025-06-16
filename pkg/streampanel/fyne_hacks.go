@@ -19,7 +19,7 @@ func (p *Panel) initWindowsHealthChecker(ctx context.Context) {
 		logger.Debugf(ctx, "initWindowsHealthChecker")
 		defer logger.Debugf(ctx, "/initWindowsHealthChecker")
 
-		t := time.NewTicker(time.Second)
+		t := time.NewTicker(7 * time.Second / 3)
 		defer t.Stop()
 
 		for {

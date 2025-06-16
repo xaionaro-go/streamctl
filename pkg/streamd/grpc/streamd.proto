@@ -160,6 +160,7 @@ message GetStreamStatusReply {
 }
 message GetBackendInfoRequest {
     string platID = 1;
+    bool includeData = 2;
 }
 message GetBackendInfoReply {
     bool isInitialized = 1;

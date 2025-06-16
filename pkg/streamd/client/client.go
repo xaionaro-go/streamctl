@@ -137,8 +137,10 @@ func (c *Client) HandleRPC(
 ) {
 	switch s := s.(type) {
 	case *stats.InPayload:
+		logger.Debugf(ctx, "in-payload size: %d", s.WireLength)
 		atomic.AddUint64(&c.Stats.BytesIn, uint64(s.WireLength))
 	case *stats.OutPayload:
+		logger.Debugf(ctx, "out-payload size: %d", s.WireLength)
 		atomic.AddUint64(&c.Stats.BytesOut, uint64(s.WireLength))
 	}
 }
@@ -718,9 +720,10 @@ func (c *Client) EndStream(
 func (c *Client) GetBackendInfo(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
+	includeData bool,
 ) (_ret *api.BackendInfo, _err error) {
-	logger.Tracef(ctx, "GetBackendInfo(ctx, '%s')", platID)
-	defer func() { logger.Tracef(ctx, "/GetBackendInfo(ctx, '%s'): %v %v", platID, _ret, _err) }()
+	logger.Tracef(ctx, "GetBackendInfo(ctx, '%s', %t)", platID, includeData)
+	defer func() { logger.Tracef(ctx, "/GetBackendInfo(ctx, '%s', %t): %v %v", platID, includeData, _ret, _err) }()
 	reply, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
@@ -731,7 +734,8 @@ func (c *Client) GetBackendInfo(
 			c,
 			client.GetBackendInfo,
 			&streamd_grpc.GetBackendInfoRequest{
-				PlatID: string(platID),
+				PlatID:      string(platID),
+				IncludeData: includeData,
 			},
 		)
 	})
@@ -743,16 +747,19 @@ func (c *Client) GetBackendInfo(
 	}
 
 	caps := goconv.CapabilitiesGRPC2Go(ctx, reply.Capabilities)
-
-	data, err := goconv.BackendDataGRPC2Go(platID, reply.GetData())
-	if err != nil {
-		return nil, fmt.Errorf("unable to deserialize data: %w", err)
+	result := &api.BackendInfo{
+		Capabilities: caps,
 	}
 
-	return &api.BackendInfo{
-		Data:         data,
-		Capabilities: caps,
-	}, nil
+	if dataSerialized := reply.GetData(); dataSerialized != "" {
+		data, err := goconv.BackendDataGRPC2Go(platID, reply.GetData())
+		if err != nil {
+			return nil, fmt.Errorf("unable to deserialize data: %w", err)
+		}
+		result.Data = data
+	}
+
+	return result, nil
 }
 
 func (c *Client) Restart(ctx context.Context) error {

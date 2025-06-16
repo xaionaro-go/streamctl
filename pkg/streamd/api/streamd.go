@@ -71,6 +71,7 @@ type StreamD interface {
 	GetBackendInfo(
 		ctx context.Context,
 		platID streamcontrol.PlatformName,
+		includeData bool,
 	) (*BackendInfo, error)
 	EXPERIMENTAL_ReinitStreamControllers(ctx context.Context) error
 	GetStreamStatus(

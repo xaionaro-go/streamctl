@@ -182,7 +182,7 @@ func (p *Panel) profileWindow(
 		}
 		backendEnabled[backendID] = isEnabled
 
-		info, err := p.StreamD.GetBackendInfo(ctx, backendID)
+		info, err := p.StreamD.GetBackendInfo(ctx, backendID, true)
 		if err != nil {
 			w.Close()
 			p.DisplayError(fmt.Errorf("unable to get data of backend '%s': %w", backendID, err))

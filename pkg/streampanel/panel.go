@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unicode"
@@ -169,6 +170,16 @@ type Panel struct {
 
 	monitorPage       *monitorPage
 	monitorPageLocker xsync.Mutex
+
+	capabilitiesCacheLocker sync.Mutex
+	capabilitiesCache       map[streamcontrol.PlatformName]map[streamcontrol.Capability]struct{}
+
+	MessagesHistoryLocker xsync.Gorex
+	MessagesHistory       []api.ChatMessage
+
+	currentlyPlayingChatMessageSoundCount int32
+	chatUIsLocker                         xsync.Mutex
+	chatUIs                               []*chatUI
 }
 
 func New(
@@ -204,7 +215,8 @@ func New(
 		streamMutex: xsync.Mutex{
 			PanicOnDeadlock: ptr(false),
 		},
-		permanentWindows: map[uint64]windowDriver{},
+		permanentWindows:  map[uint64]windowDriver{},
+		capabilitiesCache: make(map[streamcontrol.PlatformName]map[streamcontrol.Capability]struct{}),
 	}
 	return p, nil
 }
@@ -353,6 +365,11 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) (_err error) {
 			observability.Go(ctx, func() {
 				p.checkForUpdates(ctx, initCfg.AutoUpdater)
 			})
+		}
+
+		if err := p.initChatMessagesHandler(ctx); err != nil {
+			err = fmt.Errorf("unable to initialize chat messages handler: %w", err)
+			p.DisplayError(err)
 		}
 
 		p.initFyneHacks(ctx)
@@ -1659,7 +1676,7 @@ func (p *Panel) initMainWindow(
 	)
 
 	chatPage := container.NewBorder(nil, nil, nil, nil)
-	chatUI, err := newChatUI(ctx, true, true, false, false, p)
+	chatUI, err := p.newChatUI(ctx, true, true, false)
 	if err != nil {
 		logger.Errorf(ctx, "unable to initialize the page for chat: %v", err)
 	} else {
