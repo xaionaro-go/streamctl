@@ -106,6 +106,7 @@ func initRuntime(
 
 	observability.Go(ctx, func() {
 		t := time.NewTicker(time.Second)
+		defer t.Stop()
 		for {
 			<-t.C
 			belt.Flush(ctx)

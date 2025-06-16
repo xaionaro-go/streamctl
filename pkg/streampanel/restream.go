@@ -1613,6 +1613,7 @@ func (p *Panel) startStreamPlayersUpdater(
 		defer logger.Debugf(ctx, "/streamPlayersUpdater")
 
 		t := time.NewTicker(time.Second)
+		defer t.Stop()
 		for {
 			select {
 			case <-ctx.Done():
@@ -1653,6 +1654,7 @@ func (p *Panel) startStreamForwardersUpdater(
 		defer logger.Debugf(ctx, "/streamForwardersUpdater")
 
 		t := time.NewTicker(time.Second)
+		defer t.Stop()
 		for {
 			select {
 			case <-ctx.Done():

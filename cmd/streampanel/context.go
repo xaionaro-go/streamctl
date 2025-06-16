@@ -105,6 +105,7 @@ func getContext(
 					logger.Debugf(ctx, "log rotator is closed")
 				}()
 				t := time.NewTicker(12 * time.Hour)
+				defer t.Stop()
 				for {
 					select {
 					case <-ctx.Done():

@@ -41,6 +41,7 @@ func (h *updateTimerHandler) GetStartTS() time.Time {
 
 func (h *updateTimerHandler) loop() {
 	t := time.NewTicker(time.Second)
+	defer t.Stop()
 	for {
 		select {
 		case <-h.ctx.Done():

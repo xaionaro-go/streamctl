@@ -88,6 +88,7 @@ func New(
 
 	observability.Go(ctx, func() {
 		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
@@ -297,6 +298,7 @@ func getToken(ctx context.Context, cfg Config) (*oauth2.Token, error) {
 	observability.Go(ctx, func() {
 		defer wg.Done()
 		t := time.NewTicker(time.Second)
+		defer t.Stop()
 		for {
 			select {
 			case <-ctx.Done():

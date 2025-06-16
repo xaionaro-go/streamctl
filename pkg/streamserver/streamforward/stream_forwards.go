@@ -287,6 +287,7 @@ func (s *StreamForwards) newActiveStreamForward(
 						return
 					}
 					t := time.NewTicker(time.Second)
+					defer t.Stop()
 					for {
 						select {
 						case <-ctx.Done():

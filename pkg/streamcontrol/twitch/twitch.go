@@ -633,6 +633,7 @@ func (t *Twitch) getNewClientCode(
 	observability.Go(ctx, func() {
 		defer wg.Done()
 		t := time.NewTicker(time.Second)
+		defer t.Stop()
 		for {
 			select {
 			case <-ctx.Done():

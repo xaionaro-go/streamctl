@@ -315,6 +315,7 @@ func (ui *timersUI) kickOff(
 			ui.doStop(xcontext.DetachDone(ctx))
 		}()
 		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
 		for {
 			select {
 			case <-ctx.Done():

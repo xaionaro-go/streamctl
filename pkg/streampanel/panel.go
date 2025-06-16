@@ -1888,6 +1888,7 @@ func (p *Panel) subscribeUpdateControlPage(ctx context.Context) {
 
 	observability.Go(ctx, func() {
 		t := time.NewTicker(time.Second * 5)
+		defer t.Stop()
 		for {
 			select {
 			case <-ctx.Done():
