@@ -51,7 +51,7 @@ import (
 
 const (
 	dashboardDebug               = false
-	dashboardFullUpdatesInterval = 2 * time.Second
+	dashboardFullUpdatesInterval = 5 * time.Second
 )
 
 func (p *Panel) focusDashboardWindow(
@@ -770,7 +770,7 @@ func (w *dashboardWindow) startUpdatingNoLock(
 		w.renderStreamStatus(ctx)
 
 		observability.Go(ctx, func() {
-			t := time.NewTicker(1000 * time.Millisecond)
+			t := time.NewTicker(250 * time.Millisecond)
 			defer t.Stop()
 			for {
 				select {
