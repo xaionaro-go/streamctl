@@ -8,18 +8,10 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/theme"
-	"fyne.io/fyne/v2/widget"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
-	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
-	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
-	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/xsync"
 )
@@ -28,97 +20,29 @@ const (
 	ChatLogSize = 100
 )
 
-type chatUI struct {
-	CanvasObject  fyne.CanvasObject
-	Panel         *Panel
-	List          *widget.List
-	EnableButtons bool
-	ReverseOrder  bool
-	OnAdd         func(context.Context, api.ChatMessage)
-	OnRemove      func(context.Context, api.ChatMessage)
-
-	ItemLocker          xsync.Mutex
-	ItemsByCanvasObject map[fyne.CanvasObject]*chatItem
-	ItemsByMessageID    map[streamcontrol.ChatMessageID]*chatItem
-	TotalListHeight     uint
-
-	// TODO: do not store ctx in a struct:
-	ctx context.Context
-}
-
-func (panel *Panel) newChatUI(
-	ctx context.Context,
-	enableButtons bool,
-	reverseOrder bool,
-	compactify bool,
-) (_ret *chatUI, _err error) {
-	logger.Debugf(ctx, "newChatUI")
-	defer func() { logger.Debugf(ctx, "/newChatUI: %v %v", _ret, _err) }()
-
-	ui := &chatUI{
-		Panel:               panel,
-		EnableButtons:       enableButtons,
-		ReverseOrder:        reverseOrder,
-		ItemsByCanvasObject: map[fyne.CanvasObject]*chatItem{},
-		ItemsByMessageID:    map[streamcontrol.ChatMessageID]*chatItem{},
-		ctx:                 ctx,
-	}
-	if err := ui.init(ctx, compactify); err != nil {
-		return nil, err
-	}
-	return ui, nil
-}
-
-func (ui *chatUI) init(
-	ctx context.Context,
-	compactify bool,
-) (_err error) {
-	logger.Debugf(ctx, "init")
-	defer func() { logger.Debugf(ctx, "/init: %v", _err) }()
-
-	ui.List = widget.NewList(ui.listLength, ui.listCreateItem, ui.listUpdateItem)
-	if compactify {
-		container.NewThemeOverride(ui.List,
-			&themeWrapperNoPaddingsAndScrollbar{Theme: theme.Current()},
-		)
-		if v := ui.List.Theme().Size(theme.SizeNamePadding); v != 0 {
-			logger.Errorf(ctx, "an internal error: padding is not zero: %d", v)
-		}
-	}
-
-	messageInputEntry := widget.NewEntry()
-	messageInputEntry.OnSubmitted = func(s string) {
-		err := ui.sendMessage(ctx, s)
-		if err != nil {
-			ui.Panel.DisplayError(err)
-		}
-	}
-	messageSendButton := widget.NewButtonWithIcon("", theme.MailSendIcon(), func() {
-		messageInputEntry.OnSubmitted(messageInputEntry.Text)
-	})
-
-	var buttonPanel fyne.CanvasObject
-	if ui.EnableButtons {
-		buttonPanel = container.NewBorder(
-			nil,
-			nil,
-			nil,
-			messageSendButton,
-			messageInputEntry,
-		)
-	}
-	ui.CanvasObject = container.NewBorder(
-		nil,
-		buttonPanel,
-		nil,
-		nil,
-		ui.List,
+type chatUIInterface interface {
+	GetOnAdd() func(
+		ctx context.Context,
+		msg api.ChatMessage,
 	)
-	ui.Panel.addChatUI(ctx, ui)
-	return nil
+	Remove(
+		ctx context.Context,
+		msg api.ChatMessage,
+	)
+	Rebuild()
+	Append(
+		ctx context.Context,
+		itemIdx int,
+	)
+	GetTotalHeight(
+		ctx context.Context,
+	) float32
+	ScrollToBottom(
+		ctx context.Context,
+	)
 }
 
-func (p *Panel) addChatUI(ctx context.Context, ui *chatUI) {
+func (p *Panel) addChatUI(ctx context.Context, ui chatUIInterface) {
 	p.chatUIsLocker.Do(ctx, func() {
 		p.chatUIs = append(p.chatUIs, ui)
 		logger.Debugf(ctx, "len(p.chatUI) == %d", len(p.chatUIs))
@@ -126,53 +50,17 @@ func (p *Panel) addChatUI(ctx context.Context, ui *chatUI) {
 	observability.Go(ctx, func() {
 		<-ctx.Done()
 		p.chatUIsLocker.Do(ctx, func() {
-			p.chatUIs = slices.DeleteFunc(p.chatUIs, func(cmp *chatUI) bool {
+			p.chatUIs = slices.DeleteFunc(p.chatUIs, func(cmp chatUIInterface) bool {
 				return cmp == ui
 			})
 		})
 	})
 }
 
-func (p *Panel) getChatUIs(ctx context.Context) []*chatUI {
-	return xsync.DoR1(ctx, &p.chatUIsLocker, func() []*chatUI {
+func (p *Panel) getChatUIs(ctx context.Context) []chatUIInterface {
+	return xsync.DoR1(ctx, &p.chatUIsLocker, func() []chatUIInterface {
 		return slices.Clone(p.chatUIs)
 	})
-}
-
-func (ui *chatUI) sendMessage(
-	ctx context.Context,
-	message string,
-) (_err error) {
-	logger.Tracef(ctx, "sendMessage")
-	defer func() { logger.Tracef(ctx, "/sendMessage: %v", _err) }()
-
-	var result *multierror.Error
-	panel := ui.Panel
-	streamD := panel.StreamD
-
-	for _, platID := range []streamcontrol.PlatformName{
-		twitch.ID,
-		kick.ID,
-		youtube.ID,
-	} {
-		isEnabled, err := streamD.IsBackendEnabled(ctx, platID)
-		if err != nil {
-			result = multierror.Append(result, fmt.Errorf("unable to check if platform '%s' is enabled: %w", platID, err))
-			continue
-		}
-
-		if !isEnabled {
-			continue
-		}
-
-		err = streamD.SendChatMessage(ctx, platID, message)
-		if err != nil {
-			result = multierror.Append(result, fmt.Errorf("unable to send the message to platform '%s': %w", platID, err))
-			continue
-		}
-	}
-
-	return result.ErrorOrNil()
 }
 
 func (p *Panel) initChatMessagesHandler(ctx context.Context) error {
@@ -216,14 +104,14 @@ func (p *Panel) onReceiveMessage(
 	var prevLen int
 	var fullRefresh bool
 	for _, chatUI := range p.getChatUIs(ctx) {
-		if onAdd := chatUI.OnAdd; onAdd != nil {
+		if onAdd := chatUI.GetOnAdd(); onAdd != nil {
 			defer onAdd(ctx, msg)
 		}
 		defer func() {
 			if fullRefresh {
-				chatUI.List.Refresh()
+				chatUI.Rebuild()
 			} else {
-				chatUI.List.RefreshItem(prevLen)
+				chatUI.Append(ctx, prevLen)
 			}
 		}()
 	}
@@ -286,87 +174,6 @@ func (p *Panel) onReceiveMessage(
 	})
 }
 
-func (ui *chatUI) listLength() int {
-	ctx := context.TODO()
-	return xsync.DoR1(ctx, &ui.Panel.MessagesHistoryLocker, func() int {
-		return len(ui.Panel.MessagesHistory)
-	})
-}
-
-type chatItem struct {
-	BanUserButton       *widget.Button
-	RemoveMessageButton *widget.Button
-	TimestampSegment    *widget.TextSegment
-	UsernameSegment     *widget.TextSegment
-	MessageSegment      *widget.TextSegment
-	Text                *widget.RichText
-	Height              uint
-
-	*fyne.Container
-}
-
-func (ui *chatUI) listCreateItem() fyne.CanvasObject {
-	ctx := context.TODO()
-	logger.Debugf(ctx, "listCreateItem")
-	defer func() { logger.Tracef(ctx, "listCreateItem") }()
-
-	item := &chatItem{
-		Container: &fyne.Container{},
-		TimestampSegment: &widget.TextSegment{
-			Style: widget.RichTextStyle{Inline: true, TextStyle: fyne.TextStyle{Bold: true}},
-		},
-		UsernameSegment: &widget.TextSegment{
-			Style: widget.RichTextStyle{
-				Inline:    true,
-				SizeName:  theme.SizeNameSubHeadingText,
-				TextStyle: fyne.TextStyle{Bold: true},
-			},
-		},
-		MessageSegment: &widget.TextSegment{
-			Style: widget.RichTextStyle{
-				Inline:    true,
-				SizeName:  theme.SizeNameSubHeadingText,
-				TextStyle: fyne.TextStyle{Bold: true},
-			},
-		},
-	}
-
-	var leftPanel fyne.CanvasObject
-	if ui.EnableButtons {
-		item.BanUserButton = widget.NewButtonWithIcon("", theme.ErrorIcon(), func() {})
-		item.RemoveMessageButton = widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {})
-		leftPanel = container.NewHBox(
-			item.BanUserButton,
-			item.RemoveMessageButton,
-		)
-	}
-	item.Text = widget.NewRichText(
-		item.TimestampSegment,
-		&widget.TextSegment{
-			Text:  "   ",
-			Style: widget.RichTextStyle{Inline: true},
-		},
-		item.UsernameSegment,
-		&widget.TextSegment{
-			Text:  "   ",
-			Style: widget.RichTextStyle{Inline: true},
-		},
-		item.MessageSegment,
-	)
-	item.Text.Wrapping = fyne.TextWrapWord
-	item.Container = container.NewBorder(
-		nil,
-		nil,
-		leftPanel,
-		nil,
-		item.Text,
-	)
-	ui.ItemLocker.Do(ctx, func() {
-		ui.ItemsByCanvasObject[item.Container] = item
-	})
-	return item.Container
-}
-
 func (p *Panel) getPlatformCapabilities(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
@@ -393,111 +200,6 @@ func (p *Panel) getPlatformCapabilities(
 	p.capabilitiesCache[platID] = info.Capabilities
 	return info.Capabilities, nil
 }
-
-func (ui *chatUI) listUpdateItem(
-	rowID int,
-	obj fyne.CanvasObject,
-) {
-	ctx := context.TODO()
-	logger.Debugf(ctx, "listUpdateItem(%d, obj)", rowID)
-	defer func() { logger.Tracef(ctx, "listUpdateItem(%d, obj)", rowID) }()
-
-	var entryID int
-	var requiredHeight float32
-	msg := xsync.DoR1(ctx, &ui.Panel.MessagesHistoryLocker, func() *api.ChatMessage {
-		if ui.ReverseOrder {
-			entryID = len(ui.Panel.MessagesHistory) - 1 - rowID
-		} else {
-			entryID = rowID
-		}
-		if entryID < 0 || entryID >= len(ui.Panel.MessagesHistory) {
-			logger.Errorf(ctx, "invalid entry ID: %d", entryID)
-			return nil
-		}
-		return &ui.Panel.MessagesHistory[entryID]
-	})
-	if msg == nil {
-		return
-	}
-
-	platCaps, err := ui.Panel.getPlatformCapabilities(ctx, msg.Platform)
-	if err != nil {
-		ui.Panel.ReportError(fmt.Errorf("unable to get capabilities of platform '%s': %w", msg.Platform, err))
-		platCaps = map[streamcontrol.Capability]struct{}{}
-	}
-
-	item := xsync.DoR1(ctx, &ui.ItemLocker, func() *chatItem {
-		return ui.ItemsByCanvasObject[obj]
-	})
-	if ui.EnableButtons {
-		banUserButton := item.BanUserButton
-		banUserButton.OnTapped = func() {
-			w := dialog.NewConfirm(
-				"Banning an user",
-				fmt.Sprintf("Are you sure you want to ban user '%s' on '%s'", msg.UserID, msg.Platform),
-				func(b bool) {
-					if !b {
-						return
-					}
-					ui.onBanClicked(msg.Platform, msg.UserID)
-				},
-				ui.Panel.mainWindow,
-			)
-			w.Show()
-		}
-		if _, ok := platCaps[streamcontrol.CapabilityBanUser]; !ok {
-			banUserButton.Disable()
-		} else {
-			banUserButton.Enable()
-		}
-		removeMsgButton := item.RemoveMessageButton
-		removeMsgButton.OnTapped = func() {
-			w := dialog.NewConfirm(
-				"Removing a message",
-				fmt.Sprintf("Are you sure you want to remove the message from '%s' on '%s'", msg.UserID, msg.Platform),
-				func(b bool) {
-					if !b {
-						return
-					}
-					// TODO: think of consistency with onBanClicked
-					ui.Panel.onRemoveChatMessageClicked(entryID)
-				},
-				ui.Panel.mainWindow,
-			)
-			w.Show()
-		}
-		if _, ok := platCaps[streamcontrol.CapabilityDeleteChatMessage]; !ok {
-			removeMsgButton.Disable()
-		} else {
-			removeMsgButton.Enable()
-		}
-	}
-	item.TimestampSegment.Text = msg.CreatedAt.Format("15:04:05")
-	item.TimestampSegment.Style.ColorName = colorForPlatform(msg.Platform)
-	item.UsernameSegment.Text = msg.Username
-	item.UsernameSegment.Style.ColorName = colorForUsername(msg.Username)
-	item.MessageSegment.Text = msg.Message
-	item.Text.Refresh()
-	logger.Tracef(ctx, "%d: updated message is: '%s'", rowID, msg.Message)
-
-	requiredHeight = item.Container.MinSize().Height
-	logger.Tracef(ctx, "%d: requiredHeight == %f", rowID, requiredHeight)
-
-	ui.ItemLocker.Do(ctx, func() {
-		ui.ItemsByMessageID[msg.MessageID] = item
-		ui.TotalListHeight += uint(requiredHeight) - item.Height
-		ui.ItemsByMessageID[msg.MessageID].Height = uint(requiredHeight)
-	})
-	ui.List.SetItemHeight(rowID, requiredHeight)
-}
-
-func (ui *chatUI) onBanClicked(
-	platID streamcontrol.PlatformName,
-	userID streamcontrol.ChatUserID,
-) {
-	ui.Panel.chatUserBan(ui.ctx, platID, userID)
-}
-
 func (p *Panel) chatUserBan(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
@@ -525,16 +227,7 @@ func (p *Panel) onRemoveChatMessageClicked(
 		return
 	}
 	for _, chatUI := range p.getChatUIs(ctx) {
-		if onRemove := chatUI.OnRemove; onRemove != nil {
-			defer onRemove(ctx, *msg)
-		}
-		chatUI.ItemLocker.Do(ctx, func() {
-			item := chatUI.ItemsByMessageID[msg.MessageID]
-			chatUI.TotalListHeight -= item.Height
-			delete(chatUI.ItemsByMessageID, msg.MessageID)
-			delete(chatUI.ItemsByCanvasObject, item.Container)
-		})
-		observability.Go(ctx, func() { chatUI.CanvasObject.Refresh() })
+		chatUI.Remove(ctx, *msg)
 	}
 	err := p.chatMessageRemove(ctx, msg.Platform, msg.MessageID)
 	if err != nil {

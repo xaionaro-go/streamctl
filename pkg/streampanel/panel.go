@@ -179,7 +179,7 @@ type Panel struct {
 
 	currentlyPlayingChatMessageSoundCount int32
 	chatUIsLocker                         xsync.Mutex
-	chatUIs                               []*chatUI
+	chatUIs                               []chatUIInterface
 }
 
 func New(
@@ -1676,7 +1676,7 @@ func (p *Panel) initMainWindow(
 	)
 
 	chatPage := container.NewBorder(nil, nil, nil, nil)
-	chatUI, err := p.newChatUI(ctx, true, true, false)
+	chatUI, err := p.newChatUIAsList(ctx, true, true, false)
 	if err != nil {
 		logger.Errorf(ctx, "unable to initialize the page for chat: %v", err)
 	} else {
