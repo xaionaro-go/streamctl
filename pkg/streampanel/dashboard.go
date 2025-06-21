@@ -86,7 +86,7 @@ type dashboardWindow struct {
 	streamStatusLocker  xsync.Mutex
 	changedImages       []*imageInfo
 	lastFullUpdateAt    time.Time
-	chat                *chatUI
+	chat                *chatUIAsText
 
 	iteratorReusableBuffer iterate.TwoDReusableBuffers
 }
@@ -246,7 +246,7 @@ func (w *dashboardWindow) renderStreamStatus(ctx context.Context) {
 func (p *Panel) newDashboardWindow(
 	ctx context.Context,
 ) *dashboardWindow {
-	chatUI, err := p.newChatUI(ctx, false, false, true)
+	chatUI, err := p.newChatUIAsText(ctx, false, false)
 	if err != nil {
 		p.DisplayError(fmt.Errorf("unable to start a chat UI: %w", err))
 	}
@@ -318,7 +318,7 @@ func (p *Panel) newDashboardWindow(
 		bgFyne,
 	}
 	if w.chat != nil {
-		c := w.chat.List
+		c := w.chat.ScrollingContainer
 		w.chat.OnAdd = func(ctx context.Context, msg api.ChatMessage) {
 			logger.Debugf(ctx, "OnAdd(%v)", msg)
 			defer func() { logger.Tracef(ctx, "OnAdd(%v)", msg) }()
@@ -328,7 +328,7 @@ func (p *Panel) newDashboardWindow(
 			case "android":
 				screenHeight -= 110 // TODO: delete me
 			}
-			demandedHeight := float32(w.chat.TotalListHeight) + c.Theme().Size(theme.SizeNamePadding)*float32(c.Length())
+			demandedHeight := w.chat.GetTotalHeight(ctx)
 			logger.Tracef(ctx, "demanded height: %v; screen height: %v", demandedHeight, screenHeight)
 			allowedHeight := math.Min(
 				float64(screenHeight),
@@ -338,11 +338,11 @@ func (p *Panel) newDashboardWindow(
 			pos := fyne.NewPos(0, screenHeight-float32(allowedHeight))
 			size := fyne.NewSize(w.Canvas().Size().Width, float32(allowedHeight))
 			logger.Tracef(ctx, "resulting size and position: %#+v %#+v", size, pos)
-			if size.Height != w.chat.List.Size().Height {
+			if size.Height != w.chat.Text.Size().Height {
 				c.Resize(size)
 				c.Move(pos)
 			}
-			fyneTryLoop(ctx, func() { c.ScrollToBottom() })
+			w.chat.ScrollToBottom(ctx)
 		}
 		w.chat.OnAdd(ctx, api.ChatMessage{})
 		layers = append(layers,
@@ -710,7 +710,11 @@ func (w *dashboardWindow) onSizeChange(
 	newSize fyne.Size,
 ) {
 	logger.Debugf(ctx, "dashboard was resized from %v to %v", oldSize, newSize)
-	w.chat.OnAdd(ctx, api.ChatMessage{})
+	onAdd := w.chat.GetOnAdd()
+	if onAdd == nil {
+		return
+	}
+	onAdd(ctx, api.ChatMessage{})
 }
 
 func (w *dashboardWindow) startUpdatingNoLock(
