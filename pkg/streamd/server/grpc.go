@@ -1913,13 +1913,14 @@ func (grpc *GRPCServer) SubscribeToChatMessages(
 	srv streamd_grpc.StreamD_SubscribeToChatMessagesServer,
 ) error {
 	ts := req.GetSinceUNIXNano()
+	limit := req.GetLimit()
 	since := time.Unix(
 		int64(ts)/int64(time.Second.Nanoseconds()),
 		int64(ts)%int64(time.Second.Nanoseconds()),
 	)
 	return wrapChan(
 		func(ctx context.Context) (<-chan api.ChatMessage, error) {
-			return grpc.StreamD.SubscribeToChatMessages(ctx, since)
+			return grpc.StreamD.SubscribeToChatMessages(ctx, since, limit)
 		},
 		srv,
 		func(input api.ChatMessage) streamd_grpc.ChatMessage {

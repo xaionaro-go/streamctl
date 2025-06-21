@@ -221,7 +221,7 @@ func (ui *chatUIAsText) newItem(
 	msg api.ChatMessage,
 ) {
 	logger.Debugf(ctx, "newItem(ctx, %#+v)", msg)
-	defer func() { logger.Tracef(ctx, "newItem(ctx, %#+v)", msg) }()
+	defer func() { logger.Tracef(ctx, "/newItem(ctx, %#+v)", msg) }()
 
 	item := &chatTextItem{
 		TimestampSegment: &widget.TextSegment{
@@ -315,11 +315,19 @@ func (ui *chatUIAsText) newItem(
 		item.MessageSegment,
 		&widget.TextSegment{}, // line break
 	}
+	segmentsPerItem := len(newSegments)
 	if ui.ReverseOrder {
 		newSegments = append(newSegments, ui.Text.Segments...)
+		if len(newSegments)/segmentsPerItem > ChatLogSize {
+			newSegments = newSegments[:ChatLogSize*segmentsPerItem]
+		}
 		ui.Text.Segments = newSegments
 	} else {
-		ui.Text.Segments = append(ui.Text.Segments, newSegments...)
+		newSegments = append(ui.Text.Segments, newSegments...)
+		if len(newSegments)/segmentsPerItem > ChatLogSize {
+			newSegments = newSegments[len(newSegments)-ChatLogSize*segmentsPerItem:]
+		}
+		ui.Text.Segments = newSegments
 	}
 }
 

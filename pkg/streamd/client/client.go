@@ -2631,6 +2631,7 @@ func (c *Client) SubmitEvent(
 func (c *Client) SubscribeToChatMessages(
 	ctx context.Context,
 	since time.Time,
+	limit uint64,
 ) (<-chan api.ChatMessage, error) {
 	return unwrapStreamDChan(
 		ctx,
@@ -2645,6 +2646,7 @@ func (c *Client) SubscribeToChatMessages(
 				client.SubscribeToChatMessages,
 				&streamd_grpc.SubscribeToChatMessagesRequest{
 					SinceUNIXNano: uint64(since.UnixNano()),
+					Limit:         limit,
 				},
 			)
 		},

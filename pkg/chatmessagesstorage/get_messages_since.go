@@ -14,16 +14,20 @@ import (
 func (s *ChatMessagesStorage) GetMessagesSince(
 	ctx context.Context,
 	since time.Time,
+	limit uint,
 ) ([]api.ChatMessage, error) {
-	return xsync.DoA2R2(ctx, &s.Mutex, s.getMessagesSinceLocked, ctx, since)
+	return xsync.DoA3R2(ctx, &s.Mutex, s.getMessagesSinceLocked, ctx, since, limit)
 }
 
 func (s *ChatMessagesStorage) getMessagesSinceLocked(
 	ctx context.Context,
 	since time.Time,
+	limit uint,
 ) (_ret []api.ChatMessage, _err error) {
-	logger.Tracef(ctx, "getMessagesSinceLocked(ctx, %v)", since)
-	defer func() { logger.Tracef(ctx, "/getMessagesSinceLocked(ctx, %v): len:%d, %v", since, len(_ret), _err) }()
+	logger.Tracef(ctx, "getMessagesSinceLocked(ctx, %v, %d)", since, limit)
+	defer func() {
+		logger.Tracef(ctx, "/getMessagesSinceLocked(ctx, %v, %d): len:%d, %v", since, limit, len(_ret), _err)
+	}()
 
 	if len(s.Messages) == 0 {
 		return nil, nil
@@ -44,6 +48,10 @@ func (s *ChatMessagesStorage) getMessagesSinceLocked(
 			return nil, nil
 		}
 		idx = 0
+	}
+
+	if limit > 0 && len(s.Messages)-idx > int(limit) {
+		idx = len(s.Messages) - int(limit)
 	}
 
 	return slices.Clone(s.Messages[idx:]), nil

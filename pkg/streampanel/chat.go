@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	ChatLogSize = 100
+	ChatLogSize = 50
 )
 
 type chatUIInterface interface {
@@ -66,7 +66,7 @@ func (p *Panel) getChatUIs(ctx context.Context) []chatUIInterface {
 }
 
 func (p *Panel) initChatMessagesHandler(ctx context.Context) error {
-	msgCh, err := p.StreamD.SubscribeToChatMessages(ctx, time.Now().Add(-7*24*time.Hour))
+	msgCh, err := p.StreamD.SubscribeToChatMessages(ctx, time.Now().Add(-7*24*time.Hour), ChatLogSize)
 	if err != nil {
 		return fmt.Errorf("unable to subscribe to chat messages: %w", err)
 	}

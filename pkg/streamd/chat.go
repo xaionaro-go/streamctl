@@ -16,7 +16,7 @@ type ChatMessageStorage interface {
 	RemoveMessage(context.Context, streamcontrol.ChatMessageID) error
 	Load(ctx context.Context) error
 	Store(ctx context.Context) error
-	GetMessagesSince(context.Context, time.Time) ([]api.ChatMessage, error)
+	GetMessagesSince(context.Context, time.Time, uint) ([]api.ChatMessage, error)
 }
 
 func (d *StreamD) startListeningForChatMessages(
@@ -102,11 +102,12 @@ func (d *StreamD) BanUser(
 func (d *StreamD) SubscribeToChatMessages(
 	ctx context.Context,
 	since time.Time,
+	limit uint64,
 ) (<-chan api.ChatMessage, error) {
-	return eventSubToChan[api.ChatMessage](
+	return eventSubToChan(
 		ctx, d,
 		func(ctx context.Context, outCh chan api.ChatMessage) {
-			msgs, err := d.ChatMessagesStorage.GetMessagesSince(ctx, since)
+			msgs, err := d.ChatMessagesStorage.GetMessagesSince(ctx, since, uint(limit))
 			if err != nil {
 				logger.Errorf(ctx, "unable to get the messages from the storage: %v", err)
 				return

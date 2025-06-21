@@ -214,7 +214,7 @@ type chatListItem struct {
 func (ui *chatUIAsList) listCreateItem() fyne.CanvasObject {
 	ctx := context.TODO()
 	logger.Debugf(ctx, "listCreateItem")
-	defer func() { logger.Tracef(ctx, "listCreateItem") }()
+	defer func() { logger.Tracef(ctx, "/listCreateItem") }()
 
 	item := &chatListItem{
 		Container: &fyne.Container{},
@@ -279,7 +279,7 @@ func (ui *chatUIAsList) listUpdateItem(
 ) {
 	ctx := context.TODO()
 	logger.Debugf(ctx, "listUpdateItem(%d, obj)", rowID)
-	defer func() { logger.Tracef(ctx, "listUpdateItem(%d, obj)", rowID) }()
+	defer func() { logger.Tracef(ctx, "/listUpdateItem(%d, obj)", rowID) }()
 
 	var entryID int
 	var requiredHeight float32
