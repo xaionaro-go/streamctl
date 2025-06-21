@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	ChatLogSize = 50
+	ChatLogSize = 20
 )
 
 type chatUIInterface interface {

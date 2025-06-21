@@ -97,6 +97,9 @@ func (ui *chatUIAsText) init(
 		nil,
 		ui.Text,
 	)
+	observability.Go(ctx, func() {
+		ui.Rebuild(ctx)
+	})
 	ui.Panel.addChatUI(ctx, ui)
 	return nil
 }
