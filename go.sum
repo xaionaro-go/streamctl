@@ -68,6 +68,8 @@ dmitri.shuralyov.com/gpu/mtl v0.0.0-20190408044501-666a987793e9/go.mod h1:H6x//7
 dmitri.shuralyov.com/html/belt v0.0.0-20180602232347-f7d459c86be0/go.mod h1:JLBrvjyP0v+ecvNYvCpyZgu5/xkfAUhi6wJj28eUfSU=
 dmitri.shuralyov.com/service/change v0.0.0-20181023043359-a85b471d5412/go.mod h1:a1inKt/atXimZ4Mv927x+r7UpyzRUf4emIoiiSC2TN4=
 dmitri.shuralyov.com/state v0.0.0-20180228185332-28bcc343414c/go.mod h1:0PRwlb0D6DFvNNtx+9ybjezNCa8XF0xaYcETyp6rHWU=
+fyne.io/fyne/v2 v2.6.1 h1:kjPJD4/rBS9m2nHJp+npPSuaK79yj6ObMTuzR6VQ1Is=
+fyne.io/fyne/v2 v2.6.1/go.mod h1:YZt7SksjvrSNJCwbWFV32WON3mE1Sr7L41D29qMZ/lU=
 fyne.io/systray v1.11.0 h1:D9HISlxSkx+jHSniMBR6fCFOUjk1x/OOOJLa9lJYAKg=
 fyne.io/systray v1.11.0/go.mod h1:RVwqP9nYMo7h5zViCBHri2FgjXF7H2cub7MAq4NSoLs=
 git.apache.org/thrift.git v0.0.0-20180902110319-2566ecd5d999/go.mod h1:fPE2ZNJGynbRyZ4dJvy6G277gSllfV2HJqblrnkyeyg=
@@ -294,6 +296,8 @@ github.com/fyne-io/glfw-js v0.2.0 h1:8GUZtN2aCoTPNqgRDxK5+kn9OURINhBEBc7M4O1KrmM
 github.com/fyne-io/glfw-js v0.2.0/go.mod h1:Ri6te7rdZtBgBpxLW19uBpp3Dl6K9K/bRaYdJ22G8Jk=
 github.com/fyne-io/image v0.1.1 h1:WH0z4H7qfvNUw5l4p3bC1q70sa5+YWVt6HCj7y4VNyA=
 github.com/fyne-io/image v0.1.1/go.mod h1:xrfYBh6yspc+KjkgdZU/ifUC9sPA5Iv7WYUBzQKK7JM=
+github.com/fyne-io/oksvg v0.1.0 h1:7EUKk3HV3Y2E+qypp3nWqMXD7mum0hCw2KEGhI1fnBw=
+github.com/fyne-io/oksvg v0.1.0/go.mod h1:dJ9oEkPiWhnTFNCmRgEze+YNprJF7YRbpjgpWS4kzoI=
 github.com/gabriel-vasile/mimetype v1.4.7 h1:SKFKl7kD0RiPdbht0s7hFtjl489WcQ1VyPW8ZzUMYCA=
 github.com/gabriel-vasile/mimetype v1.4.7/go.mod h1:GDlAgAyIRT27BhFl53XNAFtfjzOkLaF35JdEG0P7LtU=
 github.com/gaukas/godicttls v0.0.4/go.mod h1:l6EenT4TLWgTdwslVb4sEMOCf7Bv0JAK67deKr9/NCI=
@@ -549,6 +553,10 @@ github.com/grpc-ecosystem/grpc-gateway v1.5.0/go.mod h1:RSKVYQBd5MCa4OVpNdGskqpg
 github.com/grpc-ecosystem/grpc-gateway v1.16.0/go.mod h1:BDjrQk3hbvj6Nolgz8mAMFbcEtjT1g+wF4CSlocrBnw=
 github.com/h12w/go-socks5 v0.0.0-20200522160539-76189e178364 h1:5XxdakFhqd9dnXoAZy1Mb2R/DZ6D1e+0bGC/JhucGYI=
 github.com/h12w/go-socks5 v0.0.0-20200522160539-76189e178364/go.mod h1:eDJQioIyy4Yn3MVivT7rv/39gAJTrA7lgmYr8EW950c=
+github.com/hack-pad/go-indexeddb v0.3.2 h1:DTqeJJYc1usa45Q5r52t01KhvlSN02+Oq+tQbSBI91A=
+github.com/hack-pad/go-indexeddb v0.3.2/go.mod h1:QvfTevpDVlkfomY498LhstjwbPW6QC4VC/lxYb0Kom0=
+github.com/hack-pad/safejs v0.1.0 h1:qPS6vjreAqh2amUqj4WNG1zIw7qlRQJ9K10eDKMCnE8=
+github.com/hack-pad/safejs v0.1.0/go.mod h1:HdS+bKF1NrE72VoXZeWzxFOVQVUSqZJAG0xNCnb+Tio=
 github.com/hashicorp/consul/api v1.12.0/go.mod h1:6pVBMo0ebnYdt2S3H87XhekM/HHrUoTD2XXb/VrZVy0=
 github.com/hashicorp/consul/sdk v0.8.0/go.mod h1:GBvyrGALthsZObzUGsfgHZQDXjg4lOjagTIwIR1vPms=
 github.com/hashicorp/errwrap v1.0.0/go.mod h1:YH+1FKiLXxHSkmPseP+kNlulaMuP3n2brvKWEqk/Jc4=
@@ -1086,8 +1094,6 @@ github.com/xaionaro-go/avpipeline v0.0.0-20250428012319-401ac2ebe66c h1:KTQYCAJA
 github.com/xaionaro-go/avpipeline v0.0.0-20250428012319-401ac2ebe66c/go.mod h1:Czl84biYuPZeILYiRiziR0yeuXKvrqQfzJ1ItjSq/o0=
 github.com/xaionaro-go/datacounter v1.0.4 h1:+QMZLmu73R5WGkQfUPwlXF/JFN+Weo4iuDZkiL2wVm8=
 github.com/xaionaro-go/datacounter v1.0.4/go.mod h1:Sf9vBevuV6w5iE6K3qJ9pWVKcyS60clWBUSQLjt5++c=
-github.com/xaionaro-go/fyne/v2 v2.0.0-20250215180758-399edb421067 h1:58GgTbQcOCjv1ZZ46m6WQ8zqv0KEJe5C6D5Ls1oSHvc=
-github.com/xaionaro-go/fyne/v2 v2.0.0-20250215180758-399edb421067/go.mod h1:0GOXKqyvNwk3DLmsFu9v0oYM0ZcD1ysGnlHCerKoAmo=
 github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42 h1:izCjREd+62HDF9FRYqUI7dgJNdUxAIysEuqed8lBcDY=
 github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42/go.mod h1:IuQWd+hy/tLuvuqFX0N9SMZrzOprM8Jvvdu+42RJwk4=
 github.com/xaionaro-go/goobs v0.0.0-20241103210141-030e538ac440 h1:hzQ+65oWq54XAqheyJ9E6wt+WH75051w+eLP5zWlD68=
@@ -1278,8 +1284,6 @@ golang.org/x/lint v0.0.0-20201208152925-83fdc39ff7b5/go.mod h1:3xt1FjdF8hUf6vQPI
 golang.org/x/lint v0.0.0-20210508222113-6edffad5e616/go.mod h1:3xt1FjdF8hUf6vQPIChWIBhFzV8gjjsPE/fR3IyQdNY=
 golang.org/x/mobile v0.0.0-20190312151609-d3739f865fa6/go.mod h1:z+o9i4GpDbdi3rU15maQ/Ox0txvL9dWGYEHz965HBQE=
 golang.org/x/mobile v0.0.0-20190719004257-d2bd2a29d028/go.mod h1:E/iHnbuqvinMTCcRqshq8CkpyQDoeVncDDYHnLhea+o=
-golang.org/x/mobile v0.0.0-20240404231514-09dbf07665ed h1:vZhAhVr5zF1IJaVKTawyTq78WSspLnK53iuMJ1fJgLc=
-golang.org/x/mobile v0.0.0-20240404231514-09dbf07665ed/go.mod h1:z041I2NhLjANgIfD0XbB2AmUZ8sLUcSgyLaSNGEP50M=
 golang.org/x/mod v0.0.0-20190513183733-4bf6d317e70e/go.mod h1:mXi4GBBbnImb6dmsKGUJ2LatrhH/nqhxcFungHvyanc=
 golang.org/x/mod v0.1.0/go.mod h1:0QHyrYULN0/3qlju5TqG8bIK38QM8yzMo5ekMj3DlcY=
 golang.org/x/mod v0.1.1-0.20191105210325-c90efee705ee/go.mod h1:QqPTAvyqsEbceGzBzNggFXnrqF1CaUcvgkdR5Ot7KZg=

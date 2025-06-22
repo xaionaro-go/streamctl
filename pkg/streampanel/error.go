@@ -12,6 +12,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/consts"
 	"github.com/xaionaro-go/xsync"
 )
@@ -64,7 +65,9 @@ func (p *Panel) statusPanelSet(text string) {
 		if panel == nil {
 			return
 		}
-		panel.SetText("status:  " + text)
+		observability.Go(ctx, func() {
+			panel.SetText("status:  " + text)
+		})
 	})
 }
 

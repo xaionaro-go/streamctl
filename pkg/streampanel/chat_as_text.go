@@ -3,6 +3,8 @@ package streampanel
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -33,6 +35,9 @@ type chatUIAsText struct {
 	ItemLocker       xsync.Mutex
 	ItemsByMessageID map[streamcontrol.ChatMessageID]*chatTextItem
 	TotalListHeight  uint
+
+	RefreshCount atomic.Int64
+	RefreshLock  xsync.Mutex
 
 	// TODO: do not store ctx in a struct:
 	ctx context.Context
@@ -332,6 +337,20 @@ func (ui *chatUIAsText) newItem(
 		}
 		ui.Text.Segments = newSegments
 	}
+	ui.refreshAsync(ctx)
+}
+
+func (ui *chatUIAsText) refreshAsync(
+	ctx context.Context,
+) {
+	if ui.RefreshCount.Add(1) > 2 {
+		return
+	}
+	ui.RefreshLock.Do(ctx, func() {
+		defer ui.RefreshCount.Add(-1)
+		time.Sleep(200 * time.Millisecond)
+		ui.ScrollingContainer.Refresh()
+	})
 }
 
 func (ui *chatUIAsText) onBanClicked(

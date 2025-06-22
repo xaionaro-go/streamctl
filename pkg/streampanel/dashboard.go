@@ -188,7 +188,10 @@ func (w *dashboardWindow) renderStreamStatus(ctx context.Context) {
 			bytesOutDiff := appBytesOut - w.appStatusData.prevBytesOut
 			bwIn := float64(bytesInDiff) * 8 / tsDiff.Seconds() / 1000
 			bwOut := float64(bytesOutDiff) * 8 / tsDiff.Seconds() / 1000
-			w.appStatus.SetText(fmt.Sprintf("%4.0fKb/s | %4.0fKb/s", bwIn, bwOut))
+			newAppStatusText := fmt.Sprintf("%4.0fKb/s | %4.0fKb/s", bwIn, bwOut)
+			observability.Go(ctx, func() {
+				w.appStatus.SetText(newAppStatusText)
+			})
 		}
 		w.appStatusData.prevUpdateTS = now
 		w.appStatusData.prevBytesIn = appBytesIn
@@ -207,25 +210,33 @@ func (w *dashboardWindow) renderStreamStatus(ctx context.Context) {
 					defer dst.Refresh()
 
 					if !src.BackendIsEnabled {
-						dst.SetText("disabled")
+						observability.Go(ctx, func() {
+							dst.SetText("disabled")
+						})
 						return
 					}
 
 					if src.BackendError != nil {
 						dst.Importance = widget.LowImportance
-						dst.SetText("error")
+						observability.Go(ctx, func() {
+							dst.SetText("error")
+						})
 						return
 					}
 
 					if !src.IsActive {
 						dst.Importance = widget.DangerImportance
-						dst.SetText("stopped")
+						observability.Go(ctx, func() {
+							dst.SetText("stopped")
+						})
 						return
 					}
 
 					dst.Importance = widget.SuccessImportance
 					if src.StartedAt == nil {
-						dst.SetText("started")
+						observability.Go(ctx, func() {
+							dst.SetText("started")
+						})
 						return
 					}
 
@@ -236,7 +247,9 @@ func (w *dashboardWindow) renderStreamStatus(ctx context.Context) {
 						viewerCountString = fmt.Sprintf(" (%d)", *src.ViewersCount)
 					}
 
-					dst.SetText(fmt.Sprintf("%s%s", duration.Truncate(time.Second).String(), viewerCountString))
+					observability.Go(ctx, func() {
+						dst.SetText(fmt.Sprintf("%s%s", duration.Truncate(time.Second).String(), viewerCountString))
+					})
 				})
 			}
 		})

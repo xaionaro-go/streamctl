@@ -86,6 +86,7 @@ require (
 	github.com/fyne-io/gl-js v0.1.0 // indirect
 	github.com/fyne-io/glfw-js v0.2.0 // indirect
 	github.com/fyne-io/image v0.1.1 // indirect
+	github.com/fyne-io/oksvg v0.1.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.7 // indirect
 	github.com/gen2brain/shm v0.0.0-20230802011745-f2460f5984f7 // indirect
 	github.com/getkin/kin-openapi v0.118.0 // indirect
@@ -126,6 +127,8 @@ require (
 	github.com/gookit/color v1.5.4 // indirect
 	github.com/goph/emperror v0.17.2 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
+	github.com/hack-pad/go-indexeddb v0.3.2 // indirect
+	github.com/hack-pad/safejs v0.1.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/logutils v1.0.0 // indirect
 	github.com/huandu/go-tls v1.0.1 // indirect
@@ -230,7 +233,6 @@ require (
 	golang.org/x/arch v0.12.0 // indirect
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
 	golang.org/x/image v0.24.0 // indirect
-	golang.org/x/mobile v0.0.0-20240404231514-09dbf07665ed // indirect
 	golang.org/x/net v0.39.0 // indirect
 	golang.org/x/sync v0.14.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
@@ -246,7 +248,7 @@ require (
 )
 
 require (
-	fyne.io/fyne/v2 v2.5.4
+	fyne.io/fyne/v2 v2.6.1
 	github.com/AgustinSRG/go-child-process-manager v1.0.1
 	github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802
 	github.com/Danny-Dasilva/fhttp v0.0.0-20240217042913-eeeb0b347ce1

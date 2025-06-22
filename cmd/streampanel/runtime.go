@@ -99,9 +99,9 @@ func initRuntime(
 		})
 	}
 
-	if oldValue := runtime.GOMAXPROCS(0); oldValue < 16 {
-		l.Infof("increased GOMAXPROCS from %d to %d", oldValue, 16)
-		runtime.GOMAXPROCS(16)
+	if oldValue := runtime.GOMAXPROCS(0); oldValue < 4 {
+		l.Infof("increased GOMAXPROCS from %d to %d", oldValue, 4)
+		runtime.GOMAXPROCS(4)
 	}
 
 	observability.Go(ctx, func() {
