@@ -356,6 +356,10 @@ func (p *Panel) newDashboardWindow(
 				c.Move(pos)
 			}
 			w.chat.ScrollToBottom(ctx)
+			observability.Go(ctx, func() {
+				time.Sleep(time.Second)
+				w.chat.ScrollToBottom(ctx)
+			})
 		}
 		w.chat.OnAdd(ctx, api.ChatMessage{})
 		layers = append(layers,

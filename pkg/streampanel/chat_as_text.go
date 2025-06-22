@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sync/atomic"
-	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -128,6 +127,9 @@ func (ui *chatUIAsText) Rebuild(
 				ui.newItem(ctx, itemIdx, msg)
 			}
 		})
+		if ui.OnAdd != nil {
+			ui.OnAdd(ctx, api.ChatMessage{})
+		}
 	})
 }
 func (ui *chatUIAsText) Append(
@@ -337,20 +339,6 @@ func (ui *chatUIAsText) newItem(
 		}
 		ui.Text.Segments = newSegments
 	}
-	ui.refreshAsync(ctx)
-}
-
-func (ui *chatUIAsText) refreshAsync(
-	ctx context.Context,
-) {
-	if ui.RefreshCount.Add(1) > 2 {
-		return
-	}
-	ui.RefreshLock.Do(ctx, func() {
-		defer ui.RefreshCount.Add(-1)
-		time.Sleep(200 * time.Millisecond)
-		ui.ScrollingContainer.Refresh()
-	})
 }
 
 func (ui *chatUIAsText) onBanClicked(

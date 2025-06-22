@@ -12,7 +12,6 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/consts"
 	"github.com/xaionaro-go/xsync"
 )
@@ -60,15 +59,18 @@ func (p *Panel) getErrorReports() []errorReport {
 
 func (p *Panel) statusPanelSet(text string) {
 	ctx := context.TODO()
+	var newText string
+	var panel *widget.Label
 	p.statusPanelLocker.Do(ctx, func() {
-		panel := p.statusPanel
+		panel = p.statusPanel
 		if panel == nil {
 			return
 		}
-		observability.Go(ctx, func() {
-			panel.SetText("status:  " + text)
-		})
+		newText = "status:  " + text
 	})
+	if panel != nil {
+		panel.SetText(newText)
+	}
 }
 
 func (p *Panel) ShowErrorReports() {
