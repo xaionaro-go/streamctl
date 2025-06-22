@@ -13,6 +13,7 @@ import (
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
+	"github.com/xaionaro-go/streamctl/pkg/streampanel/audio"
 	"github.com/xaionaro-go/xsync"
 )
 
@@ -167,8 +168,12 @@ func (p *Panel) onReceiveMessage(
 				logger.Debugf(ctx, "/PlayChatMessage: skipped (count == %d)", concurrentCount)
 				return
 			}
+
 			defer logger.Debugf(ctx, "/PlayChatMessage: (attempted to) played")
-			err := p.Audio.PlayChatMessage(ctx)
+			audio := audio.NewAudio(ctx)
+			defer audio.Playbacker.Close()
+			logger.Infof(ctx, "audio backend is %T", audio.Playbacker.PlayerPCM)
+			err := audio.PlayChatMessage(ctx)
 			if err != nil {
 				logger.Errorf(ctx, "unable to playback the chat message sound: %v", err)
 			}

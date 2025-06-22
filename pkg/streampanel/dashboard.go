@@ -734,6 +734,19 @@ func (w *dashboardWindow) onSizeChange(
 	onAdd(ctx, api.ChatMessage{})
 }
 
+func (w *dashboardWindow) onChatSizeChange(
+	ctx context.Context,
+	oldSize fyne.Size,
+	newSize fyne.Size,
+) {
+	logger.Debugf(ctx, "chat was resized from %v to %v", oldSize, newSize)
+	onAdd := w.chat.GetOnAdd()
+	if onAdd == nil {
+		return
+	}
+	onAdd(ctx, api.ChatMessage{})
+}
+
 func (w *dashboardWindow) startUpdatingNoLock(
 	ctx context.Context,
 ) {
@@ -759,6 +772,25 @@ func (w *dashboardWindow) startUpdatingNoLock(
 			newSize := w.Window.Canvas().Size()
 			if newSize != oldSize {
 				w.onSizeChange(ctx, oldSize, newSize)
+				oldSize = newSize
+			}
+		}
+	})
+
+	observability.Go(ctx, func() {
+		t := time.NewTicker(time.Second)
+		defer t.Stop()
+		oldSize := w.chat.ScrollingContainer.Content.MinSize()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+
+			newSize := w.chat.ScrollingContainer.Content.MinSize()
+			if newSize != oldSize {
+				w.onChatSizeChange(ctx, oldSize, newSize)
 				oldSize = newSize
 			}
 		}

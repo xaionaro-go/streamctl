@@ -46,7 +46,6 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/client"
 	streamdconfig "github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
-	"github.com/xaionaro-go/streamctl/pkg/streampanel/audio"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/config"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	"github.com/xaionaro-go/xcontext"
@@ -60,7 +59,6 @@ const youtubeTitleLength = 100
 type Panel struct {
 	StreamD      api.StreamD
 	Screenshoter Screenshoter
-	Audio        *audio.Audio
 
 	OnInternallySubmittedOAuthCode func(
 		ctx context.Context,
@@ -197,12 +195,7 @@ func New(
 		return nil, fmt.Errorf("unable to read the config from path '%s': %w", configPath, err)
 	}
 
-	ctx := context.TODO()
-	audio := audio.NewAudio(ctx)
-	logger.Infof(ctx, "audio backend is %T", audio.Playbacker.PlayerPCM)
-
 	p := &Panel{
-		Audio:               audio,
 		configPath:          configPath,
 		Config:              Options(opts).ApplyOverrides(cfg),
 		Screenshoter:        screenshoter.New(screenshot.Implementation{}),
