@@ -30,6 +30,7 @@ func (s *ChatMessagesStorage) getMessagesSinceLocked(
 	}()
 
 	if len(s.Messages) == 0 {
+		logger.Tracef(ctx, "len(s.Messages) == 0")
 		return nil, nil
 	}
 
@@ -44,7 +45,9 @@ func (s *ChatMessagesStorage) getMessagesSinceLocked(
 	})
 
 	if idx >= len(s.Messages) {
-		if !since.Before(s.Messages[0].CreatedAt) {
+		lastMessage := s.Messages[len(s.Messages)-1]
+		if !since.Before(lastMessage.CreatedAt) {
+			logger.Tracef(ctx, "all messages are too old: %v < %v", lastMessage, since)
 			return nil, nil
 		}
 		idx = 0
@@ -54,5 +57,6 @@ func (s *ChatMessagesStorage) getMessagesSinceLocked(
 		idx = len(s.Messages) - int(limit)
 	}
 
+	logger.Tracef(ctx, "s.Messages[%d:%d]", idx, len(s.Messages))
 	return slices.Clone(s.Messages[idx:]), nil
 }
