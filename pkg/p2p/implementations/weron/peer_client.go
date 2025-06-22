@@ -39,7 +39,7 @@ func (p *peerClient) init(
 ) error {
 	ctx, cancelFn := context.WithCancel(ctx)
 	p.cancelFn = cancelFn
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		<-ctx.Done()
 		if err := p.peer.network.removePeer(p.peer.id); err != nil {
 			logger.Errorf(ctx, "unable to remove peer '%s': %v", p.peer.id, err)

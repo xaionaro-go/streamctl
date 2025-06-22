@@ -61,7 +61,7 @@ func (d *StreamD) getImageBytes(
 }
 
 func (d *StreamD) initImageTaker(ctx context.Context) error {
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer logger.Debugf(ctx, "/imageTaker")
 		ch, err := d.SubscribeToDashboardChanges(ctx)
 		if err != nil {
@@ -106,7 +106,7 @@ func (d *StreamD) restartImageTakerNoLock(ctx context.Context) error {
 			elName, el := elName, el
 			_ = el
 			d.imageTakerWG.Add(1)
-			observability.Go(ctx, func() {
+			observability.Go(ctx, func(ctx context.Context) {
 				defer d.imageTakerWG.Done()
 				logger.Debugf(ctx, "taker of image '%s'", elName)
 				defer logger.Debugf(ctx, "/taker of image '%s'", elName)

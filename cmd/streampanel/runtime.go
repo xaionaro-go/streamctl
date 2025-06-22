@@ -30,7 +30,7 @@ func initRuntime(
 	l := logger.FromCtx(ctx)
 
 	if ForceDebug {
-		observability.Go(ctx, func() {
+		observability.Go(ctx, func(ctx context.Context) {
 			t := time.NewTicker(time.Second)
 			defer t.Stop()
 			for {
@@ -88,7 +88,7 @@ func initRuntime(
 	}
 
 	if netPprofAddr != "" {
-		observability.Go(ctx, func() {
+		observability.Go(ctx, func(ctx context.Context) {
 			http.Handle(
 				"/metrics",
 				promhttp.Handler(),
@@ -104,7 +104,7 @@ func initRuntime(
 		runtime.GOMAXPROCS(4)
 	}
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		t := time.NewTicker(time.Second)
 		defer t.Stop()
 		for {

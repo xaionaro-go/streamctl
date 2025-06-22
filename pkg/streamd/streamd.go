@@ -236,7 +236,7 @@ func (d *StreamD) initChatMessagesStorage(ctx context.Context) (_err error) {
 	logger.Debugf(ctx, "initChatMessagesStorage")
 	defer logger.Debugf(ctx, "/initChatMessagesStorage: %v", _err)
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		logger.Debugf(ctx, "initChatMessagesStorage-refresherLoop")
 		defer logger.Debugf(ctx, "/initChatMessagesStorage-refresherLoop")
 		t := time.NewTicker(5 * time.Second)
@@ -271,7 +271,7 @@ func (d *StreamD) secretsProviderUpdater(ctx context.Context) (_err error) {
 	})
 	logger.Debugf(ctx, "updated the secrets")
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
@@ -392,7 +392,7 @@ func (d *StreamD) InitCache(ctx context.Context) error {
 	var wg sync.WaitGroup
 
 	wg.Add(1)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer wg.Done()
 		_changedCache := d.initTwitchData(ctx)
 		d.normalizeTwitchData()
@@ -402,7 +402,7 @@ func (d *StreamD) InitCache(ctx context.Context) error {
 	})
 
 	wg.Add(1)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer wg.Done()
 		_changedCache := d.initKickData(ctx)
 		d.normalizeKickData()
@@ -412,7 +412,7 @@ func (d *StreamD) InitCache(ctx context.Context) error {
 	})
 
 	wg.Add(1)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer wg.Done()
 		_changedCache := d.initYoutubeData(ctx)
 		d.normalizeYoutubeData()
@@ -593,12 +593,12 @@ func (d *StreamD) onUpdateConfig(
 	errCh := make(chan error, 1)
 
 	wg.Add(1)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer wg.Done()
 		errCh <- d.updateOBSRestarterConfig(ctx)
 	})
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		wg.Wait()
 		close(errCh)
 	})
@@ -655,7 +655,7 @@ func (d *StreamD) StartStream(
 		defer func() {
 			d.StreamStatusCache.InvalidateCache(ctx)
 			if platID == youtube.ID {
-				observability.Go(ctx, func() {
+				observability.Go(ctx, func(ctx context.Context) {
 					now := time.Now()
 					time.Sleep(10 * time.Second)
 					for time.Since(now) < 5*time.Minute {
@@ -1639,7 +1639,7 @@ func (d *StreamD) WaitForStreamPublisher(
 		}
 
 		ch := make(chan struct{})
-		observability.Go(ctx, func() {
+		observability.Go(ctx, func(ctx context.Context) {
 			select {
 			case <-pubCh:
 				close(ch)

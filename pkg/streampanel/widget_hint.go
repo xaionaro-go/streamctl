@@ -66,7 +66,7 @@ func (w *HintWidget) mouseIn(ev *desktop.MouseEvent) {
 		panic("should not have happened")
 	}
 	w.RecheckerCancelFn = cancelFn
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():

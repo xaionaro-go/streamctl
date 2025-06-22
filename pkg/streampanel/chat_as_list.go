@@ -141,7 +141,7 @@ func (ui *chatUIAsList) Remove(
 		delete(ui.ItemsByMessageID, msg.MessageID)
 		delete(ui.ItemsByCanvasObject, item.Container)
 	})
-	observability.Go(ctx, func() { ui.CanvasObject.Refresh() }) // TODO: remove the observability.Go
+	observability.Go(ctx, func(context.Context) { ui.CanvasObject.Refresh() }) // TODO: remove the observability.Go
 }
 
 func (ui *chatUIAsList) GetTotalHeight(

@@ -32,7 +32,7 @@ func (d *StreamD) startListeningForChatMessages(
 	if err != nil {
 		return fmt.Errorf("unable to get the channel for chat messages of '%s': %w", platName, err)
 	}
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer logger.Debugf(ctx, "/startListeningForChatMessages(ctx, '%s')", platName)
 		for {
 			select {

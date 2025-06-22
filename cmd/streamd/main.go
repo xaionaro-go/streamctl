@@ -91,7 +91,7 @@ func main() {
 	ctx = logger.CtxWithLogger(ctx, l)
 
 	if *netPprofAddr != "" || (forceNetPProfOnAndroid && runtime.GOOS == "android") {
-		observability.Go(ctx, func() {
+		observability.Go(ctx, func(ctx context.Context) {
 			if *netPprofAddr == "" {
 				*netPprofAddr = "localhost:0"
 			}
@@ -175,7 +175,7 @@ func main() {
 			l.Fatalf("unable to initialize the streamd instance: %v", err)
 		}
 
-		observability.Go(ctx, func() {
+		observability.Go(ctx, func(ctx context.Context) {
 			if err = streamD.Run(ctx); err != nil {
 				l.Errorf("streamd returned an error: %v", err)
 			}
@@ -186,7 +186,7 @@ func main() {
 			log.Fatalf("failed to listen: %v", err)
 		}
 
-		observability.Go(ctx, func() {
+		observability.Go(ctx, func(ctx context.Context) {
 			<-ctx.Done()
 			listener.Close()
 		})

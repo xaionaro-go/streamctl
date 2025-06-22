@@ -402,7 +402,7 @@ func (k *Kick) GetChatMessagesChan(
 	defer func() { logger.Debugf(ctx, "/GetChatMessagesChan") }()
 
 	outCh := make(chan streamcontrol.ChatMessage)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer func() {
 			logger.Debugf(ctx, "closing the messages channel")
 			close(outCh)

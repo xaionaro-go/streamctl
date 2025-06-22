@@ -115,7 +115,7 @@ func (s *StreamServer) init(
 	for _, srv := range cfg.PortServers {
 		{
 			srv := srv
-			observability.Go(ctx, func() {
+			observability.Go(ctx, func(ctx context.Context) {
 				s.mutex.Do(ctx, func() {
 					_, err := s.startServer(ctx, srv.Type, srv.ListenAddr, srv.Options()...)
 					if err != nil {
@@ -392,7 +392,7 @@ func (s *StreamServer) WaitPublisherChan(
 	appKey := types.AppKey(streamID)
 
 	ch := make(chan types.Publisher, 1)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		var curPublisher *PublisherClosedNotifier
 		if waitForNext {
 			curPublisher = xsync.DoR1(

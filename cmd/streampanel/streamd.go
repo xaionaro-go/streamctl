@@ -57,7 +57,7 @@ func forkStreamd(preCtx context.Context, mainProcessAddr, password string) {
 	logger.Debugf(ctx, "flags == %#+v", flags)
 	ctx, cancelFunc := initRuntime(ctx, flags, procName)
 	defer cancelFunc()
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		<-ctx.Done()
 		logger.Debugf(ctx, "context is cancelled")
 	})
@@ -187,7 +187,7 @@ func runStreamd(
 		if mainProcess != nil {
 			logger.Debugf(ctx, "starting the IPC server")
 			setReadyFor(ctx, mainProcess, GetStreamdAddress{}, RequestStreamDConfig{})
-			observability.Go(ctx, func() {
+			observability.Go(ctx, func(ctx context.Context) {
 				err := mainProcess.Serve(
 					ctx,
 					func(
@@ -267,7 +267,7 @@ func initGRPCServers(
 	}
 
 	obsGRPC, obsGRPCClose, err := streamD.OBS(ctx)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		<-ctx.Done()
 		listener.Close()
 		if obsGRPCClose != nil {
@@ -298,7 +298,7 @@ func initGRPCServers(
 	registerGRPCServices(grpcServer, streamdGRPC, obsGRPC, proxyGRPC)
 
 	// start the server:
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		logger.Infof(ctx, "started server at %s", listener.Addr().String())
 		err = grpcServer.Serve(listener)
 		select {

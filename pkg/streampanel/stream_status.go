@@ -37,7 +37,7 @@ func (p *Panel) updateStreamStatus(
 		kick.ID,
 	} {
 		wg.Add(1)
-		observability.Go(ctx, func() {
+		observability.Go(ctx, func(ctx context.Context) {
 			defer wg.Done()
 
 			ok, err := p.StreamD.IsBackendEnabled(ctx, platID)

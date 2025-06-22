@@ -87,7 +87,7 @@ func (c *Client) Serve(
 ) error {
 	ctx, cancelFn := context.WithCancel(ctx)
 	defer cancelFn()
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		<-ctx.Done()
 		err := c.Close()
 		if err != nil {

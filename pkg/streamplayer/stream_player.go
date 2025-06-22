@@ -240,7 +240,7 @@ func (p *StreamPlayerHandler) startU(ctx context.Context) error {
 	p.Player = player
 	logger.Debugf(ctx, "initialized player %#+v", player)
 
-	observability.Go(ctx, func() { p.controllerLoop(ctx, cancelFn) })
+	observability.Go(ctx, func(ctx context.Context) { p.controllerLoop(ctx, cancelFn) })
 	return nil
 }
 
@@ -351,7 +351,7 @@ func (p *StreamPlayerHandler) startObserver(
 	url *url.URL,
 	restartFn context.CancelFunc,
 ) {
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer restartFn()
 		logger.Debugf(ctx, "observer started")
 		defer func() { logger.Debugf(ctx, "observer ended") }()
@@ -468,7 +468,7 @@ func (p *StreamPlayerHandler) openStream(
 		ctx, cancelFn := context.WithTimeout(ctx, openURLTimeout)
 		defer cancelFn()
 		var once sync.Once
-		observability.Go(ctx, func() {
+		observability.Go(ctx, func(ctx context.Context) {
 			<-ctx.Done()
 			once.Do(func() {
 				logger.Errorf(ctx, "timed out, unable to open the URL '%s' within the timeout of %s", u, openURLTimeout)
@@ -535,7 +535,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 			return
 		}
 		isClosed = true
-		observability.Go(ctx, func() {
+		observability.Go(ctx, func(ctx context.Context) {
 			p.PlayerLocker.Do(ctx, func() {
 				err := p.restartU(ctx)
 				errmon.ObserveErrorCtx(ctx, err)
@@ -646,7 +646,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 					if !triedToFixEmptyLinkViaReopen {
 						if link, err := player.GetLink(ctx); link == "" {
 							logger.Debugf(ctx, "the link is empty for some reason, reopening the link (BTW, err if any is: %v)", err)
-							observability.Go(ctx, func() {
+							observability.Go(ctx, func(ctx context.Context) {
 								if err := p.openStream(ctx, restart); err != nil {
 									logger.Errorf(ctx, "unable to open link '%s': %v", link, err)
 								}
@@ -704,7 +704,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 						restart()
 						return false
 					}
-					observability.Go(ctx, func() {
+					observability.Go(ctx, func(ctx context.Context) {
 						if err := p.openStream(ctx, restart); err != nil {
 							logger.Error(ctx, "unable to re-open the stream: %v", err)
 							restart()
@@ -748,7 +748,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 			cancelFn()
 			return
 		} else {
-			observability.Go(ctx, func() {
+			observability.Go(ctx, func(ctx context.Context) {
 				select {
 				case <-closeChan:
 					logger.Warnf(ctx, "the player is apparently closed, restarting it")
@@ -773,7 +773,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 		logger.Error(ctx, "unable to access the player for setting it up for streaming: %v", err)
 	}
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		time.Sleep(time.Second) // TODO: delete this ugly racy hack
 		p.notifyStart(context.WithValue(ctx, CtxKeyStreamPlayer, p))
 	})

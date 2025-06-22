@@ -62,7 +62,7 @@ func (t *Timer) start(ctx context.Context) {
 	runningTimer := time.NewTimer(time.Until(t.TriggerAt))
 	t.RunningTimer = runningTimer
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			t.stop(ctx)
@@ -101,7 +101,7 @@ func (t *Timer) trigger(ctx context.Context) {
 	logger.Debugf(ctx, "trigger (%T)", t.Timer.Action)
 	defer logger.Debugf(ctx, "/trigger (%T)", t.Timer.Action)
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		err := t.StreamD.RemoveTimer(ctx, t.Timer.ID)
 		if err != nil {
 			logger.Error(ctx, "unable to remove timer %d: %v", t.Timer.ID, err)

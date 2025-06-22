@@ -100,7 +100,7 @@ func getContext(
 				closeFile = func() { f.Close() }
 			}
 			rotateFunc()
-			observability.Go(ctx, func() {
+			observability.Go(ctx, func(ctx context.Context) {
 				defer func() {
 					logger.Debugf(ctx, "log rotator is closed")
 				}()

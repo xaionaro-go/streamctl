@@ -101,7 +101,7 @@ func (ui *chatUIAsText) init(
 		nil,
 		ui.Text,
 	)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		ui.Rebuild(ctx)
 	})
 	ui.Panel.addChatUI(ctx, ui)
@@ -166,7 +166,7 @@ func (ui *chatUIAsText) Remove(
 	ui.ItemLocker.Do(ctx, func() {
 		delete(ui.ItemsByMessageID, msg.MessageID)
 	})
-	observability.Go(ctx, func() { ui.CanvasObject.Refresh() }) // TODO: remove the observability.Go
+	observability.Go(ctx, func(context.Context) { ui.CanvasObject.Refresh() }) // TODO: remove the observability.Go
 }
 
 func (ui *chatUIAsText) GetTotalHeight(

@@ -108,7 +108,7 @@ func (fwd *ActiveStreamForwarding) start(ctx context.Context) (_err error) {
 	}
 	ctx, cancelFn := context.WithCancel(ctx)
 	fwd.cancelFunc = cancelFn
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		for {
 			err := fwd.waitForPublisherAndStart(
 				ctx,
@@ -182,7 +182,7 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 
 	ctx, cancelFn := context.WithCancel(ctx)
 	defer cancelFn()
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer cancelFn()
 		select {
 		case <-ctx.Done():
@@ -322,7 +322,7 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 		return err
 	}
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		t := time.NewTicker(time.Second)
 		defer t.Stop()
 		for {
@@ -429,7 +429,7 @@ func (fwd *ActiveStreamForwarding) killRecodingProcess(
 	}
 
 	resultCh := make(chan error, 1)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer func() {
 			close(resultCh)
 		}()

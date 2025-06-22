@@ -83,7 +83,7 @@ func NewChatListener(
 		messagesOutChan:  make(chan streamcontrol.ChatMessage, 100),
 	}
 	l.wg.Add(1)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer l.wg.Done()
 		defer func() {
 			logger.Debugf(ctx, "the listener loop is finished")

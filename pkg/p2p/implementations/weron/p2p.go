@@ -223,7 +223,7 @@ func (p *P2P) Start(
 	}
 
 	p.waitGroup.Add(1)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer p.waitGroup.Done()
 		err := p.acceptPeersLoop(ctx, 0, myIDChan0)
 		if err != nil && !errors.Is(err, context.Canceled) {
@@ -232,7 +232,7 @@ func (p *P2P) Start(
 	})
 
 	p.waitGroup.Add(1)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer p.waitGroup.Done()
 		err := p.acceptPeersLoop(ctx, 1, myIDChan1)
 		if err != nil && !errors.Is(err, context.Canceled) {

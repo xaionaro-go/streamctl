@@ -36,7 +36,7 @@ func (p *peerServer) init(
 	ctx context.Context,
 ) error {
 	ctx, cancelFn := context.WithCancel(ctx)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		<-ctx.Done()
 		if err := p.peer.network.removePeer(p.peer.id); err != nil {
 			logger.Errorf(ctx, "unable to remove peer '%s': %v", p.peer.id, err)
@@ -59,7 +59,7 @@ func (p *peerServer) init(
 	}
 
 	p.waitGroup.Add(1)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer cancelFn()
 		defer p.waitGroup.Done()
 		logger.Infof(ctx, "started the gRPC server at '%s'", grpcServerListener.Addr())

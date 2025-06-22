@@ -307,7 +307,7 @@ func (p *Panel) profileWindow(
 			for _, cat := range dataTwitch.Cache.Categories {
 				if cleanTwitchCategoryName(cat.Name) == text {
 					setSelectedTwitchCategory(cat.Name)
-					observability.Go(ctx, func() {
+					observability.Go(ctx, func(ctx context.Context) {
 						time.Sleep(100 * time.Millisecond)
 						twitchCategory.SetText("")
 					})
@@ -409,7 +409,7 @@ func (p *Panel) profileWindow(
 			text = cleanKickCategoryName(text)
 			cat := catN[text]
 			setSelectedKickCategory(cat.ID)
-			observability.Go(ctx, func() {
+			observability.Go(ctx, func(ctx context.Context) {
 				time.Sleep(100 * time.Millisecond)
 				kickCategory.SetText("")
 			})
@@ -516,7 +516,7 @@ func (p *Panel) profileWindow(
 			for _, bc := range dataYouTube.Cache.Broadcasts {
 				if cleanYoutubeRecordingName(bc.Snippet.Title) == text {
 					setSelectedYoutubeBroadcast(bc)
-					observability.Go(ctx, func() {
+					observability.Go(ctx, func(ctx context.Context) {
 						time.Sleep(100 * time.Millisecond)
 						youtubeTemplate.SetText("")
 					})

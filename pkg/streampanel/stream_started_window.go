@@ -135,7 +135,7 @@ func (w *streamStartedWindow) updateStreamStatusLoop(
 	var wg sync.WaitGroup
 
 	wg.Add(1)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer wg.Done()
 		t := time.NewTicker(time.Second)
 		defer t.Stop()
@@ -150,7 +150,7 @@ func (w *streamStartedWindow) updateStreamStatusLoop(
 	})
 
 	wg.Add(1)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer wg.Done()
 		t := time.NewTicker(time.Second)
 		defer t.Stop()
@@ -198,7 +198,7 @@ func (w *streamStartedWindow) open(
 	}
 
 	ctx, cancelFn := context.WithCancel(ctx)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		w.updateStreamStatusLoop(ctx)
 	})
 

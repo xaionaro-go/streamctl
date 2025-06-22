@@ -86,14 +86,14 @@ func NewCodeReceiver(
 		}),
 	}
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		<-ctx.Done()
 		listener.Close()
 		srv.Close()
 		close(codeCh)
 	})
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		srv.Serve(listener)
 	})
 

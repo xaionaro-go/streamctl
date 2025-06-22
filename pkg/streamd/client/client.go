@@ -421,7 +421,7 @@ func unwrapStreamDChan[E any, R any, S receiver[R]](
 	}
 
 	r := make(chan E)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer closer.Close()
 		defer cancelFn()
 		for {

@@ -9,7 +9,6 @@ import (
 )
 
 type updateTimerHandler struct {
-	ctx             context.Context
 	cancelFn        context.CancelFunc
 	startStopButton *widget.Button
 	startTS         time.Time
@@ -21,7 +20,6 @@ func newUpdateTimerHandler(
 ) *updateTimerHandler {
 	ctx, cancelFn := context.WithCancel(context.Background())
 	h := &updateTimerHandler{
-		ctx:             ctx,
 		cancelFn:        cancelFn,
 		startStopButton: startStopButton,
 		startTS:         startedAt,
@@ -39,12 +37,12 @@ func (h *updateTimerHandler) GetStartTS() time.Time {
 	return h.startTS
 }
 
-func (h *updateTimerHandler) loop() {
+func (h *updateTimerHandler) loop(ctx context.Context) {
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
 	for {
 		select {
-		case <-h.ctx.Done():
+		case <-ctx.Done():
 			return
 		case <-t.C:
 			timePassed := time.Since(h.startTS).Truncate(time.Second)

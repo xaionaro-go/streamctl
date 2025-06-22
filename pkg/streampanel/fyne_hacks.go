@@ -15,7 +15,7 @@ func (p *Panel) initFyneHacks(ctx context.Context) {
 }
 
 func (p *Panel) initWindowsHealthChecker(ctx context.Context) {
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		logger.Debugf(ctx, "initWindowsHealthChecker")
 		defer logger.Debugf(ctx, "/initWindowsHealthChecker")
 
@@ -30,7 +30,6 @@ func (p *Panel) initWindowsHealthChecker(ctx context.Context) {
 				p.checkAndFixWindowsHealth(ctx)
 			}
 		}
-
 	})
 }
 
@@ -81,7 +80,7 @@ func checkAndFixPermanentWindowHealth(
 
 	logger.Warnf(ctx, "window %v has a broken event queue, fixing")
 	window.InitEventQueue()
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		window.RunEventQueue()
 	})
 }

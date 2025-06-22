@@ -42,7 +42,7 @@ var (
 				l.Error("unable to get the value of the flag 'go-net-pprof-addr': %v", err)
 			}
 			if netPprofAddr != "" {
-				observability.Go(ctx, func() {
+				observability.Go(ctx, func(ctx context.Context) {
 					if netPprofAddr == "" {
 						netPprofAddr = "localhost:0"
 					}

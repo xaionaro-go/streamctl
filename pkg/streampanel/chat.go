@@ -50,7 +50,7 @@ func (p *Panel) addChatUI(ctx context.Context, ui chatUIInterface) {
 		p.chatUIs = append(p.chatUIs, ui)
 		logger.Debugf(ctx, "len(p.chatUI) == %d", len(p.chatUIs))
 	})
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		<-ctx.Done()
 		p.chatUIsLocker.Do(ctx, func() {
 			p.chatUIs = slices.DeleteFunc(p.chatUIs, func(cmp chatUIInterface) bool {
@@ -72,7 +72,7 @@ func (p *Panel) initChatMessagesHandler(ctx context.Context) error {
 		return fmt.Errorf("unable to subscribe to chat messages: %w", err)
 	}
 
-	observability.GoSafe(ctx, func() {
+	observability.GoSafeRestartable(ctx, func(ctx context.Context) {
 		p.messageReceiverLoop(ctx, msgCh)
 	})
 	return nil
@@ -134,7 +134,7 @@ func (p *Panel) onReceiveMessage(
 		if !notificationsEnabled {
 			return
 		}
-		observability.GoSafe(ctx, func() {
+		observability.GoSafe(ctx, func(ctx context.Context) {
 			commandTemplate := xsync.DoR1(ctx, &p.configLocker, func() string {
 				return p.Config.Chat.CommandOnReceiveMessage
 			})
@@ -146,7 +146,7 @@ func (p *Panel) onReceiveMessage(
 
 			p.execCommand(ctx, commandTemplate, msg)
 		})
-		observability.GoSafe(ctx, func() {
+		observability.GoSafe(ctx, func(ctx context.Context) {
 			logger.Debugf(ctx, "SendNotification")
 			defer logger.Debugf(ctx, "/SendNotification")
 			p.app.SendNotification(&fyne.Notification{
@@ -154,7 +154,7 @@ func (p *Panel) onReceiveMessage(
 				Content: msg.Username + ": " + msg.Message,
 			})
 		})
-		observability.GoSafe(ctx, func() {
+		observability.GoSafe(ctx, func(ctx context.Context) {
 			soundEnabled := xsync.DoR1(ctx, &p.configLocker, func() bool {
 				return p.Config.Chat.ReceiveMessageSoundAlarmEnabled()
 			})

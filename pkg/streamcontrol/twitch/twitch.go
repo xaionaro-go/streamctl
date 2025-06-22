@@ -553,7 +553,7 @@ func (t *Twitch) getNewClientCode(
 	var resultErr error
 	errCh := make(chan error)
 	errWg.Add(1)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		errWg.Done()
 		for err := range errCh {
 			errmon.ObserveErrorCtx(ctx, err)
@@ -575,7 +575,7 @@ func (t *Twitch) getNewClientCode(
 		wg.Add(1)
 		{
 			listenPort := listenPort
-			observability.Go(ctx, func() {
+			observability.Go(ctx, func(ctx context.Context) {
 				defer func() { logger.Debugf(ctx, "ended the oauth handler at port %d", listenPort) }()
 				defer wg.Done()
 				authURL := GetAuthorizationURL(
@@ -630,7 +630,7 @@ func (t *Twitch) getNewClientCode(
 	}
 
 	wg.Add(1)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer wg.Done()
 		t := time.NewTicker(time.Second)
 		defer t.Stop()
@@ -649,7 +649,7 @@ func (t *Twitch) getNewClientCode(
 		}
 	})
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		wg.Wait()
 		close(errCh)
 	})
@@ -838,7 +838,7 @@ func (t *Twitch) GetChatMessagesChan(
 	defer func() { logger.Debugf(ctx, "/GetChatMessagesChan") }()
 
 	outCh := make(chan streamcontrol.ChatMessage)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer func() {
 			logger.Debugf(ctx, "closing the messages channel")
 			close(outCh)

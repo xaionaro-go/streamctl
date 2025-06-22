@@ -49,7 +49,7 @@ func main() {
 	}
 	ctx = belt.WithField(ctx, "process", ProcessNameMain)
 	defer func() { observability.PanicIfNotNil(ctx, recover()) }()
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		<-ctx.Done()
 		logger.Debugf(ctx, "context is cancelled")
 	})
@@ -125,7 +125,7 @@ func runPanel(
 			return err
 		}
 
-		observability.Go(ctx, func() {
+		observability.Go(ctx, func(ctx context.Context) {
 			err = grpcServer.Serve(listener)
 			if err != nil {
 				logger.Panicf(ctx, "unable to server the gRPC server: %v", err)
@@ -135,7 +135,7 @@ func runPanel(
 
 	if mainProcess != nil {
 		setReadyFor(ctx, mainProcess, StreamDDied{}, UpdateStreamDConfig{})
-		observability.Go(ctx, func() {
+		observability.Go(ctx, func(ctx context.Context) {
 			err := mainProcess.Serve(
 				ctx,
 				func(ctx context.Context, source mainprocess.ProcessName, content any) error {

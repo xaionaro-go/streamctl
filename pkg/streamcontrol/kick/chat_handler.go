@@ -52,7 +52,7 @@ func NewChatHandler(
 		messagesOutChan: make(chan streamcontrol.ChatMessage, 100),
 	}
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer func() {
 			close(h.messagesOutChan)
 		}()

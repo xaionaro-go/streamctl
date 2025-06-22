@@ -45,7 +45,7 @@ func (s *StreamPlayers) Init(
 ) error {
 	initCfg := types.InitOptions(opts).Config()
 	s.WithConfig(ctx, func(ctx context.Context, cfg *types.Config) {
-		observability.Go(ctx, func() {
+		observability.Go(ctx, func(ctx context.Context) {
 			var opts SetupOptions
 			if initCfg.DefaultStreamPlayerOptions != nil {
 				opts = append(
@@ -175,7 +175,7 @@ func setupStreamPlayers(
 			}
 
 			ch := make(chan struct{})
-			observability.Go(ctx, func() {
+			observability.Go(ctx, func(ctx context.Context) {
 				select {
 				case <-ctx.Done():
 					return

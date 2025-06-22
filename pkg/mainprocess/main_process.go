@@ -120,7 +120,7 @@ func (m *Manager) Serve(
 	ctx, cancelFn := context.WithCancel(ctx)
 	defer cancelFn()
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		<-ctx.Done()
 		err := m.Close()
 		if err != nil {
@@ -160,7 +160,7 @@ func (m *Manager) addNewConnection(
 	conn net.Conn,
 	onReceivedMessage OnReceivedMessageFunc,
 ) {
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		m.handleConnection(ctx, conn, onReceivedMessage)
 	})
 }
@@ -175,7 +175,7 @@ func (m *Manager) handleConnection(
 	defer func() { logger.Tracef(ctx, "/handleConnection from %s (%s)", conn.RemoteAddr(), regMessage.Source) }()
 
 	ctx, cancelFn := context.WithCancel(ctx)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		<-ctx.Done()
 		conn.Close()
 	})
@@ -291,7 +291,7 @@ func (m *Manager) processMessage(
 		err = multierror.Append(err, onReceivedMessage(ctx, source, message.Content))
 
 		errCh := make(chan error)
-		observability.Go(ctx, func() {
+		observability.Go(ctx, func(ctx context.Context) {
 			for e := range errCh {
 				err = multierror.Append(err, e)
 			}
@@ -303,7 +303,7 @@ func (m *Manager) processMessage(
 			wg.Add(1)
 			{
 				dst := dst
-				observability.Go(ctx, func() {
+				observability.Go(ctx, func(ctx context.Context) {
 					defer wg.Done()
 					errCh <- m.sendMessage(ctx, source, dst, message.Content)
 				})
@@ -382,7 +382,7 @@ func (m *Manager) sendMessage(
 		return fmt.Errorf("process '%s' is not ever expected", destination)
 	}
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		conn, err := m.waitForReadyProcess(ctx, destination, reflect.TypeOf(content))
 		if err != nil {
 			logger.Errorf(
@@ -400,7 +400,7 @@ func (m *Manager) sendMessage(
 			Content:     content,
 		}
 
-		h := m.connLocker.Lock(context.Background(), destination)
+		h := m.connLocker.Lock(context.Background(), destination) // TODO: should we use the provided ctx?
 		defer h.Unlock()
 		defer time.Sleep(
 			100 * time.Millisecond,

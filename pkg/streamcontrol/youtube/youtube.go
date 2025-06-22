@@ -86,7 +86,7 @@ func New(
 		return nil, fmt.Errorf("connection verification failed: %w", err)
 	}
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
 		for {
@@ -232,7 +232,7 @@ func getToken(ctx context.Context, cfg Config) (*oauth2.Token, error) {
 	var resultErr error
 	errCh := make(chan error)
 	errWg.Add(1)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		errWg.Done()
 		for err := range errCh {
 			errmon.ObserveErrorCtx(ctx, err)
@@ -256,7 +256,7 @@ func getToken(ctx context.Context, cfg Config) (*oauth2.Token, error) {
 		wg.Add(1)
 		{
 			oauthCfg := oauthCfg
-			observability.Go(ctx, func() {
+			observability.Go(ctx, func(ctx context.Context) {
 				defer wg.Done()
 				oauthHandlerArg := oauthhandler.OAuthHandlerArgument{
 					AuthURL:    oauthCfg.AuthCodeURL("state-token", oauth2.AccessTypeOffline),
@@ -295,7 +295,7 @@ func getToken(ctx context.Context, cfg Config) (*oauth2.Token, error) {
 	}
 
 	wg.Add(1)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer wg.Done()
 		t := time.NewTicker(time.Second)
 		defer t.Stop()
@@ -317,7 +317,7 @@ func getToken(ctx context.Context, cfg Config) (*oauth2.Token, error) {
 		}
 	})
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		wg.Wait()
 		close(errCh)
 	})
@@ -1039,7 +1039,7 @@ func (yt *YouTube) startChatListener(
 		return fmt.Errorf("unable to initialize the chat listener instance: %w", err)
 	}
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		err := yt.processChatListener(ctx, chatListener)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			logger.Errorf(ctx, "unable to process the chat listener for '%s': %v", videoID, err)
@@ -1392,7 +1392,7 @@ func (yt *YouTube) GetChatMessagesChan(
 	defer logger.Debugf(ctx, "/GetChatMessagesChan")
 
 	outCh := make(chan streamcontrol.ChatMessage)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer func() {
 			logger.Debugf(ctx, "closing the messages channel")
 			close(outCh)

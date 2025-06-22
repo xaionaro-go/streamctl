@@ -189,7 +189,7 @@ func (w *dashboardWindow) renderStreamStatus(ctx context.Context) {
 			bwIn := float64(bytesInDiff) * 8 / tsDiff.Seconds() / 1000
 			bwOut := float64(bytesOutDiff) * 8 / tsDiff.Seconds() / 1000
 			newAppStatusText := fmt.Sprintf("%4.0fKb/s | %4.0fKb/s", bwIn, bwOut)
-			observability.Go(ctx, func() {
+			observability.Go(ctx, func(ctx context.Context) {
 				w.appStatus.SetText(newAppStatusText)
 			})
 		}
@@ -201,7 +201,7 @@ func (w *dashboardWindow) renderStreamStatus(ctx context.Context) {
 	w.Panel.streamStatusLocker.Do(ctx, func() {
 		w.streamStatusLocker.Do(ctx, func() {
 			for platID, dst := range w.streamStatus {
-				observability.CallSafe(ctx, func() {
+				observability.CallSafe(ctx, func(ctx context.Context) {
 					src := w.Panel.streamStatus[platID]
 					if src == nil {
 						logger.Debugf(ctx, "status for '%s' is not set", platID)
@@ -210,7 +210,7 @@ func (w *dashboardWindow) renderStreamStatus(ctx context.Context) {
 					defer dst.Refresh()
 
 					if !src.BackendIsEnabled {
-						observability.Go(ctx, func() {
+						observability.Go(ctx, func(ctx context.Context) {
 							dst.SetText("disabled")
 						})
 						return
@@ -218,7 +218,7 @@ func (w *dashboardWindow) renderStreamStatus(ctx context.Context) {
 
 					if src.BackendError != nil {
 						dst.Importance = widget.LowImportance
-						observability.Go(ctx, func() {
+						observability.Go(ctx, func(ctx context.Context) {
 							dst.SetText("error")
 						})
 						return
@@ -226,7 +226,7 @@ func (w *dashboardWindow) renderStreamStatus(ctx context.Context) {
 
 					if !src.IsActive {
 						dst.Importance = widget.DangerImportance
-						observability.Go(ctx, func() {
+						observability.Go(ctx, func(ctx context.Context) {
 							dst.SetText("stopped")
 						})
 						return
@@ -234,7 +234,7 @@ func (w *dashboardWindow) renderStreamStatus(ctx context.Context) {
 
 					dst.Importance = widget.SuccessImportance
 					if src.StartedAt == nil {
-						observability.Go(ctx, func() {
+						observability.Go(ctx, func(ctx context.Context) {
 							dst.SetText("started")
 						})
 						return
@@ -247,7 +247,7 @@ func (w *dashboardWindow) renderStreamStatus(ctx context.Context) {
 						viewerCountString = fmt.Sprintf(" (%d)", *src.ViewersCount)
 					}
 
-					observability.Go(ctx, func() {
+					observability.Go(ctx, func(ctx context.Context) {
 						dst.SetText(fmt.Sprintf("%s%s", duration.Truncate(time.Second).String(), viewerCountString))
 					})
 				})
@@ -356,7 +356,7 @@ func (p *Panel) newDashboardWindow(
 				c.Move(pos)
 			}
 			w.chat.ScrollToBottom(ctx)
-			observability.Go(ctx, func() {
+			observability.Go(ctx, func(ctx context.Context) {
 				time.Sleep(time.Second)
 				w.chat.ScrollToBottom(ctx)
 			})
@@ -758,7 +758,7 @@ func (w *dashboardWindow) startUpdatingNoLock(
 	ctx, cancelFunc := context.WithCancel(ctx)
 	w.stopUpdatingFunc = cancelFunc
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		t := time.NewTicker(time.Second)
 		defer t.Stop()
 		oldSize := w.Window.Canvas().Size()
@@ -777,7 +777,7 @@ func (w *dashboardWindow) startUpdatingNoLock(
 		}
 	})
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		t := time.NewTicker(time.Second)
 		defer t.Stop()
 		oldSize := w.chat.ScrollingContainer.Content.MinSize()
@@ -797,7 +797,7 @@ func (w *dashboardWindow) startUpdatingNoLock(
 	})
 
 	w.renderLocalStatus(ctx)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		t := time.NewTicker(2 * time.Second)
 		defer t.Stop()
 		for {
@@ -817,12 +817,12 @@ func (w *dashboardWindow) startUpdatingNoLock(
 		return
 	}
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		w.updateImages(ctx, cfg.Dashboard)
 		w.updateStreamStatus(ctx)
 		w.renderStreamStatus(ctx)
 
-		observability.Go(ctx, func() {
+		observability.Go(ctx, func(ctx context.Context) {
 			t := time.NewTicker(250 * time.Millisecond)
 			defer t.Stop()
 			for {
@@ -836,7 +836,7 @@ func (w *dashboardWindow) startUpdatingNoLock(
 			}
 		})
 
-		observability.Go(ctx, func() {
+		observability.Go(ctx, func(ctx context.Context) {
 			t := time.NewTicker(2 * time.Second)
 			defer t.Stop()
 			for {
@@ -995,7 +995,7 @@ func (w *dashboardWindow) updateImagesNoLock(
 				continue
 			}
 			wg.Add(1)
-			observability.Go(ctx, func() {
+			observability.Go(ctx, func(ctx context.Context) {
 				defer wg.Done()
 				img, changed, err := w.getImage(ctx, streamdconsts.ImageID(el.ElementName))
 				if err != nil {
@@ -1025,7 +1025,7 @@ func (w *dashboardWindow) updateImagesNoLock(
 	}
 
 	wg.Add(1)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer wg.Done()
 		img, changed, err := w.getImage(ctx, consts.ImageScreenshot)
 		if err != nil {
@@ -1111,7 +1111,7 @@ func (p *Panel) newDashboardSettingsWindow(ctx context.Context) {
 			p.dashboardLocker.Do(ctx, func() {
 				if p.dashboardWindow != nil {
 					p.dashboardWindow.Window.Close()
-					observability.Go(ctx, func() { p.focusDashboardWindow(ctx) })
+					observability.Go(ctx, func(ctx context.Context) { p.focusDashboardWindow(ctx) })
 				}
 			})
 

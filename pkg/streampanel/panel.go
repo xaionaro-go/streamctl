@@ -282,7 +282,7 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) (_err error) {
 	closeLoadingWindow := func() {
 		logger.Tracef(ctx, "closing the loading window")
 		loadingWindow.Hide()
-		observability.Go(ctx, func() {
+		observability.Go(ctx, func(ctx context.Context) {
 			time.Sleep(10 * time.Millisecond)
 			loadingWindow.Hide()
 			time.Sleep(100 * time.Millisecond)
@@ -292,7 +292,7 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) (_err error) {
 		})
 	}
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		if streamD, ok := p.StreamD.(*client.Client); ok {
 			p.setStatusFunc("Connecting...")
 			err := p.startOAuthListenerForRemoteStreamD(ctx, streamD)
@@ -314,7 +314,7 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) (_err error) {
 			streamD := p.StreamD.(*streamd.StreamD)
 			streamD.AddOAuthListenPort(cfg.OAuth.ListenPorts.Twitch)
 			streamD.AddOAuthListenPort(cfg.OAuth.ListenPorts.Kick)
-			observability.Go(ctx, func() {
+			observability.Go(ctx, func(ctx context.Context) {
 				<-ctx.Done()
 				streamD.RemoveOAuthListenPort(cfg.OAuth.ListenPorts.Twitch)
 				streamD.RemoveOAuthListenPort(cfg.OAuth.ListenPorts.Kick)
@@ -355,7 +355,7 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) (_err error) {
 		}
 
 		if initCfg.AutoUpdater != nil {
-			observability.Go(ctx, func() {
+			observability.Go(ctx, func(ctx context.Context) {
 				p.checkForUpdates(ctx, initCfg.AutoUpdater)
 			})
 		}
@@ -532,7 +532,7 @@ func (p *Panel) startOAuthListenerForRemoteStreamD(
 		}
 
 		logger.Debugf(ctx, "started oauth listener for the remote streamd")
-		observability.Go(ctx, func() {
+		observability.Go(ctx, func(ctx context.Context) {
 			logger.Debugf(ctx, "oauthListenerForRemoteStreamD")
 			defer logger.Debugf(ctx, "/oauthListenerForRemoteStreamD")
 			defer cancelFn()
@@ -1153,7 +1153,7 @@ func (p *Panel) getUpdatedStatus_backends_noLock(ctx context.Context) {
 	}
 
 	if backendEnabled[obs.ID] {
-		observability.Call(ctx, func() {
+		observability.Call(ctx, func(ctx context.Context) {
 			obsServer, obsServerClose, err := p.StreamD.OBS(ctx)
 			if obsServerClose != nil {
 				defer obsServerClose()
@@ -1685,7 +1685,7 @@ func (p *Panel) initMainWindow(
 	p.dashboardShowHideButton = widget.NewButtonWithIcon("Open", theme.ComputerIcon(), func() {
 		p.dashboardLocker.Do(ctx, func() {
 			if p.dashboardWindow == nil {
-				observability.Go(ctx, func() { p.focusDashboardWindow(ctx) })
+				observability.Go(ctx, func(ctx context.Context) { p.focusDashboardWindow(ctx) })
 			} else {
 				p.dashboardWindow.Window.Close()
 			}
@@ -1879,7 +1879,7 @@ func (p *Panel) subscribeUpdateControlPage(ctx context.Context) {
 
 	p.getUpdatedStatus(ctx)
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		t := time.NewTicker(time.Second * 5)
 		defer t.Stop()
 		for {
@@ -1918,7 +1918,7 @@ func (p *Panel) execCommand(
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		err := cmd.Run()
 		if err == nil {
 			err = child_process_manager.AddChildProcess(cmd.Process)
@@ -2050,7 +2050,7 @@ func (p *Panel) setupStreamNoLock(ctx context.Context) {
 		// in the browser, then the stream does not want to start.
 		//
 		// And here we wait until the hack with opening the page will complete.
-		observability.Go(ctx, func() {
+		observability.Go(ctx, func(ctx context.Context) {
 			waitFor := 15 * time.Second
 			deadline := time.Now().Add(waitFor)
 
@@ -2077,7 +2077,7 @@ func (p *Panel) setupStreamNoLock(ctx context.Context) {
 func (p *Panel) startStream(ctx context.Context) {
 	p.streamMutex.ManualLock(ctx)
 	defer func() {
-		observability.Go(ctx, func() {
+		observability.Go(ctx, func(ctx context.Context) {
 			time.Sleep(10 * time.Second) // TODO: remove this
 			p.streamMutex.ManualUnlock(ctx)
 		})
@@ -2133,11 +2133,11 @@ func (p *Panel) afterStreamStart(ctx context.Context) {
 		p.execCommand(ctx, onStreamStart, nil)
 	}
 
-	observability.Go(ctx, func() { p.openStreamStartedWindow(ctx) })
+	observability.Go(ctx, func(ctx context.Context) { p.openStreamStartedWindow(ctx) })
 }
 
 func (p *Panel) stopStream(ctx context.Context) {
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		p.streamStartedLocker.Do(ctx, func() {
 			if p.streamStartedWindow != nil {
 				p.streamStartedWindow.Close()
@@ -2297,7 +2297,7 @@ const aggregationDelayBeforeNotificationEnd = 100 * time.Millisecond
 
 func (p *Panel) showWaitStreamDCallWindow(ctx context.Context) {
 	atomic.AddInt32(&p.waitStreamDCallWindowCounter, 1)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer func() {
 			<-ctx.Done()
 			p.waitStreamDCallWindowLocker.Do(ctx, func() {
@@ -2326,7 +2326,7 @@ func (p *Panel) showWaitStreamDCallWindow(ctx context.Context) {
 
 func (p *Panel) showWaitStreamDConnectWindow(ctx context.Context) {
 	atomic.AddInt32(&p.waitStreamDConnectWindowCounter, 1)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer func() {
 			<-ctx.Done()
 			p.waitStreamDConnectWindowLocker.Do(ctx, func() {
@@ -2361,7 +2361,9 @@ func (p *Panel) Close() (_err error) {
 	err = multierror.Append(err, p.eventSensor.Close())
 	// TODO: remove observability.Go, Quit should be executed synchronously,
 	// but there is a bug in fyne and it hangs
-	observability.Go(context.TODO(), p.app.Quit)
+	observability.Go(context.TODO(), func(ctx context.Context) {
+		p.app.Quit()
+	})
 	return err.ErrorOrNil()
 }
 
@@ -2424,7 +2426,7 @@ func (p *Panel) localConfigCacheUpdater(ctx context.Context) (_err error) {
 		p.configCache = newCfg
 	})
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		logger.Debugf(ctx, "localConfigUpdaterLoop")
 		defer logger.Debugf(ctx, "/localConfigUpdaterLoop")
 

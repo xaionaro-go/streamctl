@@ -79,7 +79,7 @@ func (p *Panel) startMonitorPage(
 
 	p.monitorPageLocker.Do(ctx, func() {
 		if p.monitorPage == nil {
-			observability.Go(ctx, func() { // TODO: get rid of this ugliness
+			observability.Go(ctx, func(ctx context.Context) { // TODO: get rid of this ugliness
 				t := time.NewTicker(100 * time.Millisecond)
 				defer t.Stop()
 				for {
@@ -220,7 +220,7 @@ func (p *monitorPage) startUpdatingNoLock(
 		return
 	}
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		updateData := func() {
 			inStreams, err := streamD.ListIncomingStreams(ctx)
 			if err != nil {
@@ -534,7 +534,7 @@ func (w streamDAsStreamPlayersServerType) WaitPublisherChan(
 	}
 
 	result := make(chan streamplayer.Publisher)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer close(result)
 		select {
 		case <-ctx.Done():

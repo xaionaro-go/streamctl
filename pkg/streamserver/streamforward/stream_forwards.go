@@ -315,7 +315,7 @@ func (s *StreamForwards) newActiveStreamForward(
 	result.ActiveForwarding = fwd
 
 	if quirks.RestartUntilYoutubeRecognizesStream.Enabled {
-		observability.Go(ctx, func() {
+		observability.Go(ctx, func(ctx context.Context) {
 			s.restartUntilYoutubeRecognizesStream(
 				ctx,
 				result,

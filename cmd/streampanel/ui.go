@@ -29,7 +29,7 @@ func forkUI(preCtx context.Context, mainProcessAddr, password string) {
 	ctx, cancelFunc := initRuntime(ctx, flags, procName)
 	defer cancelFunc()
 	defer belt.Flush(ctx)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		<-ctx.Done()
 		logger.Debugf(ctx, "context is cancelled")
 	})

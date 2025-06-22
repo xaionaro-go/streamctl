@@ -30,7 +30,7 @@ func (p *Panel) initEventSensor(ctx context.Context) {
 
 	p.eventSensor = es
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		logger.Debugf(ctx, "eventSensor")
 		defer logger.Debugf(ctx, "/eventSensor")
 		es.Loop(ctx, p.StreamD)

@@ -147,7 +147,7 @@ func runSplitProcesses(
 		logger.Fatalf(ctx, "failed to start process manager: %v", err)
 	}
 	defer m.Close()
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		m.Serve(ctx, func(ctx context.Context, source ProcessName, content any) error {
 			switch content.(type) {
 			case GetFlags:
@@ -170,7 +170,7 @@ func runSplitProcesses(
 			return nil
 		})
 	})
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
@@ -289,7 +289,7 @@ func runFork(
 			logger.Errorf(ctx, "unable to register the command %v to be auto-killed: %v (GOOS: %v)", args, err, runtime.GOOS)
 		}
 	}
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		err := cmd.Wait()
 		stderrLogger.Flush()
 		stdoutLogger.Flush()
@@ -307,10 +307,10 @@ func runFork(
 func fakeFork(ctx context.Context, procName ProcessName, addr, password string) error {
 	switch procName {
 	case ProcessNameStreamd:
-		observability.Go(ctx, func() { forkUI(ctx, addr, password) })
+		observability.Go(ctx, func(ctx context.Context) { forkUI(ctx, addr, password) })
 		return nil
 	case ProcessNameUI:
-		observability.Go(ctx, func() { forkStreamd(ctx, addr, password) })
+		observability.Go(ctx, func(ctx context.Context) { forkStreamd(ctx, addr, password) })
 		return nil
 	}
 	return fmt.Errorf("unexpected process name: %s", procName)

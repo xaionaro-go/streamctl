@@ -87,7 +87,7 @@ func (s *StreamServer) init(
 	for _, srv := range cfg.PortServers {
 		{
 			srv := srv
-			observability.Go(ctx, func() {
+			observability.Go(ctx, func(ctx context.Context) {
 				_, err := s.startServer(ctx, srv.Type, srv.ListenAddr)
 				if err != nil {
 					logger.Errorf(
@@ -238,7 +238,7 @@ func (s *StreamServer) startServer(
 				}
 			},
 		})
-		observability.Go(ctx, func() {
+		observability.Go(ctx, func(ctx context.Context) {
 			err = portSrv.Serve(listener)
 			if err != nil {
 				err = fmt.Errorf(
@@ -374,7 +374,7 @@ func (s *StreamServer) WaitPublisherChan(
 ) (<-chan types.Publisher, error) {
 
 	ch := make(chan types.Publisher, 1)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		ch <- s.RelayService.WaitPubsub(ctx, types.StreamID2LocalAppName(streamID), waitForNext)
 		close(ch)
 	})

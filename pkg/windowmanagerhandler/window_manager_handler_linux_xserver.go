@@ -37,7 +37,7 @@ func (wmh *XWindowManagerHandler) WindowFocusChangeChan(ctx context.Context) <-c
 	logger.Debugf(ctx, "WindowFocusChangeChan")
 	ch := make(chan WindowFocusChange)
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer logger.Debugf(ctx, "/WindowFocusChangeChan")
 		defer func() {
 			close(ch)

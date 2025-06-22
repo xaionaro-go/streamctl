@@ -47,7 +47,7 @@ func (d *StreamD) submitEvent(
 	exprCtx := objToMap(ev)
 	for _, rule := range d.Config.TriggerRules {
 		if rule.EventQuery.Match(ev) {
-			observability.Go(ctx, func() {
+			observability.Go(ctx, func(ctx context.Context) {
 				err := d.doAction(ctx, rule.Action, exprCtx)
 				if err != nil {
 					logger.Errorf(ctx, "unable to perform action %s: %v", rule.Action, err)
@@ -131,13 +131,13 @@ func eventSubToChan[T any](
 	}
 
 	if onReady != nil {
-		observability.Go(ctx, func() {
+		observability.Go(ctx, func(ctx context.Context) {
 			defer mutex.Unlock()
 			onReady(ctx, r)
 		})
 	}
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		<-ctx.Done()
 
 		mutex.Lock()

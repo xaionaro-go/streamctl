@@ -89,7 +89,7 @@ func (ui *timersUI) StartRefreshingFromRemote(
 		ui.refresherCancelFunc = cancelFn
 
 		ui.refreshFromRemote(ctx)
-		observability.Go(ctx, func() {
+		observability.Go(ctx, func(ctx context.Context) {
 			t := time.NewTicker(time.Second * 5)
 			defer t.Stop()
 			for {
@@ -310,7 +310,7 @@ func (ui *timersUI) kickOff(
 	ctx, ui.timerCancelFunc = context.WithCancel(ctx)
 	ui.timer = time.NewTimer(time.Until(deadline))
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer func() {
 			ui.doStop(xcontext.DetachDone(ctx))
 		}()

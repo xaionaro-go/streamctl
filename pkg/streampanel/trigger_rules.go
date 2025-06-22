@@ -74,7 +74,7 @@ func (ui *triggerRulesUI) openSetupWindow(ctx context.Context) {
 							if err != nil {
 								return err
 							}
-							observability.Go(ctx, func() { refreshContent() })
+							observability.Go(ctx, func(ctx context.Context) { refreshContent() })
 							return nil
 						},
 					)
@@ -92,7 +92,7 @@ func (ui *triggerRulesUI) openSetupWindow(ctx context.Context) {
 								ui.panel.DisplayError(err)
 								return
 							}
-							observability.Go(ctx, func() { refreshContent() })
+							observability.Go(ctx, func(ctx context.Context) { refreshContent() })
 						},
 						ui.panel.mainWindow,
 					)
@@ -117,7 +117,7 @@ func (ui *triggerRulesUI) openSetupWindow(ctx context.Context) {
 						if err != nil {
 							return err
 						}
-						observability.Go(ctx, func() { refreshContent() })
+						observability.Go(ctx, func(ctx context.Context) { refreshContent() })
 						return nil
 					},
 				)

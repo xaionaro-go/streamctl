@@ -64,7 +64,7 @@ func newChatHandler(
 	}
 
 	h.waitGroup.Add(1)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		defer h.waitGroup.Done()
 		defer func() {
 			h.client.Close()

@@ -48,7 +48,7 @@ func (p *Panel) initRestreamPage(
 	logger.Debugf(ctx, "initRestreamPage")
 	defer logger.Debugf(ctx, "/initRestreamPage")
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		updateData := func() {
 			inStreams, err := p.StreamD.ListIncomingStreams(ctx)
 			if err != nil {
@@ -70,7 +70,7 @@ func (p *Panel) initRestreamPage(
 		}
 	})
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		updateData := func() {
 			streamServers, err := p.StreamD.ListStreamServers(ctx)
 			if err != nil {
@@ -92,7 +92,7 @@ func (p *Panel) initRestreamPage(
 		}
 	})
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		updateData := func() {
 			dsts, err := p.StreamD.ListStreamDestinations(ctx)
 			if err != nil {
@@ -114,7 +114,7 @@ func (p *Panel) initRestreamPage(
 		}
 	})
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		updateData := func() {
 			streamFwds, err := p.StreamD.ListStreamForwards(ctx)
 			if err != nil {
@@ -136,7 +136,7 @@ func (p *Panel) initRestreamPage(
 		}
 	})
 
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		updateData := func() {
 			streamPlayers, err := p.StreamD.ListStreamPlayers(ctx)
 			if err != nil {
@@ -1548,11 +1548,11 @@ func (p *Panel) streamServersUpdater(
 	ctx context.Context,
 ) context.CancelFunc {
 	ctx, cancelFn := context.WithCancel(ctx)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		logger.Debugf(ctx, "streamServersUpdater: updater")
 		defer logger.Debugf(ctx, "streamServersUpdater: /updater")
 
-		updateData := func() {
+		updateData := func(ctx context.Context) {
 			streamServers, err := p.StreamD.ListStreamServers(ctx)
 			if err != nil {
 				p.DisplayError(err)
@@ -1579,7 +1579,7 @@ func (p *Panel) streamServersUpdater(
 				return
 			case <-t.C:
 			}
-			updateData()
+			updateData(ctx)
 		}
 	})
 	return cancelFn
@@ -1589,11 +1589,11 @@ func (p *Panel) startStreamPlayersUpdater(
 	ctx context.Context,
 ) context.CancelFunc {
 	ctx, cancelFn := context.WithCancel(ctx)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		logger.Debugf(ctx, "startStreamPlayersUpdater: updater")
 		defer logger.Debugf(ctx, "startStreamPlayersUpdater: /updater")
 
-		updateData := func() {
+		updateData := func(ctx context.Context) {
 			streamPlayers, err := p.StreamD.ListStreamPlayers(ctx)
 			if err != nil {
 				p.DisplayError(err)
@@ -1620,7 +1620,7 @@ func (p *Panel) startStreamPlayersUpdater(
 				return
 			case <-t.C:
 			}
-			updateData()
+			updateData(ctx)
 		}
 	})
 	return cancelFn
@@ -1630,11 +1630,11 @@ func (p *Panel) startStreamForwardersUpdater(
 	ctx context.Context,
 ) context.CancelFunc {
 	ctx, cancelFn := context.WithCancel(ctx)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		logger.Debugf(ctx, "startStreamForwardersUpdater: updater")
 		defer logger.Debugf(ctx, "startStreamForwardersUpdater: /updater")
 
-		updateData := func() {
+		updateData := func(ctx context.Context) {
 			streamFwds, err := p.StreamD.ListStreamForwards(ctx)
 			if err != nil {
 				p.DisplayError(err)
@@ -1661,7 +1661,7 @@ func (p *Panel) startStreamForwardersUpdater(
 				return
 			case <-t.C:
 			}
-			updateData()
+			updateData(ctx)
 		}
 	})
 	return cancelFn

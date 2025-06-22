@@ -73,7 +73,7 @@ func (r *obsRestarter) updateConfigNoLock(
 
 	ctx, cancelFn := context.WithCancel(ctx)
 	r.cancelFunc = cancelFn
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		d.obsRestarter.loop(ctx, execCmd)
 	})
 	return nil

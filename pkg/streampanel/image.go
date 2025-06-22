@@ -312,7 +312,7 @@ func (p *Panel) reinitScreenshoter(ctx context.Context) {
 
 		ctx, cancelFunc := context.WithCancel(ctx)
 		p.screenshoterClose = cancelFunc
-		observability.Go(ctx, func() {
+		observability.Go(ctx, func(ctx context.Context) {
 			p.Screenshoter.Loop(
 				ctx,
 				200*time.Millisecond,

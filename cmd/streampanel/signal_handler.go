@@ -17,7 +17,7 @@ func mainProcessSignalHandler(
 ) chan<- os.Signal {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		for range c {
 			cancelFn()
 			forkLocker.Do(ctx, func() {
@@ -26,7 +26,7 @@ func mainProcessSignalHandler(
 					wg.Add(1)
 					{
 						name, f := name, f
-						observability.Go(ctx, func() {
+						observability.Go(ctx, func(ctx context.Context) {
 							defer wg.Done()
 							logger.Debugf(ctx, "interrupting '%s'", name)
 							err := f.Process.Signal(os.Interrupt)
@@ -37,7 +37,7 @@ func mainProcessSignalHandler(
 								return
 							}
 
-							observability.Go(ctx, func() {
+							observability.Go(ctx, func(ctx context.Context) {
 								time.Sleep(5 * time.Second)
 								logger.Debugf(ctx, "killing '%s'", name)
 								err := f.Process.Kill()
@@ -67,7 +67,7 @@ func childProcessSignalHandler(
 ) chan<- os.Signal {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		for range c {
 			logger.Infof(ctx, "received an interruption signal")
 			cancelFunc()

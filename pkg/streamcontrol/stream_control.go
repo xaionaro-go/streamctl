@@ -289,7 +289,7 @@ func (s StreamControllers) ApplyProfiles(
 		wg.Add(1)
 		{
 			p := p
-			observability.Go(ctx, func() {
+			observability.Go(ctx, func(ctx context.Context) {
 				defer wg.Done()
 				profileType := reflect.TypeOf(p)
 				c, ok := m[profileType]
@@ -304,7 +304,7 @@ func (s StreamControllers) ApplyProfiles(
 			})
 		}
 	}
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		wg.Wait()
 		close(errCh)
 	})
@@ -408,7 +408,7 @@ func (s StreamControllers) concurrently(
 		wg.Add(1)
 		{
 			c := c
-			observability.Go(ctx, func() {
+			observability.Go(ctx, func(ctx context.Context) {
 				defer wg.Done()
 				if err := callback(c); err != nil {
 					errCh <- err
@@ -416,7 +416,7 @@ func (s StreamControllers) concurrently(
 			})
 		}
 	}
-	observability.Go(ctx, func() {
+	observability.Go(ctx, func(ctx context.Context) {
 		wg.Wait()
 		close(errCh)
 	})
