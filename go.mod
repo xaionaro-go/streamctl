@@ -9,7 +9,7 @@ replace github.com/andreykaipov/goobs v1.4.1 => github.com/xaionaro-go/goobs v0.
 
 replace github.com/adrg/libvlc-go/v3 v3.1.5 => github.com/xaionaro-go/libvlc-go/v3 v3.0.0-20241011194409-0fe4e2a9d901
 
-replace fyne.io/fyne/v2 v2.5.4 => github.com/xaionaro-go/fyne/v2 v2.0.0-20250215180758-399edb421067
+replace fyne.io/fyne/v2 v2.5.5 => github.com/xaionaro-go/fyne/v2 v2.0.0-20250622004601-3a26ee69528a
 
 replace code.cloudfoundry.org/bytefmt => github.com/cloudfoundry/bytefmt v0.0.0-20211005130812-5bb3c17173e5
 
@@ -246,7 +246,7 @@ require (
 )
 
 require (
-	fyne.io/fyne/v2 v2.5.4
+	fyne.io/fyne/v2 v2.5.5
 	github.com/AgustinSRG/go-child-process-manager v1.0.1
 	github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802
 	github.com/Danny-Dasilva/fhttp v0.0.0-20240217042913-eeeb0b347ce1
