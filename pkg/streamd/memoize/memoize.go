@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/immune-gmbh/attestation-sdk/pkg/objhash"
@@ -34,8 +35,8 @@ func Memoize[REQ any, REPLY any, T func(context.Context, REQ) (REPLY, error)](
 	req REQ,
 	cacheDuration time.Duration,
 ) (_ret REPLY, _err error) {
-	logger.Tracef(ctx, "memoize %T", req)
-	defer logger.Tracef(ctx, "/memoize %T", req)
+	logger.Tracef(ctx, "memoize %T:%#+v", req, req)
+	defer logger.Tracef(ctx, "/memoize %T:%#+v", req, req)
 
 	if IsNoCache(ctx) {
 		cacheDuration = 0
@@ -46,7 +47,8 @@ func Memoize[REQ any, REPLY any, T func(context.Context, REQ) (REPLY, error)](
 	if err != nil {
 		return fn(ctx, req)
 	}
-	logger.Tracef(ctx, "cache key %X", key[:])
+	ctx = belt.WithField(ctx, "cache_key", string(key[:]))
+	logger.Tracef(ctx, "req: %T:%#+v", req, req)
 
 	d.CacheMetaLock.Lock()
 	logger.Tracef(ctx, "grpc.CacheMetaLock.Lock()-ed")

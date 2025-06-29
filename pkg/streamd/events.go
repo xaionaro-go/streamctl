@@ -114,7 +114,7 @@ func eventSubToChanUsingTopic[T any](
 	callback := func(in T) {
 		mutex.Lock()
 		defer mutex.Unlock()
-		logger.Debugf(ctx, "eventSubToChanUsingTopic(%T): received %#+v", topic, in)
+		logger.Tracef(ctx, "eventSubToChanUsingTopic(%T): received %#+v", topic, in)
 
 		select {
 		case <-ctx.Done():

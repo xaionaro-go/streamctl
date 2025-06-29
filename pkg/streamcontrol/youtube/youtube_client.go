@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/facebookincubator/go-belt/tool/logger"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
 	"google.golang.org/api/youtube/v3"
@@ -40,7 +41,7 @@ type YouTubeClient interface {
 	InsertBroadcast(context.Context, *youtube.LiveBroadcast, []string) (*youtube.LiveBroadcast, error)
 	DeleteBroadcast(context.Context, string) error
 	GetStreams(ctx context.Context, parts []string) (*youtube.LiveStreamListResponse, error)
-	GetVideos(context.Context, []string, []string) (*youtube.VideoListResponse, error)
+	GetVideos(ctx context.Context, broadcastIDs []string, parts []string) (*youtube.VideoListResponse, error)
 	UpdateVideo(context.Context, *youtube.Video, []string) error
 	InsertCuepoint(context.Context, *youtube.Cuepoint) error
 	GetPlaylists(ctx context.Context, playlistParts []string) (*youtube.PlaylistListResponse, error)
@@ -54,12 +55,50 @@ type YouTubeClient interface {
 
 type YouTubeClientV3 struct {
 	*youtube.Service
+	RequestWrapper func(context.Context, func(context.Context) error) error
+}
+
+func wrapRequest(
+	ctx context.Context,
+	requestWrapper func(context.Context, func(context.Context) error) error,
+	doFn func(opts ...googleapi.CallOption) error,
+	opts ...googleapi.CallOption,
+) (_err error) {
+	return requestWrapper(ctx, func(ctx context.Context) error {
+		return doFn(opts...)
+	})
+}
+
+func wrapRequestS[T any](
+	ctx context.Context,
+	requestWrapper func(context.Context, func(context.Context) error) error,
+	doFn func(opts ...googleapi.CallOption) (T, error),
+	opts ...googleapi.CallOption,
+) (_err error) {
+	return requestWrapper(ctx, func(ctx context.Context) error {
+		_, err := doFn(opts...)
+		return err
+	})
+}
+
+func wrapRequestR[T any](
+	ctx context.Context,
+	requestWrapper func(context.Context, func(context.Context) error) error,
+	doFn func(opts ...googleapi.CallOption) (T, error),
+	opts ...googleapi.CallOption,
+) (_ret T, _err error) {
+	_err = requestWrapper(ctx, func(ctx context.Context) error {
+		_ret, _err = doFn(opts...)
+		return _err
+	})
+	return
 }
 
 var _ YouTubeClient = (*YouTubeClientV3)(nil)
 
 func NewYouTubeClientV3(
 	ctx context.Context,
+	requestWrapper func(context.Context, func(context.Context) error) error,
 	opts ...option.ClientOption,
 ) (*YouTubeClientV3, error) {
 	srv, err := youtube.NewService(ctx, opts...)
@@ -67,15 +106,17 @@ func NewYouTubeClientV3(
 		return nil, err
 	}
 	return &YouTubeClientV3{
-		Service: srv,
+		Service:        srv,
+		RequestWrapper: requestWrapper,
 	}, nil
 }
 
 func (c *YouTubeClientV3) Ping(
 	ctx context.Context,
-) error {
-	_, err := c.I18nLanguages.List(nil).Context(ctx).Do()
-	return err
+) (_err error) {
+	logger.Tracef(ctx, "Ping")
+	defer func() { logger.Tracef(ctx, "/Ping: %v", _err) }()
+	return wrapRequestS(ctx, c.RequestWrapper, c.I18nLanguages.List(nil).Context(ctx).Do)
 }
 
 func (c *YouTubeClientV3) GetBroadcasts(
@@ -84,11 +125,16 @@ func (c *YouTubeClientV3) GetBroadcasts(
 	ids []string,
 	parts []string,
 	pageToken string,
-) (*youtube.LiveBroadcastListResponse, error) {
+) (_ret *youtube.LiveBroadcastListResponse, _err error) {
+	logger.Tracef(ctx, "GetBroadcasts")
+	defer func() { logger.Tracef(ctx, "/GetBroadcasts: %v", _err) }()
 	r := c.Service.LiveBroadcasts.List(append([]string{"id"}, parts...)).
-		Context(ctx).Fields().MaxResults(100).Mine(true)
+		Context(ctx).Fields().
+		MaxResults(50) // see 'maxResults' in https://developers.google.com/youtube/v3/live/docs/liveBroadcasts/list
 	if t != BroadcastTypeAll {
 		r = r.BroadcastStatus(t.String())
+	} else {
+		r = r.Mine(true)
 	}
 	if ids != nil {
 		r = r.Id(ids...)
@@ -96,68 +142,80 @@ func (c *YouTubeClientV3) GetBroadcasts(
 	if pageToken != "" {
 		r = r.PageToken(pageToken)
 	}
-	return r.Do(googleapi.QueryParameter("order", "date"))
+	return wrapRequestR(ctx, c.RequestWrapper, r.Do, googleapi.QueryParameter("order", "date"))
 }
 
 func (c *YouTubeClientV3) UpdateBroadcast(
 	ctx context.Context,
 	broadcast *youtube.LiveBroadcast,
 	parts []string,
-) error {
-	_, err := c.Service.LiveBroadcasts.Update(parts, broadcast).Context(ctx).Do()
-	return err
+) (_err error) {
+	logger.Tracef(ctx, "UpdateBroadcast")
+	defer func() { logger.Tracef(ctx, "/UpdateBroadcast: %v", _err) }()
+	do := c.Service.LiveBroadcasts.Update(parts, broadcast).Context(ctx).Do
+	return wrapRequestS(ctx, c.RequestWrapper, do)
 }
 
 func (c *YouTubeClientV3) InsertBroadcast(
 	ctx context.Context,
 	broadcast *youtube.LiveBroadcast,
 	parts []string,
-) (*youtube.LiveBroadcast, error) {
+) (_ret *youtube.LiveBroadcast, _err error) {
+	logger.Tracef(ctx, "InsertBroadcast")
+	defer func() { logger.Tracef(ctx, "/InsertBroadcast: %v", _err) }()
 	return c.Service.LiveBroadcasts.Insert(parts, broadcast).Context(ctx).Do()
 }
 
 func (c *YouTubeClientV3) DeleteBroadcast(
 	ctx context.Context,
 	broadcastID string,
-) error {
-	return c.Service.LiveBroadcasts.Delete(broadcastID).Context(ctx).Do()
+) (_err error) {
+	logger.Tracef(ctx, "DeleteBroadcast")
+	defer func() { logger.Tracef(ctx, "/DeleteBroadcast: %v", _err) }()
+	do := c.Service.LiveBroadcasts.Delete(broadcastID).Context(ctx).Do
+	return wrapRequest(ctx, c.RequestWrapper, do)
 }
 
 func (c *YouTubeClientV3) InsertCuepoint(
 	ctx context.Context,
 	p *youtube.Cuepoint,
-) error {
-	_, err := c.Service.LiveBroadcasts.InsertCuepoint(p).Context(ctx).Do()
-	return err
+) (_err error) {
+	logger.Tracef(ctx, "InsertCuepoint")
+	defer func() { logger.Tracef(ctx, "/InsertCuepoint: %v", _err) }()
+	do := c.Service.LiveBroadcasts.InsertCuepoint(p).Context(ctx).Do
+	return wrapRequestS(ctx, c.RequestWrapper, do)
 }
 
 func (c *YouTubeClientV3) GetVideos(
 	ctx context.Context,
 	broadcastIDs []string,
 	parts []string,
-) (*youtube.VideoListResponse, error) {
-	return c.Service.Videos.List(videoParts).
-		Id(broadcastIDs...).Context(ctx).Do()
+) (_ret *youtube.VideoListResponse, _err error) {
+	logger.Tracef(ctx, "GetVideos")
+	defer func() { logger.Tracef(ctx, "/GetVideos: %v", _err) }()
+	do := c.Service.Videos.List(videoParts).Id(broadcastIDs...).Context(ctx).Do
+	return wrapRequestR(ctx, c.RequestWrapper, do)
 }
 
 func (c *YouTubeClientV3) UpdateVideo(
 	ctx context.Context,
 	video *youtube.Video,
 	parts []string,
-) error {
-	_, err := c.Service.Videos.Update(videoParts, video).Context(ctx).Do()
-	return err
+) (_err error) {
+	logger.Tracef(ctx, "UpdateVideo")
+	defer func() { logger.Tracef(ctx, "/UpdateVideo: %v", _err) }()
+	do := c.Service.Videos.Update(videoParts, video).Context(ctx).Do
+	return wrapRequestS(ctx, c.RequestWrapper, do)
 }
 
 func (c *YouTubeClientV3) GetPlaylists(
 	ctx context.Context,
 	playlistParts []string,
-) (*youtube.PlaylistListResponse, error) {
-	return c.Service.Playlists.List(playlistParts).
-		MaxResults(1000).
-		Mine(true).
-		Context(ctx).
-		Do()
+) (_ret *youtube.PlaylistListResponse, _err error) {
+	logger.Tracef(ctx, "GetPlaylists")
+	defer func() { logger.Tracef(ctx, "/GetPlaylists: %v", _err) }()
+	do := c.Service.Playlists.List(playlistParts).MaxResults(1000).Mine(true).Context(ctx).Do
+	return wrapRequestR(ctx, c.RequestWrapper, do)
 }
 
 func (c *YouTubeClientV3) GetPlaylistItems(
@@ -165,70 +223,73 @@ func (c *YouTubeClientV3) GetPlaylistItems(
 	playlistID string,
 	videoID string,
 	parts []string,
-) (*youtube.PlaylistItemListResponse, error) {
-	return c.Service.PlaylistItems.List(parts).
-		MaxResults(1000).
-		PlaylistId(playlistID).
-		VideoId(videoID).
-		Context(ctx).
-		Do()
+) (_ret *youtube.PlaylistItemListResponse, _err error) {
+	logger.Tracef(ctx, "GetPlaylistItems")
+	defer func() { logger.Tracef(ctx, "/GetPlaylistItems: %v", _err) }()
+	do := c.Service.PlaylistItems.List(parts).MaxResults(1000).PlaylistId(playlistID).VideoId(videoID).Context(ctx).Do
+	return wrapRequestR(ctx, c.RequestWrapper, do)
 }
 
 func (c *YouTubeClientV3) InsertPlaylistItem(
 	ctx context.Context,
 	item *youtube.PlaylistItem,
 	parts []string,
-) error {
-	_, err := c.Service.PlaylistItems.Insert(parts, item).
-		Context(ctx).Do()
-	return err
+) (_err error) {
+	logger.Tracef(ctx, "InsertPlaylistItem")
+	defer func() { logger.Tracef(ctx, "/InsertPlaylistItem: %v", _err) }()
+	do := c.Service.PlaylistItems.Insert(parts, item).Context(ctx).Do
+	return wrapRequestS(ctx, c.RequestWrapper, do)
 }
 
 func (c *YouTubeClientV3) SetThumbnail(
 	ctx context.Context,
 	broadcastID string,
 	thumbnail io.Reader,
-) error {
-	_, err := c.Service.Thumbnails.Set(broadcastID).
-		Media(thumbnail).
-		Context(ctx).
-		Do()
-	return err
+) (_err error) {
+	logger.Tracef(ctx, "SetThumbnail")
+	defer func() { logger.Tracef(ctx, "/SetThumbnail: %v", _err) }()
+	do := c.Service.Thumbnails.Set(broadcastID).Media(thumbnail).Context(ctx).Do
+	return wrapRequestS(ctx, c.RequestWrapper, do)
 }
 
 func (c *YouTubeClientV3) GetStreams(
 	ctx context.Context,
 	parts []string,
-) (*youtube.LiveStreamListResponse, error) {
-	return c.Service.LiveStreams.
-		List(parts).
-		Mine(true).MaxResults(20).
-		Context(ctx).Do()
+) (_ret *youtube.LiveStreamListResponse, _err error) {
+	logger.Tracef(ctx, "GetStreams")
+	defer func() { logger.Tracef(ctx, "/GetStreams: %v", _err) }()
+	do := c.Service.LiveStreams.List(parts).Mine(true).MaxResults(20).Context(ctx).Do
+	return wrapRequestR(ctx, c.RequestWrapper, do)
 }
 
 func (c *YouTubeClientV3) InsertCommentThread(
 	ctx context.Context,
 	t *youtube.CommentThread,
 	parts []string,
-) error {
-	_, err := c.Service.CommentThreads.Insert(parts, t).Context(ctx).Do()
-	return err
+) (_err error) {
+	logger.Tracef(ctx, "InsertCommentThread")
+	defer func() { logger.Tracef(ctx, "/InsertCommentThread: %v", _err) }()
+	do := c.Service.CommentThreads.Insert(parts, t).Context(ctx).Do
+	return wrapRequestS(ctx, c.RequestWrapper, do)
 }
 
 func (c *YouTubeClientV3) ListChatMessages(
 	ctx context.Context,
 	chatID string,
 	parts []string,
-) (*youtube.LiveChatMessageListResponse, error) {
-	return c.Service.
-		LiveChatMessages.
-		List(chatID, parts).
-		Context(ctx).Do()
+) (_ret *youtube.LiveChatMessageListResponse, _err error) {
+	logger.Tracef(ctx, "ListChatMessages")
+	defer func() { logger.Tracef(ctx, "/ListChatMessages: %v", _err) }()
+	do := c.Service.LiveChatMessages.List(chatID, parts).Context(ctx).Do
+	return wrapRequestR(ctx, c.RequestWrapper, do)
 }
 
 func (c *YouTubeClientV3) DeleteChatMessage(
 	ctx context.Context,
 	messageID string,
-) error {
-	return c.Service.LiveChatMessages.Delete(messageID).Context(ctx).Do()
+) (_err error) {
+	logger.Tracef(ctx, "DeleteChatMessage")
+	defer func() { logger.Tracef(ctx, "/DeleteChatMessage: %v", _err) }()
+	do := c.Service.LiveChatMessages.Delete(messageID).Context(ctx).Do
+	return wrapRequest(ctx, c.RequestWrapper, do)
 }
