@@ -2,8 +2,10 @@ package youtube
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"google.golang.org/api/googleapi"
@@ -116,7 +118,17 @@ func (c *YouTubeClientV3) Ping(
 ) (_err error) {
 	logger.Tracef(ctx, "Ping")
 	defer func() { logger.Tracef(ctx, "/Ping: %v", _err) }()
-	return wrapRequestS(ctx, c.RequestWrapper, c.I18nLanguages.List(nil).Context(ctx).Do)
+	err := wrapRequestS(ctx, c.RequestWrapper, c.I18nLanguages.List(nil).Context(ctx).Do)
+	gErr := &googleapi.Error{}
+	if err != nil && errors.As(err, &gErr) {
+		if gErr.Code == http.StatusForbidden && len(gErr.Errors) == 1 {
+			gErrItem := gErr.Errors[0]
+			if gErrItem.Reason == "quotaExceeded" { // this is not an authentication or/and connection problem.
+				return nil
+			}
+		}
+	}
+	return err
 }
 
 func (c *YouTubeClientV3) GetBroadcasts(
