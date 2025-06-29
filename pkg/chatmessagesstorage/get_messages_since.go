@@ -41,8 +41,9 @@ func (s *ChatMessagesStorage) getMessagesSinceLocked(
 
 	idx := sort.Search(len(s.Messages), func(i int) bool {
 		m := &s.Messages[i]
-		return !m.CreatedAt.After(since)
+		return !m.CreatedAt.Before(since)
 	})
+	logger.Tracef(ctx, "search result index: %d", idx)
 
 	if idx >= len(s.Messages) {
 		lastMessage := s.Messages[len(s.Messages)-1]
@@ -54,7 +55,15 @@ func (s *ChatMessagesStorage) getMessagesSinceLocked(
 	}
 
 	if limit > 0 && len(s.Messages)-idx > int(limit) {
+		oldIdx := idx
 		idx = len(s.Messages) - int(limit)
+		logger.Tracef(ctx, "corrected the idx from %d to %d as per the count limit", oldIdx, idx)
+	}
+
+	if idx < len(s.Messages) {
+		if s.Messages[idx].CreatedAt.Before(since) {
+			logger.Errorf(ctx, "internal error, for some reason we loaded messages older than %v, for example %v", since, s.Messages[idx])
+		}
 	}
 
 	logger.Tracef(ctx, "s.Messages[%d:%d]", idx, len(s.Messages))

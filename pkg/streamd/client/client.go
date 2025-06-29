@@ -1014,7 +1014,7 @@ func (c *Client) SubscribeToOAuthURLs(
 func (c *Client) GetVariable(
 	ctx context.Context,
 	key consts.VarKey,
-) ([]byte, error) {
+) (api.VariableValue, error) {
 	reply, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,
@@ -1099,7 +1099,7 @@ func (c *Client) GetVariableHash(
 func (c *Client) SetVariable(
 	ctx context.Context,
 	key consts.VarKey,
-	value []byte,
+	value api.VariableValue,
 ) error {
 	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
@@ -1117,6 +1117,35 @@ func (c *Client) SetVariable(
 		)
 	})
 	return err
+}
+
+func (c *Client) SubscribeToVariable(
+	ctx context.Context,
+	varKey consts.VarKey,
+) (<-chan api.VariableValue, error) {
+	return unwrapStreamDChan(
+		ctx,
+		c,
+		func(
+			ctx context.Context,
+			client streamd_grpc.StreamDClient,
+		) (streamd_grpc.StreamD_SubscribeToVariableClient, error) {
+			return callWrapper(
+				ctx,
+				c,
+				client.SubscribeToVariable,
+				&streamd_grpc.SubscribeToVariableRequest{
+					Key: string(varKey),
+				},
+			)
+		},
+		func(
+			ctx context.Context,
+			event *streamd_grpc.VariableChange,
+		) api.VariableValue {
+			return event.GetValue()
+		},
+	)
 }
 
 func (c *Client) OBS(

@@ -26,6 +26,7 @@ func (s *ChatMessagesStorage) addMessageLocked(
 	if len(s.Messages) > 0 && !msg.CreatedAt.After(s.Messages[len(s.Messages)-1].CreatedAt) {
 		s.IsSorted = false
 	}
+	msg.IsLive = false
 	s.Messages = append(s.Messages, msg)
 	s.IsChanged = true
 	if len(s.Messages) <= MaxMessages {

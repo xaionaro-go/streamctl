@@ -78,13 +78,14 @@ type StreamD interface {
 		ctx context.Context,
 		platID streamcontrol.PlatformName,
 	) (*streamcontrol.StreamStatus, error)
-	GetVariable(ctx context.Context, key consts.VarKey) ([]byte, error)
+	GetVariable(ctx context.Context, key consts.VarKey) (VariableValue, error)
 	GetVariableHash(
 		ctx context.Context,
 		key consts.VarKey,
 		hashType crypto.Hash,
 	) ([]byte, error)
-	SetVariable(ctx context.Context, key consts.VarKey, value []byte) error
+	SetVariable(ctx context.Context, key consts.VarKey, value VariableValue) error
+	SubscribeToVariable(ctx context.Context, key consts.VarKey) (<-chan VariableValue, error)
 
 	OBS(ctx context.Context) (obs_grpc.OBSServer, context.CancelFunc, error)
 
@@ -396,4 +397,7 @@ type TriggerRules = config.TriggerRules
 type ChatMessage struct {
 	streamcontrol.ChatMessage
 	Platform streamcontrol.PlatformName
+	IsLive   bool
 }
+
+type VariableValue []byte

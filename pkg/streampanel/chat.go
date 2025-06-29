@@ -84,6 +84,7 @@ func (p *Panel) messageReceiverLoop(
 ) {
 	logger.Tracef(ctx, "messageReceiverLoop")
 	defer func() { logger.Tracef(ctx, "/messageReceiverLoop") }()
+
 	for {
 		select {
 		case <-ctx.Done():

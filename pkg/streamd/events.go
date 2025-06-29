@@ -100,13 +100,21 @@ func eventSubToChan[T any](
 	defer func() { logger.Debugf(ctx, "/eventSubToChan[%T]", sample) }()
 
 	topic := eventTopic(sample)
+	return eventSubToChanUsingTopic(ctx, d, onReady, topic)
+}
 
+func eventSubToChanUsingTopic[T any](
+	ctx context.Context,
+	d *StreamD,
+	onReady func(ctx context.Context, outCh chan T),
+	topic string,
+) (<-chan T, error) {
 	var mutex sync.Mutex
 	r := make(chan T)
 	callback := func(in T) {
 		mutex.Lock()
 		defer mutex.Unlock()
-		logger.Debugf(ctx, "eventSubToChan[%T]: received %#+v", sample, in)
+		logger.Debugf(ctx, "eventSubToChanUsingTopic(%T): received %#+v", topic, in)
 
 		select {
 		case <-ctx.Done():
@@ -122,26 +130,25 @@ func eventSubToChan[T any](
 	}
 
 	if onReady != nil {
-		mutex.Lock()
-	}
-
-	err := d.EventBus.SubscribeAsync(topic, callback, true)
-	if err != nil {
-		return nil, fmt.Errorf("unable to subscribe: %w", err)
-	}
-
-	if onReady != nil {
 		observability.Go(ctx, func(ctx context.Context) {
+			mutex.Lock()
 			defer mutex.Unlock()
+			err := d.EventBus.SubscribeAsync(topic, callback, true)
+			if err != nil {
+				logger.Errorf(ctx, "unable to subscribe: %v", err)
+				return
+			}
 			onReady(ctx, r)
 		})
+	} else {
+		err := d.EventBus.SubscribeAsync(topic, callback, true)
+		if err != nil {
+			return nil, fmt.Errorf("unable to subscribe: %w", err)
+		}
 	}
 
 	observability.Go(ctx, func(ctx context.Context) {
 		<-ctx.Done()
-
-		mutex.Lock()
-		defer mutex.Unlock()
 
 		d.EventBus.Unsubscribe(topic, callback)
 		d.EventBus.WaitAsync()

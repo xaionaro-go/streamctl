@@ -861,6 +861,23 @@ func (grpc *GRPCServer) SetVariable(
 	return &streamd_grpc.SetVariableReply{}, nil
 }
 
+func (grpc *GRPCServer) SubscribeToVariable(
+	req *streamd_grpc.SubscribeToVariableRequest,
+	srv streamd_grpc.StreamD_SubscribeToVariableServer,
+) error {
+	return wrapChan(
+		func(ctx context.Context) (<-chan api.VariableValue, error) {
+			return grpc.StreamD.SubscribeToVariable(ctx, consts.VarKey(req.GetKey()))
+		},
+		srv,
+		func(input api.VariableValue) streamd_grpc.VariableChange {
+			return streamd_grpc.VariableChange{
+				Value: input,
+			}
+		},
+	)
+}
+
 func (grpc *GRPCServer) SubmitOAuthCode(
 	ctx context.Context,
 	req *streamd_grpc.SubmitOAuthCodeRequest,
@@ -1619,9 +1636,15 @@ func wrapChan[T any, E any](
 	getChan func(ctx context.Context) (<-chan E, error),
 	sender sender[T],
 	parse func(E) T,
-) error {
+) (_err error) {
 	ctx, cancelFn := context.WithCancel(sender.Context())
 	defer cancelFn()
+
+	var tSample T
+	var eSample E
+	logger.Tracef(ctx, "wrapChan[%T, %T]", tSample, eSample)
+	defer func() { logger.Tracef(ctx, "/wrapChan[%T, %T]: %v", tSample, eSample, _err) }()
+
 	ch, err := getChan(ctx)
 	if err != nil {
 		return err
@@ -1927,6 +1950,7 @@ func (grpc *GRPCServer) SubscribeToChatMessages(
 			return streamd_grpc.ChatMessage{
 				CreatedAtUNIXNano: uint64(input.CreatedAt.UnixNano()),
 				PlatID:            string(input.Platform),
+				IsLive:            input.IsLive,
 				UserID:            string(input.UserID),
 				Username:          input.Username,
 				MessageID:         string(input.MessageID),

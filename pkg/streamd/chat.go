@@ -11,6 +11,10 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 )
 
+const (
+	debugSendArchiveMessagesAsLive = false
+)
+
 type ChatMessageStorage interface {
 	AddMessage(context.Context, api.ChatMessage) error
 	RemoveMessage(context.Context, streamcontrol.ChatMessageID) error
@@ -45,6 +49,7 @@ func (d *StreamD) startListeningForChatMessages(
 				}
 				msg := api.ChatMessage{
 					ChatMessage: ev,
+					IsLive:      true,
 					Platform:    platName,
 				}
 				if err := d.ChatMessagesStorage.AddMessage(ctx, msg); err != nil {
@@ -103,17 +108,40 @@ func (d *StreamD) SubscribeToChatMessages(
 	ctx context.Context,
 	since time.Time,
 	limit uint64,
-) (<-chan api.ChatMessage, error) {
+) (_ret <-chan api.ChatMessage, _err error) {
+	logger.Tracef(ctx, "SubscribeToChatMessages(ctx, %v, %v)", since, limit)
+	defer func() { logger.Tracef(ctx, "/SubscribeToChatMessages(ctx, %v, %v): %p %v", since, limit, _ret, _err) }()
+
 	return eventSubToChan(
 		ctx, d,
 		func(ctx context.Context, outCh chan api.ChatMessage) {
+			logger.Tracef(ctx, "backfilling the channel")
+			defer func() { logger.Tracef(ctx, "/backfilling the channel") }()
 			msgs, err := d.ChatMessagesStorage.GetMessagesSince(ctx, since, uint(limit))
 			if err != nil {
 				logger.Errorf(ctx, "unable to get the messages from the storage: %v", err)
 				return
 			}
 			for _, msg := range msgs {
-				outCh <- msg
+				msg.IsLive = false
+				if debugSendArchiveMessagesAsLive {
+					msg.IsLive = true
+				}
+				if !func() (_ret bool) {
+					defer func() {
+						if recover() != nil {
+							logger.Debugf(ctx, "the channel is closed")
+							_ret = false
+						}
+					}()
+					outCh <- msg
+					return true
+				}() {
+					break
+				}
+				if debugSendArchiveMessagesAsLive {
+					time.Sleep(5 * time.Second)
+				}
 			}
 		},
 	)

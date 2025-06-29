@@ -2,7 +2,6 @@ package streamd
 
 import (
 	"context"
-	"crypto"
 	"fmt"
 	"net"
 	"os"
@@ -33,7 +32,6 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/memoize"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/ui"
-	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
@@ -1055,50 +1053,6 @@ func (d *StreamD) UpdateStream(
 
 		return nil
 	})
-}
-
-func (d *StreamD) GetVariable(
-	ctx context.Context,
-	key consts.VarKey,
-) ([]byte, error) {
-	v, ok := d.Variables.Load(key)
-	if !ok {
-		return nil, ErrNoVariable{}
-	}
-
-	b, ok := v.([]byte)
-	if !ok {
-		return nil, ErrVariableWrongType{}
-	}
-
-	return b, nil
-}
-
-func (d *StreamD) GetVariableHash(
-	ctx context.Context,
-	key consts.VarKey,
-	hashType crypto.Hash,
-) ([]byte, error) {
-	b, err := d.GetVariable(ctx, key)
-	if err != nil {
-		return nil, err
-	}
-
-	hasher := hashType.New()
-	hasher.Write(b)
-	hash := hasher.Sum(nil)
-	return hash, nil
-}
-
-func (d *StreamD) SetVariable(
-	ctx context.Context,
-	key consts.VarKey,
-	value []byte,
-) error {
-	logger.Tracef(ctx, "SetVariable(ctx, '%s', value [len == %d])", key, len(value))
-	defer logger.Tracef(ctx, "/SetVariable(ctx, '%s', value [len == %d])", key, len(value))
-	d.Variables.Store(key, value)
-	return nil
 }
 
 func (d *StreamD) SubmitOAuthCode(

@@ -27,6 +27,8 @@ replace github.com/asticode/go-astiav v0.36.0 => github.com/xaionaro-go/astiav v
 
 replace github.com/bluenviron/mediacommon/v2 v2.0.1-0.20250324151931-b8ce69d15d3d => github.com/xaionaro-go/mediacommon/v2 v2.0.0-20250420012906-03d6d69ac3b7
 
+replace github.com/asaskevich/EventBus v0.0.0-20200907212545-49d423059eef => github.com/mysteriumnetwork/EventBus v0.0.0-20220414214953-84469ec2b111
+
 require (
 	github.com/facebookincubator/go-belt v0.0.0-20250308011339-62fb7027b11f
 	github.com/go-git/go-billy/v5 v5.6.2

@@ -40,6 +40,7 @@ type StreamDClient interface {
 	GetVariable(ctx context.Context, in *GetVariableRequest, opts ...grpc.CallOption) (*GetVariableReply, error)
 	GetVariableHash(ctx context.Context, in *GetVariableHashRequest, opts ...grpc.CallOption) (*GetVariableHashReply, error)
 	SetVariable(ctx context.Context, in *SetVariableRequest, opts ...grpc.CallOption) (*SetVariableReply, error)
+	SubscribeToVariable(ctx context.Context, in *SubscribeToVariableRequest, opts ...grpc.CallOption) (StreamD_SubscribeToVariableClient, error)
 	EXPERIMENTAL_ReinitStreamControllers(ctx context.Context, in *EXPERIMENTAL_ReinitStreamControllersRequest, opts ...grpc.CallOption) (*EXPERIMENTAL_ReinitStreamControllersReply, error)
 	SubscribeToOAuthRequests(ctx context.Context, in *SubscribeToOAuthRequestsRequest, opts ...grpc.CallOption) (StreamD_SubscribeToOAuthRequestsClient, error)
 	SubmitOAuthCode(ctx context.Context, in *SubmitOAuthCodeRequest, opts ...grpc.CallOption) (*SubmitOAuthCodeReply, error)
@@ -356,6 +357,38 @@ func (c *streamDClient) SetVariable(ctx context.Context, in *SetVariableRequest,
 	return out, nil
 }
 
+func (c *streamDClient) SubscribeToVariable(ctx context.Context, in *SubscribeToVariableRequest, opts ...grpc.CallOption) (StreamD_SubscribeToVariableClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_StreamD_serviceDesc.Streams[2], "/streamd.StreamD/SubscribeToVariable", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &streamDSubscribeToVariableClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type StreamD_SubscribeToVariableClient interface {
+	Recv() (*VariableChange, error)
+	grpc.ClientStream
+}
+
+type streamDSubscribeToVariableClient struct {
+	grpc.ClientStream
+}
+
+func (x *streamDSubscribeToVariableClient) Recv() (*VariableChange, error) {
+	m := new(VariableChange)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func (c *streamDClient) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context, in *EXPERIMENTAL_ReinitStreamControllersRequest, opts ...grpc.CallOption) (*EXPERIMENTAL_ReinitStreamControllersReply, error) {
 	out := new(EXPERIMENTAL_ReinitStreamControllersReply)
 	err := c.cc.Invoke(ctx, "/streamd.StreamD/EXPERIMENTAL_ReinitStreamControllers", in, out, opts...)
@@ -366,7 +399,7 @@ func (c *streamDClient) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context
 }
 
 func (c *streamDClient) SubscribeToOAuthRequests(ctx context.Context, in *SubscribeToOAuthRequestsRequest, opts ...grpc.CallOption) (StreamD_SubscribeToOAuthRequestsClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_StreamD_serviceDesc.Streams[2], "/streamd.StreamD/SubscribeToOAuthRequests", opts...)
+	stream, err := c.cc.NewStream(ctx, &_StreamD_serviceDesc.Streams[3], "/streamd.StreamD/SubscribeToOAuthRequests", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -434,7 +467,7 @@ func (c *streamDClient) StopStreamServer(ctx context.Context, in *StopStreamServ
 }
 
 func (c *streamDClient) SubscribeToStreamServersChanges(ctx context.Context, in *SubscribeToStreamServersChangesRequest, opts ...grpc.CallOption) (StreamD_SubscribeToStreamServersChangesClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_StreamD_serviceDesc.Streams[3], "/streamd.StreamD/SubscribeToStreamServersChanges", opts...)
+	stream, err := c.cc.NewStream(ctx, &_StreamD_serviceDesc.Streams[4], "/streamd.StreamD/SubscribeToStreamServersChanges", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -502,7 +535,7 @@ func (c *streamDClient) RemoveStreamDestination(ctx context.Context, in *RemoveS
 }
 
 func (c *streamDClient) SubscribeToStreamDestinationsChanges(ctx context.Context, in *SubscribeToStreamDestinationsChangesRequest, opts ...grpc.CallOption) (StreamD_SubscribeToStreamDestinationsChangesClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_StreamD_serviceDesc.Streams[4], "/streamd.StreamD/SubscribeToStreamDestinationsChanges", opts...)
+	stream, err := c.cc.NewStream(ctx, &_StreamD_serviceDesc.Streams[5], "/streamd.StreamD/SubscribeToStreamDestinationsChanges", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -561,7 +594,7 @@ func (c *streamDClient) ListIncomingStreams(ctx context.Context, in *ListIncomin
 }
 
 func (c *streamDClient) SubscribeToIncomingStreamsChanges(ctx context.Context, in *SubscribeToIncomingStreamsChangesRequest, opts ...grpc.CallOption) (StreamD_SubscribeToIncomingStreamsChangesClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_StreamD_serviceDesc.Streams[5], "/streamd.StreamD/SubscribeToIncomingStreamsChanges", opts...)
+	stream, err := c.cc.NewStream(ctx, &_StreamD_serviceDesc.Streams[6], "/streamd.StreamD/SubscribeToIncomingStreamsChanges", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -629,7 +662,7 @@ func (c *streamDClient) RemoveStreamForward(ctx context.Context, in *RemoveStrea
 }
 
 func (c *streamDClient) SubscribeToStreamForwardsChanges(ctx context.Context, in *SubscribeToStreamForwardsChangesRequest, opts ...grpc.CallOption) (StreamD_SubscribeToStreamForwardsChangesClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_StreamD_serviceDesc.Streams[6], "/streamd.StreamD/SubscribeToStreamForwardsChanges", opts...)
+	stream, err := c.cc.NewStream(ctx, &_StreamD_serviceDesc.Streams[7], "/streamd.StreamD/SubscribeToStreamForwardsChanges", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -661,7 +694,7 @@ func (x *streamDSubscribeToStreamForwardsChangesClient) Recv() (*StreamForwardsC
 }
 
 func (c *streamDClient) WaitForStreamPublisher(ctx context.Context, in *WaitForStreamPublisherRequest, opts ...grpc.CallOption) (StreamD_WaitForStreamPublisherClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_StreamD_serviceDesc.Streams[7], "/streamd.StreamD/WaitForStreamPublisher", opts...)
+	stream, err := c.cc.NewStream(ctx, &_StreamD_serviceDesc.Streams[8], "/streamd.StreamD/WaitForStreamPublisher", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -738,7 +771,7 @@ func (c *streamDClient) GetStreamPlayer(ctx context.Context, in *GetStreamPlayer
 }
 
 func (c *streamDClient) SubscribeToStreamPlayersChanges(ctx context.Context, in *SubscribeToStreamPlayersChangesRequest, opts ...grpc.CallOption) (StreamD_SubscribeToStreamPlayersChangesClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_StreamD_serviceDesc.Streams[8], "/streamd.StreamD/SubscribeToStreamPlayersChanges", opts...)
+	stream, err := c.cc.NewStream(ctx, &_StreamD_serviceDesc.Streams[9], "/streamd.StreamD/SubscribeToStreamPlayersChanges", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -797,7 +830,7 @@ func (c *streamDClient) StreamPlayerGetLink(ctx context.Context, in *StreamPlaye
 }
 
 func (c *streamDClient) StreamPlayerEndChan(ctx context.Context, in *StreamPlayerEndChanRequest, opts ...grpc.CallOption) (StreamD_StreamPlayerEndChanClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_StreamD_serviceDesc.Streams[9], "/streamd.StreamD/StreamPlayerEndChan", opts...)
+	stream, err := c.cc.NewStream(ctx, &_StreamD_serviceDesc.Streams[10], "/streamd.StreamD/StreamPlayerEndChan", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -964,7 +997,7 @@ func (c *streamDClient) SubmitEvent(ctx context.Context, in *SubmitEventRequest,
 }
 
 func (c *streamDClient) SubscribeToChatMessages(ctx context.Context, in *SubscribeToChatMessagesRequest, opts ...grpc.CallOption) (StreamD_SubscribeToChatMessagesClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_StreamD_serviceDesc.Streams[10], "/streamd.StreamD/SubscribeToChatMessages", opts...)
+	stream, err := c.cc.NewStream(ctx, &_StreamD_serviceDesc.Streams[11], "/streamd.StreamD/SubscribeToChatMessages", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1067,6 +1100,7 @@ type StreamDServer interface {
 	GetVariable(context.Context, *GetVariableRequest) (*GetVariableReply, error)
 	GetVariableHash(context.Context, *GetVariableHashRequest) (*GetVariableHashReply, error)
 	SetVariable(context.Context, *SetVariableRequest) (*SetVariableReply, error)
+	SubscribeToVariable(*SubscribeToVariableRequest, StreamD_SubscribeToVariableServer) error
 	EXPERIMENTAL_ReinitStreamControllers(context.Context, *EXPERIMENTAL_ReinitStreamControllersRequest) (*EXPERIMENTAL_ReinitStreamControllersReply, error)
 	SubscribeToOAuthRequests(*SubscribeToOAuthRequestsRequest, StreamD_SubscribeToOAuthRequestsServer) error
 	SubmitOAuthCode(context.Context, *SubmitOAuthCodeRequest) (*SubmitOAuthCodeReply, error)
@@ -1195,6 +1229,9 @@ func (UnimplementedStreamDServer) GetVariableHash(context.Context, *GetVariableH
 }
 func (UnimplementedStreamDServer) SetVariable(context.Context, *SetVariableRequest) (*SetVariableReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetVariable not implemented")
+}
+func (UnimplementedStreamDServer) SubscribeToVariable(*SubscribeToVariableRequest, StreamD_SubscribeToVariableServer) error {
+	return status.Errorf(codes.Unimplemented, "method SubscribeToVariable not implemented")
 }
 func (UnimplementedStreamDServer) EXPERIMENTAL_ReinitStreamControllers(context.Context, *EXPERIMENTAL_ReinitStreamControllersRequest) (*EXPERIMENTAL_ReinitStreamControllersReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method EXPERIMENTAL_ReinitStreamControllers not implemented")
@@ -1786,6 +1823,27 @@ func _StreamD_SetVariable_Handler(srv interface{}, ctx context.Context, dec func
 		return srv.(StreamDServer).SetVariable(ctx, req.(*SetVariableRequest))
 	}
 	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_SubscribeToVariable_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(SubscribeToVariableRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(StreamDServer).SubscribeToVariable(m, &streamDSubscribeToVariableServer{stream})
+}
+
+type StreamD_SubscribeToVariableServer interface {
+	Send(*VariableChange) error
+	grpc.ServerStream
+}
+
+type streamDSubscribeToVariableServer struct {
+	grpc.ServerStream
+}
+
+func (x *streamDSubscribeToVariableServer) Send(m *VariableChange) error {
+	return x.ServerStream.SendMsg(m)
 }
 
 func _StreamD_EXPERIMENTAL_ReinitStreamControllers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -3043,6 +3101,11 @@ var _StreamD_serviceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "SubscribeToStreamsChanges",
 			Handler:       _StreamD_SubscribeToStreamsChanges_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "SubscribeToVariable",
+			Handler:       _StreamD_SubscribeToVariable_Handler,
 			ServerStreams: true,
 		},
 		{

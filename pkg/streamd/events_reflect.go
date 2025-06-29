@@ -2,6 +2,7 @@ package streamd
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
@@ -16,7 +17,7 @@ func eventTopic(
 	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
-	return t.Name()
+	return fmt.Sprintf("type:", t.Name())
 }
 
 func (d *StreamD) publishEvent(
