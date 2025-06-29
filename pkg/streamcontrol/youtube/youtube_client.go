@@ -143,13 +143,17 @@ func (c *YouTubeClientV3) GetBroadcasts(
 	r := c.Service.LiveBroadcasts.List(append([]string{"id"}, parts...)).
 		Context(ctx).Fields().
 		MaxResults(50) // see 'maxResults' in https://developers.google.com/youtube/v3/live/docs/liveBroadcasts/list
+	shouldSetMine := true
 	if t != BroadcastTypeAll {
 		r = r.BroadcastStatus(t.String())
-	} else {
-		r = r.Mine(true)
+		shouldSetMine = false
 	}
 	if ids != nil {
 		r = r.Id(ids...)
+		shouldSetMine = false
+	}
+	if shouldSetMine {
+		r = r.Mine(true)
 	}
 	if pageToken != "" {
 		r = r.PageToken(pageToken)
