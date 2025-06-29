@@ -937,10 +937,14 @@ func (d *StreamD) streamController(
 	}
 	return result, nil
 }
+
 func (d *StreamD) GetStreamStatus(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
-) (*streamcontrol.StreamStatus, error) {
+) (_ret *streamcontrol.StreamStatus, _err error) {
+	ctx = belt.WithField(ctx, "plat_id", platID)
+	logger.Tracef(ctx, "GetStreamStatus(ctx, '%s')", platID)
+	defer func() { logger.Tracef(ctx, "/GetStreamStatus(ctx, '%s'): %#+v %v", platID, _ret, _err) }()
 	cacheDuration := 5 * time.Second
 	switch platID {
 	case obs.ID:

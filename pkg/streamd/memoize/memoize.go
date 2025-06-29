@@ -39,6 +39,7 @@ func Memoize[REQ any, REPLY any, T func(context.Context, REQ) (REPLY, error)](
 	defer logger.Tracef(ctx, "/memoize %T:%#+v", req, req)
 
 	if IsNoCache(ctx) {
+		logger.Tracef(ctx, "forcing no cache")
 		cacheDuration = 0
 	}
 
@@ -48,6 +49,7 @@ func Memoize[REQ any, REPLY any, T func(context.Context, REQ) (REPLY, error)](
 		return fn(ctx, req)
 	}
 	ctx = belt.WithField(ctx, "cache_key", string(key[:]))
+	ctx = belt.WithField(ctx, "cache_dur", cacheDuration)
 	logger.Tracef(ctx, "req: %T:%#+v", req, req)
 
 	d.CacheMetaLock.Lock()
@@ -80,7 +82,8 @@ func Memoize[REQ any, REPLY any, T func(context.Context, REQ) (REPLY, error)](
 
 	if ok {
 		if v, ok := cachedResult.(cacheItem); ok {
-			cutoffTS := time.Now().Add(-cacheDuration)
+			now := time.Now()
+			cutoffTS := now.Add(-cacheDuration)
 			if cacheDuration > 0 && !v.SavedAt.Before(cutoffTS) {
 				d.CacheMetaLock.Unlock()
 				logger.Tracef(ctx, "grpc.CacheMetaLock.Unlock()-ed")
@@ -92,9 +95,10 @@ func Memoize[REQ any, REPLY any, T func(context.Context, REQ) (REPLY, error)](
 			}
 			logger.Tracef(
 				ctx,
-				"the cached value expired: %s < %s",
+				"the cached value expired: %s < %s (%s - %s)",
 				v.SavedAt.Format(timeFormat),
 				cutoffTS.Format(timeFormat),
+				now.Format(timeFormat), cacheDuration,
 			)
 			delete(cache, key)
 		} else {
