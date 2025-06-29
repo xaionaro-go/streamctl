@@ -193,7 +193,7 @@ func (c *YouTubeClientV3) GetVideos(
 ) (_ret *youtube.VideoListResponse, _err error) {
 	logger.Tracef(ctx, "GetVideos")
 	defer func() { logger.Tracef(ctx, "/GetVideos: %v", _err) }()
-	do := c.Service.Videos.List(videoParts).Id(broadcastIDs...).Context(ctx).Do
+	do := c.Service.Videos.List(parts).Id(broadcastIDs...).Context(ctx).Do
 	return wrapRequestR(ctx, c.RequestWrapper, do)
 }
 
@@ -204,17 +204,17 @@ func (c *YouTubeClientV3) UpdateVideo(
 ) (_err error) {
 	logger.Tracef(ctx, "UpdateVideo")
 	defer func() { logger.Tracef(ctx, "/UpdateVideo: %v", _err) }()
-	do := c.Service.Videos.Update(videoParts, video).Context(ctx).Do
+	do := c.Service.Videos.Update(parts, video).Context(ctx).Do
 	return wrapRequestS(ctx, c.RequestWrapper, do)
 }
 
 func (c *YouTubeClientV3) GetPlaylists(
 	ctx context.Context,
-	playlistParts []string,
+	parts []string,
 ) (_ret *youtube.PlaylistListResponse, _err error) {
 	logger.Tracef(ctx, "GetPlaylists")
 	defer func() { logger.Tracef(ctx, "/GetPlaylists: %v", _err) }()
-	do := c.Service.Playlists.List(playlistParts).MaxResults(1000).Mine(true).Context(ctx).Do
+	do := c.Service.Playlists.List(parts).MaxResults(1000).Mine(true).Context(ctx).Do
 	return wrapRequestR(ctx, c.RequestWrapper, do)
 }
 
