@@ -2,16 +2,28 @@ package youtube
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
+	_ "time/tzdata"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"google.golang.org/api/youtube/v3"
 )
 
-var tzLosAngeles = must(time.LoadLocation("America/Los_Angeles"))
+var tzLosAngeles *time.Location
+
+func init() {
+	var err error
+	tzLosAngeles, err = time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "unable to get the timezone of Los_Angeles")
+		tzLosAngeles = time.FixedZone("America/Los_Angeles", -7 * 3600)
+	}
+}
 
 // see also: https://developers.google.com/youtube/v3/determine_quota_cost
 type YouTubeClientCalcPoints struct {

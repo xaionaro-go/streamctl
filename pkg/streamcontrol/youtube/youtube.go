@@ -1071,6 +1071,7 @@ func (yt *YouTube) GetStreamStatus(
 
 	viewersCount := uint64(0)
 
+	var requestStatsVideoIDs []string
 	err := yt.IterateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
 		ts := broadcast.Snippet.ActualStartTime
 		_startedAt, err := time.Parse(timeLayout, ts)
@@ -1089,6 +1090,8 @@ func (yt *YouTube) GetStreamStatus(
 		startedAt = &_startedAt
 		if broadcast.Statistics != nil {
 			viewersCount += broadcast.Statistics.ConcurrentViewers
+		} else {
+			requestStatsVideoIDs = append(requestStatsVideoIDs, broadcast.Id)
 		}
 		activeBroadcasts = append(activeBroadcasts, broadcast)
 		isActive = true
@@ -1096,6 +1099,20 @@ func (yt *YouTube) GetStreamStatus(
 	}, liveBroadcastParts...)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get active broadcasts info: %w", err)
+	}
+	if len(requestStatsVideoIDs) > 0 {
+		videos, err := yt.YouTubeClient.Client.GetVideos(ctx, requestStatsVideoIDs, videoParts)
+		if err != nil {
+			logger.Errorf(ctx, "unable to get info for videos %v: %v", requestStatsVideoIDs, err)
+		} else {
+			for _, video := range videos.Items {
+				if video.LiveStreamingDetails == nil {
+					logger.Errorf(ctx, "video also does not contain LiveStreamingDetails: %#+v", video)
+					continue
+				}
+				viewersCount += video.LiveStreamingDetails.ConcurrentViewers
+			}
+		}
 	}
 	yt.currentLiveBroadcastsLocker.Do(ctx, func() {
 		ids := map[string]struct{}{}
