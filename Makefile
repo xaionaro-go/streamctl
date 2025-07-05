@@ -76,7 +76,7 @@ $(GOPATH)/bin/pkg-config-wrapper:
 	sh -c 'cd 3rdparty/amd64/windows && wget https://get.videolan.org/vlc/$(WINDOWS_VLC_VERSION)/win64/vlc-$(WINDOWS_VLC_VERSION)-win64.7z && 7z -y x vlc-$(WINDOWS_VLC_VERSION)-win64.7z && rm -f vlc-$(WINDOWS_VLC_VERSION)-win64.7z'
 	sh -c 'cd 3rdparty/amd64/windows && wget https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2024-04-30-12-51/ffmpeg-n7.0-21-gfb8f0ea7b3-win64-gpl-shared-7.0.zip && unzip -o ffmpeg-n7.0-21-gfb8f0ea7b3-win64-gpl-shared-7.0.zip && rm -f ffmpeg-n7.0-21-gfb8f0ea7b3-win64-gpl-shared-7.0.zip'
 	mkdir 3rdparty/amd64/windows/mpv
-	sh -c 'cd 3rdparty/amd64/windows/mpv && wget https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20250525/mpv-x86_64-20250525-git-1d1535f.7z && 7z -y x mpv-x86_64-20250525-git-1d1535f.7z && rm -f mpv-x86_64-20250525-git-1d1535f.7z'
+	sh -c 'cd 3rdparty/amd64/windows/mpv && wget https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20250705/mpv-x86_64-20250705-git-614e3c4.7z && 7z -y x mpv-x86_64-20250705-git-614e3c4.7z && rm -f mpv-x86_64-20250705-git-614e3c4.7z'
 	touch 3rdparty/amd64/windows/ready
 
 windows-builddir: build/streampanel-windows-amd64
