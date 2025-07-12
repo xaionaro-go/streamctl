@@ -127,6 +127,7 @@ func (ui *chatUIAsText) Rebuild(
 				ui.newItem(ctx, itemIdx, msg)
 			}
 		})
+		ui.Text.Refresh()
 		if ui.OnAdd != nil {
 			ui.OnAdd(ctx, api.ChatMessage{})
 		}
@@ -153,6 +154,10 @@ func (ui *chatUIAsText) Append(
 			return
 		}
 		ui.newItem(ctx, itemIdx, *msg)
+		ui.Text.Refresh()
+		if ui.OnAdd != nil {
+			ui.OnAdd(ctx, *msg)
+		}
 	})
 }
 

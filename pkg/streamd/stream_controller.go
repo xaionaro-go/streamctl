@@ -10,6 +10,7 @@ import (
 	"github.com/andreykaipov/goobs"
 	"github.com/andreykaipov/goobs/api/events"
 	"github.com/andreykaipov/goobs/api/events/subscriptions"
+	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/object"
@@ -331,6 +332,7 @@ func (d *StreamD) processOBSEvent(
 }
 
 func (d *StreamD) initTwitchBackend(ctx context.Context) error {
+	ctx = belt.WithField(ctx, "controller", twitch.ID)
 	twitch, err := newTwitch(
 		ctx,
 		d.Config.Backends[twitch.ID],
@@ -348,6 +350,7 @@ func (d *StreamD) initTwitchBackend(ctx context.Context) error {
 }
 
 func (d *StreamD) initKickBackend(ctx context.Context) error {
+	ctx = belt.WithField(ctx, "controller", kick.ID)
 	cacheHashBeforeInit, _ := object.CalcCryptoHash(d.Cache.Kick)
 	kick, err := newKick(
 		kick.CtxWithCache(ctx, &d.Cache.Kick),
@@ -373,6 +376,7 @@ func (d *StreamD) initKickBackend(ctx context.Context) error {
 }
 
 func (d *StreamD) initYouTubeBackend(ctx context.Context) error {
+	ctx = belt.WithField(ctx, "controller", youtube.ID)
 	youTube, err := newYouTube(
 		ctx,
 		d.Config.Backends[youtube.ID],

@@ -2,85 +2,45 @@ package youtube
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
-	"fmt"
-	"math/rand"
-	"net/http"
-	"net/url"
 	"sync"
 	"time"
 
-	ytchat "github.com/abhinavxd/youtube-live-chat-downloader/v2"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"google.golang.org/api/googleapi"
+	"google.golang.org/api/youtube/v3"
 )
 
-const youtubeWatchURLString = `https://www.youtube.com/watch`
-
-func chatCustomCookies() []*http.Cookie {
-	// borrowed from: https://github.com/abhinavxd/youtube-live-chat-downloader/blob/main/example/main.go
-	return []*http.Cookie{
-		{Name: "PREF",
-			Value:  "tz=Europe.Rome",
-			MaxAge: 300},
-		{Name: "CONSENT",
-			Value:  fmt.Sprintf("YES+yt.432048971.it+FX+%d", 100+rand.Intn(999-100+1)),
-			MaxAge: 300},
-	}
-}
-
-var youtubeWatchURL *url.URL
-
-func init() {
-	var err error
-	youtubeWatchURL, err = url.Parse(youtubeWatchURLString)
-	if err != nil {
-		panic(err)
-	}
-
-	ytchat.AddCookies(chatCustomCookies())
-}
-
-func ytWatchURL(videoID string) *url.URL {
-	result := ptr(*youtubeWatchURL)
-	query := result.Query()
-	query.Add("v", videoID)
-	result.RawQuery = query.Encode()
-	return result
-}
-
 type ChatListener struct {
-	videoID          string
-	continuationCode string
-	clientConfig     ytchat.YtCfg
-	wg               sync.WaitGroup
-	cancelFunc       context.CancelFunc
-	messagesOutChan  chan streamcontrol.ChatMessage
+	videoID    string
+	liveChatID string
+	client     YouTubeChatClient
+
+	wg              sync.WaitGroup
+	cancelFunc      context.CancelFunc
+	messagesOutChan chan streamcontrol.ChatMessage
+}
+
+type YouTubeChatClient interface {
+	GetLiveChatMessages(ctx context.Context, chatID string, pageToken string, parts []string) (*youtube.LiveChatMessageListResponse, error)
 }
 
 func NewChatListener(
 	ctx context.Context,
+	ytClient YouTubeChatClient,
 	videoID string,
+	liveChatID string,
 ) (*ChatListener, error) {
-	if videoID == "" {
-		return nil, fmt.Errorf("video ID is empty")
-	}
-
-	watchURL := ytWatchURL(videoID)
-
-	continuationCode, cfg, err := ytchat.ParseInitialData(watchURL.String())
-	if err != nil {
-		return nil, fmt.Errorf("unable to fetch the initial data for chat messages retrieval (URL: %s): %w", watchURL, err)
-	}
-
 	ctx, cancelFunc := context.WithCancel(ctx)
 	l := &ChatListener{
-		videoID:          videoID,
-		continuationCode: continuationCode,
-		clientConfig:     cfg,
-		cancelFunc:       cancelFunc,
-		messagesOutChan:  make(chan streamcontrol.ChatMessage, 100),
+		videoID:         videoID,
+		liveChatID:      liveChatID,
+		client:          ytClient,
+		cancelFunc:      cancelFunc,
+		messagesOutChan: make(chan streamcontrol.ChatMessage, 100),
 	}
 	l.wg.Add(1)
 	observability.Go(ctx, func(ctx context.Context) {
@@ -90,56 +50,89 @@ func NewChatListener(
 			close(l.messagesOutChan)
 		}()
 		err := l.listenLoop(ctx)
-		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, ytchat.ErrLiveStreamOver) {
+		if err != nil && !errors.Is(err, context.Canceled) && !errors.As(err, &ErrChatEnded{}) {
 			logger.Errorf(ctx, "the listener loop returned an error: %v", err)
 		}
 	})
+
 	return l, nil
 }
-
-const chatFetchRetryInterval = time.Second
 
 func (l *ChatListener) listenLoop(ctx context.Context) (_err error) {
 	logger.Debugf(ctx, "listenLoop")
 	defer func() { logger.Debugf(ctx, "/listenLoop: %v", _err) }()
+
+	var pageToken string
 	for {
-		msgs, newContinuation, err := ytchat.FetchContinuationChat(l.continuationCode, l.clientConfig)
-		switch err {
-		case nil:
-		case ytchat.ErrLiveStreamOver:
-			return err
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
 		default:
-			logger.Errorf(
-				ctx,
-				"unable to get a continuation for %v: %v; retrying in %v",
-				l.videoID,
-				chatFetchRetryInterval,
-				err,
-			)
-			time.Sleep(chatFetchRetryInterval)
+		}
+		response, err := l.client.GetLiveChatMessages(
+			ctx,
+			l.liveChatID,
+			pageToken,
+			[]string{"snippet", "authorDetails"},
+		)
+		if err != nil {
+			gErr := &googleapi.Error{}
+			if !errors.As(err, &gErr) {
+				logger.Warnf(ctx, "unable to get chat messages: %v", err)
+				continue
+			}
+			for _, e := range gErr.Errors {
+				switch e.Reason {
+				case "liveChatEnded":
+					return ErrChatEnded{ChatID: l.liveChatID}
+				case "liveChatDisabled":
+					return ErrChatDisabled{ChatID: l.liveChatID}
+				case "liveChatNotFound":
+					return ErrChatNotFound{ChatID: l.liveChatID}
+				}
+			}
+			b, _ := json.Marshal(err)
+			logger.Warnf(ctx, "unable to get chat messages: %v (%s)", err, b)
 			continue
 		}
-		l.continuationCode = newContinuation
 
-		for _, msg := range msgs {
-			l.messagesOutChan <- streamcontrol.ChatMessage{
-				CreatedAt: msg.Timestamp,
-				UserID:    streamcontrol.ChatUserID(msg.AuthorName),
-				Username:  msg.AuthorName,
-				// TODO: find a way to extract the message ID,
-				//       in the mean while we we use a soft key for that:
-				MessageID: streamcontrol.ChatMessageID(fmt.Sprintf("%s/%s", msg.AuthorName, msg.Message)),
-				Message:   msg.Message,
+		for _, item := range response.Items {
+			publishedAt, err := ParseTimestamp(item.Snippet.PublishedAt)
+			if err != nil {
+				logger.Errorf(ctx, "unable to parse the timestamp '%s': %v", item.Snippet.PublishedAt, err)
+			}
+			msg := streamcontrol.ChatMessage{
+				CreatedAt: publishedAt,
+				UserID:    streamcontrol.ChatUserID(item.AuthorDetails.ChannelId),
+				Username:  item.AuthorDetails.DisplayName,
+				MessageID: streamcontrol.ChatMessageID(item.Id),
+				Message:   item.Snippet.DisplayMessage,
+			}
+			if item.Snippet.SuperChatDetails != nil {
+				msg.Paid.Currency = streamcontrol.CurrencyOther
+				msg.Paid.Amount = float64(item.Snippet.SuperChatDetails.AmountMicros) / 1000000
+			}
+			select {
+			case l.messagesOutChan <- msg:
+			default:
+				logger.Errorf(ctx, "the queue is full, have to drop %#+v", msg)
 			}
 		}
+		pageToken = response.NextPageToken
+
+		time.Sleep(time.Millisecond * time.Duration(response.PollingIntervalMillis))
 	}
 }
 
-func (h *ChatListener) Close() error {
+func (h *ChatListener) Close(ctx context.Context) error {
 	h.cancelFunc()
 	return nil
 }
 
 func (h *ChatListener) MessagesChan() <-chan streamcontrol.ChatMessage {
 	return h.messagesOutChan
+}
+
+func (h *ChatListener) GetVideoID() string {
+	return h.videoID
 }

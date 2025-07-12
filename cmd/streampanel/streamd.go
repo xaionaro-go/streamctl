@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/gob"
 	"fmt"
 	"net"
@@ -20,6 +21,7 @@ import (
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/cmd/streamd/ui"
+	"github.com/xaionaro-go/streamctl/pkg/cert"
 	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd"
@@ -257,7 +259,17 @@ func initGRPCServers(
 ) (net.Listener, *grpc.Server, *server.GRPCServer, obs_grpc.OBSServer, proxy_grpc.NetworkProxyServer) {
 	logger.Debugf(ctx, "initGRPCServers")
 	defer logger.Debugf(ctx, "/initGRPCServers")
-	listener, err := net.Listen("tcp", listenAddr)
+
+	cert, err := cert.GenerateSelfSignedForServer()
+	if err != nil {
+		logger.Panicf(ctx, "unable to generate the certificate: %v", err)
+	}
+
+	logger.Debugf(ctx, "generated certificate %#+v", cert)
+	listener, err := tls.Listen("tcp", listenAddr, &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		NextProtos:   []string{"h2"},
+	})
 	if err != nil {
 		logger.Panicf(ctx, "failed to listen: %v", err)
 	}

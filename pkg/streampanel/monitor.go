@@ -221,6 +221,7 @@ func (p *monitorPage) startUpdatingNoLock(
 	}
 
 	observability.Go(ctx, func(ctx context.Context) {
+		defer logger.Debugf(ctx, "startUpdatingNoLock: the handler closed")
 		updateData := func() {
 			inStreams, err := streamD.ListIncomingStreams(ctx)
 			if err != nil {
@@ -232,12 +233,20 @@ func (p *monitorPage) startUpdatingNoLock(
 		}
 		updateData()
 
-		ch, err := streamD.SubscribeToIncomingStreamsChanges(ctx)
+		ch, restartCh, err := autoResubscribe(ctx, streamD.SubscribeToIncomingStreamsChanges)
 		if err != nil {
 			p.parent().DisplayError(err)
 			return
 		}
-		for range ch {
+		for {
+			var ok bool
+			select {
+			case _, ok = <-restartCh:
+			case _, ok = <-ch:
+			}
+			if !ok {
+				break
+			}
 			logger.Debugf(ctx, "got event IncomingStreamsChange")
 			updateData()
 		}

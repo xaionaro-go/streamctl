@@ -48,6 +48,8 @@ type YouTube struct {
 	currentLiveBroadcastsLocker xsync.Mutex
 	currentLiveBroadcasts       []*youtube.LiveBroadcast
 
+	chatListeners map[string]*chatListener
+
 	messagesOutChan chan streamcontrol.ChatMessage
 }
 
@@ -58,11 +60,14 @@ const (
 	debugUseMockClient = false
 )
 
+type chatListener = ChatListenerOBSOLETE
+
 func New(
 	ctx context.Context,
 	cfg Config,
 	saveCfgFn func(Config) error,
 ) (*YouTube, error) {
+	ctx = belt.WithField(ctx, "controller", ID)
 	if cfg.Config.ClientID == "" || cfg.Config.ClientSecret.Get() == "" {
 		return nil, fmt.Errorf(
 			"'clientid' or/and 'clientsecret' is/are not set; go to https://console.cloud.google.com/apis/credentials and create an app if it not created, yet",
@@ -75,6 +80,8 @@ func New(
 		Config:         cfg,
 		SaveConfigFunc: saveCfgFn,
 		CancelFunc:     cancelFn,
+
+		chatListeners: map[string]*chatListener{},
 
 		messagesOutChan: make(chan streamcontrol.ChatMessage, 100),
 	}
@@ -955,7 +962,7 @@ func (yt *YouTube) StartStream(
 				}
 			}
 			yt.currentLiveBroadcasts = append(yt.currentLiveBroadcasts, newBroadcast)
-			err = yt.startChatListener(ctx, newBroadcast.Id)
+			err = yt.startChatListener(ctx, newBroadcast)
 			if err != nil {
 				logger.Errorf(ctx, "unable to start a chat listener for video '%s': %v", newBroadcast.Id, err)
 			}
@@ -979,21 +986,38 @@ func setProfile(broadcast *youtube.LiveBroadcast, profile StreamProfile) {
 
 func (yt *YouTube) startChatListener(
 	ctx context.Context,
-	videoID string,
+	broadcast *youtube.LiveBroadcast,
 ) (_err error) {
+	videoID := broadcast.Id
+	chatID := broadcast.Snippet.LiveChatId
 	ctx = belt.WithField(ctx, "video_id", videoID)
+	ctx = belt.WithField(ctx, "chat_id", chatID)
 	ctx = xcontext.DetachDone(ctx)
 
-	logger.Debugf(ctx, "startChatListener(ctx, '%s')", videoID)
-	defer func() { logger.Debugf(ctx, "/startChatListener(ctx, '%s'): %v", videoID, _err) }()
+	logger.Debugf(ctx, "startChatListener(ctx, '%s':'%s')", videoID, chatID)
+	defer func() { logger.Debugf(ctx, "/startChatListener(ctx, '%s':'%s'): %v", videoID, chatID, _err) }()
 
-	chatListener, err := NewChatListener(ctx, videoID)
+	_chatListener, err := NewChatListenerOBSOLETE(ctx, videoID, func(
+		ctx context.Context,
+		_chatListener *chatListener,
+	) {
+		yt.deleteChatListener(ctx, _chatListener)
+	})
 	if err != nil {
 		return fmt.Errorf("unable to initialize the chat listener instance: %w", err)
 	}
 
+	oldListener := xsync.DoR1(ctx, &yt.locker, func() *chatListener {
+		oldListener := yt.chatListeners[broadcast.Id]
+		yt.chatListeners[broadcast.Id] = _chatListener
+		return oldListener
+	})
+	if err := oldListener.Close(ctx); err != nil {
+		logger.Debugf(ctx, "unable to close the old chat listener: %v", err)
+	}
+
 	observability.Go(ctx, func(ctx context.Context) {
-		err := yt.processChatListener(ctx, chatListener)
+		err := yt.processChatListener(ctx, _chatListener)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			logger.Errorf(ctx, "unable to process the chat listener for '%s': %v", videoID, err)
 		}
@@ -1001,18 +1025,45 @@ func (yt *YouTube) startChatListener(
 	return nil
 }
 
+func (yt *YouTube) deleteChatListenerByBroadcast(
+	ctx context.Context,
+	broadcast *youtube.LiveBroadcast,
+) error {
+	chatListener := yt.getChatListener(ctx, broadcast)
+	if chatListener == nil {
+		return nil
+	}
+	return yt.deleteChatListener(ctx, chatListener)
+}
+
+func (yt *YouTube) deleteChatListener(
+	ctx context.Context,
+	chatListener *chatListener,
+) error {
+	err := chatListener.Close(ctx)
+	if err != nil {
+		logger.Warnf(ctx, "unable to close the chat listener for %s: %v", chatListener.GetVideoID(), err)
+	}
+	yt.locker.Do(ctx, func() {
+		if yt.chatListeners[chatListener.GetVideoID()] == chatListener {
+			delete(yt.chatListeners, chatListener.GetVideoID())
+		}
+	})
+	return nil
+}
+
 func (yt *YouTube) processChatListener(
 	ctx context.Context,
-	chatListener *ChatListener,
+	chatListener *chatListener,
 ) (_err error) {
 	defer func() {
-		err := chatListener.Close()
+		err := yt.deleteChatListener(ctx, chatListener)
 		if err != nil {
-			logger.Errorf(ctx, "unable to close the chat listener for '%s': %v", chatListener.videoID, err)
+			logger.Errorf(ctx, "unable to delete the chat listener for '%s': %v", chatListener.GetVideoID(), err)
 		}
 	}()
 	defer func() {
-		logger.Debugf(ctx, "stopped listening for chat messages in '%s': %v", chatListener.videoID, _err)
+		logger.Debugf(ctx, "stopped listening for chat messages in '%s': %v", chatListener.GetVideoID(), _err)
 	}()
 	inChan := chatListener.MessagesChan()
 	for {
@@ -1031,6 +1082,15 @@ func (yt *YouTube) processChatListener(
 	}
 }
 
+func (yt *YouTube) getChatListener(
+	ctx context.Context,
+	broadcast *youtube.LiveBroadcast,
+) *chatListener {
+	return xsync.DoR1(ctx, &yt.locker, func() *chatListener {
+		return yt.chatListeners[broadcast.Id]
+	})
+}
+
 func (yt *YouTube) EndStream(
 	ctx context.Context,
 ) error {
@@ -1043,6 +1103,9 @@ func (yt *YouTube) EndStream(
 	})
 
 	return yt.updateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
+		if err := yt.deleteChatListenerByBroadcast(ctx, broadcast); err != nil {
+			logger.Warnf(ctx, "unable to delete the chat listener for %s: %v", broadcast.Id, err)
+		}
 		broadcast.ContentDetails.EnableAutoStop = true
 		broadcast.ContentDetails.MonitorStream.ForceSendFields = []string{"BroadcastStreamDelayMs"}
 		if _, ok := expectedVideoIDs[broadcast.Id]; !ok {
@@ -1054,6 +1117,18 @@ func (yt *YouTube) EndStream(
 
 const timeLayout = "2006-01-02T15:04:05-0700"
 const timeLayoutFallback = time.RFC3339
+
+func ParseTimestamp(s string) (time.Time, error) {
+	ts, err0 := time.Parse(timeLayout, s)
+	if err0 == nil {
+		return ts, nil
+	}
+	ts, err1 := time.Parse(timeLayoutFallback, s)
+	if err1 == nil {
+		return ts, nil
+	}
+	return time.Now(), errors.Join(err0, err1)
+}
 
 func (yt *YouTube) GetStreamStatus(
 	ctx context.Context,
@@ -1074,18 +1149,9 @@ func (yt *YouTube) GetStreamStatus(
 	var requestStatsVideoIDs []string
 	err := yt.IterateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
 		ts := broadcast.Snippet.ActualStartTime
-		_startedAt, err := time.Parse(timeLayout, ts)
+		_startedAt, err := ParseTimestamp(ts)
 		if err != nil {
-			_startedAt, err = time.Parse(timeLayoutFallback, ts)
-			if err != nil {
-				return fmt.Errorf(
-					"unable to parse '%s' with layouts '%s' and '%s': %w",
-					ts,
-					timeLayout,
-					timeLayoutFallback,
-					err,
-				)
-			}
+			return fmt.Errorf("unable to parse '%s': %w", ts, err)
 		}
 		startedAt = &_startedAt
 		if broadcast.Statistics != nil {
@@ -1124,7 +1190,7 @@ func (yt *YouTube) GetStreamStatus(
 			if _, ok := ids[newBroadcast.Id]; ok {
 				continue
 			}
-			err = yt.startChatListener(ctx, newBroadcast.Id)
+			err = yt.startChatListener(ctx, newBroadcast)
 			if err != nil {
 				logger.Errorf(ctx, "unable to start a chat listener for video '%s': %v", newBroadcast.Id, err)
 			}

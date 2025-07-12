@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/eventbus"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/consts"
 )
@@ -43,8 +44,10 @@ func (d *StreamD) GetVariableHash(
 	return hash, nil
 }
 
-func topicForVariable(key consts.VarKey) string {
-	return fmt.Sprintf("var:%s", key)
+type subscriptionTopic string
+
+func topicForVariable(key consts.VarKey) subscriptionTopic {
+	return subscriptionTopic(fmt.Sprintf("var:%s", key))
 }
 
 func (d *StreamD) SetVariable(
@@ -55,7 +58,12 @@ func (d *StreamD) SetVariable(
 	logger.Tracef(ctx, "SetVariable(ctx, '%s', value [len == %d])", key, len(value))
 	defer logger.Tracef(ctx, "/SetVariable(ctx, '%s', value [len == %d])", key, len(value))
 	d.Variables.Store(key, value)
-	d.EventBus.Publish(topicForVariable(key), value)
+	eventbus.SendEventWithCustomTopic(
+		ctx,
+		d.EventBus,
+		topicForVariable(key),
+		value,
+	)
 	return nil
 }
 
@@ -63,5 +71,10 @@ func (d *StreamD) SubscribeToVariable(
 	ctx context.Context,
 	varKey consts.VarKey,
 ) (<-chan api.VariableValue, error) {
-	return eventSubToChanUsingTopic[api.VariableValue](ctx, d, nil, topicForVariable(varKey))
+	return eventSubToChanUsingTopic[subscriptionTopic, api.VariableValue](
+		ctx,
+		d.EventBus, 10,
+		nil,
+		topicForVariable(varKey),
+	)
 }

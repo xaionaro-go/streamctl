@@ -33,6 +33,7 @@ func (s *ChatMessagesStorage) loadLocked(ctx context.Context) (_err error) {
 	if err != nil {
 		return fmt.Errorf("unable to parse file '%s': %w", s.FilePath, err)
 	}
+	logger.Debugf(ctx, "loaded %d messages", len(s.Messages))
 	s.sortAndDeduplicateAndTruncate(ctx)
 	return nil
 }
