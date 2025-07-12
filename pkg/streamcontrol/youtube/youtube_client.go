@@ -37,6 +37,7 @@ func (t BroadcastType) String() string {
 }
 
 type YouTubeClient interface {
+	YouTubeChatClient
 	Ping(context.Context) error
 	GetBroadcasts(ctx context.Context, t BroadcastType, ids []string, parts []string, pageToken string) (*youtube.LiveBroadcastListResponse, error)
 	UpdateBroadcast(context.Context, *youtube.LiveBroadcast, []string) error
@@ -308,4 +309,19 @@ func (c *YouTubeClientV3) DeleteChatMessage(
 	defer func() { logger.Tracef(ctx, "/DeleteChatMessage: %v", _err) }()
 	do := c.Service.LiveChatMessages.Delete(messageID).Context(ctx).Do
 	return wrapRequest(ctx, c.RequestWrapper, do)
+}
+
+func (c *YouTubeClientV3) GetLiveChatMessages(
+	ctx context.Context,
+	chatID string,
+	pageToken string,
+	parts []string,
+) (_ret *youtube.LiveChatMessageListResponse, _err error) {
+	logger.Tracef(ctx, "GetLiveChatMessages")
+	defer func() { logger.Tracef(ctx, "/GetLiveChatMessages: %v", _err) }()
+	q := c.Service.LiveChatMessages.List(chatID, parts).Context(ctx)
+	if pageToken != "" {
+		q = q.PageToken(pageToken)
+	}
+	return q.Do()
 }

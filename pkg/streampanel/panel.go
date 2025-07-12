@@ -525,7 +525,9 @@ func (p *Panel) startOAuthListenerForRemoteStreamD(
 			return fmt.Errorf("unable to start listener for OAuth responses: %w", err)
 		}
 
-		oauthURLChan, err := streamD.SubscribeToOAuthURLs(ctx, listenPort)
+		oauthURLChan, restartOAuthURLChan, err := autoResubscribe(ctx, func(ctx context.Context) (<-chan *streamd_grpc.OAuthRequest, error) {
+			return streamD.SubscribeToOAuthURLs(ctx, listenPort)
+		})
 		if err != nil {
 			cancelFn()
 			return fmt.Errorf("unable to subscribe to OAuth requests of streamd: %w", err)
@@ -541,6 +543,8 @@ func (p *Panel) startOAuthListenerForRemoteStreamD(
 				select {
 				case <-ctx.Done():
 					return
+				case <-restartOAuthURLChan:
+					continue
 				case req, ok := <-oauthURLChan:
 					logger.Debugf(ctx, "<-oauthURLChan")
 					if !ok {
@@ -1864,14 +1868,14 @@ func (p *Panel) subscribeUpdateControlPage(ctx context.Context) {
 	logger.Debugf(ctx, "subscribe to streams and config changes")
 	defer logger.Debugf(ctx, "/subscribe to streams and config changes")
 
-	chStreams, err := p.StreamD.SubscribeToStreamsChanges(ctx)
+	chStreams, restartChStreams, err := autoResubscribe(ctx, p.StreamD.SubscribeToStreamsChanges)
 	if err != nil {
 		p.DisplayError(err)
 		//return
 	}
 
 	// TODO: deduplicate with localConfigCacheUpdater
-	chConfigs, err := p.StreamD.SubscribeToConfigChanges(ctx)
+	chConfigs, restartChConfigs, err := autoResubscribe(ctx, p.StreamD.SubscribeToConfigChanges)
 	if err != nil {
 		p.DisplayError(err)
 		//return
@@ -1880,15 +1884,22 @@ func (p *Panel) subscribeUpdateControlPage(ctx context.Context) {
 	p.getUpdatedStatus(ctx)
 
 	observability.Go(ctx, func(ctx context.Context) {
+		defer logger.Debugf(ctx, "subscribeUpdateControlPage: the handler closed")
 		t := time.NewTicker(time.Second * 5)
 		defer t.Stop()
 		for {
+			var ok bool
 			select {
 			case <-ctx.Done():
 				return
-			case <-chStreams:
-			case <-chConfigs:
+			case _, ok = <-chStreams:
+			case _, ok = <-restartChStreams:
+			case _, ok = <-chConfigs:
+			case _, ok = <-restartChConfigs:
 			case <-t.C:
+			}
+			if !ok {
+				return
 			}
 			p.getUpdatedStatus(ctx)
 		}
@@ -2404,7 +2415,7 @@ func (p *Panel) localConfigCacheUpdater(ctx context.Context) (_err error) {
 	logger.Debugf(ctx, "localConfigCacheUpdater")
 	defer logger.Debugf(ctx, "/localConfigCacheUpdater: %v", _err)
 
-	cfgChangeCh, err := p.StreamD.SubscribeToConfigChanges(ctx)
+	cfgChangeCh, restartCfgChangeCh, err := autoResubscribe(ctx, p.StreamD.SubscribeToConfigChanges)
 	if err != nil {
 		return fmt.Errorf("unable to subscribe to config changes: %w", err)
 	}
@@ -2431,27 +2442,33 @@ func (p *Panel) localConfigCacheUpdater(ctx context.Context) (_err error) {
 		defer logger.Debugf(ctx, "/localConfigUpdaterLoop")
 
 		for {
+			var ok bool
 			select {
 			case <-ctx.Done():
 				return
-			case <-cfgChangeCh:
-				newCfg, err := p.StreamD.GetConfig(ctx)
-				if err != nil {
-					logger.Errorf(ctx, "unable to get the new config: %v", err)
-					continue
-				}
-				err = newCfg.Convert()
-				if err != nil {
-					logger.Errorf(ctx, "unable to convert the config: %v", err)
-					continue
-				}
-				p.configCacheLocker.Do(ctx, func() {
-					p.configCache = newCfg
-				})
-				logger.Debugf(ctx, "updated the config cache")
-				observability.SecretsProviderFromCtx(ctx).(*observability.SecretsStaticProvider).ParseSecretsFrom(newCfg)
-				logger.Debugf(ctx, "updated the secrets")
+			case _, ok = <-cfgChangeCh:
+			case _, ok = <-restartCfgChangeCh:
 			}
+			if !ok {
+				logger.Errorf(ctx, "the channel is closed")
+				return
+			}
+			newCfg, err := p.StreamD.GetConfig(ctx)
+			if err != nil {
+				logger.Errorf(ctx, "unable to get the new config: %v", err)
+				continue
+			}
+			err = newCfg.Convert()
+			if err != nil {
+				logger.Errorf(ctx, "unable to convert the config: %v", err)
+				continue
+			}
+			p.configCacheLocker.Do(ctx, func() {
+				p.configCache = newCfg
+			})
+			logger.Debugf(ctx, "updated the config cache")
+			observability.SecretsProviderFromCtx(ctx).(*observability.SecretsStaticProvider).ParseSecretsFrom(newCfg)
+			logger.Debugf(ctx, "updated the secrets")
 		}
 	})
 

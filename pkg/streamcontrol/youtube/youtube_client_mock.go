@@ -177,3 +177,14 @@ func (c *YouTubeClientMock) DeleteChatMessage(
 	defer func() { logger.Tracef(ctx, "/DeleteChatMessage: %v", _err) }()
 	return fmt.Errorf("not implemented")
 }
+
+func (c *YouTubeClientMock) GetLiveChatMessages(
+	ctx context.Context,
+	chatID string,
+	pageToken string,
+	parts []string,
+) (_ret *youtube.LiveChatMessageListResponse, _err error) {
+	logger.Tracef(ctx, "GetLiveChatMessages")
+	defer func() { logger.Tracef(ctx, "/GetLiveChatMessages: %v", _err) }()
+	return nil, fmt.Errorf("not implemented")
+}

@@ -14,6 +14,7 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-multierror"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/player/pkg/player/protobuf/go/player_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd"
@@ -1649,21 +1650,37 @@ func wrapChan[T any, E any](
 	if err != nil {
 		return err
 	}
+	errCh := make(chan error, 1)
 	for {
 		var input E
+		var ok bool
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case input = <-ch:
+		case input, ok = <-ch:
+		}
+		if !ok {
+			return fmt.Errorf("channel is closed")
 		}
 		result := parse(input)
-		err := sender.Send(&result)
-		if err != nil {
-			return fmt.Errorf(
-				"unable to send %#+v: %w",
-				result,
-				err,
-			)
+		sendCtx, cancelFn := context.WithTimeout(ctx, time.Minute)
+		observability.Go(ctx, func(ctx context.Context) {
+			errCh <- sender.Send(&result)
+		})
+		select {
+		case <-sendCtx.Done():
+			logger.Warnf(ctx, "sending timed out")
+			cancelFn()
+			return sendCtx.Err()
+		case err := <-errCh:
+			cancelFn()
+			if err != nil {
+				return fmt.Errorf(
+					"unable to send %#+v: %w",
+					result,
+					err,
+				)
+			}
 		}
 	}
 }

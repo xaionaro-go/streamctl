@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"log"
-	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -19,11 +19,13 @@ import (
 	"github.com/getsentry/sentry-go"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"github.com/spf13/pflag"
+	"github.com/xaionaro-go/eventbus"
 	"github.com/xaionaro-go/grpcproxy/grpcproxyserver"
 	"github.com/xaionaro-go/grpcproxy/protobuf/go/proxy_grpc"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/cmd/streamd/ui"
+	"github.com/xaionaro-go/streamctl/pkg/cert"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
@@ -127,6 +129,8 @@ func main() {
 	}
 	defer belt.Flush(ctx)
 
+	eventbus.LoggingEnabled = true
+
 	configPathExpanded, err := xpath.Expand(*configPath)
 	if err != nil {
 		l.Fatalf("unable to get the path to the data file: %v", err)
@@ -181,7 +185,16 @@ func main() {
 			}
 		})
 
-		listener, err := net.Listen("tcp", *listenAddr)
+		cert, err := cert.GenerateSelfSignedForServer()
+		if err != nil {
+			logger.Panicf(ctx, "unable to generate the certificate: %v", err)
+		}
+
+		listener, err := tls.Listen("tcp", *listenAddr, &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			NextProtos:   []string{"h2"},
+		})
+		//listener, err := net.Listen("tcp", *listenAddr)
 		if err != nil {
 			log.Fatalf("failed to listen: %v", err)
 		}

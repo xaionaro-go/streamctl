@@ -55,7 +55,7 @@ func (d *StreamD) startListeningForChatMessages(
 				if err := d.ChatMessagesStorage.AddMessage(ctx, msg); err != nil {
 					logger.Errorf(ctx, "unable to add the message %#+v to the chat messages storage: %v", msg, err)
 				}
-				d.publishEvent(ctx, msg)
+				publishEvent(ctx, d.EventBus, msg)
 			}
 		}
 	})
@@ -113,7 +113,7 @@ func (d *StreamD) SubscribeToChatMessages(
 	defer func() { logger.Tracef(ctx, "/SubscribeToChatMessages(ctx, %v, %v): %p %v", since, limit, _ret, _err) }()
 
 	return eventSubToChan(
-		ctx, d,
+		ctx, d.EventBus, 1000,
 		func(ctx context.Context, outCh chan api.ChatMessage) {
 			logger.Tracef(ctx, "backfilling the channel")
 			defer func() { logger.Tracef(ctx, "/backfilling the channel") }()

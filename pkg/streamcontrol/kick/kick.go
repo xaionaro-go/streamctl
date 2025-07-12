@@ -11,6 +11,7 @@ import (
 
 	http "github.com/Danny-Dasilva/fhttp"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/google/uuid"
 	"github.com/scorfly/gokick"
@@ -64,6 +65,7 @@ func New(
 	cfg Config,
 	saveCfgFn func(Config) error,
 ) (*Kick, error) {
+	ctx = belt.WithField(ctx, "controller", ID)
 	if cfg.Config.Channel == "" {
 		return nil, fmt.Errorf("channel is not set")
 	}

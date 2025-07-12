@@ -59,13 +59,26 @@ func (p *Panel) initRestreamPage(
 		}
 		updateData()
 
-		ch, err := p.StreamD.SubscribeToIncomingStreamsChanges(ctx)
+		ch, restartCh, err := autoResubscribe(ctx, p.StreamD.SubscribeToIncomingStreamsChanges)
 		if err != nil {
 			p.DisplayError(err)
 			return
 		}
 		for range ch {
-			logger.Debugf(ctx, "got event IncomingStreamsChange")
+			var ok bool
+			select {
+			case _, ok = <-ch:
+				if ok {
+					logger.Debugf(ctx, "got event IncomingStreamsChange")
+				}
+			case _, ok = <-restartCh:
+				if ok {
+					logger.Debugf(ctx, "restarted SubscribeToIncomingStreamsChanges")
+				}
+			}
+			if !ok {
+				break
+			}
 			updateData()
 		}
 	})
@@ -81,18 +94,32 @@ func (p *Panel) initRestreamPage(
 		}
 		updateData()
 
-		ch, err := p.StreamD.SubscribeToStreamServersChanges(ctx)
+		ch, restartCh, err := autoResubscribe(ctx, p.StreamD.SubscribeToStreamServersChanges)
 		if err != nil {
 			p.DisplayError(err)
 			return
 		}
-		for range ch {
-			logger.Debugf(ctx, "got event StreamServersChange")
+		for {
+			var ok bool
+			select {
+			case _, ok = <-ch:
+				if ok {
+					logger.Debugf(ctx, "got event StreamServersChange")
+				}
+			case _, ok = <-restartCh:
+				if ok {
+					logger.Debugf(ctx, "restarted SubscribeToStreamServersChanges")
+				}
+			}
+			if !ok {
+				break
+			}
 			updateData()
 		}
 	})
 
 	observability.Go(ctx, func(ctx context.Context) {
+		defer logger.Debugf(ctx, "/SubscribeToStreamDestinationsChanges")
 		updateData := func() {
 			dsts, err := p.StreamD.ListStreamDestinations(ctx)
 			if err != nil {
@@ -103,18 +130,32 @@ func (p *Panel) initRestreamPage(
 		}
 		updateData()
 
-		ch, err := p.StreamD.SubscribeToStreamDestinationsChanges(ctx)
+		ch, restartCh, err := autoResubscribe(ctx, p.StreamD.SubscribeToStreamDestinationsChanges)
 		if err != nil {
 			p.DisplayError(err)
 			return
 		}
-		for range ch {
-			logger.Debugf(ctx, "got event StreamDestinationsChange")
+		for {
+			var ok bool
+			select {
+			case _, ok = <-ch:
+				if ok {
+					logger.Debugf(ctx, "got event StreamDestinationsChange")
+				}
+			case _, ok = <-restartCh:
+				if ok {
+					logger.Debugf(ctx, "restarted SubscribeToStreamDestinationsChanges")
+				}
+			}
+			if !ok {
+				break
+			}
 			updateData()
 		}
 	})
 
 	observability.Go(ctx, func(ctx context.Context) {
+		defer logger.Debugf(ctx, "/SubscribeToStreamForwardsChanges")
 		updateData := func() {
 			streamFwds, err := p.StreamD.ListStreamForwards(ctx)
 			if err != nil {
@@ -125,18 +166,32 @@ func (p *Panel) initRestreamPage(
 		}
 		updateData()
 
-		ch, err := p.StreamD.SubscribeToStreamForwardsChanges(ctx)
+		ch, restartCh, err := autoResubscribe(ctx, p.StreamD.SubscribeToStreamForwardsChanges)
 		if err != nil {
 			p.DisplayError(err)
 			return
 		}
-		for range ch {
-			logger.Debugf(ctx, "got event StreamForwardsChange")
+		for {
+			var ok bool
+			select {
+			case _, ok = <-ch:
+				if ok {
+					logger.Debugf(ctx, "got event StreamForwardsChange")
+				}
+			case _, ok = <-restartCh:
+				if ok {
+					logger.Debugf(ctx, "restarted SubscribeToStreamForwardsChanges")
+				}
+			}
+			if !ok {
+				break
+			}
 			updateData()
 		}
 	})
 
 	observability.Go(ctx, func(ctx context.Context) {
+		defer logger.Debugf(ctx, "/SubscribeToStreamPlayersChanges")
 		updateData := func() {
 			streamPlayers, err := p.StreamD.ListStreamPlayers(ctx)
 			if err != nil {
@@ -147,13 +202,26 @@ func (p *Panel) initRestreamPage(
 		}
 		updateData()
 
-		ch, err := p.StreamD.SubscribeToStreamPlayersChanges(ctx)
+		ch, restartCh, err := autoResubscribe(ctx, p.StreamD.SubscribeToStreamPlayersChanges)
 		if err != nil {
 			p.DisplayError(err)
 			return
 		}
-		for range ch {
-			logger.Debugf(ctx, "got event StreamPlayersChange")
+		for {
+			var ok bool
+			select {
+			case _, ok = <-ch:
+				if ok {
+					logger.Debugf(ctx, "got event StreamPlayersChange")
+				}
+			case _, ok = <-restartCh:
+				if ok {
+					logger.Debugf(ctx, "restarted SubscribeToStreamPlayersChanges")
+				}
+			}
+			if !ok {
+				break
+			}
 			updateData()
 		}
 	})

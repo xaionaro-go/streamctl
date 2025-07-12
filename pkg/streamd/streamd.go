@@ -11,11 +11,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	eventbus "github.com/asaskevich/EventBus"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
+	"github.com/xaionaro-go/eventbus"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/player/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/chatmessagesstorage"
@@ -92,7 +92,7 @@ type StreamD struct {
 	StreamStatusCache *memoize.MemoizeData
 	OBSState          OBSState
 
-	EventBus eventbus.Bus
+	EventBus *eventbus.EventBus
 
 	TimersLocker xsync.Mutex
 	NextTimerID  uint64
@@ -259,7 +259,7 @@ func (d *StreamD) secretsProviderUpdater(ctx context.Context) (_err error) {
 	logger.Debugf(ctx, "secretsProviderUpdater")
 	defer logger.Debugf(ctx, "/secretsProviderUpdater: %v", _err)
 
-	cfgChangeCh, err := eventSubToChan[api.DiffConfig](ctx, d, nil)
+	cfgChangeCh, err := eventSubToChan[api.DiffConfig](ctx, d.EventBus, 1000, nil)
 	if err != nil {
 		return fmt.Errorf("unable to subscribe to config changes: %w", err)
 	}
@@ -302,7 +302,7 @@ func (d *StreamD) initStreamServer(ctx context.Context) (_err error) {
 		//newBrowserOpenerAdapter(d),
 	)
 	assert(d.StreamServer != nil)
-	defer d.publishEvent(ctx, api.DiffStreamServers{})
+	defer publishEvent(ctx, d.EventBus, api.DiffStreamServers{})
 	return d.StreamServer.Init(
 		ctx,
 		sstypes.InitOptionDefaultStreamPlayerOptions(d.streamPlayerOptions()),
@@ -566,9 +566,9 @@ func (d *StreamD) setConfig(ctx context.Context, cfg *config.Config) (_ret error
 		}
 		if !dashboardCfgEqual {
 			logger.Debugf(ctx, "dashboard config changed")
-			d.publishEvent(ctx, api.DiffDashboard{})
+			publishEvent(ctx, d.EventBus, api.DiffDashboard{})
 		}
-		d.publishEvent(ctx, api.DiffConfig{})
+		publishEvent(ctx, d.EventBus, api.DiffConfig{})
 	}()
 
 	logger.Debugf(ctx, "SetConfig: %#+v", *cfg)
@@ -648,7 +648,7 @@ func (d *StreamD) StartStream(
 	logger.Debugf(ctx, "StartStream(%s)", platID)
 	return xsync.RDoR1(ctx, &d.ControllersLocker, func() error {
 		defer func() { logger.Debugf(ctx, "/StartStream(%s): %v", platID, _err) }()
-		defer d.publishEvent(ctx, api.DiffStreams{})
+		defer publishEvent(ctx, d.EventBus, api.DiffStreams{})
 
 		defer func() {
 			d.StreamStatusCache.InvalidateCache(ctx)
@@ -776,7 +776,7 @@ func (d *StreamD) EndStream(ctx context.Context, platID streamcontrol.PlatformNa
 	logger.Debugf(ctx, "EndStream(ctx, '%s')", platID)
 	defer logger.Debugf(ctx, "/EndStream(ctx, '%s')", platID)
 
-	defer d.publishEvent(ctx, api.DiffStreams{})
+	defer publishEvent(ctx, d.EventBus, api.DiffStreams{})
 
 	return xsync.RDoR1(ctx, &d.ControllersLocker, func() error {
 		defer d.StreamStatusCache.InvalidateCache(ctx)
@@ -902,6 +902,7 @@ func (d *StreamD) streamController(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
 ) (streamcontrol.AbstractStreamController, error) {
+	ctx = belt.WithField(ctx, "controller", platID)
 	var result streamcontrol.AbstractStreamController
 	switch platID {
 	case obs.ID:
@@ -978,7 +979,7 @@ func (d *StreamD) SetTitle(
 	platID streamcontrol.PlatformName,
 	title string,
 ) error {
-	defer d.publishEvent(ctx, api.DiffStreams{})
+	defer publishEvent(ctx, d.EventBus, api.DiffStreams{})
 
 	return xsync.RDoR1(ctx, &d.ControllersLocker, func() error {
 		c, err := d.streamController(ctx, platID)
@@ -995,7 +996,7 @@ func (d *StreamD) SetDescription(
 	platID streamcontrol.PlatformName,
 	description string,
 ) error {
-	defer d.publishEvent(ctx, api.DiffStreams{})
+	defer publishEvent(ctx, d.EventBus, api.DiffStreams{})
 
 	return xsync.RDoR1(ctx, &d.ControllersLocker, func() error {
 		c, err := d.streamController(ctx, platID)
@@ -1018,7 +1019,7 @@ func (d *StreamD) ApplyProfile(
 	profile streamcontrol.AbstractStreamProfile,
 	customArgs ...any,
 ) error {
-	defer d.publishEvent(ctx, api.DiffStreams{})
+	defer publishEvent(ctx, d.EventBus, api.DiffStreams{})
 
 	return xsync.RDoR1(ctx, &d.ControllersLocker, func() error {
 		c, err := d.streamController(d.ctxForController(ctx), platID)
@@ -1037,7 +1038,7 @@ func (d *StreamD) UpdateStream(
 	profile streamcontrol.AbstractStreamProfile,
 	customArgs ...any,
 ) error {
-	defer d.publishEvent(ctx, api.DiffStreams{})
+	defer publishEvent(ctx, d.EventBus, api.DiffStreams{})
 
 	return xsync.RDoR1(ctx, &d.ControllersLocker, func() error {
 		err := d.SetTitle(d.ctxForController(ctx), platID, title)
@@ -1160,7 +1161,7 @@ func (d *StreamD) StartStreamServer(
 ) error {
 	logger.Debugf(ctx, "StartStreamServer")
 	defer logger.Debugf(ctx, "/StartStreamServer")
-	defer d.publishEvent(ctx, api.DiffStreamServers{})
+	defer publishEvent(ctx, d.EventBus, api.DiffStreamServers{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		if d.StreamServer == nil {
@@ -1204,7 +1205,7 @@ func (d *StreamD) StopStreamServer(
 ) error {
 	logger.Debugf(ctx, "StopStreamServer")
 	defer logger.Debugf(ctx, "/StopStreamServer")
-	defer d.publishEvent(ctx, api.DiffStreamServers{})
+	defer publishEvent(ctx, d.EventBus, api.DiffStreamServers{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		if d.StreamServer == nil {
@@ -1235,7 +1236,7 @@ func (d *StreamD) AddIncomingStream(
 ) error {
 	logger.Debugf(ctx, "AddIncomingStream")
 	defer logger.Debugf(ctx, "/AddIncomingStream")
-	defer d.publishEvent(ctx, api.DiffIncomingStreams{})
+	defer publishEvent(ctx, d.EventBus, api.DiffIncomingStreams{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		if d.StreamServer == nil {
@@ -1261,7 +1262,7 @@ func (d *StreamD) RemoveIncomingStream(
 ) error {
 	logger.Debugf(ctx, "RemoveIncomingStream")
 	defer logger.Debugf(ctx, "/RemoveIncomingStream")
-	defer d.publishEvent(ctx, api.DiffIncomingStreams{})
+	defer publishEvent(ctx, d.EventBus, api.DiffIncomingStreams{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		if d.StreamServer == nil {
@@ -1357,7 +1358,7 @@ func (d *StreamD) AddStreamDestination(
 ) error {
 	logger.Debugf(ctx, "AddStreamDestination")
 	defer logger.Debugf(ctx, "/AddStreamDestination")
-	defer d.publishEvent(ctx, api.DiffStreamDestinations{})
+	defer publishEvent(ctx, d.EventBus, api.DiffStreamDestinations{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		if d.StreamServer == nil {
@@ -1390,7 +1391,7 @@ func (d *StreamD) UpdateStreamDestination(
 ) error {
 	logger.Debugf(ctx, "UpdateStreamDestination")
 	defer logger.Debugf(ctx, "/UpdateStreamDestination")
-	defer d.publishEvent(ctx, api.DiffStreamDestinations{})
+	defer publishEvent(ctx, d.EventBus, api.DiffStreamDestinations{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		if d.StreamServer == nil {
@@ -1421,7 +1422,7 @@ func (d *StreamD) RemoveStreamDestination(
 ) error {
 	logger.Debugf(ctx, "RemoveStreamDestination")
 	defer logger.Debugf(ctx, "/RemoveStreamDestination")
-	defer d.publishEvent(ctx, api.DiffStreamDestinations{})
+	defer publishEvent(ctx, d.EventBus, api.DiffStreamDestinations{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		if d.StreamServer == nil {
@@ -1483,7 +1484,7 @@ func (d *StreamD) AddStreamForward(
 ) error {
 	logger.Debugf(ctx, "AddStreamForward")
 	defer logger.Debugf(ctx, "/AddStreamForward")
-	defer d.publishEvent(ctx, api.DiffStreamForwards{})
+	defer publishEvent(ctx, d.EventBus, api.DiffStreamForwards{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		if d.StreamServer == nil {
@@ -1520,7 +1521,7 @@ func (d *StreamD) UpdateStreamForward(
 ) (_err error) {
 	logger.Debugf(ctx, "UpdateStreamForward")
 	defer func() { logger.Debugf(ctx, "/UpdateStreamForward: %v", _err) }()
-	defer d.publishEvent(ctx, api.DiffStreamForwards{})
+	defer publishEvent(ctx, d.EventBus, api.DiffStreamForwards{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		if d.StreamServer == nil {
@@ -1554,7 +1555,7 @@ func (d *StreamD) RemoveStreamForward(
 ) error {
 	logger.Debugf(ctx, "RemoveStreamForward")
 	defer logger.Debugf(ctx, "/RemoveStreamForward")
-	defer d.publishEvent(ctx, api.DiffStreamForwards{})
+	defer publishEvent(ctx, d.EventBus, api.DiffStreamForwards{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		if d.StreamServer == nil {
@@ -1619,7 +1620,7 @@ func (d *StreamD) AddStreamPlayer(
 		if d.StreamServer == nil {
 			return fmt.Errorf("stream server is not initialized")
 		}
-		defer d.publishEvent(ctx, api.DiffStreamPlayers{})
+		defer publishEvent(ctx, d.EventBus, api.DiffStreamPlayers{})
 		var result *multierror.Error
 		result = multierror.Append(result, d.StreamServer.AddStreamPlayer(
 			ctx,
@@ -1664,7 +1665,7 @@ func (d *StreamD) UpdateStreamPlayer(
 		if d.StreamServer == nil {
 			return fmt.Errorf("stream server is not initialized")
 		}
-		defer d.publishEvent(ctx, api.DiffStreamPlayers{})
+		defer publishEvent(ctx, d.EventBus, api.DiffStreamPlayers{})
 		var result *multierror.Error
 		result = multierror.Append(result, d.StreamServer.UpdateStreamPlayer(
 			ctx,
@@ -1687,7 +1688,7 @@ func (d *StreamD) RemoveStreamPlayer(
 		if d.StreamServer == nil {
 			return fmt.Errorf("stream server is not initialized")
 		}
-		defer d.publishEvent(ctx, api.DiffStreamPlayers{})
+		defer publishEvent(ctx, d.EventBus, api.DiffStreamPlayers{})
 		var result *multierror.Error
 		result = multierror.Append(result, d.StreamServer.RemoveStreamPlayer(
 			ctx,
