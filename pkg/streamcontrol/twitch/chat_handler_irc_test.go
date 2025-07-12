@@ -11,25 +11,25 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 )
 
-type chatClientMock struct {
+type chatClientIRCMock struct {
 	join           func(channelIDs ...string) error
 	onShardMessage func(func(shard int, msg irc.ChatMessage))
-	close          func()
+	close          func(ctx context.Context) error
 }
 
-var _ ChatClient = (*chatClientMock)(nil)
+var _ ChatClientIRC = (*chatClientIRCMock)(nil)
 
-func (c *chatClientMock) Join(channelIDs ...string) error {
+func (c *chatClientIRCMock) Join(channelIDs ...string) error {
 	return c.join(channelIDs...)
 }
-func (c *chatClientMock) OnShardMessage(callback func(shard int, msg irc.ChatMessage)) {
+func (c *chatClientIRCMock) OnShardMessage(callback func(shard int, msg irc.ChatMessage)) {
 	c.onShardMessage(callback)
 }
-func (c *chatClientMock) Close() {
-	c.close()
+func (c *chatClientIRCMock) Close(ctx context.Context) error {
+	return c.close(ctx)
 }
 
-func TestChatHandler(t *testing.T) {
+func TestChatHandlerIRC(t *testing.T) {
 	ctx := context.TODO()
 	const channelID = "test-channel-id"
 
@@ -38,7 +38,7 @@ func TestChatHandler(t *testing.T) {
 		callback         func(shard int, msg irc.ChatMessage)
 		closeCount       = 0
 	)
-	h, err := newChatHandler(ctx, &chatClientMock{
+	h, err := newChatHandlerIRC(ctx, &chatClientIRCMock{
 		join: func(channelIDs ...string) error {
 			joinedChannelIDs = append(joinedChannelIDs, channelIDs...)
 			return nil
@@ -46,8 +46,9 @@ func TestChatHandler(t *testing.T) {
 		onShardMessage: func(_callback func(shard int, msg irc.ChatMessage)) {
 			callback = _callback
 		},
-		close: func() {
+		close: func(ctx context.Context) error {
 			closeCount++
+			return nil
 		},
 	}, channelID)
 	require.NoError(t, err)
@@ -84,7 +85,7 @@ func TestChatHandler(t *testing.T) {
 	})
 
 	require.Equal(t, 0, closeCount)
-	h.Close()
+	h.Close(ctx)
 	require.Equal(t, 1, closeCount)
 	wg.Wait()
 }

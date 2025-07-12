@@ -17,8 +17,8 @@ import (
 	"github.com/xaionaro-go/xsync"
 )
 
-const (
-	ChatLogSize = 20
+var (
+	ChatLogSize = 35
 )
 
 type chatUIInterface interface {
@@ -67,7 +67,9 @@ func (p *Panel) getChatUIs(ctx context.Context) []chatUIInterface {
 }
 
 func (p *Panel) initChatMessagesHandler(ctx context.Context) error {
-	msgCh, err := p.StreamD.SubscribeToChatMessages(ctx, time.Now().Add(-7*24*time.Hour), ChatLogSize)
+	msgCh, _, err := autoResubscribe(ctx, func(ctx context.Context) (<-chan api.ChatMessage, error) {
+		return p.StreamD.SubscribeToChatMessages(ctx, time.Now().Add(-60*24*time.Hour), uint64(ChatLogSize))
+	})
 	if err != nil {
 		return fmt.Errorf("unable to subscribe to chat messages: %w", err)
 	}

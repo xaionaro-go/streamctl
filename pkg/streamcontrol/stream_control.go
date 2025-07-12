@@ -115,6 +115,20 @@ type ChatMessage struct {
 	Username  string
 	MessageID ChatMessageID
 	Message   string
+	Paid      Money
+}
+
+type Currency int
+
+const (
+	CurrencyNone = Currency(iota)
+	CurrencyUSD
+	CurrencyOther
+)
+
+type Money struct {
+	Currency Currency
+	Amount   float64
 }
 
 type StreamControllerCommons interface {

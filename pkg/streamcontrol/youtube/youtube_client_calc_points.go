@@ -21,7 +21,7 @@ func init() {
 	tzLosAngeles, err = time.LoadLocation("America/Los_Angeles")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "unable to get the timezone of Los_Angeles")
-		tzLosAngeles = time.FixedZone("America/Los_Angeles", -7 * 3600)
+		tzLosAngeles = time.FixedZone("America/Los_Angeles", -7*3600)
 	}
 }
 
@@ -207,4 +207,14 @@ func (c *YouTubeClientCalcPoints) DeleteChatMessage(
 ) (_err error) {
 	defer func() { c.addUsedPointsIfNoError(ctx, 1, _err) }()
 	return c.Client.DeleteChatMessage(ctx, messageID)
+}
+
+func (c *YouTubeClientCalcPoints) GetLiveChatMessages(
+	ctx context.Context,
+	chatID string,
+	pageToken string,
+	parts []string,
+) (_ret *youtube.LiveChatMessageListResponse, _err error) {
+	defer func() { c.addUsedPointsIfNoError(ctx, 1, _err) }()
+	return c.Client.GetLiveChatMessages(ctx, chatID, pageToken, parts)
 }

@@ -62,8 +62,10 @@ func (d *StreamD) getImageBytes(
 
 func (d *StreamD) initImageTaker(ctx context.Context) error {
 	observability.Go(ctx, func(ctx context.Context) {
+		ctxCh, cancelFn := context.WithCancel(ctx)
+		defer cancelFn()
 		defer logger.Debugf(ctx, "/imageTaker")
-		ch, err := d.SubscribeToDashboardChanges(ctx)
+		ch, restartCh, err := autoResubscribe(ctxCh, d.SubscribeToDashboardChanges)
 		if err != nil {
 			logger.Errorf(ctx, "unable to subscribe to dashboard changes: %v", err)
 			return
@@ -72,6 +74,8 @@ func (d *StreamD) initImageTaker(ctx context.Context) error {
 			select {
 			case <-ctx.Done():
 				return
+			case <-restartCh:
+				d.restartImageTaker(ctx)
 			case <-ch:
 				d.restartImageTaker(ctx)
 			}
@@ -85,7 +89,9 @@ func (d *StreamD) restartImageTaker(ctx context.Context) error {
 	return xsync.DoA1R1(ctx, &d.imageTakerLocker, d.restartImageTakerNoLock, ctx)
 }
 
-func (d *StreamD) restartImageTakerNoLock(ctx context.Context) error {
+func (d *StreamD) restartImageTakerNoLock(ctx context.Context) (_err error) {
+	logger.Debugf(ctx, "restartImageTakerNoLock")
+	defer func() { logger.Debugf(ctx, "/restartImageTakerNoLock: %v", _err) }()
 	if d.imageTakerCancel != nil {
 		d.imageTakerCancel()
 		d.imageTakerCancel = nil

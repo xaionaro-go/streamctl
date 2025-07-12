@@ -16,6 +16,7 @@ import (
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/xaionaro-go/eventbus"
 	"github.com/xaionaro-go/observability"
 )
 
@@ -114,6 +115,8 @@ func initRuntime(
 	})
 
 	seppukuIfMemHugeLeak(ctx)
+
+	eventbus.LoggingEnabled = true
 
 	ctx, cancelFn := context.WithCancel(ctx)
 	return ctx, func() {
