@@ -2,10 +2,10 @@ package kick
 
 import (
 	"github.com/go-ng/xatomic"
-	"github.com/xaionaro-go/kickcom"
+	"github.com/scorfly/gokick"
 )
 
-func (cache *Cache) GetChanInfo() *kickcom.ChannelV1 {
+func (cache *Cache) GetChanInfo() *gokick.ChannelResponse {
 	if cache == nil {
 		return nil
 	}
@@ -13,11 +13,11 @@ func (cache *Cache) GetChanInfo() *kickcom.ChannelV1 {
 	return xatomic.LoadPointer(&cache.ChanInfo)
 }
 
-func (cache *Cache) SetChanInfo(chanInfo *kickcom.ChannelV1) {
+func (cache *Cache) SetChanInfo(chanInfo *gokick.ChannelResponse) {
 	xatomic.StorePointer(&cache.ChanInfo, chanInfo)
 }
 
-func (cache *Cache) GetCategories() []kickcom.CategoryV1Short {
+func (cache *Cache) GetCategories() []gokick.CategoryResponse {
 	if cache == nil {
 		return nil
 	}
@@ -29,6 +29,6 @@ func (cache *Cache) GetCategories() []kickcom.CategoryV1Short {
 	return *ptr
 }
 
-func (cache *Cache) SetCategories(categories []kickcom.CategoryV1Short) {
+func (cache *Cache) SetCategories(categories []gokick.CategoryResponse) {
 	xatomic.StorePointer(&cache.Categories, &categories)
 }

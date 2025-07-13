@@ -13,7 +13,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 )
 
-type ChatClient interface {
+type ChatClientOBSOLETE interface {
 	GetChatMessagesV2(
 		ctx context.Context,
 		channelID uint64,
@@ -21,38 +21,51 @@ type ChatClient interface {
 	) (*kickcom.ChatMessagesV2Reply, error)
 }
 
-type ChatHandler struct {
+type ChatHandlerOBSOLETE struct {
 	currentCursor   uint64
 	channelID       uint64
 	lastMessageID   string
-	client          ReverseEngClient
+	client          ChatClientOBSOLETE
 	cancelFunc      context.CancelFunc
 	messagesOutChan chan streamcontrol.ChatMessage
+	onClose         func(context.Context)
 }
 
 func (k *Kick) newChatHandler(
 	ctx context.Context,
-	channelID uint64,
-) (*ChatHandler, error) {
-	return NewChatHandler(ctx, k.ReverseEngClient, channelID)
+	channelID int,
+	onClose func(context.Context),
+) (*ChatHandlerOBSOLETE, error) {
+	reverseEngClient, err := kickcom.New()
+	if err != nil {
+		return nil, fmt.Errorf("unable to initialize a client to Kick: %w", err)
+	}
+	return NewChatHandlerOBSOLETE(ctx, reverseEngClient, uint64(channelID), onClose)
 }
 
-func NewChatHandler(
+func NewChatHandlerOBSOLETE(
 	ctx context.Context,
-	chatClient ReverseEngClient,
+	ChatClientOld ChatClientOBSOLETE,
 	channelID uint64,
-) (*ChatHandler, error) {
+	onClose func(context.Context),
+) (*ChatHandlerOBSOLETE, error) {
 
 	ctx, cancelFn := context.WithCancel(ctx)
-	h := &ChatHandler{
+	h := &ChatHandlerOBSOLETE{
 		currentCursor:   0,
-		client:          chatClient,
+		client:          ChatClientOld,
 		channelID:       channelID,
 		cancelFunc:      cancelFn,
 		messagesOutChan: make(chan streamcontrol.ChatMessage, 100),
+		onClose:         onClose,
 	}
 
 	observability.Go(ctx, func(ctx context.Context) {
+		if onClose != nil {
+			defer func() {
+				onClose(ctx)
+			}()
+		}
 		defer func() {
 			close(h.messagesOutChan)
 		}()
@@ -81,9 +94,9 @@ func NewChatHandler(
 	return h, nil
 }
 
-func (h *ChatHandler) iterate(ctx context.Context) error {
+func (h *ChatHandlerOBSOLETE) iterate(ctx context.Context) error {
 	startTS := time.Now()
-	reply, err := h.client.GetChatMessagesV2(ctx, h.channelID, 0)
+	reply, err := h.client.GetChatMessagesV2(ctx, uint64(h.channelID), 0)
 	if err != nil {
 		return fmt.Errorf("unable to get the chat messages of channel with ID %d: %w", h.channelID, err)
 	}
@@ -120,7 +133,7 @@ func (h *ChatHandler) iterate(ctx context.Context) error {
 	return nil
 }
 
-func (h *ChatHandler) sendMessage(
+func (h *ChatHandlerOBSOLETE) sendMessage(
 	msg kickcom.ChatMessageV2,
 ) {
 	h.lastMessageID = msg.ID
@@ -135,6 +148,6 @@ func (h *ChatHandler) sendMessage(
 	default:
 	}
 }
-func (h *ChatHandler) MessagesChan() <-chan streamcontrol.ChatMessage {
+func (h *ChatHandlerOBSOLETE) MessagesChan() <-chan streamcontrol.ChatMessage {
 	return h.messagesOutChan
 }
