@@ -29,6 +29,14 @@ func ActionGRPC2Go(
 			Profile:     profile,
 			CustomArgs:  nil,
 		}
+	case *streamd_grpc.Action_StartStreamByProfileNameRequest:
+		platID := streamcontrol.PlatformName(a.StartStreamByProfileNameRequest.PlatID)
+		result = &action.StartStreamByProfileName{
+			PlatID:      platID,
+			Title:       a.StartStreamByProfileNameRequest.Title,
+			Description: a.StartStreamByProfileNameRequest.Description,
+			ProfileName: a.StartStreamByProfileNameRequest.ProfileName,
+		}
 	case *streamd_grpc.Action_EndStreamRequest:
 		result = &action.EndStream{
 			PlatID: streamcontrol.PlatformName(a.EndStreamRequest.PlatID),
@@ -74,6 +82,15 @@ func ActionGo2GRPC(
 				Title:       a.Title,
 				Description: a.Description,
 				Profile:     profileString,
+			},
+		}
+	case *action.StartStreamByProfileName:
+		result.ActionOneof = &streamd_grpc.Action_StartStreamByProfileNameRequest{
+			StartStreamByProfileNameRequest: &streamd_grpc.StartStreamByProfileNameRequest{
+				PlatID:      string(a.PlatID),
+				Title:       a.Title,
+				Description: a.Description,
+				ProfileName: a.ProfileName,
 			},
 		}
 	case *action.EndStream:

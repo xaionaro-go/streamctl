@@ -15,6 +15,7 @@ service StreamD {
     rpc ResetCache(ResetCacheRequest) returns (ResetCacheReply) {}
     rpc InitCache(InitCacheRequest) returns (InitCacheReply) {}
     rpc StartStream(StartStreamRequest) returns (StartStreamReply) {}
+    rpc StartStreamByProfileName(StartStreamByProfileNameRequest) returns (StartStreamReply) {}
     rpc EndStream(EndStreamRequest) returns (EndStreamReply) {}
     rpc GetStreamStatus(GetStreamStatusRequest) returns (GetStreamStatusReply) {}
     rpc IsBackendEnabled(IsBackendEnabledRequest) returns (IsBackendEnabledReply) {}
@@ -143,6 +144,12 @@ message StartStreamRequest {
     string title = 2;
     string description = 3;
     string profile = 4;
+}
+message StartStreamByProfileNameRequest {
+    string platID = 1;
+    optional string title = 2;
+    optional string description = 3;
+    string profileName = 4;
 }
 message StartStreamReply {}
 message EndStreamRequest {
@@ -645,8 +652,9 @@ message Action {
     oneof ActionOneof {
         NoopRequest noopRequest = 1;
         StartStreamRequest startStreamRequest = 2;
-        EndStreamRequest endStreamRequest = 3;
-        OBSAction obsAction = 4;
+        StartStreamByProfileNameRequest startStreamByProfileNameRequest = 3;
+        EndStreamRequest endStreamRequest = 4;
+        OBSAction obsAction = 5;
     }
 }
 

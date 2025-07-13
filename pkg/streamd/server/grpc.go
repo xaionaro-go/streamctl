@@ -245,11 +245,7 @@ func (grpc *GRPCServer) StartStream(
 	ctx context.Context,
 	req *streamd_grpc.StartStreamRequest,
 ) (*streamd_grpc.StartStreamReply, error) {
-	logger.Debugf(
-		ctx,
-		"grpc:StartStream: raw profile: %#+v",
-		req.Profile,
-	)
+	logger.Debugf(ctx, "grpc:StartStream: raw profile: %#+v", req.Profile)
 	platID := streamcontrol.PlatformName(req.GetPlatID())
 
 	profile, err := goconv.ProfileGRPC2Go(
@@ -259,11 +255,7 @@ func (grpc *GRPCServer) StartStream(
 	if err != nil {
 		return nil, err
 	}
-	logger.Debugf(
-		ctx,
-		"grpc:StartStream: parsed: %#+v",
-		profile,
-	)
+	logger.Debugf(ctx, "grpc:StartStream: parsed: %#+v", profile)
 
 	err = grpc.StreamD.StartStream(
 		ctx,
@@ -273,10 +265,41 @@ func (grpc *GRPCServer) StartStream(
 		profile,
 	)
 	if err != nil {
-		return nil, fmt.Errorf(
-			"unable to start the stream: %w",
-			err,
-		)
+		return nil, fmt.Errorf("unable to start the stream: %w", err)
+	}
+
+	grpc.invalidateCache(ctx)
+	return &streamd_grpc.StartStreamReply{}, nil
+}
+
+func (grpc *GRPCServer) StartStreamByProfileName(
+	ctx context.Context,
+	req *streamd_grpc.StartStreamByProfileNameRequest,
+) (*streamd_grpc.StartStreamReply, error) {
+	logger.Debugf(ctx, "grpc:StartStream: profile name: %s", req.ProfileName)
+	platID := streamcontrol.PlatformName(req.GetPlatID())
+
+	cfg, err := grpc.StreamD.GetConfig(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get config: %w", err)
+	}
+
+	backendCfg := cfg.Backends[streamcontrol.PlatformName(req.PlatID)]
+	profile, ok := backendCfg.GetStreamProfile(streamcontrol.ProfileName(req.ProfileName))
+	if !ok {
+		return nil, fmt.Errorf("profile '%s' was not found", req.ProfileName)
+	}
+	logger.Debugf(ctx, "grpc:StartStream: profile: %#+v", profile)
+
+	err = grpc.StreamD.StartStream(
+		ctx,
+		platID,
+		req.GetTitle(),
+		req.GetDescription(),
+		profile,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("unable to start the stream: %w", err)
 	}
 
 	grpc.invalidateCache(ctx)

@@ -27,6 +27,7 @@ type StreamDClient interface {
 	ResetCache(ctx context.Context, in *ResetCacheRequest, opts ...grpc.CallOption) (*ResetCacheReply, error)
 	InitCache(ctx context.Context, in *InitCacheRequest, opts ...grpc.CallOption) (*InitCacheReply, error)
 	StartStream(ctx context.Context, in *StartStreamRequest, opts ...grpc.CallOption) (*StartStreamReply, error)
+	StartStreamByProfileName(ctx context.Context, in *StartStreamByProfileNameRequest, opts ...grpc.CallOption) (*StartStreamReply, error)
 	EndStream(ctx context.Context, in *EndStreamRequest, opts ...grpc.CallOption) (*EndStreamReply, error)
 	GetStreamStatus(ctx context.Context, in *GetStreamStatusRequest, opts ...grpc.CallOption) (*GetStreamStatusReply, error)
 	IsBackendEnabled(ctx context.Context, in *IsBackendEnabledRequest, opts ...grpc.CallOption) (*IsBackendEnabledReply, error)
@@ -211,6 +212,15 @@ func (c *streamDClient) InitCache(ctx context.Context, in *InitCacheRequest, opt
 func (c *streamDClient) StartStream(ctx context.Context, in *StartStreamRequest, opts ...grpc.CallOption) (*StartStreamReply, error) {
 	out := new(StartStreamReply)
 	err := c.cc.Invoke(ctx, "/streamd.StreamD/StartStream", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) StartStreamByProfileName(ctx context.Context, in *StartStreamByProfileNameRequest, opts ...grpc.CallOption) (*StartStreamReply, error) {
+	out := new(StartStreamReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/StartStreamByProfileName", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1087,6 +1097,7 @@ type StreamDServer interface {
 	ResetCache(context.Context, *ResetCacheRequest) (*ResetCacheReply, error)
 	InitCache(context.Context, *InitCacheRequest) (*InitCacheReply, error)
 	StartStream(context.Context, *StartStreamRequest) (*StartStreamReply, error)
+	StartStreamByProfileName(context.Context, *StartStreamByProfileNameRequest) (*StartStreamReply, error)
 	EndStream(context.Context, *EndStreamRequest) (*EndStreamReply, error)
 	GetStreamStatus(context.Context, *GetStreamStatusRequest) (*GetStreamStatusReply, error)
 	IsBackendEnabled(context.Context, *IsBackendEnabledRequest) (*IsBackendEnabledReply, error)
@@ -1190,6 +1201,9 @@ func (UnimplementedStreamDServer) InitCache(context.Context, *InitCacheRequest) 
 }
 func (UnimplementedStreamDServer) StartStream(context.Context, *StartStreamRequest) (*StartStreamReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StartStream not implemented")
+}
+func (UnimplementedStreamDServer) StartStreamByProfileName(context.Context, *StartStreamByProfileNameRequest) (*StartStreamReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StartStreamByProfileName not implemented")
 }
 func (UnimplementedStreamDServer) EndStream(context.Context, *EndStreamRequest) (*EndStreamReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method EndStream not implemented")
@@ -1584,6 +1598,24 @@ func _StreamD_StartStream_Handler(srv interface{}, ctx context.Context, dec func
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).StartStream(ctx, req.(*StartStreamRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_StartStreamByProfileName_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartStreamByProfileNameRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).StartStreamByProfileName(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/StartStreamByProfileName",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).StartStreamByProfileName(ctx, req.(*StartStreamByProfileNameRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2866,6 +2898,10 @@ var _StreamD_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StartStream",
 			Handler:    _StreamD_StartStream_Handler,
+		},
+		{
+			MethodName: "StartStreamByProfileName",
+			Handler:    _StreamD_StartStreamByProfileName_Handler,
 		},
 		{
 			MethodName: "EndStream",
