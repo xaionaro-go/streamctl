@@ -13,7 +13,13 @@ func EventGo2GRPC(in event.Event) (*streamd_grpc.Event, error) {
 	case *event.WindowFocusChange:
 		return &streamd_grpc.Event{
 			EventOneOf: &streamd_grpc.Event_WindowFocusChange{
-				WindowFocusChange: triggerGo2GRPCWindowFocusChange(q),
+				WindowFocusChange: eventGo2GRPCWindowFocusChange(q),
+			},
+		}, nil
+	case *event.OBSSceneChange:
+		return &streamd_grpc.Event{
+			EventOneOf: &streamd_grpc.Event_ObsSceneChange{
+				ObsSceneChange: eventGo2GRPCOBSSceneChange(q),
 			},
 		}, nil
 	default:
@@ -21,7 +27,7 @@ func EventGo2GRPC(in event.Event) (*streamd_grpc.Event, error) {
 	}
 }
 
-func triggerGo2GRPCWindowFocusChange(q *event.WindowFocusChange) *streamd_grpc.EventWindowFocusChange {
+func eventGo2GRPCWindowFocusChange(q *event.WindowFocusChange) *streamd_grpc.EventWindowFocusChange {
 	return &streamd_grpc.EventWindowFocusChange{
 		Host:        q.Host,
 		WindowID:    q.WindowID,
@@ -33,16 +39,25 @@ func triggerGo2GRPCWindowFocusChange(q *event.WindowFocusChange) *streamd_grpc.E
 	}
 }
 
+func eventGo2GRPCOBSSceneChange(q *event.OBSSceneChange) *streamd_grpc.EventOBSSceneChange {
+	return &streamd_grpc.EventOBSSceneChange{
+		From: q.From,
+		To:   q.To,
+	}
+}
+
 func EventGRPC2Go(in *streamd_grpc.Event) (config.Event, error) {
 	switch q := in.EventOneOf.(type) {
 	case *streamd_grpc.Event_WindowFocusChange:
-		return triggerGRPC2GoWindowFocusChange(q.WindowFocusChange), nil
+		return eventGRPC2GoWindowFocusChange(q.WindowFocusChange), nil
+	case *streamd_grpc.Event_ObsSceneChange:
+		return eventGRPC2GoOBSSceneChange(q.ObsSceneChange), nil
 	default:
 		return nil, fmt.Errorf("conversion of type %T is not implemented, yet", q)
 	}
 }
 
-func triggerGRPC2GoWindowFocusChange(
+func eventGRPC2GoWindowFocusChange(
 	q *streamd_grpc.EventWindowFocusChange,
 ) config.Event {
 	return &event.WindowFocusChange{
@@ -53,5 +68,14 @@ func triggerGRPC2GoWindowFocusChange(
 		ProcessID:   q.ProcessID,
 		ProcessName: q.ProcessName,
 		IsFocused:   q.IsFocused,
+	}
+}
+
+func eventGRPC2GoOBSSceneChange(
+	q *streamd_grpc.EventOBSSceneChange,
+) config.Event {
+	return &event.OBSSceneChange{
+		From: q.From,
+		To:   q.To,
 	}
 }

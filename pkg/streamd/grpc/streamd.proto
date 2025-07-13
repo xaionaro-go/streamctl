@@ -686,10 +686,6 @@ message EventQueryNot {
     Event query = 1;
 }
 
-message EventOBSSceneChange {
-    string sceneName =  1;
-}
-
 message EventWindowFocusChange {
     optional string host = 1;
     optional uint64 windowID = 2;
@@ -698,6 +694,11 @@ message EventWindowFocusChange {
     optional string processName = 5;
     optional uint64 userID = 6;
     optional bool isFocused = 7;
+}
+
+message EventOBSSceneChange {
+    optional string from = 1;
+    optional string to = 2;
 }
 
 message EventQuery {
