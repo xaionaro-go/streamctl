@@ -11,6 +11,7 @@ import (
 	"github.com/xaionaro-go/eventbus"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/expression"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config/action"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config/event"
@@ -83,6 +84,8 @@ func (d *StreamD) doAction(
 		return nil
 	case *action.StartStream:
 		return d.StartStream(ctx, a.PlatID, a.Title, a.Description, a.Profile, a.CustomArgs...)
+	case *action.StartStreamByProfileName:
+		return d.doActionStartStreamByProfileName(ctx, a)
 	case *action.EndStream:
 		return d.EndStream(ctx, a.PlatID)
 	case *action.OBSItemShowHide:
@@ -101,6 +104,32 @@ func (d *StreamD) doAction(
 	default:
 		return fmt.Errorf("unknown action type: %T", a)
 	}
+}
+
+func (d *StreamD) doActionStartStreamByProfileName(
+	ctx context.Context,
+	a *action.StartStreamByProfileName,
+) error {
+	cfg, err := d.GetConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to get the config: %w", err)
+	}
+	metadata := cfg.ProfileMetadata[streamcontrol.ProfileName(a.ProfileName)]
+	profile, ok := cfg.Backends[a.PlatID].GetStreamProfile(streamcontrol.ProfileName(a.ProfileName))
+	if !ok {
+		return fmt.Errorf("unable to get the profile for '%s'", a.ProfileName)
+	}
+
+	title := metadata.DefaultStreamTitle
+	if a.Title != nil {
+		title = *a.Title
+	}
+	description := metadata.DefaultStreamDescription
+	if a.Description != nil {
+		description = *a.Description
+	}
+
+	return d.StartStream(ctx, a.PlatID, title, description, profile)
 }
 
 func eventSubToChan[T any](

@@ -10,7 +10,7 @@ func init() {
 }
 
 type EndStream struct {
-	PlatID streamcontrol.PlatformName
+	PlatID streamcontrol.PlatformName `yaml:"platform,omitempty" json:"platform,omitempty"`
 }
 
 var _ Action = (*EndStream)(nil)

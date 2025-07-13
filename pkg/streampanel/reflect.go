@@ -153,7 +153,14 @@ func newReflectField[T any](
 	}
 	result.SetPlaceHolder(fieldName)
 	result.OnChanged = func(s string) {
-		setter(from[T](s))
+		var v T
+		t := reflect.TypeOf(v)
+		if t.Kind() == reflect.String {
+			v = reflect.ValueOf(s).Convert(t).Interface().(T)
+		} else {
+			v = from[T](s)
+		}
+		setter(v)
 	}
 	return result
 }

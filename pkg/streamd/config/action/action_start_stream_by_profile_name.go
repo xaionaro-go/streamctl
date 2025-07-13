@@ -10,10 +10,10 @@ func init() {
 }
 
 type StartStreamByProfileName struct {
-	PlatID      streamcontrol.PlatformName
-	Title       *string
-	Description *string
-	ProfileName string
+	PlatID      streamcontrol.PlatformName `yaml:"platform,omitempty"     json:"platform,omitempty"`
+	Title       *string                    `yaml:"title,omitempty"        json:"title,omitempty"`
+	Description *string                    `yaml:"description,omitempty"  json:"description,omitempty"`
+	ProfileName string                     `yaml:"profile_name,omitempty" json:"profile_name,omitempty"`
 }
 
 var _ Action = (*StartStreamByProfileName)(nil)
