@@ -307,7 +307,11 @@ func (ui *chatUIAsText) newItem(
 			removeMsgButton.Enable()
 		}
 	}
-	item.TimestampSegment.Text = msg.CreatedAt.Format("15:04:05")
+	newText := msg.CreatedAt.Format("05")
+	if msg.EventType != streamcontrol.EventTypeChatMessage {
+		newText += fmt.Sprintf(" %s", msg.EventType.String())
+	}
+	item.TimestampSegment.Text = newText
 	item.TimestampSegment.Style.ColorName = colorForPlatform(msg.Platform)
 	item.UsernameSegment.Text = msg.Username
 	item.UsernameSegment.Style.ColorName = colorForUsername(msg.Username)
