@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -15,7 +16,6 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/google/uuid"
 	"github.com/scorfly/gokick"
-	"github.com/xaionaro-go/kickcom"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/secret"
@@ -24,34 +24,19 @@ import (
 )
 
 type ReverseEngClient interface {
-	ChatClient
-	CategoriesClient
-	LivestreamInfoClient
-}
-
-type CategoriesClient interface {
-	GetSubcategoriesV1(
-		ctx context.Context,
-	) (*kickcom.CategoriesV1Reply, error)
-}
-
-type LivestreamInfoClient interface {
-	GetLivestreamV2(
-		ctx context.Context,
-		channelSlug string,
-	) (*kickcom.LivestreamV2Reply, error)
+	ChatClientOBSOLETE
 }
 
 type Kick struct {
-	CloseCtx         context.Context
-	CloseFn          context.CancelFunc
-	Channel          *kickcom.ChannelV1
-	Client           *gokick.Client
-	ReverseEngClient ReverseEngClient
-	ChatHandler      *ChatHandler
-	CurrentConfig    Config
-	SaveCfgFn        func(Config) error
-	PrepareLocker    xsync.Mutex
+	CloseCtx          context.Context
+	CloseFn           context.CancelFunc
+	Channel           *gokick.ChannelResponse
+	Client            *gokick.Client
+	ChatHandler       *ChatHandlerOBSOLETE
+	ChatHandlerLocker xsync.CtxLocker
+	CurrentConfig     Config
+	SaveCfgFn         func(Config) error
+	PrepareLocker     xsync.Mutex
 
 	lazyInitOnce          sync.Once
 	getAccessTokenLocker  xsync.Mutex
@@ -70,11 +55,6 @@ func New(
 		return nil, fmt.Errorf("channel is not set")
 	}
 
-	reverseEngClient, err := kickcom.New()
-	if err != nil {
-		return nil, fmt.Errorf("unable to initialize a client to Kick: %w", err)
-	}
-
 	options := &gokick.ClientOptions{
 		UserAccessToken: cfg.Config.UserAccessToken.Get(),
 		ClientID:        cfg.Config.ClientID,
@@ -85,51 +65,79 @@ func New(
 		return nil, fmt.Errorf("unable to initialize a client to Kick: %w", err)
 	}
 
-	var channel *kickcom.ChannelV1
-	cache := CacheFromCtx(ctx)
-	if chanInfo := cache.GetChanInfo(); chanInfo != nil && chanInfo.Slug == cfg.Config.Channel {
-		channel = cache.ChanInfo
-		logger.Debugf(ctx, "reuse the cache, instead of querying channel info")
-	} else {
-		channel, err = reverseEngClient.GetChannelV1(ctx, cfg.Config.Channel)
-		if err != nil {
-			return nil, err
-		}
-		if cache != nil {
-			cache.SetChanInfo(channel)
-		}
-	}
-
 	ctx, closeFn := context.WithCancel(ctx)
 	k := &Kick{
-		CloseCtx:         ctx,
-		CloseFn:          closeFn,
-		CurrentConfig:    cfg,
-		Client:           client,
-		ReverseEngClient: reverseEngClient,
-		Channel:          channel,
-		SaveCfgFn:        saveCfgFn,
+		CloseCtx:          ctx,
+		CloseFn:           closeFn,
+		ChatHandlerLocker: make(xsync.CtxLocker, 1),
+		CurrentConfig:     cfg,
+		Client:            client,
+		SaveCfgFn:         saveCfgFn,
 	}
-
-	chatHandler, err := k.newChatHandler(ctx, channel.ID)
-	if err != nil {
-		return nil, fmt.Errorf("unable to initialize a chat handler: %w", err)
-	}
-	k.ChatHandler = chatHandler
-
 	return k, nil
+}
+
+func (k *Kick) initChatHandler(
+	ctx context.Context,
+) {
+	if !k.ChatHandlerLocker.Lock(ctx) {
+		logger.Debugf(ctx, "initChatHandler: cancelled (case #0)")
+		return
+	}
+
+	chatHandler, err := k.newChatHandler(ctx, k.CurrentConfig.Config.Channel, k.onChatHandlerClose)
+	if err == nil {
+		k.ChatHandlerLocker.Unlock()
+		k.ChatHandler = chatHandler
+		return
+	}
+
+	go func() {
+		defer k.ChatHandlerLocker.Unlock()
+		defer logger.Debugf(ctx, "/initChatHandler")
+		for {
+			logger.Errorf(ctx, "unable to initialize chat handler: %v", err)
+			time.Sleep(time.Second)
+			select {
+			case <-ctx.Done():
+				logger.Debugf(ctx, "initChatHandler: cancelled (case #1)")
+				return
+			default:
+			}
+			chatHandler, err = k.newChatHandler(ctx, k.CurrentConfig.Config.Channel, k.onChatHandlerClose)
+			if err == nil {
+				break
+			}
+		}
+		k.ChatHandler = chatHandler
+	}()
+}
+
+func (k *Kick) onChatHandlerClose(
+	ctx context.Context,
+) {
+	if !k.ChatHandlerLocker.Lock(ctx) {
+		return
+	}
+	defer k.ChatHandlerLocker.Unlock()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		chatHandler, err := k.newChatHandler(ctx, k.CurrentConfig.Config.Channel, k.onChatHandlerClose)
+		if err != nil {
+			logger.Errorf(ctx, "unable to initialize a chat handler: %w", err)
+			time.Sleep(time.Second)
+			continue
+		}
+		k.ChatHandler = chatHandler
+	}
 }
 
 func authRedirectURI(listenPort uint16) string {
 	return fmt.Sprintf("http://localhost:%d/oauth/kick/callback", listenPort)
-}
-
-func (k *Kick) oauthHandlerFunc() OAuthHandler {
-	oauthHandler := k.CurrentConfig.Config.CustomOAuthHandler
-	if oauthHandler == nil {
-		return oauthhandler.OAuth2HandlerViaCLI
-	}
-	return oauthHandler
 }
 
 func (k *Kick) getAccessToken(
@@ -187,7 +195,7 @@ func (k *Kick) getAccessTokenNoLock(
 	codeVerifierSHA256 := sha256.Sum256([]byte(codeVerifier))
 	codeChallenge := base64.URLEncoding.EncodeToString(codeVerifierSHA256[:])
 
-	authURL, err := k.getClient().GetAuthorizeEndpoint(
+	authURL, err := k.getClient().GetAuthorize(
 		redirectURL,
 		"EMPTY",
 		codeChallenge,
@@ -245,20 +253,6 @@ func (k *Kick) setToken(
 	return nil
 }
 
-func (k *Kick) refreshAccessToken(
-	ctx context.Context,
-) (_err error) {
-	logger.Tracef(ctx, "refreshAccessToken")
-	defer func() { logger.Tracef(ctx, "/refreshAccessToken: %v", _err) }()
-	now := time.Now()
-	token, err := k.getClient().RefreshToken(ctx, k.CurrentConfig.Config.RefreshToken.Get())
-	if err != nil {
-		logger.Errorf(ctx, "unable to refresh the token: %v; so requesting a new token from scratch", err)
-		return k.getAccessToken(ctx)
-	}
-	return k.setToken(ctx, token, now)
-}
-
 func (k *Kick) Close() (_err error) {
 	ctx := context.Background()
 	logger.Debugf(ctx, "Close(ctx)")
@@ -298,11 +292,13 @@ func (k *Kick) EndStream(ctx context.Context) error {
 	return nil
 }
 
-func (k *Kick) GetStreamStatus(ctx context.Context) (_ret *streamcontrol.StreamStatus, _err error) {
+func (k *Kick) GetStreamStatus(
+	ctx context.Context,
+) (_ret *streamcontrol.StreamStatus, _err error) {
 	logger.Debugf(ctx, "GetStreamStatus")
 	defer func() { logger.Debugf(ctx, "/GetStreamStatus: %v, %v", _ret, _err) }()
 
-	info, err := k.ReverseEngClient.GetLivestreamV2(ctx, k.Channel.Slug)
+	resp, err := k.Client.GetLivestreams(ctx, gokick.NewLivestreamListFilter().SetBroadcasterUserIDs(k.Channel.BroadcasterUserID))
 	if err != nil {
 		err := fmt.Errorf("unable to request stream status using the reverse-engineering lib: %w", err)
 		logger.Errorf(ctx, "%v", err)
@@ -315,9 +311,13 @@ func (k *Kick) GetStreamStatus(ctx context.Context) (_ret *streamcontrol.StreamS
 			fmt.Errorf("unable to request stream status using the normal lib: %w", err),
 		)
 	}
-	logger.Tracef(ctx, "the received livestream status is: %s", spew.Sdump(info))
+	if len(resp.Result) > 1 {
+		return nil, fmt.Errorf("expected livestream status of one channel (or no channels), but received for %d channels", len(resp.Result))
+	}
 
-	if info.Data == nil {
+	logger.Tracef(ctx, "the received livestream status is: %s", spew.Sdump(resp.Result))
+
+	if len(resp.Result) == 0 {
 		return &streamcontrol.StreamStatus{
 			IsActive:     false,
 			ViewersCount: nil,
@@ -325,13 +325,36 @@ func (k *Kick) GetStreamStatus(ctx context.Context) (_ret *streamcontrol.StreamS
 			CustomData:   nil,
 		}, nil
 	}
+	info := resp.Result[0]
 
+	var startedAtPtr *time.Time
+	startedAt, err := ParseTimestamp(info.StartedAt)
+	if err == nil {
+		startedAtPtr = &startedAt
+	} else {
+		logger.Errorf(ctx, "unable to parse '%s' as a timestamp: %v", info.StartedAt, err)
+	}
 	return &streamcontrol.StreamStatus{
 		IsActive:     true,
-		ViewersCount: ptr(uint(info.Data.Viewers)),
-		StartedAt:    &info.Data.CreatedAt,
-		CustomData:   nil,
+		ViewersCount: ptr(uint(info.ViewerCount)),
+		StartedAt:    startedAtPtr,
+		CustomData:   info,
 	}, nil
+}
+
+const timeLayout = "2006-01-02T15:04:05-0700"
+const timeLayoutFallback = time.RFC3339
+
+func ParseTimestamp(s string) (time.Time, error) {
+	ts, err0 := time.Parse(timeLayout, s)
+	if err0 == nil {
+		return ts, nil
+	}
+	ts, err1 := time.Parse(timeLayoutFallback, s)
+	if err1 == nil {
+		return ts, nil
+	}
+	return time.Now(), errors.Join(err0, err1)
 }
 
 func (k *Kick) getStreamStatusUsingNormalClient(
@@ -342,7 +365,7 @@ func (k *Kick) getStreamStatusUsingNormalClient(
 
 	resp, err := k.getClient().GetChannels(
 		ctx,
-		gokick.NewChannelListFilter().SetBroadcasterUserIDs([]int{int(k.Channel.ID)}),
+		gokick.NewChannelListFilter().SetBroadcasterUserIDs([]int{k.Channel.BroadcasterUserID}),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get channels info")
@@ -385,16 +408,16 @@ func (k *Kick) getStreamStatusUsingNormalClient(
 
 func (k *Kick) GetAllCategories(
 	ctx context.Context,
-) (_ret []kickcom.CategoryV1Short, _err error) {
+) (_ret []gokick.CategoryResponse, _err error) {
 	logger.Debugf(ctx, "GetAllCategories")
 	defer func() { logger.Debugf(ctx, "/GetAllCategories: len:%d, %v", len(_ret), _err) }()
 
-	reply, err := k.ReverseEngClient.GetSubcategoriesV1(ctx)
+	reply, err := k.Client.GetCategories(ctx, gokick.NewCategoryListFilter())
 	if err != nil {
 		return nil, fmt.Errorf("unable to get subcategories: %w", err)
 	}
 
-	return *reply, nil
+	return reply.Result, nil
 }
 
 func (k *Kick) GetChatMessagesChan(
@@ -410,14 +433,33 @@ func (k *Kick) GetChatMessagesChan(
 			close(outCh)
 		}()
 		for {
+			err := k.prepare(ctx)
+			if err != nil {
+				logger.Errorf(ctx, "unable to get a prepared client: %w", err)
+				time.Sleep(time.Second)
+				continue
+			}
+			break
+		}
+		logger.Debugf(ctx, "GetChatMessagesChan: client is ready")
+		for {
+			chatHandler := func() *ChatHandlerOBSOLETE {
+				if !k.ChatHandlerLocker.Lock(ctx) {
+					return nil
+				}
+				defer k.ChatHandlerLocker.Unlock()
+				return k.ChatHandler
+			}()
+			logger.Tracef(ctx, "GetChatMessagesChan: waiting for a message")
 			select {
 			case <-ctx.Done():
 				return
-			case ev, ok := <-k.ChatHandler.MessagesChan():
+			case ev, ok := <-chatHandler.MessagesChan():
 				if !ok {
 					logger.Debugf(ctx, "the input channel is closed")
-					return
+					continue
 				}
+				logger.Tracef(ctx, "GetChatMessagesChan: received a message")
 				outCh <- ev
 			}
 		}
@@ -426,9 +468,12 @@ func (k *Kick) GetChatMessagesChan(
 	return outCh, nil
 }
 
-func (k *Kick) SendChatMessage(ctx context.Context, message string) error {
-	logger.Warnf(ctx, "not implemented yet")
-	return nil
+func (k *Kick) SendChatMessage(ctx context.Context, message string) (_err error) {
+	logger.Debugf(ctx, "SendChatMessage(ctx, '%s')", message)
+	defer func() { logger.Debugf(ctx, "/SendChatMessage(ctx, '%s'): %v", message, _err) }()
+	resp, err := k.Client.SendChatMessage(ctx, &k.Channel.BroadcasterUserID, message, nil, gokick.MessageTypeUser)
+	logger.Debugf(ctx, "SendChatMessage(ctx, '%s'): %#+v", message, resp)
+	return err
 }
 
 func (k *Kick) RemoveChatMessage(ctx context.Context, messageID streamcontrol.ChatMessageID) error {
@@ -441,9 +486,29 @@ func (k *Kick) BanUser(
 	userID streamcontrol.ChatUserID,
 	reason string,
 	deadline time.Time,
-) error {
-	logger.Warnf(ctx, "not implemented yet")
-	return nil
+) (_err error) {
+	logger.Debugf(ctx, "BanUser(ctx, %d, '%s', %v): %#+v", userID, reason, deadline)
+	defer func() { logger.Debugf(ctx, "/BanUser(ctx, %d, '%s', %v): %#+v", userID, reason, deadline, _err) }()
+
+	userIDInt, err := strconv.ParseInt(string(userID), 10, 64)
+	if err != nil {
+		return fmt.Errorf("unable to convert the user ID: %w", err)
+	}
+	var reasonPtr *string
+	if reason != "" {
+		reasonPtr = &reason
+	}
+	var duration *int
+	if !deadline.IsZero() {
+		duration = ptr(int(time.Until(deadline).Minutes() + 0.5))
+		if *duration <= 0 {
+			logger.Warnf(ctx, "the requested ban interval is not greater than zero: %d", *duration)
+			return nil
+		}
+	}
+	resp, err := k.Client.BanUser(ctx, k.Channel.BroadcasterUserID, int(userIDInt), duration, reasonPtr)
+	logger.Debugf(ctx, "BanUser(ctx, %d, '%s', %v): %#+v", userID, reason, deadline, resp)
+	return err
 }
 
 func (k *Kick) ApplyProfile(
@@ -514,9 +579,43 @@ func (k *Kick) prepareNoLock(ctx context.Context) error {
 	}
 
 	k.lazyInitOnce.Do(func() {
-		// do what's needed
+		k.initChannelInfo(ctx)
+		k.initChatHandler(ctx)
 	})
 	return err
+}
+
+func (k *Kick) initChannelInfo(
+	ctx context.Context,
+) {
+	var channel *gokick.ChannelResponse
+	cache := CacheFromCtx(ctx)
+	if chanInfo := cache.GetChanInfo(); chanInfo != nil && chanInfo.Slug == k.CurrentConfig.Config.Channel {
+		logger.Debugf(ctx, "reuse the cache, instead of querying channel info")
+		k.Channel = chanInfo
+		return
+	}
+
+	for {
+		slug := k.CurrentConfig.Config.Channel
+		channelResp, err := k.Client.GetChannels(ctx, gokick.NewChannelListFilter().SetSlug([]string{slug}))
+		if err != nil {
+			logger.Errorf(ctx, "unable to get the channel info (slug: '%s'): %v", slug, err)
+			time.Sleep(time.Second)
+			continue
+		}
+		if len(channelResp.Result) != 1 {
+			logger.Errorf(ctx, "expected to find one channel with name '%s', but found %d", slug, len(channelResp.Result))
+			time.Sleep(30 * time.Second)
+			continue
+		}
+		channel = &channelResp.Result[0]
+		if cache != nil {
+			cache.SetChanInfo(channel)
+		}
+		k.Channel = channel
+		return
+	}
 }
 
 func (k *Kick) getAccessTokenIfNeeded(
@@ -543,35 +642,13 @@ func (k *Kick) IsCapable(
 ) bool {
 	switch cap {
 	case streamcontrol.CapabilitySendChatMessage:
-		return false
+		return true
 	case streamcontrol.CapabilityDeleteChatMessage:
 		return false
 	case streamcontrol.CapabilityBanUser:
-		return false
+		return true
 	}
 	return false
-}
-
-func doRequest[REQ, RESP any](
-	ctx context.Context,
-	k *Kick,
-	fn func(ctx context.Context, req REQ) (RESP, error),
-	req REQ,
-) (RESP, error) {
-	for {
-		resp, err := fn(ctx, req)
-		if !isInvalidTokenErr(ctx, err) {
-			return resp, err
-		}
-
-		logger.Infof(ctx, "the token is invalid (%v), re-getting it", err)
-		tokenErr := k.getAccessToken(ctx)
-		if tokenErr != nil {
-			var zeroValue RESP
-			return zeroValue, fmt.Errorf("unable to perform the request (%w), because the token is not valid, and was unable to get a new token: %w", err, tokenErr)
-		}
-		continue
-	}
 }
 
 func isInvalidTokenErr(

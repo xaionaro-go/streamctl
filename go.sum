@@ -948,8 +948,8 @@ github.com/ryanuber/columnize v0.0.0-20160712163229-9b3edd62028f/go.mod h1:sm1tb
 github.com/rymdport/portal v0.4.1 h1:2dnZhjf5uEaeDjeF/yBIeeRo6pNI2QAKm7kq1w/kbnA=
 github.com/rymdport/portal v0.4.1/go.mod h1:kFF4jslnJ8pD5uCi17brj/ODlfIidOxlgUDTO5ncnC4=
 github.com/sagikazarmark/crypt v0.6.0/go.mod h1:U8+INwJo3nBv1m6A/8OBXAq7Jnpspk5AxSgDyEQcea8=
-github.com/scorfly/gokick v1.1.1 h1:xkV/49ZXBHbq52UayDTiK3ne4Bb8hCBoKUZfPaK8Q+w=
-github.com/scorfly/gokick v1.1.1/go.mod h1:uJ1L4RHLc+g3RvqxhKHiB2VvEvQelJLbtgNSlqp8WB8=
+github.com/scorfly/gokick v1.11.0 h1:4VMpyO8hnPUW4dYgCfOi/YzMgVgj/Rh/OJW7oi2rn+0=
+github.com/scorfly/gokick v1.11.0/go.mod h1:9Tc5+/nwcCLjgDVUeW2K/vhEbkMkN+OE8UQVx4fL1WA=
 github.com/sean-/seed v0.0.0-20170313163322-e2103e2c3529/go.mod h1:DxrIzT+xaE7yg65j358z/aeFdxmN0P9QXhEzd20vsDc=
 github.com/sergi/go-diff v1.0.0/go.mod h1:0CfEIISq7TuYL3j771MWULgwwjU+GofnZX9QAmXWZgo=
 github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 h1:n661drycOFuPLCN3Uc8sB6B/s6Z4t2xvBgU1htSHuq8=
@@ -1157,8 +1157,8 @@ github.com/xaionaro-go/xlogrus v0.0.0-20250111150201-60557109545a h1:EoNRdOtBMnZ
 github.com/xaionaro-go/xlogrus v0.0.0-20250111150201-60557109545a/go.mod h1:RPfWNuwqJykkA2TEvisXqHgy1ypA/1H2HBdIRSeVJ9o=
 github.com/xaionaro-go/xpath v0.0.0-20250111145115-55f5728f643f h1:ofxY1akRlVdJ/AEDj0EakK4Aez8fzeWTTe2mCAZiJ0A=
 github.com/xaionaro-go/xpath v0.0.0-20250111145115-55f5728f643f/go.mod h1:f0DVcqddOy1RALOgXJHwpQnkp1u1yeBX/+A2+Bf4EGc=
-github.com/xaionaro-go/xsync v0.0.0-20250614210231-b74f647f859f h1:Yn/hgHYgZ05zaTo6cK+Fmx46ah0O8ey0JMsWQ4TsgnY=
-github.com/xaionaro-go/xsync v0.0.0-20250614210231-b74f647f859f/go.mod h1:FCpywNAl4a4hgzE8j7Z+TpdhBQi5WHxnI35jOrFpoQw=
+github.com/xaionaro-go/xsync v0.0.0-20250713122735-6e002588c3d0 h1:JDl35mgD3RsmEx7xbBCSONLceBCTFUWQvPUG5YsWrgU=
+github.com/xaionaro-go/xsync v0.0.0-20250713122735-6e002588c3d0/go.mod h1:FCpywNAl4a4hgzE8j7Z+TpdhBQi5WHxnI35jOrFpoQw=
 github.com/xaionaro-go/zerolog2belt v0.0.0-20241103164018-a3bc1ea487e5 h1:jAy7VLg8y8XE1R8jBte4PRDJzOaAE+sUfmttfB9ZcAY=
 github.com/xaionaro-go/zerolog2belt v0.0.0-20241103164018-a3bc1ea487e5/go.mod h1:KJuX7yl27vU+KV6CpsWOe5ZMY4zSg70hvEhwoYdr17w=
 github.com/xanzy/ssh-agent v0.3.3 h1:+/15pJfg/RsTxqYcX6fHqOXZwwMP+2VyYWJeWM2qQFM=

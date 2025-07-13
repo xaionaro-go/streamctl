@@ -45,7 +45,7 @@ func main() {
 	channel, err := client.GetChannelV1(ctx, channelSlug)
 	assertNoError(err)
 
-	h, err := kick.NewChatHandler(ctx, client, channel.ID)
+	h, err := kick.NewChatHandlerOBSOLETE(ctx, client, channel.ID, nil)
 	assertNoError(err)
 
 	fmt.Println("started")

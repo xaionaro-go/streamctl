@@ -554,7 +554,9 @@ func (c *Client) SaveConfig(ctx context.Context) error {
 	return err
 }
 
-func (c *Client) ResetCache(ctx context.Context) error {
+func (c *Client) ResetCache(ctx context.Context) (_err error) {
+	logger.Debugf(ctx, "ResetCache")
+	defer func() { logger.Debugf(ctx, "/ResetCache: %v", _err) }()
 	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
 		client streamd_grpc.StreamDClient,

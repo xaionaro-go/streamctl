@@ -13,7 +13,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/go-ng/xmath"
-	"github.com/xaionaro-go/kickcom"
+	"github.com/scorfly/gokick"
 	"github.com/xaionaro-go/observability"
 	gconsts "github.com/xaionaro-go/streamctl/pkg/consts"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -339,8 +339,8 @@ func (p *Panel) profileWindow(
 		}
 
 		kickCategories := dataKick.Cache.GetCategories()
-		catN := map[string]kickcom.CategoryV1Short{}
-		catI := map[uint64]kickcom.CategoryV1Short{}
+		catN := map[string]gokick.CategoryResponse{}
+		catI := map[int]gokick.CategoryResponse{}
 		for _, cat := range kickCategories {
 			catN[cleanKickCategoryName(cat.Name)] = cat
 			catI[cat.ID] = cat
@@ -386,7 +386,7 @@ func (p *Panel) profileWindow(
 			selectedKickCategoryBox.RemoveAll()
 			selectedKickCategoryContainer := container.NewHBox()
 			tagContainerRemoveButton := widget.NewButtonWithIcon(
-				catI[catID].Name,
+				catI[int(catID)].Name,
 				theme.ContentClearIcon(),
 				func() {
 					selectedKickCategoryBox.Remove(selectedKickCategoryContainer)
@@ -408,7 +408,7 @@ func (p *Panel) profileWindow(
 			}
 			text = cleanKickCategoryName(text)
 			cat := catN[text]
-			setSelectedKickCategory(cat.ID)
+			setSelectedKickCategory(uint64(cat.ID))
 			observability.Go(ctx, func(ctx context.Context) {
 				time.Sleep(100 * time.Millisecond)
 				kickCategory.SetText("")
