@@ -84,7 +84,7 @@ func (k *Kick) initChatHandler(
 		return
 	}
 
-	chatHandler, err := k.newChatHandler(ctx, k.CurrentConfig.Config.Channel, k.onChatHandlerClose)
+	chatHandler, err := k.newChatHandlerOBSOLETE(ctx, k.CurrentConfig.Config.Channel, k.onChatHandlerClose)
 	if err == nil {
 		k.ChatHandlerLocker.Unlock()
 		k.ChatHandler = chatHandler
@@ -103,7 +103,7 @@ func (k *Kick) initChatHandler(
 				return
 			default:
 			}
-			chatHandler, err = k.newChatHandler(ctx, k.CurrentConfig.Config.Channel, k.onChatHandlerClose)
+			chatHandler, err = k.newChatHandlerOBSOLETE(ctx, k.CurrentConfig.Config.Channel, k.onChatHandlerClose)
 			if err == nil {
 				break
 			}
@@ -125,7 +125,7 @@ func (k *Kick) onChatHandlerClose(
 			return
 		default:
 		}
-		chatHandler, err := k.newChatHandler(ctx, k.CurrentConfig.Config.Channel, k.onChatHandlerClose)
+		chatHandler, err := k.newChatHandlerOBSOLETE(ctx, k.CurrentConfig.Config.Channel, k.onChatHandlerClose)
 		if err != nil {
 			logger.Errorf(ctx, "unable to initialize a chat handler: %w", err)
 			time.Sleep(time.Second)

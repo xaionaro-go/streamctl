@@ -31,7 +31,7 @@ type ChatHandlerOBSOLETE struct {
 	onClose         func(context.Context)
 }
 
-func (k *Kick) newChatHandler(
+func (k *Kick) newChatHandlerOBSOLETE(
 	ctx context.Context,
 	channelSlug string,
 	onClose func(context.Context),
