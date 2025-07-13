@@ -5,11 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
-	"github.com/andreykaipov/goobs"
-	"github.com/andreykaipov/goobs/api/events"
-	"github.com/andreykaipov/goobs/api/events/subscriptions"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
@@ -254,81 +250,6 @@ func newYouTube(
 		return nil, fmt.Errorf("unable to initialize YouTube client: %w", err)
 	}
 	return yt, nil
-}
-
-func (d *StreamD) initOBSBackend(ctx context.Context) error {
-	obs, err := newOBS(
-		ctx,
-		d.Config.Backends[obs.ID],
-	)
-	if err != nil {
-		return err
-	}
-	if d.StreamControllers.OBS != nil {
-		err := d.StreamControllers.OBS.Close()
-		if err != nil {
-			logger.Warnf(ctx, "unable to close OBS: %v", err)
-		}
-	}
-	d.StreamControllers.OBS = obs
-	go d.listenOBSEvents(ctx, obs)
-	return nil
-}
-
-func (d *StreamD) listenOBSEvents(
-	ctx context.Context,
-	o *obs.OBS,
-) {
-	logger.Debugf(ctx, "listenOBSEvents")
-	defer logger.Debugf(ctx, "/listenOBSEvents")
-	for {
-		if o.IsClosed {
-			return
-		}
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
-		client, err := o.GetClient(
-			obs.GetClientOption(goobs.WithEventSubscriptions(subscriptions.InputVolumeMeters)),
-		)
-		if err != nil {
-			logger.Errorf(ctx, "unable to get an OBS client: %v", err)
-			time.Sleep(time.Second)
-			continue
-		}
-
-		func() {
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case ev, ok := <-client.IncomingEvents:
-					if !ok {
-						return
-					}
-					d.processOBSEvent(ctx, ev)
-				}
-			}
-		}()
-	}
-}
-
-func (d *StreamD) processOBSEvent(
-	ctx context.Context,
-	ev any,
-) {
-	logger.Tracef(ctx, "got an OBS event: %T", ev)
-	switch ev := ev.(type) {
-	case *events.InputVolumeMeters:
-		d.OBSState.Do(xsync.WithNoLogging(ctx, true), func() {
-			for _, v := range ev.Inputs {
-				d.OBSState.VolumeMeters[v.Name] = v.Levels
-			}
-		})
-	}
 }
 
 func (d *StreamD) initTwitchBackend(ctx context.Context) error {

@@ -41,8 +41,8 @@ func eventGo2GRPCWindowFocusChange(q *event.WindowFocusChange) *streamd_grpc.Eve
 
 func eventGo2GRPCOBSSceneChange(q *event.OBSSceneChange) *streamd_grpc.EventOBSSceneChange {
 	return &streamd_grpc.EventOBSSceneChange{
-		From: q.From,
-		To:   q.To,
+		From: q.NameFrom,
+		To:   q.NameTo,
 	}
 }
 
@@ -75,7 +75,7 @@ func eventGRPC2GoOBSSceneChange(
 	q *streamd_grpc.EventOBSSceneChange,
 ) config.Event {
 	return &event.OBSSceneChange{
-		From: q.From,
-		To:   q.To,
+		NameFrom: q.From,
+		NameTo:   q.To,
 	}
 }

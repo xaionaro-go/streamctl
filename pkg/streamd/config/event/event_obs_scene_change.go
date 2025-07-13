@@ -9,8 +9,10 @@ func init() {
 }
 
 type OBSSceneChange struct {
-	From *string `yaml:"from,omitempty" json:"from,omitempty"`
-	To   *string `yaml:"to,omitempty"   json:"to,omitempty"`
+	UUIDFrom *string `yaml:"uuid_from,omitempty" json:"uuid_from,omitempty"`
+	UUIDTo   *string `yaml:"uuid_to,omitempty"   json:"uuid_to,omitempty"`
+	NameFrom *string `yaml:"name_from,omitempty" json:"name_from,omitempty"`
+	NameTo   *string `yaml:"name_to,omitempty"   json:"name_to,omitempty"`
 }
 
 func (ev *OBSSceneChange) Get() Event { return ev }
@@ -21,10 +23,16 @@ func (ev *OBSSceneChange) Match(cmpIface Event) bool {
 		return false
 	}
 
-	if !fieldMatch(ev.From, cmp.From) {
+	if !fieldMatch(ev.UUIDFrom, cmp.UUIDFrom) {
 		return false
 	}
-	if !fieldMatch(ev.To, cmp.To) {
+	if !fieldMatch(ev.UUIDTo, cmp.UUIDTo) {
+		return false
+	}
+	if !fieldMatch(ev.NameFrom, cmp.NameFrom) {
+		return false
+	}
+	if !fieldMatch(ev.NameTo, cmp.NameTo) {
 		return false
 	}
 
