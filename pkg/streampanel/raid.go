@@ -6,6 +6,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/facebookincubator/go-belt/tool/logger"
@@ -69,6 +70,20 @@ func newRaidPage(
 		}
 		return result
 	}
+	userEntry := widget.NewEntry()
+	var nowPlatID string
+	platRadio := widget.NewRadioGroup([]string{string(youtube.ID), string(twitch.ID), string(kick.ID)}, func(s string) {
+		nowPlatID = s
+	})
+	platRadio.SetSelected(string(youtube.ID))
+	nowButton := widget.NewButtonWithIcon("Raid now!", theme.MediaPlayIcon(), func() {
+		dialog.NewConfirm("raid right now?", "Please confirm if you want to raid right now", func(b bool) {
+			err := p.StreamD.RaidTo(ctx, streamcontrol.PlatformName(nowPlatID), streamcontrol.ChatUserID(userEntry.Text))
+			if err != nil {
+				p.DisplayError(err)
+			}
+		}, p.mainWindow).Show()
+	})
 	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
 		logger.Debugf(ctx, "raidPage: save")
 		defer logger.Debugf(ctx, "raidPage: /save")
@@ -99,6 +114,12 @@ func newRaidPage(
 		nil,
 		nil,
 		container.NewVBox(
+			widget.NewLabel("User to shoutout right now:"),
+			platRadio,
+			userEntry,
+			nowButton,
+			widget.NewSeparator(),
+			widget.NewRichTextFromMarkdown("# Auto-Raid"),
 			widget.NewLabel("The comma-separated list of YouTube users to raid:"),
 			youtubeUsersEntry,
 			widget.NewLabel("The comma-separated list of Twitch users to raid:"),

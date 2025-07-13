@@ -6,6 +6,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/facebookincubator/go-belt/tool/logger"
@@ -70,6 +71,20 @@ func newShoutoutPage(
 		}
 		return result
 	}
+	userEntry := widget.NewEntry()
+	var nowPlatID string
+	platRadio := widget.NewRadioGroup([]string{string(youtube.ID), string(twitch.ID), string(kick.ID)}, func(s string) {
+		nowPlatID = s
+	})
+	platRadio.SetSelected(string(youtube.ID))
+	nowButton := widget.NewButtonWithIcon("Shoutout now!", theme.MediaPlayIcon(), func() {
+		dialog.NewConfirm("shoutout right now?", "Please confirm if you want to throw a shoutout right now", func(b bool) {
+			err := p.StreamD.Shoutout(ctx, streamcontrol.PlatformName(nowPlatID), streamcontrol.ChatUserID(userEntry.Text))
+			if err != nil {
+				p.DisplayError(err)
+			}
+		}, p.mainWindow).Show()
+	})
 	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
 		logger.Debugf(ctx, "shoutoutPage: save")
 		defer logger.Debugf(ctx, "shoutoutPage: /save")
@@ -100,6 +115,12 @@ func newShoutoutPage(
 		nil,
 		nil,
 		container.NewVBox(
+			widget.NewLabel("User to shoutout right now:"),
+			platRadio,
+			userEntry,
+			nowButton,
+			widget.NewSeparator(),
+			widget.NewRichTextFromMarkdown("# Auto-shoutout"),
 			widget.NewLabel("The comma-separated list of YouTube users to shoutout:"),
 			youtubeUsersEntry,
 			widget.NewLabel("The comma-separated list of Twitch users to shoutout:"),

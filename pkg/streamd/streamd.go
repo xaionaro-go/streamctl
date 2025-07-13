@@ -1983,3 +1983,31 @@ func (p *StreamD) addCloseCallback(callback func() error, name string) {
 		Name:     name,
 	})
 }
+
+func (p *StreamD) Shoutout(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	userID streamcontrol.ChatUserID,
+) (_err error) {
+	logger.Debugf(ctx, "Shoutout(ctx, '%s', '%s')", platID, userID)
+	defer func() { logger.Debugf(ctx, "/Shoutout(ctx, '%s', '%s'): %v", platID, userID, _err) }()
+	ctrl, err := p.streamController(ctx, platID)
+	if err != nil {
+		return fmt.Errorf("unable to get a stream controller: %w", err)
+	}
+	return ctrl.Shoutout(ctx, userID)
+}
+
+func (p *StreamD) RaidTo(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	userID streamcontrol.ChatUserID,
+) (_err error) {
+	logger.Debugf(ctx, "RaidTo(ctx, '%s', '%s')", platID, userID)
+	defer func() { logger.Debugf(ctx, "/RaidTo(ctx, '%s', '%s'): %v", platID, userID, _err) }()
+	ctrl, err := p.streamController(ctx, platID)
+	if err != nil {
+		return fmt.Errorf("unable to get a stream controller: %w", err)
+	}
+	return ctrl.RaidTo(ctx, userID)
+}

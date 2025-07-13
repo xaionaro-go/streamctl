@@ -299,6 +299,16 @@ type StreamD interface {
 		reason string,
 		deadline time.Time,
 	) error
+	Shoutout(
+		ctx context.Context,
+		platID streamcontrol.PlatformName,
+		userID streamcontrol.ChatUserID,
+	) error
+	RaidTo(
+		ctx context.Context,
+		platID streamcontrol.PlatformName,
+		userID streamcontrol.ChatUserID,
+	) error
 
 	GetPeerIDs(ctx context.Context) ([]p2ptypes.PeerID, error)
 	DialPeerByID(

@@ -2042,6 +2042,36 @@ func (grpc *GRPCServer) BanUser(
 	return &streamd_grpc.BanUserReply{}, nil
 }
 
+func (grpc *GRPCServer) Shoutout(
+	ctx context.Context,
+	req *streamd_grpc.ShoutoutRequest,
+) (*streamd_grpc.ShoutoutReply, error) {
+	err := grpc.StreamD.Shoutout(
+		ctx,
+		streamcontrol.PlatformName(req.GetPlatID()),
+		streamcontrol.ChatUserID(req.GetUserID()),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.ShoutoutReply{}, nil
+}
+
+func (grpc *GRPCServer) RaidTo(
+	ctx context.Context,
+	req *streamd_grpc.RaidToRequest,
+) (*streamd_grpc.RaidToReply, error) {
+	err := grpc.StreamD.RaidTo(
+		ctx,
+		streamcontrol.PlatformName(req.GetPlatID()),
+		streamcontrol.ChatUserID(req.GetUserID()),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.RaidToReply{}, nil
+}
+
 /*func (grpc *GRPCServer) ProxyConnect(
 	req *streamd_grpc.ProxyConnectRequest,
 	srv streamd_grpc.StreamD_ProxyConnectServer,

@@ -907,11 +907,14 @@ func (t *Twitch) IsChannelStreaming(
 func (t *Twitch) RaidTo(
 	ctx context.Context,
 	chanID streamcontrol.ChatUserID,
-) error {
+) (_err error) {
+	logger.Debugf(ctx, "RaidTo(ctx, '%s')", chanID)
+	defer func() { logger.Debugf(ctx, "/RaidTo(ctx, '%s'): %v", chanID, _err) }()
 	params := &helix.StartRaidParams{
 		FromBroadcasterID: t.broadcasterID,
 		ToBroadcasterID:   string(chanID),
 	}
+	logger.Debugf(ctx, "RaidTo(ctx, '%s'): %#+v", chanID, params)
 	resp, err := t.client.StartRaid(params)
 	if err != nil {
 		return fmt.Errorf("unable to raid %#+v: %v", params, err)
@@ -923,12 +926,15 @@ func (t *Twitch) RaidTo(
 func (t *Twitch) Shoutout(
 	ctx context.Context,
 	chanID streamcontrol.ChatUserID,
-) error {
+) (_err error) {
+	logger.Debugf(ctx, "Shoutout(ctx, '%s')", chanID)
+	defer func() { logger.Debugf(ctx, "/Shoutout(ctx, '%s'): %v", chanID, _err) }()
 	params := &helix.SendShoutoutParams{
 		FromBroadcasterID: t.broadcasterID,
 		ToBroadcasterID:   string(chanID),
 		ModeratorID:       t.broadcasterID,
 	}
+	logger.Debugf(ctx, "Shoutout(ctx, '%s'): %#+v", chanID, params)
 	_, err := t.client.SendShoutout(params)
 	if err != nil {
 		return fmt.Errorf("unable to send the shoutout (%#+v): %w", params, err)

@@ -2778,6 +2778,58 @@ func (c *Client) SendChatMessage(
 	return nil
 }
 
+func (c *Client) Shoutout(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	userID streamcontrol.ChatUserID,
+) error {
+	_, err := withStreamDClient(ctx, c, func(
+		ctx context.Context,
+		client streamd_grpc.StreamDClient,
+		conn io.Closer,
+	) (*streamd_grpc.ShoutoutReply, error) {
+		return callWrapper(
+			ctx,
+			c,
+			client.Shoutout,
+			&streamd_grpc.ShoutoutRequest{
+				PlatID: string(platID),
+				UserID: string(userID),
+			},
+		)
+	})
+	if err != nil {
+		return fmt.Errorf("unable to submit the event: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) RaidTo(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	userID streamcontrol.ChatUserID,
+) error {
+	_, err := withStreamDClient(ctx, c, func(
+		ctx context.Context,
+		client streamd_grpc.StreamDClient,
+		conn io.Closer,
+	) (*streamd_grpc.RaidToReply, error) {
+		return callWrapper(
+			ctx,
+			c,
+			client.RaidTo,
+			&streamd_grpc.RaidToRequest{
+				PlatID: string(platID),
+				UserID: string(userID),
+			},
+		)
+	})
+	if err != nil {
+		return fmt.Errorf("unable to submit the event: %w", err)
+	}
+	return nil
+}
+
 func (c *Client) DialContext(
 	ctx context.Context,
 	network string,

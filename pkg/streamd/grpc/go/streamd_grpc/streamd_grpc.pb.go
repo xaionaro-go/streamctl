@@ -93,6 +93,8 @@ type StreamDClient interface {
 	SendChatMessage(ctx context.Context, in *SendChatMessageRequest, opts ...grpc.CallOption) (*SendChatMessageReply, error)
 	RemoveChatMessage(ctx context.Context, in *RemoveChatMessageRequest, opts ...grpc.CallOption) (*RemoveChatMessageReply, error)
 	BanUser(ctx context.Context, in *BanUserRequest, opts ...grpc.CallOption) (*BanUserReply, error)
+	Shoutout(ctx context.Context, in *ShoutoutRequest, opts ...grpc.CallOption) (*ShoutoutReply, error)
+	RaidTo(ctx context.Context, in *RaidToRequest, opts ...grpc.CallOption) (*RaidToReply, error)
 	GetPeerIDs(ctx context.Context, in *GetPeerIDsRequest, opts ...grpc.CallOption) (*GetPeerIDsReply, error)
 	LLMGenerate(ctx context.Context, in *LLMGenerateRequest, opts ...grpc.CallOption) (*LLMGenerateReply, error)
 }
@@ -1065,6 +1067,24 @@ func (c *streamDClient) BanUser(ctx context.Context, in *BanUserRequest, opts ..
 	return out, nil
 }
 
+func (c *streamDClient) Shoutout(ctx context.Context, in *ShoutoutRequest, opts ...grpc.CallOption) (*ShoutoutReply, error) {
+	out := new(ShoutoutReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/Shoutout", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) RaidTo(ctx context.Context, in *RaidToRequest, opts ...grpc.CallOption) (*RaidToReply, error) {
+	out := new(RaidToReply)
+	err := c.cc.Invoke(ctx, "/streamd.StreamD/RaidTo", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *streamDClient) GetPeerIDs(ctx context.Context, in *GetPeerIDsRequest, opts ...grpc.CallOption) (*GetPeerIDsReply, error) {
 	out := new(GetPeerIDsReply)
 	err := c.cc.Invoke(ctx, "/streamd.StreamD/GetPeerIDs", in, out, opts...)
@@ -1163,6 +1183,8 @@ type StreamDServer interface {
 	SendChatMessage(context.Context, *SendChatMessageRequest) (*SendChatMessageReply, error)
 	RemoveChatMessage(context.Context, *RemoveChatMessageRequest) (*RemoveChatMessageReply, error)
 	BanUser(context.Context, *BanUserRequest) (*BanUserReply, error)
+	Shoutout(context.Context, *ShoutoutRequest) (*ShoutoutReply, error)
+	RaidTo(context.Context, *RaidToRequest) (*RaidToReply, error)
 	GetPeerIDs(context.Context, *GetPeerIDsRequest) (*GetPeerIDsReply, error)
 	LLMGenerate(context.Context, *LLMGenerateRequest) (*LLMGenerateReply, error)
 	mustEmbedUnimplementedStreamDServer()
@@ -1399,6 +1421,12 @@ func (UnimplementedStreamDServer) RemoveChatMessage(context.Context, *RemoveChat
 }
 func (UnimplementedStreamDServer) BanUser(context.Context, *BanUserRequest) (*BanUserReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BanUser not implemented")
+}
+func (UnimplementedStreamDServer) Shoutout(context.Context, *ShoutoutRequest) (*ShoutoutReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Shoutout not implemented")
+}
+func (UnimplementedStreamDServer) RaidTo(context.Context, *RaidToRequest) (*RaidToReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RaidTo not implemented")
 }
 func (UnimplementedStreamDServer) GetPeerIDs(context.Context, *GetPeerIDsRequest) (*GetPeerIDsReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetPeerIDs not implemented")
@@ -2823,6 +2851,42 @@ func _StreamD_BanUser_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
+func _StreamD_Shoutout_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ShoutoutRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).Shoutout(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/Shoutout",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).Shoutout(ctx, req.(*ShoutoutRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_RaidTo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RaidToRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).RaidTo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/streamd.StreamD/RaidTo",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).RaidTo(ctx, req.(*RaidToRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _StreamD_GetPeerIDs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetPeerIDsRequest)
 	if err := dec(in); err != nil {
@@ -3118,6 +3182,14 @@ var _StreamD_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "BanUser",
 			Handler:    _StreamD_BanUser_Handler,
+		},
+		{
+			MethodName: "Shoutout",
+			Handler:    _StreamD_Shoutout_Handler,
+		},
+		{
+			MethodName: "RaidTo",
+			Handler:    _StreamD_RaidTo_Handler,
 		},
 		{
 			MethodName: "GetPeerIDs",

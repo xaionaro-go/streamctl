@@ -90,6 +90,9 @@ service StreamD {
     rpc RemoveChatMessage(RemoveChatMessageRequest) returns (RemoveChatMessageReply) {}
     rpc BanUser(BanUserRequest) returns (BanUserReply) {}
 
+    rpc Shoutout(ShoutoutRequest) returns (ShoutoutReply) {}
+    rpc RaidTo(RaidToRequest) returns (RaidToReply) {}
+
     rpc GetPeerIDs(GetPeerIDsRequest) returns (GetPeerIDsReply) {}
 
     rpc LLMGenerate(LLMGenerateRequest) returns (LLMGenerateReply) {}
@@ -811,6 +814,17 @@ message BanUserRequest {
 	optional int64 deadlineUnixNano  = 4;
 }
 message BanUserReply {}
+
+message ShoutoutRequest {
+    string platID = 1;
+    string userID = 2;    
+}
+message ShoutoutReply {}
+message RaidToRequest {
+    string platID = 1;
+    string userID = 2;
+}
+message RaidToReply {}
 
 message GetPeerIDsRequest {}
 message GetPeerIDsReply {
