@@ -3,12 +3,14 @@ package streamd
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 )
 
 const (
@@ -56,10 +58,85 @@ func (d *StreamD) startListeningForChatMessages(
 					logger.Errorf(ctx, "unable to add the message %#+v to the chat messages storage: %v", msg, err)
 				}
 				publishEvent(ctx, d.EventBus, msg)
+				d.shoutoutIfNeeded(ctx, msg)
 			}
 		}
 	})
 	return nil
+}
+
+func (d *StreamD) shoutoutIfNeeded(
+	ctx context.Context,
+	msg api.ChatMessage,
+) {
+	if !msg.IsLive {
+		logger.Tracef(ctx, "is not a live message")
+		return
+	}
+
+	d.lastShoutoutAtLocker.Lock()
+	defer d.lastShoutoutAtLocker.Unlock()
+
+	userID := config.ChatUserID{
+		Platform: msg.Platform,
+		User:     streamcontrol.ChatUserID(strings.ToLower(string(msg.UserID))),
+	}
+	lastShoutoutAt := d.lastShoutoutAt[userID]
+	if v := time.Since(lastShoutoutAt); v < time.Hour {
+		logger.Tracef(ctx, "the previous shoutout was too soon: %v < %v", v, time.Hour)
+		return
+	}
+
+	cfg, err := d.GetConfig(ctx)
+	if err != nil {
+		logger.Errorf(ctx, "unable to get the config: %v", err)
+		return
+	}
+
+	found := false
+	for _, _candidate := range cfg.Shoutout.AutoShoutoutOnMessage {
+		if _candidate.Platform != msg.Platform {
+			continue
+		}
+		candidate := config.ChatUserID{
+			Platform: _candidate.Platform,
+			User:     streamcontrol.ChatUserID(strings.ToLower(string(_candidate.User))),
+		}
+		if candidate == userID {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		logger.Tracef(ctx, "not in the list for auto-shoutout")
+		return
+	}
+
+	d.shoutoutIfCan(ctx, userID.Platform, userID.User)
+}
+
+func (d *StreamD) shoutoutIfCan(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	userID streamcontrol.ChatUserID,
+) {
+	ctrl, err := d.streamController(ctx, platID)
+	if err != nil {
+		logger.Errorf(ctx, "unable to get a stream controller '%s': %v", platID, err)
+		return
+	}
+
+	if !ctrl.IsCapable(ctx, streamcontrol.CapabilityShoutout) {
+		logger.Errorf(ctx, "the controller '%s' does not support shoutouts", platID)
+		return
+	}
+
+	err = ctrl.Shoutout(ctx, userID)
+	if err != nil {
+		logger.Errorf(ctx, "unable to shoutout '%s' at '%s': %v", userID, platID, err)
+		return
+	}
 }
 
 func (d *StreamD) RemoveChatMessage(

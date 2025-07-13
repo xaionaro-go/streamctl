@@ -7,5 +7,8 @@ const (
 	CapabilitySendChatMessage
 	CapabilityDeleteChatMessage
 	CapabilityBanUser
+	CapabilityShoutout
+	CapabilityIsChannelStreaming
+	CapabilityRaid
 	EndOfCapability
 )

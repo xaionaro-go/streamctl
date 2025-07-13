@@ -1508,6 +1508,33 @@ func (yt *YouTube) IsCapable(
 		return true
 	case streamcontrol.CapabilityBanUser:
 		return false
+	case streamcontrol.CapabilityShoutout:
+		return false
+	case streamcontrol.CapabilityIsChannelStreaming:
+		return false
+	case streamcontrol.CapabilityRaid:
+		return false
 	}
 	return false
+}
+
+func (yt *YouTube) IsChannelStreaming(
+	ctx context.Context,
+	chanID streamcontrol.ChatUserID,
+) (bool, error) {
+	return false, fmt.Errorf("not implemented")
+}
+
+func (yt *YouTube) RaidTo(
+	ctx context.Context,
+	chanID streamcontrol.ChatUserID,
+) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (yt *YouTube) Shoutout(
+	ctx context.Context,
+	chanID streamcontrol.ChatUserID,
+) error {
+	return fmt.Errorf("not implemented")
 }

@@ -295,3 +295,24 @@ func (obs *OBS) IsCapable(
 ) bool {
 	return false
 }
+
+func (obs *OBS) IsChannelStreaming(
+	ctx context.Context,
+	chanID streamcontrol.ChatUserID,
+) (bool, error) {
+	return false, fmt.Errorf("not implemented")
+}
+
+func (obs *OBS) RaidTo(
+	ctx context.Context,
+	chanID streamcontrol.ChatUserID,
+) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (obs *OBS) Shoutout(
+	ctx context.Context,
+	chanID streamcontrol.ChatUserID,
+) error {
+	return fmt.Errorf("not implemented")
+}

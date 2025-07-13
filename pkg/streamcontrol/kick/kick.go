@@ -655,6 +655,33 @@ func (k *Kick) IsCapable(
 		return false
 	case streamcontrol.CapabilityBanUser:
 		return true
+	case streamcontrol.CapabilityShoutout:
+		return false
+	case streamcontrol.CapabilityIsChannelStreaming:
+		return false
+	case streamcontrol.CapabilityRaid:
+		return false
 	}
 	return false
+}
+
+func (k *Kick) IsChannelStreaming(
+	ctx context.Context,
+	chanID streamcontrol.ChatUserID,
+) (bool, error) {
+	return false, fmt.Errorf("not implemented")
+}
+
+func (k *Kick) RaidTo(
+	ctx context.Context,
+	chanID streamcontrol.ChatUserID,
+) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (k *Kick) Shoutout(
+	ctx context.Context,
+	chanID streamcontrol.ChatUserID,
+) error {
+	return fmt.Errorf("not implemented")
 }

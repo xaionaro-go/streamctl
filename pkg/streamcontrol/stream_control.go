@@ -136,6 +136,10 @@ type StreamControllerCommons interface {
 	BanUser(ctx context.Context, userID ChatUserID, reason string, deadline time.Time) error
 
 	IsCapable(context.Context, Capability) bool
+
+	IsChannelStreaming(ctx context.Context, chanID ChatUserID) (bool, error)
+	Shoutout(ctx context.Context, chanID ChatUserID) error
+	RaidTo(ctx context.Context, chanID ChatUserID) error
 }
 
 type StreamController[ProfileType StreamProfile] interface {
@@ -248,6 +252,16 @@ func (c *abstractStreamController) BanUser(ctx context.Context, userID ChatUserI
 }
 func (c *abstractStreamController) IsCapable(ctx context.Context, cap Capability) bool {
 	return c.StreamController.IsCapable(ctx, cap)
+}
+
+func (c *abstractStreamController) IsChannelStreaming(ctx context.Context, chanID ChatUserID) (bool, error) {
+	return c.StreamController.IsChannelStreaming(ctx, chanID)
+}
+func (c *abstractStreamController) Shoutout(ctx context.Context, chanID ChatUserID) error {
+	return c.StreamController.Shoutout(ctx, chanID)
+}
+func (c *abstractStreamController) RaidTo(ctx context.Context, chanID ChatUserID) error {
+	return c.StreamController.RaidTo(ctx, chanID)
 }
 
 func ToAbstract[T StreamProfile](c StreamController[T]) AbstractStreamController {

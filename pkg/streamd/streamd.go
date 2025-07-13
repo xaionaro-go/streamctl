@@ -111,6 +111,9 @@ type StreamD struct {
 	obsRestarter *obsRestarter
 
 	llm *llm
+
+	lastShoutoutAtLocker sync.Mutex
+	lastShoutoutAt       map[config.ChatUserID]time.Time
 }
 
 type imageHash uint64
@@ -146,9 +149,10 @@ func New(
 		OBSState: OBSState{
 			VolumeMeters: map[string][][3]float64{},
 		},
-		Timers:    map[api.TimerID]*Timer{},
-		Options:   Options(options).Aggregate(),
-		ReadyChan: make(chan struct{}),
+		Timers:         map[api.TimerID]*Timer{},
+		Options:        Options(options).Aggregate(),
+		ReadyChan:      make(chan struct{}),
+		lastShoutoutAt: map[config.ChatUserID]time.Time{},
 	}
 
 	// TODO: move this to Run()
@@ -782,6 +786,11 @@ func (d *StreamD) EndStream(ctx context.Context, platID streamcontrol.PlatformNa
 
 	defer publishEvent(ctx, d.EventBus, api.DiffStreams{})
 
+	cfg, err := d.GetConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to get the config: %w", err)
+	}
+
 	return xsync.RDoR1(ctx, &d.ControllersLocker, func() error {
 		defer d.StreamStatusCache.InvalidateCache(ctx)
 
@@ -792,6 +801,29 @@ func (d *StreamD) EndStream(ctx context.Context, platID streamcontrol.PlatformNa
 
 		if streamController == nil {
 			return fmt.Errorf("'%s' is not initialized", platID)
+		}
+
+		if streamController.IsCapable(ctx, streamcontrol.CapabilityIsChannelStreaming) && streamController.IsCapable(ctx, streamcontrol.CapabilityRaid) {
+			for _, userID := range cfg.Raid.AutoRaidOnStreamEnd {
+				if userID.Platform != platID {
+					continue
+				}
+				isStreaming, err := streamController.IsChannelStreaming(ctx, userID.User)
+				if err != nil {
+					logger.Errorf(ctx, "unable to check if '%s' is streaming: %v", userID.User, err)
+					continue
+				}
+				if !isStreaming {
+					logger.Debugf(ctx, "checking if can raid to %v: user is not streaming", userID.User)
+					continue
+				}
+				err = streamController.RaidTo(ctx, userID.User)
+				if err != nil {
+					logger.Errorf(ctx, "unable to raid to '%s': %v", userID.User, err)
+					continue
+				}
+				break
+			}
 		}
 
 		err = streamController.EndStream(ctx)
