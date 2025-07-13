@@ -875,12 +875,12 @@ func (t *Twitch) IsCapable(
 		return true
 	case streamcontrol.CapabilityBanUser:
 		return true
-	case streamcontrol.CapabilityShoutout:
-		return false
 	case streamcontrol.CapabilityIsChannelStreaming:
-		return false
+		return true
+	case streamcontrol.CapabilityShoutout:
+		return true
 	case streamcontrol.CapabilityRaid:
-		return false
+		return true
 	}
 	return false
 }
@@ -889,19 +889,49 @@ func (t *Twitch) IsChannelStreaming(
 	ctx context.Context,
 	chanID streamcontrol.ChatUserID,
 ) (bool, error) {
-	return false, fmt.Errorf("not implemented")
+	reply, err := t.client.GetStreams(&helix.StreamsParams{
+		UserIDs: []string{string(chanID)},
+	})
+	if err != nil {
+		return false, fmt.Errorf("unable to check if '%s' is streaming: %w", chanID, err)
+	}
+	if len(reply.Data.Streams) == 0 {
+		return false, nil
+	}
+	if len(reply.Data.Streams) > 1 {
+		return false, fmt.Errorf("received %d channels instead of 1", len(reply.Data.Streams))
+	}
+	return true, nil
 }
 
 func (t *Twitch) RaidTo(
 	ctx context.Context,
 	chanID streamcontrol.ChatUserID,
 ) error {
-	return fmt.Errorf("not implemented")
+	params := &helix.StartRaidParams{
+		FromBroadcasterID: t.broadcasterID,
+		ToBroadcasterID:   string(chanID),
+	}
+	resp, err := t.client.StartRaid(params)
+	if err != nil {
+		return fmt.Errorf("unable to raid %#+v: %v", params, err)
+	}
+	logger.Debugf(ctx, "raid results: %#+v", resp)
+	return nil
 }
 
 func (t *Twitch) Shoutout(
 	ctx context.Context,
 	chanID streamcontrol.ChatUserID,
 ) error {
-	return fmt.Errorf("not implemented")
+	params := &helix.SendShoutoutParams{
+		FromBroadcasterID: t.broadcasterID,
+		ToBroadcasterID:   string(chanID),
+		ModeratorID:       t.broadcasterID,
+	}
+	_, err := t.client.SendShoutout(params)
+	if err != nil {
+		return fmt.Errorf("unable to send the shoutout (%#+v): %w", params, err)
+	}
+	return nil
 }
