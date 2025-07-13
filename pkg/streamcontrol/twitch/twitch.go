@@ -188,20 +188,27 @@ func (t *Twitch) prepareNoLock(ctx context.Context) error {
 		)
 	})
 
-	if t.chatHandlerSub == nil {
-		t.chatHandlerSub, err = NewChatHandlerSub(
-			t.closeCtx, t.client, t.broadcasterID,
-			func(ctx context.Context) {
-				t.prepareLocker.Do(ctx, func() {
-					t.chatHandlerSub = nil
-				})
-			},
-		)
-		if err != nil {
-			logger.Errorf(ctx, "unable to initialize websockets based chat listener: %v", err)
-		}
-	}
+	t.prepareChatListenerNoLock(ctx)
 	return err
+}
+
+func (t *Twitch) prepareChatListenerNoLock(ctx context.Context) {
+	if t.chatHandlerSub != nil {
+		return
+	}
+
+	var err error
+	t.chatHandlerSub, err = NewChatHandlerSub(
+		t.closeCtx, t.client, t.broadcasterID,
+		func(ctx context.Context) {
+			t.prepareLocker.Do(ctx, func() {
+				t.chatHandlerSub = nil
+			})
+		},
+	)
+	if err != nil {
+		logger.Errorf(ctx, "unable to initialize websockets based chat listener: %v", err)
+	}
 }
 
 func (t *Twitch) Close() error {
@@ -724,9 +731,15 @@ func (t *Twitch) GetChatMessagesChan(
 			}
 		})
 		logger.Debugf(ctx, "chSub == %p; chIRC == %p", chSub, chIRC)
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
 		for {
 			if chSub == nil {
 				t.prepareLocker.Do(ctx, func() {
+					if t.chatHandlerSub == nil {
+						logger.Debugf(ctx, "the chat listener is closed, trying to reopen it")
+						t.prepareChatListenerNoLock(ctx)
+					}
 					if t.chatHandlerSub != nil {
 						chSub = t.chatHandlerSub.MessagesChan()
 					}
@@ -739,6 +752,8 @@ func (t *Twitch) GetChatMessagesChan(
 			select {
 			case <-ctx.Done():
 				return
+			case <-ticker.C:
+				continue
 			case ev, ok := <-chSub:
 				if !ok {
 					chSub = nil

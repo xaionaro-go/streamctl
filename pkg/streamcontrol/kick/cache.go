@@ -3,12 +3,12 @@ package kick
 import (
 	"context"
 
-	"github.com/xaionaro-go/kickcom"
+	"github.com/scorfly/gokick"
 )
 
 type Cache struct {
-	ChanInfo   *kickcom.ChannelV1
-	Categories *[]kickcom.CategoryV1Short
+	ChanInfo   *gokick.ChannelResponse
+	Categories *[]gokick.CategoryResponse
 }
 
 func (c *Cache) Clone() *Cache {
