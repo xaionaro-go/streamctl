@@ -139,7 +139,6 @@ func (ui *chatUIAsList) Remove(
 		item := ui.ItemsByMessageID[msg.MessageID]
 		ui.TotalListHeight -= item.Height
 		delete(ui.ItemsByMessageID, msg.MessageID)
-		delete(ui.ItemsByCanvasObject, item.Container)
 	})
 	observability.Go(ctx, func(context.Context) { ui.CanvasObject.Refresh() }) // TODO: remove the observability.Go
 }
@@ -308,6 +307,10 @@ func (ui *chatUIAsList) listUpdateItem(
 	item := xsync.DoR1(ctx, &ui.ItemLocker, func() *chatListItem {
 		return ui.ItemsByCanvasObject[obj]
 	})
+	if item == nil {
+		logger.Errorf(ctx, "unable to get the item")
+		return
+	}
 	if ui.EnableButtons {
 		banUserButton := item.BanUserButton
 		banUserButton.OnTapped = func() {
