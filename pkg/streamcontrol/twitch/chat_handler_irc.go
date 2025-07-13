@@ -93,6 +93,7 @@ func newChatHandlerIRC(
 				select {
 				case h.messagesOutChan <- streamcontrol.ChatMessage{
 					CreatedAt: ev.CreatedAt,
+					EventType: streamcontrol.EventTypeChatMessage,
 					UserID:    streamcontrol.ChatUserID(ev.Sender.Username),
 					Username:  ev.Sender.Username,
 					MessageID: streamcontrol.ChatMessageID(ev.ID),

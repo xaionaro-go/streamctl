@@ -106,22 +106,11 @@ type StreamStatus struct {
 	CustomData   any        `json:",omitempty"`
 }
 
-type ChatUserID string
-type ChatMessageID string
-
-type ChatMessage struct {
-	CreatedAt time.Time
-	UserID    ChatUserID
-	Username  string
-	MessageID ChatMessageID
-	Message   string
-	Paid      Money
-}
-
 type Currency int
 
 const (
 	CurrencyNone = Currency(iota)
+	CurrencyBits
 	CurrencyUSD
 	CurrencyOther
 )

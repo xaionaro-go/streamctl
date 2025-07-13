@@ -1963,17 +1963,7 @@ func (grpc *GRPCServer) SubscribeToChatMessages(
 			return grpc.StreamD.SubscribeToChatMessages(ctx, since, limit)
 		},
 		srv,
-		func(input api.ChatMessage) streamd_grpc.ChatMessage {
-			return streamd_grpc.ChatMessage{
-				CreatedAtUNIXNano: uint64(input.CreatedAt.UnixNano()),
-				PlatID:            string(input.Platform),
-				IsLive:            input.IsLive,
-				UserID:            string(input.UserID),
-				Username:          input.Username,
-				MessageID:         string(input.MessageID),
-				Message:           input.Message,
-			}
-		},
+		goconv.ChatMessageGo2GRPC,
 	)
 }
 

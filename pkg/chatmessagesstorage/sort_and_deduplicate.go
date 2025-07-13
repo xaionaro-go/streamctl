@@ -12,6 +12,9 @@ func msgLess(ctx context.Context, a *api.ChatMessage, b *api.ChatMessage) bool {
 	if a.CreatedAt != b.CreatedAt {
 		return a.CreatedAt.Before(b.CreatedAt)
 	}
+	if a.EventType != b.EventType {
+		return a.EventType < b.EventType
+	}
 	if a.Platform != b.Platform {
 		return a.Platform < b.Platform
 	}

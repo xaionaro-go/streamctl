@@ -431,6 +431,85 @@ func (EventType) EnumDescriptor() ([]byte, []int) {
 	return file_streamd_proto_rawDescGZIP(), []int{7}
 }
 
+type PlatformEventType int32
+
+const (
+	PlatformEventType_platformEventTypeUndefined              PlatformEventType = 0
+	PlatformEventType_platformEventTypeChatMessage            PlatformEventType = 1
+	PlatformEventType_platformEventTypeCheer                  PlatformEventType = 2
+	PlatformEventType_platformEventTypeAutoModHold            PlatformEventType = 3
+	PlatformEventType_platformEventTypeAdBreak                PlatformEventType = 4
+	PlatformEventType_platformEventTypeBan                    PlatformEventType = 5
+	PlatformEventType_platformEventTypeFollow                 PlatformEventType = 6
+	PlatformEventType_platformEventTypeRaid                   PlatformEventType = 7
+	PlatformEventType_platformEventTypeChannelShoutoutReceive PlatformEventType = 8
+	PlatformEventType_platformEventTypeSubscribe              PlatformEventType = 9
+	PlatformEventType_platformEventTypeStreamOnline           PlatformEventType = 10
+	PlatformEventType_platformEventTypeStreamOffline          PlatformEventType = 11
+	PlatformEventType_platformEventTypeOther                  PlatformEventType = 12
+)
+
+// Enum value maps for PlatformEventType.
+var (
+	PlatformEventType_name = map[int32]string{
+		0:  "platformEventTypeUndefined",
+		1:  "platformEventTypeChatMessage",
+		2:  "platformEventTypeCheer",
+		3:  "platformEventTypeAutoModHold",
+		4:  "platformEventTypeAdBreak",
+		5:  "platformEventTypeBan",
+		6:  "platformEventTypeFollow",
+		7:  "platformEventTypeRaid",
+		8:  "platformEventTypeChannelShoutoutReceive",
+		9:  "platformEventTypeSubscribe",
+		10: "platformEventTypeStreamOnline",
+		11: "platformEventTypeStreamOffline",
+		12: "platformEventTypeOther",
+	}
+	PlatformEventType_value = map[string]int32{
+		"platformEventTypeUndefined":              0,
+		"platformEventTypeChatMessage":            1,
+		"platformEventTypeCheer":                  2,
+		"platformEventTypeAutoModHold":            3,
+		"platformEventTypeAdBreak":                4,
+		"platformEventTypeBan":                    5,
+		"platformEventTypeFollow":                 6,
+		"platformEventTypeRaid":                   7,
+		"platformEventTypeChannelShoutoutReceive": 8,
+		"platformEventTypeSubscribe":              9,
+		"platformEventTypeStreamOnline":           10,
+		"platformEventTypeStreamOffline":          11,
+		"platformEventTypeOther":                  12,
+	}
+)
+
+func (x PlatformEventType) Enum() *PlatformEventType {
+	p := new(PlatformEventType)
+	*p = x
+	return p
+}
+
+func (x PlatformEventType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (PlatformEventType) Descriptor() protoreflect.EnumDescriptor {
+	return file_streamd_proto_enumTypes[8].Descriptor()
+}
+
+func (PlatformEventType) Type() protoreflect.EnumType {
+	return &file_streamd_proto_enumTypes[8]
+}
+
+func (x PlatformEventType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use PlatformEventType.Descriptor instead.
+func (PlatformEventType) EnumDescriptor() ([]byte, []int) {
+	return file_streamd_proto_rawDescGZIP(), []int{8}
+}
+
 type PingRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -9556,13 +9635,14 @@ type ChatMessage struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	CreatedAtUNIXNano uint64 `protobuf:"varint,1,opt,name=createdAtUNIXNano,proto3" json:"createdAtUNIXNano,omitempty"`
-	PlatID            string `protobuf:"bytes,2,opt,name=platID,proto3" json:"platID,omitempty"`
-	IsLive            bool   `protobuf:"varint,3,opt,name=isLive,proto3" json:"isLive,omitempty"`
-	UserID            string `protobuf:"bytes,4,opt,name=userID,proto3" json:"userID,omitempty"`
-	Username          string `protobuf:"bytes,5,opt,name=username,proto3" json:"username,omitempty"`
-	MessageID         string `protobuf:"bytes,6,opt,name=messageID,proto3" json:"messageID,omitempty"`
-	Message           string `protobuf:"bytes,7,opt,name=message,proto3" json:"message,omitempty"`
+	CreatedAtUNIXNano uint64            `protobuf:"varint,1,opt,name=createdAtUNIXNano,proto3" json:"createdAtUNIXNano,omitempty"`
+	PlatID            string            `protobuf:"bytes,2,opt,name=platID,proto3" json:"platID,omitempty"`
+	IsLive            bool              `protobuf:"varint,3,opt,name=isLive,proto3" json:"isLive,omitempty"`
+	EventType         PlatformEventType `protobuf:"varint,4,opt,name=eventType,proto3,enum=streamd.PlatformEventType" json:"eventType,omitempty"`
+	UserID            string            `protobuf:"bytes,5,opt,name=userID,proto3" json:"userID,omitempty"`
+	Username          string            `protobuf:"bytes,6,opt,name=username,proto3" json:"username,omitempty"`
+	MessageID         string            `protobuf:"bytes,7,opt,name=messageID,proto3" json:"messageID,omitempty"`
+	Message           string            `protobuf:"bytes,8,opt,name=message,proto3" json:"message,omitempty"`
 }
 
 func (x *ChatMessage) Reset() {
@@ -9616,6 +9696,13 @@ func (x *ChatMessage) GetIsLive() bool {
 		return x.IsLive
 	}
 	return false
+}
+
+func (x *ChatMessage) GetEventType() PlatformEventType {
+	if x != nil {
+		return x.EventType
+	}
+	return PlatformEventType_platformEventTypeUndefined
 }
 
 func (x *ChatMessage) GetUserID() string {
@@ -10997,93 +11084,124 @@ var file_streamd_proto_rawDesc = []byte{
 	0x55, 0x4e, 0x49, 0x58, 0x4e, 0x61, 0x6e, 0x6f, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x0d,
 	0x73, 0x69, 0x6e, 0x63, 0x65, 0x55, 0x4e, 0x49, 0x58, 0x4e, 0x61, 0x6e, 0x6f, 0x12, 0x14, 0x0a,
 	0x05, 0x6c, 0x69, 0x6d, 0x69, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x04, 0x52, 0x05, 0x6c, 0x69,
-	0x6d, 0x69, 0x74, 0x22, 0xd7, 0x01, 0x0a, 0x0b, 0x43, 0x68, 0x61, 0x74, 0x4d, 0x65, 0x73, 0x73,
+	0x6d, 0x69, 0x74, 0x22, 0x91, 0x02, 0x0a, 0x0b, 0x43, 0x68, 0x61, 0x74, 0x4d, 0x65, 0x73, 0x73,
 	0x61, 0x67, 0x65, 0x12, 0x2c, 0x0a, 0x11, 0x63, 0x72, 0x65, 0x61, 0x74, 0x65, 0x64, 0x41, 0x74,
 	0x55, 0x4e, 0x49, 0x58, 0x4e, 0x61, 0x6e, 0x6f, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x11,
 	0x63, 0x72, 0x65, 0x61, 0x74, 0x65, 0x64, 0x41, 0x74, 0x55, 0x4e, 0x49, 0x58, 0x4e, 0x61, 0x6e,
 	0x6f, 0x12, 0x16, 0x0a, 0x06, 0x70, 0x6c, 0x61, 0x74, 0x49, 0x44, 0x18, 0x02, 0x20, 0x01, 0x28,
 	0x09, 0x52, 0x06, 0x70, 0x6c, 0x61, 0x74, 0x49, 0x44, 0x12, 0x16, 0x0a, 0x06, 0x69, 0x73, 0x4c,
 	0x69, 0x76, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x08, 0x52, 0x06, 0x69, 0x73, 0x4c, 0x69, 0x76,
-	0x65, 0x12, 0x16, 0x0a, 0x06, 0x75, 0x73, 0x65, 0x72, 0x49, 0x44, 0x18, 0x04, 0x20, 0x01, 0x28,
-	0x09, 0x52, 0x06, 0x75, 0x73, 0x65, 0x72, 0x49, 0x44, 0x12, 0x1a, 0x0a, 0x08, 0x75, 0x73, 0x65,
-	0x72, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x05, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x75, 0x73, 0x65,
-	0x72, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x1c, 0x0a, 0x09, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65,
-	0x49, 0x44, 0x18, 0x06, 0x20, 0x01, 0x28, 0x09, 0x52, 0x09, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67,
-	0x65, 0x49, 0x44, 0x12, 0x18, 0x0a, 0x07, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x18, 0x07,
-	0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x22, 0x4a, 0x0a,
-	0x16, 0x53, 0x65, 0x6e, 0x64, 0x43, 0x68, 0x61, 0x74, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65,
+	0x65, 0x12, 0x38, 0x0a, 0x09, 0x65, 0x76, 0x65, 0x6e, 0x74, 0x54, 0x79, 0x70, 0x65, 0x18, 0x04,
+	0x20, 0x01, 0x28, 0x0e, 0x32, 0x1a, 0x2e, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x64, 0x2e, 0x50,
+	0x6c, 0x61, 0x74, 0x66, 0x6f, 0x72, 0x6d, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x54, 0x79, 0x70, 0x65,
+	0x52, 0x09, 0x65, 0x76, 0x65, 0x6e, 0x74, 0x54, 0x79, 0x70, 0x65, 0x12, 0x16, 0x0a, 0x06, 0x75,
+	0x73, 0x65, 0x72, 0x49, 0x44, 0x18, 0x05, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x75, 0x73, 0x65,
+	0x72, 0x49, 0x44, 0x12, 0x1a, 0x0a, 0x08, 0x75, 0x73, 0x65, 0x72, 0x6e, 0x61, 0x6d, 0x65, 0x18,
+	0x06, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x75, 0x73, 0x65, 0x72, 0x6e, 0x61, 0x6d, 0x65, 0x12,
+	0x1c, 0x0a, 0x09, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x49, 0x44, 0x18, 0x07, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x09, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x49, 0x44, 0x12, 0x18, 0x0a,
+	0x07, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x18, 0x08, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07,
+	0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x22, 0x4a, 0x0a, 0x16, 0x53, 0x65, 0x6e, 0x64, 0x43,
+	0x68, 0x61, 0x74, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
+	0x74, 0x12, 0x16, 0x0a, 0x06, 0x70, 0x6c, 0x61, 0x74, 0x49, 0x44, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x06, 0x70, 0x6c, 0x61, 0x74, 0x49, 0x44, 0x12, 0x18, 0x0a, 0x07, 0x6d, 0x65, 0x73,
+	0x73, 0x61, 0x67, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x6d, 0x65, 0x73, 0x73,
+	0x61, 0x67, 0x65, 0x22, 0x16, 0x0a, 0x14, 0x53, 0x65, 0x6e, 0x64, 0x43, 0x68, 0x61, 0x74, 0x4d,
+	0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x52, 0x65, 0x70, 0x6c, 0x79, 0x22, 0x50, 0x0a, 0x18, 0x52,
+	0x65, 0x6d, 0x6f, 0x76, 0x65, 0x43, 0x68, 0x61, 0x74, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65,
 	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x16, 0x0a, 0x06, 0x70, 0x6c, 0x61, 0x74, 0x49,
 	0x44, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x70, 0x6c, 0x61, 0x74, 0x49, 0x44, 0x12,
-	0x18, 0x0a, 0x07, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09,
-	0x52, 0x07, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x22, 0x16, 0x0a, 0x14, 0x53, 0x65, 0x6e,
-	0x64, 0x43, 0x68, 0x61, 0x74, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x52, 0x65, 0x70, 0x6c,
-	0x79, 0x22, 0x50, 0x0a, 0x18, 0x52, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x43, 0x68, 0x61, 0x74, 0x4d,
-	0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x16, 0x0a,
-	0x06, 0x70, 0x6c, 0x61, 0x74, 0x49, 0x44, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x70,
-	0x6c, 0x61, 0x74, 0x49, 0x44, 0x12, 0x1c, 0x0a, 0x09, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65,
-	0x49, 0x44, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x09, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67,
-	0x65, 0x49, 0x44, 0x22, 0x18, 0x0a, 0x16, 0x52, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x43, 0x68, 0x61,
-	0x74, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x52, 0x65, 0x70, 0x6c, 0x79, 0x22, 0x9e, 0x01,
-	0x0a, 0x0e, 0x42, 0x61, 0x6e, 0x55, 0x73, 0x65, 0x72, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
-	0x12, 0x16, 0x0a, 0x06, 0x70, 0x6c, 0x61, 0x74, 0x49, 0x44, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09,
-	0x52, 0x06, 0x70, 0x6c, 0x61, 0x74, 0x49, 0x44, 0x12, 0x16, 0x0a, 0x06, 0x75, 0x73, 0x65, 0x72,
-	0x49, 0x44, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x75, 0x73, 0x65, 0x72, 0x49, 0x44,
-	0x12, 0x16, 0x0a, 0x06, 0x72, 0x65, 0x61, 0x73, 0x6f, 0x6e, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09,
-	0x52, 0x06, 0x72, 0x65, 0x61, 0x73, 0x6f, 0x6e, 0x12, 0x2f, 0x0a, 0x10, 0x64, 0x65, 0x61, 0x64,
-	0x6c, 0x69, 0x6e, 0x65, 0x55, 0x6e, 0x69, 0x78, 0x4e, 0x61, 0x6e, 0x6f, 0x18, 0x04, 0x20, 0x01,
-	0x28, 0x03, 0x48, 0x00, 0x52, 0x10, 0x64, 0x65, 0x61, 0x64, 0x6c, 0x69, 0x6e, 0x65, 0x55, 0x6e,
-	0x69, 0x78, 0x4e, 0x61, 0x6e, 0x6f, 0x88, 0x01, 0x01, 0x42, 0x13, 0x0a, 0x11, 0x5f, 0x64, 0x65,
-	0x61, 0x64, 0x6c, 0x69, 0x6e, 0x65, 0x55, 0x6e, 0x69, 0x78, 0x4e, 0x61, 0x6e, 0x6f, 0x22, 0x0e,
-	0x0a, 0x0c, 0x42, 0x61, 0x6e, 0x55, 0x73, 0x65, 0x72, 0x52, 0x65, 0x70, 0x6c, 0x79, 0x22, 0x13,
-	0x0a, 0x11, 0x47, 0x65, 0x74, 0x50, 0x65, 0x65, 0x72, 0x49, 0x44, 0x73, 0x52, 0x65, 0x71, 0x75,
-	0x65, 0x73, 0x74, 0x22, 0x2b, 0x0a, 0x0f, 0x47, 0x65, 0x74, 0x50, 0x65, 0x65, 0x72, 0x49, 0x44,
-	0x73, 0x52, 0x65, 0x70, 0x6c, 0x79, 0x12, 0x18, 0x0a, 0x07, 0x70, 0x65, 0x65, 0x72, 0x49, 0x44,
-	0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x52, 0x07, 0x70, 0x65, 0x65, 0x72, 0x49, 0x44, 0x73,
-	0x22, 0x2c, 0x0a, 0x12, 0x4c, 0x4c, 0x4d, 0x47, 0x65, 0x6e, 0x65, 0x72, 0x61, 0x74, 0x65, 0x52,
-	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x16, 0x0a, 0x06, 0x70, 0x72, 0x6f, 0x6d, 0x70, 0x74,
-	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x70, 0x72, 0x6f, 0x6d, 0x70, 0x74, 0x22, 0x2e,
-	0x0a, 0x10, 0x4c, 0x4c, 0x4d, 0x47, 0x65, 0x6e, 0x65, 0x72, 0x61, 0x74, 0x65, 0x52, 0x65, 0x70,
-	0x6c, 0x79, 0x12, 0x1a, 0x0a, 0x08, 0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x18, 0x01,
-	0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2a, 0x66,
-	0x0a, 0x0c, 0x4c, 0x6f, 0x67, 0x67, 0x69, 0x6e, 0x67, 0x4c, 0x65, 0x76, 0x65, 0x6c, 0x12, 0x08,
-	0x0a, 0x04, 0x6e, 0x6f, 0x6e, 0x65, 0x10, 0x00, 0x12, 0x09, 0x0a, 0x05, 0x66, 0x61, 0x74, 0x61,
-	0x6c, 0x10, 0x01, 0x12, 0x09, 0x0a, 0x05, 0x70, 0x61, 0x6e, 0x69, 0x63, 0x10, 0x02, 0x12, 0x09,
-	0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x10, 0x03, 0x12, 0x0b, 0x0a, 0x07, 0x77, 0x61, 0x72,
-	0x6e, 0x69, 0x6e, 0x67, 0x10, 0x04, 0x12, 0x08, 0x0a, 0x04, 0x69, 0x6e, 0x66, 0x6f, 0x10, 0x05,
-	0x12, 0x09, 0x0a, 0x05, 0x64, 0x65, 0x62, 0x75, 0x67, 0x10, 0x06, 0x12, 0x09, 0x0a, 0x05, 0x74,
-	0x72, 0x61, 0x63, 0x65, 0x10, 0x07, 0x2a, 0x5e, 0x0a, 0x0a, 0x43, 0x61, 0x70, 0x61, 0x62, 0x69,
-	0x6c, 0x69, 0x74, 0x79, 0x12, 0x17, 0x0a, 0x13, 0x63, 0x61, 0x70, 0x61, 0x62, 0x69, 0x6c, 0x69,
-	0x74, 0x79, 0x55, 0x6e, 0x64, 0x65, 0x66, 0x69, 0x6e, 0x65, 0x64, 0x10, 0x00, 0x12, 0x13, 0x0a,
-	0x0f, 0x53, 0x65, 0x6e, 0x64, 0x43, 0x68, 0x61, 0x74, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65,
-	0x10, 0x01, 0x12, 0x15, 0x0a, 0x11, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x43, 0x68, 0x61, 0x74,
-	0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x10, 0x02, 0x12, 0x0b, 0x0a, 0x07, 0x42, 0x61, 0x6e,
-	0x55, 0x73, 0x65, 0x72, 0x10, 0x03, 0x2a, 0x19, 0x0a, 0x08, 0x48, 0x61, 0x73, 0x68, 0x54, 0x79,
-	0x70, 0x65, 0x12, 0x0d, 0x0a, 0x09, 0x48, 0x41, 0x53, 0x48, 0x5f, 0x53, 0x48, 0x41, 0x31, 0x10,
-	0x00, 0x2a, 0x3e, 0x0a, 0x10, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x53, 0x65, 0x72, 0x76, 0x65,
-	0x72, 0x54, 0x79, 0x70, 0x65, 0x12, 0x0d, 0x0a, 0x09, 0x55, 0x6e, 0x64, 0x65, 0x66, 0x69, 0x6e,
-	0x65, 0x64, 0x10, 0x00, 0x12, 0x08, 0x0a, 0x04, 0x52, 0x54, 0x53, 0x50, 0x10, 0x01, 0x12, 0x08,
-	0x0a, 0x04, 0x52, 0x54, 0x4d, 0x50, 0x10, 0x02, 0x12, 0x07, 0x0a, 0x03, 0x53, 0x52, 0x54, 0x10,
-	0x03, 0x2a, 0x5d, 0x0a, 0x0a, 0x41, 0x75, 0x64, 0x69, 0x6f, 0x43, 0x6f, 0x64, 0x65, 0x63, 0x12,
-	0x12, 0x0a, 0x0e, 0x41, 0x75, 0x64, 0x69, 0x6f, 0x43, 0x6f, 0x64, 0x65, 0x63, 0x43, 0x6f, 0x70,
-	0x79, 0x10, 0x00, 0x12, 0x11, 0x0a, 0x0d, 0x41, 0x75, 0x64, 0x69, 0x6f, 0x43, 0x6f, 0x64, 0x65,
-	0x63, 0x41, 0x41, 0x43, 0x10, 0x01, 0x12, 0x14, 0x0a, 0x10, 0x41, 0x75, 0x64, 0x69, 0x6f, 0x43,
-	0x6f, 0x64, 0x65, 0x63, 0x56, 0x6f, 0x72, 0x62, 0x69, 0x73, 0x10, 0x02, 0x12, 0x12, 0x0a, 0x0e,
-	0x41, 0x75, 0x64, 0x69, 0x6f, 0x43, 0x6f, 0x64, 0x65, 0x63, 0x4f, 0x70, 0x75, 0x73, 0x10, 0x03,
-	0x2a, 0x5b, 0x0a, 0x0a, 0x56, 0x69, 0x64, 0x65, 0x6f, 0x43, 0x6f, 0x64, 0x65, 0x63, 0x12, 0x12,
-	0x0a, 0x0e, 0x56, 0x69, 0x64, 0x65, 0x6f, 0x43, 0x6f, 0x64, 0x65, 0x63, 0x43, 0x6f, 0x70, 0x79,
-	0x10, 0x00, 0x12, 0x12, 0x0a, 0x0e, 0x56, 0x69, 0x64, 0x65, 0x6f, 0x43, 0x6f, 0x64, 0x65, 0x63,
-	0x48, 0x32, 0x36, 0x34, 0x10, 0x01, 0x12, 0x12, 0x0a, 0x0e, 0x56, 0x69, 0x64, 0x65, 0x6f, 0x43,
-	0x6f, 0x64, 0x65, 0x63, 0x48, 0x45, 0x56, 0x43, 0x10, 0x02, 0x12, 0x11, 0x0a, 0x0d, 0x56, 0x69,
-	0x64, 0x65, 0x6f, 0x43, 0x6f, 0x64, 0x65, 0x63, 0x41, 0x56, 0x31, 0x10, 0x03, 0x2a, 0x49, 0x0a,
-	0x0a, 0x50, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x54, 0x79, 0x70, 0x65, 0x12, 0x12, 0x0a, 0x0e, 0x50,
-	0x6c, 0x61, 0x79, 0x65, 0x72, 0x54, 0x79, 0x70, 0x65, 0x41, 0x75, 0x74, 0x6f, 0x10, 0x00, 0x12,
-	0x14, 0x0a, 0x10, 0x50, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x54, 0x79, 0x70, 0x65, 0x4c, 0x69, 0x62,
-	0x56, 0x4c, 0x43, 0x10, 0x01, 0x12, 0x11, 0x0a, 0x0d, 0x50, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x54,
-	0x79, 0x70, 0x65, 0x4d, 0x50, 0x56, 0x10, 0x02, 0x2a, 0x40, 0x0a, 0x09, 0x45, 0x76, 0x65, 0x6e,
-	0x74, 0x54, 0x79, 0x70, 0x65, 0x12, 0x1a, 0x0a, 0x16, 0x65, 0x76, 0x65, 0x6e, 0x74, 0x57, 0x69,
-	0x6e, 0x64, 0x6f, 0x77, 0x46, 0x6f, 0x63, 0x75, 0x73, 0x43, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x10,
-	0x00, 0x12, 0x17, 0x0a, 0x13, 0x65, 0x76, 0x65, 0x6e, 0x74, 0x4f, 0x42, 0x53, 0x53, 0x63, 0x65,
-	0x6e, 0x65, 0x43, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x10, 0x01, 0x32, 0xe2, 0x35, 0x0a, 0x07, 0x53,
+	0x1c, 0x0a, 0x09, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x49, 0x44, 0x18, 0x02, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x09, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x49, 0x44, 0x22, 0x18, 0x0a,
+	0x16, 0x52, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x43, 0x68, 0x61, 0x74, 0x4d, 0x65, 0x73, 0x73, 0x61,
+	0x67, 0x65, 0x52, 0x65, 0x70, 0x6c, 0x79, 0x22, 0x9e, 0x01, 0x0a, 0x0e, 0x42, 0x61, 0x6e, 0x55,
+	0x73, 0x65, 0x72, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x16, 0x0a, 0x06, 0x70, 0x6c,
+	0x61, 0x74, 0x49, 0x44, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x70, 0x6c, 0x61, 0x74,
+	0x49, 0x44, 0x12, 0x16, 0x0a, 0x06, 0x75, 0x73, 0x65, 0x72, 0x49, 0x44, 0x18, 0x02, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x06, 0x75, 0x73, 0x65, 0x72, 0x49, 0x44, 0x12, 0x16, 0x0a, 0x06, 0x72, 0x65,
+	0x61, 0x73, 0x6f, 0x6e, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x72, 0x65, 0x61, 0x73,
+	0x6f, 0x6e, 0x12, 0x2f, 0x0a, 0x10, 0x64, 0x65, 0x61, 0x64, 0x6c, 0x69, 0x6e, 0x65, 0x55, 0x6e,
+	0x69, 0x78, 0x4e, 0x61, 0x6e, 0x6f, 0x18, 0x04, 0x20, 0x01, 0x28, 0x03, 0x48, 0x00, 0x52, 0x10,
+	0x64, 0x65, 0x61, 0x64, 0x6c, 0x69, 0x6e, 0x65, 0x55, 0x6e, 0x69, 0x78, 0x4e, 0x61, 0x6e, 0x6f,
+	0x88, 0x01, 0x01, 0x42, 0x13, 0x0a, 0x11, 0x5f, 0x64, 0x65, 0x61, 0x64, 0x6c, 0x69, 0x6e, 0x65,
+	0x55, 0x6e, 0x69, 0x78, 0x4e, 0x61, 0x6e, 0x6f, 0x22, 0x0e, 0x0a, 0x0c, 0x42, 0x61, 0x6e, 0x55,
+	0x73, 0x65, 0x72, 0x52, 0x65, 0x70, 0x6c, 0x79, 0x22, 0x13, 0x0a, 0x11, 0x47, 0x65, 0x74, 0x50,
+	0x65, 0x65, 0x72, 0x49, 0x44, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x2b, 0x0a,
+	0x0f, 0x47, 0x65, 0x74, 0x50, 0x65, 0x65, 0x72, 0x49, 0x44, 0x73, 0x52, 0x65, 0x70, 0x6c, 0x79,
+	0x12, 0x18, 0x0a, 0x07, 0x70, 0x65, 0x65, 0x72, 0x49, 0x44, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28,
+	0x09, 0x52, 0x07, 0x70, 0x65, 0x65, 0x72, 0x49, 0x44, 0x73, 0x22, 0x2c, 0x0a, 0x12, 0x4c, 0x4c,
+	0x4d, 0x47, 0x65, 0x6e, 0x65, 0x72, 0x61, 0x74, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
+	0x12, 0x16, 0x0a, 0x06, 0x70, 0x72, 0x6f, 0x6d, 0x70, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09,
+	0x52, 0x06, 0x70, 0x72, 0x6f, 0x6d, 0x70, 0x74, 0x22, 0x2e, 0x0a, 0x10, 0x4c, 0x4c, 0x4d, 0x47,
+	0x65, 0x6e, 0x65, 0x72, 0x61, 0x74, 0x65, 0x52, 0x65, 0x70, 0x6c, 0x79, 0x12, 0x1a, 0x0a, 0x08,
+	0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08,
+	0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2a, 0x66, 0x0a, 0x0c, 0x4c, 0x6f, 0x67, 0x67,
+	0x69, 0x6e, 0x67, 0x4c, 0x65, 0x76, 0x65, 0x6c, 0x12, 0x08, 0x0a, 0x04, 0x6e, 0x6f, 0x6e, 0x65,
+	0x10, 0x00, 0x12, 0x09, 0x0a, 0x05, 0x66, 0x61, 0x74, 0x61, 0x6c, 0x10, 0x01, 0x12, 0x09, 0x0a,
+	0x05, 0x70, 0x61, 0x6e, 0x69, 0x63, 0x10, 0x02, 0x12, 0x09, 0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f,
+	0x72, 0x10, 0x03, 0x12, 0x0b, 0x0a, 0x07, 0x77, 0x61, 0x72, 0x6e, 0x69, 0x6e, 0x67, 0x10, 0x04,
+	0x12, 0x08, 0x0a, 0x04, 0x69, 0x6e, 0x66, 0x6f, 0x10, 0x05, 0x12, 0x09, 0x0a, 0x05, 0x64, 0x65,
+	0x62, 0x75, 0x67, 0x10, 0x06, 0x12, 0x09, 0x0a, 0x05, 0x74, 0x72, 0x61, 0x63, 0x65, 0x10, 0x07,
+	0x2a, 0x5e, 0x0a, 0x0a, 0x43, 0x61, 0x70, 0x61, 0x62, 0x69, 0x6c, 0x69, 0x74, 0x79, 0x12, 0x17,
+	0x0a, 0x13, 0x63, 0x61, 0x70, 0x61, 0x62, 0x69, 0x6c, 0x69, 0x74, 0x79, 0x55, 0x6e, 0x64, 0x65,
+	0x66, 0x69, 0x6e, 0x65, 0x64, 0x10, 0x00, 0x12, 0x13, 0x0a, 0x0f, 0x53, 0x65, 0x6e, 0x64, 0x43,
+	0x68, 0x61, 0x74, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x10, 0x01, 0x12, 0x15, 0x0a, 0x11,
+	0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x43, 0x68, 0x61, 0x74, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67,
+	0x65, 0x10, 0x02, 0x12, 0x0b, 0x0a, 0x07, 0x42, 0x61, 0x6e, 0x55, 0x73, 0x65, 0x72, 0x10, 0x03,
+	0x2a, 0x19, 0x0a, 0x08, 0x48, 0x61, 0x73, 0x68, 0x54, 0x79, 0x70, 0x65, 0x12, 0x0d, 0x0a, 0x09,
+	0x48, 0x41, 0x53, 0x48, 0x5f, 0x53, 0x48, 0x41, 0x31, 0x10, 0x00, 0x2a, 0x3e, 0x0a, 0x10, 0x53,
+	0x74, 0x72, 0x65, 0x61, 0x6d, 0x53, 0x65, 0x72, 0x76, 0x65, 0x72, 0x54, 0x79, 0x70, 0x65, 0x12,
+	0x0d, 0x0a, 0x09, 0x55, 0x6e, 0x64, 0x65, 0x66, 0x69, 0x6e, 0x65, 0x64, 0x10, 0x00, 0x12, 0x08,
+	0x0a, 0x04, 0x52, 0x54, 0x53, 0x50, 0x10, 0x01, 0x12, 0x08, 0x0a, 0x04, 0x52, 0x54, 0x4d, 0x50,
+	0x10, 0x02, 0x12, 0x07, 0x0a, 0x03, 0x53, 0x52, 0x54, 0x10, 0x03, 0x2a, 0x5d, 0x0a, 0x0a, 0x41,
+	0x75, 0x64, 0x69, 0x6f, 0x43, 0x6f, 0x64, 0x65, 0x63, 0x12, 0x12, 0x0a, 0x0e, 0x41, 0x75, 0x64,
+	0x69, 0x6f, 0x43, 0x6f, 0x64, 0x65, 0x63, 0x43, 0x6f, 0x70, 0x79, 0x10, 0x00, 0x12, 0x11, 0x0a,
+	0x0d, 0x41, 0x75, 0x64, 0x69, 0x6f, 0x43, 0x6f, 0x64, 0x65, 0x63, 0x41, 0x41, 0x43, 0x10, 0x01,
+	0x12, 0x14, 0x0a, 0x10, 0x41, 0x75, 0x64, 0x69, 0x6f, 0x43, 0x6f, 0x64, 0x65, 0x63, 0x56, 0x6f,
+	0x72, 0x62, 0x69, 0x73, 0x10, 0x02, 0x12, 0x12, 0x0a, 0x0e, 0x41, 0x75, 0x64, 0x69, 0x6f, 0x43,
+	0x6f, 0x64, 0x65, 0x63, 0x4f, 0x70, 0x75, 0x73, 0x10, 0x03, 0x2a, 0x5b, 0x0a, 0x0a, 0x56, 0x69,
+	0x64, 0x65, 0x6f, 0x43, 0x6f, 0x64, 0x65, 0x63, 0x12, 0x12, 0x0a, 0x0e, 0x56, 0x69, 0x64, 0x65,
+	0x6f, 0x43, 0x6f, 0x64, 0x65, 0x63, 0x43, 0x6f, 0x70, 0x79, 0x10, 0x00, 0x12, 0x12, 0x0a, 0x0e,
+	0x56, 0x69, 0x64, 0x65, 0x6f, 0x43, 0x6f, 0x64, 0x65, 0x63, 0x48, 0x32, 0x36, 0x34, 0x10, 0x01,
+	0x12, 0x12, 0x0a, 0x0e, 0x56, 0x69, 0x64, 0x65, 0x6f, 0x43, 0x6f, 0x64, 0x65, 0x63, 0x48, 0x45,
+	0x56, 0x43, 0x10, 0x02, 0x12, 0x11, 0x0a, 0x0d, 0x56, 0x69, 0x64, 0x65, 0x6f, 0x43, 0x6f, 0x64,
+	0x65, 0x63, 0x41, 0x56, 0x31, 0x10, 0x03, 0x2a, 0x49, 0x0a, 0x0a, 0x50, 0x6c, 0x61, 0x79, 0x65,
+	0x72, 0x54, 0x79, 0x70, 0x65, 0x12, 0x12, 0x0a, 0x0e, 0x50, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x54,
+	0x79, 0x70, 0x65, 0x41, 0x75, 0x74, 0x6f, 0x10, 0x00, 0x12, 0x14, 0x0a, 0x10, 0x50, 0x6c, 0x61,
+	0x79, 0x65, 0x72, 0x54, 0x79, 0x70, 0x65, 0x4c, 0x69, 0x62, 0x56, 0x4c, 0x43, 0x10, 0x01, 0x12,
+	0x11, 0x0a, 0x0d, 0x50, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x54, 0x79, 0x70, 0x65, 0x4d, 0x50, 0x56,
+	0x10, 0x02, 0x2a, 0x40, 0x0a, 0x09, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x54, 0x79, 0x70, 0x65, 0x12,
+	0x1a, 0x0a, 0x16, 0x65, 0x76, 0x65, 0x6e, 0x74, 0x57, 0x69, 0x6e, 0x64, 0x6f, 0x77, 0x46, 0x6f,
+	0x63, 0x75, 0x73, 0x43, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x10, 0x00, 0x12, 0x17, 0x0a, 0x13, 0x65,
+	0x76, 0x65, 0x6e, 0x74, 0x4f, 0x42, 0x53, 0x53, 0x63, 0x65, 0x6e, 0x65, 0x43, 0x68, 0x61, 0x6e,
+	0x67, 0x65, 0x10, 0x01, 0x2a, 0xb3, 0x03, 0x0a, 0x11, 0x50, 0x6c, 0x61, 0x74, 0x66, 0x6f, 0x72,
+	0x6d, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x54, 0x79, 0x70, 0x65, 0x12, 0x1e, 0x0a, 0x1a, 0x70, 0x6c,
+	0x61, 0x74, 0x66, 0x6f, 0x72, 0x6d, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x54, 0x79, 0x70, 0x65, 0x55,
+	0x6e, 0x64, 0x65, 0x66, 0x69, 0x6e, 0x65, 0x64, 0x10, 0x00, 0x12, 0x20, 0x0a, 0x1c, 0x70, 0x6c,
+	0x61, 0x74, 0x66, 0x6f, 0x72, 0x6d, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x54, 0x79, 0x70, 0x65, 0x43,
+	0x68, 0x61, 0x74, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x10, 0x01, 0x12, 0x1a, 0x0a, 0x16,
+	0x70, 0x6c, 0x61, 0x74, 0x66, 0x6f, 0x72, 0x6d, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x54, 0x79, 0x70,
+	0x65, 0x43, 0x68, 0x65, 0x65, 0x72, 0x10, 0x02, 0x12, 0x20, 0x0a, 0x1c, 0x70, 0x6c, 0x61, 0x74,
+	0x66, 0x6f, 0x72, 0x6d, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x54, 0x79, 0x70, 0x65, 0x41, 0x75, 0x74,
+	0x6f, 0x4d, 0x6f, 0x64, 0x48, 0x6f, 0x6c, 0x64, 0x10, 0x03, 0x12, 0x1c, 0x0a, 0x18, 0x70, 0x6c,
+	0x61, 0x74, 0x66, 0x6f, 0x72, 0x6d, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x54, 0x79, 0x70, 0x65, 0x41,
+	0x64, 0x42, 0x72, 0x65, 0x61, 0x6b, 0x10, 0x04, 0x12, 0x18, 0x0a, 0x14, 0x70, 0x6c, 0x61, 0x74,
+	0x66, 0x6f, 0x72, 0x6d, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x54, 0x79, 0x70, 0x65, 0x42, 0x61, 0x6e,
+	0x10, 0x05, 0x12, 0x1b, 0x0a, 0x17, 0x70, 0x6c, 0x61, 0x74, 0x66, 0x6f, 0x72, 0x6d, 0x45, 0x76,
+	0x65, 0x6e, 0x74, 0x54, 0x79, 0x70, 0x65, 0x46, 0x6f, 0x6c, 0x6c, 0x6f, 0x77, 0x10, 0x06, 0x12,
+	0x19, 0x0a, 0x15, 0x70, 0x6c, 0x61, 0x74, 0x66, 0x6f, 0x72, 0x6d, 0x45, 0x76, 0x65, 0x6e, 0x74,
+	0x54, 0x79, 0x70, 0x65, 0x52, 0x61, 0x69, 0x64, 0x10, 0x07, 0x12, 0x2b, 0x0a, 0x27, 0x70, 0x6c,
+	0x61, 0x74, 0x66, 0x6f, 0x72, 0x6d, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x54, 0x79, 0x70, 0x65, 0x43,
+	0x68, 0x61, 0x6e, 0x6e, 0x65, 0x6c, 0x53, 0x68, 0x6f, 0x75, 0x74, 0x6f, 0x75, 0x74, 0x52, 0x65,
+	0x63, 0x65, 0x69, 0x76, 0x65, 0x10, 0x08, 0x12, 0x1e, 0x0a, 0x1a, 0x70, 0x6c, 0x61, 0x74, 0x66,
+	0x6f, 0x72, 0x6d, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x54, 0x79, 0x70, 0x65, 0x53, 0x75, 0x62, 0x73,
+	0x63, 0x72, 0x69, 0x62, 0x65, 0x10, 0x09, 0x12, 0x21, 0x0a, 0x1d, 0x70, 0x6c, 0x61, 0x74, 0x66,
+	0x6f, 0x72, 0x6d, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x54, 0x79, 0x70, 0x65, 0x53, 0x74, 0x72, 0x65,
+	0x61, 0x6d, 0x4f, 0x6e, 0x6c, 0x69, 0x6e, 0x65, 0x10, 0x0a, 0x12, 0x22, 0x0a, 0x1e, 0x70, 0x6c,
+	0x61, 0x74, 0x66, 0x6f, 0x72, 0x6d, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x54, 0x79, 0x70, 0x65, 0x53,
+	0x74, 0x72, 0x65, 0x61, 0x6d, 0x4f, 0x66, 0x66, 0x6c, 0x69, 0x6e, 0x65, 0x10, 0x0b, 0x12, 0x1a,
+	0x0a, 0x16, 0x70, 0x6c, 0x61, 0x74, 0x66, 0x6f, 0x72, 0x6d, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x54,
+	0x79, 0x70, 0x65, 0x4f, 0x74, 0x68, 0x65, 0x72, 0x10, 0x0c, 0x32, 0xe2, 0x35, 0x0a, 0x07, 0x53,
 	0x74, 0x72, 0x65, 0x61, 0x6d, 0x44, 0x12, 0x32, 0x0a, 0x04, 0x50, 0x69, 0x6e, 0x67, 0x12, 0x14,
 	0x2e, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x64, 0x2e, 0x50, 0x69, 0x6e, 0x67, 0x52, 0x65, 0x71,
 	0x75, 0x65, 0x73, 0x74, 0x1a, 0x12, 0x2e, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x64, 0x2e, 0x50,
@@ -11530,7 +11648,7 @@ func file_streamd_proto_rawDescGZIP() []byte {
 	return file_streamd_proto_rawDescData
 }
 
-var file_streamd_proto_enumTypes = make([]protoimpl.EnumInfo, 8)
+var file_streamd_proto_enumTypes = make([]protoimpl.EnumInfo, 9)
 var file_streamd_proto_msgTypes = make([]protoimpl.MessageInfo, 196)
 var file_streamd_proto_goTypes = []interface{}{
 	(LoggingLevel)(0),                                   // 0: streamd.LoggingLevel
@@ -11541,224 +11659,225 @@ var file_streamd_proto_goTypes = []interface{}{
 	(VideoCodec)(0),                                     // 5: streamd.VideoCodec
 	(PlayerType)(0),                                     // 6: streamd.PlayerType
 	(EventType)(0),                                      // 7: streamd.EventType
-	(*PingRequest)(nil),                                 // 8: streamd.PingRequest
-	(*PingReply)(nil),                                   // 9: streamd.PingReply
-	(*SetLoggingLevelRequest)(nil),                      // 10: streamd.SetLoggingLevelRequest
-	(*SetLoggingLevelReply)(nil),                        // 11: streamd.SetLoggingLevelReply
-	(*GetLoggingLevelRequest)(nil),                      // 12: streamd.GetLoggingLevelRequest
-	(*GetLoggingLevelReply)(nil),                        // 13: streamd.GetLoggingLevelReply
-	(*GetConfigRequest)(nil),                            // 14: streamd.GetConfigRequest
-	(*GetConfigReply)(nil),                              // 15: streamd.GetConfigReply
-	(*SetConfigRequest)(nil),                            // 16: streamd.SetConfigRequest
-	(*SetConfigReply)(nil),                              // 17: streamd.SetConfigReply
-	(*SaveConfigRequest)(nil),                           // 18: streamd.SaveConfigRequest
-	(*SaveConfigReply)(nil),                             // 19: streamd.SaveConfigReply
-	(*ResetCacheRequest)(nil),                           // 20: streamd.ResetCacheRequest
-	(*ResetCacheReply)(nil),                             // 21: streamd.ResetCacheReply
-	(*InitCacheRequest)(nil),                            // 22: streamd.InitCacheRequest
-	(*InitCacheReply)(nil),                              // 23: streamd.InitCacheReply
-	(*StartStreamRequest)(nil),                          // 24: streamd.StartStreamRequest
-	(*StartStreamReply)(nil),                            // 25: streamd.StartStreamReply
-	(*EndStreamRequest)(nil),                            // 26: streamd.EndStreamRequest
-	(*EndStreamReply)(nil),                              // 27: streamd.EndStreamReply
-	(*GetStreamStatusRequest)(nil),                      // 28: streamd.GetStreamStatusRequest
-	(*GetStreamStatusReply)(nil),                        // 29: streamd.GetStreamStatusReply
-	(*GetBackendInfoRequest)(nil),                       // 30: streamd.GetBackendInfoRequest
-	(*GetBackendInfoReply)(nil),                         // 31: streamd.GetBackendInfoReply
-	(*IsBackendEnabledRequest)(nil),                     // 32: streamd.IsBackendEnabledRequest
-	(*IsBackendEnabledReply)(nil),                       // 33: streamd.IsBackendEnabledReply
-	(*RestartRequest)(nil),                              // 34: streamd.RestartRequest
-	(*RestartReply)(nil),                                // 35: streamd.RestartReply
-	(*SetTitleRequest)(nil),                             // 36: streamd.SetTitleRequest
-	(*SetTitleReply)(nil),                               // 37: streamd.SetTitleReply
-	(*SetDescriptionRequest)(nil),                       // 38: streamd.SetDescriptionRequest
-	(*SetDescriptionReply)(nil),                         // 39: streamd.SetDescriptionReply
-	(*ApplyProfileRequest)(nil),                         // 40: streamd.ApplyProfileRequest
-	(*ApplyProfileReply)(nil),                           // 41: streamd.ApplyProfileReply
-	(*UpdateStreamRequest)(nil),                         // 42: streamd.UpdateStreamRequest
-	(*UpdateStreamReply)(nil),                           // 43: streamd.UpdateStreamReply
-	(*EXPERIMENTAL_ReinitStreamControllersRequest)(nil), // 44: streamd.EXPERIMENTAL_ReinitStreamControllersRequest
-	(*EXPERIMENTAL_ReinitStreamControllersReply)(nil),   // 45: streamd.EXPERIMENTAL_ReinitStreamControllersReply
-	(*OBSOLETE_FetchConfigRequest)(nil),                 // 46: streamd.OBSOLETE_FetchConfigRequest
-	(*OBSOLETE_FetchConfigReply)(nil),                   // 47: streamd.OBSOLETE_FetchConfigReply
-	(*OBSOLETE_GetGitInfoRequest)(nil),                  // 48: streamd.OBSOLETE_GetGitInfoRequest
-	(*OBSOLETE_GetGitInfoReply)(nil),                    // 49: streamd.OBSOLETE_GetGitInfoReply
-	(*OBSOLETE_GitReloginRequest)(nil),                  // 50: streamd.OBSOLETE_GitReloginRequest
-	(*OBSOLETE_GitReloginReply)(nil),                    // 51: streamd.OBSOLETE_GitReloginReply
-	(*SubscribeToOAuthRequestsRequest)(nil),             // 52: streamd.SubscribeToOAuthRequestsRequest
-	(*OAuthRequest)(nil),                                // 53: streamd.OAuthRequest
-	(*GetVariableRequest)(nil),                          // 54: streamd.GetVariableRequest
-	(*GetVariableReply)(nil),                            // 55: streamd.GetVariableReply
-	(*GetVariableHashRequest)(nil),                      // 56: streamd.GetVariableHashRequest
-	(*GetVariableHashReply)(nil),                        // 57: streamd.GetVariableHashReply
-	(*SetVariableRequest)(nil),                          // 58: streamd.SetVariableRequest
-	(*SetVariableReply)(nil),                            // 59: streamd.SetVariableReply
-	(*SubscribeToVariableRequest)(nil),                  // 60: streamd.SubscribeToVariableRequest
-	(*VariableChange)(nil),                              // 61: streamd.VariableChange
-	(*SubmitOAuthCodeRequest)(nil),                      // 62: streamd.SubmitOAuthCodeRequest
-	(*SubmitOAuthCodeReply)(nil),                        // 63: streamd.SubmitOAuthCodeReply
-	(*TLSCertificate)(nil),                              // 64: streamd.TLSCertificate
-	(*PrivateKey)(nil),                                  // 65: streamd.PrivateKey
-	(*StreamServer)(nil),                                // 66: streamd.StreamServer
-	(*StreamServerStatistics)(nil),                      // 67: streamd.StreamServerStatistics
-	(*StreamServerWithStatistics)(nil),                  // 68: streamd.StreamServerWithStatistics
-	(*ListStreamServersRequest)(nil),                    // 69: streamd.ListStreamServersRequest
-	(*ListStreamServersReply)(nil),                      // 70: streamd.ListStreamServersReply
-	(*StartStreamServerRequest)(nil),                    // 71: streamd.StartStreamServerRequest
-	(*StartStreamServerReply)(nil),                      // 72: streamd.StartStreamServerReply
-	(*StopStreamServerRequest)(nil),                     // 73: streamd.StopStreamServerRequest
-	(*StopStreamServerReply)(nil),                       // 74: streamd.StopStreamServerReply
-	(*StreamDestination)(nil),                           // 75: streamd.StreamDestination
-	(*ListStreamDestinationsRequest)(nil),               // 76: streamd.ListStreamDestinationsRequest
-	(*ListStreamDestinationsReply)(nil),                 // 77: streamd.ListStreamDestinationsReply
-	(*AddStreamDestinationRequest)(nil),                 // 78: streamd.AddStreamDestinationRequest
-	(*AddStreamDestinationReply)(nil),                   // 79: streamd.AddStreamDestinationReply
-	(*UpdateStreamDestinationRequest)(nil),              // 80: streamd.UpdateStreamDestinationRequest
-	(*UpdateStreamDestinationReply)(nil),                // 81: streamd.UpdateStreamDestinationReply
-	(*RemoveStreamDestinationRequest)(nil),              // 82: streamd.RemoveStreamDestinationRequest
-	(*RemoveStreamDestinationReply)(nil),                // 83: streamd.RemoveStreamDestinationReply
-	(*IncomingStream)(nil),                              // 84: streamd.IncomingStream
-	(*AddIncomingStreamRequest)(nil),                    // 85: streamd.AddIncomingStreamRequest
-	(*AddIncomingStreamReply)(nil),                      // 86: streamd.AddIncomingStreamReply
-	(*RemoveIncomingStreamRequest)(nil),                 // 87: streamd.RemoveIncomingStreamRequest
-	(*RemoveIncomingStreamReply)(nil),                   // 88: streamd.RemoveIncomingStreamReply
-	(*ListIncomingStreamsRequest)(nil),                  // 89: streamd.ListIncomingStreamsRequest
-	(*ListIncomingStreamsReply)(nil),                    // 90: streamd.ListIncomingStreamsReply
-	(*RestartUntilYoutubeRecognizesStream)(nil),         // 91: streamd.RestartUntilYoutubeRecognizesStream
-	(*StartAfterYoutubeRecognizedStream)(nil),           // 92: streamd.StartAfterYoutubeRecognizedStream
-	(*StreamForwardQuirks)(nil),                         // 93: streamd.StreamForwardQuirks
-	(*StreamForward)(nil),                               // 94: streamd.StreamForward
-	(*EncoderConfig)(nil),                               // 95: streamd.EncoderConfig
-	(*OutputAudioTrack)(nil),                            // 96: streamd.OutputAudioTrack
-	(*EncodeAudioConfig)(nil),                           // 97: streamd.EncodeAudioConfig
-	(*AudioQuality)(nil),                                // 98: streamd.AudioQuality
-	(*OutputVideoTrack)(nil),                            // 99: streamd.OutputVideoTrack
-	(*EncodeVideoConfig)(nil),                           // 100: streamd.EncodeVideoConfig
-	(*VideoQuality)(nil),                                // 101: streamd.VideoQuality
-	(*StreamForwardStatistics)(nil),                     // 102: streamd.StreamForwardStatistics
-	(*StreamForwardWithStatistics)(nil),                 // 103: streamd.StreamForwardWithStatistics
-	(*ListStreamForwardsRequest)(nil),                   // 104: streamd.ListStreamForwardsRequest
-	(*ListStreamForwardsReply)(nil),                     // 105: streamd.ListStreamForwardsReply
-	(*AddStreamForwardRequest)(nil),                     // 106: streamd.AddStreamForwardRequest
-	(*AddStreamForwardReply)(nil),                       // 107: streamd.AddStreamForwardReply
-	(*UpdateStreamForwardRequest)(nil),                  // 108: streamd.UpdateStreamForwardRequest
-	(*UpdateStreamForwardReply)(nil),                    // 109: streamd.UpdateStreamForwardReply
-	(*RemoveStreamForwardRequest)(nil),                  // 110: streamd.RemoveStreamForwardRequest
-	(*RemoveStreamForwardReply)(nil),                    // 111: streamd.RemoveStreamForwardReply
-	(*WaitForStreamPublisherRequest)(nil),               // 112: streamd.WaitForStreamPublisherRequest
-	(*StreamPublisher)(nil),                             // 113: streamd.StreamPublisher
-	(*StreamPlaybackConfig)(nil),                        // 114: streamd.StreamPlaybackConfig
-	(*StreamPlayerConfig)(nil),                          // 115: streamd.StreamPlayerConfig
-	(*AddStreamPlayerRequest)(nil),                      // 116: streamd.AddStreamPlayerRequest
-	(*AddStreamPlayerReply)(nil),                        // 117: streamd.AddStreamPlayerReply
-	(*RemoveStreamPlayerRequest)(nil),                   // 118: streamd.RemoveStreamPlayerRequest
-	(*RemoveStreamPlayerReply)(nil),                     // 119: streamd.RemoveStreamPlayerReply
-	(*UpdateStreamPlayerRequest)(nil),                   // 120: streamd.UpdateStreamPlayerRequest
-	(*UpdateStreamPlayerReply)(nil),                     // 121: streamd.UpdateStreamPlayerReply
-	(*ListStreamPlayersRequest)(nil),                    // 122: streamd.ListStreamPlayersRequest
-	(*ListStreamPlayersReply)(nil),                      // 123: streamd.ListStreamPlayersReply
-	(*GetStreamPlayerRequest)(nil),                      // 124: streamd.GetStreamPlayerRequest
-	(*GetStreamPlayerReply)(nil),                        // 125: streamd.GetStreamPlayerReply
-	(*StreamPlayerOpenRequest)(nil),                     // 126: streamd.StreamPlayerOpenRequest
-	(*StreamPlayerOpenReply)(nil),                       // 127: streamd.StreamPlayerOpenReply
-	(*StreamPlayerProcessTitleRequest)(nil),             // 128: streamd.StreamPlayerProcessTitleRequest
-	(*StreamPlayerProcessTitleReply)(nil),               // 129: streamd.StreamPlayerProcessTitleReply
-	(*StreamPlayerGetLinkRequest)(nil),                  // 130: streamd.StreamPlayerGetLinkRequest
-	(*StreamPlayerGetLinkReply)(nil),                    // 131: streamd.StreamPlayerGetLinkReply
-	(*StreamPlayerEndChanRequest)(nil),                  // 132: streamd.StreamPlayerEndChanRequest
-	(*StreamPlayerEndChanReply)(nil),                    // 133: streamd.StreamPlayerEndChanReply
-	(*StreamPlayerIsEndedRequest)(nil),                  // 134: streamd.StreamPlayerIsEndedRequest
-	(*StreamPlayerIsEndedReply)(nil),                    // 135: streamd.StreamPlayerIsEndedReply
-	(*StreamPlayerGetPositionRequest)(nil),              // 136: streamd.StreamPlayerGetPositionRequest
-	(*StreamPlayerGetPositionReply)(nil),                // 137: streamd.StreamPlayerGetPositionReply
-	(*StreamPlayerGetLengthRequest)(nil),                // 138: streamd.StreamPlayerGetLengthRequest
-	(*StreamPlayerGetLengthReply)(nil),                  // 139: streamd.StreamPlayerGetLengthReply
-	(*StreamPlayerSetSpeedRequest)(nil),                 // 140: streamd.StreamPlayerSetSpeedRequest
-	(*StreamPlayerSetSpeedReply)(nil),                   // 141: streamd.StreamPlayerSetSpeedReply
-	(*StreamPlayerSetPauseRequest)(nil),                 // 142: streamd.StreamPlayerSetPauseRequest
-	(*StreamPlayerSetPauseReply)(nil),                   // 143: streamd.StreamPlayerSetPauseReply
-	(*StreamPlayerStopRequest)(nil),                     // 144: streamd.StreamPlayerStopRequest
-	(*StreamPlayerStopReply)(nil),                       // 145: streamd.StreamPlayerStopReply
-	(*StreamPlayerCloseRequest)(nil),                    // 146: streamd.StreamPlayerCloseRequest
-	(*StreamPlayerCloseReply)(nil),                      // 147: streamd.StreamPlayerCloseReply
-	(*SubscribeToConfigChangesRequest)(nil),             // 148: streamd.SubscribeToConfigChangesRequest
-	(*ConfigChange)(nil),                                // 149: streamd.ConfigChange
-	(*SubscribeToStreamsChangesRequest)(nil),            // 150: streamd.SubscribeToStreamsChangesRequest
-	(*StreamsChange)(nil),                               // 151: streamd.StreamsChange
-	(*SubscribeToStreamServersChangesRequest)(nil),      // 152: streamd.SubscribeToStreamServersChangesRequest
-	(*StreamServersChange)(nil),                         // 153: streamd.StreamServersChange
-	(*SubscribeToStreamDestinationsChangesRequest)(nil), // 154: streamd.SubscribeToStreamDestinationsChangesRequest
-	(*StreamDestinationsChange)(nil),                    // 155: streamd.StreamDestinationsChange
-	(*SubscribeToIncomingStreamsChangesRequest)(nil),    // 156: streamd.SubscribeToIncomingStreamsChangesRequest
-	(*IncomingStreamsChange)(nil),                       // 157: streamd.IncomingStreamsChange
-	(*SubscribeToStreamForwardsChangesRequest)(nil),     // 158: streamd.SubscribeToStreamForwardsChangesRequest
-	(*StreamForwardsChange)(nil),                        // 159: streamd.StreamForwardsChange
-	(*SubscribeToStreamPlayersChangesRequest)(nil),      // 160: streamd.SubscribeToStreamPlayersChangesRequest
-	(*StreamPlayersChange)(nil),                         // 161: streamd.StreamPlayersChange
-	(*NoopRequest)(nil),                                 // 162: streamd.NoopRequest
-	(*OBSActionItemShowHide)(nil),                       // 163: streamd.OBSActionItemShowHide
-	(*OBSActionWindowCaptureSetSource)(nil),             // 164: streamd.OBSActionWindowCaptureSetSource
-	(*OBSAction)(nil),                                   // 165: streamd.OBSAction
-	(*Action)(nil),                                      // 166: streamd.Action
-	(*AddTimerRequest)(nil),                             // 167: streamd.AddTimerRequest
-	(*AddTimerReply)(nil),                               // 168: streamd.AddTimerReply
-	(*RemoveTimerRequest)(nil),                          // 169: streamd.RemoveTimerRequest
-	(*RemoveTimerReply)(nil),                            // 170: streamd.RemoveTimerReply
-	(*Timer)(nil),                                       // 171: streamd.Timer
-	(*ListTimersRequest)(nil),                           // 172: streamd.ListTimersRequest
-	(*ListTimersReply)(nil),                             // 173: streamd.ListTimersReply
-	(*EventQueryAnd)(nil),                               // 174: streamd.EventQueryAnd
-	(*EventQueryOr)(nil),                                // 175: streamd.EventQueryOr
-	(*EventQueryNot)(nil),                               // 176: streamd.EventQueryNot
-	(*EventOBSSceneChange)(nil),                         // 177: streamd.EventOBSSceneChange
-	(*EventWindowFocusChange)(nil),                      // 178: streamd.EventWindowFocusChange
-	(*EventQuery)(nil),                                  // 179: streamd.EventQuery
-	(*Event)(nil),                                       // 180: streamd.Event
-	(*TriggerRule)(nil),                                 // 181: streamd.TriggerRule
-	(*ListTriggerRulesRequest)(nil),                     // 182: streamd.ListTriggerRulesRequest
-	(*ListTriggerRulesReply)(nil),                       // 183: streamd.ListTriggerRulesReply
-	(*AddTriggerRuleRequest)(nil),                       // 184: streamd.AddTriggerRuleRequest
-	(*AddTriggerRuleReply)(nil),                         // 185: streamd.AddTriggerRuleReply
-	(*RemoveTriggerRuleRequest)(nil),                    // 186: streamd.RemoveTriggerRuleRequest
-	(*RemoveTriggerRuleReply)(nil),                      // 187: streamd.RemoveTriggerRuleReply
-	(*UpdateTriggerRuleRequest)(nil),                    // 188: streamd.UpdateTriggerRuleRequest
-	(*UpdateTriggerRuleReply)(nil),                      // 189: streamd.UpdateTriggerRuleReply
-	(*SubmitEventRequest)(nil),                          // 190: streamd.SubmitEventRequest
-	(*SubmitEventReply)(nil),                            // 191: streamd.SubmitEventReply
-	(*SubscribeToChatMessagesRequest)(nil),              // 192: streamd.SubscribeToChatMessagesRequest
-	(*ChatMessage)(nil),                                 // 193: streamd.ChatMessage
-	(*SendChatMessageRequest)(nil),                      // 194: streamd.SendChatMessageRequest
-	(*SendChatMessageReply)(nil),                        // 195: streamd.SendChatMessageReply
-	(*RemoveChatMessageRequest)(nil),                    // 196: streamd.RemoveChatMessageRequest
-	(*RemoveChatMessageReply)(nil),                      // 197: streamd.RemoveChatMessageReply
-	(*BanUserRequest)(nil),                              // 198: streamd.BanUserRequest
-	(*BanUserReply)(nil),                                // 199: streamd.BanUserReply
-	(*GetPeerIDsRequest)(nil),                           // 200: streamd.GetPeerIDsRequest
-	(*GetPeerIDsReply)(nil),                             // 201: streamd.GetPeerIDsReply
-	(*LLMGenerateRequest)(nil),                          // 202: streamd.LLMGenerateRequest
-	(*LLMGenerateReply)(nil),                            // 203: streamd.LLMGenerateReply
-	(*player_grpc.OpenRequest)(nil),                     // 204: player.OpenRequest
-	(*player_grpc.OpenReply)(nil),                       // 205: player.OpenReply
-	(*player_grpc.ProcessTitleRequest)(nil),             // 206: player.ProcessTitleRequest
-	(*player_grpc.ProcessTitleReply)(nil),               // 207: player.ProcessTitleReply
-	(*player_grpc.GetLinkRequest)(nil),                  // 208: player.GetLinkRequest
-	(*player_grpc.GetLinkReply)(nil),                    // 209: player.GetLinkReply
-	(*player_grpc.EndChanRequest)(nil),                  // 210: player.EndChanRequest
-	(*player_grpc.EndChanReply)(nil),                    // 211: player.EndChanReply
-	(*player_grpc.IsEndedRequest)(nil),                  // 212: player.IsEndedRequest
-	(*player_grpc.IsEndedReply)(nil),                    // 213: player.IsEndedReply
-	(*player_grpc.GetPositionRequest)(nil),              // 214: player.GetPositionRequest
-	(*player_grpc.GetPositionReply)(nil),                // 215: player.GetPositionReply
-	(*player_grpc.GetLengthRequest)(nil),                // 216: player.GetLengthRequest
-	(*player_grpc.GetLengthReply)(nil),                  // 217: player.GetLengthReply
-	(*player_grpc.SetSpeedRequest)(nil),                 // 218: player.SetSpeedRequest
-	(*player_grpc.SetSpeedReply)(nil),                   // 219: player.SetSpeedReply
-	(*player_grpc.SetPauseRequest)(nil),                 // 220: player.SetPauseRequest
-	(*player_grpc.SetPauseReply)(nil),                   // 221: player.SetPauseReply
-	(*player_grpc.StopRequest)(nil),                     // 222: player.StopRequest
-	(*player_grpc.StopReply)(nil),                       // 223: player.StopReply
-	(*player_grpc.CloseRequest)(nil),                    // 224: player.CloseRequest
-	(*player_grpc.CloseReply)(nil),                      // 225: player.CloseReply
+	(PlatformEventType)(0),                              // 8: streamd.PlatformEventType
+	(*PingRequest)(nil),                                 // 9: streamd.PingRequest
+	(*PingReply)(nil),                                   // 10: streamd.PingReply
+	(*SetLoggingLevelRequest)(nil),                      // 11: streamd.SetLoggingLevelRequest
+	(*SetLoggingLevelReply)(nil),                        // 12: streamd.SetLoggingLevelReply
+	(*GetLoggingLevelRequest)(nil),                      // 13: streamd.GetLoggingLevelRequest
+	(*GetLoggingLevelReply)(nil),                        // 14: streamd.GetLoggingLevelReply
+	(*GetConfigRequest)(nil),                            // 15: streamd.GetConfigRequest
+	(*GetConfigReply)(nil),                              // 16: streamd.GetConfigReply
+	(*SetConfigRequest)(nil),                            // 17: streamd.SetConfigRequest
+	(*SetConfigReply)(nil),                              // 18: streamd.SetConfigReply
+	(*SaveConfigRequest)(nil),                           // 19: streamd.SaveConfigRequest
+	(*SaveConfigReply)(nil),                             // 20: streamd.SaveConfigReply
+	(*ResetCacheRequest)(nil),                           // 21: streamd.ResetCacheRequest
+	(*ResetCacheReply)(nil),                             // 22: streamd.ResetCacheReply
+	(*InitCacheRequest)(nil),                            // 23: streamd.InitCacheRequest
+	(*InitCacheReply)(nil),                              // 24: streamd.InitCacheReply
+	(*StartStreamRequest)(nil),                          // 25: streamd.StartStreamRequest
+	(*StartStreamReply)(nil),                            // 26: streamd.StartStreamReply
+	(*EndStreamRequest)(nil),                            // 27: streamd.EndStreamRequest
+	(*EndStreamReply)(nil),                              // 28: streamd.EndStreamReply
+	(*GetStreamStatusRequest)(nil),                      // 29: streamd.GetStreamStatusRequest
+	(*GetStreamStatusReply)(nil),                        // 30: streamd.GetStreamStatusReply
+	(*GetBackendInfoRequest)(nil),                       // 31: streamd.GetBackendInfoRequest
+	(*GetBackendInfoReply)(nil),                         // 32: streamd.GetBackendInfoReply
+	(*IsBackendEnabledRequest)(nil),                     // 33: streamd.IsBackendEnabledRequest
+	(*IsBackendEnabledReply)(nil),                       // 34: streamd.IsBackendEnabledReply
+	(*RestartRequest)(nil),                              // 35: streamd.RestartRequest
+	(*RestartReply)(nil),                                // 36: streamd.RestartReply
+	(*SetTitleRequest)(nil),                             // 37: streamd.SetTitleRequest
+	(*SetTitleReply)(nil),                               // 38: streamd.SetTitleReply
+	(*SetDescriptionRequest)(nil),                       // 39: streamd.SetDescriptionRequest
+	(*SetDescriptionReply)(nil),                         // 40: streamd.SetDescriptionReply
+	(*ApplyProfileRequest)(nil),                         // 41: streamd.ApplyProfileRequest
+	(*ApplyProfileReply)(nil),                           // 42: streamd.ApplyProfileReply
+	(*UpdateStreamRequest)(nil),                         // 43: streamd.UpdateStreamRequest
+	(*UpdateStreamReply)(nil),                           // 44: streamd.UpdateStreamReply
+	(*EXPERIMENTAL_ReinitStreamControllersRequest)(nil), // 45: streamd.EXPERIMENTAL_ReinitStreamControllersRequest
+	(*EXPERIMENTAL_ReinitStreamControllersReply)(nil),   // 46: streamd.EXPERIMENTAL_ReinitStreamControllersReply
+	(*OBSOLETE_FetchConfigRequest)(nil),                 // 47: streamd.OBSOLETE_FetchConfigRequest
+	(*OBSOLETE_FetchConfigReply)(nil),                   // 48: streamd.OBSOLETE_FetchConfigReply
+	(*OBSOLETE_GetGitInfoRequest)(nil),                  // 49: streamd.OBSOLETE_GetGitInfoRequest
+	(*OBSOLETE_GetGitInfoReply)(nil),                    // 50: streamd.OBSOLETE_GetGitInfoReply
+	(*OBSOLETE_GitReloginRequest)(nil),                  // 51: streamd.OBSOLETE_GitReloginRequest
+	(*OBSOLETE_GitReloginReply)(nil),                    // 52: streamd.OBSOLETE_GitReloginReply
+	(*SubscribeToOAuthRequestsRequest)(nil),             // 53: streamd.SubscribeToOAuthRequestsRequest
+	(*OAuthRequest)(nil),                                // 54: streamd.OAuthRequest
+	(*GetVariableRequest)(nil),                          // 55: streamd.GetVariableRequest
+	(*GetVariableReply)(nil),                            // 56: streamd.GetVariableReply
+	(*GetVariableHashRequest)(nil),                      // 57: streamd.GetVariableHashRequest
+	(*GetVariableHashReply)(nil),                        // 58: streamd.GetVariableHashReply
+	(*SetVariableRequest)(nil),                          // 59: streamd.SetVariableRequest
+	(*SetVariableReply)(nil),                            // 60: streamd.SetVariableReply
+	(*SubscribeToVariableRequest)(nil),                  // 61: streamd.SubscribeToVariableRequest
+	(*VariableChange)(nil),                              // 62: streamd.VariableChange
+	(*SubmitOAuthCodeRequest)(nil),                      // 63: streamd.SubmitOAuthCodeRequest
+	(*SubmitOAuthCodeReply)(nil),                        // 64: streamd.SubmitOAuthCodeReply
+	(*TLSCertificate)(nil),                              // 65: streamd.TLSCertificate
+	(*PrivateKey)(nil),                                  // 66: streamd.PrivateKey
+	(*StreamServer)(nil),                                // 67: streamd.StreamServer
+	(*StreamServerStatistics)(nil),                      // 68: streamd.StreamServerStatistics
+	(*StreamServerWithStatistics)(nil),                  // 69: streamd.StreamServerWithStatistics
+	(*ListStreamServersRequest)(nil),                    // 70: streamd.ListStreamServersRequest
+	(*ListStreamServersReply)(nil),                      // 71: streamd.ListStreamServersReply
+	(*StartStreamServerRequest)(nil),                    // 72: streamd.StartStreamServerRequest
+	(*StartStreamServerReply)(nil),                      // 73: streamd.StartStreamServerReply
+	(*StopStreamServerRequest)(nil),                     // 74: streamd.StopStreamServerRequest
+	(*StopStreamServerReply)(nil),                       // 75: streamd.StopStreamServerReply
+	(*StreamDestination)(nil),                           // 76: streamd.StreamDestination
+	(*ListStreamDestinationsRequest)(nil),               // 77: streamd.ListStreamDestinationsRequest
+	(*ListStreamDestinationsReply)(nil),                 // 78: streamd.ListStreamDestinationsReply
+	(*AddStreamDestinationRequest)(nil),                 // 79: streamd.AddStreamDestinationRequest
+	(*AddStreamDestinationReply)(nil),                   // 80: streamd.AddStreamDestinationReply
+	(*UpdateStreamDestinationRequest)(nil),              // 81: streamd.UpdateStreamDestinationRequest
+	(*UpdateStreamDestinationReply)(nil),                // 82: streamd.UpdateStreamDestinationReply
+	(*RemoveStreamDestinationRequest)(nil),              // 83: streamd.RemoveStreamDestinationRequest
+	(*RemoveStreamDestinationReply)(nil),                // 84: streamd.RemoveStreamDestinationReply
+	(*IncomingStream)(nil),                              // 85: streamd.IncomingStream
+	(*AddIncomingStreamRequest)(nil),                    // 86: streamd.AddIncomingStreamRequest
+	(*AddIncomingStreamReply)(nil),                      // 87: streamd.AddIncomingStreamReply
+	(*RemoveIncomingStreamRequest)(nil),                 // 88: streamd.RemoveIncomingStreamRequest
+	(*RemoveIncomingStreamReply)(nil),                   // 89: streamd.RemoveIncomingStreamReply
+	(*ListIncomingStreamsRequest)(nil),                  // 90: streamd.ListIncomingStreamsRequest
+	(*ListIncomingStreamsReply)(nil),                    // 91: streamd.ListIncomingStreamsReply
+	(*RestartUntilYoutubeRecognizesStream)(nil),         // 92: streamd.RestartUntilYoutubeRecognizesStream
+	(*StartAfterYoutubeRecognizedStream)(nil),           // 93: streamd.StartAfterYoutubeRecognizedStream
+	(*StreamForwardQuirks)(nil),                         // 94: streamd.StreamForwardQuirks
+	(*StreamForward)(nil),                               // 95: streamd.StreamForward
+	(*EncoderConfig)(nil),                               // 96: streamd.EncoderConfig
+	(*OutputAudioTrack)(nil),                            // 97: streamd.OutputAudioTrack
+	(*EncodeAudioConfig)(nil),                           // 98: streamd.EncodeAudioConfig
+	(*AudioQuality)(nil),                                // 99: streamd.AudioQuality
+	(*OutputVideoTrack)(nil),                            // 100: streamd.OutputVideoTrack
+	(*EncodeVideoConfig)(nil),                           // 101: streamd.EncodeVideoConfig
+	(*VideoQuality)(nil),                                // 102: streamd.VideoQuality
+	(*StreamForwardStatistics)(nil),                     // 103: streamd.StreamForwardStatistics
+	(*StreamForwardWithStatistics)(nil),                 // 104: streamd.StreamForwardWithStatistics
+	(*ListStreamForwardsRequest)(nil),                   // 105: streamd.ListStreamForwardsRequest
+	(*ListStreamForwardsReply)(nil),                     // 106: streamd.ListStreamForwardsReply
+	(*AddStreamForwardRequest)(nil),                     // 107: streamd.AddStreamForwardRequest
+	(*AddStreamForwardReply)(nil),                       // 108: streamd.AddStreamForwardReply
+	(*UpdateStreamForwardRequest)(nil),                  // 109: streamd.UpdateStreamForwardRequest
+	(*UpdateStreamForwardReply)(nil),                    // 110: streamd.UpdateStreamForwardReply
+	(*RemoveStreamForwardRequest)(nil),                  // 111: streamd.RemoveStreamForwardRequest
+	(*RemoveStreamForwardReply)(nil),                    // 112: streamd.RemoveStreamForwardReply
+	(*WaitForStreamPublisherRequest)(nil),               // 113: streamd.WaitForStreamPublisherRequest
+	(*StreamPublisher)(nil),                             // 114: streamd.StreamPublisher
+	(*StreamPlaybackConfig)(nil),                        // 115: streamd.StreamPlaybackConfig
+	(*StreamPlayerConfig)(nil),                          // 116: streamd.StreamPlayerConfig
+	(*AddStreamPlayerRequest)(nil),                      // 117: streamd.AddStreamPlayerRequest
+	(*AddStreamPlayerReply)(nil),                        // 118: streamd.AddStreamPlayerReply
+	(*RemoveStreamPlayerRequest)(nil),                   // 119: streamd.RemoveStreamPlayerRequest
+	(*RemoveStreamPlayerReply)(nil),                     // 120: streamd.RemoveStreamPlayerReply
+	(*UpdateStreamPlayerRequest)(nil),                   // 121: streamd.UpdateStreamPlayerRequest
+	(*UpdateStreamPlayerReply)(nil),                     // 122: streamd.UpdateStreamPlayerReply
+	(*ListStreamPlayersRequest)(nil),                    // 123: streamd.ListStreamPlayersRequest
+	(*ListStreamPlayersReply)(nil),                      // 124: streamd.ListStreamPlayersReply
+	(*GetStreamPlayerRequest)(nil),                      // 125: streamd.GetStreamPlayerRequest
+	(*GetStreamPlayerReply)(nil),                        // 126: streamd.GetStreamPlayerReply
+	(*StreamPlayerOpenRequest)(nil),                     // 127: streamd.StreamPlayerOpenRequest
+	(*StreamPlayerOpenReply)(nil),                       // 128: streamd.StreamPlayerOpenReply
+	(*StreamPlayerProcessTitleRequest)(nil),             // 129: streamd.StreamPlayerProcessTitleRequest
+	(*StreamPlayerProcessTitleReply)(nil),               // 130: streamd.StreamPlayerProcessTitleReply
+	(*StreamPlayerGetLinkRequest)(nil),                  // 131: streamd.StreamPlayerGetLinkRequest
+	(*StreamPlayerGetLinkReply)(nil),                    // 132: streamd.StreamPlayerGetLinkReply
+	(*StreamPlayerEndChanRequest)(nil),                  // 133: streamd.StreamPlayerEndChanRequest
+	(*StreamPlayerEndChanReply)(nil),                    // 134: streamd.StreamPlayerEndChanReply
+	(*StreamPlayerIsEndedRequest)(nil),                  // 135: streamd.StreamPlayerIsEndedRequest
+	(*StreamPlayerIsEndedReply)(nil),                    // 136: streamd.StreamPlayerIsEndedReply
+	(*StreamPlayerGetPositionRequest)(nil),              // 137: streamd.StreamPlayerGetPositionRequest
+	(*StreamPlayerGetPositionReply)(nil),                // 138: streamd.StreamPlayerGetPositionReply
+	(*StreamPlayerGetLengthRequest)(nil),                // 139: streamd.StreamPlayerGetLengthRequest
+	(*StreamPlayerGetLengthReply)(nil),                  // 140: streamd.StreamPlayerGetLengthReply
+	(*StreamPlayerSetSpeedRequest)(nil),                 // 141: streamd.StreamPlayerSetSpeedRequest
+	(*StreamPlayerSetSpeedReply)(nil),                   // 142: streamd.StreamPlayerSetSpeedReply
+	(*StreamPlayerSetPauseRequest)(nil),                 // 143: streamd.StreamPlayerSetPauseRequest
+	(*StreamPlayerSetPauseReply)(nil),                   // 144: streamd.StreamPlayerSetPauseReply
+	(*StreamPlayerStopRequest)(nil),                     // 145: streamd.StreamPlayerStopRequest
+	(*StreamPlayerStopReply)(nil),                       // 146: streamd.StreamPlayerStopReply
+	(*StreamPlayerCloseRequest)(nil),                    // 147: streamd.StreamPlayerCloseRequest
+	(*StreamPlayerCloseReply)(nil),                      // 148: streamd.StreamPlayerCloseReply
+	(*SubscribeToConfigChangesRequest)(nil),             // 149: streamd.SubscribeToConfigChangesRequest
+	(*ConfigChange)(nil),                                // 150: streamd.ConfigChange
+	(*SubscribeToStreamsChangesRequest)(nil),            // 151: streamd.SubscribeToStreamsChangesRequest
+	(*StreamsChange)(nil),                               // 152: streamd.StreamsChange
+	(*SubscribeToStreamServersChangesRequest)(nil),      // 153: streamd.SubscribeToStreamServersChangesRequest
+	(*StreamServersChange)(nil),                         // 154: streamd.StreamServersChange
+	(*SubscribeToStreamDestinationsChangesRequest)(nil), // 155: streamd.SubscribeToStreamDestinationsChangesRequest
+	(*StreamDestinationsChange)(nil),                    // 156: streamd.StreamDestinationsChange
+	(*SubscribeToIncomingStreamsChangesRequest)(nil),    // 157: streamd.SubscribeToIncomingStreamsChangesRequest
+	(*IncomingStreamsChange)(nil),                       // 158: streamd.IncomingStreamsChange
+	(*SubscribeToStreamForwardsChangesRequest)(nil),     // 159: streamd.SubscribeToStreamForwardsChangesRequest
+	(*StreamForwardsChange)(nil),                        // 160: streamd.StreamForwardsChange
+	(*SubscribeToStreamPlayersChangesRequest)(nil),      // 161: streamd.SubscribeToStreamPlayersChangesRequest
+	(*StreamPlayersChange)(nil),                         // 162: streamd.StreamPlayersChange
+	(*NoopRequest)(nil),                                 // 163: streamd.NoopRequest
+	(*OBSActionItemShowHide)(nil),                       // 164: streamd.OBSActionItemShowHide
+	(*OBSActionWindowCaptureSetSource)(nil),             // 165: streamd.OBSActionWindowCaptureSetSource
+	(*OBSAction)(nil),                                   // 166: streamd.OBSAction
+	(*Action)(nil),                                      // 167: streamd.Action
+	(*AddTimerRequest)(nil),                             // 168: streamd.AddTimerRequest
+	(*AddTimerReply)(nil),                               // 169: streamd.AddTimerReply
+	(*RemoveTimerRequest)(nil),                          // 170: streamd.RemoveTimerRequest
+	(*RemoveTimerReply)(nil),                            // 171: streamd.RemoveTimerReply
+	(*Timer)(nil),                                       // 172: streamd.Timer
+	(*ListTimersRequest)(nil),                           // 173: streamd.ListTimersRequest
+	(*ListTimersReply)(nil),                             // 174: streamd.ListTimersReply
+	(*EventQueryAnd)(nil),                               // 175: streamd.EventQueryAnd
+	(*EventQueryOr)(nil),                                // 176: streamd.EventQueryOr
+	(*EventQueryNot)(nil),                               // 177: streamd.EventQueryNot
+	(*EventOBSSceneChange)(nil),                         // 178: streamd.EventOBSSceneChange
+	(*EventWindowFocusChange)(nil),                      // 179: streamd.EventWindowFocusChange
+	(*EventQuery)(nil),                                  // 180: streamd.EventQuery
+	(*Event)(nil),                                       // 181: streamd.Event
+	(*TriggerRule)(nil),                                 // 182: streamd.TriggerRule
+	(*ListTriggerRulesRequest)(nil),                     // 183: streamd.ListTriggerRulesRequest
+	(*ListTriggerRulesReply)(nil),                       // 184: streamd.ListTriggerRulesReply
+	(*AddTriggerRuleRequest)(nil),                       // 185: streamd.AddTriggerRuleRequest
+	(*AddTriggerRuleReply)(nil),                         // 186: streamd.AddTriggerRuleReply
+	(*RemoveTriggerRuleRequest)(nil),                    // 187: streamd.RemoveTriggerRuleRequest
+	(*RemoveTriggerRuleReply)(nil),                      // 188: streamd.RemoveTriggerRuleReply
+	(*UpdateTriggerRuleRequest)(nil),                    // 189: streamd.UpdateTriggerRuleRequest
+	(*UpdateTriggerRuleReply)(nil),                      // 190: streamd.UpdateTriggerRuleReply
+	(*SubmitEventRequest)(nil),                          // 191: streamd.SubmitEventRequest
+	(*SubmitEventReply)(nil),                            // 192: streamd.SubmitEventReply
+	(*SubscribeToChatMessagesRequest)(nil),              // 193: streamd.SubscribeToChatMessagesRequest
+	(*ChatMessage)(nil),                                 // 194: streamd.ChatMessage
+	(*SendChatMessageRequest)(nil),                      // 195: streamd.SendChatMessageRequest
+	(*SendChatMessageReply)(nil),                        // 196: streamd.SendChatMessageReply
+	(*RemoveChatMessageRequest)(nil),                    // 197: streamd.RemoveChatMessageRequest
+	(*RemoveChatMessageReply)(nil),                      // 198: streamd.RemoveChatMessageReply
+	(*BanUserRequest)(nil),                              // 199: streamd.BanUserRequest
+	(*BanUserReply)(nil),                                // 200: streamd.BanUserReply
+	(*GetPeerIDsRequest)(nil),                           // 201: streamd.GetPeerIDsRequest
+	(*GetPeerIDsReply)(nil),                             // 202: streamd.GetPeerIDsReply
+	(*LLMGenerateRequest)(nil),                          // 203: streamd.LLMGenerateRequest
+	(*LLMGenerateReply)(nil),                            // 204: streamd.LLMGenerateReply
+	(*player_grpc.OpenRequest)(nil),                     // 205: player.OpenRequest
+	(*player_grpc.OpenReply)(nil),                       // 206: player.OpenReply
+	(*player_grpc.ProcessTitleRequest)(nil),             // 207: player.ProcessTitleRequest
+	(*player_grpc.ProcessTitleReply)(nil),               // 208: player.ProcessTitleReply
+	(*player_grpc.GetLinkRequest)(nil),                  // 209: player.GetLinkRequest
+	(*player_grpc.GetLinkReply)(nil),                    // 210: player.GetLinkReply
+	(*player_grpc.EndChanRequest)(nil),                  // 211: player.EndChanRequest
+	(*player_grpc.EndChanReply)(nil),                    // 212: player.EndChanReply
+	(*player_grpc.IsEndedRequest)(nil),                  // 213: player.IsEndedRequest
+	(*player_grpc.IsEndedReply)(nil),                    // 214: player.IsEndedReply
+	(*player_grpc.GetPositionRequest)(nil),              // 215: player.GetPositionRequest
+	(*player_grpc.GetPositionReply)(nil),                // 216: player.GetPositionReply
+	(*player_grpc.GetLengthRequest)(nil),                // 217: player.GetLengthRequest
+	(*player_grpc.GetLengthReply)(nil),                  // 218: player.GetLengthReply
+	(*player_grpc.SetSpeedRequest)(nil),                 // 219: player.SetSpeedRequest
+	(*player_grpc.SetSpeedReply)(nil),                   // 220: player.SetSpeedReply
+	(*player_grpc.SetPauseRequest)(nil),                 // 221: player.SetPauseRequest
+	(*player_grpc.SetPauseReply)(nil),                   // 222: player.SetPauseReply
+	(*player_grpc.StopRequest)(nil),                     // 223: player.StopRequest
+	(*player_grpc.StopReply)(nil),                       // 224: player.StopReply
+	(*player_grpc.CloseRequest)(nil),                    // 225: player.CloseRequest
+	(*player_grpc.CloseReply)(nil),                      // 226: player.CloseReply
 }
 var file_streamd_proto_depIdxs = []int32{
 	0,   // 0: streamd.SetLoggingLevelRequest.loggingLevel:type_name -> streamd.LoggingLevel
@@ -11767,246 +11886,247 @@ var file_streamd_proto_depIdxs = []int32{
 	2,   // 3: streamd.GetVariableHashRequest.hashType:type_name -> streamd.HashType
 	2,   // 4: streamd.GetVariableHashReply.hashType:type_name -> streamd.HashType
 	3,   // 5: streamd.StreamServer.serverType:type_name -> streamd.StreamServerType
-	64,  // 6: streamd.StreamServer.ServerCert:type_name -> streamd.TLSCertificate
-	65,  // 7: streamd.StreamServer.ServerKey:type_name -> streamd.PrivateKey
-	66,  // 8: streamd.StreamServerWithStatistics.config:type_name -> streamd.StreamServer
-	67,  // 9: streamd.StreamServerWithStatistics.statistics:type_name -> streamd.StreamServerStatistics
-	68,  // 10: streamd.ListStreamServersReply.streamServers:type_name -> streamd.StreamServerWithStatistics
-	66,  // 11: streamd.StartStreamServerRequest.config:type_name -> streamd.StreamServer
-	75,  // 12: streamd.ListStreamDestinationsReply.streamDestinations:type_name -> streamd.StreamDestination
-	75,  // 13: streamd.AddStreamDestinationRequest.config:type_name -> streamd.StreamDestination
-	75,  // 14: streamd.UpdateStreamDestinationRequest.config:type_name -> streamd.StreamDestination
-	84,  // 15: streamd.ListIncomingStreamsReply.incomingStreams:type_name -> streamd.IncomingStream
-	91,  // 16: streamd.StreamForwardQuirks.restartUntilYoutubeRecognizesStream:type_name -> streamd.RestartUntilYoutubeRecognizesStream
-	92,  // 17: streamd.StreamForwardQuirks.startAfterYoutubeRecognizedStream:type_name -> streamd.StartAfterYoutubeRecognizedStream
-	95,  // 18: streamd.StreamForward.encode:type_name -> streamd.EncoderConfig
-	93,  // 19: streamd.StreamForward.quirks:type_name -> streamd.StreamForwardQuirks
-	96,  // 20: streamd.EncoderConfig.outputAudioTracks:type_name -> streamd.OutputAudioTrack
-	99,  // 21: streamd.EncoderConfig.outputVideoTracks:type_name -> streamd.OutputVideoTrack
-	97,  // 22: streamd.OutputAudioTrack.encode:type_name -> streamd.EncodeAudioConfig
+	65,  // 6: streamd.StreamServer.ServerCert:type_name -> streamd.TLSCertificate
+	66,  // 7: streamd.StreamServer.ServerKey:type_name -> streamd.PrivateKey
+	67,  // 8: streamd.StreamServerWithStatistics.config:type_name -> streamd.StreamServer
+	68,  // 9: streamd.StreamServerWithStatistics.statistics:type_name -> streamd.StreamServerStatistics
+	69,  // 10: streamd.ListStreamServersReply.streamServers:type_name -> streamd.StreamServerWithStatistics
+	67,  // 11: streamd.StartStreamServerRequest.config:type_name -> streamd.StreamServer
+	76,  // 12: streamd.ListStreamDestinationsReply.streamDestinations:type_name -> streamd.StreamDestination
+	76,  // 13: streamd.AddStreamDestinationRequest.config:type_name -> streamd.StreamDestination
+	76,  // 14: streamd.UpdateStreamDestinationRequest.config:type_name -> streamd.StreamDestination
+	85,  // 15: streamd.ListIncomingStreamsReply.incomingStreams:type_name -> streamd.IncomingStream
+	92,  // 16: streamd.StreamForwardQuirks.restartUntilYoutubeRecognizesStream:type_name -> streamd.RestartUntilYoutubeRecognizesStream
+	93,  // 17: streamd.StreamForwardQuirks.startAfterYoutubeRecognizedStream:type_name -> streamd.StartAfterYoutubeRecognizedStream
+	96,  // 18: streamd.StreamForward.encode:type_name -> streamd.EncoderConfig
+	94,  // 19: streamd.StreamForward.quirks:type_name -> streamd.StreamForwardQuirks
+	97,  // 20: streamd.EncoderConfig.outputAudioTracks:type_name -> streamd.OutputAudioTrack
+	100, // 21: streamd.EncoderConfig.outputVideoTracks:type_name -> streamd.OutputVideoTrack
+	98,  // 22: streamd.OutputAudioTrack.encode:type_name -> streamd.EncodeAudioConfig
 	4,   // 23: streamd.EncodeAudioConfig.codec:type_name -> streamd.AudioCodec
-	98,  // 24: streamd.EncodeAudioConfig.quality:type_name -> streamd.AudioQuality
-	100, // 25: streamd.OutputVideoTrack.encode:type_name -> streamd.EncodeVideoConfig
+	99,  // 24: streamd.EncodeAudioConfig.quality:type_name -> streamd.AudioQuality
+	101, // 25: streamd.OutputVideoTrack.encode:type_name -> streamd.EncodeVideoConfig
 	5,   // 26: streamd.EncodeVideoConfig.codec:type_name -> streamd.VideoCodec
-	101, // 27: streamd.EncodeVideoConfig.quality:type_name -> streamd.VideoQuality
-	94,  // 28: streamd.StreamForwardWithStatistics.config:type_name -> streamd.StreamForward
-	102, // 29: streamd.StreamForwardWithStatistics.statistics:type_name -> streamd.StreamForwardStatistics
-	103, // 30: streamd.ListStreamForwardsReply.streamForwards:type_name -> streamd.StreamForwardWithStatistics
-	94,  // 31: streamd.AddStreamForwardRequest.config:type_name -> streamd.StreamForward
-	94,  // 32: streamd.UpdateStreamForwardRequest.config:type_name -> streamd.StreamForward
-	94,  // 33: streamd.RemoveStreamForwardRequest.config:type_name -> streamd.StreamForward
+	102, // 27: streamd.EncodeVideoConfig.quality:type_name -> streamd.VideoQuality
+	95,  // 28: streamd.StreamForwardWithStatistics.config:type_name -> streamd.StreamForward
+	103, // 29: streamd.StreamForwardWithStatistics.statistics:type_name -> streamd.StreamForwardStatistics
+	104, // 30: streamd.ListStreamForwardsReply.streamForwards:type_name -> streamd.StreamForwardWithStatistics
+	95,  // 31: streamd.AddStreamForwardRequest.config:type_name -> streamd.StreamForward
+	95,  // 32: streamd.UpdateStreamForwardRequest.config:type_name -> streamd.StreamForward
+	95,  // 33: streamd.RemoveStreamForwardRequest.config:type_name -> streamd.StreamForward
 	6,   // 34: streamd.StreamPlayerConfig.playerType:type_name -> streamd.PlayerType
-	114, // 35: streamd.StreamPlayerConfig.streamPlaybackConfig:type_name -> streamd.StreamPlaybackConfig
-	115, // 36: streamd.AddStreamPlayerRequest.config:type_name -> streamd.StreamPlayerConfig
-	115, // 37: streamd.UpdateStreamPlayerRequest.config:type_name -> streamd.StreamPlayerConfig
-	115, // 38: streamd.ListStreamPlayersReply.players:type_name -> streamd.StreamPlayerConfig
-	115, // 39: streamd.GetStreamPlayerReply.config:type_name -> streamd.StreamPlayerConfig
-	204, // 40: streamd.StreamPlayerOpenRequest.request:type_name -> player.OpenRequest
-	205, // 41: streamd.StreamPlayerOpenReply.reply:type_name -> player.OpenReply
-	206, // 42: streamd.StreamPlayerProcessTitleRequest.request:type_name -> player.ProcessTitleRequest
-	207, // 43: streamd.StreamPlayerProcessTitleReply.reply:type_name -> player.ProcessTitleReply
-	208, // 44: streamd.StreamPlayerGetLinkRequest.request:type_name -> player.GetLinkRequest
-	209, // 45: streamd.StreamPlayerGetLinkReply.reply:type_name -> player.GetLinkReply
-	210, // 46: streamd.StreamPlayerEndChanRequest.request:type_name -> player.EndChanRequest
-	211, // 47: streamd.StreamPlayerEndChanReply.reply:type_name -> player.EndChanReply
-	212, // 48: streamd.StreamPlayerIsEndedRequest.request:type_name -> player.IsEndedRequest
-	213, // 49: streamd.StreamPlayerIsEndedReply.reply:type_name -> player.IsEndedReply
-	214, // 50: streamd.StreamPlayerGetPositionRequest.request:type_name -> player.GetPositionRequest
-	215, // 51: streamd.StreamPlayerGetPositionReply.reply:type_name -> player.GetPositionReply
-	216, // 52: streamd.StreamPlayerGetLengthRequest.request:type_name -> player.GetLengthRequest
-	217, // 53: streamd.StreamPlayerGetLengthReply.reply:type_name -> player.GetLengthReply
-	218, // 54: streamd.StreamPlayerSetSpeedRequest.request:type_name -> player.SetSpeedRequest
-	219, // 55: streamd.StreamPlayerSetSpeedReply.reply:type_name -> player.SetSpeedReply
-	220, // 56: streamd.StreamPlayerSetPauseRequest.request:type_name -> player.SetPauseRequest
-	221, // 57: streamd.StreamPlayerSetPauseReply.reply:type_name -> player.SetPauseReply
-	222, // 58: streamd.StreamPlayerStopRequest.request:type_name -> player.StopRequest
-	223, // 59: streamd.StreamPlayerStopReply.reply:type_name -> player.StopReply
-	224, // 60: streamd.StreamPlayerCloseRequest.request:type_name -> player.CloseRequest
-	225, // 61: streamd.StreamPlayerCloseReply.reply:type_name -> player.CloseReply
-	163, // 62: streamd.OBSAction.itemShowHide:type_name -> streamd.OBSActionItemShowHide
-	164, // 63: streamd.OBSAction.windowCaptureSetSource:type_name -> streamd.OBSActionWindowCaptureSetSource
-	162, // 64: streamd.Action.noopRequest:type_name -> streamd.NoopRequest
-	24,  // 65: streamd.Action.startStreamRequest:type_name -> streamd.StartStreamRequest
-	26,  // 66: streamd.Action.endStreamRequest:type_name -> streamd.EndStreamRequest
-	165, // 67: streamd.Action.obsAction:type_name -> streamd.OBSAction
-	166, // 68: streamd.AddTimerRequest.action:type_name -> streamd.Action
-	166, // 69: streamd.Timer.action:type_name -> streamd.Action
-	171, // 70: streamd.ListTimersReply.timers:type_name -> streamd.Timer
-	180, // 71: streamd.EventQueryAnd.queries:type_name -> streamd.Event
-	180, // 72: streamd.EventQueryOr.queries:type_name -> streamd.Event
-	180, // 73: streamd.EventQueryNot.query:type_name -> streamd.Event
-	174, // 74: streamd.EventQuery.and:type_name -> streamd.EventQueryAnd
-	175, // 75: streamd.EventQuery.or:type_name -> streamd.EventQueryOr
-	176, // 76: streamd.EventQuery.not:type_name -> streamd.EventQueryNot
+	115, // 35: streamd.StreamPlayerConfig.streamPlaybackConfig:type_name -> streamd.StreamPlaybackConfig
+	116, // 36: streamd.AddStreamPlayerRequest.config:type_name -> streamd.StreamPlayerConfig
+	116, // 37: streamd.UpdateStreamPlayerRequest.config:type_name -> streamd.StreamPlayerConfig
+	116, // 38: streamd.ListStreamPlayersReply.players:type_name -> streamd.StreamPlayerConfig
+	116, // 39: streamd.GetStreamPlayerReply.config:type_name -> streamd.StreamPlayerConfig
+	205, // 40: streamd.StreamPlayerOpenRequest.request:type_name -> player.OpenRequest
+	206, // 41: streamd.StreamPlayerOpenReply.reply:type_name -> player.OpenReply
+	207, // 42: streamd.StreamPlayerProcessTitleRequest.request:type_name -> player.ProcessTitleRequest
+	208, // 43: streamd.StreamPlayerProcessTitleReply.reply:type_name -> player.ProcessTitleReply
+	209, // 44: streamd.StreamPlayerGetLinkRequest.request:type_name -> player.GetLinkRequest
+	210, // 45: streamd.StreamPlayerGetLinkReply.reply:type_name -> player.GetLinkReply
+	211, // 46: streamd.StreamPlayerEndChanRequest.request:type_name -> player.EndChanRequest
+	212, // 47: streamd.StreamPlayerEndChanReply.reply:type_name -> player.EndChanReply
+	213, // 48: streamd.StreamPlayerIsEndedRequest.request:type_name -> player.IsEndedRequest
+	214, // 49: streamd.StreamPlayerIsEndedReply.reply:type_name -> player.IsEndedReply
+	215, // 50: streamd.StreamPlayerGetPositionRequest.request:type_name -> player.GetPositionRequest
+	216, // 51: streamd.StreamPlayerGetPositionReply.reply:type_name -> player.GetPositionReply
+	217, // 52: streamd.StreamPlayerGetLengthRequest.request:type_name -> player.GetLengthRequest
+	218, // 53: streamd.StreamPlayerGetLengthReply.reply:type_name -> player.GetLengthReply
+	219, // 54: streamd.StreamPlayerSetSpeedRequest.request:type_name -> player.SetSpeedRequest
+	220, // 55: streamd.StreamPlayerSetSpeedReply.reply:type_name -> player.SetSpeedReply
+	221, // 56: streamd.StreamPlayerSetPauseRequest.request:type_name -> player.SetPauseRequest
+	222, // 57: streamd.StreamPlayerSetPauseReply.reply:type_name -> player.SetPauseReply
+	223, // 58: streamd.StreamPlayerStopRequest.request:type_name -> player.StopRequest
+	224, // 59: streamd.StreamPlayerStopReply.reply:type_name -> player.StopReply
+	225, // 60: streamd.StreamPlayerCloseRequest.request:type_name -> player.CloseRequest
+	226, // 61: streamd.StreamPlayerCloseReply.reply:type_name -> player.CloseReply
+	164, // 62: streamd.OBSAction.itemShowHide:type_name -> streamd.OBSActionItemShowHide
+	165, // 63: streamd.OBSAction.windowCaptureSetSource:type_name -> streamd.OBSActionWindowCaptureSetSource
+	163, // 64: streamd.Action.noopRequest:type_name -> streamd.NoopRequest
+	25,  // 65: streamd.Action.startStreamRequest:type_name -> streamd.StartStreamRequest
+	27,  // 66: streamd.Action.endStreamRequest:type_name -> streamd.EndStreamRequest
+	166, // 67: streamd.Action.obsAction:type_name -> streamd.OBSAction
+	167, // 68: streamd.AddTimerRequest.action:type_name -> streamd.Action
+	167, // 69: streamd.Timer.action:type_name -> streamd.Action
+	172, // 70: streamd.ListTimersReply.timers:type_name -> streamd.Timer
+	181, // 71: streamd.EventQueryAnd.queries:type_name -> streamd.Event
+	181, // 72: streamd.EventQueryOr.queries:type_name -> streamd.Event
+	181, // 73: streamd.EventQueryNot.query:type_name -> streamd.Event
+	175, // 74: streamd.EventQuery.and:type_name -> streamd.EventQueryAnd
+	176, // 75: streamd.EventQuery.or:type_name -> streamd.EventQueryOr
+	177, // 76: streamd.EventQuery.not:type_name -> streamd.EventQueryNot
 	7,   // 77: streamd.EventQuery.eventType:type_name -> streamd.EventType
-	180, // 78: streamd.EventQuery.event:type_name -> streamd.Event
-	177, // 79: streamd.Event.obsSceneChange:type_name -> streamd.EventOBSSceneChange
-	178, // 80: streamd.Event.windowFocusChange:type_name -> streamd.EventWindowFocusChange
-	179, // 81: streamd.TriggerRule.eventQuery:type_name -> streamd.EventQuery
-	166, // 82: streamd.TriggerRule.action:type_name -> streamd.Action
-	181, // 83: streamd.ListTriggerRulesReply.rules:type_name -> streamd.TriggerRule
-	181, // 84: streamd.AddTriggerRuleRequest.rule:type_name -> streamd.TriggerRule
-	181, // 85: streamd.UpdateTriggerRuleRequest.rule:type_name -> streamd.TriggerRule
-	180, // 86: streamd.SubmitEventRequest.event:type_name -> streamd.Event
-	8,   // 87: streamd.StreamD.Ping:input_type -> streamd.PingRequest
-	10,  // 88: streamd.StreamD.SetLoggingLevel:input_type -> streamd.SetLoggingLevelRequest
-	12,  // 89: streamd.StreamD.GetLoggingLevel:input_type -> streamd.GetLoggingLevelRequest
-	14,  // 90: streamd.StreamD.GetConfig:input_type -> streamd.GetConfigRequest
-	16,  // 91: streamd.StreamD.SetConfig:input_type -> streamd.SetConfigRequest
-	18,  // 92: streamd.StreamD.SaveConfig:input_type -> streamd.SaveConfigRequest
-	148, // 93: streamd.StreamD.SubscribeToConfigChanges:input_type -> streamd.SubscribeToConfigChangesRequest
-	20,  // 94: streamd.StreamD.ResetCache:input_type -> streamd.ResetCacheRequest
-	22,  // 95: streamd.StreamD.InitCache:input_type -> streamd.InitCacheRequest
-	24,  // 96: streamd.StreamD.StartStream:input_type -> streamd.StartStreamRequest
-	26,  // 97: streamd.StreamD.EndStream:input_type -> streamd.EndStreamRequest
-	28,  // 98: streamd.StreamD.GetStreamStatus:input_type -> streamd.GetStreamStatusRequest
-	32,  // 99: streamd.StreamD.IsBackendEnabled:input_type -> streamd.IsBackendEnabledRequest
-	30,  // 100: streamd.StreamD.GetBackendInfo:input_type -> streamd.GetBackendInfoRequest
-	150, // 101: streamd.StreamD.SubscribeToStreamsChanges:input_type -> streamd.SubscribeToStreamsChangesRequest
-	34,  // 102: streamd.StreamD.Restart:input_type -> streamd.RestartRequest
-	36,  // 103: streamd.StreamD.SetTitle:input_type -> streamd.SetTitleRequest
-	38,  // 104: streamd.StreamD.SetDescription:input_type -> streamd.SetDescriptionRequest
-	40,  // 105: streamd.StreamD.ApplyProfile:input_type -> streamd.ApplyProfileRequest
-	42,  // 106: streamd.StreamD.UpdateStream:input_type -> streamd.UpdateStreamRequest
-	54,  // 107: streamd.StreamD.GetVariable:input_type -> streamd.GetVariableRequest
-	56,  // 108: streamd.StreamD.GetVariableHash:input_type -> streamd.GetVariableHashRequest
-	58,  // 109: streamd.StreamD.SetVariable:input_type -> streamd.SetVariableRequest
-	60,  // 110: streamd.StreamD.SubscribeToVariable:input_type -> streamd.SubscribeToVariableRequest
-	44,  // 111: streamd.StreamD.EXPERIMENTAL_ReinitStreamControllers:input_type -> streamd.EXPERIMENTAL_ReinitStreamControllersRequest
-	52,  // 112: streamd.StreamD.SubscribeToOAuthRequests:input_type -> streamd.SubscribeToOAuthRequestsRequest
-	62,  // 113: streamd.StreamD.SubmitOAuthCode:input_type -> streamd.SubmitOAuthCodeRequest
-	69,  // 114: streamd.StreamD.ListStreamServers:input_type -> streamd.ListStreamServersRequest
-	71,  // 115: streamd.StreamD.StartStreamServer:input_type -> streamd.StartStreamServerRequest
-	73,  // 116: streamd.StreamD.StopStreamServer:input_type -> streamd.StopStreamServerRequest
-	152, // 117: streamd.StreamD.SubscribeToStreamServersChanges:input_type -> streamd.SubscribeToStreamServersChangesRequest
-	76,  // 118: streamd.StreamD.ListStreamDestinations:input_type -> streamd.ListStreamDestinationsRequest
-	78,  // 119: streamd.StreamD.AddStreamDestination:input_type -> streamd.AddStreamDestinationRequest
-	80,  // 120: streamd.StreamD.UpdateStreamDestination:input_type -> streamd.UpdateStreamDestinationRequest
-	82,  // 121: streamd.StreamD.RemoveStreamDestination:input_type -> streamd.RemoveStreamDestinationRequest
-	154, // 122: streamd.StreamD.SubscribeToStreamDestinationsChanges:input_type -> streamd.SubscribeToStreamDestinationsChangesRequest
-	85,  // 123: streamd.StreamD.AddIncomingStream:input_type -> streamd.AddIncomingStreamRequest
-	87,  // 124: streamd.StreamD.RemoveIncomingStream:input_type -> streamd.RemoveIncomingStreamRequest
-	89,  // 125: streamd.StreamD.ListIncomingStreams:input_type -> streamd.ListIncomingStreamsRequest
-	156, // 126: streamd.StreamD.SubscribeToIncomingStreamsChanges:input_type -> streamd.SubscribeToIncomingStreamsChangesRequest
-	104, // 127: streamd.StreamD.ListStreamForwards:input_type -> streamd.ListStreamForwardsRequest
-	106, // 128: streamd.StreamD.AddStreamForward:input_type -> streamd.AddStreamForwardRequest
-	108, // 129: streamd.StreamD.UpdateStreamForward:input_type -> streamd.UpdateStreamForwardRequest
-	110, // 130: streamd.StreamD.RemoveStreamForward:input_type -> streamd.RemoveStreamForwardRequest
-	158, // 131: streamd.StreamD.SubscribeToStreamForwardsChanges:input_type -> streamd.SubscribeToStreamForwardsChangesRequest
-	112, // 132: streamd.StreamD.WaitForStreamPublisher:input_type -> streamd.WaitForStreamPublisherRequest
-	116, // 133: streamd.StreamD.AddStreamPlayer:input_type -> streamd.AddStreamPlayerRequest
-	118, // 134: streamd.StreamD.RemoveStreamPlayer:input_type -> streamd.RemoveStreamPlayerRequest
-	120, // 135: streamd.StreamD.UpdateStreamPlayer:input_type -> streamd.UpdateStreamPlayerRequest
-	122, // 136: streamd.StreamD.ListStreamPlayers:input_type -> streamd.ListStreamPlayersRequest
-	124, // 137: streamd.StreamD.GetStreamPlayer:input_type -> streamd.GetStreamPlayerRequest
-	160, // 138: streamd.StreamD.SubscribeToStreamPlayersChanges:input_type -> streamd.SubscribeToStreamPlayersChangesRequest
-	126, // 139: streamd.StreamD.StreamPlayerOpen:input_type -> streamd.StreamPlayerOpenRequest
-	128, // 140: streamd.StreamD.StreamPlayerProcessTitle:input_type -> streamd.StreamPlayerProcessTitleRequest
-	130, // 141: streamd.StreamD.StreamPlayerGetLink:input_type -> streamd.StreamPlayerGetLinkRequest
-	132, // 142: streamd.StreamD.StreamPlayerEndChan:input_type -> streamd.StreamPlayerEndChanRequest
-	134, // 143: streamd.StreamD.StreamPlayerIsEnded:input_type -> streamd.StreamPlayerIsEndedRequest
-	136, // 144: streamd.StreamD.StreamPlayerGetPosition:input_type -> streamd.StreamPlayerGetPositionRequest
-	138, // 145: streamd.StreamD.StreamPlayerGetLength:input_type -> streamd.StreamPlayerGetLengthRequest
-	140, // 146: streamd.StreamD.StreamPlayerSetSpeed:input_type -> streamd.StreamPlayerSetSpeedRequest
-	142, // 147: streamd.StreamD.StreamPlayerSetPause:input_type -> streamd.StreamPlayerSetPauseRequest
-	144, // 148: streamd.StreamD.StreamPlayerStop:input_type -> streamd.StreamPlayerStopRequest
-	146, // 149: streamd.StreamD.StreamPlayerClose:input_type -> streamd.StreamPlayerCloseRequest
-	167, // 150: streamd.StreamD.AddTimer:input_type -> streamd.AddTimerRequest
-	169, // 151: streamd.StreamD.RemoveTimer:input_type -> streamd.RemoveTimerRequest
-	172, // 152: streamd.StreamD.ListTimers:input_type -> streamd.ListTimersRequest
-	182, // 153: streamd.StreamD.ListTriggerRules:input_type -> streamd.ListTriggerRulesRequest
-	184, // 154: streamd.StreamD.AddTriggerRule:input_type -> streamd.AddTriggerRuleRequest
-	186, // 155: streamd.StreamD.RemoveTriggerRule:input_type -> streamd.RemoveTriggerRuleRequest
-	188, // 156: streamd.StreamD.UpdateTriggerRule:input_type -> streamd.UpdateTriggerRuleRequest
-	190, // 157: streamd.StreamD.SubmitEvent:input_type -> streamd.SubmitEventRequest
-	192, // 158: streamd.StreamD.SubscribeToChatMessages:input_type -> streamd.SubscribeToChatMessagesRequest
-	194, // 159: streamd.StreamD.SendChatMessage:input_type -> streamd.SendChatMessageRequest
-	196, // 160: streamd.StreamD.RemoveChatMessage:input_type -> streamd.RemoveChatMessageRequest
-	198, // 161: streamd.StreamD.BanUser:input_type -> streamd.BanUserRequest
-	200, // 162: streamd.StreamD.GetPeerIDs:input_type -> streamd.GetPeerIDsRequest
-	202, // 163: streamd.StreamD.LLMGenerate:input_type -> streamd.LLMGenerateRequest
-	9,   // 164: streamd.StreamD.Ping:output_type -> streamd.PingReply
-	11,  // 165: streamd.StreamD.SetLoggingLevel:output_type -> streamd.SetLoggingLevelReply
-	13,  // 166: streamd.StreamD.GetLoggingLevel:output_type -> streamd.GetLoggingLevelReply
-	15,  // 167: streamd.StreamD.GetConfig:output_type -> streamd.GetConfigReply
-	17,  // 168: streamd.StreamD.SetConfig:output_type -> streamd.SetConfigReply
-	19,  // 169: streamd.StreamD.SaveConfig:output_type -> streamd.SaveConfigReply
-	149, // 170: streamd.StreamD.SubscribeToConfigChanges:output_type -> streamd.ConfigChange
-	21,  // 171: streamd.StreamD.ResetCache:output_type -> streamd.ResetCacheReply
-	23,  // 172: streamd.StreamD.InitCache:output_type -> streamd.InitCacheReply
-	25,  // 173: streamd.StreamD.StartStream:output_type -> streamd.StartStreamReply
-	27,  // 174: streamd.StreamD.EndStream:output_type -> streamd.EndStreamReply
-	29,  // 175: streamd.StreamD.GetStreamStatus:output_type -> streamd.GetStreamStatusReply
-	33,  // 176: streamd.StreamD.IsBackendEnabled:output_type -> streamd.IsBackendEnabledReply
-	31,  // 177: streamd.StreamD.GetBackendInfo:output_type -> streamd.GetBackendInfoReply
-	151, // 178: streamd.StreamD.SubscribeToStreamsChanges:output_type -> streamd.StreamsChange
-	35,  // 179: streamd.StreamD.Restart:output_type -> streamd.RestartReply
-	37,  // 180: streamd.StreamD.SetTitle:output_type -> streamd.SetTitleReply
-	39,  // 181: streamd.StreamD.SetDescription:output_type -> streamd.SetDescriptionReply
-	41,  // 182: streamd.StreamD.ApplyProfile:output_type -> streamd.ApplyProfileReply
-	43,  // 183: streamd.StreamD.UpdateStream:output_type -> streamd.UpdateStreamReply
-	55,  // 184: streamd.StreamD.GetVariable:output_type -> streamd.GetVariableReply
-	57,  // 185: streamd.StreamD.GetVariableHash:output_type -> streamd.GetVariableHashReply
-	59,  // 186: streamd.StreamD.SetVariable:output_type -> streamd.SetVariableReply
-	61,  // 187: streamd.StreamD.SubscribeToVariable:output_type -> streamd.VariableChange
-	45,  // 188: streamd.StreamD.EXPERIMENTAL_ReinitStreamControllers:output_type -> streamd.EXPERIMENTAL_ReinitStreamControllersReply
-	53,  // 189: streamd.StreamD.SubscribeToOAuthRequests:output_type -> streamd.OAuthRequest
-	63,  // 190: streamd.StreamD.SubmitOAuthCode:output_type -> streamd.SubmitOAuthCodeReply
-	70,  // 191: streamd.StreamD.ListStreamServers:output_type -> streamd.ListStreamServersReply
-	72,  // 192: streamd.StreamD.StartStreamServer:output_type -> streamd.StartStreamServerReply
-	74,  // 193: streamd.StreamD.StopStreamServer:output_type -> streamd.StopStreamServerReply
-	153, // 194: streamd.StreamD.SubscribeToStreamServersChanges:output_type -> streamd.StreamServersChange
-	77,  // 195: streamd.StreamD.ListStreamDestinations:output_type -> streamd.ListStreamDestinationsReply
-	79,  // 196: streamd.StreamD.AddStreamDestination:output_type -> streamd.AddStreamDestinationReply
-	81,  // 197: streamd.StreamD.UpdateStreamDestination:output_type -> streamd.UpdateStreamDestinationReply
-	83,  // 198: streamd.StreamD.RemoveStreamDestination:output_type -> streamd.RemoveStreamDestinationReply
-	155, // 199: streamd.StreamD.SubscribeToStreamDestinationsChanges:output_type -> streamd.StreamDestinationsChange
-	86,  // 200: streamd.StreamD.AddIncomingStream:output_type -> streamd.AddIncomingStreamReply
-	88,  // 201: streamd.StreamD.RemoveIncomingStream:output_type -> streamd.RemoveIncomingStreamReply
-	90,  // 202: streamd.StreamD.ListIncomingStreams:output_type -> streamd.ListIncomingStreamsReply
-	157, // 203: streamd.StreamD.SubscribeToIncomingStreamsChanges:output_type -> streamd.IncomingStreamsChange
-	105, // 204: streamd.StreamD.ListStreamForwards:output_type -> streamd.ListStreamForwardsReply
-	107, // 205: streamd.StreamD.AddStreamForward:output_type -> streamd.AddStreamForwardReply
-	109, // 206: streamd.StreamD.UpdateStreamForward:output_type -> streamd.UpdateStreamForwardReply
-	111, // 207: streamd.StreamD.RemoveStreamForward:output_type -> streamd.RemoveStreamForwardReply
-	159, // 208: streamd.StreamD.SubscribeToStreamForwardsChanges:output_type -> streamd.StreamForwardsChange
-	113, // 209: streamd.StreamD.WaitForStreamPublisher:output_type -> streamd.StreamPublisher
-	117, // 210: streamd.StreamD.AddStreamPlayer:output_type -> streamd.AddStreamPlayerReply
-	119, // 211: streamd.StreamD.RemoveStreamPlayer:output_type -> streamd.RemoveStreamPlayerReply
-	121, // 212: streamd.StreamD.UpdateStreamPlayer:output_type -> streamd.UpdateStreamPlayerReply
-	123, // 213: streamd.StreamD.ListStreamPlayers:output_type -> streamd.ListStreamPlayersReply
-	125, // 214: streamd.StreamD.GetStreamPlayer:output_type -> streamd.GetStreamPlayerReply
-	161, // 215: streamd.StreamD.SubscribeToStreamPlayersChanges:output_type -> streamd.StreamPlayersChange
-	127, // 216: streamd.StreamD.StreamPlayerOpen:output_type -> streamd.StreamPlayerOpenReply
-	129, // 217: streamd.StreamD.StreamPlayerProcessTitle:output_type -> streamd.StreamPlayerProcessTitleReply
-	131, // 218: streamd.StreamD.StreamPlayerGetLink:output_type -> streamd.StreamPlayerGetLinkReply
-	133, // 219: streamd.StreamD.StreamPlayerEndChan:output_type -> streamd.StreamPlayerEndChanReply
-	135, // 220: streamd.StreamD.StreamPlayerIsEnded:output_type -> streamd.StreamPlayerIsEndedReply
-	137, // 221: streamd.StreamD.StreamPlayerGetPosition:output_type -> streamd.StreamPlayerGetPositionReply
-	139, // 222: streamd.StreamD.StreamPlayerGetLength:output_type -> streamd.StreamPlayerGetLengthReply
-	141, // 223: streamd.StreamD.StreamPlayerSetSpeed:output_type -> streamd.StreamPlayerSetSpeedReply
-	143, // 224: streamd.StreamD.StreamPlayerSetPause:output_type -> streamd.StreamPlayerSetPauseReply
-	145, // 225: streamd.StreamD.StreamPlayerStop:output_type -> streamd.StreamPlayerStopReply
-	147, // 226: streamd.StreamD.StreamPlayerClose:output_type -> streamd.StreamPlayerCloseReply
-	168, // 227: streamd.StreamD.AddTimer:output_type -> streamd.AddTimerReply
-	170, // 228: streamd.StreamD.RemoveTimer:output_type -> streamd.RemoveTimerReply
-	173, // 229: streamd.StreamD.ListTimers:output_type -> streamd.ListTimersReply
-	183, // 230: streamd.StreamD.ListTriggerRules:output_type -> streamd.ListTriggerRulesReply
-	185, // 231: streamd.StreamD.AddTriggerRule:output_type -> streamd.AddTriggerRuleReply
-	187, // 232: streamd.StreamD.RemoveTriggerRule:output_type -> streamd.RemoveTriggerRuleReply
-	189, // 233: streamd.StreamD.UpdateTriggerRule:output_type -> streamd.UpdateTriggerRuleReply
-	191, // 234: streamd.StreamD.SubmitEvent:output_type -> streamd.SubmitEventReply
-	193, // 235: streamd.StreamD.SubscribeToChatMessages:output_type -> streamd.ChatMessage
-	195, // 236: streamd.StreamD.SendChatMessage:output_type -> streamd.SendChatMessageReply
-	197, // 237: streamd.StreamD.RemoveChatMessage:output_type -> streamd.RemoveChatMessageReply
-	199, // 238: streamd.StreamD.BanUser:output_type -> streamd.BanUserReply
-	201, // 239: streamd.StreamD.GetPeerIDs:output_type -> streamd.GetPeerIDsReply
-	203, // 240: streamd.StreamD.LLMGenerate:output_type -> streamd.LLMGenerateReply
-	164, // [164:241] is the sub-list for method output_type
-	87,  // [87:164] is the sub-list for method input_type
-	87,  // [87:87] is the sub-list for extension type_name
-	87,  // [87:87] is the sub-list for extension extendee
-	0,   // [0:87] is the sub-list for field type_name
+	181, // 78: streamd.EventQuery.event:type_name -> streamd.Event
+	178, // 79: streamd.Event.obsSceneChange:type_name -> streamd.EventOBSSceneChange
+	179, // 80: streamd.Event.windowFocusChange:type_name -> streamd.EventWindowFocusChange
+	180, // 81: streamd.TriggerRule.eventQuery:type_name -> streamd.EventQuery
+	167, // 82: streamd.TriggerRule.action:type_name -> streamd.Action
+	182, // 83: streamd.ListTriggerRulesReply.rules:type_name -> streamd.TriggerRule
+	182, // 84: streamd.AddTriggerRuleRequest.rule:type_name -> streamd.TriggerRule
+	182, // 85: streamd.UpdateTriggerRuleRequest.rule:type_name -> streamd.TriggerRule
+	181, // 86: streamd.SubmitEventRequest.event:type_name -> streamd.Event
+	8,   // 87: streamd.ChatMessage.eventType:type_name -> streamd.PlatformEventType
+	9,   // 88: streamd.StreamD.Ping:input_type -> streamd.PingRequest
+	11,  // 89: streamd.StreamD.SetLoggingLevel:input_type -> streamd.SetLoggingLevelRequest
+	13,  // 90: streamd.StreamD.GetLoggingLevel:input_type -> streamd.GetLoggingLevelRequest
+	15,  // 91: streamd.StreamD.GetConfig:input_type -> streamd.GetConfigRequest
+	17,  // 92: streamd.StreamD.SetConfig:input_type -> streamd.SetConfigRequest
+	19,  // 93: streamd.StreamD.SaveConfig:input_type -> streamd.SaveConfigRequest
+	149, // 94: streamd.StreamD.SubscribeToConfigChanges:input_type -> streamd.SubscribeToConfigChangesRequest
+	21,  // 95: streamd.StreamD.ResetCache:input_type -> streamd.ResetCacheRequest
+	23,  // 96: streamd.StreamD.InitCache:input_type -> streamd.InitCacheRequest
+	25,  // 97: streamd.StreamD.StartStream:input_type -> streamd.StartStreamRequest
+	27,  // 98: streamd.StreamD.EndStream:input_type -> streamd.EndStreamRequest
+	29,  // 99: streamd.StreamD.GetStreamStatus:input_type -> streamd.GetStreamStatusRequest
+	33,  // 100: streamd.StreamD.IsBackendEnabled:input_type -> streamd.IsBackendEnabledRequest
+	31,  // 101: streamd.StreamD.GetBackendInfo:input_type -> streamd.GetBackendInfoRequest
+	151, // 102: streamd.StreamD.SubscribeToStreamsChanges:input_type -> streamd.SubscribeToStreamsChangesRequest
+	35,  // 103: streamd.StreamD.Restart:input_type -> streamd.RestartRequest
+	37,  // 104: streamd.StreamD.SetTitle:input_type -> streamd.SetTitleRequest
+	39,  // 105: streamd.StreamD.SetDescription:input_type -> streamd.SetDescriptionRequest
+	41,  // 106: streamd.StreamD.ApplyProfile:input_type -> streamd.ApplyProfileRequest
+	43,  // 107: streamd.StreamD.UpdateStream:input_type -> streamd.UpdateStreamRequest
+	55,  // 108: streamd.StreamD.GetVariable:input_type -> streamd.GetVariableRequest
+	57,  // 109: streamd.StreamD.GetVariableHash:input_type -> streamd.GetVariableHashRequest
+	59,  // 110: streamd.StreamD.SetVariable:input_type -> streamd.SetVariableRequest
+	61,  // 111: streamd.StreamD.SubscribeToVariable:input_type -> streamd.SubscribeToVariableRequest
+	45,  // 112: streamd.StreamD.EXPERIMENTAL_ReinitStreamControllers:input_type -> streamd.EXPERIMENTAL_ReinitStreamControllersRequest
+	53,  // 113: streamd.StreamD.SubscribeToOAuthRequests:input_type -> streamd.SubscribeToOAuthRequestsRequest
+	63,  // 114: streamd.StreamD.SubmitOAuthCode:input_type -> streamd.SubmitOAuthCodeRequest
+	70,  // 115: streamd.StreamD.ListStreamServers:input_type -> streamd.ListStreamServersRequest
+	72,  // 116: streamd.StreamD.StartStreamServer:input_type -> streamd.StartStreamServerRequest
+	74,  // 117: streamd.StreamD.StopStreamServer:input_type -> streamd.StopStreamServerRequest
+	153, // 118: streamd.StreamD.SubscribeToStreamServersChanges:input_type -> streamd.SubscribeToStreamServersChangesRequest
+	77,  // 119: streamd.StreamD.ListStreamDestinations:input_type -> streamd.ListStreamDestinationsRequest
+	79,  // 120: streamd.StreamD.AddStreamDestination:input_type -> streamd.AddStreamDestinationRequest
+	81,  // 121: streamd.StreamD.UpdateStreamDestination:input_type -> streamd.UpdateStreamDestinationRequest
+	83,  // 122: streamd.StreamD.RemoveStreamDestination:input_type -> streamd.RemoveStreamDestinationRequest
+	155, // 123: streamd.StreamD.SubscribeToStreamDestinationsChanges:input_type -> streamd.SubscribeToStreamDestinationsChangesRequest
+	86,  // 124: streamd.StreamD.AddIncomingStream:input_type -> streamd.AddIncomingStreamRequest
+	88,  // 125: streamd.StreamD.RemoveIncomingStream:input_type -> streamd.RemoveIncomingStreamRequest
+	90,  // 126: streamd.StreamD.ListIncomingStreams:input_type -> streamd.ListIncomingStreamsRequest
+	157, // 127: streamd.StreamD.SubscribeToIncomingStreamsChanges:input_type -> streamd.SubscribeToIncomingStreamsChangesRequest
+	105, // 128: streamd.StreamD.ListStreamForwards:input_type -> streamd.ListStreamForwardsRequest
+	107, // 129: streamd.StreamD.AddStreamForward:input_type -> streamd.AddStreamForwardRequest
+	109, // 130: streamd.StreamD.UpdateStreamForward:input_type -> streamd.UpdateStreamForwardRequest
+	111, // 131: streamd.StreamD.RemoveStreamForward:input_type -> streamd.RemoveStreamForwardRequest
+	159, // 132: streamd.StreamD.SubscribeToStreamForwardsChanges:input_type -> streamd.SubscribeToStreamForwardsChangesRequest
+	113, // 133: streamd.StreamD.WaitForStreamPublisher:input_type -> streamd.WaitForStreamPublisherRequest
+	117, // 134: streamd.StreamD.AddStreamPlayer:input_type -> streamd.AddStreamPlayerRequest
+	119, // 135: streamd.StreamD.RemoveStreamPlayer:input_type -> streamd.RemoveStreamPlayerRequest
+	121, // 136: streamd.StreamD.UpdateStreamPlayer:input_type -> streamd.UpdateStreamPlayerRequest
+	123, // 137: streamd.StreamD.ListStreamPlayers:input_type -> streamd.ListStreamPlayersRequest
+	125, // 138: streamd.StreamD.GetStreamPlayer:input_type -> streamd.GetStreamPlayerRequest
+	161, // 139: streamd.StreamD.SubscribeToStreamPlayersChanges:input_type -> streamd.SubscribeToStreamPlayersChangesRequest
+	127, // 140: streamd.StreamD.StreamPlayerOpen:input_type -> streamd.StreamPlayerOpenRequest
+	129, // 141: streamd.StreamD.StreamPlayerProcessTitle:input_type -> streamd.StreamPlayerProcessTitleRequest
+	131, // 142: streamd.StreamD.StreamPlayerGetLink:input_type -> streamd.StreamPlayerGetLinkRequest
+	133, // 143: streamd.StreamD.StreamPlayerEndChan:input_type -> streamd.StreamPlayerEndChanRequest
+	135, // 144: streamd.StreamD.StreamPlayerIsEnded:input_type -> streamd.StreamPlayerIsEndedRequest
+	137, // 145: streamd.StreamD.StreamPlayerGetPosition:input_type -> streamd.StreamPlayerGetPositionRequest
+	139, // 146: streamd.StreamD.StreamPlayerGetLength:input_type -> streamd.StreamPlayerGetLengthRequest
+	141, // 147: streamd.StreamD.StreamPlayerSetSpeed:input_type -> streamd.StreamPlayerSetSpeedRequest
+	143, // 148: streamd.StreamD.StreamPlayerSetPause:input_type -> streamd.StreamPlayerSetPauseRequest
+	145, // 149: streamd.StreamD.StreamPlayerStop:input_type -> streamd.StreamPlayerStopRequest
+	147, // 150: streamd.StreamD.StreamPlayerClose:input_type -> streamd.StreamPlayerCloseRequest
+	168, // 151: streamd.StreamD.AddTimer:input_type -> streamd.AddTimerRequest
+	170, // 152: streamd.StreamD.RemoveTimer:input_type -> streamd.RemoveTimerRequest
+	173, // 153: streamd.StreamD.ListTimers:input_type -> streamd.ListTimersRequest
+	183, // 154: streamd.StreamD.ListTriggerRules:input_type -> streamd.ListTriggerRulesRequest
+	185, // 155: streamd.StreamD.AddTriggerRule:input_type -> streamd.AddTriggerRuleRequest
+	187, // 156: streamd.StreamD.RemoveTriggerRule:input_type -> streamd.RemoveTriggerRuleRequest
+	189, // 157: streamd.StreamD.UpdateTriggerRule:input_type -> streamd.UpdateTriggerRuleRequest
+	191, // 158: streamd.StreamD.SubmitEvent:input_type -> streamd.SubmitEventRequest
+	193, // 159: streamd.StreamD.SubscribeToChatMessages:input_type -> streamd.SubscribeToChatMessagesRequest
+	195, // 160: streamd.StreamD.SendChatMessage:input_type -> streamd.SendChatMessageRequest
+	197, // 161: streamd.StreamD.RemoveChatMessage:input_type -> streamd.RemoveChatMessageRequest
+	199, // 162: streamd.StreamD.BanUser:input_type -> streamd.BanUserRequest
+	201, // 163: streamd.StreamD.GetPeerIDs:input_type -> streamd.GetPeerIDsRequest
+	203, // 164: streamd.StreamD.LLMGenerate:input_type -> streamd.LLMGenerateRequest
+	10,  // 165: streamd.StreamD.Ping:output_type -> streamd.PingReply
+	12,  // 166: streamd.StreamD.SetLoggingLevel:output_type -> streamd.SetLoggingLevelReply
+	14,  // 167: streamd.StreamD.GetLoggingLevel:output_type -> streamd.GetLoggingLevelReply
+	16,  // 168: streamd.StreamD.GetConfig:output_type -> streamd.GetConfigReply
+	18,  // 169: streamd.StreamD.SetConfig:output_type -> streamd.SetConfigReply
+	20,  // 170: streamd.StreamD.SaveConfig:output_type -> streamd.SaveConfigReply
+	150, // 171: streamd.StreamD.SubscribeToConfigChanges:output_type -> streamd.ConfigChange
+	22,  // 172: streamd.StreamD.ResetCache:output_type -> streamd.ResetCacheReply
+	24,  // 173: streamd.StreamD.InitCache:output_type -> streamd.InitCacheReply
+	26,  // 174: streamd.StreamD.StartStream:output_type -> streamd.StartStreamReply
+	28,  // 175: streamd.StreamD.EndStream:output_type -> streamd.EndStreamReply
+	30,  // 176: streamd.StreamD.GetStreamStatus:output_type -> streamd.GetStreamStatusReply
+	34,  // 177: streamd.StreamD.IsBackendEnabled:output_type -> streamd.IsBackendEnabledReply
+	32,  // 178: streamd.StreamD.GetBackendInfo:output_type -> streamd.GetBackendInfoReply
+	152, // 179: streamd.StreamD.SubscribeToStreamsChanges:output_type -> streamd.StreamsChange
+	36,  // 180: streamd.StreamD.Restart:output_type -> streamd.RestartReply
+	38,  // 181: streamd.StreamD.SetTitle:output_type -> streamd.SetTitleReply
+	40,  // 182: streamd.StreamD.SetDescription:output_type -> streamd.SetDescriptionReply
+	42,  // 183: streamd.StreamD.ApplyProfile:output_type -> streamd.ApplyProfileReply
+	44,  // 184: streamd.StreamD.UpdateStream:output_type -> streamd.UpdateStreamReply
+	56,  // 185: streamd.StreamD.GetVariable:output_type -> streamd.GetVariableReply
+	58,  // 186: streamd.StreamD.GetVariableHash:output_type -> streamd.GetVariableHashReply
+	60,  // 187: streamd.StreamD.SetVariable:output_type -> streamd.SetVariableReply
+	62,  // 188: streamd.StreamD.SubscribeToVariable:output_type -> streamd.VariableChange
+	46,  // 189: streamd.StreamD.EXPERIMENTAL_ReinitStreamControllers:output_type -> streamd.EXPERIMENTAL_ReinitStreamControllersReply
+	54,  // 190: streamd.StreamD.SubscribeToOAuthRequests:output_type -> streamd.OAuthRequest
+	64,  // 191: streamd.StreamD.SubmitOAuthCode:output_type -> streamd.SubmitOAuthCodeReply
+	71,  // 192: streamd.StreamD.ListStreamServers:output_type -> streamd.ListStreamServersReply
+	73,  // 193: streamd.StreamD.StartStreamServer:output_type -> streamd.StartStreamServerReply
+	75,  // 194: streamd.StreamD.StopStreamServer:output_type -> streamd.StopStreamServerReply
+	154, // 195: streamd.StreamD.SubscribeToStreamServersChanges:output_type -> streamd.StreamServersChange
+	78,  // 196: streamd.StreamD.ListStreamDestinations:output_type -> streamd.ListStreamDestinationsReply
+	80,  // 197: streamd.StreamD.AddStreamDestination:output_type -> streamd.AddStreamDestinationReply
+	82,  // 198: streamd.StreamD.UpdateStreamDestination:output_type -> streamd.UpdateStreamDestinationReply
+	84,  // 199: streamd.StreamD.RemoveStreamDestination:output_type -> streamd.RemoveStreamDestinationReply
+	156, // 200: streamd.StreamD.SubscribeToStreamDestinationsChanges:output_type -> streamd.StreamDestinationsChange
+	87,  // 201: streamd.StreamD.AddIncomingStream:output_type -> streamd.AddIncomingStreamReply
+	89,  // 202: streamd.StreamD.RemoveIncomingStream:output_type -> streamd.RemoveIncomingStreamReply
+	91,  // 203: streamd.StreamD.ListIncomingStreams:output_type -> streamd.ListIncomingStreamsReply
+	158, // 204: streamd.StreamD.SubscribeToIncomingStreamsChanges:output_type -> streamd.IncomingStreamsChange
+	106, // 205: streamd.StreamD.ListStreamForwards:output_type -> streamd.ListStreamForwardsReply
+	108, // 206: streamd.StreamD.AddStreamForward:output_type -> streamd.AddStreamForwardReply
+	110, // 207: streamd.StreamD.UpdateStreamForward:output_type -> streamd.UpdateStreamForwardReply
+	112, // 208: streamd.StreamD.RemoveStreamForward:output_type -> streamd.RemoveStreamForwardReply
+	160, // 209: streamd.StreamD.SubscribeToStreamForwardsChanges:output_type -> streamd.StreamForwardsChange
+	114, // 210: streamd.StreamD.WaitForStreamPublisher:output_type -> streamd.StreamPublisher
+	118, // 211: streamd.StreamD.AddStreamPlayer:output_type -> streamd.AddStreamPlayerReply
+	120, // 212: streamd.StreamD.RemoveStreamPlayer:output_type -> streamd.RemoveStreamPlayerReply
+	122, // 213: streamd.StreamD.UpdateStreamPlayer:output_type -> streamd.UpdateStreamPlayerReply
+	124, // 214: streamd.StreamD.ListStreamPlayers:output_type -> streamd.ListStreamPlayersReply
+	126, // 215: streamd.StreamD.GetStreamPlayer:output_type -> streamd.GetStreamPlayerReply
+	162, // 216: streamd.StreamD.SubscribeToStreamPlayersChanges:output_type -> streamd.StreamPlayersChange
+	128, // 217: streamd.StreamD.StreamPlayerOpen:output_type -> streamd.StreamPlayerOpenReply
+	130, // 218: streamd.StreamD.StreamPlayerProcessTitle:output_type -> streamd.StreamPlayerProcessTitleReply
+	132, // 219: streamd.StreamD.StreamPlayerGetLink:output_type -> streamd.StreamPlayerGetLinkReply
+	134, // 220: streamd.StreamD.StreamPlayerEndChan:output_type -> streamd.StreamPlayerEndChanReply
+	136, // 221: streamd.StreamD.StreamPlayerIsEnded:output_type -> streamd.StreamPlayerIsEndedReply
+	138, // 222: streamd.StreamD.StreamPlayerGetPosition:output_type -> streamd.StreamPlayerGetPositionReply
+	140, // 223: streamd.StreamD.StreamPlayerGetLength:output_type -> streamd.StreamPlayerGetLengthReply
+	142, // 224: streamd.StreamD.StreamPlayerSetSpeed:output_type -> streamd.StreamPlayerSetSpeedReply
+	144, // 225: streamd.StreamD.StreamPlayerSetPause:output_type -> streamd.StreamPlayerSetPauseReply
+	146, // 226: streamd.StreamD.StreamPlayerStop:output_type -> streamd.StreamPlayerStopReply
+	148, // 227: streamd.StreamD.StreamPlayerClose:output_type -> streamd.StreamPlayerCloseReply
+	169, // 228: streamd.StreamD.AddTimer:output_type -> streamd.AddTimerReply
+	171, // 229: streamd.StreamD.RemoveTimer:output_type -> streamd.RemoveTimerReply
+	174, // 230: streamd.StreamD.ListTimers:output_type -> streamd.ListTimersReply
+	184, // 231: streamd.StreamD.ListTriggerRules:output_type -> streamd.ListTriggerRulesReply
+	186, // 232: streamd.StreamD.AddTriggerRule:output_type -> streamd.AddTriggerRuleReply
+	188, // 233: streamd.StreamD.RemoveTriggerRule:output_type -> streamd.RemoveTriggerRuleReply
+	190, // 234: streamd.StreamD.UpdateTriggerRule:output_type -> streamd.UpdateTriggerRuleReply
+	192, // 235: streamd.StreamD.SubmitEvent:output_type -> streamd.SubmitEventReply
+	194, // 236: streamd.StreamD.SubscribeToChatMessages:output_type -> streamd.ChatMessage
+	196, // 237: streamd.StreamD.SendChatMessage:output_type -> streamd.SendChatMessageReply
+	198, // 238: streamd.StreamD.RemoveChatMessage:output_type -> streamd.RemoveChatMessageReply
+	200, // 239: streamd.StreamD.BanUser:output_type -> streamd.BanUserReply
+	202, // 240: streamd.StreamD.GetPeerIDs:output_type -> streamd.GetPeerIDsReply
+	204, // 241: streamd.StreamD.LLMGenerate:output_type -> streamd.LLMGenerateReply
+	165, // [165:242] is the sub-list for method output_type
+	88,  // [88:165] is the sub-list for method input_type
+	88,  // [88:88] is the sub-list for extension type_name
+	88,  // [88:88] is the sub-list for extension extendee
+	0,   // [0:88] is the sub-list for field type_name
 }
 
 func init() { file_streamd_proto_init() }
@@ -14414,7 +14534,7 @@ func file_streamd_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_streamd_proto_rawDesc,
-			NumEnums:      8,
+			NumEnums:      9,
 			NumMessages:   196,
 			NumExtensions: 0,
 			NumServices:   1,

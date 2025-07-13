@@ -29,6 +29,10 @@ replace github.com/asticode/go-astiav v0.36.0 => github.com/xaionaro-go/astiav v
 
 replace github.com/bluenviron/mediacommon/v2 v2.0.1-0.20250324151931-b8ce69d15d3d => github.com/xaionaro-go/mediacommon/v2 v2.0.0-20250420012906-03d6d69ac3b7
 
+replace github.com/joeyak/go-twitch-eventsub/v3 => github.com/xaionaro-go/go-twitch-eventsub/v3 v3.0.0-20250713163657-276e5a5b7adc
+
+replace github.com/scorfly/gokick => github.com/xaionaro-go/gokick v0.0.0-20250713175656-f538d6396851
+
 require (
 	github.com/facebookincubator/go-belt v0.0.0-20250308011339-62fb7027b11f
 	github.com/go-git/go-billy/v5 v5.6.2
@@ -51,6 +55,7 @@ require (
 	fyne.io/systray v1.11.0 // indirect
 	github.com/BurntSushi/toml v1.5.0 // indirect
 	github.com/Danny-Dasilva/CycleTLS/cycletls v1.0.26 // indirect
+	github.com/Danny-Dasilva/fhttp v0.0.0-20240217042913-eeeb0b347ce1 // indirect
 	github.com/DataDog/gostackparse v0.7.0 // indirect
 	github.com/MicahParks/jwkset v0.8.0 // indirect
 	github.com/MicahParks/keyfunc/v3 v3.3.10 // indirect
@@ -252,7 +257,6 @@ require (
 	fyne.io/fyne/v2 v2.5.5
 	github.com/AgustinSRG/go-child-process-manager v1.0.1
 	github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802
-	github.com/Danny-Dasilva/fhttp v0.0.0-20240217042913-eeeb0b347ce1
 	github.com/abhinavxd/youtube-live-chat-downloader/v2 v2.0.3
 	github.com/adeithe/go-twitch v0.3.1
 	github.com/andreykaipov/goobs v1.4.1

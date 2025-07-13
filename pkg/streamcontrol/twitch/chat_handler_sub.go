@@ -2,13 +2,14 @@ package twitch
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/coder/websocket"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/joeyak/go-twitch-eventsub/v3"
 	twitcheventsub "github.com/joeyak/go-twitch-eventsub/v3"
 	"github.com/nicklaw5/helix/v2"
 	"github.com/xaionaro-go/observability"
@@ -73,129 +74,258 @@ func NewChatHandlerSub(
 		}
 	}()
 
-	_, sessMsgBytes, err := c.Read(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get my session ID: %w", err)
-	}
-	var sessMsg SessionWelcomeMessage
-	err = json.Unmarshal(sessMsgBytes, &sessMsg)
-	if err != nil {
-		return nil, fmt.Errorf("unable to deserialize the session ID message '%s': %w", sessMsgBytes, err)
-	}
-	sessID := sessMsg.Payload.Session.ID
-	logger.Debugf(ctx, "session ID: '%s' (%s)", sessID, sessMsgBytes)
+	eventSubClient := twitcheventsub.NewClientWithUrl(urlString)
 
-	params := &helix.EventSubSubscription{
-		Type:    string(twitcheventsub.SubChannelChatMessage),
-		Version: "1",
-		Condition: helix.EventSubCondition{
-			BroadcasterUserID: broadcasterID,
-			UserID:            myUserID,
-		},
-		Transport: helix.EventSubTransport{
-			Method:    "websocket",
-			SessionID: sessID,
-		},
+	var errCallback func(ctx context.Context, err error)
+	errCallback = func(ctx context.Context, err error) {
+		logger.Errorf(ctx, "unable to read from the socket: %v", err)
+		go func() {
+			for {
+				err = eventSubClient.ConnectWithContext(ctx, errCallback)
+				if err == nil {
+					break
+				}
+				time.Sleep(time.Second)
+				logger.Errorf(ctx, "unable to connect to '%s': %v", urlString, err)
+			}
+		}()
 	}
-	resp, err := client.CreateEventSubSubscription(params)
+	eventSubClient.OnEventAutomodMessageHold(func(event twitcheventsub.EventAutomodMessageHold, msg twitcheventsub.NotificationMessage) {
+		h.sendMessage(ctx, streamcontrol.ChatMessage{
+			CreatedAt: msg.Metadata.MessageTimestamp,
+			EventType: streamcontrol.EventTypeAutoModHold,
+			UserID:    streamcontrol.ChatUserID(event.UserID),
+			Username:  event.UserName,
+			MessageID: streamcontrol.ChatMessageID(msg.Metadata.MessageID),
+			Message:   event.Message.Text,
+		})
+	})
+	eventSubClient.OnEventChannelAdBreakBegin(func(event twitcheventsub.EventChannelAdBreakBegin, msg twitcheventsub.NotificationMessage) {
+		h.sendMessage(ctx, streamcontrol.ChatMessage{
+			CreatedAt: msg.Metadata.MessageTimestamp,
+			EventType: streamcontrol.EventTypeAdBreak,
+			UserID:    "twitch",
+			Username:  "Twitch",
+			MessageID: streamcontrol.ChatMessageID(msg.Metadata.MessageID),
+			Message:   fmt.Sprintf("%d seconds", event.DurationSeconds),
+		})
+	})
+	eventSubClient.OnEventChannelBan(func(event twitcheventsub.EventChannelBan, msg twitcheventsub.NotificationMessage) {
+		h.sendMessage(ctx, streamcontrol.ChatMessage{
+			CreatedAt: msg.Metadata.MessageTimestamp,
+			EventType: streamcontrol.EventTypeBan,
+			UserID:    streamcontrol.ChatUserID(event.UserID),
+			Username:  event.UserName,
+			MessageID: streamcontrol.ChatMessageID(msg.Metadata.MessageID),
+			Message:   event.Reason,
+		})
+	})
+	eventSubClient.OnEventChannelCheer(func(event twitcheventsub.EventChannelCheer, msg twitcheventsub.NotificationMessage) {
+		h.sendMessage(ctx, streamcontrol.ChatMessage{
+			CreatedAt: msg.Metadata.MessageTimestamp,
+			EventType: streamcontrol.EventTypeCheer,
+			UserID:    streamcontrol.ChatUserID(event.UserID),
+			Username:  event.UserName,
+			MessageID: streamcontrol.ChatMessageID(msg.Metadata.MessageID),
+			Message:   event.Message,
+			Paid: streamcontrol.Money{
+				Currency: streamcontrol.CurrencyBits,
+				Amount:   float64(event.Bits),
+			},
+		})
+	})
+	eventSubClient.OnEventChannelFollow(func(event twitcheventsub.EventChannelFollow, msg twitcheventsub.NotificationMessage) {
+		h.sendMessage(ctx, streamcontrol.ChatMessage{
+			CreatedAt: msg.Metadata.MessageTimestamp,
+			EventType: streamcontrol.EventTypeFollow,
+			UserID:    streamcontrol.ChatUserID(event.UserID),
+			Username:  event.UserName,
+			MessageID: streamcontrol.ChatMessageID(msg.Metadata.MessageID),
+			Message:   "",
+		})
+	})
+	eventSubClient.OnEventChannelRaid(func(event twitcheventsub.EventChannelRaid, msg twitcheventsub.NotificationMessage) {
+		h.sendMessage(ctx, streamcontrol.ChatMessage{
+			CreatedAt: msg.Metadata.MessageTimestamp,
+			EventType: streamcontrol.EventTypeRaid,
+			UserID:    streamcontrol.ChatUserID(event.FromBroadcasterUserId),
+			Username:  event.FromBroadcasterUserName,
+			MessageID: streamcontrol.ChatMessageID(msg.Metadata.MessageID),
+			Message:   fmt.Sprintf("%d viewers", event.Viewers),
+		})
+	})
+	eventSubClient.OnEventChannelShoutoutReceive(func(event twitcheventsub.EventChannelShoutoutReceive, msg twitcheventsub.NotificationMessage) {
+		h.sendMessage(ctx, streamcontrol.ChatMessage{
+			CreatedAt: msg.Metadata.MessageTimestamp,
+			EventType: streamcontrol.EventTypeChannelShoutoutReceive,
+			UserID:    streamcontrol.ChatUserID(event.FromBroadcasterUserId),
+			Username:  event.FromBroadcasterUserName,
+			MessageID: streamcontrol.ChatMessageID(msg.Metadata.MessageID),
+			Message:   fmt.Sprintf("%d viewers", event.ViewerCount),
+		})
+	})
+	eventSubClient.OnEventChannelSubscribe(func(event twitcheventsub.EventChannelSubscribe, msg twitcheventsub.NotificationMessage) {
+		var description []string
+		switch {
+		case event.IsGift:
+			description = append(description, "gift:")
+		}
+		description = append(description, fmt.Sprintf("tier '%s'", event.Tier))
+		h.sendMessage(ctx, streamcontrol.ChatMessage{
+			CreatedAt: msg.Metadata.MessageTimestamp,
+			EventType: streamcontrol.EventTypeSubscribe,
+			UserID:    streamcontrol.ChatUserID(event.UserID),
+			Username:  event.UserName,
+			MessageID: streamcontrol.ChatMessageID(msg.Metadata.MessageID),
+			Message:   strings.Join(description, " "),
+		})
+	})
+	eventSubClient.OnEventChannelSubscriptionMessage(func(event twitcheventsub.EventChannelSubscriptionMessage, msg twitcheventsub.NotificationMessage) {
+		h.sendMessage(ctx, streamcontrol.ChatMessage{
+			CreatedAt: msg.Metadata.MessageTimestamp,
+			EventType: streamcontrol.EventTypeSubscribe,
+			UserID:    streamcontrol.ChatUserID(event.UserID),
+			Username:  event.UserName,
+			MessageID: streamcontrol.ChatMessageID(msg.Metadata.MessageID),
+			Message: fmt.Sprintf(
+				"%d months (%d in total), tier '%s', message: %s",
+				event.DurationMonths, event.CumulativeMonths, event.Tier, event.Message.Text,
+			),
+		})
+	})
+	eventSubClient.OnEventChannelSubscriptionGift(func(event twitcheventsub.EventChannelSubscriptionGift, msg twitcheventsub.NotificationMessage) {
+		h.sendMessage(ctx, streamcontrol.ChatMessage{
+			CreatedAt: msg.Metadata.MessageTimestamp,
+			EventType: streamcontrol.EventTypeSubscribe,
+			UserID:    streamcontrol.ChatUserID(event.UserID),
+			Username:  event.UserName,
+			MessageID: streamcontrol.ChatMessageID(msg.Metadata.MessageID),
+			Message: fmt.Sprintf(
+				"gift: %d subs, tier '%s'",
+				event.Total, event.Tier,
+			),
+		})
+	})
+	eventSubClient.OnEventStreamOnline(func(event twitcheventsub.EventStreamOnline, msg twitcheventsub.NotificationMessage) {
+		h.sendMessage(ctx, streamcontrol.ChatMessage{
+			CreatedAt: msg.Metadata.MessageTimestamp,
+			EventType: streamcontrol.EventTypeStreamOnline,
+			UserID:    streamcontrol.ChatUserID(event.BroadcasterUserId),
+			Username:  event.BroadcasterUserName,
+			MessageID: streamcontrol.ChatMessageID(msg.Metadata.MessageID),
+			Message:   event.StartedAt.Format(time.DateTime),
+		})
+	})
+	eventSubClient.OnEventStreamOffline(func(event twitcheventsub.EventStreamOffline, msg twitcheventsub.NotificationMessage) {
+		h.sendMessage(ctx, streamcontrol.ChatMessage{
+			CreatedAt: msg.Metadata.MessageTimestamp,
+			EventType: streamcontrol.EventTypeStreamOffline,
+			UserID:    streamcontrol.ChatUserID(event.BroadcasterUserId),
+			Username:  event.BroadcasterUserName,
+			MessageID: streamcontrol.ChatMessageID(msg.Metadata.MessageID),
+			Message:   "",
+		})
+	})
+	eventSubClient.OnEventChannelChatMessage(func(chatEvent twitcheventsub.EventChannelChatMessage, msg twitcheventsub.NotificationMessage) {
+		logger.Tracef(ctx, "chat message: %#+v", chatEvent)
+		eventType := streamcontrol.EventTypeChatMessage
+		if chatEvent.Cheer != nil {
+			eventType = streamcontrol.EventTypeCheer
+		}
+		h.sendMessage(ctx, streamcontrol.ChatMessage{
+			CreatedAt: msg.Metadata.MessageTimestamp,
+			EventType: eventType,
+			UserID:    streamcontrol.ChatUserID(chatEvent.ChatterUserId),
+			Username:  chatEvent.ChatterUserName,
+			MessageID: streamcontrol.ChatMessageID(chatEvent.MessageId),
+			Message:   chatEvent.Message.Text,
+		})
+	})
+
+	eventSubClient.OnWelcome(func(sessMsg twitcheventsub.WelcomeMessage) {
+		sessID := sessMsg.Payload.Session.ID
+		logger.Debugf(ctx, "session ID: '%s'", sessID)
+
+		eventMap := twitcheventsub.SubMetadata()
+
+		params := &helix.EventSubSubscription{
+			Type:    string(twitcheventsub.SubChannelChatMessage),
+			Version: eventMap[twitcheventsub.SubChannelChatMessage].Version,
+			Condition: helix.EventSubCondition{
+				BroadcasterUserID: broadcasterID,
+				ModeratorUserID:   broadcasterID,
+				UserID:            myUserID,
+			},
+			Transport: helix.EventSubTransport{
+				Method:    "websocket",
+				SessionID: sessID,
+			},
+		}
+		resp, err := client.CreateEventSubSubscription(params)
+		if err != nil {
+			logger.Errorf(ctx, "unable to create a subscription (%#+v): %v", params, err)
+			return
+		}
+		if resp.ErrorMessage != "" {
+			logger.Errorf(ctx, "got an error during subscription (%#+v): %s", params, resp.ErrorMessage)
+			return
+		}
+
+		go func() {
+			for chanName, metadata := range eventMap {
+				params := &helix.EventSubSubscription{
+					Type:    string(chanName),
+					Version: metadata.Version,
+					Condition: helix.EventSubCondition{
+						BroadcasterUserID: broadcasterID,
+						ModeratorUserID:   broadcasterID,
+						UserID:            myUserID,
+					},
+					Transport: helix.EventSubTransport{
+						Method:    "websocket",
+						SessionID: sessID,
+					},
+				}
+				switch chanName {
+				case twitcheventsub.SubChannelRaid:
+					params.Condition.ToBroadcasterUserID = broadcasterID
+				case twitcheventsub.SubChannelChatMessage:
+					continue
+				case twitcheventsub.SubConduitShardDisabled,
+					twitch.SubExtensionBitsTransactionCreate,
+					twitch.SubDropEntitlementGrant,
+					twitch.SubUserAuthorizationRevoke,
+					twitch.SubUserAuthorizationGrant:
+					continue
+
+				}
+				resp, err := client.CreateEventSubSubscription(params)
+				if err != nil {
+					logger.Errorf(ctx, "unable to create a subscription (%#+v): %w", params, err)
+				}
+				if resp.ErrorMessage != "" {
+					logger.Warnf(ctx, "unable to subscribe to '%s': %v", chanName, err)
+					continue
+				}
+				logger.Debugf(ctx, "successfully subscribed to '%s'", chanName)
+			}
+		}()
+	})
+
+	err = eventSubClient.ConnectWithContext(ctx, errCallback)
 	if err != nil {
-		return nil, fmt.Errorf("unable to create a subscription (%#+v): %w", params, err)
-	}
-	if resp.ErrorMessage != "" {
-		return nil, fmt.Errorf("got an error during subscription (%#+v): %s", params, resp.ErrorMessage)
+		return nil, fmt.Errorf("unable to connect to '%s': %w", urlString, err)
 	}
 
 	h.waitGroup.Add(1)
 	observability.Go(ctx, func(ctx context.Context) {
-		defer logger.Debugf(ctx, "NewChatHandlerSub: closed")
+		defer h.waitGroup.Done()
+		defer close(h.messagesOutChan)
 		if onClose != nil {
 			defer onClose(ctx)
 		}
-		defer h.waitGroup.Done()
-		defer func() {
-			close(h.messagesOutChan)
-		}()
-		for {
-			select {
-			case <-ctx.Done():
-				logger.Debugf(ctx, "NewChatHandlerSub: context closed: %v", ctx.Err())
-				return
-			default:
-			}
-			_, messageSerialized, err := c.Read(ctx)
-			if err != nil {
-				logger.Errorf(ctx, "unable to read the message: %v", err)
-				return
-			}
-			var header struct {
-				Metadata MessageMetadata `json:"metadata"`
-			}
-			if err := json.Unmarshal(messageSerialized, &header); err != nil {
-				logger.Errorf(ctx, "unable to un-JSON-ize message '%s': %v", messageSerialized, err)
-				return
-			}
-
-			t, err := time.Parse(time.RFC3339Nano, header.Metadata.MessageTimestamp)
-			if err != nil {
-				logger.Errorf(ctx, "unable to parse timestamp '%s': %v", header.Metadata.MessageTimestamp, err)
-				t = time.Now()
-			}
-
-			var msgAbstract any
-			switch header.Metadata.MessageType {
-			case "session_welcome":
-				msgAbstract = &SessionWelcomeMessage{}
-			case "notification":
-				var msg NotificationMessage
-				err := json.Unmarshal(messageSerialized, &msg)
-				if err != nil {
-					logger.Errorf(ctx, "unable to unserialize the notification message '%s': %v", messageSerialized, err)
-					continue
-				}
-				logger.Tracef(ctx, "notification: %#+v", msg)
-				switch twitcheventsub.EventSubscription(msg.Payload.Subscription.Type) {
-				case twitcheventsub.SubChannelChatMessage:
-					var chatEvent ChatMessageEvent
-					err := json.Unmarshal(msg.Payload.Event, &chatEvent)
-					if err != nil {
-						logger.Errorf(ctx, "unable to unserialize the chat message '%s': %v", msg.Payload.Event, err)
-						continue
-					}
-					logger.Tracef(ctx, "chat message: %#+v", msg)
-					msg := streamcontrol.ChatMessage{
-						CreatedAt: t,
-						UserID:    streamcontrol.ChatUserID(chatEvent.ChatterUserID),
-						Username:  chatEvent.ChatterUserName,
-						MessageID: streamcontrol.ChatMessageID(chatEvent.MessageID),
-						Message:   chatEvent.Message.Text,
-					}
-					logger.Tracef(ctx, "resulting chat: %#+v", msg)
-					select {
-					case h.messagesOutChan <- msg:
-					default:
-						logger.Errorf(ctx, "the queue is full, have to drop %#+v", msg)
-					}
-				default:
-					logger.Warnf(ctx, "got an event on a channel I haven't subscribed to: '%s': %s", msg.Payload.Subscription.Type, messageSerialized)
-				}
-				continue
-			case "session_keepalive":
-				msgAbstract = &KeepaliveMessage{}
-			case "reconnect":
-				msgAbstract = &ReconnectMessage{}
-			case "revocation":
-				msgAbstract = &RevocationMessage{}
-			default:
-				logger.Debugf(ctx, "unknown message type: '%s': '%s'", header.Metadata.MessageType, messageSerialized)
-				continue
-			}
-			err = json.Unmarshal(messageSerialized, &msgAbstract)
-			if err != nil {
-				logger.Errorf(ctx, "unable to unserialize the %T message '%s': %v", msgAbstract, messageSerialized, err)
-				continue
-			}
-			logger.Tracef(ctx, "received %T: %#+v", msgAbstract, msgAbstract)
-		}
+		defer logger.Debugf(ctx, "NewChatHandlerSub: closed")
+		eventSubClient.Wait()
 	})
 
 	return h, nil
@@ -210,96 +340,14 @@ func (h *ChatHandlerSub) MessagesChan() <-chan streamcontrol.ChatMessage {
 	return h.messagesOutChan
 }
 
-// Common metadata for all messages
-type MessageMetadata struct {
-	MessageID        string `json:"message_id"`
-	MessageType      string `json:"message_type"`
-	MessageTimestamp string `json:"message_timestamp"`
-}
-
-// Session (used in session_welcome and reconnect)
-type Session struct {
-	ID                      string  `json:"id"`
-	Status                  string  `json:"status"`
-	KeepaliveTimeoutSeconds int     `json:"keepalive_timeout_seconds"`
-	ReconnectURL            *string `json:"reconnect_url"` // can be null
-	ConnectedAt             string  `json:"connected_at"`
-}
-
-// Payload for session_welcome
-type WelcomePayload struct {
-	Session Session `json:"session"`
-}
-
-// Session Welcome message
-type SessionWelcomeMessage struct {
-	Metadata MessageMetadata `json:"metadata"`
-	Payload  WelcomePayload  `json:"payload"`
-}
-
-// Subscription info (used in notifications)
-type Subscription struct {
-	ID        string            `json:"id"`
-	Type      string            `json:"type"`
-	Version   string            `json:"version"`
-	Status    string            `json:"status"`
-	Cost      int               `json:"cost"`
-	Condition map[string]string `json:"condition"`
-	CreatedAt string            `json:"created_at"`
-	Transport struct {
-		Method    string `json:"method"`
-		SessionID string `json:"session_id"`
-	} `json:"transport"`
-}
-
-// Example: Channel Chat Message Event (payload.event for chat messages)
-type ChatMessageEvent struct {
-	BroadcasterUserID    string `json:"broadcaster_user_id"`
-	BroadcasterUserLogin string `json:"broadcaster_user_login"`
-	BroadcasterUserName  string `json:"broadcaster_user_name"`
-	ChatterUserID        string `json:"chatter_user_id"`
-	ChatterUserLogin     string `json:"chatter_user_login"`
-	ChatterUserName      string `json:"chatter_user_name"`
-	MessageID            string `json:"message_id"`
-	Message              struct {
-		Text string `json:"text"`
-	} `json:"message"`
-	Color  string `json:"color"`
-	Badges []struct {
-		SetID string `json:"set_id"`
-		ID    string `json:"id"`
-		Info  string `json:"info"`
-	} `json:"badges"`
-}
-
-type NotificationPayload struct {
-	Subscription Subscription    `json:"subscription"`
-	Event        json.RawMessage `json:"event"`
-}
-
-type NotificationMessage struct {
-	Metadata MessageMetadata     `json:"metadata"`
-	Payload  NotificationPayload `json:"payload"`
-}
-
-type KeepaliveMessage struct {
-	Metadata MessageMetadata `json:"metadata"`
-}
-
-type ReconnectPayload struct {
-	Session Session `json:"session"`
-}
-
-type ReconnectMessage struct {
-	Metadata MessageMetadata  `json:"metadata"`
-	Payload  ReconnectPayload `json:"payload"`
-}
-
-type RevocationPayload struct {
-	Subscription Subscription `json:"subscription"`
-}
-
-type RevocationMessage struct {
-	Metadata MessageMetadata   `json:"metadata"`
-	Payload  RevocationPayload `json:"payload"`
+func (h *ChatHandlerSub) sendMessage(
+	ctx context.Context,
+	chatMsg streamcontrol.ChatMessage,
+) {
+	logger.Tracef(ctx, "resulting chat: %#+v", chatMsg)
+	select {
+	case h.messagesOutChan <- chatMsg:
+	default:
+		logger.Errorf(ctx, "the queue is full, have to drop %#+v", chatMsg)
+	}
 }

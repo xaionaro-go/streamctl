@@ -2688,20 +2688,7 @@ func (c *Client) SubscribeToChatMessages(
 			ctx context.Context,
 			event *streamd_grpc.ChatMessage,
 		) api.ChatMessage {
-			createdAtUNIXNano := event.GetCreatedAtUNIXNano()
-			return api.ChatMessage{
-				ChatMessage: streamcontrol.ChatMessage{
-					CreatedAt: time.Unix(
-						int64(createdAtUNIXNano)/int64(time.Second),
-						(int64(createdAtUNIXNano)%int64(time.Second))/int64(time.Nanosecond),
-					),
-					UserID:    streamcontrol.ChatUserID(event.GetUserID()),
-					Username:  event.GetUsername(),
-					MessageID: streamcontrol.ChatMessageID(event.GetMessageID()),
-					Message:   event.GetMessage(),
-				},
-				Platform: streamcontrol.PlatformName(event.GetPlatID()),
-			}
+			return goconv.ChatMessageGRPC2Go(event)
 		},
 	)
 }

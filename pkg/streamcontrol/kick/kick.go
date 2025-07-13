@@ -78,17 +78,16 @@ func New(
 
 func (k *Kick) initChatHandler(
 	ctx context.Context,
-) {
+) error {
 	if !k.ChatHandlerLocker.Lock(ctx) {
-		logger.Debugf(ctx, "initChatHandler: cancelled (case #0)")
-		return
+		return ctx.Err()
 	}
 
 	chatHandler, err := k.newChatHandlerOBSOLETE(ctx, k.CurrentConfig.Config.Channel, k.onChatHandlerClose)
 	if err == nil {
 		k.ChatHandlerLocker.Unlock()
 		k.ChatHandler = chatHandler
-		return
+		return nil
 	}
 
 	go func() {
@@ -110,6 +109,7 @@ func (k *Kick) initChatHandler(
 		}
 		k.ChatHandler = chatHandler
 	}()
+	return nil
 }
 
 func (k *Kick) onChatHandlerClose(
@@ -194,18 +194,21 @@ func (k *Kick) getAccessTokenNoLock(
 	codeVerifierSHA256 := sha256.Sum256([]byte(codeVerifier))
 	codeChallenge := base64.URLEncoding.EncodeToString(codeVerifierSHA256[:])
 
+	scopes := []gokick.Scope{
+		gokick.ScopeUserRead,
+		gokick.ScopeChannelRead,
+		gokick.ScopeChannelWrite,
+		gokick.ScopeChatWrite,
+		gokick.ScopeStremkeyRead,
+		gokick.ScopeEventSubscribe,
+		gokick.ScopeModerationBan,
+	}
+	logger.Debugf(ctx, "scopes: %v", scopes)
 	authURL, err := k.getClient().GetAuthorize(
 		redirectURL,
 		"EMPTY",
 		codeChallenge,
-		[]gokick.Scope{
-			gokick.ScopeUserRead,
-			gokick.ScopeChannelRead,
-			gokick.ScopeChannelWrite,
-			gokick.ScopeChatWrite,
-			gokick.ScopeStremkeyRead,
-			gokick.ScopeEventSubscribe,
-		},
+		scopes,
 	)
 	if err != nil {
 		return fmt.Errorf("unable to get an authorization endpoint URL: %w", err)
@@ -574,25 +577,31 @@ func (k *Kick) prepare(ctx context.Context) (_err error) {
 func (k *Kick) prepareNoLock(ctx context.Context) error {
 	err := k.getAccessTokenIfNeeded(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("getAccessTokenIfNeeded: %w", err)
 	}
 
 	k.lazyInitOnce.Do(func() {
-		k.initChannelInfo(ctx)
-		k.initChatHandler(ctx)
+		if err = k.initChannelInfo(ctx); err != nil {
+			err = fmt.Errorf("initChannelInfo: %w", err)
+			return
+		}
+		if err = k.initChatHandler(ctx); err != nil {
+			err = fmt.Errorf("initChatHandler: %w", err)
+			return
+		}
 	})
 	return err
 }
 
 func (k *Kick) initChannelInfo(
 	ctx context.Context,
-) {
+) error {
 	var channel *gokick.ChannelResponse
 	cache := CacheFromCtx(ctx)
 	if chanInfo := cache.GetChanInfo(); chanInfo != nil && chanInfo.Slug == k.CurrentConfig.Config.Channel {
 		logger.Debugf(ctx, "reuse the cache, instead of querying channel info")
 		k.Channel = chanInfo
-		return
+		return nil
 	}
 
 	for {
@@ -613,7 +622,7 @@ func (k *Kick) initChannelInfo(
 			cache.SetChanInfo(channel)
 		}
 		k.Channel = channel
-		return
+		return nil
 	}
 }
 

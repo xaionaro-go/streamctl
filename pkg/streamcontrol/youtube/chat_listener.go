@@ -103,6 +103,7 @@ func (l *ChatListener) listenLoop(ctx context.Context) (_err error) {
 			}
 			msg := streamcontrol.ChatMessage{
 				CreatedAt: publishedAt,
+				EventType: streamcontrol.EventTypeChatMessage,
 				UserID:    streamcontrol.ChatUserID(item.AuthorDetails.ChannelId),
 				Username:  item.AuthorDetails.DisplayName,
 				MessageID: streamcontrol.ChatMessageID(item.Id),

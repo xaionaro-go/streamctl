@@ -757,14 +757,31 @@ message SubscribeToChatMessagesRequest {
     uint64 sinceUNIXNano = 1;
     uint64 limit = 2;
 }
+enum PlatformEventType {
+    platformEventTypeUndefined = 0;
+    platformEventTypeChatMessage = 1;
+    platformEventTypeCheer = 2;
+    platformEventTypeAutoModHold = 3;
+    platformEventTypeAdBreak = 4;
+    platformEventTypeBan = 5;
+    platformEventTypeFollow = 6;
+    platformEventTypeRaid = 7;
+    platformEventTypeChannelShoutoutReceive = 8;
+    platformEventTypeSubscribe = 9;
+    platformEventTypeStreamOnline = 10;
+    platformEventTypeStreamOffline = 11;
+    platformEventTypeOther = 12;
+}
+
 message ChatMessage {
 	uint64 createdAtUNIXNano  = 1;
     string platID = 2;
     bool isLive = 3;
-    string userID = 4;
-    string username = 5;
-    string messageID = 6;
-    string message = 7;
+    PlatformEventType eventType = 4;
+    string userID = 5;
+    string username = 6;
+    string messageID = 7;
+    string message = 8;
 }
 
 message SendChatMessageRequest {

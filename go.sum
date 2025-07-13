@@ -615,8 +615,6 @@ github.com/jfreymuth/oggvorbis v1.0.5 h1:u+Ck+R0eLSRhgq8WTmffYnrVtSztJcYrl588DM4
 github.com/jfreymuth/oggvorbis v1.0.5/go.mod h1:1U4pqWmghcoVsCJJ4fRBKv9peUJMBHixthRlBeD6uII=
 github.com/jfreymuth/vorbis v1.0.2 h1:m1xH6+ZI4thH927pgKD8JOH4eaGRm18rEE9/0WKjvNE=
 github.com/jfreymuth/vorbis v1.0.2/go.mod h1:DoftRo4AznKnShRl1GxiTFCseHr4zR9BN3TWXyuzrqQ=
-github.com/joeyak/go-twitch-eventsub/v3 v3.0.0 h1:6BDgmYJynNDyCP7P+wM9jPQnE3leJAi58nohDnzliJ4=
-github.com/joeyak/go-twitch-eventsub/v3 v3.0.0/go.mod h1:rpqOjYP1ftWDj3H4D8fA58AdOpkvK9YvODoduDpPCQU=
 github.com/josharian/intern v1.0.0 h1:vlS4z54oSdjm0bgjRigI+G1HpF+tI+9rE5LLzOg8HmY=
 github.com/josharian/intern v1.0.0/go.mod h1:5DoeVV0s6jJacbCEi61lwdGj/aVlrQvzHFFd8Hwg//Y=
 github.com/jpillora/backoff v1.0.0/go.mod h1:J/6gKK9jxlEcS3zixgDgUAsiuZ7yrSoa/FX5e0EB2j4=
@@ -948,8 +946,6 @@ github.com/ryanuber/columnize v0.0.0-20160712163229-9b3edd62028f/go.mod h1:sm1tb
 github.com/rymdport/portal v0.4.1 h1:2dnZhjf5uEaeDjeF/yBIeeRo6pNI2QAKm7kq1w/kbnA=
 github.com/rymdport/portal v0.4.1/go.mod h1:kFF4jslnJ8pD5uCi17brj/ODlfIidOxlgUDTO5ncnC4=
 github.com/sagikazarmark/crypt v0.6.0/go.mod h1:U8+INwJo3nBv1m6A/8OBXAq7Jnpspk5AxSgDyEQcea8=
-github.com/scorfly/gokick v1.11.0 h1:4VMpyO8hnPUW4dYgCfOi/YzMgVgj/Rh/OJW7oi2rn+0=
-github.com/scorfly/gokick v1.11.0/go.mod h1:9Tc5+/nwcCLjgDVUeW2K/vhEbkMkN+OE8UQVx4fL1WA=
 github.com/sean-/seed v0.0.0-20170313163322-e2103e2c3529/go.mod h1:DxrIzT+xaE7yg65j358z/aeFdxmN0P9QXhEzd20vsDc=
 github.com/sergi/go-diff v1.0.0/go.mod h1:0CfEIISq7TuYL3j771MWULgwwjU+GofnZX9QAmXWZgo=
 github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 h1:n661drycOFuPLCN3Uc8sB6B/s6Z4t2xvBgU1htSHuq8=
@@ -1096,6 +1092,10 @@ github.com/xaionaro-go/fyne/v2 v2.0.0-20250622004601-3a26ee69528a h1:awMQXlaweei
 github.com/xaionaro-go/fyne/v2 v2.0.0-20250622004601-3a26ee69528a/go.mod h1:0GOXKqyvNwk3DLmsFu9v0oYM0ZcD1ysGnlHCerKoAmo=
 github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42 h1:izCjREd+62HDF9FRYqUI7dgJNdUxAIysEuqed8lBcDY=
 github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42/go.mod h1:IuQWd+hy/tLuvuqFX0N9SMZrzOprM8Jvvdu+42RJwk4=
+github.com/xaionaro-go/go-twitch-eventsub/v3 v3.0.0-20250713163657-276e5a5b7adc h1:RwmId5gCeAesuyNKr7BaakXLmHSUxOUqRwV3ME32peU=
+github.com/xaionaro-go/go-twitch-eventsub/v3 v3.0.0-20250713163657-276e5a5b7adc/go.mod h1:rpqOjYP1ftWDj3H4D8fA58AdOpkvK9YvODoduDpPCQU=
+github.com/xaionaro-go/gokick v0.0.0-20250713175656-f538d6396851 h1:P9DQMVL1OWRGKlXZFIwgzivUKsYfQV0y8lfYi5Ek8Yw=
+github.com/xaionaro-go/gokick v0.0.0-20250713175656-f538d6396851/go.mod h1:9Tc5+/nwcCLjgDVUeW2K/vhEbkMkN+OE8UQVx4fL1WA=
 github.com/xaionaro-go/goobs v0.0.0-20241103210141-030e538ac440 h1:hzQ+65oWq54XAqheyJ9E6wt+WH75051w+eLP5zWlD68=
 github.com/xaionaro-go/goobs v0.0.0-20241103210141-030e538ac440/go.mod h1:Fhk0SWHxZ1atNEIm3tUlB93HHRl/v6hWulG/B7BkIOk=
 github.com/xaionaro-go/gorex v0.0.0-20241010205749-bcd59d639c4d h1:9DyH0lboWWzKUwiqGmp9sTZ3bSPhgJHiiWgV+hqY9Uo=
