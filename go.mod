@@ -1,6 +1,8 @@
 module github.com/xaionaro-go/streamctl
 
-go 1.24.1
+go 1.24.4
+
+toolchain go1.24.5
 
 // The original go-yaml is very slow, using the improved version instead
 replace github.com/goccy/go-yaml v1.11.3 => github.com/yoelsusanto/go-yaml v0.0.0-20240324162521-2018c1ab915b
@@ -281,7 +283,7 @@ require (
 	github.com/pojntfx/weron v0.2.7
 	github.com/prometheus/client_golang v1.20.5
 	github.com/rs/zerolog v1.33.0
-	github.com/scorfly/gokick v1.1.1
+	github.com/scorfly/gokick v1.11.0
 	github.com/sethvargo/go-password v0.3.1
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/sirupsen/logrus v1.9.3
@@ -312,7 +314,7 @@ require (
 	github.com/xaionaro-go/xfyne v0.0.0-20250615190411-4c96281f6e25
 	github.com/xaionaro-go/xlogrus v0.0.0-20250111150201-60557109545a
 	github.com/xaionaro-go/xpath v0.0.0-20250111145115-55f5728f643f
-	github.com/xaionaro-go/xsync v0.0.0-20250614210231-b74f647f859f
+	github.com/xaionaro-go/xsync v0.0.0-20250713122735-6e002588c3d0
 	github.com/yutopp/go-flv v0.3.1
 	golang.org/x/crypto v0.39.0
 	google.golang.org/grpc v1.73.0

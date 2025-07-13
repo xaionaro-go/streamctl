@@ -540,7 +540,9 @@ func (d *StreamD) saveConfig(ctx context.Context) error {
 	return nil
 }
 
-func (d *StreamD) ResetCache(ctx context.Context) error {
+func (d *StreamD) ResetCache(ctx context.Context) (_err error) {
+	logger.Debugf(ctx, "ResetCache")
+	defer func() { logger.Debugf(ctx, "/ResetCache: %v", _err) }()
 	d.Cache = &cache.Cache{}
 	return nil
 }

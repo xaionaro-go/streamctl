@@ -1091,6 +1091,8 @@ func (p *Panel) openSettingsWindow(ctx context.Context) error {
 }
 
 func (p *Panel) resetCache(ctx context.Context) {
+	logger.Debugf(ctx, "resetCache")
+	defer func() { logger.Debugf(ctx, "/resetCache") }()
 	p.StreamD.ResetCache(ctx)
 	err := p.StreamD.InitCache(ctx)
 	if err != nil {
