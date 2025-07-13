@@ -32,6 +32,8 @@ type config struct {
 	TriggerRules        TriggerRules        `yaml:"trigger_rules"`
 	P2PNetwork          P2PNetwork          `yaml:"p2p_network"`
 	LLM                 LLM                 `yaml:"llm"`
+	Shoutout            Shoutout            `yaml:"shoutout"`
+	Raid                Raid                `yaml:"raid"`
 }
 
 type Config config

@@ -555,7 +555,9 @@ func (d *StreamD) SetConfig(ctx context.Context, cfg *config.Config) error {
 	return xsync.DoA2R1(ctx, &d.ConfigLock, d.setConfig, ctx, cfg)
 }
 
-func (d *StreamD) setConfig(ctx context.Context, cfg *config.Config) (_ret error) {
+func (d *StreamD) setConfig(ctx context.Context, cfg *config.Config) (_err error) {
+	logger.Debugf(ctx, "setConfig(ctx, %#+v)", cfg)
+	defer func() { logger.Debugf(ctx, "/setConfig(ctx, %#+v): %v", cfg, _err) }()
 	dashboardCfgEqual := reflect.DeepEqual(d.Config.Dashboard, cfg.Dashboard)
 	cfgEqual := reflect.DeepEqual(&d.Config, cfg)
 	if cfgEqual {
@@ -563,7 +565,7 @@ func (d *StreamD) setConfig(ctx context.Context, cfg *config.Config) (_ret error
 		return nil
 	}
 	defer func() {
-		if _ret != nil {
+		if _err != nil {
 			return
 		}
 		if !dashboardCfgEqual {

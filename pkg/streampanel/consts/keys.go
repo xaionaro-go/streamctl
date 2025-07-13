@@ -28,4 +28,6 @@ const (
 	PageCamera       = Page("Camera")
 	PageSelectServer = Page("Select server")
 	PageMonitor      = Page("Monitor (local)")
+	PageShoutout     = Page("Shoutout")
+	PageRaid         = Page("Raid")
 )

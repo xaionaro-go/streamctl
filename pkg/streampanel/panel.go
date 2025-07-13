@@ -1706,6 +1706,9 @@ func (p *Panel) initMainWindow(
 		nil,
 	)
 
+	shoutoutPage := newShoutoutPage(ctx, p)
+	raidPage := newRaidPage(ctx, p)
+
 	var cancelPage context.CancelFunc
 	setPage := func(page consts.Page) {
 		logger.Debugf(ctx, "setPage(%s)", page)
@@ -1728,6 +1731,8 @@ func (p *Panel) initMainWindow(
 			selectServerPage.Hide()
 			timersUI.StopRefreshingFromRemote(ctx)
 			monitorPage.Hide()
+			shoutoutPage.Hide()
+			raidPage.Hide()
 			profileControl.Show()
 			controlPage.Show()
 		case consts.PageMoreControl:
@@ -1739,6 +1744,8 @@ func (p *Panel) initMainWindow(
 			dashboardPage.Hide()
 			selectServerPage.Hide()
 			monitorPage.Hide()
+			shoutoutPage.Hide()
+			raidPage.Hide()
 			moreControlPage.Show()
 			timersUI.StartRefreshingFromRemote(ctx)
 		case consts.PageChat:
@@ -1750,6 +1757,8 @@ func (p *Panel) initMainWindow(
 			dashboardPage.Hide()
 			selectServerPage.Hide()
 			monitorPage.Hide()
+			shoutoutPage.Hide()
+			raidPage.Hide()
 			chatPage.Show()
 		case consts.PageDashboard:
 			profileControl.Hide()
@@ -1762,6 +1771,8 @@ func (p *Panel) initMainWindow(
 			obsPage.Hide()
 			selectServerPage.Hide()
 			monitorPage.Hide()
+			shoutoutPage.Hide()
+			raidPage.Hide()
 			dashboardPage.Show()
 			p.focusDashboardWindow(ctx)
 		case consts.PageOBS:
@@ -1774,6 +1785,8 @@ func (p *Panel) initMainWindow(
 			selectServerPage.Hide()
 			timersUI.StopRefreshingFromRemote(ctx)
 			monitorPage.Hide()
+			shoutoutPage.Hide()
+			raidPage.Hide()
 			obsPage.Show()
 		case consts.PageRestream:
 			controlPage.Hide()
@@ -1785,6 +1798,8 @@ func (p *Panel) initMainWindow(
 			selectServerPage.Hide()
 			timersUI.StopRefreshingFromRemote(ctx)
 			monitorPage.Hide()
+			shoutoutPage.Hide()
+			raidPage.Hide()
 			restreamPage.Show()
 			p.startRestreamPage(pageCtx)
 		case consts.PageSelectServer:
@@ -1797,6 +1812,8 @@ func (p *Panel) initMainWindow(
 			dashboardPage.Hide()
 			timersUI.StopRefreshingFromRemote(ctx)
 			monitorPage.Hide()
+			shoutoutPage.Hide()
+			raidPage.Hide()
 			selectServerPage.Show()
 		case consts.PageMonitor:
 			profileControl.Hide()
@@ -1808,8 +1825,36 @@ func (p *Panel) initMainWindow(
 			dashboardPage.Hide()
 			timersUI.StopRefreshingFromRemote(ctx)
 			selectServerPage.Hide()
+			shoutoutPage.Hide()
+			raidPage.Hide()
 			monitorPage.Show()
 			p.startMonitorPage(pageCtx)
+		case consts.PageShoutout:
+			obsPage.Hide()
+			restreamPage.Hide()
+			controlPage.Hide()
+			moreControlPage.Hide()
+			chatPage.Hide()
+			dashboardPage.Hide()
+			selectServerPage.Hide()
+			timersUI.StopRefreshingFromRemote(ctx)
+			monitorPage.Hide()
+			profileControl.Hide()
+			raidPage.Hide()
+			shoutoutPage.Show()
+		case consts.PageRaid:
+			obsPage.Hide()
+			restreamPage.Hide()
+			controlPage.Hide()
+			moreControlPage.Hide()
+			chatPage.Hide()
+			dashboardPage.Hide()
+			selectServerPage.Hide()
+			timersUI.StopRefreshingFromRemote(ctx)
+			monitorPage.Hide()
+			profileControl.Hide()
+			shoutoutPage.Hide()
+			raidPage.Show()
 		}
 	}
 
@@ -1822,6 +1867,8 @@ func (p *Panel) initMainWindow(
 			string(consts.PageOBS),
 			string(consts.PageRestream),
 			string(consts.PageMonitor),
+			string(consts.PageShoutout),
+			string(consts.PageRaid),
 		},
 		func(page string) {
 			setPage(consts.Page(page))
@@ -1854,6 +1901,8 @@ func (p *Panel) initMainWindow(
 			obsPage,
 			restreamPage,
 			monitorPage,
+			shoutoutPage.CanvasObject(),
+			raidPage.CanvasObject(),
 		),
 	))
 
