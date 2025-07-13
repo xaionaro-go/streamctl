@@ -15,6 +15,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/google/uuid"
 	"github.com/scorfly/gokick"
+	"github.com/xaionaro-go/kickcom"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/secret"
@@ -29,8 +30,9 @@ type ReverseEngClient interface {
 type Kick struct {
 	CloseCtx          context.Context
 	CloseFn           context.CancelFunc
-	Channel           *gokick.ChannelResponse
+	Channel           *kickcom.ChannelV1
 	Client            *gokick.Client
+	ClientOBSOLETE    *kickcom.Kick
 	ChatHandler       *ChatHandlerOBSOLETE
 	ChatHandlerLocker xsync.CtxLocker
 	CurrentConfig     Config
@@ -64,6 +66,11 @@ func New(
 		return nil, fmt.Errorf("unable to initialize a client to Kick: %w", err)
 	}
 
+	clientOld, err := kickcom.New()
+	if err != nil {
+		return nil, fmt.Errorf("unable to initialize the old client: %w", err)
+	}
+
 	ctx, closeFn := context.WithCancel(ctx)
 	k := &Kick{
 		CloseCtx:          ctx,
@@ -71,6 +78,7 @@ func New(
 		ChatHandlerLocker: make(xsync.CtxLocker, 1),
 		CurrentConfig:     cfg,
 		Client:            client,
+		ClientOBSOLETE:    clientOld,
 		SaveCfgFn:         saveCfgFn,
 	}
 	return k, nil
@@ -300,7 +308,8 @@ func (k *Kick) GetStreamStatus(
 	logger.Debugf(ctx, "GetStreamStatus")
 	defer func() { logger.Debugf(ctx, "/GetStreamStatus: %v, %v", _ret, _err) }()
 
-	resp, err := k.Client.GetLivestreams(ctx, gokick.NewLivestreamListFilter().SetBroadcasterUserIDs(k.Channel.BroadcasterUserID))
+	//resp, err := k.Client.GetLivestreams(ctx, gokick.NewLivestreamListFilter().SetBroadcasterUserIDs(k.Channel.BroadcasterUserID))
+	info, err := k.ClientOBSOLETE.GetLivestreamV2(ctx, k.Channel.Slug)
 	if err != nil {
 		err := fmt.Errorf("unable to request stream status using the reverse-engineering lib: %w", err)
 		logger.Errorf(ctx, "%v", err)
@@ -313,13 +322,13 @@ func (k *Kick) GetStreamStatus(
 			fmt.Errorf("unable to request stream status using the normal lib: %w", err),
 		)
 	}
-	if len(resp.Result) > 1 {
+	/*if len(resp.Result) > 1 {
 		return nil, fmt.Errorf("expected livestream status of one channel (or no channels), but received for %d channels", len(resp.Result))
-	}
+	}*/
 
-	logger.Tracef(ctx, "the received livestream status is: %s", spew.Sdump(resp.Result))
+	logger.Tracef(ctx, "the received livestream status is: %s", spew.Sdump(info))
 
-	if len(resp.Result) == 0 {
+	if info.Data == nil {
 		return &streamcontrol.StreamStatus{
 			IsActive:     false,
 			ViewersCount: nil,
@@ -327,19 +336,18 @@ func (k *Kick) GetStreamStatus(
 			CustomData:   nil,
 		}, nil
 	}
-	info := resp.Result[0]
 
-	var startedAtPtr *time.Time
+	/*var startedAtPtr *time.Time
 	startedAt, err := ParseTimestamp(info.StartedAt)
 	if err == nil {
 		startedAtPtr = &startedAt
 	} else {
 		logger.Errorf(ctx, "unable to parse '%s' as a timestamp: %v", info.StartedAt, err)
-	}
+	}*/
 	return &streamcontrol.StreamStatus{
 		IsActive:     true,
-		ViewersCount: ptr(uint(info.ViewerCount)),
-		StartedAt:    startedAtPtr,
+		ViewersCount: ptr(uint(info.Data.Viewers)),
+		StartedAt:    &info.Data.CreatedAt,
 		CustomData:   info,
 	}, nil
 }
@@ -367,7 +375,7 @@ func (k *Kick) getStreamStatusUsingNormalClient(
 
 	resp, err := k.getClient().GetChannels(
 		ctx,
-		gokick.NewChannelListFilter().SetBroadcasterUserIDs([]int{k.Channel.BroadcasterUserID}),
+		gokick.NewChannelListFilter().SetBroadcasterUserIDs([]int{int(k.Channel.UserID)}),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get channels info")
@@ -410,16 +418,17 @@ func (k *Kick) getStreamStatusUsingNormalClient(
 
 func (k *Kick) GetAllCategories(
 	ctx context.Context,
-) (_ret []gokick.CategoryResponse, _err error) {
+) (_ret []kickcom.CategoryV1Short, _err error) {
 	logger.Debugf(ctx, "GetAllCategories")
 	defer func() { logger.Debugf(ctx, "/GetAllCategories: len:%d, %v", len(_ret), _err) }()
 
-	reply, err := k.Client.GetCategories(ctx, gokick.NewCategoryListFilter())
+	//reply, err := k.Client.GetCategories(ctx, gokick.NewCategoryListFilter())
+	reply, err := k.ClientOBSOLETE.GetSubcategoriesV1(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get subcategories: %w", err)
 	}
 
-	return reply.Result, nil
+	return *reply, nil
 }
 
 func (k *Kick) GetChatMessagesChan(
@@ -473,7 +482,7 @@ func (k *Kick) GetChatMessagesChan(
 func (k *Kick) SendChatMessage(ctx context.Context, message string) (_err error) {
 	logger.Debugf(ctx, "SendChatMessage(ctx, '%s')", message)
 	defer func() { logger.Debugf(ctx, "/SendChatMessage(ctx, '%s'): %v", message, _err) }()
-	resp, err := k.Client.SendChatMessage(ctx, &k.Channel.BroadcasterUserID, message, nil, gokick.MessageTypeUser)
+	resp, err := k.Client.SendChatMessage(ctx, ptr(int(k.Channel.UserID)), message, nil, gokick.MessageTypeUser)
 	logger.Debugf(ctx, "SendChatMessage(ctx, '%s'): %#+v", message, resp)
 	return err
 }
@@ -508,7 +517,7 @@ func (k *Kick) BanUser(
 			return nil
 		}
 	}
-	resp, err := k.Client.BanUser(ctx, k.Channel.BroadcasterUserID, int(userIDInt), duration, reasonPtr)
+	resp, err := k.Client.BanUser(ctx, int(k.Channel.UserID), int(userIDInt), duration, reasonPtr)
 	logger.Debugf(ctx, "BanUser(ctx, %d, '%s', %v): %#+v", userID, reason, deadline, resp)
 	return err
 }
@@ -596,7 +605,7 @@ func (k *Kick) prepareNoLock(ctx context.Context) error {
 func (k *Kick) initChannelInfo(
 	ctx context.Context,
 ) error {
-	var channel *gokick.ChannelResponse
+	//var channel *gokick.ChannelResponse
 	cache := CacheFromCtx(ctx)
 	if chanInfo := cache.GetChanInfo(); chanInfo != nil && chanInfo.Slug == k.CurrentConfig.Config.Channel {
 		logger.Debugf(ctx, "reuse the cache, instead of querying channel info")
@@ -606,22 +615,23 @@ func (k *Kick) initChannelInfo(
 
 	for {
 		slug := k.CurrentConfig.Config.Channel
-		channelResp, err := k.Client.GetChannels(ctx, gokick.NewChannelListFilter().SetSlug([]string{slug}))
+		chanInfo, err := k.ClientOBSOLETE.GetChannelV1(ctx, slug)
+		//channelResp, err := k.Client.GetChannels(ctx, gokick.NewChannelListFilter().SetSlug([]string{slug}))
 		if err != nil {
 			logger.Errorf(ctx, "unable to get the channel info (slug: '%s'): %v", slug, err)
 			time.Sleep(time.Second)
 			continue
 		}
-		if len(channelResp.Result) != 1 {
+		/*if len(channelResp.Result) != 1 {
 			logger.Errorf(ctx, "expected to find one channel with name '%s', but found %d", slug, len(channelResp.Result))
 			time.Sleep(30 * time.Second)
 			continue
 		}
-		channel = &channelResp.Result[0]
+		channel = &channelResp.Result[0]*/
 		if cache != nil {
-			cache.SetChanInfo(channel)
+			cache.SetChanInfo(chanInfo)
 		}
-		k.Channel = channel
+		k.Channel = chanInfo
 		return nil
 	}
 }
