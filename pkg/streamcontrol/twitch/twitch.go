@@ -939,5 +939,43 @@ func (t *Twitch) Shoutout(
 	if err != nil {
 		return fmt.Errorf("unable to send the shoutout (%#+v): %w", params, err)
 	}
+
+	reply, err := t.client.GetStreams(&helix.StreamsParams{
+		UserIDs: []string{string(chanID)},
+	})
+	if err != nil {
+		logger.Errorf(ctx, "unable to get channel info ('%s'): %w", chanID, err)
+		return t.sendShoutoutMessageWithoutChanInfo(ctx, chanID)
+	}
+	if len(reply.Data.Streams) == 0 {
+		return t.sendShoutoutMessageWithoutChanInfo(ctx, chanID)
+	}
+	return t.sendShoutoutMessage(ctx, chanID, reply.Data.Streams[0])
+}
+
+func (t *Twitch) sendShoutoutMessageWithoutChanInfo(
+	ctx context.Context,
+	chanID streamcontrol.ChatUserID,
+) (_err error) {
+	logger.Debugf(ctx, "sendShoutoutMessageWithoutChanInfo(ctx, '%s')", chanID)
+	defer func() { logger.Debugf(ctx, "/sendShoutoutMessageWithoutChanInfo(ctx, '%s'): %v", chanID, _err) }()
+	err := t.SendChatMessage(ctx, fmt.Sprintf("Shoutout to %s! Great creator! Take a look at their channel and click that follow button! https://www.twitch.tv/%s", chanID, chanID))
+	if err != nil {
+		return fmt.Errorf("unable to send the message (case #0): %w", err)
+	}
+	return nil
+}
+
+func (t *Twitch) sendShoutoutMessage(
+	ctx context.Context,
+	chanID streamcontrol.ChatUserID,
+	stream helix.Stream,
+) (_err error) {
+	logger.Debugf(ctx, "sendShoutoutMessage(ctx, '%s')", chanID)
+	defer func() { logger.Debugf(ctx, "/sendShoutoutMessage(ctx, '%s'): %v", chanID, _err) }()
+	err := t.SendChatMessage(ctx, fmt.Sprintf("Shoutout to %s! Great creator! Their last stream: '%s'. Take a look at their channel and click that follow button! https://www.twitch.tv/%s", chanID, stream.Title, chanID))
+	if err != nil {
+		return fmt.Errorf("unable to send the message (case #1): %w", err)
+	}
 	return nil
 }

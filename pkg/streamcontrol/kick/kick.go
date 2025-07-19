@@ -28,16 +28,17 @@ type ReverseEngClient interface {
 }
 
 type Kick struct {
-	CloseCtx          context.Context
-	CloseFn           context.CancelFunc
-	Channel           *kickcom.ChannelV1
-	Client            *gokick.Client
-	ClientOBSOLETE    *kickcom.Kick
-	ChatHandler       *ChatHandlerOBSOLETE
-	ChatHandlerLocker xsync.CtxLocker
-	CurrentConfig     Config
-	SaveCfgFn         func(Config) error
-	PrepareLocker     xsync.Mutex
+	CloseCtx            context.Context
+	CloseFn             context.CancelFunc
+	Channel             *kickcom.ChannelV1
+	Client              *gokick.Client
+	ClientOBSOLETE      *kickcom.Kick
+	ChatHandler         *ChatHandlerOBSOLETE
+	ChatHandlerLocker   xsync.CtxLocker
+	CurrentConfig       Config
+	CurrentConfigLocker xsync.Mutex
+	SaveCfgFn           func(Config) error
+	PrepareLocker       xsync.Mutex
 
 	lazyInitOnce          sync.Once
 	getAccessTokenLocker  xsync.Mutex
@@ -57,9 +58,10 @@ func New(
 	}
 
 	options := &gokick.ClientOptions{
-		UserAccessToken: cfg.Config.UserAccessToken.Get(),
-		ClientID:        cfg.Config.ClientID,
-		ClientSecret:    cfg.Config.ClientSecret.Get(),
+		UserAccessToken:  cfg.Config.UserAccessToken.Get(),
+		UserRefreshToken: cfg.Config.RefreshToken.Get(),
+		ClientID:         cfg.Config.ClientID,
+		ClientSecret:     cfg.Config.ClientSecret.Get(),
 	}
 	client, err := gokick.NewClient(options)
 	if err != nil {
@@ -81,7 +83,23 @@ func New(
 		ClientOBSOLETE:    clientOld,
 		SaveCfgFn:         saveCfgFn,
 	}
+	client.OnUserAccessTokenRefreshed(k.onUserAccessTokenRefreshed)
 	return k, nil
+}
+
+func (k *Kick) onUserAccessTokenRefreshed(
+	userAccessToken string,
+	refreshToken string,
+) {
+	ctx := context.TODO()
+	k.CurrentConfigLocker.Do(ctx, func() {
+		k.CurrentConfig.Config.UserAccessToken.Set(userAccessToken)
+		k.CurrentConfig.Config.RefreshToken.Set(refreshToken)
+		err := k.SaveCfgFn(k.CurrentConfig)
+		if err != nil {
+			logger.Errorf(ctx, "unable to save the config: %v", err)
+		}
+	})
 }
 
 func (k *Kick) initChatHandler(
@@ -666,7 +684,7 @@ func (k *Kick) IsCapable(
 	case streamcontrol.CapabilityBanUser:
 		return true
 	case streamcontrol.CapabilityShoutout:
-		return false
+		return true
 	case streamcontrol.CapabilityIsChannelStreaming:
 		return false
 	case streamcontrol.CapabilityRaid:
@@ -693,5 +711,40 @@ func (k *Kick) Shoutout(
 	ctx context.Context,
 	chanID streamcontrol.ChatUserID,
 ) error {
-	return fmt.Errorf("not implemented")
+	reply, err := k.ClientOBSOLETE.GetChannelV1(ctx, string(chanID))
+	if err != nil {
+		logger.Errorf(ctx, "unable to get channel info ('%s'): %w", chanID, err)
+		return k.sendShoutoutMessageWithoutChanInfo(ctx, chanID)
+	}
+	if len(reply.PreviousLivestreams) == 0 {
+		return k.sendShoutoutMessageWithoutChanInfo(ctx, chanID)
+	}
+	return k.sendShoutoutMessage(ctx, chanID, reply.PreviousLivestreams[0])
+}
+
+func (k *Kick) sendShoutoutMessageWithoutChanInfo(
+	ctx context.Context,
+	chanID streamcontrol.ChatUserID,
+) (_err error) {
+	logger.Debugf(ctx, "sendShoutoutMessageWithoutChanInfo(ctx, '%s')", chanID)
+	defer func() { logger.Debugf(ctx, "/sendShoutoutMessageWithoutChanInfo(ctx, '%s'): %v", chanID, _err) }()
+	err := k.SendChatMessage(ctx, fmt.Sprintf("Shoutout to %s! Great creator! Take a look at their channel and click that follow button! https://www.twitch.tv/%s", chanID, chanID))
+	if err != nil {
+		return fmt.Errorf("unable to send the message (case #0): %w", err)
+	}
+	return nil
+}
+
+func (k *Kick) sendShoutoutMessage(
+	ctx context.Context,
+	chanID streamcontrol.ChatUserID,
+	stream kickcom.LivestreamV1,
+) (_err error) {
+	logger.Debugf(ctx, "sendShoutoutMessage(ctx, '%s')", chanID)
+	defer func() { logger.Debugf(ctx, "/sendShoutoutMessage(ctx, '%s'): %v", chanID, _err) }()
+	err := k.SendChatMessage(ctx, fmt.Sprintf("Shoutout to %s! Great creator! Their last stream: '%s'. Take a look at their channel and click that follow button! https://kick.com/%s", chanID, stream.SessionTitle, chanID))
+	if err != nil {
+		return fmt.Errorf("unable to send the message (case #1): %w", err)
+	}
+	return nil
 }

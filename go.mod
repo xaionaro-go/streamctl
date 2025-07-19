@@ -332,6 +332,7 @@ require (
 	github.com/cloudwego/eino-ext/components/model/openai v0.0.0-20250424061409-ccd60fbc7c1c
 	github.com/coder/websocket v1.8.13
 	github.com/joeyak/go-twitch-eventsub/v3 v3.0.0
+	github.com/jweslley/localtunnel v0.1.0
 	github.com/phuslu/goid v1.0.2 // indirect
 	github.com/pion/datachannel v1.5.10 // indirect
 	github.com/pion/dtls/v2 v2.2.12 // indirect

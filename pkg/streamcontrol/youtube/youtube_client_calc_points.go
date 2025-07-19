@@ -218,3 +218,13 @@ func (c *YouTubeClientCalcPoints) GetLiveChatMessages(
 	defer func() { c.addUsedPointsIfNoError(ctx, 1, _err) }()
 	return c.Client.GetLiveChatMessages(ctx, chatID, pageToken, parts)
 }
+
+func (c *YouTubeClientCalcPoints) Search(
+	ctx context.Context,
+	chanID string,
+	eventType EventType,
+	parts []string,
+) (_ret *youtube.SearchListResponse, _err error) {
+	defer func() { c.addUsedPointsIfNoError(ctx, 1, _err) }()
+	return c.Client.Search(ctx, chanID, eventType, parts)
+}

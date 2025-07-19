@@ -1133,6 +1133,8 @@ func (p *Panel) getUpdatedStatus_backends(ctx context.Context) {
 	})
 }
 func (p *Panel) getUpdatedStatus_backends_noLock(ctx context.Context) {
+	logger.Tracef(ctx, "getUpdatedStatus_backends_noLock")
+	defer logger.Tracef(ctx, "/getUpdatedStatus_backends_noLock")
 	backendEnabled := map[streamcontrol.PlatformName]bool{}
 	for _, backendID := range []streamcontrol.PlatformName{
 		obs.ID,
@@ -1206,6 +1208,9 @@ func (p *Panel) getUpdatedStatus_startStopStreamButton(ctx context.Context) {
 }
 
 func (p *Panel) getUpdatedStatus_startStopStreamButton_noLock(ctx context.Context) {
+	logger.Debugf(ctx, "getUpdatedStatus_startStopStreamButton_noLock")
+	defer logger.Debugf(ctx, "/getUpdatedStatus_startStopStreamButton_noLock")
+
 	obsIsEnabled, _ := p.StreamD.IsBackendEnabled(ctx, obs.ID)
 	if obsIsEnabled {
 		obsStreamStatus, err := p.StreamD.GetStreamStatus(ctx, obs.ID)
@@ -1432,8 +1437,7 @@ func (p *Panel) initMainWindow(
 			return
 		}
 
-		p.startStopButton.OnTapped()
-		p.startStopButton.OnTapped()
+		p.setupStreamButton.OnTapped()
 	}
 	p.streamTitleLabel = widget.NewLabel("")
 	p.streamTitleLabel.Wrapping = fyne.TextWrapWord
@@ -1472,8 +1476,7 @@ func (p *Panel) initMainWindow(
 			return
 		}
 
-		p.startStopButton.OnTapped()
-		p.startStopButton.OnTapped()
+		p.setupStreamButton.OnTapped()
 	}
 	p.streamDescriptionLabel = widget.NewLabel("")
 	streamDescriptionButton := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
@@ -1516,7 +1519,7 @@ func (p *Panel) initMainWindow(
 	p.twitchCheck.Disable()
 
 	p.kickCheck = widget.NewCheck("Kick", nil)
-	p.kickCheck.SetChecked(false)
+	p.kickCheck.SetChecked(true)
 	p.kickCheck.Disable()
 
 	p.youtubeCheck = widget.NewCheck("YouTube", nil)
@@ -1939,9 +1942,10 @@ func (p *Panel) subscribeUpdateControlPage(ctx context.Context) {
 		t := time.NewTicker(time.Second * 5)
 		defer t.Stop()
 		for {
-			var ok bool
+			ok := true
 			select {
 			case <-ctx.Done():
+				logger.Debugf(ctx, "subscribeUpdateControlPage: context closed")
 				return
 			case _, ok = <-chStreams:
 			case _, ok = <-restartChStreams:
@@ -1950,7 +1954,7 @@ func (p *Panel) subscribeUpdateControlPage(ctx context.Context) {
 			case <-t.C:
 			}
 			if !ok {
-				return
+				logger.Debugf(ctx, "subscribeUpdateControlPage: channel closed")
 			}
 			p.getUpdatedStatus(ctx)
 		}
@@ -2117,6 +2121,12 @@ func (p *Panel) setupStreamNoLock(ctx context.Context) {
 			deadline := time.Now().Add(waitFor)
 
 			p.streamMutex.Do(ctx, func() {
+				defer func(){
+					p.startStopButton.SetText(startStreamString())
+					p.startStopButton.Icon = theme.MediaRecordIcon()
+					p.startStopButton.Importance = widget.SuccessImportance
+					p.startStopButton.Enable()
+				}()
 				p.startStopButton.Disable()
 				p.startStopButton.Icon = theme.ViewRefreshIcon()
 				p.startStopButton.Importance = widget.DangerImportance

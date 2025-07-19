@@ -134,7 +134,7 @@ DOCKER_CONTAINER_NAME?=streampanel-android-builder
 
 dockerbuilder-android-arm64:
 	docker pull  $(DOCKER_IMAGE)
-	docker start $(DOCKER_IMAGE) >/dev/null 2>&1 || \
+	docker start $(DOCKER_CONTAINER_NAME) >/dev/null 2>&1 || \
 		docker run \
 			--detach \
 			--init \

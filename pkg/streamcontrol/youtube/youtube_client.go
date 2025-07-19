@@ -54,7 +54,16 @@ type YouTubeClient interface {
 	InsertCommentThread(ctx context.Context, t *youtube.CommentThread, parts []string) error
 	ListChatMessages(ctx context.Context, chatID string, parts []string) (*youtube.LiveChatMessageListResponse, error)
 	DeleteChatMessage(ctx context.Context, messageID string) error
+	Search(ctx context.Context, chanID string, eventType EventType, parts []string) (*youtube.SearchListResponse, error)
 }
+
+type EventType string
+
+const (
+	EventTypeCompleted = EventType("completed")
+	EventTypeLive      = EventType("live")
+	EventTypeUpcoming  = EventType("upcoming")
+)
 
 type YouTubeClientV3 struct {
 	*youtube.Service
@@ -322,6 +331,24 @@ func (c *YouTubeClientV3) GetLiveChatMessages(
 	q := c.Service.LiveChatMessages.List(chatID, parts).Context(ctx)
 	if pageToken != "" {
 		q = q.PageToken(pageToken)
+	}
+	return q.Do()
+}
+
+func (c *YouTubeClientV3) Search(
+	ctx context.Context,
+	chanID string,
+	eventType EventType,
+	parts []string,
+) (_ret *youtube.SearchListResponse, _err error) {
+	logger.Tracef(ctx, "Search")
+	defer func() { logger.Tracef(ctx, "/Search: %v", _err) }()
+	q := c.Service.Search.List(parts).Context(ctx).Order("date").MaxResults(50)
+	if chanID != "" {
+		q = q.ChannelId(chanID)
+	}
+	if eventType != "" {
+		q = q.EventType(string(eventType))
 	}
 	return q.Do()
 }

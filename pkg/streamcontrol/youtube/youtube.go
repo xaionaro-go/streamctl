@@ -235,6 +235,8 @@ func getAuthCfgBase(cfg Config) *oauth2.Config {
 		Endpoint:     google.Endpoint,
 		Scopes: []string{
 			"https://www.googleapis.com/auth/youtube",
+			"https://www.googleapis.com/auth/youtube.force-ssl",
+			"https://www.googleapis.com/auth/youtube.upload",
 		},
 	}
 }
@@ -1012,8 +1014,10 @@ func (yt *YouTube) startChatListener(
 		yt.chatListeners[broadcast.Id] = _chatListener
 		return oldListener
 	})
-	if err := oldListener.Close(ctx); err != nil {
-		logger.Debugf(ctx, "unable to close the old chat listener: %v", err)
+	if oldListener != nil {
+		if err := oldListener.Close(ctx); err != nil {
+			logger.Debugf(ctx, "unable to close the old chat listener: %v", err)
+		}
 	}
 
 	observability.Go(ctx, func(ctx context.Context) {
@@ -1509,9 +1513,9 @@ func (yt *YouTube) IsCapable(
 	case streamcontrol.CapabilityBanUser:
 		return false
 	case streamcontrol.CapabilityShoutout:
-		return false
+		return true
 	case streamcontrol.CapabilityIsChannelStreaming:
-		return false
+		return true
 	case streamcontrol.CapabilityRaid:
 		return false
 	}
@@ -1522,13 +1526,19 @@ func (yt *YouTube) IsChannelStreaming(
 	ctx context.Context,
 	chanID streamcontrol.ChatUserID,
 ) (bool, error) {
-	return false, fmt.Errorf("not implemented")
+	resp, err := yt.YouTubeClient.Search(ctx, string(chanID), EventTypeLive, []string{"snippet"})
+	if err != nil {
+		return false, fmt.Errorf("unable to search: %w", err)
+	}
+
+	return len(resp.Items) > 0, nil
 }
 
 func (yt *YouTube) RaidTo(
 	ctx context.Context,
 	chanID streamcontrol.ChatUserID,
 ) error {
+	// https://issuetracker.google.com/issues/408498307?pli=1
 	return fmt.Errorf("not implemented")
 }
 
@@ -1536,5 +1546,30 @@ func (yt *YouTube) Shoutout(
 	ctx context.Context,
 	chanID streamcontrol.ChatUserID,
 ) error {
-	return fmt.Errorf("not implemented")
+	resp, err := yt.YouTubeClient.Search(ctx, string(chanID), "", []string{"snippet"})
+	if err != nil {
+		logger.Errorf(ctx, "unable to get channel info ('%s'): %w", chanID, err)
+		return yt.shoutoutWithoutSearch(ctx, chanID)
+	}
+	if len(resp.Items) == 0 {
+		return yt.shoutoutWithoutSearch(ctx, chanID)
+	}
+	lastStream := resp.Items[0]
+
+	err = yt.SendChatMessage(ctx, fmt.Sprintf("Shoutout to %s! Great creator! Their last stream: '%s'. Take a look at their channel and click that subscribe button! https://www.youtube.com/channel/%s", lastStream.Snippet.ChannelTitle, lastStream.Snippet.Title, chanID))
+	if err != nil {
+		return fmt.Errorf("unable to send the message (case #0): %w", err)
+	}
+	return nil
+}
+
+func (yt *YouTube) shoutoutWithoutSearch(
+	ctx context.Context,
+	chanID streamcontrol.ChatUserID,
+) error {
+	err := yt.SendChatMessage(ctx, fmt.Sprintf("Shoutout to a great creator! Take a look at their channel and click that subscribe button! https://www.youtube.com/channel/%s", chanID))
+	if err != nil {
+		return fmt.Errorf("unable to send the message (case #1): %w", err)
+	}
+	return nil
 }

@@ -2657,7 +2657,7 @@ func (c *Client) SubmitEvent(
 		)
 	})
 	if err != nil {
-		return fmt.Errorf("unable to submit the event: %w", err)
+		return fmt.Errorf("unable to query: %w", err)
 	}
 	return nil
 }
@@ -2714,7 +2714,7 @@ func (c *Client) RemoveChatMessage(
 		)
 	})
 	if err != nil {
-		return fmt.Errorf("unable to submit the event: %w", err)
+		return fmt.Errorf("unable to query: %w", err)
 	}
 	return nil
 }
@@ -2747,7 +2747,7 @@ func (c *Client) BanUser(
 		)
 	})
 	if err != nil {
-		return fmt.Errorf("unable to submit the event: %w", err)
+		return fmt.Errorf("unable to query: %w", err)
 	}
 	return nil
 }
@@ -2773,7 +2773,7 @@ func (c *Client) SendChatMessage(
 		)
 	})
 	if err != nil {
-		return fmt.Errorf("unable to submit the event: %w", err)
+		return fmt.Errorf("unable to query: %w", err)
 	}
 	return nil
 }
@@ -2799,7 +2799,7 @@ func (c *Client) Shoutout(
 		)
 	})
 	if err != nil {
-		return fmt.Errorf("unable to submit the event: %w", err)
+		return fmt.Errorf("unable to query: %w", err)
 	}
 	return nil
 }
@@ -2825,7 +2825,7 @@ func (c *Client) RaidTo(
 		)
 	})
 	if err != nil {
-		return fmt.Errorf("unable to submit the event: %w", err)
+		return fmt.Errorf("unable to query: %w", err)
 	}
 	return nil
 }
@@ -2879,7 +2879,7 @@ func (c *Client) GetPeerIDs(ctx context.Context) ([]p2ptypes.PeerID, error) {
 		)
 	})
 	if err != nil {
-		return nil, fmt.Errorf("unable to submit the event: %w", err)
+		return nil, fmt.Errorf("unable to query: %w", err)
 	}
 
 	r := make([]p2ptypes.PeerID, 0, len(resp.GetPeerIDs()))
@@ -2915,7 +2915,7 @@ func (c *Client) LLMGenerate(
 		)
 	})
 	if err != nil {
-		return "", fmt.Errorf("unable to submit the event: %w", err)
+		return "", fmt.Errorf("unable to query: %w", err)
 	}
 
 	return resp.GetResponse(), nil

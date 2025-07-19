@@ -188,3 +188,12 @@ func (c *YouTubeClientMock) GetLiveChatMessages(
 	defer func() { logger.Tracef(ctx, "/GetLiveChatMessages: %v", _err) }()
 	return nil, fmt.Errorf("not implemented")
 }
+
+func (c *YouTubeClientMock) Search(
+	ctx context.Context,
+	chanID string,
+	eventType EventType,
+	parts []string,
+) (_ret *youtube.SearchListResponse, _err error) {
+	return nil, fmt.Errorf("not implemented")
+}
