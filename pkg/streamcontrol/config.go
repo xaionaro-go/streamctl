@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"runtime/debug"
 
+	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
@@ -214,6 +216,7 @@ func (cfg *Config) UnmarshalYAML(b []byte) (_err error) {
 		r := recover()
 		if r != nil {
 			_err = fmt.Errorf("got a panic: %v", r)
+			ctx = belt.WithField(ctx, "stack_trace", string(debug.Stack()))
 			errmon.ObserveRecoverCtx(ctx, r)
 		}
 	}()

@@ -234,9 +234,9 @@ func getAuthCfgBase(cfg Config) *oauth2.Config {
 		ClientSecret: cfg.Config.ClientSecret.Get(),
 		Endpoint:     google.Endpoint,
 		Scopes: []string{
-			"https://www.googleapis.com/auth/youtube",
 			"https://www.googleapis.com/auth/youtube.force-ssl",
 			"https://www.googleapis.com/auth/youtube.upload",
+			"https://www.googleapis.com/auth/youtube",
 		},
 	}
 }

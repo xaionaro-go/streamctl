@@ -14,15 +14,18 @@ import (
 	"github.com/nicklaw5/helix/v2"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/xsync"
 )
 
 type ChatHandlerSub struct {
-	client          TwitchSubscriptionClient
-	wsConn          *websocket.Conn
-	broadcasterID   string
-	cancelFunc      context.CancelFunc
-	waitGroup       sync.WaitGroup
-	messagesOutChan chan streamcontrol.ChatMessage
+	client        TwitchSubscriptionClient
+	wsConn        *websocket.Conn
+	broadcasterID string
+	cancelFunc    context.CancelFunc
+	waitGroup     sync.WaitGroup
+
+	messagesOutChan       chan streamcontrol.ChatMessage
+	messagesOutChanLocker xsync.Mutex
 }
 
 var _ ChatHandler = (*ChatHandlerSub)(nil)
@@ -320,7 +323,11 @@ func NewChatHandlerSub(
 	h.waitGroup.Add(1)
 	observability.Go(ctx, func(ctx context.Context) {
 		defer h.waitGroup.Done()
-		defer close(h.messagesOutChan)
+		defer func() {
+			h.messagesOutChanLocker.Do(ctx, func() {
+				close(h.messagesOutChan)
+			})
+		}()
 		if onClose != nil {
 			defer onClose(ctx)
 		}
@@ -344,10 +351,12 @@ func (h *ChatHandlerSub) sendMessage(
 	ctx context.Context,
 	chatMsg streamcontrol.ChatMessage,
 ) {
-	logger.Tracef(ctx, "resulting chat: %#+v", chatMsg)
-	select {
-	case h.messagesOutChan <- chatMsg:
-	default:
-		logger.Errorf(ctx, "the queue is full, have to drop %#+v", chatMsg)
-	}
+	h.messagesOutChanLocker.Do(ctx, func() {
+		logger.Tracef(ctx, "resulting chat: %#+v", chatMsg)
+		select {
+		case h.messagesOutChan <- chatMsg:
+		default:
+			logger.Errorf(ctx, "the queue is full, have to drop %#+v", chatMsg)
+		}
+	})
 }

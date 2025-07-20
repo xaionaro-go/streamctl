@@ -8,6 +8,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"runtime"
+	"runtime/debug"
 	"runtime/pprof"
 	"sync"
 
@@ -205,8 +206,9 @@ func main() {
 		})
 
 		opts := []grpc_recovery.Option{
-			grpc_recovery.WithRecoveryHandler(func(p interface{}) (err error) {
-				errmon.ObserveRecoverCtx(ctx, p)
+			grpc_recovery.WithRecoveryHandlerContext(func(ctx context.Context, r any) (err error) {
+				ctx = belt.WithField(ctx, "stack_trace", string(debug.Stack()))
+				errmon.ObserveRecoverCtx(ctx, r)
 				return nil
 			}),
 		}
