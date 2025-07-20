@@ -1090,6 +1090,8 @@ github.com/xaionaro-go/datacounter v1.0.4 h1:+QMZLmu73R5WGkQfUPwlXF/JFN+Weo4iuDZ
 github.com/xaionaro-go/datacounter v1.0.4/go.mod h1:Sf9vBevuV6w5iE6K3qJ9pWVKcyS60clWBUSQLjt5++c=
 github.com/xaionaro-go/eventbus v0.0.0-20250712221024-f0986ef769fa h1:p4rzmAuKfYTgoHp4yL3qIL3Js4P3I91yhe654L4gnFo=
 github.com/xaionaro-go/eventbus v0.0.0-20250712221024-f0986ef769fa/go.mod h1:zSbWHZpDvsRhjD3Sr3bruqqsWotjXvsIKmx6/THwXFw=
+github.com/xaionaro-go/eventbus v0.0.0-20250720144534-4670758005d9 h1:ZAm8ueMw5D85LDeV1Kboc3ANqXr3LK/eXIl9hj1BJyM=
+github.com/xaionaro-go/eventbus v0.0.0-20250720144534-4670758005d9/go.mod h1:zSbWHZpDvsRhjD3Sr3bruqqsWotjXvsIKmx6/THwXFw=
 github.com/xaionaro-go/fyne/v2 v2.0.0-20250622004601-3a26ee69528a h1:awMQXlaweeiSZB4rSNfMmJGJriyn1ca/m/lglBi9uyA=
 github.com/xaionaro-go/fyne/v2 v2.0.0-20250622004601-3a26ee69528a/go.mod h1:0GOXKqyvNwk3DLmsFu9v0oYM0ZcD1ysGnlHCerKoAmo=
 github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42 h1:izCjREd+62HDF9FRYqUI7dgJNdUxAIysEuqed8lBcDY=

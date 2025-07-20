@@ -344,6 +344,10 @@ func (k *Kick) GetStreamStatus(
 	logger.Debugf(ctx, "GetStreamStatus")
 	defer func() { logger.Debugf(ctx, "/GetStreamStatus: %v, %v", _ret, _err) }()
 
+	if err := k.prepare(ctx); err != nil {
+		return nil, fmt.Errorf("unable to get a prepared client: %w", err)
+	}
+
 	//resp, err := k.Client.GetLivestreams(ctx, gokick.NewLivestreamListFilter().SetBroadcasterUserIDs(k.Channel.BroadcasterUserID))
 	info, err := k.ClientOBSOLETE.GetLivestreamV2(ctx, k.Channel.Slug)
 	if err != nil {
@@ -409,6 +413,10 @@ func (k *Kick) getStreamStatusUsingNormalClient(
 	logger.Debugf(ctx, "getStreamStatusUsingNormalClient")
 	defer func() { logger.Debugf(ctx, "/getStreamStatusUsingNormalClient: %v %v", _ret, _err) }()
 
+	if err := k.prepare(ctx); err != nil {
+		return nil, fmt.Errorf("unable to get a prepared client: %w", err)
+	}
+
 	resp, err := k.GetClient().GetChannels(
 		ctx,
 		gokick.NewChannelListFilter().SetBroadcasterUserIDs([]int{int(k.Channel.UserID)}),
@@ -473,6 +481,10 @@ func (k *Kick) GetChatMessagesChan(
 	logger.Debugf(ctx, "GetChatMessagesChan")
 	defer func() { logger.Debugf(ctx, "/GetChatMessagesChan") }()
 
+	if err := k.prepare(ctx); err != nil {
+		return nil, fmt.Errorf("unable to get a prepared client: %w", err)
+	}
+
 	outCh := make(chan streamcontrol.ChatMessage)
 	observability.Go(ctx, func(ctx context.Context) {
 		defer func() {
@@ -518,6 +530,11 @@ func (k *Kick) GetChatMessagesChan(
 func (k *Kick) SendChatMessage(ctx context.Context, message string) (_err error) {
 	logger.Debugf(ctx, "SendChatMessage(ctx, '%s')", message)
 	defer func() { logger.Debugf(ctx, "/SendChatMessage(ctx, '%s'): %v", message, _err) }()
+
+	if err := k.prepare(ctx); err != nil {
+		return fmt.Errorf("unable to get a prepared client: %w", err)
+	}
+
 	resp, err := k.GetClient().SendChatMessage(ctx, ptr(int(k.Channel.UserID)), message, nil, gokick.MessageTypeUser)
 	logger.Debugf(ctx, "SendChatMessage(ctx, '%s'): %#+v", message, resp)
 	return err
@@ -536,6 +553,10 @@ func (k *Kick) BanUser(
 ) (_err error) {
 	logger.Debugf(ctx, "BanUser(ctx, %d, '%s', %v): %#+v", userID, reason, deadline)
 	defer func() { logger.Debugf(ctx, "/BanUser(ctx, %d, '%s', %v): %#+v", userID, reason, deadline, _err) }()
+
+	if err := k.prepare(ctx); err != nil {
+		return fmt.Errorf("unable to get a prepared client: %w", err)
+	}
 
 	userIDInt, err := strconv.ParseInt(string(userID), 10, 64)
 	if err != nil {
@@ -620,6 +641,13 @@ func (k *Kick) prepare(ctx context.Context) (_err error) {
 }
 
 func (k *Kick) prepareNoLock(ctx context.Context) error {
+	if k == nil {
+		return fmt.Errorf("k == nil")
+	}
+	if k.ClientOBSOLETE == nil {
+		return fmt.Errorf("k.ClientOBSOLETE == nil")
+	}
+
 	err := k.getAccessTokenIfNeeded(ctx)
 	if err != nil {
 		return fmt.Errorf("getAccessTokenIfNeeded: %w", err)
@@ -714,21 +742,42 @@ func (k *Kick) IsCapable(
 func (k *Kick) IsChannelStreaming(
 	ctx context.Context,
 	chanID streamcontrol.ChatUserID,
-) (bool, error) {
+) (_ret bool, _err error) {
+	logger.Debugf(ctx, "IsChannelStreaming(ctx, '%s')", chanID)
+	defer func() { logger.Debugf(ctx, "/IsChannelStreaming(ctx, '%s'): %v", chanID, _ret, _err) }()
+
+	if err := k.prepare(ctx); err != nil {
+		return false, fmt.Errorf("unable to get a prepared client: %w", err)
+	}
+
 	return false, fmt.Errorf("not implemented")
 }
 
 func (k *Kick) RaidTo(
 	ctx context.Context,
 	chanID streamcontrol.ChatUserID,
-) error {
+) (_err error) {
+	logger.Debugf(ctx, "RaidTo(ctx, '%s')", chanID)
+	defer func() { logger.Debugf(ctx, "/RaidTo(ctx, '%s'): %v", chanID, _err) }()
+
+	if err := k.prepare(ctx); err != nil {
+		return fmt.Errorf("unable to get a prepared client: %w", err)
+	}
+
 	return fmt.Errorf("not implemented")
 }
 
 func (k *Kick) Shoutout(
 	ctx context.Context,
 	chanID streamcontrol.ChatUserID,
-) error {
+) (_err error) {
+	logger.Debugf(ctx, "Shoutout(ctx, '%s')", chanID)
+	defer func() { logger.Debugf(ctx, "/Shoutout(ctx, '%s'): %v", chanID, _err) }()
+
+	if err := k.prepare(ctx); err != nil {
+		return fmt.Errorf("unable to get a prepared client: %w", err)
+	}
+
 	reply, err := k.ClientOBSOLETE.GetChannelV1(ctx, string(chanID))
 	if err != nil {
 		logger.Errorf(ctx, "unable to get channel info ('%s'): %w", chanID, err)
@@ -746,10 +795,16 @@ func (k *Kick) sendShoutoutMessageWithoutChanInfo(
 ) (_err error) {
 	logger.Debugf(ctx, "sendShoutoutMessageWithoutChanInfo(ctx, '%s')", chanID)
 	defer func() { logger.Debugf(ctx, "/sendShoutoutMessageWithoutChanInfo(ctx, '%s'): %v", chanID, _err) }()
+
+	if err := k.prepare(ctx); err != nil {
+		return fmt.Errorf("unable to get a prepared client: %w", err)
+	}
+
 	err := k.SendChatMessage(ctx, fmt.Sprintf("Shoutout to %s! Great creator! Take a look at their channel and click that follow button! https://www.twitch.tv/%s", chanID, chanID))
 	if err != nil {
 		return fmt.Errorf("unable to send the message (case #0): %w", err)
 	}
+
 	return nil
 }
 
@@ -760,9 +815,11 @@ func (k *Kick) sendShoutoutMessage(
 ) (_err error) {
 	logger.Debugf(ctx, "sendShoutoutMessage(ctx, '%s')", chanID)
 	defer func() { logger.Debugf(ctx, "/sendShoutoutMessage(ctx, '%s'): %v", chanID, _err) }()
+
 	err := k.SendChatMessage(ctx, fmt.Sprintf("Shoutout to %s! Great creator! Their last stream: '%s'. Take a look at their channel and click that follow button! https://kick.com/%s", chanID, stream.SessionTitle, chanID))
 	if err != nil {
 		return fmt.Errorf("unable to send the message (case #1): %w", err)
 	}
+
 	return nil
 }

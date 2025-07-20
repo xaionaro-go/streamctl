@@ -40,7 +40,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/nicklaw5/helix/v2 v2.30.1-0.20240715193454-0151ccccf980
 	github.com/spf13/cobra v1.8.1
-	github.com/xaionaro-go/eventbus v0.0.0-20250712221024-f0986ef769fa
+	github.com/xaionaro-go/eventbus v0.0.0-20250720144534-4670758005d9
 	github.com/xaionaro-go/logrustash v0.0.0-20240804141650-d48034780a5f // indirect
 	golang.org/x/oauth2 v0.30.0
 	google.golang.org/api v0.239.0

@@ -2121,7 +2121,7 @@ func (p *Panel) setupStreamNoLock(ctx context.Context) {
 			deadline := time.Now().Add(waitFor)
 
 			p.streamMutex.Do(ctx, func() {
-				defer func(){
+				defer func() {
 					p.startStopButton.SetText(startStreamString())
 					p.startStopButton.Icon = theme.MediaRecordIcon()
 					p.startStopButton.Importance = widget.SuccessImportance
