@@ -138,10 +138,10 @@ func (c *Client) HandleRPC(
 ) {
 	switch s := s.(type) {
 	case *stats.InPayload:
-		logger.Debugf(ctx, "in-payload size: %d", s.WireLength)
+		logger.Tracef(ctx, "in-payload size: %d", s.WireLength)
 		atomic.AddUint64(&c.Stats.BytesIn, uint64(s.WireLength))
 	case *stats.OutPayload:
-		logger.Debugf(ctx, "out-payload size: %d", s.WireLength)
+		logger.Tracef(ctx, "out-payload size: %d", s.WireLength)
 		atomic.AddUint64(&c.Stats.BytesOut, uint64(s.WireLength))
 	}
 }
