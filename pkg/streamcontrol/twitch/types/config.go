@@ -4,12 +4,9 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/buildvars"
 	"github.com/xaionaro-go/streamctl/pkg/secret"
 	streamctl "github.com/xaionaro-go/streamctl/pkg/streamcontrol"
-	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/auth"
 )
 
 const ID = streamctl.PlatformName("twitch")
-
-type OAuthHandler = auth.OAuthHandler
 
 type PlatformSpecificConfig struct {
 	Channel             string

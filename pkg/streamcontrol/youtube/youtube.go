@@ -41,7 +41,7 @@ const (
 type YouTube struct {
 	locker         xsync.Mutex
 	Config         Config
-	YouTubeClient  *YouTubeClientCalcPoints
+	YouTubeClient  *ClientCalcPoints
 	CancelFunc     context.CancelFunc
 	SaveConfigFunc func(Config) error
 
@@ -208,12 +208,12 @@ func (yt *YouTube) initNoLock(ctx context.Context) (_err error) {
 		return fmt.Errorf("the token is invalid: %w", err)
 	}
 
-	var youtubeClient YouTubeClient
+	var youtubeClient client
 	if debugUseMockClient {
-		youtubeClient = NewYouTubeClientMock()
+		youtubeClient = newClientMock()
 	} else {
 		var err error
-		youtubeClient, err = NewYouTubeClientV3(
+		youtubeClient, err = newClientV3(
 			ctx,
 			yt.wrapRequest,
 			option.WithTokenSource(tokenSource),

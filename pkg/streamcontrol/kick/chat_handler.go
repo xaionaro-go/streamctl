@@ -12,14 +12,6 @@ type ChatHandler struct {
 	onClose func(context.Context)
 }
 
-func (k *Kick) newChatHandler(
-	ctx context.Context,
-	broadcasterUserID *int,
-	onClose func(context.Context),
-) (*ChatHandler, error) {
-	return NewChatHandler(ctx, k.Client, broadcasterUserID, onClose)
-}
-
 func NewChatHandler(
 	ctx context.Context,
 	client *gokick.Client,

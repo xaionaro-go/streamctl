@@ -17,20 +17,20 @@ import (
 type ChatListener struct {
 	videoID    string
 	liveChatID string
-	client     YouTubeChatClient
+	client     ChatClient
 
 	wg              sync.WaitGroup
 	cancelFunc      context.CancelFunc
 	messagesOutChan chan streamcontrol.ChatMessage
 }
 
-type YouTubeChatClient interface {
+type ChatClient interface {
 	GetLiveChatMessages(ctx context.Context, chatID string, pageToken string, parts []string) (*youtube.LiveChatMessageListResponse, error)
 }
 
 func NewChatListener(
 	ctx context.Context,
-	ytClient YouTubeChatClient,
+	ytClient ChatClient,
 	videoID string,
 	liveChatID string,
 ) (*ChatListener, error) {

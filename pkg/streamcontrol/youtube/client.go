@@ -36,8 +36,8 @@ func (t BroadcastType) String() string {
 	return fmt.Sprintf("unexpected_value_%d", int(t))
 }
 
-type YouTubeClient interface {
-	YouTubeChatClient
+type client interface {
+	ChatClient
 	Ping(context.Context) error
 	GetBroadcasts(ctx context.Context, t BroadcastType, ids []string, parts []string, pageToken string) (*youtube.LiveBroadcastListResponse, error)
 	UpdateBroadcast(context.Context, *youtube.LiveBroadcast, []string) error
@@ -65,7 +65,7 @@ const (
 	EventTypeUpcoming  = EventType("upcoming")
 )
 
-type YouTubeClientV3 struct {
+type clientV3 struct {
 	*youtube.Service
 	RequestWrapper func(context.Context, func(context.Context) error) error
 }
@@ -106,24 +106,24 @@ func wrapRequestR[T any](
 	return
 }
 
-var _ YouTubeClient = (*YouTubeClientV3)(nil)
+var _ client = (*clientV3)(nil)
 
-func NewYouTubeClientV3(
+func newClientV3(
 	ctx context.Context,
 	requestWrapper func(context.Context, func(context.Context) error) error,
 	opts ...option.ClientOption,
-) (*YouTubeClientV3, error) {
+) (*clientV3, error) {
 	srv, err := youtube.NewService(ctx, opts...)
 	if err != nil {
 		return nil, err
 	}
-	return &YouTubeClientV3{
+	return &clientV3{
 		Service:        srv,
 		RequestWrapper: requestWrapper,
 	}, nil
 }
 
-func (c *YouTubeClientV3) Ping(
+func (c *clientV3) Ping(
 	ctx context.Context,
 ) (_err error) {
 	logger.Tracef(ctx, "Ping")
@@ -141,7 +141,7 @@ func (c *YouTubeClientV3) Ping(
 	return err
 }
 
-func (c *YouTubeClientV3) GetBroadcasts(
+func (c *clientV3) GetBroadcasts(
 	ctx context.Context,
 	t BroadcastType,
 	ids []string,
@@ -171,7 +171,7 @@ func (c *YouTubeClientV3) GetBroadcasts(
 	return wrapRequestR(ctx, c.RequestWrapper, r.Do, googleapi.QueryParameter("order", "date"))
 }
 
-func (c *YouTubeClientV3) UpdateBroadcast(
+func (c *clientV3) UpdateBroadcast(
 	ctx context.Context,
 	broadcast *youtube.LiveBroadcast,
 	parts []string,
@@ -182,7 +182,7 @@ func (c *YouTubeClientV3) UpdateBroadcast(
 	return wrapRequestS(ctx, c.RequestWrapper, do)
 }
 
-func (c *YouTubeClientV3) InsertBroadcast(
+func (c *clientV3) InsertBroadcast(
 	ctx context.Context,
 	broadcast *youtube.LiveBroadcast,
 	parts []string,
@@ -192,7 +192,7 @@ func (c *YouTubeClientV3) InsertBroadcast(
 	return c.Service.LiveBroadcasts.Insert(parts, broadcast).Context(ctx).Do()
 }
 
-func (c *YouTubeClientV3) DeleteBroadcast(
+func (c *clientV3) DeleteBroadcast(
 	ctx context.Context,
 	broadcastID string,
 ) (_err error) {
@@ -202,7 +202,7 @@ func (c *YouTubeClientV3) DeleteBroadcast(
 	return wrapRequest(ctx, c.RequestWrapper, do)
 }
 
-func (c *YouTubeClientV3) InsertCuepoint(
+func (c *clientV3) InsertCuepoint(
 	ctx context.Context,
 	p *youtube.Cuepoint,
 ) (_err error) {
@@ -212,7 +212,7 @@ func (c *YouTubeClientV3) InsertCuepoint(
 	return wrapRequestS(ctx, c.RequestWrapper, do)
 }
 
-func (c *YouTubeClientV3) GetVideos(
+func (c *clientV3) GetVideos(
 	ctx context.Context,
 	broadcastIDs []string,
 	parts []string,
@@ -223,7 +223,7 @@ func (c *YouTubeClientV3) GetVideos(
 	return wrapRequestR(ctx, c.RequestWrapper, do)
 }
 
-func (c *YouTubeClientV3) UpdateVideo(
+func (c *clientV3) UpdateVideo(
 	ctx context.Context,
 	video *youtube.Video,
 	parts []string,
@@ -234,7 +234,7 @@ func (c *YouTubeClientV3) UpdateVideo(
 	return wrapRequestS(ctx, c.RequestWrapper, do)
 }
 
-func (c *YouTubeClientV3) GetPlaylists(
+func (c *clientV3) GetPlaylists(
 	ctx context.Context,
 	parts []string,
 ) (_ret *youtube.PlaylistListResponse, _err error) {
@@ -244,7 +244,7 @@ func (c *YouTubeClientV3) GetPlaylists(
 	return wrapRequestR(ctx, c.RequestWrapper, do)
 }
 
-func (c *YouTubeClientV3) GetPlaylistItems(
+func (c *clientV3) GetPlaylistItems(
 	ctx context.Context,
 	playlistID string,
 	videoID string,
@@ -256,7 +256,7 @@ func (c *YouTubeClientV3) GetPlaylistItems(
 	return wrapRequestR(ctx, c.RequestWrapper, do)
 }
 
-func (c *YouTubeClientV3) InsertPlaylistItem(
+func (c *clientV3) InsertPlaylistItem(
 	ctx context.Context,
 	item *youtube.PlaylistItem,
 	parts []string,
@@ -267,7 +267,7 @@ func (c *YouTubeClientV3) InsertPlaylistItem(
 	return wrapRequestS(ctx, c.RequestWrapper, do)
 }
 
-func (c *YouTubeClientV3) SetThumbnail(
+func (c *clientV3) SetThumbnail(
 	ctx context.Context,
 	broadcastID string,
 	thumbnail io.Reader,
@@ -278,7 +278,7 @@ func (c *YouTubeClientV3) SetThumbnail(
 	return wrapRequestS(ctx, c.RequestWrapper, do)
 }
 
-func (c *YouTubeClientV3) GetStreams(
+func (c *clientV3) GetStreams(
 	ctx context.Context,
 	parts []string,
 ) (_ret *youtube.LiveStreamListResponse, _err error) {
@@ -288,7 +288,7 @@ func (c *YouTubeClientV3) GetStreams(
 	return wrapRequestR(ctx, c.RequestWrapper, do)
 }
 
-func (c *YouTubeClientV3) InsertCommentThread(
+func (c *clientV3) InsertCommentThread(
 	ctx context.Context,
 	t *youtube.CommentThread,
 	parts []string,
@@ -299,7 +299,7 @@ func (c *YouTubeClientV3) InsertCommentThread(
 	return wrapRequestS(ctx, c.RequestWrapper, do)
 }
 
-func (c *YouTubeClientV3) ListChatMessages(
+func (c *clientV3) ListChatMessages(
 	ctx context.Context,
 	chatID string,
 	parts []string,
@@ -310,7 +310,7 @@ func (c *YouTubeClientV3) ListChatMessages(
 	return wrapRequestR(ctx, c.RequestWrapper, do)
 }
 
-func (c *YouTubeClientV3) DeleteChatMessage(
+func (c *clientV3) DeleteChatMessage(
 	ctx context.Context,
 	messageID string,
 ) (_err error) {
@@ -320,7 +320,7 @@ func (c *YouTubeClientV3) DeleteChatMessage(
 	return wrapRequest(ctx, c.RequestWrapper, do)
 }
 
-func (c *YouTubeClientV3) GetLiveChatMessages(
+func (c *clientV3) GetLiveChatMessages(
 	ctx context.Context,
 	chatID string,
 	pageToken string,
@@ -335,7 +335,7 @@ func (c *YouTubeClientV3) GetLiveChatMessages(
 	return q.Do()
 }
 
-func (c *YouTubeClientV3) Search(
+func (c *clientV3) Search(
 	ctx context.Context,
 	chanID string,
 	eventType EventType,

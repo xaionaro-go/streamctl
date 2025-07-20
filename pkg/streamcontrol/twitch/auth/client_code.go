@@ -16,9 +16,10 @@ import (
 	"github.com/nicklaw5/helix/v2"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
+	twitch "github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/types"
 )
 
-type OAuthHandler func(context.Context, oauthhandler.OAuthHandlerArgument) error
+type OAuthHandler = twitch.OAuthHandler
 
 func getScopes() []string {
 	scopes := map[string]struct{}{

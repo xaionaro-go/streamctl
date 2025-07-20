@@ -5,14 +5,14 @@ import (
 	"fmt"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/nicklaw5/helix/v2"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/secret"
+	twitch "github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/types"
 )
 
 func NewTokenByUser(
 	ctx context.Context,
-	client *helix.Client,
+	client twitch.Client,
 	clientCode secret.String,
 ) (secret.String, secret.String, error) {
 	logger.Debugf(ctx, "getNewTokenByUser")

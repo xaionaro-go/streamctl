@@ -23,6 +23,10 @@ import (
 	"github.com/xaionaro-go/xsync"
 )
 
+const (
+	debugUseMockClient = false
+)
+
 type ReverseEngClient interface {
 	ChatClientOBSOLETE
 }
@@ -31,7 +35,7 @@ type Kick struct {
 	CloseCtx            context.Context
 	CloseFn             context.CancelFunc
 	Channel             *kickcom.ChannelV1
-	Client              *gokick.Client
+	Client              *Client
 	ClientOBSOLETE      *kickcom.Kick
 	ChatHandler         *ChatHandlerOBSOLETE
 	ChatHandlerLocker   xsync.CtxLocker
@@ -57,20 +61,14 @@ func New(
 		return nil, fmt.Errorf("channel is not set")
 	}
 
-	options := &gokick.ClientOptions{
-		UserAccessToken:  cfg.Config.UserAccessToken.Get(),
-		UserRefreshToken: cfg.Config.RefreshToken.Get(),
-		ClientID:         cfg.Config.ClientID,
-		ClientSecret:     cfg.Config.ClientSecret.Get(),
-	}
-	client, err := gokick.NewClient(options)
-	if err != nil {
-		return nil, fmt.Errorf("unable to initialize a client to Kick: %w", err)
-	}
-
 	clientOld, err := kickcom.New()
 	if err != nil {
 		return nil, fmt.Errorf("unable to initialize the old client: %w", err)
+	}
+
+	client, err := getClient(cfg.Config)
+	if err != nil {
+		return nil, fmt.Errorf("unable to initialize the client: %w", err)
 	}
 
 	ctx, closeFn := context.WithCancel(ctx)
@@ -79,12 +77,32 @@ func New(
 		CloseFn:           closeFn,
 		ChatHandlerLocker: make(xsync.CtxLocker, 1),
 		CurrentConfig:     cfg,
-		Client:            client,
 		ClientOBSOLETE:    clientOld,
 		SaveCfgFn:         saveCfgFn,
 	}
+	k.SetClient(client)
 	client.OnUserAccessTokenRefreshed(k.onUserAccessTokenRefreshed)
 	return k, nil
+}
+
+func getClient(
+	cfg PlatformSpecificConfig,
+) (Client, error) {
+	if debugUseMockClient {
+		return newClientMock(), nil
+	}
+
+	client, err := newClient(&gokick.ClientOptions{
+		UserAccessToken:  cfg.UserAccessToken.Get(),
+		UserRefreshToken: cfg.RefreshToken.Get(),
+		ClientID:         cfg.ClientID,
+		ClientSecret:     cfg.ClientSecret.Get(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return client, nil
 }
 
 func (k *Kick) onUserAccessTokenRefreshed(
@@ -230,7 +248,7 @@ func (k *Kick) getAccessTokenNoLock(
 		gokick.ScopeModerationBan,
 	}
 	logger.Debugf(ctx, "scopes: %v", scopes)
-	authURL, err := k.getClient().GetAuthorize(
+	authURL, err := k.GetClient().GetAuthorize(
 		redirectURL,
 		"EMPTY",
 		codeChallenge,
@@ -248,7 +266,7 @@ func (k *Kick) getAccessTokenNoLock(
 			code string,
 		) error {
 			now := time.Now()
-			token, err := k.getClient().GetToken(ctx, redirectURL, code, codeVerifier)
+			token, err := k.GetClient().GetToken(ctx, redirectURL, code, codeVerifier)
 			if err != nil {
 				return fmt.Errorf("unable to get an access token: %w", err)
 			}
@@ -297,7 +315,7 @@ func (k *Kick) SetTitle(ctx context.Context, title string) (err error) {
 		return fmt.Errorf("unable to get a prepared client: %w", err)
 	}
 
-	_, err = k.getClient().UpdateStreamTitle(ctx, title)
+	_, err = k.GetClient().UpdateStreamTitle(ctx, title)
 	return
 }
 
@@ -391,7 +409,7 @@ func (k *Kick) getStreamStatusUsingNormalClient(
 	logger.Debugf(ctx, "getStreamStatusUsingNormalClient")
 	defer func() { logger.Debugf(ctx, "/getStreamStatusUsingNormalClient: %v %v", _ret, _err) }()
 
-	resp, err := k.getClient().GetChannels(
+	resp, err := k.GetClient().GetChannels(
 		ctx,
 		gokick.NewChannelListFilter().SetBroadcasterUserIDs([]int{int(k.Channel.UserID)}),
 	)
@@ -500,7 +518,7 @@ func (k *Kick) GetChatMessagesChan(
 func (k *Kick) SendChatMessage(ctx context.Context, message string) (_err error) {
 	logger.Debugf(ctx, "SendChatMessage(ctx, '%s')", message)
 	defer func() { logger.Debugf(ctx, "/SendChatMessage(ctx, '%s'): %v", message, _err) }()
-	resp, err := k.Client.SendChatMessage(ctx, ptr(int(k.Channel.UserID)), message, nil, gokick.MessageTypeUser)
+	resp, err := k.GetClient().SendChatMessage(ctx, ptr(int(k.Channel.UserID)), message, nil, gokick.MessageTypeUser)
 	logger.Debugf(ctx, "SendChatMessage(ctx, '%s'): %#+v", message, resp)
 	return err
 }
@@ -535,7 +553,7 @@ func (k *Kick) BanUser(
 			return nil
 		}
 	}
-	resp, err := k.Client.BanUser(ctx, int(k.Channel.UserID), int(userIDInt), duration, reasonPtr)
+	resp, err := k.GetClient().BanUser(ctx, int(k.Channel.UserID), int(userIDInt), duration, reasonPtr)
 	logger.Debugf(ctx, "BanUser(ctx, %d, '%s', %v): %#+v", userID, reason, deadline, resp)
 	return err
 }
@@ -556,7 +574,7 @@ func (k *Kick) ApplyProfile(
 
 	if profile.CategoryID != nil {
 		logger.Debugf(ctx, "has a CategoryID")
-		_, err := k.getClient().UpdateStreamCategory(ctx, int(*profile.CategoryID))
+		_, err := k.GetClient().UpdateStreamCategory(ctx, int(*profile.CategoryID))
 		if err != nil {
 			result = append(result, fmt.Errorf("unable to update the category: %w", err))
 		}

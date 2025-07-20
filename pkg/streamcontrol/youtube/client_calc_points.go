@@ -26,17 +26,17 @@ func init() {
 }
 
 // see also: https://developers.google.com/youtube/v3/determine_quota_cost
-type YouTubeClientCalcPoints struct {
-	Client          YouTubeClient
+type ClientCalcPoints struct {
+	Client          client
 	UsedPoints      atomic.Uint64
 	CheckMutex      sync.Mutex
 	PreviousCheckAt time.Time
 }
 
-var _ YouTubeClient = (*YouTubeClientCalcPoints)(nil)
+var _ client = (*ClientCalcPoints)(nil)
 
-func NewYouTubeClientCalcPoints(client YouTubeClient) *YouTubeClientCalcPoints {
-	return &YouTubeClientCalcPoints{
+func NewYouTubeClientCalcPoints(client client) *ClientCalcPoints {
+	return &ClientCalcPoints{
 		Client: client,
 	}
 }
@@ -45,7 +45,7 @@ func getQuotaCutoffDate(t time.Time) string {
 	return t.In(tzLosAngeles).Format("2006-01-02")
 }
 
-func (c *YouTubeClientCalcPoints) addUsedPointsIfNoError(
+func (c *ClientCalcPoints) addUsedPointsIfNoError(
 	ctx context.Context,
 	points uint,
 	err error,
@@ -71,12 +71,12 @@ func (c *YouTubeClientCalcPoints) addUsedPointsIfNoError(
 	}
 }
 
-func (c *YouTubeClientCalcPoints) Ping(ctx context.Context) (_err error) {
+func (c *ClientCalcPoints) Ping(ctx context.Context) (_err error) {
 	defer func() { c.addUsedPointsIfNoError(ctx, 1, _err) }()
 	return c.Client.Ping(ctx)
 }
 
-func (c *YouTubeClientCalcPoints) GetBroadcasts(
+func (c *ClientCalcPoints) GetBroadcasts(
 	ctx context.Context,
 	t BroadcastType,
 	ids []string,
@@ -87,7 +87,7 @@ func (c *YouTubeClientCalcPoints) GetBroadcasts(
 	return c.Client.GetBroadcasts(ctx, t, ids, parts, pageToken)
 }
 
-func (c *YouTubeClientCalcPoints) UpdateBroadcast(
+func (c *ClientCalcPoints) UpdateBroadcast(
 	ctx context.Context,
 	broadcast *youtube.LiveBroadcast,
 	parts []string,
@@ -96,7 +96,7 @@ func (c *YouTubeClientCalcPoints) UpdateBroadcast(
 	return c.Client.UpdateBroadcast(ctx, broadcast, parts)
 }
 
-func (c *YouTubeClientCalcPoints) InsertBroadcast(
+func (c *ClientCalcPoints) InsertBroadcast(
 	ctx context.Context,
 	broadcast *youtube.LiveBroadcast,
 	parts []string,
@@ -105,7 +105,7 @@ func (c *YouTubeClientCalcPoints) InsertBroadcast(
 	return c.Client.InsertBroadcast(ctx, broadcast, parts)
 }
 
-func (c *YouTubeClientCalcPoints) DeleteBroadcast(
+func (c *ClientCalcPoints) DeleteBroadcast(
 	ctx context.Context,
 	broadcastID string,
 ) (_err error) {
@@ -113,7 +113,7 @@ func (c *YouTubeClientCalcPoints) DeleteBroadcast(
 	return c.Client.DeleteBroadcast(ctx, broadcastID)
 }
 
-func (c *YouTubeClientCalcPoints) GetStreams(
+func (c *ClientCalcPoints) GetStreams(
 	ctx context.Context,
 	parts []string,
 ) (_ret *youtube.LiveStreamListResponse, _err error) {
@@ -121,7 +121,7 @@ func (c *YouTubeClientCalcPoints) GetStreams(
 	return c.Client.GetStreams(ctx, parts)
 }
 
-func (c *YouTubeClientCalcPoints) GetVideos(
+func (c *ClientCalcPoints) GetVideos(
 	ctx context.Context,
 	broadcastIDs []string,
 	parts []string,
@@ -130,7 +130,7 @@ func (c *YouTubeClientCalcPoints) GetVideos(
 	return c.Client.GetVideos(ctx, broadcastIDs, parts)
 }
 
-func (c *YouTubeClientCalcPoints) UpdateVideo(
+func (c *ClientCalcPoints) UpdateVideo(
 	ctx context.Context,
 	video *youtube.Video,
 	parts []string,
@@ -139,7 +139,7 @@ func (c *YouTubeClientCalcPoints) UpdateVideo(
 	return c.Client.UpdateVideo(ctx, video, parts)
 }
 
-func (c *YouTubeClientCalcPoints) InsertCuepoint(
+func (c *ClientCalcPoints) InsertCuepoint(
 	ctx context.Context,
 	cuepoint *youtube.Cuepoint,
 ) (_err error) {
@@ -147,7 +147,7 @@ func (c *YouTubeClientCalcPoints) InsertCuepoint(
 	return c.Client.InsertCuepoint(ctx, cuepoint)
 }
 
-func (c *YouTubeClientCalcPoints) GetPlaylists(
+func (c *ClientCalcPoints) GetPlaylists(
 	ctx context.Context,
 	playlistParts []string,
 ) (_ret *youtube.PlaylistListResponse, _err error) {
@@ -155,7 +155,7 @@ func (c *YouTubeClientCalcPoints) GetPlaylists(
 	return c.Client.GetPlaylists(ctx, playlistParts)
 }
 
-func (c *YouTubeClientCalcPoints) GetPlaylistItems(
+func (c *ClientCalcPoints) GetPlaylistItems(
 	ctx context.Context,
 	playlistID string,
 	videoID string,
@@ -165,7 +165,7 @@ func (c *YouTubeClientCalcPoints) GetPlaylistItems(
 	return c.Client.GetPlaylistItems(ctx, playlistID, videoID, parts)
 }
 
-func (c *YouTubeClientCalcPoints) InsertPlaylistItem(
+func (c *ClientCalcPoints) InsertPlaylistItem(
 	ctx context.Context,
 	item *youtube.PlaylistItem,
 	parts []string,
@@ -174,7 +174,7 @@ func (c *YouTubeClientCalcPoints) InsertPlaylistItem(
 	return c.Client.InsertPlaylistItem(ctx, item, parts)
 }
 
-func (c *YouTubeClientCalcPoints) SetThumbnail(
+func (c *ClientCalcPoints) SetThumbnail(
 	ctx context.Context,
 	broadcastID string,
 	thumbnail io.Reader,
@@ -183,7 +183,7 @@ func (c *YouTubeClientCalcPoints) SetThumbnail(
 	return c.Client.SetThumbnail(ctx, broadcastID, thumbnail)
 }
 
-func (c *YouTubeClientCalcPoints) InsertCommentThread(
+func (c *ClientCalcPoints) InsertCommentThread(
 	ctx context.Context,
 	t *youtube.CommentThread,
 	parts []string,
@@ -192,7 +192,7 @@ func (c *YouTubeClientCalcPoints) InsertCommentThread(
 	return c.Client.InsertCommentThread(ctx, t, parts)
 }
 
-func (c *YouTubeClientCalcPoints) ListChatMessages(
+func (c *ClientCalcPoints) ListChatMessages(
 	ctx context.Context,
 	chatID string,
 	parts []string,
@@ -201,7 +201,7 @@ func (c *YouTubeClientCalcPoints) ListChatMessages(
 	return c.Client.ListChatMessages(ctx, chatID, parts)
 }
 
-func (c *YouTubeClientCalcPoints) DeleteChatMessage(
+func (c *ClientCalcPoints) DeleteChatMessage(
 	ctx context.Context,
 	messageID string,
 ) (_err error) {
@@ -209,7 +209,7 @@ func (c *YouTubeClientCalcPoints) DeleteChatMessage(
 	return c.Client.DeleteChatMessage(ctx, messageID)
 }
 
-func (c *YouTubeClientCalcPoints) GetLiveChatMessages(
+func (c *ClientCalcPoints) GetLiveChatMessages(
 	ctx context.Context,
 	chatID string,
 	pageToken string,
@@ -219,7 +219,7 @@ func (c *YouTubeClientCalcPoints) GetLiveChatMessages(
 	return c.Client.GetLiveChatMessages(ctx, chatID, pageToken, parts)
 }
 
-func (c *YouTubeClientCalcPoints) Search(
+func (c *ClientCalcPoints) Search(
 	ctx context.Context,
 	chanID string,
 	eventType EventType,

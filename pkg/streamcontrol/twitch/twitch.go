@@ -28,7 +28,7 @@ type Twitch struct {
 	closeFn        context.CancelFunc
 	chatHandlerSub *ChatHandlerSub
 	chatHandlerIRC *ChatHandlerIRC
-	client         *helix.Client
+	client         client
 	config         Config
 	broadcasterID  string
 	lazyInitOnce   sync.Once
@@ -39,7 +39,10 @@ type Twitch struct {
 	clientSecret   secret.String
 }
 
-const twitchDebug = false
+const (
+	twitchDebug        = false
+	debugUseMockClient = false
+)
 
 var _ streamcontrol.StreamController[StreamProfile] = (*Twitch)(nil)
 
@@ -141,7 +144,7 @@ func New(
 
 func GetUserID(
 	_ context.Context,
-	client *helix.Client,
+	client client,
 	login string,
 ) (string, error) {
 	resp, err := client.GetUsers(&helix.UsersParams{
@@ -613,10 +616,13 @@ func (t *Twitch) getNewTokenByApp(
 func (t *Twitch) getClient(
 	ctx context.Context,
 	oauthListenPort uint16,
-) (*helix.Client, error) {
+) (client, error) {
 	logger.Debugf(ctx, "getClient(ctx, %#+v, %v)", t.config, oauthListenPort)
 	defer func() { logger.Debugf(ctx, "/getClient") }()
 
+	if debugUseMockClient {
+		return newClientMock(), nil
+	}
 	options := &helix.Options{
 		ClientID:     t.clientID,
 		ClientSecret: t.clientSecret.Get(),

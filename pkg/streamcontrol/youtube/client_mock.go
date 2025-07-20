@@ -9,21 +9,21 @@ import (
 	"google.golang.org/api/youtube/v3"
 )
 
-type YouTubeClientMock struct{}
+type clientMock struct{}
 
-var _ YouTubeClient = (*YouTubeClientMock)(nil)
+var _ client = (*clientMock)(nil)
 
-func NewYouTubeClientMock() *YouTubeClientMock {
-	return &YouTubeClientMock{}
+func newClientMock() *clientMock {
+	return &clientMock{}
 }
 
-func (c *YouTubeClientMock) Ping(ctx context.Context) (_err error) {
+func (c *clientMock) Ping(ctx context.Context) (_err error) {
 	logger.Tracef(ctx, "Ping")
 	defer func() { logger.Tracef(ctx, "/Ping: %v", _err) }()
 	return nil
 }
 
-func (c *YouTubeClientMock) GetBroadcasts(
+func (c *clientMock) GetBroadcasts(
 	ctx context.Context,
 	t BroadcastType,
 	ids []string,
@@ -39,7 +39,7 @@ func (c *YouTubeClientMock) GetBroadcasts(
 	}, nil
 }
 
-func (c *YouTubeClientMock) UpdateBroadcast(
+func (c *clientMock) UpdateBroadcast(
 	ctx context.Context,
 	broadcast *youtube.LiveBroadcast,
 	parts []string,
@@ -49,7 +49,7 @@ func (c *YouTubeClientMock) UpdateBroadcast(
 	return fmt.Errorf("not implemented")
 }
 
-func (c *YouTubeClientMock) InsertBroadcast(
+func (c *clientMock) InsertBroadcast(
 	ctx context.Context,
 	broadcast *youtube.LiveBroadcast,
 	parts []string,
@@ -59,7 +59,7 @@ func (c *YouTubeClientMock) InsertBroadcast(
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (c *YouTubeClientMock) DeleteBroadcast(
+func (c *clientMock) DeleteBroadcast(
 	ctx context.Context,
 	broadcastID string,
 ) (_err error) {
@@ -68,7 +68,7 @@ func (c *YouTubeClientMock) DeleteBroadcast(
 	return fmt.Errorf("not implemented")
 }
 
-func (c *YouTubeClientMock) GetStreams(
+func (c *clientMock) GetStreams(
 	ctx context.Context,
 	parts []string,
 ) (_ret *youtube.LiveStreamListResponse, _err error) {
@@ -80,7 +80,7 @@ func (c *YouTubeClientMock) GetStreams(
 	}, nil
 }
 
-func (c *YouTubeClientMock) GetVideos(
+func (c *clientMock) GetVideos(
 	ctx context.Context,
 	broadcastIDs []string,
 	parts []string,
@@ -90,7 +90,7 @@ func (c *YouTubeClientMock) GetVideos(
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (c *YouTubeClientMock) UpdateVideo(
+func (c *clientMock) UpdateVideo(
 	ctx context.Context,
 	video *youtube.Video,
 	parts []string,
@@ -100,7 +100,7 @@ func (c *YouTubeClientMock) UpdateVideo(
 	return fmt.Errorf("not implemented")
 }
 
-func (c *YouTubeClientMock) InsertCuepoint(
+func (c *clientMock) InsertCuepoint(
 	ctx context.Context,
 	cuepoint *youtube.Cuepoint,
 ) (_err error) {
@@ -109,7 +109,7 @@ func (c *YouTubeClientMock) InsertCuepoint(
 	return fmt.Errorf("not implemented")
 }
 
-func (c *YouTubeClientMock) GetPlaylists(
+func (c *clientMock) GetPlaylists(
 	ctx context.Context,
 	playlistParts []string,
 ) (_ret *youtube.PlaylistListResponse, _err error) {
@@ -118,7 +118,7 @@ func (c *YouTubeClientMock) GetPlaylists(
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (c *YouTubeClientMock) GetPlaylistItems(
+func (c *clientMock) GetPlaylistItems(
 	ctx context.Context,
 	playlistID string,
 	videoID string,
@@ -129,7 +129,7 @@ func (c *YouTubeClientMock) GetPlaylistItems(
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (c *YouTubeClientMock) InsertPlaylistItem(
+func (c *clientMock) InsertPlaylistItem(
 	ctx context.Context,
 	item *youtube.PlaylistItem,
 	parts []string,
@@ -139,7 +139,7 @@ func (c *YouTubeClientMock) InsertPlaylistItem(
 	return fmt.Errorf("not implemented")
 }
 
-func (c *YouTubeClientMock) SetThumbnail(
+func (c *clientMock) SetThumbnail(
 	ctx context.Context,
 	broadcastID string,
 	thumbnail io.Reader,
@@ -149,7 +149,7 @@ func (c *YouTubeClientMock) SetThumbnail(
 	return fmt.Errorf("not implemented")
 }
 
-func (c *YouTubeClientMock) InsertCommentThread(
+func (c *clientMock) InsertCommentThread(
 	ctx context.Context,
 	t *youtube.CommentThread,
 	parts []string,
@@ -159,7 +159,7 @@ func (c *YouTubeClientMock) InsertCommentThread(
 	return fmt.Errorf("not implemented")
 }
 
-func (c *YouTubeClientMock) ListChatMessages(
+func (c *clientMock) ListChatMessages(
 	ctx context.Context,
 	chatID string,
 	parts []string,
@@ -169,7 +169,7 @@ func (c *YouTubeClientMock) ListChatMessages(
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (c *YouTubeClientMock) DeleteChatMessage(
+func (c *clientMock) DeleteChatMessage(
 	ctx context.Context,
 	messageID string,
 ) (_err error) {
@@ -178,7 +178,7 @@ func (c *YouTubeClientMock) DeleteChatMessage(
 	return fmt.Errorf("not implemented")
 }
 
-func (c *YouTubeClientMock) GetLiveChatMessages(
+func (c *clientMock) GetLiveChatMessages(
 	ctx context.Context,
 	chatID string,
 	pageToken string,
@@ -189,7 +189,7 @@ func (c *YouTubeClientMock) GetLiveChatMessages(
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (c *YouTubeClientMock) Search(
+func (c *clientMock) Search(
 	ctx context.Context,
 	chanID string,
 	eventType EventType,
