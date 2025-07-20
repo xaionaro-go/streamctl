@@ -158,15 +158,15 @@ func eventSubToChanUsingTopic[T, E any](
 	opts := eventbus.Options{
 		eventbus.OptionQueueSize(1),
 		eventbus.OptionOnOverflow(eventbus.OnOverflowPileUpOrClose(queueSize, 10*time.Second)),
-		eventbus.OptionOnUnsubscribe[E](func(_ context.Context, sub *eventbus.Subscription[E]) {
+		eventbus.OptionOnUnsubscribe[T, E](func(_ context.Context, sub *eventbus.Subscription[T, E]) {
 			logger.Debugf(ctx, "eventSubToChanUsingTopic[%T, %T]: unsubscribed", topic, sample)
 		}),
 	}
 	if onReady != nil {
 		opts = append(opts,
-			eventbus.OptionOnSubscribed[E](func(
+			eventbus.OptionOnSubscribed[T, E](func(
 				ctx context.Context,
-				sub *eventbus.Subscription[E],
+				sub *eventbus.Subscription[T, E],
 			) {
 				onReady(ctx, sub.EventChan())
 			}),
