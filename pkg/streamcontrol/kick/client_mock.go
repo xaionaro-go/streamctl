@@ -32,6 +32,10 @@ func (clientMock) UpdateStreamCategory(ctx context.Context, categoryID int) (gok
 	return gokick.EmptyResponse{}, nil
 }
 
+func (clientMock) GetLivestreams(ctx context.Context, filter gokick.LivestreamListFilter) (gokick.LivestreamsResponseWrapper, error) {
+	return gokick.LivestreamsResponseWrapper{}, nil
+}
+
 func (clientMock) GetChannels(ctx context.Context, filter gokick.ChannelListFilter) (gokick.ChannelsResponseWrapper, error) {
 	return gokick.ChannelsResponseWrapper{
 		Result: []gokick.ChannelResponse{{

@@ -12,6 +12,7 @@ type Client interface {
 	OnUserAccessTokenRefreshed(callback func(accessToken, refreshToken string))
 	UpdateStreamTitle(ctx context.Context, title string) (gokick.EmptyResponse, error)
 	UpdateStreamCategory(ctx context.Context, categoryID int) (gokick.EmptyResponse, error)
+	GetLivestreams(ctx context.Context, filter gokick.LivestreamListFilter) (gokick.LivestreamsResponseWrapper, error)
 	GetChannels(ctx context.Context, filter gokick.ChannelListFilter) (gokick.ChannelsResponseWrapper, error)
 	SendChatMessage(
 		ctx context.Context,
