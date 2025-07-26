@@ -82,6 +82,9 @@ func New(
 	}
 	k.SetClient(client)
 	client.OnUserAccessTokenRefreshed(k.onUserAccessTokenRefreshed)
+	observability.Go(ctx, func(ctx context.Context) {
+		k.keepAliveLoop(ctx)
+	})
 	return k, nil
 }
 
@@ -122,6 +125,28 @@ func (k *Kick) onUserAccessTokenRefreshed(
 	})
 }
 
+func (k *Kick) keepAliveLoop(
+	ctx context.Context,
+) {
+	logger.Debugf(ctx, "keepAliveLoop")
+	defer func() { logger.Debugf(ctx, "/keepAliveLoop") }()
+
+	t := time.NewTicker(time.Minute)
+	defer t.Stop()
+	for {
+		select {
+		case <-k.CloseCtx.Done():
+			return
+		case <-t.C:
+		}
+		_, err := k.GetClient().GetLivestreams(ctx, gokick.NewLivestreamListFilter().SetBroadcasterUserIDs(int(k.Channel.UserID)))
+		if err != nil {
+			logger.Errorf(ctx, "unable to get my stream status: %v", err)
+			continue
+		}
+	}
+}
+
 func (k *Kick) initChatHandler(
 	ctx context.Context,
 ) error {
@@ -143,8 +168,11 @@ func (k *Kick) initChatHandler(
 			logger.Errorf(ctx, "unable to initialize chat handler: %v", err)
 			time.Sleep(time.Second)
 			select {
-			case <-ctx.Done():
+			case <-k.CloseCtx.Done():
 				logger.Debugf(ctx, "initChatHandler: cancelled (case #1)")
+				return
+			case <-ctx.Done():
+				logger.Debugf(ctx, "initChatHandler: cancelled (case #2)")
 				return
 			default:
 			}
@@ -167,11 +195,16 @@ func (k *Kick) onChatHandlerClose(
 	defer k.ChatHandlerLocker.Unlock()
 	select {
 	case <-ctx.Done():
+		return
+	case <-k.CloseCtx.Done():
+		return
 	case <-time.After(time.Second):
 	}
 	for {
 		select {
 		case <-ctx.Done():
+			return
+		case <-k.CloseCtx.Done():
 			return
 		default:
 		}
@@ -517,6 +550,8 @@ func (k *Kick) GetChatMessagesChan(
 			}()
 			logger.Tracef(ctx, "GetChatMessagesChan: waiting for a message")
 			select {
+			case <-k.CloseCtx.Done():
+				return
 			case <-ctx.Done():
 				return
 			case ev, ok := <-chatHandler.MessagesChan():
