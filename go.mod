@@ -193,8 +193,7 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
-	github.com/quic-go/quic-go v0.41.0 // indirect
-	github.com/refraction-networking/utls v1.6.2 // indirect
+	github.com/refraction-networking/utls v1.8.0 // indirect
 	github.com/rubenv/sql-migrate v1.7.0 // indirect
 	github.com/rymdport/portal v0.4.1 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
@@ -302,7 +301,7 @@ require (
 	github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42
 	github.com/xaionaro-go/grpcproxy v0.0.0-20241103205849-a8fef42e72f9
 	github.com/xaionaro-go/iterate v0.0.0-20250406123757-7802d56b52ce
-	github.com/xaionaro-go/kickcom v0.0.0-20250316223447-a1fe3d153d96
+	github.com/xaionaro-go/kickcom v0.0.0-20250726234055-93b1e91438d9
 	github.com/xaionaro-go/lockmap v0.0.0-20240901172806-e17aea364748
 	github.com/xaionaro-go/logwriter v0.0.0-20250111154941-c3f7a1a2d567
 	github.com/xaionaro-go/mediamtx v0.0.0-20250406132618-79ecbc3e138f

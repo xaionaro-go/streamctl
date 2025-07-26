@@ -165,6 +165,10 @@ func (k *Kick) onChatHandlerClose(
 		return
 	}
 	defer k.ChatHandlerLocker.Unlock()
+	select {
+	case <-ctx.Done():
+	case <-time.After(time.Second):
+	}
 	for {
 		select {
 		case <-ctx.Done():
