@@ -2,11 +2,13 @@ package youtube
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,6 +16,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/xsync"
 )
 
 const youtubeWatchURLString = `https://www.youtube.com/watch`
@@ -50,6 +53,8 @@ func ytWatchURL(videoID string) *url.URL {
 	return result
 }
 
+// TODO: delete this handler after explaining to YouTube the application and
+// getting a quota for normal ChatListener.
 type ChatListenerOBSOLETE struct {
 	videoID          string
 	continuationCode string
@@ -57,6 +62,9 @@ type ChatListenerOBSOLETE struct {
 	wg               sync.WaitGroup
 	cancelFunc       context.CancelFunc
 	messagesOutChan  chan streamcontrol.ChatMessage
+
+	channelIDToName       map[string]streamcontrol.ChatUserID
+	channelIDToNameLocker xsync.Mutex
 }
 
 func NewChatListenerOBSOLETE(
@@ -82,6 +90,7 @@ func NewChatListenerOBSOLETE(
 		clientConfig:     cfg,
 		cancelFunc:       cancelFunc,
 		messagesOutChan:  make(chan streamcontrol.ChatMessage, 100),
+		channelIDToName:  map[string]streamcontrol.ChatUserID{},
 	}
 	l.wg.Add(1)
 	observability.Go(ctx, func(ctx context.Context) {
@@ -134,7 +143,7 @@ func (l *ChatListenerOBSOLETE) listenLoop(ctx context.Context) (_err error) {
 			l.messagesOutChan <- streamcontrol.ChatMessage{
 				CreatedAt: msg.Timestamp,
 				EventType: streamcontrol.EventTypeChatMessage,
-				UserID:    streamcontrol.ChatUserID(msg.AuthorName),
+				UserID:    l.getUserID(ctx, msg.AuthorID),
 				Username:  msg.AuthorName,
 				// TODO: find a way to extract the message ID,
 				//       in the mean while we we use a soft key for that:
@@ -145,7 +154,63 @@ func (l *ChatListenerOBSOLETE) listenLoop(ctx context.Context) (_err error) {
 	}
 }
 
-func (h *ChatListenerOBSOLETE) Close(ctx context.Context) error {
+func (h *ChatListenerOBSOLETE) getUserID(
+	ctx context.Context,
+	authorID string,
+) (_ret streamcontrol.ChatUserID) {
+	logger.Tracef(ctx, "getUserID(ctx, '%s')", authorID)
+	defer func() { logger.Tracef(ctx, "/getUserID(ctx, '%s'): %v", authorID, _ret) }()
+	return xsync.DoR1(ctx, &h.channelIDToNameLocker, func() streamcontrol.ChatUserID {
+		if v, ok := h.channelIDToName[authorID]; ok {
+			return v
+		}
+
+		v, err := h.resolveChannelID(ctx, authorID)
+		if err != nil {
+			logger.Errorf(ctx, "unable to resolve channel ID '%s': %v", authorID, err)
+			return streamcontrol.ChatUserID(authorID)
+		}
+
+		h.channelIDToName[authorID] = v
+		return v
+	})
+}
+
+func (h *ChatListenerOBSOLETE) resolveChannelID(
+	ctx context.Context,
+	authorID string,
+) (_ret streamcontrol.ChatUserID, _err error) {
+	logger.Debugf(ctx, "resolveChannelID(ctx, '%s')", authorID)
+	defer func() { logger.Debugf(ctx, "/resolveChannelID(ctx, '%s'): %v %v", authorID, _ret, _err) }()
+
+	urlString := fmt.Sprintf("https://www.youtube.com/channel/%s", authorID)
+	initialDataBytes, _, err := ytchat.GetYTDataFromURL(urlString)
+	if err != nil {
+		return "", fmt.Errorf("unable to get data from '%s': %w", urlString, err)
+	}
+
+	type initialDataT struct {
+		Metadata struct {
+			ChannelMetadataRenderer struct {
+				VanityChannelURL string `json:"vanityChannelUrl"`
+			} `json:"channelMetadataRenderer"`
+		} `json:"metadata"`
+	}
+	var initialData initialDataT
+	if err := json.Unmarshal(initialDataBytes, &initialData); err != nil {
+		return "", fmt.Errorf("unable to JSON-unmarshal '%s': %w", initialDataBytes, err)
+	}
+
+	vanityURLString := initialData.Metadata.ChannelMetadataRenderer.VanityChannelURL
+	vanityURLParts := strings.Split(vanityURLString, "/")
+	channelSlug := vanityURLParts[len(vanityURLParts)-1]
+	channelSlug = strings.Trim(channelSlug, "@")
+	return streamcontrol.ChatUserID(channelSlug), nil
+}
+
+func (h *ChatListenerOBSOLETE) Close(ctx context.Context) (_err error) {
+	logger.Debugf(ctx, "Close(ctx)")
+	defer func() { logger.Debugf(ctx, "/Close(ctx): %v", _err) }()
 	h.cancelFunc()
 	return nil
 }

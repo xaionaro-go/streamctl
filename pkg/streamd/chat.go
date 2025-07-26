@@ -73,8 +73,8 @@ func (d *StreamD) shoutoutIfNeeded(
 	ctx context.Context,
 	msg api.ChatMessage,
 ) {
-	logger.Tracef(ctx, "shoutoutIfNeeded(ctx, %#+v)", msg)
-	defer logger.Tracef(ctx, "/shoutoutIfNeeded(ctx, %#+v)", msg)
+	logger.Debugf(ctx, "shoutoutIfNeeded(ctx, %#+v)", msg)
+	defer logger.Debugf(ctx, "/shoutoutIfNeeded(ctx, %#+v)", msg)
 	if !msg.IsLive {
 		logger.Tracef(ctx, "is not a live message")
 		return
@@ -88,7 +88,7 @@ func (d *StreamD) shoutoutIfNeeded(
 		User:     streamcontrol.ChatUserID(strings.ToLower(string(msg.UserID))),
 	}
 	lastShoutoutAt := d.lastShoutoutAt[userID]
-	logger.Tracef(ctx, "lastShoutoutAt(%#+v): %v", userID, lastShoutoutAt)
+	logger.Debugf(ctx, "lastShoutoutAt(%#+v): %v", userID, lastShoutoutAt)
 	if v := time.Since(lastShoutoutAt); v < time.Hour {
 		logger.Tracef(ctx, "the previous shoutout was too soon: %v < %v", v, time.Hour)
 		return
@@ -116,7 +116,7 @@ func (d *StreamD) shoutoutIfNeeded(
 	}
 
 	if !found {
-		logger.Tracef(ctx, "not in the list for auto-shoutout")
+		logger.Debugf(ctx, "not in the list for auto-shoutout")
 		return
 	}
 
@@ -128,8 +128,8 @@ func (d *StreamD) shoutoutIfCan(
 	platID streamcontrol.PlatformName,
 	userID streamcontrol.ChatUserID,
 ) {
-	logger.Tracef(ctx, "shoutoutIfCan('%s', '%s')", platID, userID)
-	defer logger.Tracef(ctx, "/shoutoutIfCan('%s', '%s')", platID, userID)
+	logger.Debugf(ctx, "shoutoutIfCan('%s', '%s')", platID, userID)
+	defer logger.Debugf(ctx, "/shoutoutIfCan('%s', '%s')", platID, userID)
 
 	ctrl, err := d.streamController(ctx, platID)
 	if err != nil {

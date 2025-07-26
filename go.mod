@@ -33,6 +33,8 @@ replace github.com/joeyak/go-twitch-eventsub/v3 => github.com/xaionaro-go/go-twi
 
 replace github.com/scorfly/gokick => github.com/xaionaro-go/gokick v0.0.0-20250713175656-f538d6396851
 
+replace github.com/abhinavxd/youtube-live-chat-downloader/v2 => github.com/xaionaro-go/youtube-live-chat-downloader/v2 v2.0.0-20250726224735-811554015ae8
+
 require (
 	github.com/facebookincubator/go-belt v0.0.0-20250308011339-62fb7027b11f
 	github.com/go-git/go-billy/v5 v5.6.2
@@ -332,7 +334,6 @@ require (
 	github.com/cloudwego/eino-ext/components/model/openai v0.0.0-20250424061409-ccd60fbc7c1c
 	github.com/coder/websocket v1.8.13
 	github.com/joeyak/go-twitch-eventsub/v3 v3.0.0
-	github.com/jweslley/localtunnel v0.1.0
 	github.com/phuslu/goid v1.0.2 // indirect
 	github.com/pion/datachannel v1.5.10 // indirect
 	github.com/pion/dtls/v2 v2.2.12 // indirect

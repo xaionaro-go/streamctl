@@ -165,7 +165,9 @@ func seppukuIfMemHugeLeak(
 					buf.Reset()
 					err := pprof.WriteHeapProfile(&buf)
 					if err == nil {
-						fmt.Fprintf(os.Stderr, "HEAP-PROFILE: %s\n", base64.StdEncoding.EncodeToString(buf.Bytes()))
+						msg := fmt.Sprintf("HEAP-PROFILE: %s\n", base64.StdEncoding.EncodeToString(buf.Bytes()))
+						fmt.Fprintf(os.Stderr, "%s", msg)
+						logger.Debugf(ctx, msg)
 					} else {
 						logger.Errorf(ctx, "unable to get heap profile: %v", err)
 					}

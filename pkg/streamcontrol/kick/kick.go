@@ -110,6 +110,8 @@ func (k *Kick) onUserAccessTokenRefreshed(
 	refreshToken string,
 ) {
 	ctx := context.TODO()
+	logger.Debugf(ctx, "onUserAccessTokenRefreshed")
+	defer logger.Debugf(ctx, "/onUserAccessTokenRefreshed")
 	k.CurrentConfigLocker.Do(ctx, func() {
 		k.CurrentConfig.Config.UserAccessToken.Set(userAccessToken)
 		k.CurrentConfig.Config.RefreshToken.Set(refreshToken)
