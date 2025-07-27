@@ -134,7 +134,16 @@ func (k *Kick) keepAliveLoop(
 	t := time.NewTicker(time.Minute)
 	defer t.Stop()
 	for {
-		_, err := k.GetClient().GetLivestreams(k.CloseCtx, gokick.NewLivestreamListFilter().SetBroadcasterUserIDs(int(k.Channel.UserID)))
+		if k.Channel == nil { // TODO: fix non-atomicity
+			logger.Warnf(ctx, "channel info is not set, yet")
+			continue
+		}
+		client := k.GetClient()
+		if client == nil {
+			logger.Errorf(ctx, "client is not initialized")
+			continue
+		}
+		_, err := client.GetLivestreams(k.CloseCtx, gokick.NewLivestreamListFilter().SetBroadcasterUserIDs(int(k.Channel.UserID)))
 		if err != nil {
 			logger.Errorf(ctx, "unable to get my stream status: %v", err)
 			continue

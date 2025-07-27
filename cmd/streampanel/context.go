@@ -51,6 +51,7 @@ func getContext(
 
 	ll := xlogrus.DefaultLogrusLogger()
 	ll.Formatter.(*logrus.TextFormatter).ForceColors = true
+	ll.ReportCaller = true
 
 	logPreHooks := logger.PreHooks{
 		&observability.LogLevelFilter,
