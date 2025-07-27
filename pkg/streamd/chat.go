@@ -87,6 +87,10 @@ func (d *StreamD) shoutoutIfNeeded(
 		Platform: msg.Platform,
 		User:     streamcontrol.ChatUserID(strings.ToLower(string(msg.UserID))),
 	}
+	userIDByName := config.ChatUserID{
+		Platform: msg.Platform,
+		User:     streamcontrol.ChatUserID(strings.ToLower(string(msg.Username))),
+	}
 	lastShoutoutAt := d.lastShoutoutAt[userID]
 	logger.Debugf(ctx, "lastShoutoutAt(%#+v): %v", userID, lastShoutoutAt)
 	if v := time.Since(lastShoutoutAt); v < time.Hour {
@@ -110,6 +114,10 @@ func (d *StreamD) shoutoutIfNeeded(
 			User:     streamcontrol.ChatUserID(strings.ToLower(string(_candidate.User))),
 		}
 		if candidate == userID {
+			found = true
+			break
+		}
+		if candidate == userIDByName {
 			found = true
 			break
 		}
