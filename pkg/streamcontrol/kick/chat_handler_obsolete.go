@@ -28,13 +28,13 @@ type ChatHandlerOBSOLETE struct {
 	client          ChatClientOBSOLETE
 	cancelFunc      context.CancelFunc
 	messagesOutChan chan streamcontrol.ChatMessage
-	onClose         func(context.Context)
+	onClose         func(context.Context, *ChatHandlerOBSOLETE)
 }
 
 func (k *Kick) newChatHandlerOBSOLETE(
 	ctx context.Context,
 	channelSlug string,
-	onClose func(context.Context),
+	onClose func(context.Context, *ChatHandlerOBSOLETE),
 ) (*ChatHandlerOBSOLETE, error) {
 	reverseEngClient, err := kickcom.New()
 	if err != nil {
@@ -51,7 +51,7 @@ func NewChatHandlerOBSOLETE(
 	ctx context.Context,
 	chatClient ChatClientOBSOLETE,
 	channelID uint64,
-	onClose func(context.Context),
+	onClose func(context.Context, *ChatHandlerOBSOLETE),
 ) (_ret *ChatHandlerOBSOLETE, _err error) {
 	logger.Debugf(ctx, "NewChatHandlerOBSOLETE(ctx, client, %d, %p)", channelID, onClose)
 	defer func() {
@@ -71,7 +71,7 @@ func NewChatHandlerOBSOLETE(
 	observability.Go(ctx, func(ctx context.Context) {
 		if onClose != nil {
 			defer func() {
-				onClose(ctx)
+				onClose(ctx, h)
 			}()
 		}
 		defer func() {

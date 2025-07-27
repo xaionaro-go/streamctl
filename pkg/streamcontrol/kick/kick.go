@@ -188,11 +188,16 @@ func (k *Kick) initChatHandler(
 
 func (k *Kick) onChatHandlerClose(
 	ctx context.Context,
+	h *ChatHandlerOBSOLETE,
 ) {
 	if !k.ChatHandlerLocker.Lock(ctx) {
 		return
 	}
 	defer k.ChatHandlerLocker.Unlock()
+	if h != k.ChatHandler {
+		logger.Errorf(ctx, "chat handler was already replaced")
+		return
+	}
 	select {
 	case <-ctx.Done():
 		return
