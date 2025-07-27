@@ -305,7 +305,7 @@ func (d *StreamD) initYouTubeBackend(ctx context.Context) error {
 			return d.setPlatformConfig(ctx, youtube.ID, cfg)
 		},
 		d.UI.OAuthHandlerYouTube,
-		d.GetOAuthListenPorts,
+		func() []uint16 { return []uint16{8091} }, // TODO: replace with: d.GetOAuthListenPorts,
 	)
 	if err != nil {
 		return fmt.Errorf("unable to initialize the backend 'YouTube': %w", err)
