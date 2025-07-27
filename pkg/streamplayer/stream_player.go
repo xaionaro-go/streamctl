@@ -925,6 +925,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 					logger.Errorf(ctx, "unable to slow down to %f: %v", curSpeed, err)
 					return
 				}
+				time.Sleep(100 * time.Millisecond) // let it catch up at least a bit, before changing the speed back (to avoid flickering)
 				return
 			}
 			if lag <= p.Config.JitterBufDuration {

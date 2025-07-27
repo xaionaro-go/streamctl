@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -136,16 +137,19 @@ func (k *Kick) keepAliveLoop(
 	for {
 		if k.Channel == nil { // TODO: fix non-atomicity
 			logger.Warnf(ctx, "channel info is not set, yet")
+			time.Sleep(time.Second)
 			continue
 		}
 		client := k.GetClient()
 		if client == nil {
 			logger.Errorf(ctx, "client is not initialized")
+			time.Sleep(time.Second)
 			continue
 		}
 		_, err := client.GetLivestreams(k.CloseCtx, gokick.NewLivestreamListFilter().SetBroadcasterUserIDs(int(k.Channel.UserID)))
 		if err != nil {
 			logger.Errorf(ctx, "unable to get my stream status: %v", err)
+			time.Sleep(time.Second)
 			continue
 		}
 		select {
@@ -822,56 +826,110 @@ func (k *Kick) RaidTo(
 	return fmt.Errorf("not implemented")
 }
 
-func (k *Kick) Shoutout(
+func (k *Kick) getChanInfoViaOldClient(
 	ctx context.Context,
-	chanID streamcontrol.ChatUserID,
-) (_err error) {
-	logger.Debugf(ctx, "Shoutout(ctx, '%s')", chanID)
-	defer func() { logger.Debugf(ctx, "/Shoutout(ctx, '%s'): %v", chanID, _err) }()
-
-	if err := k.prepare(ctx); err != nil {
-		return fmt.Errorf("unable to get a prepared client: %w", err)
-	}
-
-	reply, err := k.ClientOBSOLETE.GetChannelV1(ctx, string(chanID))
+	idOrLogin streamcontrol.ChatUserID,
+) (_ret *gokick.ChannelResponse, _err error) {
+	logger.Debugf(ctx, "getChanInfoViaOldClient(ctx, '%s')")
+	defer func() { logger.Debugf(ctx, "/getChanInfoViaOldClient(ctx, '%s'): %v %v", _ret, _err) }()
+	chanInfo, err := k.ClientOBSOLETE.GetChannelV1(ctx, string(idOrLogin))
 	if err != nil {
-		logger.Errorf(ctx, "unable to get channel info ('%s'): %w", chanID, err)
-		return k.sendShoutoutMessageWithoutChanInfo(ctx, chanID)
+		return nil, fmt.Errorf("unable to get chan info of '%s': %w", idOrLogin, err)
 	}
-	if len(reply.PreviousLivestreams) == 0 {
-		return k.sendShoutoutMessageWithoutChanInfo(ctx, chanID)
+
+	result := &gokick.ChannelResponse{
+		BannerPicture:     chanInfo.BannerImage.URL,
+		BroadcasterUserID: int(chanInfo.UserID),
+		Slug:              chanInfo.Slug,
+		StreamTitle:       chanInfo.Livestream.SessionTitle,
 	}
-	return k.sendShoutoutMessage(ctx, chanID, reply.PreviousLivestreams[0])
+	if len(chanInfo.RecentCategories) > 0 {
+		cat := chanInfo.RecentCategories[0]
+		result.Category = gokick.CategoryResponse{
+			ID:        int(cat.ID),
+			Name:      cat.Name,
+			Thumbnail: cat.Category.Icon,
+		}
+	}
+
+	return result, nil
 }
 
-func (k *Kick) sendShoutoutMessageWithoutChanInfo(
+func (k *Kick) getChanInfo(
 	ctx context.Context,
-	chanID streamcontrol.ChatUserID,
+	idOrLogin streamcontrol.ChatUserID,
+) (_ret *gokick.ChannelResponse, _err error) {
+	logger.Debugf(ctx, "getChanInfo(ctx, '%s')")
+	defer func() { logger.Debugf(ctx, "/getChanInfo(ctx, '%s'): %v %v", _ret, _err) }()
+
+	id, idConvErr := strconv.ParseInt(string(idOrLogin), 10, 64)
+
+	client := k.GetClient()
+	if client == nil {
+		err := fmt.Errorf("kick client is not initialized")
+		if idConvErr != nil {
+			logger.Errorf(ctx, "%v", err)
+			return k.getChanInfoViaOldClient(ctx, idOrLogin)
+		}
+		return nil, err
+	}
+
+	if idConvErr == nil {
+		resp, err := client.GetChannels(ctx, gokick.NewChannelListFilter().SetBroadcasterUserIDs([]int{int(id)}))
+		if err != nil {
+			return nil, fmt.Errorf("unable to request channel info by id %d: %w", id, err)
+		}
+		if len(resp.Result) != 0 {
+			return &resp.Result[0], nil
+		}
+	}
+
+	resp, err := client.GetChannels(ctx, gokick.NewChannelListFilter().SetSlug([]string{string(idOrLogin)}))
+	if err != nil {
+		logger.Errorf(ctx, "unable to request channel info by slug '%s': %v", idOrLogin, err)
+		return k.getChanInfoViaOldClient(ctx, idOrLogin) // TODO: use an multierror to combine errors from both variants
+	}
+	if len(resp.Result) == 0 {
+		return nil, fmt.Errorf("user with slug or ID '%s' is not found", idOrLogin)
+	}
+
+	return &resp.Result[0], nil
+}
+
+func (k *Kick) Shoutout(
+	ctx context.Context,
+	idOrLogin streamcontrol.ChatUserID,
 ) (_err error) {
-	logger.Debugf(ctx, "sendShoutoutMessageWithoutChanInfo(ctx, '%s')", chanID)
-	defer func() { logger.Debugf(ctx, "/sendShoutoutMessageWithoutChanInfo(ctx, '%s'): %v", chanID, _err) }()
+	logger.Debugf(ctx, "Shoutout(ctx, '%s')", idOrLogin)
+	defer func() { logger.Debugf(ctx, "/Shoutout(ctx, '%s'): %v", idOrLogin, _err) }()
 
 	if err := k.prepare(ctx); err != nil {
 		return fmt.Errorf("unable to get a prepared client: %w", err)
 	}
 
-	err := k.SendChatMessage(ctx, fmt.Sprintf("Shoutout to %s! Great creator! Take a look at their channel and click that follow button! https://www.twitch.tv/%s", chanID, chanID))
+	chanInfo, err := k.getChanInfo(ctx, idOrLogin)
 	if err != nil {
-		return fmt.Errorf("unable to send the message (case #0): %w", err)
+		return fmt.Errorf("unable to get channel info ('%s'): %w", idOrLogin, err)
 	}
 
-	return nil
+	return k.sendShoutoutMessage(ctx, *chanInfo)
 }
 
 func (k *Kick) sendShoutoutMessage(
 	ctx context.Context,
-	chanID streamcontrol.ChatUserID,
-	stream kickcom.LivestreamV1,
+	chanInfo gokick.ChannelResponse,
 ) (_err error) {
-	logger.Debugf(ctx, "sendShoutoutMessage(ctx, '%s')", chanID)
-	defer func() { logger.Debugf(ctx, "/sendShoutoutMessage(ctx, '%s'): %v", chanID, _err) }()
+	logger.Debugf(ctx, "sendShoutoutMessage(ctx, '%s')", spew.Sdump(chanInfo))
+	defer func() { logger.Debugf(ctx, "/sendShoutoutMessage(ctx, '%s'): %v", spew.Sdump(chanInfo), _err) }()
 
-	err := k.SendChatMessage(ctx, fmt.Sprintf("Shoutout to %s! Great creator! Their last stream: '%s'. Take a look at their channel and click that follow button! https://kick.com/%s", chanID, stream.SessionTitle, chanID))
+	var message []string
+	message = append(message, fmt.Sprintf("Shoutout to %s!", chanInfo.Slug))
+	if chanInfo.StreamTitle != "" {
+		message = append(message, fmt.Sprintf("Their latest stream: '%s'.", chanInfo.StreamTitle))
+	}
+	message = append(message, fmt.Sprintf("Take a look at their channel and click that follow button! https://kick.com/%s", chanInfo.Slug))
+
+	err := k.SendChatMessage(ctx, strings.Join(message, " "))
 	if err != nil {
 		return fmt.Errorf("unable to send the message (case #1): %w", err)
 	}

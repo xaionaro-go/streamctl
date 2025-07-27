@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
@@ -1425,15 +1426,15 @@ func (yt *YouTube) GetChatMessagesChan(
 func (yt *YouTube) SendChatMessage(
 	ctx context.Context,
 	message string,
-) error {
+) (_err error) {
+	logger.Debugf(ctx, "SendChatMessage(ctx, '%s')", message)
+	defer func() { logger.Debugf(ctx, "/SendChatMessage(ctx, '%s'): %v", message, _err) }()
 	return xsync.DoR1(ctx, &yt.currentLiveBroadcastsLocker, func() error {
 		var result *multierror.Error
 		for _, broadcast := range yt.currentLiveBroadcasts {
-			err := yt.YouTubeClient.InsertCommentThread(ctx, &youtube.CommentThread{
+			commentInfo := &youtube.CommentThread{
 				Snippet: &youtube.CommentThreadSnippet{
-					CanReply:  true,
 					ChannelId: yt.Config.Config.ChannelID,
-					IsPublic:  true,
 					TopLevelComment: &youtube.Comment{
 						Snippet: &youtube.CommentSnippet{
 							TextOriginal: message,
@@ -1441,9 +1442,11 @@ func (yt *YouTube) SendChatMessage(
 					},
 					VideoId: broadcast.Id,
 				},
-			}, []string{"snippet"})
+			}
+			logger.Tracef(ctx, "commentInfo: %s", spew.Sdump(commentInfo))
+			err := yt.YouTubeClient.InsertCommentThread(ctx, commentInfo, []string{"snippet"})
 			if err != nil {
-				result = multierror.Append(result, fmt.Errorf("unable to post the comment under video '%s': %w", broadcast.Id, err))
+				result = multierror.Append(result, fmt.Errorf("unable to post the comment under video '%s': %w: %s", broadcast.Id, err, spew.Sdump(commentInfo)))
 			}
 		}
 		return result.ErrorOrNil()
@@ -1453,7 +1456,9 @@ func (yt *YouTube) SendChatMessage(
 func (yt *YouTube) RemoveChatMessage(
 	ctx context.Context,
 	messageID streamcontrol.ChatMessageID,
-) error {
+) (_err error) {
+	logger.Debugf(ctx, "RemoveChatMessage(ctx, '%s')", messageID)
+	defer func() { logger.Debugf(ctx, "/RemoveChatMessage(ctx, '%s'): %v", messageID, _err) }()
 	// TODO: The `messageID` value below is not a message ID, unfortunately.
 	//       It just contains the author and the message as a temporary solution.
 	//       Find a way to extract the message ID.
@@ -1525,7 +1530,10 @@ func (yt *YouTube) IsCapable(
 func (yt *YouTube) IsChannelStreaming(
 	ctx context.Context,
 	chanID streamcontrol.ChatUserID,
-) (bool, error) {
+) (_ret bool, _err error) {
+	logger.Debugf(ctx, "IsChannelStreaming")
+	defer func() { logger.Debugf(ctx, "/IsChannelStreaming: %v %v", _ret, _err) }()
+
 	resp, err := yt.YouTubeClient.Search(ctx, string(chanID), EventTypeLive, []string{"snippet"})
 	if err != nil {
 		return false, fmt.Errorf("unable to search: %w", err)

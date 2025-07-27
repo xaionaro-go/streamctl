@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"reflect"
+	"slices"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -822,6 +823,9 @@ func (d *StreamD) EndStream(ctx context.Context, platID streamcontrol.PlatformNa
 					logger.Errorf(ctx, "unable to raid to '%s': %v", userID.User, err)
 					continue
 				}
+
+				logger.Debugf(ctx, "sleeping for 2 seconds, just in case")
+				time.Sleep(2 * time.Second)
 				break
 			}
 		}
@@ -1146,9 +1150,7 @@ func (d *StreamD) getOAuthListenPorts() []uint16 {
 		ports = append(ports, k)
 	}
 
-	sort.Slice(ports, func(i, j int) bool {
-		return ports[i] < ports[j]
-	})
+	slices.Sort(ports)
 
 	logger.Default().Debugf("oauth ports: %#+v", ports)
 	return ports
