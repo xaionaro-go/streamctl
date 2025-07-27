@@ -9,6 +9,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
@@ -894,7 +895,10 @@ func (t *Twitch) IsCapable(
 func (t *Twitch) IsChannelStreaming(
 	ctx context.Context,
 	chanID streamcontrol.ChatUserID,
-) (bool, error) {
+) (_ret bool, _err error) {
+	logger.Debugf(ctx, "IsChannelStreaming")
+	defer func() { logger.Debugf(ctx, "/IsChannelStreaming: %v %v", _ret, _err) }()
+
 	reply, err := t.client.GetStreams(&helix.StreamsParams{
 		UserIDs: []string{string(chanID)},
 	})
@@ -912,15 +916,19 @@ func (t *Twitch) IsChannelStreaming(
 
 func (t *Twitch) RaidTo(
 	ctx context.Context,
-	chanID streamcontrol.ChatUserID,
+	idOrLogin streamcontrol.ChatUserID,
 ) (_err error) {
-	logger.Debugf(ctx, "RaidTo(ctx, '%s')", chanID)
-	defer func() { logger.Debugf(ctx, "/RaidTo(ctx, '%s'): %v", chanID, _err) }()
+	logger.Debugf(ctx, "RaidTo(ctx, '%s')", idOrLogin)
+	defer func() { logger.Debugf(ctx, "/RaidTo(ctx, '%s'): %v", idOrLogin, _err) }()
+	user, err := t.GetUser(string(idOrLogin))
+	if err != nil {
+		return fmt.Errorf("unable to get user '%s': %w", idOrLogin, err)
+	}
 	params := &helix.StartRaidParams{
 		FromBroadcasterID: t.broadcasterID,
-		ToBroadcasterID:   string(chanID),
+		ToBroadcasterID:   string(user.ID),
 	}
-	logger.Debugf(ctx, "RaidTo(ctx, '%s'): %#+v", chanID, params)
+	logger.Debugf(ctx, "RaidTo(ctx, '%s'): %#+v", idOrLogin, params)
 	resp, err := t.client.StartRaid(params)
 	if err != nil {
 		return fmt.Errorf("unable to raid %#+v: %v", params, err)
@@ -929,43 +937,71 @@ func (t *Twitch) RaidTo(
 	return nil
 }
 
+func (t *Twitch) GetUser(idOrLogin string) (*helix.User, error) {
+	users, err := t.client.GetUsers(&helix.UsersParams{
+		IDs: []string{string(idOrLogin)},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("unable to get user info for userID '%s': %w", idOrLogin, err)
+	}
+	if len(users.Data.Users) == 0 {
+		users, err = t.client.GetUsers(&helix.UsersParams{
+			Logins: []string{string(idOrLogin)},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("unable to get user info for login '%s': %w", idOrLogin, err)
+		}
+	}
+	if len(users.Data.Users) == 0 {
+		return nil, fmt.Errorf("user with ID-or-login '%s' not found", idOrLogin)
+	}
+	return &users.Data.Users[0], nil
+}
+
 func (t *Twitch) Shoutout(
 	ctx context.Context,
-	chanID streamcontrol.ChatUserID,
+	userIDOrLogin streamcontrol.ChatUserID,
 ) (_err error) {
-	logger.Debugf(ctx, "Shoutout(ctx, '%s')", chanID)
-	defer func() { logger.Debugf(ctx, "/Shoutout(ctx, '%s'): %v", chanID, _err) }()
+	logger.Debugf(ctx, "Shoutout(ctx, '%s')", userIDOrLogin)
+	defer func() { logger.Debugf(ctx, "/Shoutout(ctx, '%s'): %v", userIDOrLogin, _err) }()
 	params := &helix.SendShoutoutParams{
 		FromBroadcasterID: t.broadcasterID,
-		ToBroadcasterID:   string(chanID),
+		ToBroadcasterID:   string(userIDOrLogin),
 		ModeratorID:       t.broadcasterID,
 	}
-	logger.Debugf(ctx, "Shoutout(ctx, '%s'): %#+v", chanID, params)
+	logger.Debugf(ctx, "Shoutout(ctx, '%s'): %#+v", userIDOrLogin, params)
 	_, err := t.client.SendShoutout(params)
 	if err != nil {
 		return fmt.Errorf("unable to send the shoutout (%#+v): %w", params, err)
 	}
 
+	user, err := t.GetUser(string(userIDOrLogin))
+	if err != nil {
+		return fmt.Errorf("unable to get user '%s': %w", userIDOrLogin, err)
+	}
 	reply, err := t.client.GetStreams(&helix.StreamsParams{
-		UserIDs: []string{string(chanID)},
+		UserIDs: []string{string(user.ID)},
 	})
 	if err != nil {
-		logger.Errorf(ctx, "unable to get channel info ('%s'): %w", chanID, err)
-		return t.sendShoutoutMessageWithoutChanInfo(ctx, chanID)
+		logger.Errorf(ctx, "unable to get streams info (userID: %v): %w", user.ID, err)
+		return t.sendShoutoutMessageWithoutChanInfo(ctx, *user)
 	}
 	if len(reply.Data.Streams) == 0 {
-		return t.sendShoutoutMessageWithoutChanInfo(ctx, chanID)
+		return t.sendShoutoutMessageWithoutChanInfo(ctx, *user)
 	}
-	return t.sendShoutoutMessage(ctx, chanID, reply.Data.Streams[0])
+	return t.sendShoutoutMessage(ctx, *user, reply.Data.Streams[0])
 }
 
 func (t *Twitch) sendShoutoutMessageWithoutChanInfo(
 	ctx context.Context,
-	chanID streamcontrol.ChatUserID,
+	user helix.User,
 ) (_err error) {
-	logger.Debugf(ctx, "sendShoutoutMessageWithoutChanInfo(ctx, '%s')", chanID)
-	defer func() { logger.Debugf(ctx, "/sendShoutoutMessageWithoutChanInfo(ctx, '%s'): %v", chanID, _err) }()
-	err := t.SendChatMessage(ctx, fmt.Sprintf("Shoutout to %s! Great creator! Take a look at their channel and click that follow button! https://www.twitch.tv/%s", chanID, chanID))
+	logger.Debugf(ctx, "sendShoutoutMessageWithoutChanInfo(ctx, '%s')", spew.Sdump(user))
+	defer func() {
+		logger.Debugf(ctx, "/sendShoutoutMessageWithoutChanInfo(ctx, '%s'): %v", spew.Sdump(user), _err)
+	}()
+	yearsExists := float64(int(time.Since(user.CreatedAt.Time).Hours()/24/364*10)) / 10
+	err := t.SendChatMessage(ctx, fmt.Sprintf("Shoutout to %s! A great creator (%.1f years on Twitch)! Their self-description: '%s'. Take a look at their channel and click that follow button! https://www.twitch.tv/%s", user.DisplayName, yearsExists, user.Description, user.Login))
 	if err != nil {
 		return fmt.Errorf("unable to send the message (case #0): %w", err)
 	}
@@ -974,12 +1010,13 @@ func (t *Twitch) sendShoutoutMessageWithoutChanInfo(
 
 func (t *Twitch) sendShoutoutMessage(
 	ctx context.Context,
-	chanID streamcontrol.ChatUserID,
+	user helix.User,
 	stream helix.Stream,
 ) (_err error) {
-	logger.Debugf(ctx, "sendShoutoutMessage(ctx, '%s')", chanID)
-	defer func() { logger.Debugf(ctx, "/sendShoutoutMessage(ctx, '%s'): %v", chanID, _err) }()
-	err := t.SendChatMessage(ctx, fmt.Sprintf("Shoutout to %s! Great creator! Their last stream: '%s'. Take a look at their channel and click that follow button! https://www.twitch.tv/%s", chanID, stream.Title, chanID))
+	logger.Debugf(ctx, "sendShoutoutMessage(ctx, '%s')", spew.Sdump(user))
+	defer func() { logger.Debugf(ctx, "/sendShoutoutMessage(ctx, '%s'): %v", spew.Sdump(user), _err) }()
+	yearsExists := float64(int(time.Since(user.CreatedAt.Time).Hours()/24/364*10)) / 10
+	err := t.SendChatMessage(ctx, fmt.Sprintf("Shoutout to %s! A great creator (%.1f years on Twitch)! Their last stream: '%s'. Their self-description: '%s'. Take a look at their channel and click that follow button! https://www.twitch.tv/%s", user.DisplayName, yearsExists, stream.Title, user.Description, user.Login))
 	if err != nil {
 		return fmt.Errorf("unable to send the message (case #1): %w", err)
 	}

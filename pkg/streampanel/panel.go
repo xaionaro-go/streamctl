@@ -56,6 +56,8 @@ import (
 // https://developers.google.com/youtube/v3/docs/videos
 const youtubeTitleLength = 100
 
+const browserDedupTimeout = time.Second * 5
+
 type Panel struct {
 	StreamD      api.StreamD
 	Screenshoter Screenshoter
@@ -178,6 +180,10 @@ type Panel struct {
 	currentlyPlayingChatMessageSoundCount int32
 	chatUIsLocker                         xsync.Mutex
 	chatUIs                               []chatUIInterface
+
+	lastOpenedBrowserURL       string
+	lastOpenedBrowserURLAt     time.Time
+	lastOpenedBrowserURLLocker xsync.Mutex
 }
 
 func New(
@@ -810,7 +816,24 @@ func (p *Panel) openBrowser(
 	urlString string,
 	reason string,
 ) (_err error) {
-	return newBrowser(p).openBrowser(ctx, urlString, reason)
+	logger.Debugf(ctx, "openBrowser(ctx, '%s', '%s')")
+	defer func() { logger.Debugf(ctx, "/openBrowser(ctx, '%s', '%s'): %v", _err) }()
+	return xsync.DoR1(ctx, &p.lastOpenedBrowserURLLocker, func() error {
+		now := time.Now()
+		if now.Sub(p.lastOpenedBrowserURLAt) <= browserDedupTimeout {
+			if p.lastOpenedBrowserURL == urlString {
+				logger.Debugf(ctx, "the URL was already opened recently, skipping")
+				return nil
+			}
+		}
+		err := newBrowser(p).openBrowser(ctx, urlString, reason)
+		if err != nil {
+			return err
+		}
+		p.lastOpenedBrowserURL = urlString
+		p.lastOpenedBrowserURLAt = now
+		return nil
+	})
 }
 
 var twitchAppsCreateLink = must(url.Parse("https://dev.twitch.tv/console/apps/create"))
