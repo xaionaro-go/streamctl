@@ -189,7 +189,11 @@ enum Capability {
     SendChatMessage = 1;
 	DeleteChatMessage = 2;
 	BanUser = 3;
+    Shoutout = 4;
+    IsChannelStreaming = 5;
+    Raid = 6;
 }
+
 message RestartRequest {}
 message RestartReply {}
 

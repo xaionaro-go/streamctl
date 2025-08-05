@@ -824,8 +824,11 @@ func (d *StreamD) EndStream(ctx context.Context, platID streamcontrol.PlatformNa
 					continue
 				}
 
-				logger.Debugf(ctx, "sleeping for 2 seconds, just in case")
-				time.Sleep(2 * time.Second)
+				switch platID {
+				case twitch.ID:
+					logger.Debugf(ctx, "sleeping for 20 seconds, to wait until Raid happens")
+					time.Sleep(20 * time.Second)
+				}
 				break
 			}
 		}

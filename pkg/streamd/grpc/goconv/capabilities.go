@@ -23,6 +23,12 @@ func CapabilitiesGRPC2Go(
 			r = streamcontrol.CapabilityDeleteChatMessage
 		case streamd_grpc.Capability_BanUser:
 			r = streamcontrol.CapabilityBanUser
+		case streamd_grpc.Capability_Shoutout:
+			r = streamcontrol.CapabilityShoutout
+		case streamd_grpc.Capability_IsChannelStreaming:
+			r = streamcontrol.CapabilityIsChannelStreaming
+		case streamd_grpc.Capability_Raid:
+			r = streamcontrol.CapabilityRaid
 		default:
 			logger.Warnf(ctx, "unexpected capability: %v", cap)
 			continue
@@ -47,6 +53,12 @@ func CapabilitiesGo2GRPC(
 			item = streamd_grpc.Capability_DeleteChatMessage
 		case streamcontrol.CapabilityBanUser:
 			item = streamd_grpc.Capability_BanUser
+		case streamcontrol.CapabilityShoutout:
+			item = streamd_grpc.Capability_Shoutout
+		case streamcontrol.CapabilityIsChannelStreaming:
+			item = streamd_grpc.Capability_IsChannelStreaming
+		case streamcontrol.CapabilityRaid:
+			item = streamd_grpc.Capability_Raid
 		default:
 			logger.Warnf(ctx, "unexpected capability: %v", cap)
 			continue

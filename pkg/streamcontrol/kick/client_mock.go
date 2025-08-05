@@ -18,6 +18,10 @@ func (clientMock) GetAuthorize(redirectURI, state, codeChallenge string, scope [
 	return "", nil
 }
 
+func (clientMock) RefreshToken(ctx context.Context, refreshToken string) (gokick.TokenResponse, error) {
+	return gokick.TokenResponse{}, nil
+}
+
 func (clientMock) GetToken(ctx context.Context, redirectURI, code, codeVerifier string) (gokick.TokenResponse, error) {
 	return gokick.TokenResponse{}, nil
 }
@@ -89,3 +93,7 @@ func (clientMock) BanUser(
 		Result: gokick.BanUserResponse{},
 	}, nil
 }
+
+func (clientMock) SetAppAccessToken(token string)   {}
+func (clientMock) SetUserAccessToken(token string)  {}
+func (clientMock) SetUserRefreshToken(token string) {}

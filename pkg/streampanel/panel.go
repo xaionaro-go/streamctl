@@ -2250,6 +2250,7 @@ func (p *Panel) doStopStream(ctx context.Context) {
 		obs.ID,
 		youtube.ID,
 		twitch.ID,
+		kick.ID,
 	} {
 		isEnabled, err := p.StreamD.IsBackendEnabled(ctx, backendID)
 		if err != nil {
@@ -2273,6 +2274,46 @@ func (p *Panel) doStopStream(ctx context.Context) {
 		p.updateStreamClockHandler = nil
 	}
 
+	var wg sync.WaitGroup
+
+	if p.youtubeCheck.Checked && backendEnabled[youtube.ID] {
+		wg.Add(1)
+		observability.Go(ctx, func(ctx context.Context) {
+			defer wg.Done()
+			p.startStopButton.SetText("Stopping YouTube...")
+			err := p.StreamD.EndStream(ctx, youtube.ID)
+			if err != nil {
+				p.DisplayError(fmt.Errorf("unable to stop the stream on YouTube: %w", err))
+			}
+		})
+	}
+
+	if p.twitchCheck.Checked && backendEnabled[twitch.ID] {
+		wg.Add(1)
+		observability.Go(ctx, func(ctx context.Context) {
+			defer wg.Done()
+			p.startStopButton.SetText("Stopping Twitch...")
+			err := p.StreamD.EndStream(ctx, twitch.ID)
+			if err != nil {
+				p.DisplayError(fmt.Errorf("unable to stop the stream on Twitch: %w", err))
+			}
+		})
+	}
+
+	if p.kickCheck.Checked && backendEnabled[kick.ID] {
+		wg.Add(1)
+		observability.Go(ctx, func(ctx context.Context) {
+			defer wg.Done()
+			p.startStopButton.SetText("Stopping Kick...")
+			err := p.StreamD.EndStream(ctx, kick.ID)
+			if err != nil {
+				p.DisplayError(fmt.Errorf("unable to stop the stream on Kick: %w", err))
+			}
+		})
+	}
+
+	wg.Wait()
+
 	if backendEnabled[obs.ID] {
 		if streamDCfg != nil {
 			obsCfg := streamcontrol.GetPlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile](ctx, streamDCfg.Backends, obs.ID)
@@ -2293,14 +2334,6 @@ func (p *Panel) doStopStream(ctx context.Context) {
 		err := p.StreamD.EndStream(ctx, obs.ID)
 		if err != nil {
 			p.DisplayError(fmt.Errorf("unable to stop the stream on OBS: %w", err))
-		}
-	}
-
-	if p.youtubeCheck.Checked && backendEnabled[youtube.ID] {
-		p.startStopButton.SetText("Stopping YouTube...")
-		err := p.StreamD.EndStream(ctx, youtube.ID)
-		if err != nil {
-			p.DisplayError(fmt.Errorf("unable to stop the stream on YouTube: %w", err))
 		}
 	}
 
