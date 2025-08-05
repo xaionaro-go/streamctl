@@ -9,6 +9,7 @@ import (
 type Client interface {
 	GetAuthorize(redirectURI, state, codeChallenge string, scope []gokick.Scope) (string, error)
 	GetToken(ctx context.Context, redirectURI, code, codeVerifier string) (gokick.TokenResponse, error)
+	RefreshToken(ctx context.Context, refreshToken string) (gokick.TokenResponse, error)
 	OnUserAccessTokenRefreshed(callback func(accessToken, refreshToken string))
 	UpdateStreamTitle(ctx context.Context, title string) (gokick.EmptyResponse, error)
 	UpdateStreamCategory(ctx context.Context, categoryID int) (gokick.EmptyResponse, error)
@@ -28,6 +29,9 @@ type Client interface {
 		duration *int,
 		reason *string,
 	) (gokick.BanUserResponseWrapper, error)
+	SetAppAccessToken(token string)
+	SetUserAccessToken(token string)
+	SetUserRefreshToken(token string)
 }
 
 type clientScorfly struct {

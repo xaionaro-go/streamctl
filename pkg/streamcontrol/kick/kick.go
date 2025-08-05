@@ -45,9 +45,8 @@ type Kick struct {
 	SaveCfgFn           func(Config) error
 	PrepareLocker       xsync.Mutex
 
-	lazyInitOnce          sync.Once
-	getAccessTokenLocker  xsync.Mutex
-	lastGetMutexSuccessAt time.Time
+	lazyInitOnce         sync.Once
+	getAccessTokenLocker xsync.Mutex
 }
 
 var _ streamcontrol.StreamController[StreamProfile] = (*Kick)(nil)
@@ -117,6 +116,7 @@ func (k *Kick) onUserAccessTokenRefreshed(
 	logger.Debugf(ctx, "onUserAccessTokenRefreshed")
 	defer logger.Debugf(ctx, "/onUserAccessTokenRefreshed")
 	k.CurrentConfigLocker.Do(ctx, func() {
+		logger.Infof(ctx, "UserAccessToken had been refreshed")
 		k.CurrentConfig.Config.UserAccessToken.Set(userAccessToken)
 		k.CurrentConfig.Config.RefreshToken.Set(refreshToken)
 		err := k.SaveCfgFn(k.CurrentConfig)
@@ -140,13 +140,10 @@ func (k *Kick) keepAliveLoop(
 			time.Sleep(time.Second)
 			continue
 		}
-		client := k.GetClient()
-		if client == nil {
-			logger.Errorf(ctx, "client is not initialized")
-			time.Sleep(time.Second)
-			continue
-		}
-		_, err := client.GetLivestreams(k.CloseCtx, gokick.NewLivestreamListFilter().SetBroadcasterUserIDs(int(k.Channel.UserID)))
+		_, err := k.getLivestreams(
+			k.CloseCtx,
+			gokick.NewLivestreamListFilter().SetBroadcasterUserIDs(int(k.Channel.UserID)),
+		)
 		if err != nil {
 			logger.Errorf(ctx, "unable to get my stream status: %v", err)
 			time.Sleep(time.Second)
@@ -245,13 +242,8 @@ func (k *Kick) getAccessToken(
 ) (_err error) {
 	logger.Tracef(ctx, "getAccessToken")
 	defer func() { logger.Tracef(ctx, "/getAccessToken: %v", _err) }()
-	now := time.Now()
 	return xsync.DoR1(ctx, &k.getAccessTokenLocker, func() error {
-		if k.lastGetMutexSuccessAt.After(now) {
-			return nil
-		}
-		err := k.getAccessTokenNoLock(ctx)
-		return err
+		return k.getAccessTokenNoLock(ctx)
 	})
 }
 
@@ -260,12 +252,6 @@ func (k *Kick) getAccessTokenNoLock(
 ) (_err error) {
 	logger.Tracef(ctx, "getAccessTokenNoLock")
 	defer func() { logger.Tracef(ctx, "/getAccessTokenNoLock: %v", _err) }()
-
-	defer func() {
-		if _err == nil {
-			k.lastGetMutexSuccessAt = time.Now()
-		}
-	}()
 
 	getPortsFn := k.CurrentConfig.Config.GetOAuthListenPorts
 	if getPortsFn == nil {
@@ -345,6 +331,11 @@ func (k *Kick) setToken(
 ) (_err error) {
 	logger.Tracef(ctx, "setToken")
 	defer func() { logger.Tracef(ctx, "/setToken: %v", _err) }()
+	logger.Infof(ctx, "new UserAccessToken was set")
+	if client := k.GetClient(); client != nil {
+		client.SetUserAccessToken(token.AccessToken)
+		client.SetUserRefreshToken(token.AccessToken)
+	}
 	k.CurrentConfig.Config.UserAccessToken.Set(token.AccessToken)
 	k.CurrentConfig.Config.UserAccessTokenExpiresAt = now.Add(time.Second * time.Duration(token.ExpiresIn))
 	k.CurrentConfig.Config.RefreshToken.Set(token.RefreshToken)
@@ -391,8 +382,32 @@ func (k *Kick) Flush(ctx context.Context) error {
 }
 
 func (k *Kick) EndStream(ctx context.Context) error {
-	logger.Warnf(ctx, "not implemented yet")
+	// Kick ends a stream automatically, nothing to do:
 	return nil
+}
+
+func (k *Kick) getLivestreams(
+	ctx context.Context,
+	filter gokick.LivestreamListFilter,
+) (_ret *gokick.LivestreamsResponseWrapper, _err error) {
+	logger.Debugf(ctx, "getLivestreams")
+	defer func() { logger.Debugf(ctx, "/getLivestreams: %v, %v", _ret, _err) }()
+
+	if err := k.prepare(ctx); err != nil {
+		return nil, fmt.Errorf("unable to get a prepared client: %w", err)
+	}
+
+	client := k.GetClient()
+	if client == nil {
+		return nil, fmt.Errorf("client is not initialized")
+	}
+
+	resp, err := client.GetLivestreams(k.CloseCtx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get my stream status: %w", err)
+	}
+
+	return &resp, nil
 }
 
 func (k *Kick) GetStreamStatus(
@@ -765,6 +780,14 @@ func (k *Kick) getAccessTokenIfNeeded(
 	logger.Tracef(ctx, "getAccessTokenIfNeeded")
 	defer func() { logger.Tracef(ctx, "/getAccessTokenIfNeeded: %v", _err) }()
 
+	if time.Now().After(k.CurrentConfig.Config.UserAccessTokenExpiresAt.Add(-30 * time.Second)) {
+		if k.CurrentConfig.Config.RefreshToken.Get() != "" {
+			if err := k.refreshAccessToken(ctx); err != nil {
+				return fmt.Errorf("unable to refresh the access token: %w", err)
+			}
+		}
+	}
+
 	if k.CurrentConfig.Config.UserAccessToken.Get() != "" {
 		return nil
 	}
@@ -772,6 +795,29 @@ func (k *Kick) getAccessTokenIfNeeded(
 	err := k.getAccessToken(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to get access token: %w", err)
+	}
+
+	return nil
+}
+
+func (k *Kick) refreshAccessToken(
+	ctx context.Context,
+) (_err error) {
+	logger.Tracef(ctx, "refreshAccessToken")
+	defer func() { logger.Tracef(ctx, "/refreshAccessToken: %v", _err) }()
+
+	resp, err := k.GetClient().RefreshToken(ctx, k.CurrentConfig.Config.RefreshToken.Get())
+	if err != nil {
+		logger.Errorf(ctx, "unable to refresh the token: %v", err)
+		if getErr := k.getAccessToken(ctx); getErr != nil {
+			return fmt.Errorf("unable to refresh access token (%w); and unable to get a new access token (%w)", err, getErr)
+		}
+		return nil
+	}
+
+	err = k.setToken(ctx, resp, time.Now())
+	if err != nil {
+		return fmt.Errorf("unable to set access token: %w")
 	}
 
 	return nil

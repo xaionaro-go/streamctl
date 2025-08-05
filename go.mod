@@ -124,7 +124,7 @@ require (
 	github.com/goccy/go-json v0.10.4 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/gofrs/uuid v4.4.0+incompatible // indirect
-	github.com/golang-jwt/jwt/v4 v4.5.1 // indirect
+	github.com/golang-jwt/jwt/v4 v4.5.2 // indirect
 	github.com/golang-jwt/jwt/v5 v5.2.2 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
@@ -216,12 +216,13 @@ require (
 	github.com/volatiletech/sqlboiler/v4 v4.16.2 // indirect
 	github.com/volatiletech/strmangle v0.0.6 // indirect
 	github.com/wlynxg/anet v0.0.6-0.20250109065809-5501d401a269 // indirect
-	github.com/xaionaro-go/avcommon v0.0.0-20250510235605-840f8210b727 // indirect
+	github.com/xaionaro-go/avcommon v0.0.0-20250805213258-459b927db31a // indirect
 	github.com/xaionaro-go/avmediacodec v0.0.0-20250505012527-c819676502d8 // indirect
 	github.com/xaionaro-go/gorex v0.0.0-20241010205749-bcd59d639c4d // indirect
 	github.com/xaionaro-go/libsrt v0.0.0-20250505013920-61d894a3b7e9 // indirect
 	github.com/xaionaro-go/ndk v0.0.0-20250420195304-361bb98583bf // indirect
 	github.com/xaionaro-go/proxy v0.0.0-20250525144747-579f5a891c15 // indirect
+	github.com/xaionaro-go/sockopt v0.0.0-20250526214909-e15e1e4bc738 // indirect
 	github.com/xaionaro-go/spinlock v0.0.0-20200518175509-30e6d1ce68a1 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	github.com/xo/terminfo v0.0.0-20210125001918-ca9a967f8778 // indirect
@@ -236,6 +237,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.36.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
+	gocv.io/x/gocv v0.41.0 // indirect
 	golang.org/x/arch v0.12.0 // indirect
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
 	golang.org/x/image v0.24.0 // indirect
@@ -296,7 +298,7 @@ require (
 	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0
 	github.com/xaionaro-go/audio v0.0.0-20250210102901-abfced9d5ef3
-	github.com/xaionaro-go/avpipeline v0.0.0-20250525204026-17104bc4baca
+	github.com/xaionaro-go/avpipeline v0.0.0-20250727184631-f13f8d149b18
 	github.com/xaionaro-go/datacounter v1.0.4
 	github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42
 	github.com/xaionaro-go/grpcproxy v0.0.0-20241103205849-a8fef42e72f9
@@ -308,8 +310,8 @@ require (
 	github.com/xaionaro-go/object v0.0.0-20241026212449-753ce10ec94c
 	github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20241018162120-5faf4e7a684a
 	github.com/xaionaro-go/observability v0.0.0-20250622130956-24b7017284e4
-	github.com/xaionaro-go/player v0.0.0-20250622141416-ef1757710ec5
-	github.com/xaionaro-go/recoder v0.0.0-20250622141828-d59a546c36e9
+	github.com/xaionaro-go/player v0.0.0-20250805195658-8ea6ef10e5ff
+	github.com/xaionaro-go/recoder v0.0.0-20250805195121-617f4a6a1506
 	github.com/xaionaro-go/secret v0.0.0-20250111141743-ced12e1082c2
 	github.com/xaionaro-go/serializable v0.0.0-20250412140540-5ac572306599
 	github.com/xaionaro-go/timeapiio v0.0.0-20240915203246-b907cf699af3
