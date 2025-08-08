@@ -97,7 +97,7 @@ require (
 	github.com/fyne-io/glfw-js v0.2.0 // indirect
 	github.com/fyne-io/image v0.1.1 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.7 // indirect
-	github.com/gen2brain/shm v0.0.0-20230802011745-f2460f5984f7 // indirect
+	github.com/gen2brain/shm v0.1.0 // indirect
 	github.com/getkin/kin-openapi v0.118.0 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/gin-gonic/gin v1.10.0 // indirect
@@ -143,7 +143,7 @@ require (
 	github.com/invopop/yaml v0.1.0 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/jeandeaual/go-locale v0.0.0-20241217141322-fcc2cadd6f08 // indirect
-	github.com/jezek/xgb v1.1.0 // indirect
+	github.com/jezek/xgb v1.1.1 // indirect
 	github.com/jfreymuth/oggvorbis v1.0.5 // indirect
 	github.com/jfreymuth/pulse v0.1.1 // indirect
 	github.com/jfreymuth/vorbis v1.0.2 // indirect
@@ -284,7 +284,7 @@ require (
 	github.com/hashicorp/go-version v1.7.0
 	github.com/iancoleman/strcase v0.3.0
 	github.com/immune-gmbh/attestation-sdk v0.0.0-20230711173209-f44e4502aeca
-	github.com/kbinani/screenshot v0.0.0-20230812210009-b87d31814237
+	github.com/kbinani/screenshot v0.0.0-20250624051815-089614a94018
 	github.com/klauspost/compress v1.17.9
 	github.com/lusingander/colorpicker v0.7.3
 	github.com/pojntfx/weron v0.2.7
