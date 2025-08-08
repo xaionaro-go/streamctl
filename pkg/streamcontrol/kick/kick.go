@@ -547,6 +547,37 @@ func (k *Kick) GetAllCategories(
 	return *reply, nil
 }
 
+func (k *Kick) tryGetChatHandler(
+	ctx context.Context,
+) *ChatHandlerOBSOLETE {
+	if !k.ChatHandlerLocker.Lock(ctx) {
+		return nil
+	}
+	defer k.ChatHandlerLocker.Unlock()
+	return k.ChatHandler
+}
+
+func (k *Kick) getChatHandler(
+	ctx context.Context,
+) *ChatHandlerOBSOLETE {
+	t := time.NewTicker(time.Second)
+	defer t.Stop()
+	for {
+		chatHandler := k.tryGetChatHandler(ctx)
+		if chatHandler != nil {
+			return chatHandler
+		}
+		logger.Warnf(ctx, "unable to get chat handler")
+		select {
+		case <-k.CloseCtx.Done():
+			return nil
+		case <-ctx.Done():
+			return nil
+		case <-t.C:
+		}
+	}
+}
+
 func (k *Kick) GetChatMessagesChan(
 	ctx context.Context,
 ) (<-chan streamcontrol.ChatMessage, error) {
@@ -574,13 +605,11 @@ func (k *Kick) GetChatMessagesChan(
 		}
 		logger.Debugf(ctx, "GetChatMessagesChan: client is ready")
 		for {
-			chatHandler := func() *ChatHandlerOBSOLETE {
-				if !k.ChatHandlerLocker.Lock(ctx) {
-					return nil
-				}
-				defer k.ChatHandlerLocker.Unlock()
-				return k.ChatHandler
-			}()
+			chatHandler := k.getChatHandler(ctx)
+			if chatHandler == nil {
+				logger.Debugf(ctx, "getting of chat handler was cancelled: %v %v", ctx.Err(), k.CloseCtx.Err())
+				return
+			}
 			logger.Tracef(ctx, "GetChatMessagesChan: waiting for a message")
 			select {
 			case <-k.CloseCtx.Done():
