@@ -60,46 +60,48 @@ func NewChatHandlerOBSOLETE(
 
 	ctx, cancelFn := context.WithCancel(ctx)
 	h := &ChatHandlerOBSOLETE{
-		currentCursor:   0,
-		client:          chatClient,
-		channelID:       channelID,
-		cancelFunc:      cancelFn,
-		messagesOutChan: make(chan streamcontrol.ChatMessage, 100),
-		onClose:         onClose,
+		currentCursor: 0,
+		client:        chatClient,
+		channelID:     channelID,
+		cancelFunc:    cancelFn,
+		onClose:       onClose,
+	}
+	h.init(ctx)
+	return h, nil
+}
+
+func (h *ChatHandlerOBSOLETE) init(ctx context.Context) {
+	h.messagesOutChan = make(chan streamcontrol.ChatMessage, 100)
+	observability.Go(ctx, func(ctx context.Context) {
+		if h.onClose != nil {
+			defer h.onClose(ctx, h)
+		}
+		defer close(h.messagesOutChan)
+		h.loop(ctx)
+	})
+}
+
+func (h *ChatHandlerOBSOLETE) loop(ctx context.Context) {
+	err := h.iterate(ctx)
+	if err != nil {
+		logger.Errorf(ctx, "unable to perform an iteration: %v", err)
+		return
 	}
 
-	observability.Go(ctx, func(ctx context.Context) {
-		if onClose != nil {
-			defer func() {
-				onClose(ctx, h)
-			}()
+	t := time.NewTicker(time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
 		}
-		defer func() {
-			close(h.messagesOutChan)
-		}()
 		err := h.iterate(ctx)
 		if err != nil {
 			logger.Errorf(ctx, "unable to perform an iteration: %v", err)
 			return
 		}
-
-		t := time.NewTicker(time.Second)
-		defer t.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-t.C:
-			}
-			err := h.iterate(ctx)
-			if err != nil {
-				logger.Errorf(ctx, "unable to perform an iteration: %v", err)
-				return
-			}
-		}
-	})
-
-	return h, nil
+	}
 }
 
 func (h *ChatHandlerOBSOLETE) iterate(ctx context.Context) error {
