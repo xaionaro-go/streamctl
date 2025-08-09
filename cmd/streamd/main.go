@@ -93,6 +93,9 @@ func main() {
 	ctx := context.Background()
 	ctx = logger.CtxWithLogger(ctx, l)
 
+	secretsProvider := observability.NewStaticSecretsProvider()
+	ctx = observability.WithSecretsProvider(ctx, secretsProvider)
+
 	if *netPprofAddr != "" || (forceNetPProfOnAndroid && runtime.GOOS == "android") {
 		observability.Go(ctx, func(ctx context.Context) {
 			if *netPprofAddr == "" {
