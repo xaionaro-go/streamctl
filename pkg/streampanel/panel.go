@@ -34,7 +34,6 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/command"
 	gconsts "github.com/xaionaro-go/streamctl/pkg/consts"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
-	"github.com/xaionaro-go/streamctl/pkg/screenshot"
 	"github.com/xaionaro-go/streamctl/pkg/screenshoter"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
@@ -204,7 +203,7 @@ func New(
 	p := &Panel{
 		configPath:          configPath,
 		Config:              Options(opts).ApplyOverrides(cfg),
-		Screenshoter:        screenshoter.New(screenshot.Implementation{}),
+		Screenshoter:        screenshoter.New(),
 		imageLastDownloaded: map[consts.ImageID][]byte{},
 		imageLastParsed:     map[consts.ImageID]image.Image{},
 		streamStatus:        map[streamcontrol.PlatformName]*streamStatus{},

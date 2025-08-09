@@ -10,37 +10,38 @@ import (
 )
 
 type ScreenshotEngine interface {
-	Screenshot(cfg screenshot.Config) (*image.RGBA, error)
+	Screenshot(cfg screenshot.Config) (image.Image, error)
 }
 
 type Screenshoter struct {
 	ScreenshotEngine ScreenshotEngine
 }
 
-func New(
-	engine ScreenshotEngine,
-) *Screenshoter {
+type ScreenshotImplementation struct{}
+
+func (ScreenshotImplementation) Screenshot(cfg screenshot.Config) (image.Image, error) {
+	return screenshot.Implementation{}.Screenshot(cfg)
+}
+
+func New() *Screenshoter {
 	return &Screenshoter{
-		ScreenshotEngine: engine,
+		ScreenshotEngine: ScreenshotImplementation{},
 	}
 }
 
-func (s *Screenshoter) Engine() ScreenshotEngine {
-	return s.ScreenshotEngine
-}
-
+// TODO: add the support of Wayland
 func (s *Screenshoter) Loop(
 	ctx context.Context,
 	interval time.Duration,
 	config screenshot.Config,
-	callback func(context.Context, *image.RGBA),
-) {
+	callback func(context.Context, image.Image),
+) error {
 	t := time.NewTicker(interval)
 	defer t.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return ctx.Err()
 		case <-t.C:
 		}
 		img, err := s.ScreenshotEngine.Screenshot(config)

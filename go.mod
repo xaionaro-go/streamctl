@@ -298,7 +298,7 @@ require (
 	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0
 	github.com/xaionaro-go/audio v0.0.0-20250210102901-abfced9d5ef3
-	github.com/xaionaro-go/avpipeline v0.0.0-20250727184631-f13f8d149b18
+	github.com/xaionaro-go/avpipeline v0.0.0-20250809014515-3d56d4095dc4
 	github.com/xaionaro-go/datacounter v1.0.4
 	github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42
 	github.com/xaionaro-go/grpcproxy v0.0.0-20241103205849-a8fef42e72f9
@@ -310,8 +310,8 @@ require (
 	github.com/xaionaro-go/object v0.0.0-20241026212449-753ce10ec94c
 	github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20241018162120-5faf4e7a684a
 	github.com/xaionaro-go/observability v0.0.0-20250622130956-24b7017284e4
-	github.com/xaionaro-go/player v0.0.0-20250805195658-8ea6ef10e5ff
-	github.com/xaionaro-go/recoder v0.0.0-20250805195121-617f4a6a1506
+	github.com/xaionaro-go/player v0.0.0-20250809010311-a80dbec6c520
+	github.com/xaionaro-go/recoder v0.0.0-20250809010016-1241e0b14473
 	github.com/xaionaro-go/secret v0.0.0-20250111141743-ced12e1082c2
 	github.com/xaionaro-go/serializable v0.0.0-20250412140540-5ac572306599
 	github.com/xaionaro-go/timeapiio v0.0.0-20240915203246-b907cf699af3

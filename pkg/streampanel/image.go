@@ -17,20 +17,18 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/screenshot"
-	"github.com/xaionaro-go/streamctl/pkg/screenshoter"
 	streamdconsts "github.com/xaionaro-go/streamctl/pkg/streamd/consts"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	"github.com/xaionaro-go/xsync"
 )
 
 type Screenshoter interface {
-	Engine() screenshoter.ScreenshotEngine
 	Loop(
 		ctx context.Context,
 		interval time.Duration,
 		config screenshot.Config,
-		callback func(context.Context, *image.RGBA),
-	)
+		callback func(context.Context, image.Image),
+	) error
 }
 
 func (p *Panel) setImage(
@@ -158,13 +156,27 @@ func imgFitTo(src image.Image, size image.Point) (image.Image, error) {
 	factor = math.Min(factor, float64(size.Y)/float64(sizeCur.Y))
 	newWidth := int(float64(sizeCur.X) * factor)
 	newHeight := int(float64(sizeCur.Y) * factor)
-	output := image.NewRGBA(image.Rectangle{Max: image.Point{
+	newSize := image.Rectangle{Max: image.Point{
 		X: newWidth,
 		Y: newHeight,
-	}})
+	}}
+	var output image.Image
+
+	switch src := src.(type) {
+	case *image.RGBA:
+		output = image.NewRGBA(newSize)
+	case *image.RGBA64:
+		output = image.NewRGBA64(newSize)
+	case *image.Gray:
+		output = image.NewGray(newSize)
+	case *image.YCbCr:
+		output = image.NewYCbCr(newSize, src.SubsampleRatio)
+	default:
+		return nil, fmt.Errorf("image format %T is not supported, yet", src)
+	}
 	err := rez.Convert(output, src, rez.NewBicubicFilter())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to convert: %w", err)
 	}
 	return output, nil
 }
@@ -269,7 +281,7 @@ func (p *Panel) setScreenshot(
 	screenshot image.Image,
 ) {
 	bounds := screenshot.Bounds()
-	logger.Tracef(ctx, "screenshot bounds: %#+v", bounds)
+	logger.Tracef(ctx, "screenshot %T bounds: %#+v", screenshot, bounds)
 	if bounds.Max.X == 0 || bounds.Max.Y == 0 {
 		p.DisplayError(fmt.Errorf("received an empty screenshot"))
 		p.screenshoterLocker.Do(ctx, func() {
@@ -313,12 +325,15 @@ func (p *Panel) reinitScreenshoter(ctx context.Context) {
 		ctx, cancelFunc := context.WithCancel(ctx)
 		p.screenshoterClose = cancelFunc
 		observability.Go(ctx, func(ctx context.Context) {
-			p.Screenshoter.Loop(
+			err := p.Screenshoter.Loop(
 				ctx,
 				200*time.Millisecond,
 				p.Config.Screenshot.Config,
-				func(ctx context.Context, img *image.RGBA) { p.setScreenshot(ctx, img) },
+				func(ctx context.Context, img image.Image) { p.setScreenshot(ctx, img) },
 			)
+			if err != nil {
+				logger.Errorf(ctx, "unable to run the screenshoter loop: %v", err)
+			}
 		})
 	})
 }
