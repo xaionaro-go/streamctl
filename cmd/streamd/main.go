@@ -42,6 +42,11 @@ const forceNetPProfOnAndroid = true
 func main() {
 	loggerLevel := logger.LevelWarning
 	pflag.Var(&loggerLevel, "log-level", "Log level")
+	logstashAddr := pflag.String(
+		"logstash-addr",
+		"",
+		"the address of logstash to send logs to (for example: 'tcp://192.168.0.2:5044')",
+	)
 	listenAddr := pflag.String(
 		"listen-addr",
 		":3594",
@@ -95,6 +100,14 @@ func main() {
 
 	secretsProvider := observability.NewStaticSecretsProvider()
 	ctx = observability.WithSecretsProvider(ctx, secretsProvider)
+
+	if *logstashAddr != "" {
+		ctx = observability.CtxWithLogstash(
+			ctx,
+			*logstashAddr,
+			"streamd",
+		)
+	}
 
 	if *netPprofAddr != "" || (forceNetPProfOnAndroid && runtime.GOOS == "android") {
 		observability.Go(ctx, func(ctx context.Context) {
