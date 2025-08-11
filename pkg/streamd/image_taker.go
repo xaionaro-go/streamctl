@@ -19,7 +19,9 @@ func (d *StreamD) getImageBytes(
 	elName string,
 	el config.DashboardElementConfig,
 	dataProvider config.ImageDataProvider,
-) ([]byte, time.Time, error) {
+) (_ret0 []byte, _ret1 time.Time, _err error) {
+	logger.Tracef(ctx, "getImageBytes")
+	defer func() { logger.Tracef(ctx, "/getImageBytes: len:%d, %v, %v", len(_ret0), _ret1, _err) }()
 
 	src := el.Source
 	if getImageByteser, ok := src.(config.GetImageBytes); ok {
