@@ -1102,6 +1102,10 @@ github.com/xaionaro-go/iterate v0.0.0-20250406123757-7802d56b52ce h1:4a0vM4EOq7c
 github.com/xaionaro-go/iterate v0.0.0-20250406123757-7802d56b52ce/go.mod h1:Dx52o1WH1xUoV8jjpiIVTRZ/rNoPNPcnLdMrQ5D2FH0=
 github.com/xaionaro-go/kickcom v0.0.0-20250726234055-93b1e91438d9 h1:BwBnitho7cpQv0/gyCLjGvDQ0uq4hnbaOUYgol9W+IY=
 github.com/xaionaro-go/kickcom v0.0.0-20250726234055-93b1e91438d9/go.mod h1:/7Rv7GaLVJsnlhXljja5m2kKTtADn8OdfDRvPcmdlSw=
+github.com/xaionaro-go/kickcom v0.0.0-20250814232821-f169afaed508 h1:B06zcB7kR13QmSqy5K4e+ATF0Irwe8Qc+hPv3Q0GIRQ=
+github.com/xaionaro-go/kickcom v0.0.0-20250814232821-f169afaed508/go.mod h1:/7Rv7GaLVJsnlhXljja5m2kKTtADn8OdfDRvPcmdlSw=
+github.com/xaionaro-go/kickcom v0.0.0-20250814233614-50ab59507e69 h1:LSjh0//9FPIwcROqyaCetsYascUlxoeFdbawtXirZFg=
+github.com/xaionaro-go/kickcom v0.0.0-20250814233614-50ab59507e69/go.mod h1:/7Rv7GaLVJsnlhXljja5m2kKTtADn8OdfDRvPcmdlSw=
 github.com/xaionaro-go/libsrt v0.0.0-20250505013920-61d894a3b7e9 h1:z5K1pa9cJZ2oqFNWyyxrxO/50Hv4Gn+1kkfXTHkoKNM=
 github.com/xaionaro-go/libsrt v0.0.0-20250505013920-61d894a3b7e9/go.mod h1:yH5w7hdIyhbR4p0WfABH9fLIIK2ZwPd5CKk2K2ND/vo=
 github.com/xaionaro-go/lockmap v0.0.0-20240901172806-e17aea364748 h1:SlB3zLAuLgRxdOo250gMUG/7hSiEU2NzEUNYbJDuI2A=

@@ -40,9 +40,15 @@ func (k *Kick) newChatHandlerOBSOLETE(
 	if err != nil {
 		return nil, fmt.Errorf("unable to initialize a client to Kick: %w", err)
 	}
-	resp, err := reverseEngClient.GetChannelV1(ctx, channelSlug)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get channel '%s' info: %w", channelSlug, err)
+
+	var resp *kickcom.ChannelV1
+	{
+		ctx, cancelFn := context.WithTimeout(ctx, time.Minute)
+		resp, err = reverseEngClient.GetChannelV1(ctx, channelSlug)
+		cancelFn()
+		if err != nil {
+			return nil, fmt.Errorf("unable to get channel '%s' info: %w", channelSlug, err)
+		}
 	}
 	return NewChatHandlerOBSOLETE(ctx, reverseEngClient, resp.ID, onClose)
 }
