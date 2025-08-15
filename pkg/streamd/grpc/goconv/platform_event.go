@@ -6,6 +6,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
+	"github.com/xaionaro-go/streamctl/pkg/xstring"
 )
 
 func ChatMessageGo2GRPC(
@@ -18,6 +19,7 @@ func ChatMessageGo2GRPC(
 		EventType:         PlatformEventTypeGo2GRPC(event.EventType),
 		UserID:            string(event.UserID),
 		Username:          event.Username,
+		UsernameReadable:  xstring.ToReadable(event.Username),
 		MessageID:         string(event.MessageID),
 		Message:           event.Message,
 	}

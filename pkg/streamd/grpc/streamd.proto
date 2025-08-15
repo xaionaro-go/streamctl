@@ -798,6 +798,7 @@ message ChatMessage {
     string username = 6;
     string messageID = 7;
     string message = 8;
+    string usernameReadable = 9;
 }
 
 message SendChatMessageRequest {
