@@ -150,9 +150,9 @@ func (l *ChatListenerOBSOLETE) listenLoop(ctx context.Context) (_err error) {
 				Username:  msg.AuthorName,
 				// TODO: find a way to extract the message ID,
 				//       in the mean while we we use a soft key for that:
-				MessageID:  streamcontrol.ChatMessageID(fmt.Sprintf("%s/%s", msg.AuthorName, msg.Message)),
-				Message:    text,
-				FormatType: format,
+				MessageID:         streamcontrol.ChatMessageID(fmt.Sprintf("%s/%s", msg.AuthorName, msg.Message)),
+				Message:           text,
+				MessageFormatType: format,
 			}
 		}
 	}

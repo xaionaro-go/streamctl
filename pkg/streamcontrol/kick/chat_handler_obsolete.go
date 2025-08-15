@@ -155,13 +155,13 @@ func (h *ChatHandlerOBSOLETE) sendMessage(
 	h.lastMessageID = msg.ID
 	select {
 	case h.messagesOutChan <- streamcontrol.ChatMessage{
-		CreatedAt:  msg.CreatedAt,
-		EventType:  streamcontrol.EventTypeChatMessage,
-		UserID:     streamcontrol.ChatUserID(fmt.Sprintf("%d", msg.UserID)),
-		Username:   msg.Sender.Slug,
-		MessageID:  streamcontrol.ChatMessageID(msg.ID),
-		Message:    msg.Content,
-		FormatType: streamcontrol.TextFormatTypePlain,
+		CreatedAt:         msg.CreatedAt,
+		EventType:         streamcontrol.EventTypeChatMessage,
+		UserID:            streamcontrol.ChatUserID(fmt.Sprintf("%d", msg.UserID)),
+		Username:          msg.Sender.Slug,
+		MessageID:         streamcontrol.ChatMessageID(msg.ID),
+		Message:           msg.Content,
+		MessageFormatType: streamcontrol.TextFormatTypePlain,
 	}:
 	default:
 	}
