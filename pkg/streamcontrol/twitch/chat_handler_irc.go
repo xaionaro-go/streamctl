@@ -92,12 +92,13 @@ func newChatHandlerIRC(
 				}
 				select {
 				case h.messagesOutChan <- streamcontrol.ChatMessage{
-					CreatedAt: ev.CreatedAt,
-					EventType: streamcontrol.EventTypeChatMessage,
-					UserID:    streamcontrol.ChatUserID(ev.Sender.Username),
-					Username:  ev.Sender.Username,
-					MessageID: streamcontrol.ChatMessageID(ev.ID),
-					Message:   ev.Text, // TODO: investigate if we need ev.IRCMessage.Text
+					CreatedAt:  ev.CreatedAt,
+					EventType:  streamcontrol.EventTypeChatMessage,
+					UserID:     streamcontrol.ChatUserID(ev.Sender.Username),
+					Username:   ev.Sender.Username,
+					MessageID:  streamcontrol.ChatMessageID(ev.ID),
+					Message:    ev.Text, // TODO: investigate if we need ev.IRCMessage.Text
+					FormatType: streamcontrol.TextFormatTypePlain,
 				}:
 				default:
 					logger.Warnf(ctx, "the queue is full, skipping the message")

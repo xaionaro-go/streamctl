@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"math/rand"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -140,6 +142,7 @@ func (l *ChatListenerOBSOLETE) listenLoop(ctx context.Context) (_err error) {
 		l.continuationCode = newContinuation
 
 		for _, msg := range msgs {
+			text, format := l.normalizeMessage(ctx, msg.Message)
 			l.messagesOutChan <- streamcontrol.ChatMessage{
 				CreatedAt: msg.Timestamp,
 				EventType: streamcontrol.EventTypeChatMessage,
@@ -147,11 +150,36 @@ func (l *ChatListenerOBSOLETE) listenLoop(ctx context.Context) (_err error) {
 				Username:  msg.AuthorName,
 				// TODO: find a way to extract the message ID,
 				//       in the mean while we we use a soft key for that:
-				MessageID: streamcontrol.ChatMessageID(fmt.Sprintf("%s/%s", msg.AuthorName, msg.Message)),
-				Message:   msg.Message,
+				MessageID:  streamcontrol.ChatMessageID(fmt.Sprintf("%s/%s", msg.AuthorName, msg.Message)),
+				Message:    text,
+				FormatType: format,
 			}
 		}
 	}
+}
+
+func (h *ChatListenerOBSOLETE) normalizeMessage(
+	ctx context.Context,
+	msg string,
+) (_ret0 string, _ret1 streamcontrol.TextFormatType) {
+	logger.Tracef(ctx, "normalizeMessage(ctx, '%v')", msg)
+	defer func() { logger.Tracef(ctx, "/normalizeMessage(ctx, '%v'): %v %v", msg, _ret0, _ret1) }()
+
+	switch {
+	case strings.Contains(msg, "https://yt3.ggpht.com/"):
+		return messageAsHTML(msg), streamcontrol.TextFormatTypeHTML
+	default:
+		return msg, streamcontrol.TextFormatTypePlain
+	}
+}
+
+func messageAsHTML(msg string) string {
+	msg = html.EscapeString(msg)
+	re := regexp.MustCompile(`https://yt3\.ggpht\.com/[^\s]+`)
+	return re.ReplaceAllStringFunc(msg, func(link string) string {
+		link = html.EscapeString(link)
+		return fmt.Sprintf(`<a href="%s">%s</a>`, link, link)
+	})
 }
 
 func (h *ChatListenerOBSOLETE) getUserID(

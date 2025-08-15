@@ -799,6 +799,14 @@ message ChatMessage {
     string messageID = 7;
     string message = 8;
     string usernameReadable = 9;
+    TextFormatType messageFormatType = 10;
+}
+
+enum TextFormatType {
+    TEXT_FORMAT_TYPE_UNDEFINED = 0;
+    TEXT_FORMAT_TYPE_PLAIN = 1;
+    TEXT_FORMAT_TYPE_MARKDOWN = 2;
+    TEXT_FORMAT_TYPE_HTML = 3;
 }
 
 message SendChatMessageRequest {

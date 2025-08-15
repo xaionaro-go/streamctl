@@ -9,13 +9,14 @@ type ChatUserID string
 type ChatMessageID string
 
 type ChatMessage struct {
-	CreatedAt time.Time
-	EventType EventType
-	UserID    ChatUserID
-	Username  string
-	MessageID ChatMessageID
-	Message   string
-	Paid      Money
+	CreatedAt  time.Time
+	EventType  EventType
+	UserID     ChatUserID
+	Username   string
+	MessageID  ChatMessageID
+	Message    string
+	FormatType TextFormatType
+	Paid       Money
 }
 
 type EventType int
