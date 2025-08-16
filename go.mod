@@ -321,7 +321,7 @@ require (
 	github.com/xaionaro-go/xfyne v0.0.0-20250615190411-4c96281f6e25
 	github.com/xaionaro-go/xlogrus v0.0.0-20250111150201-60557109545a
 	github.com/xaionaro-go/xpath v0.0.0-20250111145115-55f5728f643f
-	github.com/xaionaro-go/xsync v0.0.0-20250713122735-6e002588c3d0
+	github.com/xaionaro-go/xsync v0.0.0-20250816221754-5ff810dd0a2c
 	github.com/yutopp/go-flv v0.3.1
 	golang.org/x/crypto v0.39.0
 	google.golang.org/grpc v1.73.0

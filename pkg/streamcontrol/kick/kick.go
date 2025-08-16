@@ -160,50 +160,51 @@ func (k *Kick) keepAliveLoop(
 func (k *Kick) initChatHandler(
 	ctx context.Context,
 ) error {
-	if !k.ChatHandlerLocker.Lock(ctx) {
-		return ctx.Err()
-	}
+	return xsync.DoA1R1(ctx, &k.ChatHandlerLocker, k.initChatHandlerNoLock, ctx)
+}
 
+func (k *Kick) initChatHandlerNoLock(
+	ctx context.Context,
+) error {
 	chatHandler, err := k.newChatHandlerOBSOLETE(ctx, k.CurrentConfig.Config.Channel, k.onChatHandlerClose)
 	if err == nil {
-		k.ChatHandlerLocker.Unlock()
 		k.ChatHandler = chatHandler
 		return nil
 	}
 
-	go func() {
-		defer k.ChatHandlerLocker.Unlock()
-		defer logger.Debugf(ctx, "/initChatHandler")
-		for {
-			logger.Errorf(ctx, "unable to initialize chat handler: %v", err)
-			time.Sleep(time.Second)
-			select {
-			case <-k.CloseCtx.Done():
-				logger.Debugf(ctx, "initChatHandler: cancelled (case #1)")
-				return
-			case <-ctx.Done():
-				logger.Debugf(ctx, "initChatHandler: cancelled (case #2)")
-				return
-			default:
-			}
-			chatHandler, err = k.newChatHandlerOBSOLETE(ctx, k.CurrentConfig.Config.Channel, k.onChatHandlerClose)
-			if err == nil {
-				break
-			}
+	for {
+		logger.Errorf(ctx, "unable to initialize chat handler: %v", err)
+		time.Sleep(time.Second)
+		select {
+		case <-k.CloseCtx.Done():
+			logger.Debugf(ctx, "initChatHandler: cancelled (case #1)")
+			return fmt.Errorf("k.CloseCtx is closed: %w", k.CloseCtx.Err())
+		case <-ctx.Done():
+			logger.Debugf(ctx, "initChatHandler: cancelled (case #2)")
+			return fmt.Errorf("ctx is closed: %w", ctx.Err())
+		default:
+		}
+		chatHandler, err = k.newChatHandlerOBSOLETE(ctx, k.CurrentConfig.Config.Channel, k.onChatHandlerClose)
+		if err != nil {
+			logger.Debugf(ctx, "initChatHandler: unable to create a new chat handler: %v", err)
+			continue
 		}
 		k.ChatHandler = chatHandler
-	}()
-	return nil
+		return nil
+	}
 }
 
 func (k *Kick) onChatHandlerClose(
 	ctx context.Context,
 	h *ChatHandlerOBSOLETE,
 ) {
-	if !k.ChatHandlerLocker.Lock(ctx) {
-		return
-	}
-	defer k.ChatHandlerLocker.Unlock()
+	xsync.DoA2(ctx, &k.ChatHandlerLocker, k.onChatHandlerCloseNoLock, ctx, h)
+}
+
+func (k *Kick) onChatHandlerCloseNoLock(
+	ctx context.Context,
+	h *ChatHandlerOBSOLETE,
+) {
 	if h != k.ChatHandler {
 		logger.Errorf(ctx, "chat handler was already replaced")
 		return
@@ -550,11 +551,9 @@ func (k *Kick) GetAllCategories(
 func (k *Kick) tryGetChatHandler(
 	ctx context.Context,
 ) *ChatHandlerOBSOLETE {
-	if !k.ChatHandlerLocker.Lock(ctx) {
-		return nil
-	}
-	defer k.ChatHandlerLocker.Unlock()
-	return k.ChatHandler
+	return xsync.DoR1(ctx, &k.ChatHandlerLocker, func() *ChatHandlerOBSOLETE {
+		return k.ChatHandler
+	})
 }
 
 func (k *Kick) getChatHandler(
@@ -761,10 +760,11 @@ func (k *Kick) prepareNoLock(ctx context.Context) error {
 			err = fmt.Errorf("initChannelInfo: %w", err)
 			return
 		}
-		if err = k.initChatHandler(ctx); err != nil {
-			err = fmt.Errorf("initChatHandler: %w", err)
-			return
-		}
+		observability.Go(ctx, func(ctx context.Context) {
+			if err = k.initChatHandler(ctx); err != nil {
+				logger.Errorf(ctx, "initChatHandler: %v", err)
+			}
+		})
 	})
 	return err
 }
@@ -846,7 +846,7 @@ func (k *Kick) refreshAccessToken(
 
 	err = k.setToken(ctx, resp, time.Now())
 	if err != nil {
-		return fmt.Errorf("unable to set access token: %w")
+		return fmt.Errorf("unable to set access token: %w", err)
 	}
 
 	return nil
