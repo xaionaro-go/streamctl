@@ -12,6 +12,7 @@ const (
 	TextFormatTypePlain
 	TextFormatTypeMarkdown
 	TextFormatTypeHTML
+	EndOfTextFormatType
 )
 
 func (t TextFormatType) String() string {
@@ -34,7 +35,7 @@ func (t TextFormatType) MarshalJSON() ([]byte, error) {
 }
 
 func TextFormatTypeFromString(s string) (TextFormatType, error) {
-	for i := TextFormatTypeUndefined + 1; i < TextFormatTypeHTML; i++ {
+	for i := range EndOfTextFormatType {
 		if s == i.String() {
 			return i, nil
 		}

@@ -24,9 +24,9 @@ func (s *ChatMessagesStorage) getMessagesSinceLocked(
 	since time.Time,
 	limit uint,
 ) (_ret []api.ChatMessage, _err error) {
-	logger.Tracef(ctx, "getMessagesSinceLocked(ctx, %v, %d)", since, limit)
+	logger.Debugf(ctx, "getMessagesSinceLocked(ctx, %v, %d)", since, limit)
 	defer func() {
-		logger.Tracef(ctx, "/getMessagesSinceLocked(ctx, %v, %d): len:%d, %v", since, limit, len(_ret), _err)
+		logger.Debugf(ctx, "/getMessagesSinceLocked(ctx, %v, %d): len:%d, %v", since, limit, len(_ret), _err)
 	}()
 
 	if len(s.Messages) == 0 {
@@ -48,7 +48,7 @@ func (s *ChatMessagesStorage) getMessagesSinceLocked(
 	if idx >= len(s.Messages) {
 		lastMessage := s.Messages[len(s.Messages)-1]
 		if !since.Before(lastMessage.CreatedAt) {
-			logger.Tracef(ctx, "all messages are too old: %v < %v", lastMessage, since)
+			logger.Tracef(ctx, "all messages (%d) are too old: %v < %v; meanwhile the first message: %v", len(s.Messages), lastMessage, since, s.Messages[0])
 			return nil, nil
 		}
 		idx = 0

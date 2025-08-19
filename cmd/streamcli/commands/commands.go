@@ -319,7 +319,7 @@ func chatListen(cmd *cobra.Command, args []string) {
 	assertNoError(ctx, err)
 
 	fmt.Println("subscribing...")
-	ch, err := streamD.SubscribeToChatMessages(ctx, time.Now().Add(-time.Minute), 1000)
+	ch, err := streamD.SubscribeToChatMessages(ctx, time.Now().Add(-time.Hour*24*3), 1000)
 	assertNoError(ctx, err)
 
 	fmt.Println("started listening...")
