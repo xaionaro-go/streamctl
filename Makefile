@@ -246,7 +246,7 @@ streampanel-windows: windows-builddir windows-deps
 streampanel-windows-debug: streampanel-windows-debug-using-gobuild
 
 streamd-linux-amd64: builddir
-	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o build/streamd-linux-amd64 ./cmd/streamd
+	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build $(GOBUILD_FLAGS) -ldflags "$(LINKER_FLAGS_LINUX)" -o build/streamd-linux-amd64 ./cmd/streamd
 
 streamcli-linux-amd64: builddir
 	CGO_ENABLED=0 CGO_LDFLAGS="-static" GOOS=linux GOARCH=amd64 go build -o build/streamcli-linux-amd64 ./cmd/streamcli
