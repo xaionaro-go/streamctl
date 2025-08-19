@@ -178,7 +178,7 @@ func messageAsHTML(msg string) string {
 	re := regexp.MustCompile(`https://yt3\.ggpht\.com/[^\s]+`)
 	return re.ReplaceAllStringFunc(msg, func(link string) string {
 		link = html.EscapeString(link)
-		return fmt.Sprintf(`<a href="%s">%s</a>`, link, link)
+		return fmt.Sprintf(`<img src="%s">`, link)
 	})
 }
 
