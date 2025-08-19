@@ -1076,8 +1076,8 @@ github.com/xaionaro-go/avcommon v0.0.0-20250805213258-459b927db31a h1:dAFZ5UCjmT
 github.com/xaionaro-go/avcommon v0.0.0-20250805213258-459b927db31a/go.mod h1:kjLo1LasgdDJqbTGD5bbEM+D6RiZSbf5ZT8yiPFF1BA=
 github.com/xaionaro-go/avmediacodec v0.0.0-20250505012527-c819676502d8 h1:FZn9+TN3uHhohfpanWkR9lFNHApizznZbML6XjvEgTU=
 github.com/xaionaro-go/avmediacodec v0.0.0-20250505012527-c819676502d8/go.mod h1:2W2Kp/HJFXcFBppQ4YytgDy/ydFL3hGc23xSB1U/Luc=
-github.com/xaionaro-go/avpipeline v0.0.0-20250809014515-3d56d4095dc4 h1:f9PZRDlQQvYaxqBCOJf9f04Xa0Z7dQZ8rKPQm723u9c=
-github.com/xaionaro-go/avpipeline v0.0.0-20250809014515-3d56d4095dc4/go.mod h1:eFxxNA50Pyp1B+snK0TlmpsnrGUtzJohbY/+J3BEvqA=
+github.com/xaionaro-go/avpipeline v0.0.0-20250818235118-eb2402c035f0 h1:saQG0XLbFr9DfYG7xSa+WFBGUXqHgnBHEae3B7sPfes=
+github.com/xaionaro-go/avpipeline v0.0.0-20250818235118-eb2402c035f0/go.mod h1:LEjK7dDVzZKby0WMI45b26cdFKd1D5ZW0NZEsgWRpdQ=
 github.com/xaionaro-go/datacounter v1.0.4 h1:+QMZLmu73R5WGkQfUPwlXF/JFN+Weo4iuDZkiL2wVm8=
 github.com/xaionaro-go/datacounter v1.0.4/go.mod h1:Sf9vBevuV6w5iE6K3qJ9pWVKcyS60clWBUSQLjt5++c=
 github.com/xaionaro-go/eventbus v0.0.0-20250720144534-4670758005d9 h1:ZAm8ueMw5D85LDeV1Kboc3ANqXr3LK/eXIl9hj1BJyM=
@@ -1100,10 +1100,6 @@ github.com/xaionaro-go/helix/v2 v2.0.0-20250309182928-f54c9d4c8a29 h1:k7WLDHIK0A
 github.com/xaionaro-go/helix/v2 v2.0.0-20250309182928-f54c9d4c8a29/go.mod h1:e1GsZq4NDk9sQlPJ0Nr3+14R9cizqg09VAk7/IonpOU=
 github.com/xaionaro-go/iterate v0.0.0-20250406123757-7802d56b52ce h1:4a0vM4EOq7cU15TTmJHX66vX2cXA7RgVX3bWyj4ZVw4=
 github.com/xaionaro-go/iterate v0.0.0-20250406123757-7802d56b52ce/go.mod h1:Dx52o1WH1xUoV8jjpiIVTRZ/rNoPNPcnLdMrQ5D2FH0=
-github.com/xaionaro-go/kickcom v0.0.0-20250726234055-93b1e91438d9 h1:BwBnitho7cpQv0/gyCLjGvDQ0uq4hnbaOUYgol9W+IY=
-github.com/xaionaro-go/kickcom v0.0.0-20250726234055-93b1e91438d9/go.mod h1:/7Rv7GaLVJsnlhXljja5m2kKTtADn8OdfDRvPcmdlSw=
-github.com/xaionaro-go/kickcom v0.0.0-20250814232821-f169afaed508 h1:B06zcB7kR13QmSqy5K4e+ATF0Irwe8Qc+hPv3Q0GIRQ=
-github.com/xaionaro-go/kickcom v0.0.0-20250814232821-f169afaed508/go.mod h1:/7Rv7GaLVJsnlhXljja5m2kKTtADn8OdfDRvPcmdlSw=
 github.com/xaionaro-go/kickcom v0.0.0-20250814233614-50ab59507e69 h1:LSjh0//9FPIwcROqyaCetsYascUlxoeFdbawtXirZFg=
 github.com/xaionaro-go/kickcom v0.0.0-20250814233614-50ab59507e69/go.mod h1:/7Rv7GaLVJsnlhXljja5m2kKTtADn8OdfDRvPcmdlSw=
 github.com/xaionaro-go/libsrt v0.0.0-20250505013920-61d894a3b7e9 h1:z5K1pa9cJZ2oqFNWyyxrxO/50Hv4Gn+1kkfXTHkoKNM=
@@ -1157,8 +1153,6 @@ github.com/xaionaro-go/xlogrus v0.0.0-20250111150201-60557109545a h1:EoNRdOtBMnZ
 github.com/xaionaro-go/xlogrus v0.0.0-20250111150201-60557109545a/go.mod h1:RPfWNuwqJykkA2TEvisXqHgy1ypA/1H2HBdIRSeVJ9o=
 github.com/xaionaro-go/xpath v0.0.0-20250111145115-55f5728f643f h1:ofxY1akRlVdJ/AEDj0EakK4Aez8fzeWTTe2mCAZiJ0A=
 github.com/xaionaro-go/xpath v0.0.0-20250111145115-55f5728f643f/go.mod h1:f0DVcqddOy1RALOgXJHwpQnkp1u1yeBX/+A2+Bf4EGc=
-github.com/xaionaro-go/xsync v0.0.0-20250713122735-6e002588c3d0 h1:JDl35mgD3RsmEx7xbBCSONLceBCTFUWQvPUG5YsWrgU=
-github.com/xaionaro-go/xsync v0.0.0-20250713122735-6e002588c3d0/go.mod h1:FCpywNAl4a4hgzE8j7Z+TpdhBQi5WHxnI35jOrFpoQw=
 github.com/xaionaro-go/xsync v0.0.0-20250816221754-5ff810dd0a2c h1:d1jyWhrTnHhwk+16Y7fexlXQCqfvm0NCsDvdsg2mcCA=
 github.com/xaionaro-go/xsync v0.0.0-20250816221754-5ff810dd0a2c/go.mod h1:FCpywNAl4a4hgzE8j7Z+TpdhBQi5WHxnI35jOrFpoQw=
 github.com/xaionaro-go/youtube-live-chat-downloader/v2 v2.0.0-20250726224735-811554015ae8 h1:iRcIRlIryjDkgFoKJZQQWra/zv783CnKtXnpq9z7VTQ=
@@ -1267,8 +1261,8 @@ golang.org/x/exp v0.0.0-20200119233911-0405dc783f0a/go.mod h1:2RIsYlXP63K8oxa1u0
 golang.org/x/exp v0.0.0-20200207192155-f17229e696bd/go.mod h1:J/WKrq2StrnmMY6+EHIKF9dgMWnmCNThgcyBT1FY9mM=
 golang.org/x/exp v0.0.0-20200224162631-6cc2880d07d6/go.mod h1:3jZMyOhIsHpP37uCMkUooju7aAi5cS1Q23tOzKc+0MU=
 golang.org/x/exp v0.0.0-20221205204356-47842c84f3db/go.mod h1:CxIveKay+FTh1D0yPZemJVgC/95VzuuOLq5Qi4xnoYc=
-golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 h1:R84qjqJb5nVJMxqWYb3np9L5ZsaDtB+a39EqjV0JSUM=
-golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0/go.mod h1:S9Xr4PYopiDyqSyp5NjCrhFrqg6A5zA2E/iPHPhqnS8=
+golang.org/x/exp v0.0.0-20250813145105-42675adae3e6 h1:SbTAbRFnd5kjQXbczszQ0hdk3ctwYf3qBNH9jIsGclE=
+golang.org/x/exp v0.0.0-20250813145105-42675adae3e6/go.mod h1:4QTo5u+SEIbbKW1RacMZq1YEfOBqeXa19JeshGi+zc4=
 golang.org/x/image v0.0.0-20190227222117-0694c2d4d067/go.mod h1:kZ7UVZpmo3dzQBMxlp+ypCbDeSB+sBbTgSJuh5dn5js=
 golang.org/x/image v0.0.0-20190802002840-cff245a6509b/go.mod h1:FeLwcggjj3mMvU+oOTbSwawSJRM1uh48EjtB4UJZlP0=
 golang.org/x/image v0.24.0 h1:AN7zRgVsbvmTfNyqIbbOraYL8mSwcKncEj8ofjgzcMQ=
@@ -1415,8 +1409,8 @@ golang.org/x/sync v0.0.0-20220513210516-0976fa681c29/go.mod h1:RxMgew5VJxzue5/jJ
 golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sync v0.1.0/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sync v0.2.0/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
-golang.org/x/sync v0.15.0 h1:KWH3jNZsfyT6xfAfKiz6MRNmd46ByHDYaZ7KSkCtdW8=
-golang.org/x/sync v0.15.0/go.mod h1:1dzgHSNfp02xaA81J2MS99Qcpr2w7fw1gpm99rleRqA=
+golang.org/x/sync v0.16.0 h1:ycBJEhp9p4vXvUZNszeOq0kGTPghopOL8q0fq3vstxw=
+golang.org/x/sync v0.16.0/go.mod h1:1dzgHSNfp02xaA81J2MS99Qcpr2w7fw1gpm99rleRqA=
 golang.org/x/sys v0.0.0-20180823144017-11551d06cbcc/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
 golang.org/x/sys v0.0.0-20180830151530-49385e6e1522/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
 golang.org/x/sys v0.0.0-20180905080454-ebe1bf3edb33/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
