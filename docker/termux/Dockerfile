@@ -31,6 +31,7 @@ RUN rm -f /data/data/.built-packages/libandroid-posix-semaphore && ./build-packa
 
 # build custom ffmpeg
 COPY ffmpeg_mediacodec_set_parameters.patch /home/builder/termux-packages/packages/ffmpeg/mediacodec_set_parameters.patch
+COPY ffmpeg_mediacodec_q_params.patch /home/builder/termux-packages/packages/ffmpeg/mediacodec_q_params.patch
 RUN ./build-package.sh ffmpeg
 
 # installing fyne
