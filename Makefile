@@ -140,6 +140,7 @@ dockerbuilder-android-arm64:
 			--init \
 			--name $(DOCKER_CONTAINER_NAME) \
 			--volume ".:/project" \
+			--volume "$(PWD)/.cache:/home/builder/.cache" \
 			--tty \
 			$(DOCKER_IMAGE) >/dev/null 2>&1 || /bin/true
 

@@ -7,10 +7,24 @@ Date:   Fri Jan 10 16:47:23 2025 +0800
     Signed-off-by: Zhao Zhili <zhilizhao@tencent.com>
 
 diff --git a/libavcodec/mediacodecenc.c b/libavcodec/mediacodecenc.c
-index bcd5f865fa..8f44cd5b12 100644
+index e76ea81236..89041199e4 100644
 --- a/libavcodec/mediacodecenc.c
 +++ b/libavcodec/mediacodecenc.c
-@@ -121,6 +121,39 @@ static int mediacodec_init_bsf(AVCodecContext *avctx)
+@@ -76,6 +76,13 @@ typedef struct MediaCodecEncContext {
+     int level;
+     int pts_as_dts;
+     int extract_extradata;
++
++    int qp_i_min;
++    int qp_p_min;
++    int qp_b_min;
++    int qp_i_max;
++    int qp_p_max;
++    int qp_b_max;
+ } MediaCodecEncContext;
+ 
+ enum {
+@@ -185,6 +192,39 @@ static int mediacodec_init_bsf(AVCodecContext *avctx)
  
  static int mediacodec_generate_extradata(AVCodecContext *avctx);
  
@@ -50,16 +64,17 @@ index bcd5f865fa..8f44cd5b12 100644
  static av_cold int mediacodec_init(AVCodecContext *avctx)
  {
      const char *codec_mime = NULL;
-@@ -261,6 +294,8 @@ static av_cold int mediacodec_init(AVCodecContext *avctx)
- #endif //__ANDROID_API__ >= 26
+@@ -313,6 +353,9 @@ static av_cold int mediacodec_init(AVCodecContext *avctx)
+         if (s->bitrate_mode == BITRATE_MODE_CQ && avctx->global_quality > 0)
+             ff_AMediaFormat_setInt32(format, "quality", avctx->global_quality);
      }
- 
++
 +    mediacodec_set_qp_range(avctx, format);
 +
      // frame-rate and i-frame-interval are required to configure codec
      if (avctx->framerate.num >= avctx->framerate.den && avctx->framerate.den > 0) {
          s->fps = avctx->framerate.num / avctx->framerate.den;
-@@ -734,6 +769,12 @@ static const AVCodecHWConfigInternal *const mediacodec_hw_configs[] = {
+@@ -734,6 +777,12 @@ static const AVCodecHWConfigInternal *const mediacodec_hw_configs[] = {
      NULL
  };
  
@@ -72,7 +87,7 @@ index bcd5f865fa..8f44cd5b12 100644
  #define OFFSET(x) offsetof(MediaCodecEncContext, x)
  #define VE AV_OPT_FLAG_VIDEO_PARAM | AV_OPT_FLAG_ENCODING_PARAM
  #define COMMON_OPTION                                                                                       \
-@@ -756,7 +797,18 @@ static const AVCodecHWConfigInternal *const mediacodec_hw_configs[] = {
+@@ -754,7 +803,18 @@ static const AVCodecHWConfigInternal *const mediacodec_hw_configs[] = {
      { "pts_as_dts", "Use PTS as DTS. It is enabled automatically if avctx max_b_frames <= 0, "              \
                      "since most of Android devices don't output B frames by default.",                      \
                      OFFSET(pts_as_dts), AV_OPT_TYPE_BOOL, {.i64 = -1}, -1, 1, VE },                         \
@@ -92,29 +107,11 @@ index bcd5f865fa..8f44cd5b12 100644
  
  #define MEDIACODEC_ENCODER_CLASS(name)              \
  static const AVClass name ## _mediacodec_class = {  \
-@@ -778,6 +830,7 @@ const FFCodec ff_ ## short_name ## _mediacodec_encoder = {              \
-                         AV_CODEC_CAP_ENCODER_FLUSH,                     \
+@@ -777,6 +837,7 @@ const FFCodec ff_ ## short_name ## _mediacodec_encoder = {              \
      .priv_data_size   = sizeof(MediaCodecEncContext),                   \
      .p.pix_fmts       = avc_pix_fmts,                                   \
+     .color_ranges   = AVCOL_RANGE_MPEG | AVCOL_RANGE_JPEG,              \
 +    .defaults         = mediacodec_defaults,                            \
      .init             = mediacodec_init,                                \
      FF_CODEC_RECEIVE_PACKET_CB(mediacodec_encode),                      \
      .close            = mediacodec_close,                               \
-diff --git a/libavcodec/mediacodecenc.h b/libavcodec/mediacodecenc.h
-index 8915c99f54..8860148f41 100644
---- a/libavcodec/mediacodecenc.h
-+++ b/libavcodec/mediacodecenc.h
-@@ -67,6 +67,13 @@ typedef struct MediaCodecEncContext {
-     int pts_as_dts;
-     int extract_extradata;
- 
-+    int qp_i_min;
-+    int qp_p_min;
-+    int qp_b_min;
-+    int qp_i_max;
-+    int qp_p_max;
-+    int qp_b_max;
-+
- #if __ANDROID_API__ >= 26
-     MediaCodecEncControlContext ctrl_ctx;
- #endif //__ANDROID_API__ >= 26

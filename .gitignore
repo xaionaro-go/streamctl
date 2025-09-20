@@ -11,3 +11,5 @@ rcc*.cpp
 .vscode
 termux-packages
 priv
+.cache
+.ccache

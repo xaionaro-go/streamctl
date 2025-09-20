@@ -3,9 +3,8 @@ Author: Dmitrii Okunev <xaionaro@dx.center>
 Date:   Sun Apr 20 17:54:21 2025 +0100
 
     Add MediaCodec function setParameters
-
 diff --git a/libavcodec/mediacodec_wrapper.c b/libavcodec/mediacodec_wrapper.c
-index 283bbe72d6..660adf4d40 100644
+index 96c886666a..b63a60a292 100644
 --- a/libavcodec/mediacodec_wrapper.c
 +++ b/libavcodec/mediacodec_wrapper.c
 @@ -192,6 +192,8 @@ struct JNIAMediaCodecFields {
@@ -52,7 +51,7 @@ index 283bbe72d6..660adf4d40 100644
  static int mediacodec_jni_start(FFAMediaCodec* ctx)
  {
      int ret = 0;
-@@ -1826,6 +1849,8 @@ static const FFAMediaCodec media_codec_jni = {
+@@ -1818,6 +1841,8 @@ static const FFAMediaCodec media_codec_jni = {
      .getBufferFlagEndOfStream = mediacodec_jni_getBufferFlagEndOfStream,
      .getBufferFlagKeyFrame = mediacodec_jni_getBufferFlagKeyFrame,
  
@@ -61,7 +60,7 @@ index 283bbe72d6..660adf4d40 100644
      .getConfigureFlagEncode = mediacodec_jni_getConfigureFlagEncode,
      .cleanOutputBuffers = mediacodec_jni_cleanOutputBuffers,
      .signalEndOfInputStream = mediacodec_jni_signalEndOfInputStream,
-@@ -2219,6 +2244,21 @@ static int mediacodec_ndk_configure(FFAMediaCodec* ctx,
+@@ -2178,6 +2203,21 @@ static int mediacodec_ndk_configure(FFAMediaCodec* ctx,
      return 0;
  }
  
@@ -83,7 +82,7 @@ index 283bbe72d6..660adf4d40 100644
  #define MEDIACODEC_NDK_WRAPPER(method)                                   \
  static int mediacodec_ndk_ ## method(FFAMediaCodec* ctx)                 \
  {                                                                        \
-@@ -2522,6 +2562,8 @@ static const FFAMediaCodec media_codec_ndk = {
+@@ -2393,6 +2433,8 @@ static const FFAMediaCodec media_codec_ndk = {
      .getBufferFlagEndOfStream = mediacodec_ndk_getBufferFlagEndOfStream,
      .getBufferFlagKeyFrame = mediacodec_ndk_getBufferFlagKeyFrame,
  
@@ -93,10 +92,10 @@ index 283bbe72d6..660adf4d40 100644
      .cleanOutputBuffers = mediacodec_ndk_cleanOutputBuffers,
      .signalEndOfInputStream = mediacodec_ndk_signalEndOfInputStream,
 diff --git a/libavcodec/mediacodec_wrapper.h b/libavcodec/mediacodec_wrapper.h
-index 18d0796445..e8feb6bf8e 100644
+index 11a4260497..804349ea2c 100644
 --- a/libavcodec/mediacodec_wrapper.h
 +++ b/libavcodec/mediacodec_wrapper.h
-@@ -233,6 +233,9 @@ struct FFAMediaCodec {
+@@ -217,6 +217,9 @@ struct FFAMediaCodec {
  
      int (*cleanOutputBuffers)(FFAMediaCodec *codec);
  
@@ -105,8 +104,8 @@ index 18d0796445..e8feb6bf8e 100644
 +
      // For encoder with FFANativeWindow as input.
      int (*signalEndOfInputStream)(FFAMediaCodec *);
- 
-@@ -259,6 +262,12 @@ static inline int ff_AMediaCodec_configure(FFAMediaCodec *codec,
+ };
+@@ -238,6 +241,12 @@ static inline int ff_AMediaCodec_configure(FFAMediaCodec *codec,
      return codec->configure(codec, format, surface, crypto, flags);
  }
  
