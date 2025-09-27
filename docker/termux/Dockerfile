@@ -44,7 +44,7 @@ RUN sed -e 's/make -f Makefile$/make -f Makefile-libbz2_so/' -i ./packages/libbz
 # build custom ffmpeg
 COPY ffmpeg_mediacodec_set_parameters.patch /home/builder/termux-packages/packages/ffmpeg/mediacodec_set_parameters.patch
 COPY ffmpeg_mediacodec_q_params.patch /home/builder/termux-packages/packages/ffmpeg/mediacodec_q_params.patch
-RUN ./build-package.sh -d ffmpeg
+RUN ./build-package.sh -I -d ffmpeg
 
 # installing fyne
 RUN sudo apt install -y golang-go
