@@ -18,8 +18,8 @@ import (
 	"github.com/scorfly/gokick"
 	"github.com/xaionaro-go/kickcom"
 	"github.com/xaionaro-go/observability"
+	"github.com/xaionaro-go/secret"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
-	"github.com/xaionaro-go/streamctl/pkg/secret"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/xsync"
 )

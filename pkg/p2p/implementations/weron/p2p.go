@@ -20,10 +20,10 @@ import (
 	"github.com/pojntfx/weron/pkg/wrtcconn"
 	"github.com/pojntfx/weron/pkg/wrtcip"
 	"github.com/xaionaro-go/observability"
+	"github.com/xaionaro-go/secret"
 	"github.com/xaionaro-go/streamctl/pkg/consts"
 	p2pconsts "github.com/xaionaro-go/streamctl/pkg/p2p/implementations/weron/consts"
 	"github.com/xaionaro-go/streamctl/pkg/p2p/types"
-	"github.com/xaionaro-go/streamctl/pkg/secret"
 )
 
 const (

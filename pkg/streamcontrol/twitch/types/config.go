@@ -1,8 +1,8 @@
 package twitch
 
 import (
+	"github.com/xaionaro-go/secret"
 	"github.com/xaionaro-go/streamctl/pkg/buildvars"
-	"github.com/xaionaro-go/streamctl/pkg/secret"
 	streamctl "github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 )
 

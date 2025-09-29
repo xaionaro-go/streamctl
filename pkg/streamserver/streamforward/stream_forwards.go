@@ -11,7 +11,7 @@ import (
 	"github.com/xaionaro-go/lockmap"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/recoder"
-	"github.com/xaionaro-go/streamctl/pkg/secret"
+	"github.com/xaionaro-go/secret"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/memoize"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"

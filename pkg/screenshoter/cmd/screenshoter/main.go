@@ -37,6 +37,7 @@ func main() {
 
 	startedAt := time.Now()
 	frameCount := 0
+	logger.Debugf(ctx, "starting the loop with %f FPS", *fps)
 	err := h.Loop(
 		ctx,
 		time.Duration(float64(time.Second) / *fps),
@@ -61,7 +62,7 @@ func main() {
 			}
 
 			func() {
-				f, err := os.OpenFile(*outputFile, os.O_CREATE|os.O_WRONLY, 0644)
+				f, err := os.OpenFile(*outputFile+"~", os.O_CREATE|os.O_WRONLY, 0644)
 				if err != nil {
 					logger.Error(ctx, "unable to open '%s'", *outputFile)
 					return
@@ -71,6 +72,12 @@ func main() {
 				err = png.Encode(f, img)
 				if err != nil {
 					logger.Errorf(ctx, "unable to encode the image to PNG: %w", err)
+					return
+				}
+
+				err = os.Rename(*outputFile+"~", *outputFile)
+				if err != nil {
+					logger.Errorf(ctx, "unable to rename '%s~' to '%s': %w", *outputFile, *outputFile, err)
 					return
 				}
 			}()

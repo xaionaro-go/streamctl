@@ -2,7 +2,7 @@ package types
 
 import (
 	"github.com/xaionaro-go/recoder/xaionaro-go-rtmp/yutoppgortmp"
-	"github.com/xaionaro-go/streamctl/pkg/secret"
+	"github.com/xaionaro-go/secret"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
 

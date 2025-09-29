@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
+	"github.com/xaionaro-go/secret"
 	"github.com/xaionaro-go/streamctl/pkg/buildvars"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
-	"github.com/xaionaro-go/streamctl/pkg/secret"
 	streamctl "github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 )
 
