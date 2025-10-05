@@ -214,7 +214,7 @@ func (p *StreamPlayerHandler) startU(ctx context.Context) error {
 	instanceCtx, cancelFn := context.WithCancel(ctx)
 
 	opts := player.Options{
-		//player.OptionPreset(player.PresetLowLatency),
+		player.OptionPreset(player.PresetLowLatency),
 		player.OptionAudioBuffer(500 * time.Millisecond), // to make sure there are no audio glitches
 		//player.OptionCacheDuration(0),
 	}
