@@ -909,8 +909,8 @@ func (p *StreamPlayerHandler) controllerLoop(
 					return
 				}
 				speed = float64(uint(speed*10)) / 10 // to avoid flickering (for example between 1.0001 and 1.0)
-				if speed < 0.8 {
-					speed = 0.8
+				if speed < 0.9 {
+					speed = 0.9
 				}
 				if speed == curSpeed {
 					return
