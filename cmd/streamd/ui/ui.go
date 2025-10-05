@@ -63,9 +63,9 @@ func NewUI(
 	}
 }
 
-func (ui *UI) OpenBrowser(ctx context.Context, url string) error {
+func (ui *UI) OpenBrowser(ctx context.Context, url string) (_err error) {
 	logger.Debugf(ctx, "UI.OpenBrowser(ctx, '%s')", url)
-	defer logger.Debugf(ctx, "/UI.OpenBrowser(ctx, '%s')", url)
+	defer func() { logger.Debugf(ctx, "/UI.OpenBrowser(ctx, '%s')", url, _err) }()
 	return ui.OpenBrowserFn(ctx, url)
 }
 

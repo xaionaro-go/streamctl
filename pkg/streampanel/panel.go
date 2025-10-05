@@ -815,8 +815,8 @@ func (p *Panel) openBrowser(
 	urlString string,
 	reason string,
 ) (_err error) {
-	logger.Debugf(ctx, "openBrowser(ctx, '%s', '%s')")
-	defer func() { logger.Debugf(ctx, "/openBrowser(ctx, '%s', '%s'): %v", _err) }()
+	logger.Debugf(ctx, "openBrowser(ctx, '%s', '%s')", urlString, reason)
+	defer func() { logger.Debugf(ctx, "/openBrowser(ctx, '%s', '%s'): %v", urlString, reason, _err) }()
 	return xsync.DoR1(ctx, &p.lastOpenedBrowserURLLocker, func() error {
 		now := time.Now()
 		if now.Sub(p.lastOpenedBrowserURLAt) <= browserDedupTimeout {

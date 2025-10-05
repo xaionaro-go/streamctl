@@ -698,9 +698,9 @@ func (err ErrNoOAuthHandlerForPort) Error() string {
 func (grpc *GRPCServer) OpenBrowser(
 	ctx context.Context,
 	url string,
-) (_ret error) {
+) (_err error) {
 	logger.Debugf(ctx, "OpenBrowser(ctx, '%s')", url)
-	defer func() { logger.Debugf(ctx, "/OpenBrowser(ctx, '%s'): %v", url, _ret) }()
+	defer func() { logger.Debugf(ctx, "/OpenBrowser(ctx, '%s'): %v", url, _err) }()
 
 	// TODO: Stop abusing the function for OAuthURLs here! Implement a separate function, or
 	//       at least rename the old one.
