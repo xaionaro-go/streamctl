@@ -213,7 +213,7 @@ func (p *StreamPlayerHandler) startU(ctx context.Context) error {
 	instanceCtx, cancelFn := context.WithCancel(ctx)
 
 	opts := player.Options{
-		player.OptionLowLatency(true),
+		//player.OptionLowLatency(true), // disabled, because low latency mode causes audio distortions on speed non-equal to 1x
 		//player.OptionCacheDuration(0),
 	}
 	if p.Config.CustomPlayerOptions != nil {
