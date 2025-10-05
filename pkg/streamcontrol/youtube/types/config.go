@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/xaionaro-go/secret"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
+	"github.com/xaionaro-go/streamctl/pkg/secret"
 	streamctl "github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"golang.org/x/oauth2"
 )

@@ -7,8 +7,8 @@ import (
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/schema"
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/xaionaro-go/secret"
 	llmtypes "github.com/xaionaro-go/streamctl/pkg/llm/types"
+	"github.com/xaionaro-go/streamctl/pkg/secret"
 )
 
 type ChatGPT struct {

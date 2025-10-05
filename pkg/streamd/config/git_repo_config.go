@@ -1,7 +1,7 @@
 package config
 
 import (
-	"github.com/xaionaro-go/secret"
+	"github.com/xaionaro-go/streamctl/pkg/secret"
 )
 
 type GitRepoConfig struct {

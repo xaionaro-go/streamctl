@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/xaionaro-go/secret"
 	llms "github.com/xaionaro-go/streamctl/pkg/llm"
 	llmtypes "github.com/xaionaro-go/streamctl/pkg/llm/types"
+	"github.com/xaionaro-go/streamctl/pkg/secret"
 	"github.com/xaionaro-go/xcontext"
 	"github.com/xaionaro-go/xsync"
 )

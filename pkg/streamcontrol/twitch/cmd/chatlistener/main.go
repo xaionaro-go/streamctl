@@ -12,8 +12,8 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger/implementation/zap"
 	"github.com/nicklaw5/helix/v2"
 	"github.com/xaionaro-go/observability"
-	"github.com/xaionaro-go/secret"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
+	"github.com/xaionaro-go/streamctl/pkg/secret"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/auth"
 )

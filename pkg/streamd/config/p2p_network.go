@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/goombaio/namegenerator"
-	"github.com/xaionaro-go/secret"
+	"github.com/xaionaro-go/streamctl/pkg/secret"
 )
 
 type P2PPrivateKey struct {

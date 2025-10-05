@@ -23,8 +23,8 @@ import (
 	"github.com/xaionaro-go/avpipeline/node"
 	"github.com/xaionaro-go/avpipeline/packet"
 	"github.com/xaionaro-go/observability"
-	"github.com/xaionaro-go/secret"
 	"github.com/xaionaro-go/streamctl/pkg/screenshot"
+	"github.com/xaionaro-go/secret"
 	"golang.org/x/sys/unix"
 )
 
@@ -57,7 +57,7 @@ func (s *ScreenshoterWayland) Loop(
 	logger.Debugf(ctx, "starting wf-recorder")
 	args := []string{
 		"wf-recorder",
-		"-o", "DP-2",
+		"-o", "DP-8",
 		"-y",
 		"-r", fmt.Sprintf("%f", 1.0/interval.Seconds()),
 		"-c", "rawvideo",

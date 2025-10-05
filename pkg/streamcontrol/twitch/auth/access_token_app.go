@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/xaionaro-go/secret"
+	"github.com/xaionaro-go/streamctl/pkg/secret"
 	twitch "github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/types"
 )
 
