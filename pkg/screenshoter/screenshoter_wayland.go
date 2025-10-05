@@ -23,8 +23,8 @@ import (
 	"github.com/xaionaro-go/avpipeline/node"
 	"github.com/xaionaro-go/avpipeline/packet"
 	"github.com/xaionaro-go/observability"
-	"github.com/xaionaro-go/streamctl/pkg/screenshot"
 	"github.com/xaionaro-go/secret"
+	"github.com/xaionaro-go/streamctl/pkg/screenshot"
 	"golang.org/x/sys/unix"
 )
 

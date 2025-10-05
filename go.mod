@@ -319,7 +319,7 @@ require (
 	github.com/xaionaro-go/object v0.0.0-20241026212449-753ce10ec94c
 	github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20241018162120-5faf4e7a684a
 	github.com/xaionaro-go/observability v0.0.0-20250622130956-24b7017284e4
-	github.com/xaionaro-go/player v0.0.0-20250929012034-6beedca5cfa9
+	github.com/xaionaro-go/player v0.0.0-20251005170047-2c6ad383c093
 	github.com/xaionaro-go/recoder v0.0.0-20250929011527-29b198af8c77
 	github.com/xaionaro-go/secret v0.0.0-20250111141743-ced12e1082c2
 	github.com/xaionaro-go/serializable v0.0.0-20250412140540-5ac572306599

@@ -30,6 +30,7 @@ const (
 	enableSeekOnStart    = true
 	enableTracksRotation = false
 	enableSlowDown       = true
+	minSpeed             = 1.0
 )
 
 type Publisher interface {
@@ -213,7 +214,8 @@ func (p *StreamPlayerHandler) startU(ctx context.Context) error {
 	instanceCtx, cancelFn := context.WithCancel(ctx)
 
 	opts := player.Options{
-		//player.OptionLowLatency(true), // disabled, because low latency mode causes audio distortions on speed non-equal to 1x
+		player.OptionPreset(player.PresetLowLatency),
+		player.OptionAudioBuffer(500 * time.Millisecond), // otherwise low latency mode causes audio distortions on speed non-equal to 1x
 		//player.OptionCacheDuration(0),
 	}
 	if p.Config.CustomPlayerOptions != nil {
@@ -909,8 +911,8 @@ func (p *StreamPlayerHandler) controllerLoop(
 					return
 				}
 				speed = float64(uint(speed*10)) / 10 // to avoid flickering (for example between 1.0001 and 1.0)
-				if speed < 0.9 {
-					speed = 0.9
+				if speed < minSpeed {
+					speed = minSpeed
 				}
 				if speed == curSpeed {
 					return
