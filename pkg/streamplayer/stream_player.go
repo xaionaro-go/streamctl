@@ -905,12 +905,14 @@ func (p *StreamPlayerHandler) controllerLoop(
 
 			lag := l - pos
 			logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: lag == %v", p.StreamID, lag)
-			if enableSlowDown && protocol == streamtypes.ServerTypeRTMP && p.Config.JitterBufDuration > time.Second && lag < p.Config.JitterBufDuration/2 {
-				speed := lag.Seconds() / (p.Config.JitterBufDuration / 2).Seconds()
+			minBufDuration := p.Config.JitterBufDuration / 2
+			if enableSlowDown && protocol == streamtypes.ServerTypeRTMP && p.Config.JitterBufDuration > time.Second && lag < minBufDuration {
+				k := lag.Seconds() / minBufDuration.Seconds()
+				speed := 1 - (1-k)*(1-minSpeed)
 				if speed <= 0 {
 					return
 				}
-				speed = float64(uint(speed*10)) / 10 // to avoid flickering (for example between 1.0001 and 1.0)
+				speed = float64(uint(speed*1000)) / 1000 // to avoid flickering (for example between 1.0001 and 1.0)
 				if speed < minSpeed {
 					speed = minSpeed
 				}
