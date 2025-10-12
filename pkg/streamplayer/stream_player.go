@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"runtime/debug"
 	"strings"
@@ -27,10 +28,11 @@ import (
 )
 
 const (
-	enableSeekOnStart    = true
-	enableTracksRotation = false
-	enableSlowDown       = true
-	minSpeed             = 0.975
+	enableSeekOnStart          = true
+	enableTracksRotation       = false
+	enableSlowDown             = true
+	minSpeed                   = 0.975
+	minSpeedDifferenceSlowDown = 0.001
 )
 
 type Publisher interface {
@@ -213,11 +215,7 @@ func (p *StreamPlayerHandler) startU(ctx context.Context) error {
 
 	instanceCtx, cancelFn := context.WithCancel(ctx)
 
-	opts := player.Options{
-		player.OptionPreset(player.PresetLowLatency),
-		player.OptionAudioBuffer(500 * time.Millisecond), // to make sure there are no audio glitches
-		//player.OptionCacheDuration(0),
-	}
+	opts := player.Options{}
 	if p.Config.CustomPlayerOptions != nil {
 		opts = append(opts, p.Config.CustomPlayerOptions...)
 	}
@@ -912,11 +910,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 				if speed <= 0 {
 					return
 				}
-				speed = float64(uint(speed*1000)) / 1000 // to avoid flickering (for example between 1.0001 and 1.0)
-				if speed < minSpeed {
-					speed = minSpeed
-				}
-				if speed == curSpeed {
+				if math.Abs(speed-curSpeed) < minSpeedDifferenceSlowDown {
 					return
 				}
 				curSpeed = speed
