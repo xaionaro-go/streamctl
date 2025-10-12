@@ -30,7 +30,7 @@ const (
 	enableSeekOnStart    = true
 	enableTracksRotation = false
 	enableSlowDown       = true
-	minSpeed             = 1.0
+	minSpeed             = 0.975
 )
 
 type Publisher interface {
