@@ -271,11 +271,6 @@ func imgFillTo(
 	return dst
 }
 
-const (
-	ScreenshotMaxWidth  = 384
-	ScreenshotMaxHeight = 216
-)
-
 func (p *Panel) setScreenshot(
 	ctx context.Context,
 	screenshot image.Image,
@@ -292,11 +287,11 @@ func (p *Panel) setScreenshot(
 		return
 	}
 
-	if bounds.Max.X > ScreenshotMaxWidth || bounds.Max.Y > ScreenshotMaxHeight {
+	if bounds.Max.X > consts.ScreenshotMaxWidth || bounds.Max.Y > consts.ScreenshotMaxHeight {
 		var err error
 		screenshot, err = imgFitTo(screenshot, image.Point{
-			X: ScreenshotMaxWidth,
-			Y: ScreenshotMaxHeight,
+			X: consts.ScreenshotMaxWidth,
+			Y: consts.ScreenshotMaxHeight,
 		})
 		if err != nil {
 			logger.Errorf(ctx, "unable to rescale the screenshot: %v", err)

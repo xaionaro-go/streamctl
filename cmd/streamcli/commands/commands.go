@@ -10,12 +10,14 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/spf13/cobra"
 	"github.com/xaionaro-go/observability"
+	player "github.com/xaionaro-go/player/pkg/player/builtin"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	kick "github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick/types"
 	obs "github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs/types"
@@ -23,6 +25,7 @@ import (
 	youtube "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/client"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
+	"github.com/xaionaro-go/xcontext"
 )
 
 var (
@@ -95,6 +98,12 @@ var (
 		Run:  variablesSet,
 	}
 
+	VariablesSetScreenshotFromURL = &cobra.Command{
+		Use:  "set_image_from_url",
+		Args: cobra.ExactArgs(3),
+		Run:  variablesSetImageFromURL,
+	}
+
 	Config = &cobra.Command{
 		Use: "config",
 	}
@@ -127,6 +136,7 @@ func init() {
 	Variables.AddCommand(VariablesGet)
 	Variables.AddCommand(VariablesGetHash)
 	Variables.AddCommand(VariablesSet)
+	Variables.AddCommand(VariablesSetScreenshotFromURL)
 
 	Root.AddCommand(Config)
 	Config.AddCommand(ConfigGet)
@@ -294,6 +304,33 @@ func variablesSet(cmd *cobra.Command, args []string) {
 
 	err = streamD.SetVariable(ctx, consts.VarKey(variableKey), value)
 	assertNoError(ctx, err)
+}
+
+func variablesSetImageFromURL(cmd *cobra.Command, args []string) {
+	ctx := xcontext.DetachDone(cmd.Context())
+	imageKey := consts.ImageID(args[0])
+	fps, err := strconv.ParseFloat(args[1], 64)
+	assertNoError(ctx, err)
+	url := args[2]
+
+	remoteAddr, err := cmd.Flags().GetString("remote-addr")
+	assertNoError(ctx, err)
+
+	streamD, err := client.New(ctx, remoteAddr)
+	assertNoError(ctx, err)
+
+	imageRenderer := newScreenshotSender(streamD, consts.VarKeyImage(imageKey), fps)
+	defer imageRenderer.Close()
+
+	p := player.New(ctx, imageRenderer, nil)
+	defer p.Close(ctx)
+
+	err = p.OpenURL(ctx, url)
+	assertNoError(ctx, err)
+
+	ch, err := p.EndChan(ctx)
+	assertNoError(ctx, err)
+	<-ch
 }
 
 func configGet(cmd *cobra.Command, args []string) {
