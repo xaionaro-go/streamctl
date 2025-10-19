@@ -37,6 +37,8 @@ replace github.com/abhinavxd/youtube-live-chat-downloader/v2 => github.com/xaion
 
 replace github.com/Danny-Dasilva/CycleTLS => github.com/xaionaro-go/CycleTLS v0.0.0-20250923213111-aed0022ae7b5
 
+replace github.com/dexterlb/mpvipc => github.com/xaionaro-go/mpvipc v0.0.0-20251019230357-e0f534e5dde4
+
 require (
 	github.com/facebookincubator/go-belt v0.0.0-20250308011339-62fb7027b11f
 	github.com/go-git/go-billy/v5 v5.6.2
@@ -321,7 +323,7 @@ require (
 	github.com/xaionaro-go/object v0.0.0-20241026212449-753ce10ec94c
 	github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20241018162120-5faf4e7a684a
 	github.com/xaionaro-go/observability v0.0.0-20250622130956-24b7017284e4
-	github.com/xaionaro-go/player v0.0.0-20251013001322-7c270c1a6f32
+	github.com/xaionaro-go/player v0.0.0-20251019231026-8556cc580969
 	github.com/xaionaro-go/recoder v0.0.0-20250929011527-29b198af8c77
 	github.com/xaionaro-go/secret v0.0.0-20250111141743-ced12e1082c2
 	github.com/xaionaro-go/serializable v0.0.0-20250412140540-5ac572306599
