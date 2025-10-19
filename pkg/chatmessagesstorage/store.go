@@ -40,13 +40,13 @@ func (s *ChatMessagesStorage) storeLocked(ctx context.Context) (_err error) {
 	err = os.Rename(s.FilePath, oldFilePath)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			return fmt.Errorf("unable to move '%s' to '%s': %w", s.FilePath, oldFilePath)
+			return fmt.Errorf("unable to move '%s' to '%s': %w", s.FilePath, oldFilePath, err)
 		}
 	}
 
 	err = os.Rename(newFilePath, s.FilePath)
 	if err != nil {
-		return fmt.Errorf("unable to move '%s' to '%s': %w", newFilePath, s.FilePath)
+		return fmt.Errorf("unable to move '%s' to '%s': %w", newFilePath, s.FilePath, err)
 	}
 
 	err = os.Remove(oldFilePath)

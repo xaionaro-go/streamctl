@@ -35,6 +35,8 @@ replace github.com/scorfly/gokick => github.com/xaionaro-go/gokick v0.0.0-202507
 
 replace github.com/abhinavxd/youtube-live-chat-downloader/v2 => github.com/xaionaro-go/youtube-live-chat-downloader/v2 v2.0.0-20250726224735-811554015ae8
 
+replace github.com/Danny-Dasilva/CycleTLS => github.com/xaionaro-go/CycleTLS v0.0.0-20250923213111-aed0022ae7b5
+
 require (
 	github.com/facebookincubator/go-belt v0.0.0-20250308011339-62fb7027b11f
 	github.com/go-git/go-billy/v5 v5.6.2
@@ -71,7 +73,7 @@ require (
 	github.com/abema/go-mp4 v1.4.1 // indirect
 	github.com/adrg/libvlc-go/v3 v3.1.6 // indirect
 	github.com/ajstarks/svgo v0.0.0-20211024235047-1546f124cd8b // indirect
-	github.com/andybalholm/brotli v1.1.0 // indirect
+	github.com/andybalholm/brotli v1.2.0 // indirect
 	github.com/asticode/go-astikit v0.55.0 // indirect
 	github.com/asticode/go-astits v1.13.0 // indirect
 	github.com/av-elier/go-decimal-to-rational v0.0.0-20250603203441-f39a07f43ff3 // indirect
@@ -294,7 +296,7 @@ require (
 	github.com/iancoleman/strcase v0.3.0
 	github.com/immune-gmbh/attestation-sdk v0.0.0-20230711173209-f44e4502aeca
 	github.com/kbinani/screenshot v0.0.0-20250624051815-089614a94018
-	github.com/klauspost/compress v1.17.9
+	github.com/klauspost/compress v1.18.0
 	github.com/lusingander/colorpicker v0.7.3
 	github.com/pojntfx/weron v0.2.7
 	github.com/prometheus/client_golang v1.20.5
@@ -312,7 +314,7 @@ require (
 	github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42
 	github.com/xaionaro-go/grpcproxy v0.0.0-20241103205849-a8fef42e72f9
 	github.com/xaionaro-go/iterate v0.0.0-20250406123757-7802d56b52ce
-	github.com/xaionaro-go/kickcom v0.0.0-20250923213542-2e7de9d14c9a
+	github.com/xaionaro-go/kickcom v0.0.0-20251019213336-23769c47b395
 	github.com/xaionaro-go/lockmap v0.0.0-20240901172806-e17aea364748
 	github.com/xaionaro-go/logwriter v0.0.0-20250111154941-c3f7a1a2d567
 	github.com/xaionaro-go/mediamtx v0.0.0-20250406132618-79ecbc3e138f

@@ -152,7 +152,7 @@ func (s *StreamServer) PathReady(path defs.Path) {
 		publisher := s.publishers[appKey]
 		if publisher != nil {
 			err := fmt.Errorf(
-				"double-registration of a publisher for '%s' (this is an internal error in the code): %w",
+				"double-registration of a publisher for '%s' (this is an internal error in the code)",
 				appKey,
 			)
 			logger.Errorf(ctx, "%v", err)

@@ -62,7 +62,7 @@ func (s *screenshotSender) setImage(
 		var err error
 		s.ImageResized, err = imgLike(
 			img.Image,
-			image.Point{X: consts.ScreenshotMaxWidth, Y: consts.ScreenshotMaxHeight},
+			image.Point{X: consts.ScreenshotMaxWidth / 2, Y: consts.ScreenshotMaxHeight / 2},
 		)
 		if err != nil {
 			return fmt.Errorf("unable to create resized image: %w", err)

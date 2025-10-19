@@ -54,10 +54,12 @@ func TestChatHandlerIRC(t *testing.T) {
 	require.NoError(t, err)
 
 	expectedEvent := streamcontrol.ChatMessage{
+		EventType: 1,
 		UserID:    "user-id",
 		Username:  "user-id",
 		MessageID: "message-id",
 		Message:   "some\nmulti line\n message",
+		MessageFormatType: 1,
 	}
 
 	messagesCount := 0

@@ -55,7 +55,7 @@ func AudioCodecToThrift(
 	case recoder.AudioCodecOpus:
 		return streamd_grpc.AudioCodec_AudioCodecOpus
 	default:
-		panic(fmt.Errorf("unexpected audio codec: '%s'", codec))
+		panic(fmt.Errorf("unexpected audio codec: '%#+v'", codec))
 	}
 }
 
@@ -114,7 +114,7 @@ func VideoCodecToThrift(
 	case recoder.VideoCodecAV1:
 		return streamd_grpc.VideoCodec_VideoCodecAV1
 	default:
-		panic(fmt.Errorf("unexpected video codec: '%s'", codec))
+		panic(fmt.Errorf("unexpected video codec: '%#+v'", codec))
 	}
 }
 
