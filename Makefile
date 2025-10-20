@@ -134,6 +134,8 @@ DOCKER_CONTAINER_NAME?=streampanel-android-builder
 
 dockerbuilder-android-arm64:
 	docker pull  $(DOCKER_IMAGE)
+	mkdir -p "$(PWD)/.cache"
+	chmod 1777 "$(PWD)/.cache"
 	docker start $(DOCKER_CONTAINER_NAME) >/dev/null 2>&1 || \
 		docker run \
 			--detach \
