@@ -39,6 +39,8 @@ replace github.com/Danny-Dasilva/CycleTLS => github.com/xaionaro-go/CycleTLS v0.
 
 replace github.com/dexterlb/mpvipc => github.com/xaionaro-go/mpvipc v0.0.0-20251019230357-e0f534e5dde4
 
+replace github.com/RomainMichau/cloudscraper_go => github.com/xaionaro-go/cloudscraper v0.0.0-20251019213127-d3687042cb55
+
 require (
 	github.com/facebookincubator/go-belt v0.0.0-20250308011339-62fb7027b11f
 	github.com/go-git/go-billy/v5 v5.6.2
@@ -64,7 +66,7 @@ require (
 	fyne.io/systray v1.11.0 // indirect
 	git.sr.ht/~sbinet/gg v0.6.0 // indirect
 	github.com/BurntSushi/toml v1.5.0 // indirect
-	github.com/Danny-Dasilva/CycleTLS/cycletls v1.0.26 // indirect
+	github.com/Danny-Dasilva/CycleTLS v0.0.0-20250923213111-aed0022ae7b5 // indirect
 	github.com/Danny-Dasilva/fhttp v0.0.0-20240217042913-eeeb0b347ce1 // indirect
 	github.com/DataDog/gostackparse v0.7.0 // indirect
 	github.com/MicahParks/jwkset v0.8.0 // indirect
@@ -108,6 +110,8 @@ require (
 	github.com/fyne-io/glfw-js v0.2.0 // indirect
 	github.com/fyne-io/image v0.1.1 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.7 // indirect
+	github.com/gaukas/clienthellod v0.4.2 // indirect
+	github.com/gaukas/godicttls v0.0.4 // indirect
 	github.com/gen2brain/shm v0.1.0 // indirect
 	github.com/getkin/kin-openapi v0.118.0 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
@@ -130,6 +134,7 @@ require (
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.23.0 // indirect
 	github.com/go-redis/redis/v8 v8.11.5 // indirect
+	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
 	github.com/go-text/render v0.2.0 // indirect
 	github.com/go-text/typesetting v0.2.1 // indirect
 	github.com/goccy/go-json v0.10.4 // indirect
@@ -141,6 +146,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/gopacket v1.1.19 // indirect
+	github.com/google/pprof v0.0.0-20240430035430-e4905b036c4e // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.6 // indirect
 	github.com/googleapis/gax-go/v2 v2.14.2 // indirect
@@ -183,6 +189,7 @@ require (
 	github.com/nicksnyder/go-i18n/v2 v2.5.1 // indirect
 	github.com/nikolalohinski/gonja v1.5.3 // indirect
 	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d // indirect
+	github.com/onsi/ginkgo/v2 v2.17.2 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
 	github.com/perimeterx/marshmallow v1.1.4 // indirect
 	github.com/pion/dtls/v3 v3.0.4 // indirect
@@ -206,6 +213,9 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
+	github.com/quic-go/qpack v0.5.1 // indirect
+	github.com/quic-go/quic-go v0.54.0 // indirect
+	github.com/refraction-networking/uquic v0.0.6 // indirect
 	github.com/refraction-networking/utls v1.8.0 // indirect
 	github.com/rubenv/sql-migrate v1.7.0 // indirect
 	github.com/rymdport/portal v0.4.1 // indirect
@@ -249,6 +259,7 @@ require (
 	go.opentelemetry.io/otel v1.36.0 // indirect
 	go.opentelemetry.io/otel/metric v1.36.0 // indirect
 	go.opentelemetry.io/otel/trace v1.36.0 // indirect
+	go.uber.org/mock v0.5.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	gocv.io/x/gocv v0.41.0 // indirect
@@ -256,10 +267,12 @@ require (
 	golang.org/x/exp v0.0.0-20250813145105-42675adae3e6 // indirect
 	golang.org/x/image v0.27.0 // indirect
 	golang.org/x/mobile v0.0.0-20240404231514-09dbf07665ed // indirect
+	golang.org/x/mod v0.27.0 // indirect
 	golang.org/x/net v0.44.0 // indirect
 	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/term v0.35.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
+	golang.org/x/tools v0.36.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240716161551-93cc26a95ae9 // indirect
 	gonum.org/v1/plot v0.16.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250603155806-513f23925822 // indirect
@@ -316,7 +329,7 @@ require (
 	github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42
 	github.com/xaionaro-go/grpcproxy v0.0.0-20241103205849-a8fef42e72f9
 	github.com/xaionaro-go/iterate v0.0.0-20250406123757-7802d56b52ce
-	github.com/xaionaro-go/kickcom v0.0.0-20251019213336-23769c47b395
+	github.com/xaionaro-go/kickcom v0.0.0-20251020001342-56d643f3dccf
 	github.com/xaionaro-go/lockmap v0.0.0-20240901172806-e17aea364748
 	github.com/xaionaro-go/logwriter v0.0.0-20250111154941-c3f7a1a2d567
 	github.com/xaionaro-go/mediamtx v0.0.0-20250406132618-79ecbc3e138f
