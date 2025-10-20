@@ -19,12 +19,15 @@ import (
 
 type screenshotSender struct {
 	xsync.Mutex
-	StreamD      *client.Client
-	VariableKey  consts.VarKey
-	stepSize     time.Duration
-	LastPTS      time.Duration
-	ImageResized image.Image
-	Buffer       bytes.Buffer
+	StreamD                    *client.Client
+	VariableKey                consts.VarKey
+	stepSize                   time.Duration
+	PlayerPriority             *xsync.Map[*player.Player[player.ImageGeneric], int]
+	LastPTS                    map[*player.Player[player.ImageGeneric]]time.Duration
+	ImageResized               map[*player.Player[player.ImageGeneric]]image.Image
+	Buffer                     bytes.Buffer
+	LastRenderedPlayerPriority int
+	LastRenderTS               time.Time
 }
 
 var _ player.ImageRenderer[player.ImageGeneric] = (*screenshotSender)(nil)
@@ -33,12 +36,16 @@ func newScreenshotSender(
 	streamD *client.Client,
 	variableKey consts.VarKey,
 	fps float64,
+	playerPriority *xsync.Map[*player.Player[player.ImageGeneric], int],
 ) *screenshotSender {
 	return &screenshotSender{
-		StreamD:     streamD,
-		VariableKey: variableKey,
-		stepSize:    time.Duration(float64(time.Second) / fps),
-		LastPTS:     time.Duration(math.MinInt64),
+		StreamD:                    streamD,
+		VariableKey:                variableKey,
+		stepSize:                   time.Duration(float64(time.Second) / fps),
+		PlayerPriority:             playerPriority,
+		LastPTS:                    map[*player.Player[player.ImageGeneric]]time.Duration{},
+		ImageResized:               map[*player.Player[player.ImageGeneric]]image.Image{},
+		LastRenderedPlayerPriority: math.MaxInt,
 	}
 }
 
@@ -57,33 +64,51 @@ func (s *screenshotSender) setImage(
 	if img.Bounds().Empty() {
 		return nil
 	}
+	now := time.Now()
 
-	if s.ImageResized == nil {
+	priority, ok := s.PlayerPriority.Load(img.Player)
+	if !ok {
+		return fmt.Errorf("unknown player")
+	}
+	if priority > s.LastRenderedPlayerPriority && now.Sub(s.LastRenderTS) <= time.Second {
+		return nil
+	}
+	s.LastRenderedPlayerPriority = priority
+	s.LastRenderTS = now
+
+	imageResized := s.ImageResized[img.Player]
+	if imageResized == nil {
 		var err error
-		s.ImageResized, err = imgLike(
+		imageResized, err = imgLike(
 			img.Image,
 			image.Point{X: consts.ScreenshotMaxWidth / 2, Y: consts.ScreenshotMaxHeight / 2},
 		)
 		if err != nil {
 			return fmt.Errorf("unable to create resized image: %w", err)
 		}
-		logger.Debugf(ctx, "initialized the screenshot sender: image format %T, size %v, resized size %v", img.Image, img.Image.Bounds().Size(), s.ImageResized.Bounds().Size())
+		logger.Debugf(ctx, "initialized the screenshot sender: image format %T, size %v, resized size %v", img.Image, img.Image.Bounds().Size(), imageResized.Bounds().Size())
+		s.ImageResized[img.Player] = imageResized
+	}
+
+	lastPTS, ok := s.LastPTS[img.Player]
+	if !ok {
+		lastPTS = time.Duration(math.MinInt64)
 	}
 
 	pts := img.GetPTSAsDuration()
-	if pts < s.LastPTS+s.stepSize {
+	if pts < lastPTS+s.stepSize {
 		return nil
 	}
-	s.LastPTS = pts
+	s.LastPTS[img.Player] = pts
 
-	err := rez.Convert(s.ImageResized, img.Image, rez.NewLanczosFilter(3))
+	err := rez.Convert(imageResized, img.Image, rez.NewLanczosFilter(3))
 	if err != nil {
 		return fmt.Errorf("unable to resize: %w", err)
 	}
 
 	s.Buffer.Reset()
 	defer s.Buffer.Reset()
-	err = webp.Encode(&s.Buffer, s.ImageResized, &webp.Options{
+	err = webp.Encode(&s.Buffer, imageResized, &webp.Options{
 		Lossless: false,
 		Quality:  10,
 		Exact:    false,

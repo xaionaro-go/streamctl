@@ -11,6 +11,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
@@ -26,6 +27,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/client"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	"github.com/xaionaro-go/xcontext"
+	"github.com/xaionaro-go/xsync"
 )
 
 var (
@@ -100,7 +102,7 @@ var (
 
 	VariablesSetScreenshotFromURL = &cobra.Command{
 		Use:  "set_image_from_url",
-		Args: cobra.ExactArgs(3),
+		Args: cobra.MinimumNArgs(3),
 		Run:  variablesSetImageFromURL,
 	}
 
@@ -311,7 +313,6 @@ func variablesSetImageFromURL(cmd *cobra.Command, args []string) {
 	imageKey := consts.ImageID(args[0])
 	fps, err := strconv.ParseFloat(args[1], 64)
 	assertNoError(ctx, err)
-	url := args[2]
 
 	remoteAddr, err := cmd.Flags().GetString("remote-addr")
 	assertNoError(ctx, err)
@@ -319,18 +320,45 @@ func variablesSetImageFromURL(cmd *cobra.Command, args []string) {
 	streamD, err := client.New(ctx, remoteAddr)
 	assertNoError(ctx, err)
 
-	imageRenderer := newScreenshotSender(streamD, consts.VarKeyImage(imageKey), fps)
+	var playerMap xsync.Map[*player.Player[player.ImageGeneric], int]
+
+	imageRenderer := newScreenshotSender(streamD, consts.VarKeyImage(imageKey), fps, &playerMap)
 	defer imageRenderer.Close()
 
-	p := player.New(ctx, imageRenderer, nil)
-	defer p.Close(ctx)
+	var cancelFn context.CancelFunc
+	ctx, cancelFn = context.WithCancel(ctx)
+	defer cancelFn()
 
-	err = p.OpenURL(ctx, url)
-	assertNoError(ctx, err)
+	var wg sync.WaitGroup
+	for idx, url := range args[2:] {
+		idx, url := idx, url
+		wg.Add(1)
+		observability.Go(ctx, func(ctx context.Context) {
+			defer wg.Done()
+			for {
+				func() {
+					p := player.New(ctx, imageRenderer, nil)
+					defer p.Close(ctx)
 
-	ch, err := p.EndChan(ctx)
-	assertNoError(ctx, err)
-	<-ch
+					playerMap.Store(p, idx)
+
+					err = p.OpenURL(ctx, url)
+					if err != nil {
+						logger.Errorf(ctx, "player.OpenURL(%q) returned: %v", url, err)
+						time.Sleep(time.Second)
+						return
+					}
+
+					ch, err := p.EndChan(ctx)
+					assertNoError(ctx, err)
+
+					<-ch
+				}()
+			}
+		})
+	}
+
+	wg.Wait()
 }
 
 func configGet(cmd *cobra.Command, args []string) {
