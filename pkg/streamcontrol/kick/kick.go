@@ -28,22 +28,19 @@ const (
 	debugUseMockClient = false
 )
 
-type ReverseEngClient interface {
-	ChatClientOBSOLETE
-}
-
 type Kick struct {
-	CloseCtx            context.Context
-	CloseFn             context.CancelFunc
-	Channel             *kickcom.ChannelV1
-	Client              *Client
-	ClientOBSOLETE      *kickcom.Kick
-	ChatHandler         *ChatHandlerOBSOLETE
-	ChatHandlerLocker   xsync.CtxLocker
-	CurrentConfig       Config
-	CurrentConfigLocker xsync.Mutex
-	SaveCfgFn           func(Config) error
-	PrepareLocker       xsync.Mutex
+	CloseCtx               context.Context
+	CloseFn                context.CancelFunc
+	Channel                *kickcom.ChannelV1
+	Client                 *Client
+	ClientOBSOLETE         *kickcom.Kick
+	ChatHandler            *ChatHandlerOBSOLETE
+	ChatHandlerInitStarted bool
+	ChatHandlerLocker      xsync.CtxLocker
+	CurrentConfig          Config
+	CurrentConfigLocker    xsync.Mutex
+	SaveCfgFn              func(Config) error
+	PrepareLocker          xsync.Mutex
 
 	lazyInitOnce         sync.Once
 	getAccessTokenLocker xsync.Mutex
@@ -166,7 +163,7 @@ func (k *Kick) initChatHandler(
 func (k *Kick) initChatHandlerNoLock(
 	ctx context.Context,
 ) error {
-	chatHandler, err := k.newChatHandlerOBSOLETE(ctx, k.CurrentConfig.Config.Channel, k.onChatHandlerClose)
+	chatHandler, err := k.newChatHandlerOBSOLETE(ctx, k.CurrentConfig.Config.Channel)
 	if err == nil {
 		k.ChatHandler = chatHandler
 		return nil
@@ -184,53 +181,13 @@ func (k *Kick) initChatHandlerNoLock(
 			return fmt.Errorf("ctx is closed: %w", ctx.Err())
 		default:
 		}
-		chatHandler, err = k.newChatHandlerOBSOLETE(ctx, k.CurrentConfig.Config.Channel, k.onChatHandlerClose)
+		chatHandler, err = k.newChatHandlerOBSOLETE(ctx, k.CurrentConfig.Config.Channel)
 		if err != nil {
 			logger.Debugf(ctx, "initChatHandler: unable to create a new chat handler: %v", err)
 			continue
 		}
 		k.ChatHandler = chatHandler
 		return nil
-	}
-}
-
-func (k *Kick) onChatHandlerClose(
-	ctx context.Context,
-	h *ChatHandlerOBSOLETE,
-) {
-	xsync.DoA2(ctx, &k.ChatHandlerLocker, k.onChatHandlerCloseNoLock, ctx, h)
-}
-
-func (k *Kick) onChatHandlerCloseNoLock(
-	ctx context.Context,
-	h *ChatHandlerOBSOLETE,
-) {
-	if h != k.ChatHandler {
-		logger.Errorf(ctx, "chat handler was already replaced")
-		return
-	}
-	select {
-	case <-ctx.Done():
-		return
-	case <-k.CloseCtx.Done():
-		return
-	case <-time.After(time.Second):
-	}
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-k.CloseCtx.Done():
-			return
-		default:
-		}
-		chatHandler, err := k.newChatHandlerOBSOLETE(ctx, k.CurrentConfig.Config.Channel, k.onChatHandlerClose)
-		if err != nil {
-			logger.Errorf(ctx, "unable to initialize a chat handler: %w", err)
-			time.Sleep(time.Second)
-			continue
-		}
-		k.ChatHandler = chatHandler
 	}
 }
 
@@ -550,19 +507,42 @@ func (k *Kick) GetAllCategories(
 
 func (k *Kick) tryGetChatHandler(
 	ctx context.Context,
-) *ChatHandlerOBSOLETE {
-	return xsync.DoR1(ctx, &k.ChatHandlerLocker, func() *ChatHandlerOBSOLETE {
-		return k.ChatHandler
+) (*ChatHandlerOBSOLETE, error) {
+	return xsync.DoR2(ctx, &k.ChatHandlerLocker, func() (*ChatHandlerOBSOLETE, error) {
+		if k.ChatHandler != nil {
+			return k.ChatHandler, nil
+		}
+		k.startInitChatHandlerNoLock(ctx)
+		return nil, fmt.Errorf("chat handler is being initialized")
 	})
+}
+
+func (k *Kick) startInitChatHandlerNoLock(
+	ctx context.Context,
+) {
+	if k.ChatHandlerInitStarted {
+		return
+	}
+	k.ChatHandlerInitStarted = true
+	go func() {
+		defer func() { k.ChatHandlerInitStarted = false }()
+		err := k.initChatHandlerNoLock(ctx)
+		if err != nil {
+			logger.Errorf(ctx, "unable to initialize chat handler: %v", err)
+		}
+	}()
 }
 
 func (k *Kick) getChatHandler(
 	ctx context.Context,
 ) *ChatHandlerOBSOLETE {
-	t := time.NewTicker(time.Second)
-	defer t.Stop()
 	for {
-		chatHandler := k.tryGetChatHandler(ctx)
+		chatHandler, err := k.tryGetChatHandler(ctx)
+		if err != nil {
+			logger.Errorf(ctx, "unable to get chat handler: %v", err)
+			time.Sleep(time.Second)
+			continue
+		}
 		if chatHandler != nil {
 			return chatHandler
 		}
@@ -572,7 +552,6 @@ func (k *Kick) getChatHandler(
 			return nil
 		case <-ctx.Done():
 			return nil
-		case <-t.C:
 		}
 	}
 }
@@ -609,15 +588,23 @@ func (k *Kick) GetChatMessagesChan(
 				logger.Debugf(ctx, "getting of chat handler was cancelled: %v %v", ctx.Err(), k.CloseCtx.Err())
 				return
 			}
+			msgCh, err := chatHandler.GetMessagesChan(ctx)
+			if err != nil {
+				logger.Errorf(ctx, "unable to get messages channel from chat handler: %v", err)
+				k.resetChatHandler(ctx)
+				time.Sleep(time.Second)
+				continue
+			}
 			logger.Tracef(ctx, "GetChatMessagesChan: waiting for a message")
 			select {
 			case <-k.CloseCtx.Done():
 				return
 			case <-ctx.Done():
 				return
-			case ev, ok := <-chatHandler.MessagesChan():
+			case ev, ok := <-msgCh:
 				if !ok {
 					logger.Debugf(ctx, "the input channel is closed")
+					k.resetChatHandler(ctx)
 					continue
 				}
 				logger.Tracef(ctx, "GetChatMessagesChan: received a message")
@@ -627,6 +614,21 @@ func (k *Kick) GetChatMessagesChan(
 	})
 
 	return outCh, nil
+}
+
+func (k *Kick) resetChatHandler(ctx context.Context) {
+	logger.Debugf(ctx, "resetChatHandler")
+	defer logger.Debugf(ctx, "/resetChatHandler")
+	k.ChatHandlerLocker.Do(ctx, func() {
+		if k.ChatHandler == nil {
+			return
+		}
+		logger.Debugf(ctx, "closing existing chat handler")
+		if err := k.ChatHandler.Close(ctx); err != nil {
+			logger.Errorf(ctx, "unable to close the chat handler: %v", err)
+		}
+		k.ChatHandler = nil
+	})
 }
 
 func (k *Kick) SendChatMessage(ctx context.Context, message string) (_err error) {
@@ -760,11 +762,6 @@ func (k *Kick) prepareNoLock(ctx context.Context) error {
 			err = fmt.Errorf("initChannelInfo: %w", err)
 			return
 		}
-		observability.Go(ctx, func(ctx context.Context) {
-			if err = k.initChatHandler(ctx); err != nil {
-				logger.Errorf(ctx, "initChatHandler: %v", err)
-			}
-		})
 	})
 	return err
 }

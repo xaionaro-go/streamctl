@@ -123,7 +123,7 @@ func (l *ChatListenerOBSOLETE) listenLoop(ctx context.Context) (_err error) {
 			return ctx.Err()
 		default:
 		}
-		msgs, newContinuation, err := ytchat.FetchContinuationChat(l.continuationCode, l.clientConfig)
+		msgs, newContinuation, _, err := ytchat.FetchContinuationChat(l.continuationCode, l.clientConfig)
 		switch err {
 		case nil:
 		case ytchat.ErrLiveStreamOver:
@@ -133,8 +133,8 @@ func (l *ChatListenerOBSOLETE) listenLoop(ctx context.Context) (_err error) {
 				ctx,
 				"unable to get a continuation for %v: %v; retrying in %v",
 				l.videoID,
-				chatFetchRetryInterval,
 				err,
+				chatFetchRetryInterval,
 			)
 			time.Sleep(chatFetchRetryInterval)
 			continue
@@ -155,6 +155,7 @@ func (l *ChatListenerOBSOLETE) listenLoop(ctx context.Context) (_err error) {
 				MessageFormatType: format,
 			}
 		}
+		time.Sleep(500 * time.Millisecond)
 	}
 }
 

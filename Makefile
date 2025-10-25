@@ -168,7 +168,6 @@ checkconfig-android:
 streampanel-android-arm64-in-docker: build-streampanel-android-arm64-in-docker check-streampanel-android-arm64-static-cgo
 
 build-streampanel-android-arm64-in-docker: checkconfig-android-in-docker builddir $(GOPATH)/bin/pkg-config-wrapper
-	go mod tidy
 	git config --global --add safe.directory /project
 	$(eval ANDROID_NDK_HOME=$(shell ls -d /home/builder/lib/android-ndk-* | tail -1))
 	cd cmd/streampanel && \

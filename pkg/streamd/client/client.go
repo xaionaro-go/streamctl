@@ -6,12 +6,10 @@ import (
 	"crypto"
 	"crypto/tls"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net"
 	"runtime"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -23,7 +21,6 @@ import (
 	"github.com/xaionaro-go/grpcproxy/protobuf/go/proxy_grpc"
 	"github.com/xaionaro-go/obs-grpc-proxy/pkg/obsgrpcproxy"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
-	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/player/pkg/player"
 	"github.com/xaionaro-go/player/pkg/player/protobuf/go/player_grpc"
 	p2ptypes "github.com/xaionaro-go/streamctl/pkg/p2p/types"
@@ -39,6 +36,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
+	"github.com/xaionaro-go/streamctl/pkg/xgrpc"
 	"github.com/xaionaro-go/xsync"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
@@ -170,12 +168,12 @@ func (c *Client) connect(
 		),
 		grpc.WithConnectParams(grpc.ConnectParams{
 			Backoff: backoff.Config{
-				BaseDelay:  c.Config.Reconnect.InitialInterval,
-				Multiplier: c.Config.Reconnect.IntervalMultiplier,
+				BaseDelay:  c.Config.Retry.InitialInterval,
+				Multiplier: c.Config.Retry.IntervalMultiplier,
 				Jitter:     0.2,
-				MaxDelay:   c.Config.Reconnect.MaximalInterval,
+				MaxDelay:   c.Config.Retry.MaximalInterval,
 			},
-			MinConnectTimeout: c.Config.Reconnect.InitialInterval,
+			MinConnectTimeout: c.Config.Retry.InitialInterval,
 		}),
 		grpc.WithStatsHandler(c),
 	}
@@ -203,7 +201,7 @@ func (c *Client) doConnect(
 		opts,
 		c.Config,
 	)
-	delay := c.Config.Reconnect.InitialInterval
+	delay := c.Config.Retry.InitialInterval
 	for {
 		select {
 		case <-ctx.Done():
@@ -248,12 +246,19 @@ func (c *Client) doConnect(
 		delay = time.Duration(
 			float64(
 				delay,
-			) * c.Config.Reconnect.IntervalMultiplier,
+			) * c.Config.Retry.IntervalMultiplier,
 		)
-		if delay > c.Config.Reconnect.MaximalInterval {
-			delay = c.Config.Reconnect.MaximalInterval
+		if delay > c.Config.Retry.MaximalInterval {
+			delay = c.Config.Retry.MaximalInterval
 		}
 	}
+}
+
+func (c *Client) GRPCClient(
+	ctx context.Context,
+) (streamd_grpc.StreamDClient, io.Closer, error) {
+	client, _, closer, err := c.grpcClient(ctx)
+	return client, closer, err
 }
 
 func (c *Client) grpcClient(
@@ -303,6 +308,14 @@ func (c *Client) Run(ctx context.Context) error {
 	return nil
 }
 
+func (c *Client) GetRetryConfig() xgrpc.RetryConfig {
+	return c.Config.Retry
+}
+
+func (c *Client) GetCallWrapper() xgrpc.CallWrapperFunc {
+	return c.Config.CallWrapper
+}
+
 func callWrapper[REQ any, REPLY any](
 	ctx context.Context,
 	c *Client,
@@ -310,54 +323,7 @@ func callWrapper[REQ any, REPLY any](
 	req *REQ,
 	opts ...grpc.CallOption,
 ) (REPLY, error) {
-
-	var reply REPLY
-	callFn := func(ctx context.Context, opts ...grpc.CallOption) error {
-		var err error
-		delay := c.Config.Reconnect.InitialInterval
-		for {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-			}
-			reply, err = fn(ctx, req, opts...)
-			if err == nil {
-				return nil
-			}
-			err = c.processError(ctx, err)
-			if err != nil {
-				return err
-			}
-			logger.Debugf(
-				ctx,
-				"retrying; sleeping %v for the retry",
-				delay,
-			)
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(delay):
-			}
-			delay = time.Duration(
-				float64(
-					delay,
-				) * c.Config.Reconnect.IntervalMultiplier,
-			)
-			if delay > c.Config.Reconnect.MaximalInterval {
-				delay = c.Config.Reconnect.MaximalInterval
-			}
-		}
-	}
-
-	wrapper := c.Config.CallWrapper
-	if wrapper == nil {
-		err := callFn(ctx, opts...)
-		return reply, err
-	}
-
-	err := wrapper(ctx, req, callFn, opts...)
-	return reply, err
+	return xgrpc.CallRetryable[REQ, REPLY, streamd_grpc.StreamDClient, *Client](ctx, c, fn, req, opts...)
 }
 
 func withStreamDClient[REPLY any](
@@ -394,103 +360,10 @@ func unwrapStreamDChan[E any, R any, S receiver[R]](
 	fn func(ctx context.Context, client streamd_grpc.StreamDClient) (S, error),
 	parse func(ctx context.Context, event *R) E,
 ) (<-chan E, error) {
-
-	pc, _, _, _ := runtime.Caller(1)
-	caller := runtime.FuncForPC(pc)
-	ctx = belt.WithField(ctx, "caller_func", caller.Name())
-
-	ctx, cancelFn := context.WithCancel(ctx)
-	getSub := func() (S, io.Closer, error) {
-		client, _, closer, err := c.grpcClient(ctx)
-		if err != nil {
-			var emptyS S
-			return emptyS, nil, err
-		}
-		sub, err := fn(ctx, client)
-		if err != nil {
-			var emptyS S
-			return emptyS, nil, fmt.Errorf(
-				"unable to subscribe: %w",
-				err,
-			)
-		}
-		return sub, closer, nil
-	}
-
-	sub, closer, err := getSub()
-	if err != nil {
-		cancelFn()
-		return nil, err
-	}
-
-	r := make(chan E)
-	observability.Go(ctx, func(ctx context.Context) {
-		defer closer.Close()
-		defer cancelFn()
-		for {
-			event, err := sub.Recv()
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-			if err != nil {
-				switch {
-				case errors.Is(err, io.EOF):
-					logger.Debugf(
-						ctx,
-						"the receiver is closed: %v",
-						err,
-					)
-					return
-				case strings.Contains(err.Error(), grpc.ErrClientConnClosing.Error()):
-					logger.Debugf(
-						ctx,
-						"apparently we are closing the client: %v",
-						err,
-					)
-					return
-				case strings.Contains(err.Error(), context.Canceled.Error()):
-					logger.Debugf(
-						ctx,
-						"subscription was cancelled: %v",
-						err,
-					)
-					return
-				default:
-					for {
-						err = c.processError(ctx, err)
-						if err != nil {
-							logger.Errorf(
-								ctx,
-								"unable to read data: %v",
-								err,
-							)
-							return
-						}
-						closer.Close()
-						sub, closer, err = getSub()
-						if err != nil {
-							logger.Errorf(
-								ctx,
-								"unable to resubscribe: %v",
-								err,
-							)
-							continue
-						}
-						break
-					}
-					continue
-				}
-			}
-
-			r <- parse(ctx, event)
-		}
-	})
-	return r, nil
+	return xgrpc.UnwrapChan[E, R, S, streamd_grpc.StreamDClient, *Client](ctx, c, fn, parse)
 }
 
-func (c *Client) processError(
+func (c *Client) ProcessError(
 	ctx context.Context,
 	err error,
 ) error {
@@ -2688,7 +2561,7 @@ func (c *Client) SubscribeToChatMessages(
 			ctx context.Context,
 			event *streamd_grpc.ChatMessage,
 		) api.ChatMessage {
-			return goconv.ChatMessageGRPC2Go(event)
+			return goconv.PlatformEventGRPC2Go(event)
 		},
 	)
 }

@@ -2,6 +2,7 @@ syntax = "proto3";
 package streamd;
 option go_package = "go/streamd_grpc";
 
+import "streamcontrol/streamcontrol.proto";
 import "player/player.proto";
 
 service StreamD {
@@ -789,17 +790,11 @@ enum PlatformEventType {
     platformEventTypeOther = 12;
 }
 
+// TODO: rename to PlatformEvent
 message ChatMessage {
-	uint64 createdAtUNIXNano  = 1;
-    string platID = 2;
-    bool isLive = 3;
-    PlatformEventType eventType = 4;
-    string userID = 5;
-    string username = 6;
-    string messageID = 7;
-    string message = 8;
-    string usernameReadable = 9;
-    TextFormatType messageFormatType = 10;
+    string platID = 1;
+    bool isLive = 2;
+    streamcontrol.ChatMessage content = 3;
 }
 
 enum TextFormatType {

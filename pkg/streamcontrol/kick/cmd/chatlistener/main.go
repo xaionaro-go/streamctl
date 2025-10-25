@@ -10,7 +10,6 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	xlogrus "github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
 	"github.com/spf13/pflag"
-	"github.com/xaionaro-go/kickcom"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 )
 
@@ -39,17 +38,14 @@ func main() {
 	}
 	defer belt.Flush(ctx)
 
-	client, err := kickcom.New()
+	h, err := kick.NewChatHandlerOBSOLETE(ctx, channelSlug)
 	assertNoError(err)
 
-	channel, err := client.GetChannelV1(ctx, channelSlug)
-	assertNoError(err)
-
-	h, err := kick.NewChatHandlerOBSOLETE(ctx, client, channel.ID, nil)
+	msgCh, err := h.GetMessagesChan(ctx)
 	assertNoError(err)
 
 	fmt.Println("started")
-	for ev := range h.MessagesChan() {
+	for ev := range msgCh {
 		fmt.Printf("%#+v\n", ev)
 	}
 }

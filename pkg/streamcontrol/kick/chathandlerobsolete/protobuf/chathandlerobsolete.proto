@@ -1,0 +1,42 @@
+syntax = "proto3";
+package chathandlerobsolete;
+option go_package = "github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick/chathandlerobsolete/protobuf/go/chathandlerobsolete_grpc";
+
+import "streamcontrol/streamcontrol.proto";
+
+service ChatHandlerObsolete {
+	rpc Open(OpenRequest) returns (OpenReply) {}
+	rpc Close(CloseRequest) returns (CloseReply) {}
+	rpc MessagesChan(MessagesChanRequest) returns (stream streamcontrol.ChatMessage) {}
+}
+
+enum LoggingLevel {
+	LoggingLevelNone = 0;
+	LoggingLevelFatal = 1;
+	LoggingLevelPanic = 2;
+	LoggingLevelError = 3;
+	LoggingLevelWarn = 4;
+	LoggingLevelInfo = 5;
+	LoggingLevelDebug = 6;
+	LoggingLevelTrace = 7;
+}
+
+message RequestCommons {
+	LoggingLevel loggingLevel = 1;
+}
+
+message OpenRequest {
+	RequestCommons commons = 1;
+	string channelSlug = 2;
+}
+message OpenReply {}
+
+message CloseRequest {
+	RequestCommons commons = 1;
+}
+message CloseReply {}
+
+message MessagesChanRequest {
+	RequestCommons commons = 1;
+}
+

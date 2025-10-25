@@ -33,13 +33,13 @@ replace github.com/joeyak/go-twitch-eventsub/v3 => github.com/xaionaro-go/go-twi
 
 replace github.com/scorfly/gokick => github.com/xaionaro-go/gokick v0.0.0-20250713175656-f538d6396851
 
-replace github.com/abhinavxd/youtube-live-chat-downloader/v2 => github.com/xaionaro-go/youtube-live-chat-downloader/v2 v2.0.0-20250726224735-811554015ae8
-
 replace github.com/Danny-Dasilva/CycleTLS => github.com/xaionaro-go/CycleTLS v0.0.0-20250923213111-aed0022ae7b5
 
 replace github.com/dexterlb/mpvipc => github.com/xaionaro-go/mpvipc v0.0.0-20251019230357-e0f534e5dde4
 
 replace github.com/RomainMichau/cloudscraper_go => github.com/xaionaro-go/cloudscraper v0.0.0-20251019213127-d3687042cb55
+
+replace github.com/abhinavxd/youtube-live-chat-downloader/v2 => github.com/xaionaro-go/youtube-live-chat-downloader/v2 v2.0.0-20251025201126-e815a074fd2c
 
 require (
 	github.com/facebookincubator/go-belt v0.0.0-20250308011339-62fb7027b11f
@@ -214,7 +214,7 @@ require (
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/quic-go/qpack v0.5.1 // indirect
-	github.com/quic-go/quic-go v0.54.0 // indirect
+	github.com/quic-go/quic-go v0.55.0 // indirect
 	github.com/refraction-networking/uquic v0.0.6 // indirect
 	github.com/refraction-networking/utls v1.8.0 // indirect
 	github.com/rubenv/sql-migrate v1.7.0 // indirect
@@ -259,7 +259,7 @@ require (
 	go.opentelemetry.io/otel v1.36.0 // indirect
 	go.opentelemetry.io/otel/metric v1.36.0 // indirect
 	go.opentelemetry.io/otel/trace v1.36.0 // indirect
-	go.uber.org/mock v0.5.0 // indirect
+	go.uber.org/mock v0.5.2 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	gocv.io/x/gocv v0.41.0 // indirect
@@ -329,7 +329,7 @@ require (
 	github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42
 	github.com/xaionaro-go/grpcproxy v0.0.0-20241103205849-a8fef42e72f9
 	github.com/xaionaro-go/iterate v0.0.0-20250406123757-7802d56b52ce
-	github.com/xaionaro-go/kickcom v0.0.0-20251020001342-56d643f3dccf
+	github.com/xaionaro-go/kickcom v0.0.0-20251025201043-15900e6712af
 	github.com/xaionaro-go/lockmap v0.0.0-20240901172806-e17aea364748
 	github.com/xaionaro-go/logwriter v0.0.0-20250111154941-c3f7a1a2d567
 	github.com/xaionaro-go/mediamtx v0.0.0-20250406132618-79ecbc3e138f

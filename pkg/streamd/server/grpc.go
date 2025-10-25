@@ -14,7 +14,6 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-multierror"
-	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/player/pkg/player/protobuf/go/player_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd"
@@ -27,8 +26,8 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
+	"github.com/xaionaro-go/streamctl/pkg/xgrpc"
 	"github.com/xaionaro-go/xsync"
-	"google.golang.org/grpc"
 )
 
 type oauthURLHandlers map[uint16]map[uuid.UUID]*OAuthURLHandler
@@ -1649,63 +1648,13 @@ func (grpc *GRPCServer) StreamPlayerClose(
 	}, nil
 }
 
-type sender[T any] interface {
-	grpc.ServerStream
-
-	Context() context.Context
-	Send(*T) error
-}
-
 func wrapChan[T any, E any](
 	getChan func(ctx context.Context) (<-chan E, error),
-	sender sender[T],
+	sender xgrpc.Sender[T],
 	parse func(E) T,
 ) (_err error) {
-	ctx, cancelFn := context.WithCancel(sender.Context())
-	defer cancelFn()
-
-	var tSample T
-	var eSample E
-	logger.Tracef(ctx, "wrapChan[%T, %T]", tSample, eSample)
-	defer func() { logger.Tracef(ctx, "/wrapChan[%T, %T]: %v", tSample, eSample, _err) }()
-
-	ch, err := getChan(ctx)
-	if err != nil {
-		return err
-	}
-	errCh := make(chan error, 1)
-	for {
-		var input E
-		var ok bool
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case input, ok = <-ch:
-		}
-		if !ok {
-			return fmt.Errorf("channel is closed")
-		}
-		result := parse(input)
-		sendCtx, cancelFn := context.WithTimeout(ctx, time.Minute)
-		observability.Go(ctx, func(ctx context.Context) {
-			errCh <- sender.Send(&result)
-		})
-		select {
-		case <-sendCtx.Done():
-			logger.Warnf(ctx, "sending timed out")
-			cancelFn()
-			return sendCtx.Err()
-		case err := <-errCh:
-			cancelFn()
-			if err != nil {
-				return fmt.Errorf(
-					"unable to send %#+v: %w",
-					result,
-					err,
-				)
-			}
-		}
-	}
+	ctx := sender.Context()
+	return xgrpc.WrapChan(ctx, getChan, sender, parse)
 }
 
 func (grpc *GRPCServer) SubscribeToConfigChanges(
