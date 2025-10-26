@@ -33,6 +33,9 @@ const (
 	enableSlowDown             = true
 	minSpeed                   = 0.975
 	minSpeedDifferenceSlowDown = 0.001
+	minJitterBufDuration       = 100 * time.Millisecond
+	jitterBufDecayHalftime     = 5 * time.Minute
+	playerCheckInterval        = 100 * time.Millisecond
 )
 
 type Publisher interface {
@@ -90,6 +93,8 @@ type StreamPlayer struct {
 	StreamID     streamtypes.StreamID
 	Backend      player.Backend
 	Config       Config
+
+	CurrentJitterBufDuration time.Duration
 }
 
 type StreamPlayerHandler struct {
@@ -145,6 +150,7 @@ func (sp *StreamPlayers) Create(
 		)
 	}
 
+	p.CurrentJitterBufDuration = minJitterBufDuration
 	if err := p.startU(ctx); err != nil {
 		return nil, fmt.Errorf("unable to start the player: %w", err)
 	}
@@ -785,7 +791,25 @@ func (p *StreamPlayerHandler) controllerLoop(
 
 	logger.Debugf(ctx, "finished waiting for a publisher at '%s'", p.StreamID)
 
-	t := time.NewTicker(100 * time.Millisecond)
+	jitterBufDurationIncrease := time.Duration(0)
+	commitJitterBufferIncrease := func() {
+		if jitterBufDurationIncrease == 0 {
+			return
+		}
+		p.CurrentJitterBufDuration = min(
+			p.CurrentJitterBufDuration+jitterBufDurationIncrease,
+			p.Config.JitterBufDuration,
+		)
+		logger.Debugf(ctx,
+			"StreamPlayer[%s].controllerLoop: increased jitter buffer duration to %v",
+			p.StreamID,
+			p.CurrentJitterBufDuration,
+		)
+		jitterBufDurationIncrease = 0
+	}
+	defer commitJitterBufferIncrease()
+
+	t := time.NewTicker(playerCheckInterval)
 	defer t.Stop()
 
 	// now monitoring if everything is OK:
@@ -896,6 +920,9 @@ func (p *StreamPlayerHandler) controllerLoop(
 			} else {
 				if now.Sub(posUpdatedAt) > p.Config.ReadTimeout {
 					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: now == %v, posUpdatedAt == %v, len == %v; pos == %v; readTimeout == %v, restarting", p.StreamID, now, posUpdatedAt, l, pos, p.Config.ReadTimeout)
+					commitJitterBufferIncrease()
+					jitterBufDurationIncrease = p.Config.ReadTimeout
+					commitJitterBufferIncrease()
 					restart()
 					return
 				}
@@ -903,8 +930,9 @@ func (p *StreamPlayerHandler) controllerLoop(
 
 			lag := l - pos
 			logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: lag == %v", p.StreamID, lag)
-			minBufDuration := p.Config.JitterBufDuration / 2
-			if enableSlowDown && protocol == streamtypes.ServerTypeRTMP && p.Config.JitterBufDuration > time.Second && lag < minBufDuration {
+			minBufDuration := p.CurrentJitterBufDuration / 2
+			if enableSlowDown && protocol == streamtypes.ServerTypeRTMP && p.CurrentJitterBufDuration > time.Second && minBufDuration > lag {
+				jitterBufDurationIncrease = max(jitterBufDurationIncrease, minBufDuration-lag)
 				k := lag.Seconds() / minBufDuration.Seconds()
 				speed := 1 - (1-k)*(1-minSpeed)
 				if speed <= 0 {
@@ -926,7 +954,10 @@ func (p *StreamPlayerHandler) controllerLoop(
 				time.Sleep(100 * time.Millisecond) // let it catch up at least a bit, before changing the speed back (to avoid flickering)
 				return
 			}
-			if lag <= p.Config.JitterBufDuration {
+			if jitterBufDurationIncrease > 0 {
+				commitJitterBufferIncrease()
+			}
+			if lag <= p.CurrentJitterBufDuration {
 				if curSpeed == 1 {
 					return
 				}
@@ -943,12 +974,29 @@ func (p *StreamPlayerHandler) controllerLoop(
 				return
 			}
 
+			// x^(halftime/interval) = 0.5
+			// log(x) * (halftime/interval) = log(0.5)
+			// log(x) = log(0.5) / (halftime/interval)
+			// x = e^(log(0.5)/(halftime/interval))
+			jitterBufFactor := math.Exp(math.Log(2) / (jitterBufDecayHalftime.Seconds() / playerCheckInterval.Seconds()))
+			logger.Tracef(ctx,
+				"StreamPlayer[%s].controllerLoop: increasing jitter buffer duration factor: %v (halftime: %v, interval: %v)",
+				p.StreamID,
+				jitterBufFactor,
+				jitterBufDecayHalftime,
+				playerCheckInterval,
+			)
+			p.CurrentJitterBufDuration = max(
+				time.Duration(float64(p.CurrentJitterBufDuration)*jitterBufFactor),
+				minJitterBufDuration,
+			)
+
 			speed := float64(1) +
 				(p.Config.CatchupMaxSpeedFactor-float64(1))*
-					(lag.Seconds()-p.Config.JitterBufDuration.Seconds())/
-					(p.Config.MaxCatchupAtLag.Seconds()-p.Config.JitterBufDuration.Seconds())
+					(lag-p.CurrentJitterBufDuration).Seconds()/
+					(p.Config.MaxCatchupAtLag-p.CurrentJitterBufDuration).Seconds()
 
-			speed = float64(uint(speed*10)) / 10 // to avoid flickering (for example between 1.0001 and 1.0)
+			speed = float64(uint(speed*100)) / 100 // to avoid flickering (for example between 1.0001 and 1.0)
 
 			if speed > p.Config.CatchupMaxSpeedFactor {
 				logger.Warnf(ctx,
@@ -957,9 +1005,9 @@ func (p *StreamPlayerHandler) controllerLoop(
 					p.Config.CatchupMaxSpeedFactor,
 					p.Config.CatchupMaxSpeedFactor,
 					lag.Seconds(),
-					p.Config.JitterBufDuration.Seconds(),
+					p.CurrentJitterBufDuration.Seconds(),
 					p.Config.MaxCatchupAtLag.Seconds(),
-					p.Config.JitterBufDuration.Seconds(),
+					p.CurrentJitterBufDuration.Seconds(),
 					l, pos,
 				)
 				speed = p.Config.CatchupMaxSpeedFactor
