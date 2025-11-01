@@ -12,6 +12,7 @@ import (
 	"github.com/xaionaro-go/kickcom"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick/chathandlerobsolete/protobuf/go/chathandlerobsolete_grpc"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick/kickclientobsolete"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/protobuf/goconv"
 	"github.com/xaionaro-go/streamctl/pkg/xgrpc"
 	"github.com/xaionaro-go/xcontext"
@@ -91,7 +92,7 @@ func (srv *GRPCServer) open(
 	ctx = srv.getCtx(ctx, req.GetCommons())
 	channelSlug := req.GetChannelSlug()
 
-	reverseEngClient, err := kickcom.New()
+	reverseEngClient, err := kickclientobsolete.New()
 	if err != nil {
 		return nil, fmt.Errorf("unable to initialize a client to Kick: %w", err)
 	}

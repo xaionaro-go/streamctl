@@ -21,6 +21,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/secret"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick/kickclientobsolete"
 	"github.com/xaionaro-go/xsync"
 )
 
@@ -33,7 +34,7 @@ type Kick struct {
 	CloseFn                context.CancelFunc
 	Channel                *kickcom.ChannelV1
 	Client                 *Client
-	ClientOBSOLETE         *kickcom.Kick
+	ClientOBSOLETE         *kickclientobsolete.KickClientOBSOLETE
 	ChatHandler            *ChatHandlerOBSOLETE
 	ChatHandlerInitStarted bool
 	ChatHandlerLocker      xsync.CtxLocker
@@ -58,7 +59,7 @@ func New(
 		return nil, fmt.Errorf("channel is not set")
 	}
 
-	clientOld, err := kickcom.New()
+	clientOld, err := kickclientobsolete.New()
 	if err != nil {
 		return nil, fmt.Errorf("unable to initialize the old client: %w", err)
 	}

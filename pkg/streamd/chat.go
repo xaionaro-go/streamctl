@@ -72,12 +72,12 @@ func (d *StreamD) startListeningForChatMessages(
 func (d *StreamD) shoutoutIfNeeded(
 	ctx context.Context,
 	msg api.ChatMessage,
-) {
+) (_ret bool) {
 	logger.Debugf(ctx, "shoutoutIfNeeded(ctx, %#+v)", msg)
-	defer logger.Debugf(ctx, "/shoutoutIfNeeded(ctx, %#+v)", msg)
+	defer logger.Debugf(ctx, "/shoutoutIfNeeded(ctx, %#+v): %v", msg, _ret)
 	if !msg.IsLive {
 		logger.Tracef(ctx, "is not a live message")
-		return
+		return false
 	}
 
 	d.lastShoutoutAtLocker.Lock()
@@ -95,13 +95,13 @@ func (d *StreamD) shoutoutIfNeeded(
 	logger.Debugf(ctx, "lastShoutoutAt(%#+v): %v", userID, lastShoutoutAt)
 	if v := time.Since(lastShoutoutAt); v < time.Hour {
 		logger.Tracef(ctx, "the previous shoutout was too soon: %v < %v", v, time.Hour)
-		return
+		return false
 	}
 
 	cfg, err := d.GetConfig(ctx)
 	if err != nil {
 		logger.Errorf(ctx, "unable to get the config: %v", err)
-		return
+		return false
 	}
 
 	found := false
@@ -124,42 +124,43 @@ func (d *StreamD) shoutoutIfNeeded(
 	}
 
 	if !found {
-		logger.Debugf(ctx, "not in the list for auto-shoutout")
-		return
+		logger.Debugf(ctx, "'%s' not in the list for auto-shoutout at '%s'", userID, msg.Platform)
+		return false
 	}
 
-	d.shoutoutIfCan(ctx, userID.Platform, userID.User)
+	return d.shoutoutIfCan(ctx, userID.Platform, userID.User)
 }
 
 func (d *StreamD) shoutoutIfCan(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
 	userID streamcontrol.ChatUserID,
-) {
+) (_ret bool) {
 	logger.Debugf(ctx, "shoutoutIfCan('%s', '%s')", platID, userID)
 	defer logger.Debugf(ctx, "/shoutoutIfCan('%s', '%s')", platID, userID)
 
 	ctrl, err := d.streamController(ctx, platID)
 	if err != nil {
 		logger.Errorf(ctx, "unable to get a stream controller '%s': %v", platID, err)
-		return
+		return false
 	}
 
 	if !ctrl.IsCapable(ctx, streamcontrol.CapabilityShoutout) {
 		logger.Errorf(ctx, "the controller '%s' does not support shoutouts", platID)
-		return
+		return false
 	}
 
 	err = ctrl.Shoutout(ctx, userID)
 	if err != nil {
 		logger.Errorf(ctx, "unable to shoutout '%s' at '%s': %v", userID, platID, err)
-		return
+		return false
 	}
 	userFullID := config.ChatUserID{
 		Platform: platID,
 		User:     userID,
 	}
 	d.lastShoutoutAt[userFullID] = time.Now()
+	return true
 }
 
 func (d *StreamD) RemoveChatMessage(

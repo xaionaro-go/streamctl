@@ -146,8 +146,8 @@ func (l *ChatListenerOBSOLETE) listenLoop(ctx context.Context) (_err error) {
 			l.messagesOutChan <- streamcontrol.ChatMessage{
 				CreatedAt: msg.Timestamp,
 				EventType: streamcontrol.EventTypeChatMessage,
-				UserID:    l.getUserID(ctx, msg.AuthorID),
-				Username:  msg.AuthorName,
+				UserID:    l.getUserID(ctx, sanitizeAuthorID(msg.AuthorID)),
+				Username:  sanitizeAuthorName(msg.AuthorName),
 				// TODO: find a way to extract the message ID,
 				//       in the mean while we we use a soft key for that:
 				MessageID:         streamcontrol.ChatMessageID(fmt.Sprintf("%s/%s", msg.AuthorName, msg.Message)),
@@ -157,6 +157,15 @@ func (l *ChatListenerOBSOLETE) listenLoop(ctx context.Context) (_err error) {
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
+}
+
+func sanitizeAuthorID(authorID string) string {
+	return authorID
+}
+
+func sanitizeAuthorName(authorName string) string {
+	r, _ := strings.CutPrefix(authorName, "@")
+	return r
 }
 
 func (h *ChatListenerOBSOLETE) normalizeMessage(
