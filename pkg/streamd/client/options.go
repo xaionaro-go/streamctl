@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/xaionaro-go/streamctl/pkg/xgrpc"
+	"github.com/xaionaro-go/xgrpc"
 	"google.golang.org/grpc"
 )
 

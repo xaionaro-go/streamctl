@@ -290,24 +290,24 @@ type StreamD interface {
 	RemoveChatMessage(
 		ctx context.Context,
 		platID streamcontrol.PlatformName,
-		msgID streamcontrol.ChatMessageID,
+		msgID streamcontrol.EventID,
 	) error
 	BanUser(
 		ctx context.Context,
 		platID streamcontrol.PlatformName,
-		userID streamcontrol.ChatUserID,
+		userID streamcontrol.UserID,
 		reason string,
 		deadline time.Time,
 	) error
 	Shoutout(
 		ctx context.Context,
 		platID streamcontrol.PlatformName,
-		userID streamcontrol.ChatUserID,
+		userID streamcontrol.UserID,
 	) error
 	RaidTo(
 		ctx context.Context,
 		platID streamcontrol.PlatformName,
-		userID streamcontrol.ChatUserID,
+		userID streamcontrol.UserID,
 	) error
 
 	GetPeerIDs(ctx context.Context) ([]p2ptypes.PeerID, error)
@@ -405,7 +405,7 @@ type TriggerRule = config.TriggerRule
 type TriggerRules = config.TriggerRules
 
 type ChatMessage struct {
-	streamcontrol.ChatMessage
+	streamcontrol.Event
 	Platform streamcontrol.PlatformName
 	IsLive   bool
 }

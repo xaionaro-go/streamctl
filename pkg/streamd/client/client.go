@@ -36,7 +36,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
-	"github.com/xaionaro-go/streamctl/pkg/xgrpc"
+	"github.com/xaionaro-go/xgrpc"
 	"github.com/xaionaro-go/xsync"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
@@ -2569,7 +2569,7 @@ func (c *Client) SubscribeToChatMessages(
 func (c *Client) RemoveChatMessage(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
-	msgID streamcontrol.ChatMessageID,
+	msgID streamcontrol.EventID,
 ) error {
 	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
@@ -2594,7 +2594,7 @@ func (c *Client) RemoveChatMessage(
 func (c *Client) BanUser(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
-	userID streamcontrol.ChatUserID,
+	userID streamcontrol.UserID,
 	reason string,
 	deadline time.Time,
 ) error {
@@ -2654,7 +2654,7 @@ func (c *Client) SendChatMessage(
 func (c *Client) Shoutout(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
-	userID streamcontrol.ChatUserID,
+	userID streamcontrol.UserID,
 ) error {
 	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,
@@ -2680,7 +2680,7 @@ func (c *Client) Shoutout(
 func (c *Client) RaidTo(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
-	userID streamcontrol.ChatUserID,
+	userID streamcontrol.UserID,
 ) error {
 	_, err := withStreamDClient(ctx, c, func(
 		ctx context.Context,

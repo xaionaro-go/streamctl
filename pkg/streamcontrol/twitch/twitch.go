@@ -696,7 +696,7 @@ func (t *Twitch) GetAllCategories(
 
 func (t *Twitch) GetChatMessagesChan(
 	ctx context.Context,
-) (<-chan streamcontrol.ChatMessage, error) {
+) (<-chan streamcontrol.Event, error) {
 	logger.Debugf(ctx, "GetChatMessagesChan")
 	defer func() { logger.Debugf(ctx, "/GetChatMessagesChan") }()
 
@@ -704,11 +704,11 @@ func (t *Twitch) GetChatMessagesChan(
 		logger.Errorf(ctx, "unable to prepare the client: %v", err)
 	}
 
-	outCh := make(chan streamcontrol.ChatMessage)
-	recentMsgIDs := ringbuffer.New[streamcontrol.ChatMessageID](10)
+	outCh := make(chan streamcontrol.Event)
+	recentMsgIDs := ringbuffer.New[streamcontrol.EventID](10)
 
-	sendEvent := func(ev streamcontrol.ChatMessage) {
-		recentMsgIDs.Add(ev.MessageID)
+	sendEvent := func(ev streamcontrol.Event) {
+		recentMsgIDs.Add(ev.ID)
 		select {
 		case outCh <- ev:
 		default:
@@ -716,7 +716,7 @@ func (t *Twitch) GetChatMessagesChan(
 		}
 	}
 
-	alreadySeen := func(msgID streamcontrol.ChatMessageID) bool {
+	alreadySeen := func(msgID streamcontrol.EventID) bool {
 		return recentMsgIDs.Contains(msgID)
 	}
 
@@ -726,8 +726,8 @@ func (t *Twitch) GetChatMessagesChan(
 			close(outCh)
 		}()
 		var (
-			chSub <-chan streamcontrol.ChatMessage
-			chIRC <-chan streamcontrol.ChatMessage
+			chSub <-chan streamcontrol.Event
+			chIRC <-chan streamcontrol.Event
 		)
 		t.prepareLocker.Do(ctx, func() {
 			if t.chatHandlerSub != nil {
@@ -768,8 +768,8 @@ func (t *Twitch) GetChatMessagesChan(
 					continue
 				}
 				logger.Tracef(ctx, "received a message from API: %#+v", ev)
-				if alreadySeen(ev.MessageID) {
-					logger.Tracef(ctx, "already seen message %s", ev.MessageID)
+				if alreadySeen(ev.ID) {
+					logger.Tracef(ctx, "already seen message %s", ev.ID)
 					continue
 				}
 				sendEvent(ev)
@@ -780,8 +780,8 @@ func (t *Twitch) GetChatMessagesChan(
 					continue
 				}
 				logger.Tracef(ctx, "received a message from IRC: %#+v", evIRC)
-				if alreadySeen(evIRC.MessageID) {
-					logger.Tracef(ctx, "already seen message %s", evIRC.MessageID)
+				if alreadySeen(evIRC.ID) {
+					logger.Tracef(ctx, "already seen message %s", evIRC.ID)
 					continue
 				}
 
@@ -794,7 +794,7 @@ func (t *Twitch) GetChatMessagesChan(
 					}
 					logger.Tracef(ctx, "received a message from API: %#+v", evIRC)
 					sendEvent(evSub)
-					if alreadySeen(evIRC.MessageID) {
+					if alreadySeen(evIRC.ID) {
 						logger.Tracef(ctx, "the same message")
 						continue
 					}
@@ -826,7 +826,7 @@ func (t *Twitch) SendChatMessage(ctx context.Context, message string) (_ret erro
 }
 func (t *Twitch) RemoveChatMessage(
 	ctx context.Context,
-	messageID streamcontrol.ChatMessageID,
+	messageID streamcontrol.EventID,
 ) (_ret error) {
 	logger.Debugf(ctx, "RemoveChatMessage(ctx, '%s')", messageID)
 	defer func() { logger.Debugf(ctx, "/RemoveChatMessage(ctx, '%s'): %v", messageID, _ret) }()
@@ -844,7 +844,7 @@ func (t *Twitch) RemoveChatMessage(
 }
 func (t *Twitch) BanUser(
 	ctx context.Context,
-	userID streamcontrol.ChatUserID,
+	userID streamcontrol.UserID,
 	reason string,
 	deadline time.Time,
 ) (_err error) {
@@ -894,7 +894,7 @@ func (t *Twitch) IsCapable(
 
 func (t *Twitch) IsChannelStreaming(
 	ctx context.Context,
-	chanID streamcontrol.ChatUserID,
+	chanID streamcontrol.UserID,
 ) (_ret bool, _err error) {
 	logger.Debugf(ctx, "IsChannelStreaming")
 	defer func() { logger.Debugf(ctx, "/IsChannelStreaming: %v %v", _ret, _err) }()
@@ -916,7 +916,7 @@ func (t *Twitch) IsChannelStreaming(
 
 func (t *Twitch) RaidTo(
 	ctx context.Context,
-	idOrLogin streamcontrol.ChatUserID,
+	idOrLogin streamcontrol.UserID,
 ) (_err error) {
 	logger.Debugf(ctx, "RaidTo(ctx, '%s')", idOrLogin)
 	defer func() { logger.Debugf(ctx, "/RaidTo(ctx, '%s'): %v", idOrLogin, _err) }()
@@ -960,7 +960,7 @@ func (t *Twitch) GetUser(idOrLogin string) (*helix.User, error) {
 
 func (t *Twitch) Shoutout(
 	ctx context.Context,
-	userIDOrLogin streamcontrol.ChatUserID,
+	userIDOrLogin streamcontrol.UserID,
 ) (_err error) {
 	logger.Debugf(ctx, "Shoutout(ctx, '%s')", userIDOrLogin)
 	defer func() { logger.Debugf(ctx, "/Shoutout(ctx, '%s'): %v", userIDOrLogin, _err) }()

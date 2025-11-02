@@ -21,7 +21,7 @@ type ChatListener struct {
 
 	wg              sync.WaitGroup
 	cancelFunc      context.CancelFunc
-	messagesOutChan chan streamcontrol.ChatMessage
+	messagesOutChan chan streamcontrol.Event
 }
 
 type ChatClient interface {
@@ -40,7 +40,7 @@ func NewChatListener(
 		liveChatID:      liveChatID,
 		client:          ytClient,
 		cancelFunc:      cancelFunc,
-		messagesOutChan: make(chan streamcontrol.ChatMessage, 100),
+		messagesOutChan: make(chan streamcontrol.Event, 100),
 	}
 	l.wg.Add(1)
 	observability.Go(ctx, func(ctx context.Context) {
@@ -101,13 +101,19 @@ func (l *ChatListener) listenLoop(ctx context.Context) (_err error) {
 			if err != nil {
 				logger.Errorf(ctx, "unable to parse the timestamp '%s': %v", item.Snippet.PublishedAt, err)
 			}
-			msg := streamcontrol.ChatMessage{
+			msg := streamcontrol.Event{
+				ID:        streamcontrol.EventID(item.Id),
 				CreatedAt: publishedAt,
-				EventType: streamcontrol.EventTypeChatMessage,
-				UserID:    streamcontrol.ChatUserID(item.AuthorDetails.ChannelId),
-				Username:  item.AuthorDetails.DisplayName,
-				MessageID: streamcontrol.ChatMessageID(item.Id),
-				Message:   item.Snippet.DisplayMessage,
+				Type:      streamcontrol.EventTypeChatMessage,
+				User: streamcontrol.User{
+					ID:   streamcontrol.UserID(item.AuthorDetails.ChannelId),
+					Slug: item.AuthorDetails.ChannelId,
+					Name: item.AuthorDetails.DisplayName,
+				},
+				Message: &streamcontrol.Message{
+					Content: item.Snippet.DisplayMessage,
+					Format:  streamcontrol.TextFormatTypePlain,
+				},
 			}
 			if item.Snippet.SuperChatDetails != nil {
 				msg.Paid.Currency = streamcontrol.CurrencyOther
@@ -130,7 +136,7 @@ func (h *ChatListener) Close(ctx context.Context) error {
 	return nil
 }
 
-func (h *ChatListener) MessagesChan() <-chan streamcontrol.ChatMessage {
+func (h *ChatListener) MessagesChan() <-chan streamcontrol.Event {
 	return h.messagesOutChan
 }
 

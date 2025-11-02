@@ -154,7 +154,7 @@ func (p *Panel) onReceiveMessage(
 			defer logger.Debugf(ctx, "/SendNotification")
 			p.app.SendNotification(&fyne.Notification{
 				Title:   string(msg.Platform) + " chat message",
-				Content: msg.Username + ": " + msg.Message,
+				Content: msg.User.Name + ": " + msg.Message.Content,
 			})
 		})
 		observability.GoSafe(ctx, func(ctx context.Context) {
@@ -213,7 +213,7 @@ func (p *Panel) getPlatformCapabilities(
 func (p *Panel) chatUserBan(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
-	userID streamcontrol.ChatUserID,
+	userID streamcontrol.UserID,
 ) error {
 	// TODO: add controls for the reason and deadline
 	return p.StreamD.BanUser(ctx, platID, userID, "", time.Time{})
@@ -239,7 +239,7 @@ func (p *Panel) onRemoveChatMessageClicked(
 	for _, chatUI := range p.getChatUIs(ctx) {
 		chatUI.Remove(ctx, *msg)
 	}
-	err := p.chatMessageRemove(ctx, msg.Platform, msg.MessageID)
+	err := p.chatMessageRemove(ctx, msg.Platform, msg.ID)
 	if err != nil {
 		p.DisplayError(err)
 	}
@@ -248,7 +248,7 @@ func (p *Panel) onRemoveChatMessageClicked(
 func (p *Panel) chatMessageRemove(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
-	msgID streamcontrol.ChatMessageID,
+	msgID streamcontrol.EventID,
 ) error {
 	return p.StreamD.RemoveChatMessage(ctx, platID, msgID)
 }

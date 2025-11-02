@@ -1992,7 +1992,7 @@ func (p *StreamD) addCloseCallback(callback func() error, name string) {
 func (p *StreamD) Shoutout(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
-	userID streamcontrol.ChatUserID,
+	userID streamcontrol.UserID,
 ) (_err error) {
 	logger.Debugf(ctx, "Shoutout(ctx, '%s', '%s')", platID, userID)
 	defer func() { logger.Debugf(ctx, "/Shoutout(ctx, '%s', '%s'): %v", platID, userID, _err) }()
@@ -2006,7 +2006,7 @@ func (p *StreamD) Shoutout(
 func (p *StreamD) RaidTo(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
-	userID streamcontrol.ChatUserID,
+	userID streamcontrol.UserID,
 ) (_err error) {
 	logger.Debugf(ctx, "RaidTo(ctx, '%s', '%s')", platID, userID)
 	defer func() { logger.Debugf(ctx, "/RaidTo(ctx, '%s', '%s'): %v", platID, userID, _err) }()

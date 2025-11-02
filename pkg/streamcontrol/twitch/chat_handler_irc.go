@@ -24,7 +24,7 @@ type ChatHandlerIRC struct {
 	cancelFunc      context.CancelFunc
 	waitGroup       sync.WaitGroup
 	messagesInChan  chan irc.ChatMessage
-	messagesOutChan chan streamcontrol.ChatMessage
+	messagesOutChan chan streamcontrol.Event
 }
 
 var _ ChatHandler = (*ChatHandlerIRC)(nil)
@@ -66,7 +66,7 @@ func newChatHandlerIRC(
 		client:          chatClient,
 		cancelFunc:      cancelFn,
 		messagesInChan:  make(chan irc.ChatMessage),
-		messagesOutChan: make(chan streamcontrol.ChatMessage, 100),
+		messagesOutChan: make(chan streamcontrol.Event, 100),
 	}
 
 	h.waitGroup.Add(1)
@@ -91,14 +91,19 @@ func newChatHandlerIRC(
 					return
 				}
 				select {
-				case h.messagesOutChan <- streamcontrol.ChatMessage{
-					CreatedAt:         ev.CreatedAt,
-					EventType:         streamcontrol.EventTypeChatMessage,
-					UserID:            streamcontrol.ChatUserID(ev.Sender.Username),
-					Username:          ev.Sender.Username,
-					MessageID:         streamcontrol.ChatMessageID(ev.ID),
-					Message:           ev.Text, // TODO: investigate if we need ev.IRCMessage.Text
-					MessageFormatType: streamcontrol.TextFormatTypePlain,
+				case h.messagesOutChan <- streamcontrol.Event{
+					CreatedAt: ev.CreatedAt,
+					Type:      streamcontrol.EventTypeChatMessage,
+					User: streamcontrol.User{
+						ID:   streamcontrol.UserID(ev.Sender.Username),
+						Slug: ev.Sender.Username,
+						Name: ev.Sender.DisplayName,
+					},
+					ID: streamcontrol.EventID(ev.ID),
+					Message: &streamcontrol.Message{
+						Content: ev.Text, // TODO: investigate if we need ev.IRCMessage.Text
+						Format:  streamcontrol.TextFormatTypePlain,
+					},
 				}:
 				default:
 					logger.Warnf(ctx, "the queue is full, skipping the message")
@@ -123,6 +128,6 @@ func (h *ChatHandlerIRC) Close(ctx context.Context) error {
 	return nil
 }
 
-func (h *ChatHandlerIRC) MessagesChan() <-chan streamcontrol.ChatMessage {
+func (h *ChatHandlerIRC) MessagesChan() <-chan streamcontrol.Event {
 	return h.messagesOutChan
 }

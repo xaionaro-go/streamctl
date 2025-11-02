@@ -264,7 +264,7 @@ func (obs *OBS) SetCurrentProgramScene(
 
 func (obs *OBS) GetChatMessagesChan(
 	ctx context.Context,
-) (<-chan streamcontrol.ChatMessage, error) {
+) (<-chan streamcontrol.Event, error) {
 	return nil, nil
 }
 
@@ -276,13 +276,13 @@ func (obs *OBS) SendChatMessage(
 }
 func (obs *OBS) RemoveChatMessage(
 	ctx context.Context,
-	messageID streamcontrol.ChatMessageID,
+	messageID streamcontrol.EventID,
 ) error {
 	return fmt.Errorf("not implemented, yet")
 }
 func (obs *OBS) BanUser(
 	ctx context.Context,
-	userID streamcontrol.ChatUserID,
+	userID streamcontrol.UserID,
 	reason string,
 	deadline time.Time,
 ) error {
@@ -298,21 +298,21 @@ func (obs *OBS) IsCapable(
 
 func (obs *OBS) IsChannelStreaming(
 	ctx context.Context,
-	chanID streamcontrol.ChatUserID,
+	chanID streamcontrol.UserID,
 ) (bool, error) {
 	return false, fmt.Errorf("not implemented")
 }
 
 func (obs *OBS) RaidTo(
 	ctx context.Context,
-	chanID streamcontrol.ChatUserID,
+	chanID streamcontrol.UserID,
 ) error {
 	return fmt.Errorf("not implemented")
 }
 
 func (obs *OBS) Shoutout(
 	ctx context.Context,
-	chanID streamcontrol.ChatUserID,
+	chanID streamcontrol.UserID,
 ) error {
 	return fmt.Errorf("not implemented")
 }

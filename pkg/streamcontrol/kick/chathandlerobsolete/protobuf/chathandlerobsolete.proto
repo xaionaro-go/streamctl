@@ -2,12 +2,12 @@ syntax = "proto3";
 package chathandlerobsolete;
 option go_package = "github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick/chathandlerobsolete/protobuf/go/chathandlerobsolete_grpc";
 
-import "streamcontrol/streamcontrol.proto";
+import "chat/chatwebhook.proto";
 
 service ChatHandlerObsolete {
 	rpc Open(OpenRequest) returns (OpenReply) {}
 	rpc Close(CloseRequest) returns (CloseReply) {}
-	rpc MessagesChan(MessagesChanRequest) returns (stream streamcontrol.ChatMessage) {}
+	rpc MessagesChan(MessagesChanRequest) returns (stream chatwebhook.Event) {}
 }
 
 enum LoggingLevel {

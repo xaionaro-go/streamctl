@@ -32,7 +32,7 @@ type chatUIAsText struct {
 	OnRemove           func(context.Context, api.ChatMessage)
 
 	ItemLocker       xsync.Mutex
-	ItemsByMessageID map[streamcontrol.ChatMessageID]*chatTextItem
+	ItemsByMessageID map[streamcontrol.EventID]*chatTextItem
 	TotalListHeight  uint
 
 	RefreshCount atomic.Int64
@@ -54,7 +54,7 @@ func (panel *Panel) newChatUIAsText(
 		Panel:            panel,
 		EnableButtons:    enableButtons,
 		ReverseOrder:     reverseOrder,
-		ItemsByMessageID: map[streamcontrol.ChatMessageID]*chatTextItem{},
+		ItemsByMessageID: map[streamcontrol.EventID]*chatTextItem{},
 		ctx:              ctx,
 	}
 	if err := ui.init(ctx); err != nil {
@@ -148,7 +148,7 @@ func (ui *chatUIAsText) Append(
 			logger.Warnf(ctx, "chat item %d not found", itemIdx)
 			return
 		}
-		item, _ := ui.ItemsByMessageID[msg.MessageID]
+		item, _ := ui.ItemsByMessageID[msg.ID]
 		if item != nil {
 			logger.Warnf(ctx, "item %d is already added", itemIdx)
 			return
@@ -169,7 +169,7 @@ func (ui *chatUIAsText) Remove(
 		defer onRemove(ctx, msg)
 	}
 	ui.ItemLocker.Do(ctx, func() {
-		delete(ui.ItemsByMessageID, msg.MessageID)
+		delete(ui.ItemsByMessageID, msg.ID)
 	})
 	observability.Go(ctx, func(context.Context) { ui.CanvasObject.Refresh() }) // TODO: remove the observability.Go
 }
@@ -269,12 +269,12 @@ func (ui *chatUIAsText) newItem(
 		banUserButton.OnTapped = func() {
 			w := dialog.NewConfirm(
 				"Banning an user",
-				fmt.Sprintf("Are you sure you want to ban user '%s' on '%s'", msg.UserID, msg.Platform),
+				fmt.Sprintf("Are you sure you want to ban user '%s' on '%s'", msg.User.ID, msg.Platform),
 				func(b bool) {
 					if !b {
 						return
 					}
-					ui.onBanClicked(msg.Platform, msg.UserID)
+					ui.onBanClicked(msg.Platform, msg.User.ID)
 				},
 				ui.Panel.mainWindow,
 			)
@@ -289,7 +289,7 @@ func (ui *chatUIAsText) newItem(
 		removeMsgButton.OnTapped = func() {
 			w := dialog.NewConfirm(
 				"Removing a message",
-				fmt.Sprintf("Are you sure you want to remove the message from '%s' on '%s'", msg.UserID, msg.Platform),
+				fmt.Sprintf("Are you sure you want to remove the message from '%s' on '%s'", msg.User.ID, msg.Platform),
 				func(b bool) {
 					if !b {
 						return
@@ -308,17 +308,17 @@ func (ui *chatUIAsText) newItem(
 		}
 	}
 	newText := msg.CreatedAt.Format("05")
-	if msg.EventType != streamcontrol.EventTypeChatMessage {
-		newText += fmt.Sprintf(" %s", msg.EventType.String())
+	if msg.Type != streamcontrol.EventTypeChatMessage {
+		newText += fmt.Sprintf(" %s", msg.Type.String())
 	}
 	item.TimestampSegment.Text = newText
 	item.TimestampSegment.Style.ColorName = colorForPlatform(msg.Platform)
-	item.UsernameSegment.Text = msg.Username
-	item.UsernameSegment.Style.ColorName = colorForUsername(msg.Username)
-	item.MessageSegment.Text = msg.Message
+	item.UsernameSegment.Text = msg.User.Name
+	item.UsernameSegment.Style.ColorName = colorForUsername(msg.User.Name)
+	item.MessageSegment.Text = msg.Message.Content
 	logger.Tracef(ctx, "%d: updated message is: '%s'", itemIdx, msg.Message)
 
-	ui.ItemsByMessageID[msg.MessageID] = item
+	ui.ItemsByMessageID[msg.ID] = item
 
 	newSegments := []widget.RichTextSegment{
 		item.TimestampSegment,
@@ -352,7 +352,7 @@ func (ui *chatUIAsText) newItem(
 
 func (ui *chatUIAsText) onBanClicked(
 	platID streamcontrol.PlatformName,
-	userID streamcontrol.ChatUserID,
+	userID streamcontrol.UserID,
 ) {
 	ui.Panel.chatUserBan(ui.ctx, platID, userID)
 }

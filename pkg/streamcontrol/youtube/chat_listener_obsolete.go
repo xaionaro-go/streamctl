@@ -63,9 +63,9 @@ type ChatListenerOBSOLETE struct {
 	clientConfig     ytchat.YtCfg
 	wg               sync.WaitGroup
 	cancelFunc       context.CancelFunc
-	messagesOutChan  chan streamcontrol.ChatMessage
+	messagesOutChan  chan streamcontrol.Event
 
-	channelIDToName       map[string]streamcontrol.ChatUserID
+	channelIDToName       map[string]streamcontrol.UserID
 	channelIDToNameLocker xsync.Mutex
 }
 
@@ -91,8 +91,8 @@ func NewChatListenerOBSOLETE(
 		continuationCode: continuationCode,
 		clientConfig:     cfg,
 		cancelFunc:       cancelFunc,
-		messagesOutChan:  make(chan streamcontrol.ChatMessage, 100),
-		channelIDToName:  map[string]streamcontrol.ChatUserID{},
+		messagesOutChan:  make(chan streamcontrol.Event, 100),
+		channelIDToName:  map[string]streamcontrol.UserID{},
 	}
 	l.wg.Add(1)
 	observability.Go(ctx, func(ctx context.Context) {
@@ -143,16 +143,22 @@ func (l *ChatListenerOBSOLETE) listenLoop(ctx context.Context) (_err error) {
 
 		for _, msg := range msgs {
 			text, format := l.normalizeMessage(ctx, msg.Message)
-			l.messagesOutChan <- streamcontrol.ChatMessage{
-				CreatedAt: msg.Timestamp,
-				EventType: streamcontrol.EventTypeChatMessage,
-				UserID:    l.getUserID(ctx, sanitizeAuthorID(msg.AuthorID)),
-				Username:  sanitizeAuthorName(msg.AuthorName),
+			userID := l.getUserID(ctx, sanitizeAuthorID(msg.AuthorID))
+			l.messagesOutChan <- streamcontrol.Event{
 				// TODO: find a way to extract the message ID,
 				//       in the mean while we we use a soft key for that:
-				MessageID:         streamcontrol.ChatMessageID(fmt.Sprintf("%s/%s", msg.AuthorName, msg.Message)),
-				Message:           text,
-				MessageFormatType: format,
+				ID:        streamcontrol.EventID(fmt.Sprintf("%s/%s", msg.AuthorName, msg.Message)),
+				CreatedAt: msg.Timestamp,
+				Type:      streamcontrol.EventTypeChatMessage,
+				User: streamcontrol.User{
+					ID:   userID,
+					Slug: string(userID),
+					Name: sanitizeAuthorName(msg.AuthorName),
+				},
+				Message: &streamcontrol.Message{
+					Content: text,
+					Format:  format,
+				},
 			}
 		}
 		time.Sleep(500 * time.Millisecond)
@@ -195,10 +201,10 @@ func messageAsHTML(msg string) string {
 func (h *ChatListenerOBSOLETE) getUserID(
 	ctx context.Context,
 	authorID string,
-) (_ret streamcontrol.ChatUserID) {
+) (_ret streamcontrol.UserID) {
 	logger.Tracef(ctx, "getUserID(ctx, '%s')", authorID)
 	defer func() { logger.Tracef(ctx, "/getUserID(ctx, '%s'): %v", authorID, _ret) }()
-	return xsync.DoR1(ctx, &h.channelIDToNameLocker, func() streamcontrol.ChatUserID {
+	return xsync.DoR1(ctx, &h.channelIDToNameLocker, func() streamcontrol.UserID {
 		if v, ok := h.channelIDToName[authorID]; ok {
 			return v
 		}
@@ -206,7 +212,7 @@ func (h *ChatListenerOBSOLETE) getUserID(
 		v, err := h.resolveChannelID(ctx, authorID)
 		if err != nil {
 			logger.Errorf(ctx, "unable to resolve channel ID '%s': %v", authorID, err)
-			return streamcontrol.ChatUserID(authorID)
+			return streamcontrol.UserID(authorID)
 		}
 
 		h.channelIDToName[authorID] = v
@@ -217,7 +223,7 @@ func (h *ChatListenerOBSOLETE) getUserID(
 func (h *ChatListenerOBSOLETE) resolveChannelID(
 	ctx context.Context,
 	authorID string,
-) (_ret streamcontrol.ChatUserID, _err error) {
+) (_ret streamcontrol.UserID, _err error) {
 	logger.Debugf(ctx, "resolveChannelID(ctx, '%s')", authorID)
 	defer func() { logger.Debugf(ctx, "/resolveChannelID(ctx, '%s'): %v %v", authorID, _ret, _err) }()
 
@@ -243,7 +249,7 @@ func (h *ChatListenerOBSOLETE) resolveChannelID(
 	vanityURLParts := strings.Split(vanityURLString, "/")
 	channelSlug := vanityURLParts[len(vanityURLParts)-1]
 	channelSlug = strings.Trim(channelSlug, "@")
-	return streamcontrol.ChatUserID(channelSlug), nil
+	return streamcontrol.UserID(channelSlug), nil
 }
 
 func (h *ChatListenerOBSOLETE) Close(ctx context.Context) (_err error) {
@@ -253,7 +259,7 @@ func (h *ChatListenerOBSOLETE) Close(ctx context.Context) (_err error) {
 	return nil
 }
 
-func (h *ChatListenerOBSOLETE) MessagesChan() <-chan streamcontrol.ChatMessage {
+func (h *ChatListenerOBSOLETE) MessagesChan() <-chan streamcontrol.Event {
 	return h.messagesOutChan
 }
 

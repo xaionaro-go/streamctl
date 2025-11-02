@@ -8,7 +8,7 @@ package chathandlerobsolete_grpc
 
 import (
 	context "context"
-	streamcontrol_grpc "github.com/xaionaro-go/streamctl/pkg/streamcontrol/protobuf/go/streamcontrol_grpc"
+	chatwebhook_grpc "github.com/xaionaro-go/chatwebhook/pkg/grpc/protobuf/go/chatwebhook_grpc"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -79,7 +79,7 @@ func (c *chatHandlerObsoleteClient) MessagesChan(ctx context.Context, in *Messag
 }
 
 type ChatHandlerObsolete_MessagesChanClient interface {
-	Recv() (*streamcontrol_grpc.ChatMessage, error)
+	Recv() (*chatwebhook_grpc.Event, error)
 	grpc.ClientStream
 }
 
@@ -87,8 +87,8 @@ type chatHandlerObsoleteMessagesChanClient struct {
 	grpc.ClientStream
 }
 
-func (x *chatHandlerObsoleteMessagesChanClient) Recv() (*streamcontrol_grpc.ChatMessage, error) {
-	m := new(streamcontrol_grpc.ChatMessage)
+func (x *chatHandlerObsoleteMessagesChanClient) Recv() (*chatwebhook_grpc.Event, error) {
+	m := new(chatwebhook_grpc.Event)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -176,7 +176,7 @@ func _ChatHandlerObsolete_MessagesChan_Handler(srv interface{}, stream grpc.Serv
 }
 
 type ChatHandlerObsolete_MessagesChanServer interface {
-	Send(*streamcontrol_grpc.ChatMessage) error
+	Send(*chatwebhook_grpc.Event) error
 	grpc.ServerStream
 }
 
@@ -184,7 +184,7 @@ type chatHandlerObsoleteMessagesChanServer struct {
 	grpc.ServerStream
 }
 
-func (x *chatHandlerObsoleteMessagesChanServer) Send(m *streamcontrol_grpc.ChatMessage) error {
+func (x *chatHandlerObsoleteMessagesChanServer) Send(m *chatwebhook_grpc.Event) error {
 	return x.ServerStream.SendMsg(m)
 }
 

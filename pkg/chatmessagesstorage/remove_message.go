@@ -11,20 +11,20 @@ import (
 
 func (s *ChatMessagesStorage) RemoveMessage(
 	ctx context.Context,
-	msgID streamcontrol.ChatMessageID,
+	msgID streamcontrol.EventID,
 ) error {
 	return xsync.DoA2R1(ctx, &s.Mutex, s.removeMessageLocked, ctx, msgID)
 }
 
 func (s *ChatMessagesStorage) removeMessageLocked(
 	ctx context.Context,
-	msgID streamcontrol.ChatMessageID,
+	msgID streamcontrol.EventID,
 ) (_err error) {
 	logger.Tracef(ctx, "removeMessageLocked(ctx, '%v')", msgID)
 	defer func() { logger.Tracef(ctx, "/removeMessageLocked(ctx, '%v'): %v", msgID, _err) }()
 
 	for idx := range s.Messages {
-		if s.Messages[idx].MessageID != msgID {
+		if s.Messages[idx].ID != msgID {
 			continue
 		}
 		s.Messages[idx] = s.Messages[len(s.Messages)-1]

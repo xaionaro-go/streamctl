@@ -24,7 +24,7 @@ type ChatHandlerSub struct {
 	cancelFunc    context.CancelFunc
 	waitGroup     sync.WaitGroup
 
-	messagesOutChan       chan streamcontrol.ChatMessage
+	messagesOutChan       chan streamcontrol.Event
 	messagesOutChanLocker xsync.Mutex
 }
 
@@ -69,7 +69,7 @@ func NewChatHandlerSub(
 		wsConn:          c,
 		broadcasterID:   broadcasterID,
 		cancelFunc:      cancelFn,
-		messagesOutChan: make(chan streamcontrol.ChatMessage, 100),
+		messagesOutChan: make(chan streamcontrol.Event, 100),
 	}
 	defer func() {
 		if _err != nil {
@@ -94,84 +94,113 @@ func NewChatHandlerSub(
 		}()
 	}
 	eventSubClient.OnEventAutomodMessageHold(func(event twitcheventsub.EventAutomodMessageHold, msg twitcheventsub.NotificationMessage) {
-		h.sendMessage(ctx, streamcontrol.ChatMessage{
-			CreatedAt:         msg.Metadata.MessageTimestamp,
-			EventType:         streamcontrol.EventTypeAutoModHold,
-			UserID:            streamcontrol.ChatUserID(event.UserID),
-			Username:          event.UserName,
-			MessageID:         streamcontrol.ChatMessageID(msg.Metadata.MessageID),
-			Message:           event.Message.Text,
-			MessageFormatType: streamcontrol.TextFormatTypePlain,
+		h.sendMessage(ctx, streamcontrol.Event{
+			ID:        streamcontrol.EventID(msg.Metadata.MessageID),
+			CreatedAt: msg.Metadata.MessageTimestamp,
+			Type:      streamcontrol.EventTypeAutoModHold,
+			User: streamcontrol.User{
+				ID:   streamcontrol.UserID(event.UserID),
+				Slug: event.UserLogin,
+				Name: event.UserName,
+			},
+			Message: &streamcontrol.Message{
+				Content: event.Message.Text,
+				Format:  streamcontrol.TextFormatTypePlain,
+			},
 		})
 	})
 	eventSubClient.OnEventChannelAdBreakBegin(func(event twitcheventsub.EventChannelAdBreakBegin, msg twitcheventsub.NotificationMessage) {
-		h.sendMessage(ctx, streamcontrol.ChatMessage{
-			CreatedAt:         msg.Metadata.MessageTimestamp,
-			EventType:         streamcontrol.EventTypeAdBreak,
-			UserID:            "twitch",
-			Username:          "Twitch",
-			MessageID:         streamcontrol.ChatMessageID(msg.Metadata.MessageID),
-			Message:           fmt.Sprintf("%d seconds", event.DurationSeconds),
-			MessageFormatType: streamcontrol.TextFormatTypePlain,
+		h.sendMessage(ctx, streamcontrol.Event{
+			ID:        streamcontrol.EventID(msg.Metadata.MessageID),
+			CreatedAt: msg.Metadata.MessageTimestamp,
+			Type:      streamcontrol.EventTypeAdBreak,
+			User: streamcontrol.User{
+				ID:   streamcontrol.UserID("twitch"),
+				Name: "Twitch",
+			},
+			Message: &streamcontrol.Message{
+				Content: fmt.Sprintf("%d seconds", event.DurationSeconds),
+				Format:  streamcontrol.TextFormatTypePlain,
+			},
 		})
 	})
 	eventSubClient.OnEventChannelBan(func(event twitcheventsub.EventChannelBan, msg twitcheventsub.NotificationMessage) {
-		h.sendMessage(ctx, streamcontrol.ChatMessage{
-			CreatedAt:         msg.Metadata.MessageTimestamp,
-			EventType:         streamcontrol.EventTypeBan,
-			UserID:            streamcontrol.ChatUserID(event.UserID),
-			Username:          event.UserName,
-			MessageID:         streamcontrol.ChatMessageID(msg.Metadata.MessageID),
-			Message:           event.Reason,
-			MessageFormatType: streamcontrol.TextFormatTypePlain,
+		h.sendMessage(ctx, streamcontrol.Event{
+			ID:        streamcontrol.EventID(msg.Metadata.MessageID),
+			CreatedAt: msg.Metadata.MessageTimestamp,
+			Type:      streamcontrol.EventTypeBan,
+			User: streamcontrol.User{
+				ID:   streamcontrol.UserID(event.UserID),
+				Name: event.UserName,
+			},
+			Message: &streamcontrol.Message{
+				Content: event.Reason,
+				Format:  streamcontrol.TextFormatTypePlain,
+			},
 		})
 	})
 	eventSubClient.OnEventChannelCheer(func(event twitcheventsub.EventChannelCheer, msg twitcheventsub.NotificationMessage) {
-		h.sendMessage(ctx, streamcontrol.ChatMessage{
+		h.sendMessage(ctx, streamcontrol.Event{
+			ID:        streamcontrol.EventID(msg.Metadata.MessageID),
 			CreatedAt: msg.Metadata.MessageTimestamp,
-			EventType: streamcontrol.EventTypeCheer,
-			UserID:    streamcontrol.ChatUserID(event.UserID),
-			Username:  event.UserName,
-			MessageID: streamcontrol.ChatMessageID(msg.Metadata.MessageID),
-			Message:   event.Message,
-			Paid: streamcontrol.Money{
-				Currency: streamcontrol.CurrencyBits,
+			Type:      streamcontrol.EventTypeCheer,
+			User: streamcontrol.User{
+				ID:   streamcontrol.UserID(event.UserID),
+				Name: event.UserName,
+			},
+			Message: &streamcontrol.Message{
+				Content: event.Message,
+				Format:  streamcontrol.TextFormatTypePlain,
+			},
+			Paid: &streamcontrol.Money{
+				Currency: streamcontrol.CurrencyTwitchBits,
 				Amount:   float64(event.Bits),
 			},
-			MessageFormatType: streamcontrol.TextFormatTypePlain,
 		})
 	})
 	eventSubClient.OnEventChannelFollow(func(event twitcheventsub.EventChannelFollow, msg twitcheventsub.NotificationMessage) {
-		h.sendMessage(ctx, streamcontrol.ChatMessage{
-			CreatedAt:         msg.Metadata.MessageTimestamp,
-			EventType:         streamcontrol.EventTypeFollow,
-			UserID:            streamcontrol.ChatUserID(event.UserID),
-			Username:          event.UserName,
-			MessageID:         streamcontrol.ChatMessageID(msg.Metadata.MessageID),
-			Message:           "",
-			MessageFormatType: streamcontrol.TextFormatTypePlain,
+		h.sendMessage(ctx, streamcontrol.Event{
+			ID:        streamcontrol.EventID(msg.Metadata.MessageID),
+			CreatedAt: msg.Metadata.MessageTimestamp,
+			Type:      streamcontrol.EventTypeFollow,
+			User: streamcontrol.User{
+				ID:   streamcontrol.UserID(event.UserID),
+				Name: event.UserName,
+			},
+			Message: &streamcontrol.Message{
+				Content: "",
+				Format:  streamcontrol.TextFormatTypePlain,
+			},
 		})
 	})
 	eventSubClient.OnEventChannelRaid(func(event twitcheventsub.EventChannelRaid, msg twitcheventsub.NotificationMessage) {
-		h.sendMessage(ctx, streamcontrol.ChatMessage{
-			CreatedAt:         msg.Metadata.MessageTimestamp,
-			EventType:         streamcontrol.EventTypeRaid,
-			UserID:            streamcontrol.ChatUserID(event.FromBroadcasterUserId),
-			Username:          event.FromBroadcasterUserName,
-			MessageID:         streamcontrol.ChatMessageID(msg.Metadata.MessageID),
-			Message:           fmt.Sprintf("%d viewers", event.Viewers),
-			MessageFormatType: streamcontrol.TextFormatTypePlain,
+		h.sendMessage(ctx, streamcontrol.Event{
+			ID:        streamcontrol.EventID(msg.Metadata.MessageID),
+			CreatedAt: msg.Metadata.MessageTimestamp,
+			Type:      streamcontrol.EventTypeRaid,
+			User: streamcontrol.User{
+				ID:   streamcontrol.UserID(event.FromBroadcasterUserId),
+				Name: event.FromBroadcasterUserName,
+			},
+			Message: &streamcontrol.Message{
+				Content: fmt.Sprintf("%d viewers", event.Viewers),
+				Format:  streamcontrol.TextFormatTypePlain,
+			},
 		})
 	})
 	eventSubClient.OnEventChannelShoutoutReceive(func(event twitcheventsub.EventChannelShoutoutReceive, msg twitcheventsub.NotificationMessage) {
-		h.sendMessage(ctx, streamcontrol.ChatMessage{
-			CreatedAt:         msg.Metadata.MessageTimestamp,
-			EventType:         streamcontrol.EventTypeChannelShoutoutReceive,
-			UserID:            streamcontrol.ChatUserID(event.FromBroadcasterUserId),
-			Username:          event.FromBroadcasterUserName,
-			MessageID:         streamcontrol.ChatMessageID(msg.Metadata.MessageID),
-			Message:           fmt.Sprintf("%d viewers", event.ViewerCount),
-			MessageFormatType: streamcontrol.TextFormatTypePlain,
+		h.sendMessage(ctx, streamcontrol.Event{
+			ID:        streamcontrol.EventID(msg.Metadata.MessageID),
+			CreatedAt: msg.Metadata.MessageTimestamp,
+			Type:      streamcontrol.EventTypeChannelShoutoutReceive,
+			User: streamcontrol.User{
+				ID:   streamcontrol.UserID(event.FromBroadcasterUserId),
+				Name: event.FromBroadcasterUserName,
+			},
+			Message: &streamcontrol.Message{
+				Content: fmt.Sprintf("%d viewers", event.ViewerCount),
+				Format:  streamcontrol.TextFormatTypePlain,
+			},
 		})
 	})
 	eventSubClient.OnEventChannelSubscribe(func(event twitcheventsub.EventChannelSubscribe, msg twitcheventsub.NotificationMessage) {
@@ -181,64 +210,81 @@ func NewChatHandlerSub(
 			description = append(description, "gift:")
 		}
 		description = append(description, fmt.Sprintf("tier '%s'", event.Tier))
-		h.sendMessage(ctx, streamcontrol.ChatMessage{
-			CreatedAt:         msg.Metadata.MessageTimestamp,
-			EventType:         streamcontrol.EventTypeSubscribe,
-			UserID:            streamcontrol.ChatUserID(event.UserID),
-			Username:          event.UserName,
-			MessageID:         streamcontrol.ChatMessageID(msg.Metadata.MessageID),
-			Message:           strings.Join(description, " "),
-			MessageFormatType: streamcontrol.TextFormatTypePlain,
+		h.sendMessage(ctx, streamcontrol.Event{
+			ID:        streamcontrol.EventID(msg.Metadata.MessageID),
+			CreatedAt: msg.Metadata.MessageTimestamp,
+			// some codebases may not define EventTypeSubscribe; fall back to a string cast
+			Type: streamcontrol.EventTypeSubscriptionNew,
+			User: streamcontrol.User{
+				ID:   streamcontrol.UserID(event.UserID),
+				Name: event.UserName,
+			},
+			Message: &streamcontrol.Message{
+				Content: strings.Join(description, " "),
+				Format:  streamcontrol.TextFormatTypePlain,
+			},
 		})
 	})
 	eventSubClient.OnEventChannelSubscriptionMessage(func(event twitcheventsub.EventChannelSubscriptionMessage, msg twitcheventsub.NotificationMessage) {
-		h.sendMessage(ctx, streamcontrol.ChatMessage{
+		h.sendMessage(ctx, streamcontrol.Event{
+			ID:        streamcontrol.EventID(msg.Metadata.MessageID),
 			CreatedAt: msg.Metadata.MessageTimestamp,
-			EventType: streamcontrol.EventTypeSubscribe,
-			UserID:    streamcontrol.ChatUserID(event.UserID),
-			Username:  event.UserName,
-			MessageID: streamcontrol.ChatMessageID(msg.Metadata.MessageID),
-			Message: fmt.Sprintf(
-				"%d months (%d in total), tier '%s', message: %s",
-				event.DurationMonths, event.CumulativeMonths, event.Tier, event.Message.Text,
-			),
-			MessageFormatType: streamcontrol.TextFormatTypePlain,
+			Type:      streamcontrol.EventTypeSubscriptionRenewed,
+			User: streamcontrol.User{
+				ID:   streamcontrol.UserID(event.UserID),
+				Name: event.UserName,
+			},
+			Message: &streamcontrol.Message{
+				Content: fmt.Sprintf(
+					"%d months (%d in total), tier '%s', message: %s",
+					event.DurationMonths, event.CumulativeMonths, event.Tier, event.Message.Text,
+				),
+				Format: streamcontrol.TextFormatTypePlain,
+			},
 		})
 	})
 	eventSubClient.OnEventChannelSubscriptionGift(func(event twitcheventsub.EventChannelSubscriptionGift, msg twitcheventsub.NotificationMessage) {
-		h.sendMessage(ctx, streamcontrol.ChatMessage{
+		h.sendMessage(ctx, streamcontrol.Event{
+			ID:        streamcontrol.EventID(msg.Metadata.MessageID),
 			CreatedAt: msg.Metadata.MessageTimestamp,
-			EventType: streamcontrol.EventTypeSubscribe,
-			UserID:    streamcontrol.ChatUserID(event.UserID),
-			Username:  event.UserName,
-			MessageID: streamcontrol.ChatMessageID(msg.Metadata.MessageID),
-			Message: fmt.Sprintf(
-				"gift: %d subs, tier '%s'",
-				event.Total, event.Tier,
-			),
-			MessageFormatType: streamcontrol.TextFormatTypePlain,
+			Type:      streamcontrol.EventTypeGiftedSubscription,
+			User: streamcontrol.User{
+				ID:   streamcontrol.UserID(event.UserID),
+				Name: event.UserName,
+			},
+			Message: &streamcontrol.Message{
+				Content: fmt.Sprintf(
+					"gift: %d subs, tier '%s'",
+					event.Total, event.Tier,
+				),
+				Format: streamcontrol.TextFormatTypePlain,
+			},
 		})
 	})
 	eventSubClient.OnEventStreamOnline(func(event twitcheventsub.EventStreamOnline, msg twitcheventsub.NotificationMessage) {
-		h.sendMessage(ctx, streamcontrol.ChatMessage{
-			CreatedAt:         msg.Metadata.MessageTimestamp,
-			EventType:         streamcontrol.EventTypeStreamOnline,
-			UserID:            streamcontrol.ChatUserID(event.BroadcasterUserId),
-			Username:          event.BroadcasterUserName,
-			MessageID:         streamcontrol.ChatMessageID(msg.Metadata.MessageID),
-			Message:           event.StartedAt.Format(time.DateTime),
-			MessageFormatType: streamcontrol.TextFormatTypePlain,
+		h.sendMessage(ctx, streamcontrol.Event{
+			ID:        streamcontrol.EventID(msg.Metadata.MessageID),
+			CreatedAt: msg.Metadata.MessageTimestamp,
+			Type:      streamcontrol.EventTypeStreamOnline,
+			User: streamcontrol.User{
+				ID:   streamcontrol.UserID(event.BroadcasterUserId),
+				Name: event.BroadcasterUserName,
+			},
+			Message: &streamcontrol.Message{
+				Content: event.StartedAt.Format(time.DateTime),
+				Format:  streamcontrol.TextFormatTypePlain,
+			},
 		})
 	})
 	eventSubClient.OnEventStreamOffline(func(event twitcheventsub.EventStreamOffline, msg twitcheventsub.NotificationMessage) {
-		h.sendMessage(ctx, streamcontrol.ChatMessage{
-			CreatedAt:         msg.Metadata.MessageTimestamp,
-			EventType:         streamcontrol.EventTypeStreamOffline,
-			UserID:            streamcontrol.ChatUserID(event.BroadcasterUserId),
-			Username:          event.BroadcasterUserName,
-			MessageID:         streamcontrol.ChatMessageID(msg.Metadata.MessageID),
-			Message:           "",
-			MessageFormatType: streamcontrol.TextFormatTypePlain,
+		h.sendMessage(ctx, streamcontrol.Event{
+			ID:        streamcontrol.EventID(msg.Metadata.MessageID),
+			CreatedAt: msg.Metadata.MessageTimestamp,
+			Type:      streamcontrol.EventTypeStreamOffline,
+			User: streamcontrol.User{
+				ID:   streamcontrol.UserID(event.BroadcasterUserId),
+				Name: event.BroadcasterUserName,
+			},
 		})
 	})
 	eventSubClient.OnEventChannelChatMessage(func(chatEvent twitcheventsub.EventChannelChatMessage, msg twitcheventsub.NotificationMessage) {
@@ -247,14 +293,18 @@ func NewChatHandlerSub(
 		if chatEvent.Cheer != nil {
 			eventType = streamcontrol.EventTypeCheer
 		}
-		h.sendMessage(ctx, streamcontrol.ChatMessage{
-			CreatedAt:         msg.Metadata.MessageTimestamp,
-			EventType:         eventType,
-			UserID:            streamcontrol.ChatUserID(chatEvent.ChatterUserId),
-			Username:          chatEvent.ChatterUserName,
-			MessageID:         streamcontrol.ChatMessageID(chatEvent.MessageId),
-			Message:           chatEvent.Message.Text,
-			MessageFormatType: streamcontrol.TextFormatTypePlain,
+		h.sendMessage(ctx, streamcontrol.Event{
+			ID:        streamcontrol.EventID(chatEvent.MessageId),
+			CreatedAt: msg.Metadata.MessageTimestamp,
+			Type:      eventType,
+			User: streamcontrol.User{
+				ID:   streamcontrol.UserID(chatEvent.ChatterUserId),
+				Name: chatEvent.ChatterUserName,
+			},
+			Message: &streamcontrol.Message{
+				Content: chatEvent.Message.Text,
+				Format:  streamcontrol.TextFormatTypePlain,
+			},
 		})
 	})
 
@@ -356,13 +406,13 @@ func (h *ChatHandlerSub) Close(ctx context.Context) error {
 	return nil
 }
 
-func (h *ChatHandlerSub) MessagesChan() <-chan streamcontrol.ChatMessage {
+func (h *ChatHandlerSub) MessagesChan() <-chan streamcontrol.Event {
 	return h.messagesOutChan
 }
 
 func (h *ChatHandlerSub) sendMessage(
 	ctx context.Context,
-	chatMsg streamcontrol.ChatMessage,
+	chatMsg streamcontrol.Event,
 ) {
 	h.messagesOutChanLocker.Do(ctx, func() {
 		logger.Tracef(ctx, "resulting chat: %#+v", chatMsg)

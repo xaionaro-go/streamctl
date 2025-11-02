@@ -10,7 +10,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick/chathandlerobsolete/protobuf/go/chathandlerobsolete_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/protobuf/go/streamcontrol_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/protobuf/goconv"
-	"github.com/xaionaro-go/streamctl/pkg/xgrpc"
+	"github.com/xaionaro-go/xgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -109,7 +109,7 @@ func (c *GRPCClient) GetCallWrapper() xgrpc.CallWrapperFunc {
 
 func (c *GRPCClient) GetMessagesChan(
 	ctx context.Context,
-) (<-chan streamcontrol.ChatMessage, error) {
+) (<-chan streamcontrol.Event, error) {
 	return xgrpc.UnwrapChan(
 		ctx,
 		c,
@@ -128,9 +128,9 @@ func (c *GRPCClient) GetMessagesChan(
 		},
 		func(
 			ctx context.Context,
-			event *streamcontrol_grpc.ChatMessage,
-		) streamcontrol.ChatMessage {
-			return goconv.ChatMessageGRPC2Go(event)
+			event *streamcontrol_grpc.Event,
+		) streamcontrol.Event {
+			return goconv.EventGRPC2Go(event)
 		},
 	)
 }

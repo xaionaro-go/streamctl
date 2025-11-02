@@ -2,38 +2,5 @@ syntax = "proto3";
 package streamcontrol;
 option go_package = "github.com/xaionaro-go/streamctl/pkg/streamcontrol/protobuf/go/streamcontrol_grpc";
 
-enum PlatformEventType {
-    platformEventTypeUndefined = 0;
-    platformEventTypeChatMessage = 1;
-    platformEventTypeCheer = 2;
-    platformEventTypeAutoModHold = 3;
-    platformEventTypeAdBreak = 4;
-    platformEventTypeBan = 5;
-    platformEventTypeFollow = 6;
-    platformEventTypeRaid = 7;
-    platformEventTypeChannelShoutoutReceive = 8;
-    platformEventTypeSubscribe = 9;
-    platformEventTypeStreamOnline = 10;
-    platformEventTypeStreamOffline = 11;
-    platformEventTypeOther = 12;
-}
-
-// TODO: rename to PlatformEvent
-message ChatMessage {
-	uint64 createdAtUNIXNano  = 1;
-    PlatformEventType eventType = 2;
-    string userID = 3;
-    string username = 4;
-    string messageID = 5;
-    string message = 6;
-    string usernameReadable = 7;
-    TextFormatType messageFormatType = 8;
-}
-
-enum TextFormatType {
-    TEXT_FORMAT_TYPE_UNDEFINED = 0;
-    TEXT_FORMAT_TYPE_PLAIN = 1;
-    TEXT_FORMAT_TYPE_MARKDOWN = 2;
-    TEXT_FORMAT_TYPE_HTML = 3;
-}
+import public "chat/chatwebhook.proto";
 

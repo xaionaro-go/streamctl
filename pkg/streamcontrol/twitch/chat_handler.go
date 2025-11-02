@@ -8,5 +8,5 @@ import (
 
 type ChatHandler interface {
 	Close(ctx context.Context) error
-	MessagesChan() <-chan streamcontrol.ChatMessage
+	MessagesChan() <-chan streamcontrol.Event
 }

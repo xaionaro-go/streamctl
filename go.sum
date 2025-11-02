@@ -1117,8 +1117,10 @@ github.com/xaionaro-go/avmediacodec v0.0.0-20250505012527-c819676502d8 h1:FZn9+T
 github.com/xaionaro-go/avmediacodec v0.0.0-20250505012527-c819676502d8/go.mod h1:2W2Kp/HJFXcFBppQ4YytgDy/ydFL3hGc23xSB1U/Luc=
 github.com/xaionaro-go/avpipeline v0.0.0-20250929013757-2eb9ecc88185 h1:eZyEeFRd9Dk7gDfgkQ6ORHawh9RjUR+nBDayATHwmQ8=
 github.com/xaionaro-go/avpipeline v0.0.0-20250929013757-2eb9ecc88185/go.mod h1:TiLj0o11F3HnNXC8MraetW1/MIM3x0ROUrruxBpeSuw=
-github.com/xaionaro-go/chatwebhook v0.0.0-20251102013345-80b205a8c53d h1:YkfE1CQ4MCxSfJjOzIgrXYvsBg4WUQxzPI8aVYLj+WE=
-github.com/xaionaro-go/chatwebhook v0.0.0-20251102013345-80b205a8c53d/go.mod h1:aQT4myeHPflWauMBxfXCUj0XnhBsA1OhJSAH2G08ap0=
+github.com/xaionaro-go/chatwebhook v0.0.0-20251102191426-33a5759f705c h1:fVqdR1EDNO8K0l9ZxhN94X7rKAoDjUhy7OSUskOFOpQ=
+github.com/xaionaro-go/chatwebhook v0.0.0-20251102191426-33a5759f705c/go.mod h1:y6fX0jgyyfrjyj4QMRLAF/ieNHdWsccd2dcGlXNUPfI=
+github.com/xaionaro-go/chatwebhook v0.0.0-20251102204738-0b8b2966ba1d h1:Q8i1p+zyF+K5pF4uz0qI8BJCjcSmQ6HVozCAS5nhv9w=
+github.com/xaionaro-go/chatwebhook v0.0.0-20251102204738-0b8b2966ba1d/go.mod h1:y6fX0jgyyfrjyj4QMRLAF/ieNHdWsccd2dcGlXNUPfI=
 github.com/xaionaro-go/cloudscraper v0.0.0-20251019213127-d3687042cb55 h1:rHvnuVmqa9M+id2Q8e0V/csp0jDhXIBAAuCC76mBW8k=
 github.com/xaionaro-go/cloudscraper v0.0.0-20251019213127-d3687042cb55/go.mod h1:mFODbc87KEjFfERrFjmAGajGZOBQq+kzMd+2wsAZSHo=
 github.com/xaionaro-go/datacounter v1.0.4 h1:+QMZLmu73R5WGkQfUPwlXF/JFN+Weo4iuDZkiL2wVm8=
@@ -1165,8 +1167,8 @@ github.com/xaionaro-go/object v0.0.0-20241026212449-753ce10ec94c h1:2CIIxTRox9au
 github.com/xaionaro-go/object v0.0.0-20241026212449-753ce10ec94c/go.mod h1:vRcA12NWsR0IrS75eqnPBs5aVfCYmJy4bR+6DbJpBCg=
 github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20241018162120-5faf4e7a684a h1:PyX7XpLkj+eAwrPMFMGpvZIG4zBfzAfwNhwTtbORqN0=
 github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20241018162120-5faf4e7a684a/go.mod h1:exSKIlCibB0ww+ABDwH+YG/iNdqVfdzXBBg5LYxkxGw=
-github.com/xaionaro-go/observability v0.0.0-20250622130956-24b7017284e4 h1:dlsJ1l9WI+LTpB5z4f7FCLLrxJ7uV4tj9jWNqpibhA0=
-github.com/xaionaro-go/observability v0.0.0-20250622130956-24b7017284e4/go.mod h1:GkNC0+nPJMOzotTzJVlH4+DvDg9cKrV9qqOe+8/kVw4=
+github.com/xaionaro-go/observability v0.0.0-20251102143534-3aeb2a25e57d h1:3oelsD973xao6Y1ucukBXElEfoSoEJ6naArGf7OQKTU=
+github.com/xaionaro-go/observability v0.0.0-20251102143534-3aeb2a25e57d/go.mod h1:83Ywq4Ukg4EtS3+1HvaboKpt6sqZzwv7oZ5+jLkzSNc=
 github.com/xaionaro-go/player v0.0.0-20251020004405-460c9f1a4b11 h1:F6tbYuPZRSaNWklbZkPpUZJ29rqB50EHr8RfhvnwZ7o=
 github.com/xaionaro-go/player v0.0.0-20251020004405-460c9f1a4b11/go.mod h1:FolxF7IWLEE5aTHOJiZ+6lAk9sGCvOkeqcbw1dYeu2w=
 github.com/xaionaro-go/proxy v0.0.0-20250525144747-579f5a891c15 h1:Qqoy9MDWq2Yh6uazAqQDzqU0doalTL3tRjNCo7X7GXA=
@@ -1194,6 +1196,8 @@ github.com/xaionaro-go/xcontext v0.0.0-20250111150717-e70e1f5b299c h1://sE/WLpO7
 github.com/xaionaro-go/xcontext v0.0.0-20250111150717-e70e1f5b299c/go.mod h1:MGRT1+2m2adVRc4aAn0RVGysjsSRKN9VCyBJLHvQd4k=
 github.com/xaionaro-go/xfyne v0.0.0-20250615190411-4c96281f6e25 h1:zGpt+U8zOCB/gMOpJZ1IzqjfU85fvbL9LUvSL/R/xEk=
 github.com/xaionaro-go/xfyne v0.0.0-20250615190411-4c96281f6e25/go.mod h1:52pwXTJFBlreHnA0sf8EoJvw5MZZNPSRm9kpdSqHOuk=
+github.com/xaionaro-go/xgrpc v0.0.0-20251102160837-04b13583739a h1:rjI5y2zUNQ4Cpxg+DcxCa/RCQgIIw5cHjJGKMtsmH8U=
+github.com/xaionaro-go/xgrpc v0.0.0-20251102160837-04b13583739a/go.mod h1:9mSKZHC8O/CxLVq8bjrUz1ZavPFhn5bGxr60do2hL6g=
 github.com/xaionaro-go/xlogrus v0.0.0-20250111150201-60557109545a h1:EoNRdOtBMnZedKfW7/4xtGmGHC+L+jfmLe5UOnF1tqc=
 github.com/xaionaro-go/xlogrus v0.0.0-20250111150201-60557109545a/go.mod h1:RPfWNuwqJykkA2TEvisXqHgy1ypA/1H2HBdIRSeVJ9o=
 github.com/xaionaro-go/xpath v0.0.0-20250111145115-55f5728f643f h1:ofxY1akRlVdJ/AEDj0EakK4Aez8fzeWTTe2mCAZiJ0A=

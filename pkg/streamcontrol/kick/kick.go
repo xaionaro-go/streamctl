@@ -35,7 +35,7 @@ type Kick struct {
 	Channel                *kickcom.ChannelV1
 	Client                 *Client
 	ClientOBSOLETE         *kickclientobsolete.KickClientOBSOLETE
-	ChatHandler            *ChatHandlerOBSOLETE
+	ChatHandler            ChatHandlerAbstract
 	ChatHandlerInitStarted bool
 	ChatHandlerLocker      xsync.CtxLocker
 	CurrentConfig          Config
@@ -502,8 +502,8 @@ func (k *Kick) GetAllCategories(
 
 func (k *Kick) tryGetChatHandler(
 	ctx context.Context,
-) (*ChatHandlerOBSOLETE, error) {
-	return xsync.DoR2(ctx, &k.ChatHandlerLocker, func() (*ChatHandlerOBSOLETE, error) {
+) (ChatHandlerAbstract, error) {
+	return xsync.DoR2(ctx, &k.ChatHandlerLocker, func() (ChatHandlerAbstract, error) {
 		if k.ChatHandler != nil {
 			return k.ChatHandler, nil
 		}
@@ -530,7 +530,7 @@ func (k *Kick) startInitChatHandlerNoLock(
 
 func (k *Kick) getChatHandler(
 	ctx context.Context,
-) *ChatHandlerOBSOLETE {
+) ChatHandlerAbstract {
 	for {
 		chatHandler, err := k.tryGetChatHandler(ctx)
 		if err != nil {
@@ -553,7 +553,7 @@ func (k *Kick) getChatHandler(
 
 func (k *Kick) GetChatMessagesChan(
 	ctx context.Context,
-) (<-chan streamcontrol.ChatMessage, error) {
+) (<-chan streamcontrol.Event, error) {
 	logger.Debugf(ctx, "GetChatMessagesChan")
 	defer func() { logger.Debugf(ctx, "/GetChatMessagesChan") }()
 
@@ -561,7 +561,7 @@ func (k *Kick) GetChatMessagesChan(
 		return nil, fmt.Errorf("unable to get a prepared client: %w", err)
 	}
 
-	outCh := make(chan streamcontrol.ChatMessage)
+	outCh := make(chan streamcontrol.Event)
 	observability.Go(ctx, func(ctx context.Context) {
 		defer func() {
 			logger.Debugf(ctx, "closing the messages channel")
@@ -618,11 +618,16 @@ func (k *Kick) resetChatHandler(ctx context.Context) {
 		if k.ChatHandler == nil {
 			return
 		}
-		logger.Debugf(ctx, "closing existing chat handler")
-		if err := k.ChatHandler.Close(ctx); err != nil {
-			logger.Errorf(ctx, "unable to close the chat handler: %v", err)
+		h, ok := k.ChatHandler.(*ChatHandlerOBSOLETE)
+		if ok {
+			logger.Debugf(ctx, "closing existing chat handler")
+			if err := h.Close(ctx); err != nil {
+				logger.Errorf(ctx, "unable to close the chat handler: %v", err)
+			}
+			k.ChatHandler = nil
+		} else {
+			logger.Debugf(ctx, "chat handler does not require resetting")
 		}
-		k.ChatHandler = nil
 	})
 }
 
@@ -639,14 +644,14 @@ func (k *Kick) SendChatMessage(ctx context.Context, message string) (_err error)
 	return err
 }
 
-func (k *Kick) RemoveChatMessage(ctx context.Context, messageID streamcontrol.ChatMessageID) error {
+func (k *Kick) RemoveChatMessage(ctx context.Context, messageID streamcontrol.EventID) error {
 	logger.Warnf(ctx, "not implemented yet")
 	return nil
 }
 
 func (k *Kick) BanUser(
 	ctx context.Context,
-	userID streamcontrol.ChatUserID,
+	userID streamcontrol.UserID,
 	reason string,
 	deadline time.Time,
 ) (_err error) {
@@ -870,7 +875,7 @@ func (k *Kick) IsCapable(
 
 func (k *Kick) IsChannelStreaming(
 	ctx context.Context,
-	chanID streamcontrol.ChatUserID,
+	chanID streamcontrol.UserID,
 ) (_ret bool, _err error) {
 	logger.Debugf(ctx, "IsChannelStreaming(ctx, '%s')", chanID)
 	defer func() { logger.Debugf(ctx, "/IsChannelStreaming(ctx, '%s'): %v", chanID, _ret, _err) }()
@@ -884,7 +889,7 @@ func (k *Kick) IsChannelStreaming(
 
 func (k *Kick) RaidTo(
 	ctx context.Context,
-	chanID streamcontrol.ChatUserID,
+	chanID streamcontrol.UserID,
 ) (_err error) {
 	logger.Debugf(ctx, "RaidTo(ctx, '%s')", chanID)
 	defer func() { logger.Debugf(ctx, "/RaidTo(ctx, '%s'): %v", chanID, _err) }()
@@ -898,7 +903,7 @@ func (k *Kick) RaidTo(
 
 func (k *Kick) getChanInfoViaOldClient(
 	ctx context.Context,
-	idOrLogin streamcontrol.ChatUserID,
+	idOrLogin streamcontrol.UserID,
 ) (_ret *gokick.ChannelResponse, _err error) {
 	logger.Debugf(ctx, "getChanInfoViaOldClient(ctx, '%s')")
 	defer func() { logger.Debugf(ctx, "/getChanInfoViaOldClient(ctx, '%s'): %v %v", _ret, _err) }()
@@ -927,7 +932,7 @@ func (k *Kick) getChanInfoViaOldClient(
 
 func (k *Kick) getChanInfo(
 	ctx context.Context,
-	idOrLogin streamcontrol.ChatUserID,
+	idOrLogin streamcontrol.UserID,
 ) (_ret *gokick.ChannelResponse, _err error) {
 	logger.Debugf(ctx, "getChanInfo(ctx, '%s')")
 	defer func() { logger.Debugf(ctx, "/getChanInfo(ctx, '%s'): %v %v", _ret, _err) }()
@@ -968,7 +973,7 @@ func (k *Kick) getChanInfo(
 
 func (k *Kick) Shoutout(
 	ctx context.Context,
-	idOrLogin streamcontrol.ChatUserID,
+	idOrLogin streamcontrol.UserID,
 ) (_err error) {
 	logger.Debugf(ctx, "Shoutout(ctx, '%s')", idOrLogin)
 	defer func() { logger.Debugf(ctx, "/Shoutout(ctx, '%s'): %v", idOrLogin, _err) }()

@@ -109,9 +109,12 @@ type StreamStatus struct {
 type Currency int
 
 const (
-	CurrencyNone = Currency(iota)
-	CurrencyBits
+	UndefinedCurrency = Currency(iota)
 	CurrencyUSD
+	CurrencyEUR
+	CurrencyGBP
+	CurrencyJPY
+	CurrencyTwitchBits
 	CurrencyOther
 )
 
@@ -130,16 +133,16 @@ type StreamControllerCommons interface {
 	EndStream(ctx context.Context) error
 	GetStreamStatus(ctx context.Context) (*StreamStatus, error)
 
-	GetChatMessagesChan(ctx context.Context) (<-chan ChatMessage, error)
+	GetChatMessagesChan(ctx context.Context) (<-chan Event, error)
 	SendChatMessage(ctx context.Context, message string) error
-	RemoveChatMessage(ctx context.Context, messageID ChatMessageID) error
-	BanUser(ctx context.Context, userID ChatUserID, reason string, deadline time.Time) error
+	RemoveChatMessage(ctx context.Context, messageID EventID) error
+	BanUser(ctx context.Context, userID UserID, reason string, deadline time.Time) error
 
 	IsCapable(context.Context, Capability) bool
 
-	IsChannelStreaming(ctx context.Context, chanID ChatUserID) (bool, error)
-	Shoutout(ctx context.Context, chanID ChatUserID) error
-	RaidTo(ctx context.Context, chanID ChatUserID) error
+	IsChannelStreaming(ctx context.Context, chanID UserID) (bool, error)
+	Shoutout(ctx context.Context, chanID UserID) error
+	RaidTo(ctx context.Context, chanID UserID) error
 }
 
 type StreamController[ProfileType StreamProfile] interface {
@@ -238,29 +241,29 @@ func (c *abstractStreamController) StreamProfileType() reflect.Type {
 	return c.StreamProfileTypeValue
 }
 
-func (c *abstractStreamController) GetChatMessagesChan(ctx context.Context) (<-chan ChatMessage, error) {
+func (c *abstractStreamController) GetChatMessagesChan(ctx context.Context) (<-chan Event, error) {
 	return c.StreamController.GetChatMessagesChan(ctx)
 }
 func (c *abstractStreamController) SendChatMessage(ctx context.Context, message string) error {
 	return c.StreamController.SendChatMessage(ctx, message)
 }
-func (c *abstractStreamController) RemoveChatMessage(ctx context.Context, messageID ChatMessageID) error {
+func (c *abstractStreamController) RemoveChatMessage(ctx context.Context, messageID EventID) error {
 	return c.StreamController.RemoveChatMessage(ctx, messageID)
 }
-func (c *abstractStreamController) BanUser(ctx context.Context, userID ChatUserID, reason string, deadline time.Time) error {
+func (c *abstractStreamController) BanUser(ctx context.Context, userID UserID, reason string, deadline time.Time) error {
 	return c.StreamController.BanUser(ctx, userID, reason, deadline)
 }
 func (c *abstractStreamController) IsCapable(ctx context.Context, cap Capability) bool {
 	return c.StreamController.IsCapable(ctx, cap)
 }
 
-func (c *abstractStreamController) IsChannelStreaming(ctx context.Context, chanID ChatUserID) (bool, error) {
+func (c *abstractStreamController) IsChannelStreaming(ctx context.Context, chanID UserID) (bool, error) {
 	return c.StreamController.IsChannelStreaming(ctx, chanID)
 }
-func (c *abstractStreamController) Shoutout(ctx context.Context, chanID ChatUserID) error {
+func (c *abstractStreamController) Shoutout(ctx context.Context, chanID UserID) error {
 	return c.StreamController.Shoutout(ctx, chanID)
 }
-func (c *abstractStreamController) RaidTo(ctx context.Context, chanID ChatUserID) error {
+func (c *abstractStreamController) RaidTo(ctx context.Context, chanID UserID) error {
 	return c.StreamController.RaidTo(ctx, chanID)
 }
 

@@ -2,6 +2,7 @@ package twitch
 
 import (
 	"context"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -53,13 +54,18 @@ func TestChatHandlerIRC(t *testing.T) {
 	}, channelID)
 	require.NoError(t, err)
 
-	expectedEvent := streamcontrol.ChatMessage{
-		EventType:         1,
-		UserID:            "user-id",
-		Username:          "user-id",
-		MessageID:         "message-id",
-		Message:           "some\nmulti line\n message",
-		MessageFormatType: 1,
+	expectedEvent := streamcontrol.Event{
+		Type: 1,
+		User: streamcontrol.User{
+			ID:   "2",
+			Slug: "user-slug",
+			Name: "user-name",
+		},
+		ID: "message-id",
+		Message: &streamcontrol.Message{
+			Content: "some\nmulti line\n message",
+			Format:  streamcontrol.TextFormatTypePlain,
+		},
 	}
 
 	messagesCount := 0
@@ -78,11 +84,13 @@ func TestChatHandlerIRC(t *testing.T) {
 
 	callback(0, irc.ChatMessage{
 		Sender: irc.ChatSender{
-			Username: string(expectedEvent.UserID),
+			ID:          parseInt64(expectedEvent.User.ID),
+			DisplayName: expectedEvent.User.Name,
+			Username:    string(expectedEvent.User.Slug),
 		},
-		ID:        string(expectedEvent.MessageID),
+		ID:        string(expectedEvent.ID),
 		Channel:   channelID,
-		Text:      expectedEvent.Message,
+		Text:      expectedEvent.Message.Content,
 		CreatedAt: time.Now(),
 	})
 
@@ -90,4 +98,12 @@ func TestChatHandlerIRC(t *testing.T) {
 	h.Close(ctx)
 	require.Equal(t, 1, closeCount)
 	wg.Wait()
+}
+
+func parseInt64(s streamcontrol.UserID) int64 {
+	v, err := strconv.ParseInt(string(s), 10, 64)
+	if err != nil {
+		panic(err)
+	}
+	return v
 }

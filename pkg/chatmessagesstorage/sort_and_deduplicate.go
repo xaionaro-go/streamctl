@@ -12,20 +12,26 @@ func msgLess(ctx context.Context, a *api.ChatMessage, b *api.ChatMessage) bool {
 	if a.CreatedAt != b.CreatedAt {
 		return a.CreatedAt.Before(b.CreatedAt)
 	}
-	if a.EventType != b.EventType {
-		return a.EventType < b.EventType
+	if a.Type != b.Type {
+		return a.Type < b.Type
 	}
 	if a.Platform != b.Platform {
 		return a.Platform < b.Platform
 	}
-	if a.Username != b.Username {
-		return a.Username < b.Username
+	if a.User.ID != b.User.ID {
+		return a.User.ID < b.User.ID
 	}
-	if a.MessageID != b.MessageID {
-		return a.MessageID < b.MessageID
+	if a.User.Slug != b.User.Slug {
+		return a.User.Slug < b.User.Slug
+	}
+	if a.User.Name != b.User.Name {
+		return a.User.Name < b.User.Name
 	}
 	if a.Message != b.Message {
-		return a.Message < b.Message
+		return a.Message.Content < b.Message.Content
+	}
+	if a.ID != b.ID {
+		return a.ID < b.ID
 	}
 	if a != b {
 		logger.Errorf(ctx, "msgs A and B look equal, but are not: A:%#+v B:%#+v", a, b)

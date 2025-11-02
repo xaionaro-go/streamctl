@@ -31,7 +31,7 @@ type chatUIAsList struct {
 
 	ItemLocker          xsync.Mutex
 	ItemsByCanvasObject map[fyne.CanvasObject]*chatListItem
-	ItemsByMessageID    map[streamcontrol.ChatMessageID]*chatListItem
+	ItemsByMessageID    map[streamcontrol.EventID]*chatListItem
 	TotalListHeight     uint
 
 	// TODO: do not store ctx in a struct:
@@ -52,7 +52,7 @@ func (panel *Panel) newChatUIAsList(
 		EnableButtons:       enableButtons,
 		ReverseOrder:        reverseOrder,
 		ItemsByCanvasObject: map[fyne.CanvasObject]*chatListItem{},
-		ItemsByMessageID:    map[streamcontrol.ChatMessageID]*chatListItem{},
+		ItemsByMessageID:    map[streamcontrol.EventID]*chatListItem{},
 		ctx:                 ctx,
 	}
 	if err := ui.init(ctx, compactify); err != nil {
@@ -136,9 +136,9 @@ func (ui *chatUIAsList) Remove(
 		defer onRemove(ctx, msg)
 	}
 	ui.ItemLocker.Do(ctx, func() {
-		item := ui.ItemsByMessageID[msg.MessageID]
+		item := ui.ItemsByMessageID[msg.ID]
 		ui.TotalListHeight -= item.Height
-		delete(ui.ItemsByMessageID, msg.MessageID)
+		delete(ui.ItemsByMessageID, msg.ID)
 	})
 	observability.Go(ctx, func(context.Context) { ui.CanvasObject.Refresh() }) // TODO: remove the observability.Go
 }
@@ -316,12 +316,12 @@ func (ui *chatUIAsList) listUpdateItem(
 		banUserButton.OnTapped = func() {
 			w := dialog.NewConfirm(
 				"Banning an user",
-				fmt.Sprintf("Are you sure you want to ban user '%s' on '%s'", msg.UserID, msg.Platform),
+				fmt.Sprintf("Are you sure you want to ban user '%s' on '%s'", msg.User.ID, msg.Platform),
 				func(b bool) {
 					if !b {
 						return
 					}
-					ui.onBanClicked(msg.Platform, msg.UserID)
+					ui.onBanClicked(msg.Platform, msg.User.ID)
 				},
 				ui.Panel.mainWindow,
 			)
@@ -336,7 +336,7 @@ func (ui *chatUIAsList) listUpdateItem(
 		removeMsgButton.OnTapped = func() {
 			w := dialog.NewConfirm(
 				"Removing a message",
-				fmt.Sprintf("Are you sure you want to remove the message from '%s' on '%s'", msg.UserID, msg.Platform),
+				fmt.Sprintf("Are you sure you want to remove the message from '%s' on '%s'", msg.User.ID, msg.Platform),
 				func(b bool) {
 					if !b {
 						return
@@ -355,14 +355,14 @@ func (ui *chatUIAsList) listUpdateItem(
 		}
 	}
 	newText := msg.CreatedAt.Format("05")
-	if msg.EventType != streamcontrol.EventTypeChatMessage {
-		newText += fmt.Sprintf(" %s", msg.EventType.String())
+	if msg.Type != streamcontrol.EventTypeChatMessage {
+		newText += fmt.Sprintf(" %s", msg.Type.String())
 	}
 	item.TimestampSegment.Text = newText
 	item.TimestampSegment.Style.ColorName = colorForPlatform(msg.Platform)
-	item.UsernameSegment.Text = msg.Username
-	item.UsernameSegment.Style.ColorName = colorForUsername(msg.Username)
-	item.MessageSegment.Text = msg.Message
+	item.UsernameSegment.Text = msg.User.Name
+	item.UsernameSegment.Style.ColorName = colorForUsername(msg.User.Name)
+	item.MessageSegment.Text = msg.Message.Content
 	item.Text.Refresh()
 	logger.Tracef(ctx, "%d: updated message is: '%s'", rowID, msg.Message)
 
@@ -370,16 +370,16 @@ func (ui *chatUIAsList) listUpdateItem(
 	logger.Tracef(ctx, "%d: requiredHeight == %f", rowID, requiredHeight)
 
 	ui.ItemLocker.Do(ctx, func() {
-		ui.ItemsByMessageID[msg.MessageID] = item
+		ui.ItemsByMessageID[msg.ID] = item
 		ui.TotalListHeight += uint(requiredHeight) - item.Height
-		ui.ItemsByMessageID[msg.MessageID].Height = uint(requiredHeight)
+		ui.ItemsByMessageID[msg.ID].Height = uint(requiredHeight)
 	})
 	ui.List.SetItemHeight(rowID, requiredHeight)
 }
 
 func (ui *chatUIAsList) onBanClicked(
 	platID streamcontrol.PlatformName,
-	userID streamcontrol.ChatUserID,
+	userID streamcontrol.UserID,
 ) {
 	ui.Panel.chatUserBan(ui.ctx, platID, userID)
 }

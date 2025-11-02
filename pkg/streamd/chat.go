@@ -19,7 +19,7 @@ const (
 
 type ChatMessageStorage interface {
 	AddMessage(context.Context, api.ChatMessage) error
-	RemoveMessage(context.Context, streamcontrol.ChatMessageID) error
+	RemoveMessage(context.Context, streamcontrol.EventID) error
 	Load(ctx context.Context) error
 	Store(ctx context.Context) error
 	GetMessagesSince(context.Context, time.Time, uint) ([]api.ChatMessage, error)
@@ -51,9 +51,9 @@ func (d *StreamD) startListeningForChatMessages(
 				}
 				func() {
 					msg := api.ChatMessage{
-						ChatMessage: ev,
-						IsLive:      true,
-						Platform:    platName,
+						Event:    ev,
+						IsLive:   true,
+						Platform: platName,
 					}
 					logger.Tracef(ctx, "received chat message: %#+v", msg)
 					defer logger.Tracef(ctx, "finished processing the chat message")
@@ -85,11 +85,11 @@ func (d *StreamD) shoutoutIfNeeded(
 
 	userID := config.ChatUserID{
 		Platform: msg.Platform,
-		User:     streamcontrol.ChatUserID(strings.ToLower(string(msg.UserID))),
+		User:     streamcontrol.UserID(strings.ToLower(string(msg.User.ID))),
 	}
 	userIDByName := config.ChatUserID{
 		Platform: msg.Platform,
-		User:     streamcontrol.ChatUserID(strings.ToLower(string(msg.Username))),
+		User:     streamcontrol.UserID(strings.ToLower(string(msg.User.Name))),
 	}
 	lastShoutoutAt := d.lastShoutoutAt[userID]
 	logger.Debugf(ctx, "lastShoutoutAt(%#+v): %v", userID, lastShoutoutAt)
@@ -111,7 +111,7 @@ func (d *StreamD) shoutoutIfNeeded(
 		}
 		candidate := config.ChatUserID{
 			Platform: _candidate.Platform,
-			User:     streamcontrol.ChatUserID(strings.ToLower(string(_candidate.User))),
+			User:     streamcontrol.UserID(strings.ToLower(string(_candidate.User))),
 		}
 		if candidate == userID {
 			found = true
@@ -134,7 +134,7 @@ func (d *StreamD) shoutoutIfNeeded(
 func (d *StreamD) shoutoutIfCan(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
-	userID streamcontrol.ChatUserID,
+	userID streamcontrol.UserID,
 ) (_ret bool) {
 	logger.Debugf(ctx, "shoutoutIfCan('%s', '%s')", platID, userID)
 	defer logger.Debugf(ctx, "/shoutoutIfCan('%s', '%s')", platID, userID)
@@ -166,7 +166,7 @@ func (d *StreamD) shoutoutIfCan(
 func (d *StreamD) RemoveChatMessage(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
-	msgID streamcontrol.ChatMessageID,
+	msgID streamcontrol.EventID,
 ) error {
 	ctrl, err := d.streamController(ctx, platID)
 	if err != nil {
@@ -188,7 +188,7 @@ func (d *StreamD) RemoveChatMessage(
 func (d *StreamD) BanUser(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
-	userID streamcontrol.ChatUserID,
+	userID streamcontrol.UserID,
 	reason string,
 	deadline time.Time,
 ) error {
@@ -197,7 +197,7 @@ func (d *StreamD) BanUser(
 		return fmt.Errorf("unable to get stream controller '%s': %w", platID, err)
 	}
 
-	err = ctrl.BanUser(ctx, streamcontrol.ChatUserID(userID), reason, deadline)
+	err = ctrl.BanUser(ctx, streamcontrol.UserID(userID), reason, deadline)
 	if err != nil {
 		return fmt.Errorf("unable to ban user '%s' on '%s': %w", userID, platID, err)
 	}

@@ -6,7 +6,7 @@ import (
 
 type ChatUserID struct {
 	Platform streamcontrol.PlatformName `yaml:"platform"`
-	User     streamcontrol.ChatUserID   `yaml:"user"`
+	User     streamcontrol.UserID       `yaml:"user"`
 }
 
 type Shoutout struct {

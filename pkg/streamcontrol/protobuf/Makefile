@@ -1,8 +1,12 @@
 
 all: go
 
-go:
+chat/go:
+	make -C chat go
+
+go: chat/go
 	protoc --go_out=. --go-grpc_out=. streamcontrol.proto
+	rm -rf go
 	mv github.com/xaionaro-go/streamctl/pkg/streamcontrol/protobuf/go .
 	rm -rf github.com
 

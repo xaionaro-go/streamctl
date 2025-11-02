@@ -26,7 +26,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
-	"github.com/xaionaro-go/streamctl/pkg/xgrpc"
+	"github.com/xaionaro-go/xgrpc"
 	"github.com/xaionaro-go/xsync"
 )
 
@@ -1654,7 +1654,9 @@ func wrapChan[T any, E any](
 	parse func(E) T,
 ) (_err error) {
 	ctx := sender.Context()
-	return xgrpc.WrapChan(ctx, getChan, sender, parse)
+	return xgrpc.WrapChan(ctx, getChan, sender, func(input E) *T {
+		return ptr(parse(input))
+	})
 }
 
 func (grpc *GRPCServer) SubscribeToConfigChanges(
@@ -1961,7 +1963,7 @@ func (grpc *GRPCServer) RemoveChatMessage(
 	err := grpc.StreamD.RemoveChatMessage(
 		ctx,
 		streamcontrol.PlatformName(req.GetPlatID()),
-		streamcontrol.ChatMessageID(req.GetMessageID()),
+		streamcontrol.EventID(req.GetMessageID()),
 	)
 	if err != nil {
 		return nil, err
@@ -1981,7 +1983,7 @@ func (grpc *GRPCServer) BanUser(
 	err := grpc.StreamD.BanUser(
 		ctx,
 		streamcontrol.PlatformName(req.GetPlatID()),
-		streamcontrol.ChatUserID(req.GetUserID()),
+		streamcontrol.UserID(req.GetUserID()),
 		req.GetReason(),
 		deadline,
 	)
@@ -1998,7 +2000,7 @@ func (grpc *GRPCServer) Shoutout(
 	err := grpc.StreamD.Shoutout(
 		ctx,
 		streamcontrol.PlatformName(req.GetPlatID()),
-		streamcontrol.ChatUserID(req.GetUserID()),
+		streamcontrol.UserID(req.GetUserID()),
 	)
 	if err != nil {
 		return nil, err
@@ -2013,7 +2015,7 @@ func (grpc *GRPCServer) RaidTo(
 	err := grpc.StreamD.RaidTo(
 		ctx,
 		streamcontrol.PlatformName(req.GetPlatID()),
-		streamcontrol.ChatUserID(req.GetUserID()),
+		streamcontrol.UserID(req.GetUserID()),
 	)
 	if err != nil {
 		return nil, err

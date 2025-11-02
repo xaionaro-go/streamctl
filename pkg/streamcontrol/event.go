@@ -5,18 +5,33 @@ import (
 	"time"
 )
 
-type ChatUserID string
-type ChatMessageID string
+type EventID string
+type UserID string
+type Tier string
 
-type ChatMessage struct {
-	CreatedAt         time.Time
-	EventType         EventType
-	UserID            ChatUserID
-	Username          string
-	MessageID         ChatMessageID
-	Message           string
-	MessageFormatType TextFormatType
-	Paid              Money
+type User struct {
+	ID   UserID
+	Slug string
+	Name string
+}
+
+type Message struct {
+	Content   string
+	Format    TextFormatType
+	InReplyTo *EventID
+}
+
+type Event struct {
+	ID            EventID
+	CreatedAt     time.Time
+	ExpiresAt     *time.Time
+	Type          EventType
+	User          User
+	TargetUser    *User
+	TargetChannel *User
+	Message       *Message
+	Paid          *Money
+	Tier          *Tier
 }
 
 type EventType int
@@ -31,9 +46,12 @@ const (
 	EventTypeFollow
 	EventTypeRaid
 	EventTypeChannelShoutoutReceive
-	EventTypeSubscribe
+	EventTypeSubscriptionNew
+	EventTypeSubscriptionRenewed
+	EventTypeGiftedSubscription
 	EventTypeStreamOnline
 	EventTypeStreamOffline
+	EventTypeStreamInfoUpdate
 	EventTypeOther
 )
 
@@ -57,12 +75,16 @@ func (t EventType) String() string {
 		return "raid"
 	case EventTypeChannelShoutoutReceive:
 		return "channel_shoutout_receive"
-	case EventTypeSubscribe:
-		return "subscribe"
+	case EventTypeSubscriptionNew:
+		return "subscription_new"
+	case EventTypeSubscriptionRenewed:
+		return "subscription_renewed"
 	case EventTypeStreamOnline:
 		return "stream_online"
 	case EventTypeStreamOffline:
 		return "stream_offline"
+	case EventTypeStreamInfoUpdate:
+		return "stream_info_update"
 	case EventTypeOther:
 		return "other"
 	}

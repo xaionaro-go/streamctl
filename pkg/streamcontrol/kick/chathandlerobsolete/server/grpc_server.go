@@ -14,8 +14,8 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick/chathandlerobsolete/protobuf/go/chathandlerobsolete_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick/kickclientobsolete"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/protobuf/goconv"
-	"github.com/xaionaro-go/streamctl/pkg/xgrpc"
 	"github.com/xaionaro-go/xcontext"
+	"github.com/xaionaro-go/xgrpc"
 	"github.com/xaionaro-go/xsync"
 	"google.golang.org/grpc"
 )
@@ -164,10 +164,10 @@ func (srv *GRPCServer) MessagesChan(
 
 	return xgrpc.WrapChan(
 		ctx,
-		func(ctx context.Context) (<-chan streamcontrol.ChatMessage, error) {
+		func(ctx context.Context) (<-chan streamcontrol.Event, error) {
 			return h.MessagesChan(), nil
 		},
 		sender,
-		goconv.ChatMessageGo2GRPC,
+		goconv.EventGo2GRPC,
 	)
 }

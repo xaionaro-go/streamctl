@@ -51,7 +51,7 @@ type YouTube struct {
 
 	chatListeners map[string]*chatListener
 
-	messagesOutChan chan streamcontrol.ChatMessage
+	messagesOutChan chan streamcontrol.Event
 }
 
 var _ streamcontrol.StreamController[StreamProfile] = (*YouTube)(nil)
@@ -84,7 +84,7 @@ func New(
 
 		chatListeners: map[string]*chatListener{},
 
-		messagesOutChan: make(chan streamcontrol.ChatMessage, 100),
+		messagesOutChan: make(chan streamcontrol.Event, 100),
 	}
 
 	err := yt.init(ctx)
@@ -1396,11 +1396,11 @@ func (yt *YouTube) fixError(ctx context.Context, err error, counterPtr *int) boo
 
 func (yt *YouTube) GetChatMessagesChan(
 	ctx context.Context,
-) (<-chan streamcontrol.ChatMessage, error) {
+) (<-chan streamcontrol.Event, error) {
 	logger.Debugf(ctx, "GetChatMessagesChan")
 	defer logger.Debugf(ctx, "/GetChatMessagesChan")
 
-	outCh := make(chan streamcontrol.ChatMessage)
+	outCh := make(chan streamcontrol.Event)
 	observability.Go(ctx, func(ctx context.Context) {
 		defer func() {
 			logger.Debugf(ctx, "closing the messages channel")
@@ -1455,7 +1455,7 @@ func (yt *YouTube) SendChatMessage(
 
 func (yt *YouTube) RemoveChatMessage(
 	ctx context.Context,
-	messageID streamcontrol.ChatMessageID,
+	messageID streamcontrol.EventID,
 ) (_err error) {
 	logger.Debugf(ctx, "RemoveChatMessage(ctx, '%s')", messageID)
 	defer func() { logger.Debugf(ctx, "/RemoveChatMessage(ctx, '%s'): %v", messageID, _err) }()
@@ -1499,7 +1499,7 @@ func (yt *YouTube) RemoveChatMessage(
 }
 func (yt *YouTube) BanUser(
 	ctx context.Context,
-	userID streamcontrol.ChatUserID,
+	userID streamcontrol.UserID,
 	reason string,
 	deadline time.Time,
 ) error {
@@ -1529,7 +1529,7 @@ func (yt *YouTube) IsCapable(
 
 func (yt *YouTube) IsChannelStreaming(
 	ctx context.Context,
-	chanID streamcontrol.ChatUserID,
+	chanID streamcontrol.UserID,
 ) (_ret bool, _err error) {
 	logger.Debugf(ctx, "IsChannelStreaming")
 	defer func() { logger.Debugf(ctx, "/IsChannelStreaming: %v %v", _ret, _err) }()
@@ -1544,7 +1544,7 @@ func (yt *YouTube) IsChannelStreaming(
 
 func (yt *YouTube) RaidTo(
 	ctx context.Context,
-	chanID streamcontrol.ChatUserID,
+	chanID streamcontrol.UserID,
 ) error {
 	// https://issuetracker.google.com/issues/408498307?pli=1
 	return fmt.Errorf("not implemented")
@@ -1552,7 +1552,7 @@ func (yt *YouTube) RaidTo(
 
 func (yt *YouTube) Shoutout(
 	ctx context.Context,
-	chanID streamcontrol.ChatUserID,
+	chanID streamcontrol.UserID,
 ) error {
 	resp, err := yt.YouTubeClient.Search(ctx, string(chanID), "", []string{"snippet"})
 	if err != nil {
@@ -1573,7 +1573,7 @@ func (yt *YouTube) Shoutout(
 
 func (yt *YouTube) shoutoutWithoutSearch(
 	ctx context.Context,
-	chanID streamcontrol.ChatUserID,
+	chanID streamcontrol.UserID,
 ) error {
 	err := yt.SendChatMessage(ctx, fmt.Sprintf("Shoutout to a great creator! Take a look at their channel and click that subscribe button! https://www.youtube.com/channel/%s", chanID))
 	if err != nil {

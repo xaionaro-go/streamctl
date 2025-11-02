@@ -8,6 +8,8 @@ import (
 
 type ChatHandlerOBSOLETE = chathandlerobsolete.ChatHandlerOBSOLETE
 
+var _ ChatHandlerAbstract = (*ChatHandlerOBSOLETE)(nil)
+
 func (k *Kick) newChatHandlerOBSOLETE(
 	ctx context.Context,
 	channelSlug string,

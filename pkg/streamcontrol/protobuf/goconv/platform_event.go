@@ -5,25 +5,39 @@ import (
 
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/protobuf/go/streamcontrol_grpc"
-	"github.com/xaionaro-go/streamctl/pkg/xstring"
 )
 
-func ChatMessageGo2GRPC(
-	event streamcontrol.ChatMessage,
-) streamcontrol_grpc.ChatMessage {
-	return streamcontrol_grpc.ChatMessage{
+func EventGo2GRPC(
+	event streamcontrol.Event,
+) *streamcontrol_grpc.Event {
+	ev := &streamcontrol_grpc.Event{
+		Id:                string(event.ID),
 		CreatedAtUNIXNano: uint64(event.CreatedAt.UnixNano()),
-		EventType:         PlatformEventTypeGo2GRPC(event.EventType),
-		UserID:            string(event.UserID),
-		Username:          event.Username,
-		UsernameReadable:  xstring.ToReadable(event.Username),
-		MessageID:         string(event.MessageID),
-		Message:           event.Message,
-		MessageFormatType: MessageFormatTypeGo2GRPC(event.MessageFormatType),
+		EventType:         EventTypeGo2GRPC(event.Type),
+		User:              UserGo2GRPC(event.User),
 	}
+	if event.ExpiresAt != nil {
+		ev.ExpiresAtUNIXNano = ptr(uint64(event.ExpiresAt.UnixNano()))
+	}
+	if event.TargetUser != nil {
+		ev.TargetUser = UserGo2GRPC(*event.TargetUser)
+	}
+	if event.TargetChannel != nil {
+		ev.TargetChannel = UserGo2GRPC(*event.TargetChannel)
+	}
+	if event.Message != nil {
+		ev.Message = MessageGo2GRPC(*event.Message)
+	}
+	if event.Paid != nil {
+		ev.Money = MoneyGo2GRPC(*event.Paid)
+	}
+	if event.Tier != nil {
+		ev.Tier = ptr(string(*event.Tier))
+	}
+	return ev
 }
 
-func MessageFormatTypeGo2GRPC(
+func TextFormatTypeGo2GRPC(
 	formatType streamcontrol.TextFormatType,
 ) streamcontrol_grpc.TextFormatType {
 	switch formatType {
@@ -38,25 +52,37 @@ func MessageFormatTypeGo2GRPC(
 	}
 }
 
-func ChatMessageGRPC2Go(
-	event *streamcontrol_grpc.ChatMessage,
-) streamcontrol.ChatMessage {
-	createdAtUNIXNano := event.GetCreatedAtUNIXNano()
-	return streamcontrol.ChatMessage{
-		CreatedAt: time.Unix(
-			int64(createdAtUNIXNano)/int64(time.Second),
-			(int64(createdAtUNIXNano)%int64(time.Second))/int64(time.Nanosecond),
-		),
-		EventType:         PlatformEventTypeGRPC2Go(event.GetEventType()),
-		UserID:            streamcontrol.ChatUserID(event.GetUserID()),
-		Username:          event.GetUsername(),
-		MessageID:         streamcontrol.ChatMessageID(event.GetMessageID()),
-		Message:           event.GetMessage(),
-		MessageFormatType: MessageFormatTypeGRPC2Go(event.GetMessageFormatType()),
+func EventGRPC2Go(
+	event *streamcontrol_grpc.Event,
+) streamcontrol.Event {
+	ev := streamcontrol.Event{
+		ID:        streamcontrol.EventID(event.Id),
+		CreatedAt: time.Unix(0, int64(event.CreatedAtUNIXNano)),
+		Type:      PlatformEventTypeGRPC2Go(event.EventType),
+		User:      UserGRPC2Go(event.User),
 	}
+	if event.ExpiresAtUNIXNano != nil {
+		ev.ExpiresAt = ptr(time.Unix(0, int64(*event.ExpiresAtUNIXNano)))
+	}
+	if event.TargetUser != nil {
+		ev.TargetUser = ptr(UserGRPC2Go(event.TargetUser))
+	}
+	if event.TargetChannel != nil {
+		ev.TargetChannel = ptr(UserGRPC2Go(event.TargetChannel))
+	}
+	if event.Message != nil {
+		ev.Message = ptr(MessageGRPC2Go(event.Message))
+	}
+	if event.Money != nil {
+		ev.Paid = ptr(MoneyGRPC2Go(event.Money))
+	}
+	if event.Tier != nil {
+		ev.Tier = ptr(streamcontrol.Tier(*event.Tier))
+	}
+	return ev
 }
 
-func MessageFormatTypeGRPC2Go(
+func TextFormatTypeGRPC2Go(
 	formatType streamcontrol_grpc.TextFormatType,
 ) streamcontrol.TextFormatType {
 	switch formatType {

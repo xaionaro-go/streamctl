@@ -27,7 +27,7 @@ type ChatHandlerOBSOLETE struct {
 	lastMessageID   string
 	client          ChatClientOBSOLETE
 	cancelFunc      context.CancelFunc
-	messagesOutChan chan streamcontrol.ChatMessage
+	messagesOutChan chan streamcontrol.Event
 	onClose         func(context.Context, *ChatHandlerOBSOLETE)
 }
 
@@ -55,7 +55,7 @@ func NewChatHandlerOBSOLETE(
 }
 
 func (h *ChatHandlerOBSOLETE) init(ctx context.Context) {
-	h.messagesOutChan = make(chan streamcontrol.ChatMessage, 100)
+	h.messagesOutChan = make(chan streamcontrol.Event, 100)
 	observability.Go(ctx, func(ctx context.Context) {
 		if h.onClose != nil {
 			defer h.onClose(ctx, h)
@@ -134,19 +134,24 @@ func (h *ChatHandlerOBSOLETE) sendMessage(
 ) {
 	h.lastMessageID = msg.ID
 	select {
-	case h.messagesOutChan <- streamcontrol.ChatMessage{
-		CreatedAt:         msg.CreatedAt,
-		EventType:         streamcontrol.EventTypeChatMessage,
-		UserID:            streamcontrol.ChatUserID(fmt.Sprintf("%d", msg.UserID)),
-		Username:          msg.Sender.Slug,
-		MessageID:         streamcontrol.ChatMessageID(msg.ID),
-		Message:           msg.Content,
-		MessageFormatType: streamcontrol.TextFormatTypePlain,
+	case h.messagesOutChan <- streamcontrol.Event{
+		CreatedAt: msg.CreatedAt,
+		Type:      streamcontrol.EventTypeChatMessage,
+		User: streamcontrol.User{
+			ID:   streamcontrol.UserID(fmt.Sprintf("%d", msg.UserID)),
+			Slug: msg.Sender.Slug,
+			Name: msg.Sender.Username,
+		},
+		ID: streamcontrol.EventID(msg.ID),
+		Message: &streamcontrol.Message{
+			Content: msg.Content,
+			Format:  streamcontrol.TextFormatTypePlain,
+		},
 	}:
 	default:
 	}
 }
-func (h *ChatHandlerOBSOLETE) MessagesChan() <-chan streamcontrol.ChatMessage {
+func (h *ChatHandlerOBSOLETE) MessagesChan() <-chan streamcontrol.Event {
 	return h.messagesOutChan
 }
 

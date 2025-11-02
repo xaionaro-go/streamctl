@@ -1,0 +1,3 @@
+[submodule "pkg/streamcontrol/protobuf/imports/chatwebhook"]
+	path = pkg/streamcontrol/protobuf/imports/chatwebhook
+	url = https://github.com/xaionaro-go/chatwebhook

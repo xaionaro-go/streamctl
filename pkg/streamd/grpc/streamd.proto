@@ -3,6 +3,7 @@ package streamd;
 option go_package = "go/streamd_grpc";
 
 import "streamcontrol/streamcontrol.proto";
+import "chat/chatwebhook.proto";
 import "player/player.proto";
 
 service StreamD {
@@ -774,27 +775,12 @@ message SubscribeToChatMessagesRequest {
     uint64 sinceUNIXNano = 1;
     uint64 limit = 2;
 }
-enum PlatformEventType {
-    platformEventTypeUndefined = 0;
-    platformEventTypeChatMessage = 1;
-    platformEventTypeCheer = 2;
-    platformEventTypeAutoModHold = 3;
-    platformEventTypeAdBreak = 4;
-    platformEventTypeBan = 5;
-    platformEventTypeFollow = 6;
-    platformEventTypeRaid = 7;
-    platformEventTypeChannelShoutoutReceive = 8;
-    platformEventTypeSubscribe = 9;
-    platformEventTypeStreamOnline = 10;
-    platformEventTypeStreamOffline = 11;
-    platformEventTypeOther = 12;
-}
 
 // TODO: rename to PlatformEvent
 message ChatMessage {
     string platID = 1;
     bool isLive = 2;
-    streamcontrol.ChatMessage content = 3;
+    chatwebhook.Event content = 3;
 }
 
 enum TextFormatType {

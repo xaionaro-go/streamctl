@@ -5,7 +5,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/protobuf/go/streamcontrol_grpc"
 )
 
-func PlatformEventTypeGo2GRPC(
+func EventTypeGo2GRPC(
 	ev streamcontrol.EventType,
 ) streamcontrol_grpc.PlatformEventType {
 	switch ev {
@@ -15,26 +15,30 @@ func PlatformEventTypeGo2GRPC(
 		return streamcontrol_grpc.PlatformEventType_platformEventTypeChatMessage
 	case streamcontrol.EventTypeCheer:
 		return streamcontrol_grpc.PlatformEventType_platformEventTypeCheer
-	case streamcontrol.EventTypeAutoModHold:
-		return streamcontrol_grpc.PlatformEventType_platformEventTypeAutoModHold
 	case streamcontrol.EventTypeAdBreak:
 		return streamcontrol_grpc.PlatformEventType_platformEventTypeAdBreak
-	case streamcontrol.EventTypeBan:
-		return streamcontrol_grpc.PlatformEventType_platformEventTypeBan
 	case streamcontrol.EventTypeFollow:
 		return streamcontrol_grpc.PlatformEventType_platformEventTypeFollow
-	case streamcontrol.EventTypeRaid:
-		return streamcontrol_grpc.PlatformEventType_platformEventTypeRaid
-	case streamcontrol.EventTypeChannelShoutoutReceive:
-		return streamcontrol_grpc.PlatformEventType_platformEventTypeChannelShoutoutReceive
-	case streamcontrol.EventTypeSubscribe:
-		return streamcontrol_grpc.PlatformEventType_platformEventTypeSubscribe
 	case streamcontrol.EventTypeStreamOnline:
 		return streamcontrol_grpc.PlatformEventType_platformEventTypeStreamOnline
 	case streamcontrol.EventTypeStreamOffline:
 		return streamcontrol_grpc.PlatformEventType_platformEventTypeStreamOffline
-	case streamcontrol.EventTypeOther:
-		return streamcontrol_grpc.PlatformEventType_platformEventTypeOther
+	case streamcontrol.EventTypeStreamInfoUpdate:
+		return streamcontrol_grpc.PlatformEventType_platformEventTypeStreamInfoUpdate
+	case streamcontrol.EventTypeSubscriptionNew:
+		return streamcontrol_grpc.PlatformEventType_platformEventTypeSubscriptionNew
+	case streamcontrol.EventTypeSubscriptionRenewed:
+		return streamcontrol_grpc.PlatformEventType_platformEventTypeSubscriptionRenewed
+	case streamcontrol.EventTypeGiftedSubscription:
+		return streamcontrol_grpc.PlatformEventType_platformEventTypeGiftedSubscription
+	case streamcontrol.EventTypeRaid:
+		return streamcontrol_grpc.PlatformEventType_platformEventTypeRaid
+	case streamcontrol.EventTypeChannelShoutoutReceive:
+		return streamcontrol_grpc.PlatformEventType_platformEventTypeChannelShoutoutReceive
+	case streamcontrol.EventTypeBan:
+		return streamcontrol_grpc.PlatformEventType_platformEventTypeBan
+	case streamcontrol.EventTypeAutoModHold:
+		return streamcontrol_grpc.PlatformEventType_platformEventTypeAutoModHold
 	}
 	return streamcontrol_grpc.PlatformEventType_platformEventTypeOther
 }
@@ -49,26 +53,30 @@ func PlatformEventTypeGRPC2Go(
 		return streamcontrol.EventTypeChatMessage
 	case streamcontrol_grpc.PlatformEventType_platformEventTypeCheer:
 		return streamcontrol.EventTypeCheer
-	case streamcontrol_grpc.PlatformEventType_platformEventTypeAutoModHold:
-		return streamcontrol.EventTypeAutoModHold
 	case streamcontrol_grpc.PlatformEventType_platformEventTypeAdBreak:
 		return streamcontrol.EventTypeAdBreak
-	case streamcontrol_grpc.PlatformEventType_platformEventTypeBan:
-		return streamcontrol.EventTypeBan
 	case streamcontrol_grpc.PlatformEventType_platformEventTypeFollow:
 		return streamcontrol.EventTypeFollow
-	case streamcontrol_grpc.PlatformEventType_platformEventTypeRaid:
-		return streamcontrol.EventTypeRaid
-	case streamcontrol_grpc.PlatformEventType_platformEventTypeChannelShoutoutReceive:
-		return streamcontrol.EventTypeChannelShoutoutReceive
-	case streamcontrol_grpc.PlatformEventType_platformEventTypeSubscribe:
-		return streamcontrol.EventTypeSubscribe
 	case streamcontrol_grpc.PlatformEventType_platformEventTypeStreamOnline:
 		return streamcontrol.EventTypeStreamOnline
 	case streamcontrol_grpc.PlatformEventType_platformEventTypeStreamOffline:
 		return streamcontrol.EventTypeStreamOffline
-	case streamcontrol_grpc.PlatformEventType_platformEventTypeOther:
-		return streamcontrol.EventTypeOther
+	case streamcontrol_grpc.PlatformEventType_platformEventTypeStreamInfoUpdate:
+		return streamcontrol.EventTypeStreamInfoUpdate
+	case streamcontrol_grpc.PlatformEventType_platformEventTypeSubscriptionNew:
+		return streamcontrol.EventTypeSubscriptionNew
+	case streamcontrol_grpc.PlatformEventType_platformEventTypeSubscriptionRenewed:
+		return streamcontrol.EventTypeSubscriptionRenewed
+	case streamcontrol_grpc.PlatformEventType_platformEventTypeGiftedSubscription:
+		return streamcontrol.EventTypeGiftedSubscription
+	case streamcontrol_grpc.PlatformEventType_platformEventTypeRaid:
+		return streamcontrol.EventTypeRaid
+	case streamcontrol_grpc.PlatformEventType_platformEventTypeChannelShoutoutReceive:
+		return streamcontrol.EventTypeChannelShoutoutReceive
+	case streamcontrol_grpc.PlatformEventType_platformEventTypeBan:
+		return streamcontrol.EventTypeBan
+	case streamcontrol_grpc.PlatformEventType_platformEventTypeAutoModHold:
+		return streamcontrol.EventTypeAutoModHold
 	}
 	return streamcontrol.EventTypeOther
 }
