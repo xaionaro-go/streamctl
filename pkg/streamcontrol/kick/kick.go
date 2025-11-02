@@ -158,7 +158,7 @@ func (k *Kick) keepAliveLoop(
 func (k *Kick) initChatHandlerNoLock(
 	ctx context.Context,
 ) error {
-	chatHandler, err := k.newChatHandlerOBSOLETE(ctx, k.CurrentConfig.Config.Channel)
+	chatHandler, err := k.newChatHandler(ctx)
 	if err == nil {
 		k.ChatHandler = chatHandler
 		return nil
@@ -176,7 +176,7 @@ func (k *Kick) initChatHandlerNoLock(
 			return fmt.Errorf("ctx is closed: %w", ctx.Err())
 		default:
 		}
-		chatHandler, err = k.newChatHandlerOBSOLETE(ctx, k.CurrentConfig.Config.Channel)
+		chatHandler, err = k.newChatHandler(ctx)
 		if err != nil {
 			logger.Debugf(ctx, "initChatHandler: unable to create a new chat handler: %v", err)
 			continue
@@ -600,6 +600,10 @@ func (k *Kick) GetChatMessagesChan(
 				if !ok {
 					logger.Debugf(ctx, "the input channel is closed")
 					k.resetChatHandler(ctx)
+					continue
+				}
+				if ev.TargetChannel.Slug != k.Channel.Slug {
+					logger.Warnf(ctx, "skipping a message for another channel: %q != %q", ev.TargetChannel.Slug, k.Channel.Slug)
 					continue
 				}
 				logger.Tracef(ctx, "GetChatMessagesChan: received a message")
