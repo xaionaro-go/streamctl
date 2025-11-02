@@ -39,26 +39,41 @@ func NewChatHandler(
 	}, nil
 }
 
+func (k *Kick) newChatHandler(
+	ctx context.Context,
+) (*ChatHandler, error) {
+	c, err := chatwebhookclient.New(ctx, chatwebhookclient.DefaultServerAddress)
+	if err != nil {
+		return nil, fmt.Errorf("kick: failed to create chat webhook client: %w", err)
+	}
+	return NewChatHandler(ctx, c)
+}
+
 func (h *ChatHandler) GetMessagesChan(
 	ctx context.Context,
 ) (<-chan streamcontrol.Event, error) {
 	ctx, cancelFn := context.WithCancel(ctx)
-	defer cancelFn()
 
 	inCh, err := h.Client.GetMessagesChan(ctx, kickcom.ID, "")
 	if err != nil {
+		cancelFn()
 		return nil, fmt.Errorf("kick: failed to get messages chan: %w", err)
 	}
 
 	outCh := make(chan streamcontrol.Event, 1)
 	observability.Go(ctx, func(ctx context.Context) {
 		defer close(outCh)
+		defer cancelFn()
+		logger.Debugf(ctx, "kick: started forwarding chat messages")
+		defer logger.Debugf(ctx, "kick: stopped forwarding chat messages")
 		for {
 			select {
 			case <-ctx.Done():
+				logger.Debugf(ctx, "kick: forwarding chat messages: context is closed; %v", ctx.Err())
 				return
 			case ev, ok := <-inCh:
 				if !ok {
+					logger.Debugf(ctx, "kick: forwarding chat messages: input channel is closed")
 					return
 				}
 				msg, err := convertKickEventToChatMessage(ev)

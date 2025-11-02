@@ -1121,6 +1121,8 @@ github.com/xaionaro-go/chatwebhook v0.0.0-20251102191426-33a5759f705c h1:fVqdR1E
 github.com/xaionaro-go/chatwebhook v0.0.0-20251102191426-33a5759f705c/go.mod h1:y6fX0jgyyfrjyj4QMRLAF/ieNHdWsccd2dcGlXNUPfI=
 github.com/xaionaro-go/chatwebhook v0.0.0-20251102204738-0b8b2966ba1d h1:Q8i1p+zyF+K5pF4uz0qI8BJCjcSmQ6HVozCAS5nhv9w=
 github.com/xaionaro-go/chatwebhook v0.0.0-20251102204738-0b8b2966ba1d/go.mod h1:y6fX0jgyyfrjyj4QMRLAF/ieNHdWsccd2dcGlXNUPfI=
+github.com/xaionaro-go/chatwebhook v0.0.0-20251102210754-fc155de0d2a9 h1:OjxCra9GSMYajfb+brJS4oFiPUTckxipJZeFBNlCKAQ=
+github.com/xaionaro-go/chatwebhook v0.0.0-20251102210754-fc155de0d2a9/go.mod h1:y6fX0jgyyfrjyj4QMRLAF/ieNHdWsccd2dcGlXNUPfI=
 github.com/xaionaro-go/cloudscraper v0.0.0-20251019213127-d3687042cb55 h1:rHvnuVmqa9M+id2Q8e0V/csp0jDhXIBAAuCC76mBW8k=
 github.com/xaionaro-go/cloudscraper v0.0.0-20251019213127-d3687042cb55/go.mod h1:mFODbc87KEjFfERrFjmAGajGZOBQq+kzMd+2wsAZSHo=
 github.com/xaionaro-go/datacounter v1.0.4 h1:+QMZLmu73R5WGkQfUPwlXF/JFN+Weo4iuDZkiL2wVm8=

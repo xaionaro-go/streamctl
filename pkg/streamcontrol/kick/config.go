@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
-	streamctl "github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	kick "github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick/types"
 )
 
@@ -17,10 +16,10 @@ type PlatformSpecificConfig = kick.PlatformSpecificConfig
 type OAuthHandler = kick.OAuthHandler
 
 func init() {
-	streamctl.RegisterPlatform[PlatformSpecificConfig, StreamProfile](ID)
+	streamcontrol.RegisterPlatform[PlatformSpecificConfig, StreamProfile](ID)
 }
 
-func InitConfig(cfg streamctl.Config) {
+func InitConfig(cfg streamcontrol.Config) {
 	kick.InitConfig(cfg)
 }
 

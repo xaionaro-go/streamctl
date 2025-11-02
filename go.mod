@@ -376,5 +376,5 @@ require (
 	github.com/pion/turn/v2 v2.1.6 // indirect
 	github.com/pion/webrtc/v3 v3.3.0 // indirect
 	github.com/tiendc/go-deepcopy v1.5.2
-	github.com/xaionaro-go/chatwebhook v0.0.0-20251102204738-0b8b2966ba1d
+	github.com/xaionaro-go/chatwebhook v0.0.0-20251102210754-fc155de0d2a9
 )

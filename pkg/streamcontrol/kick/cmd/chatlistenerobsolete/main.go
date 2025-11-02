@@ -11,7 +11,6 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	xlogrus "github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
 	"github.com/spf13/pflag"
-	chatwebhookclient "github.com/xaionaro-go/chatwebhook/pkg/grpc/client"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 )
 
@@ -30,13 +29,14 @@ func must[T any](v T, err error) T {
 func main() {
 	logLevel := logger.LevelInfo
 	pflag.Var(&logLevel, "log-level", "")
-	chatwebhookAddr := pflag.String("chatwebhook-server", chatwebhookclient.DefaultServerAddress, "chat webhook gRPC server address")
 	pflag.Parse()
 
-	if pflag.NArg() != 0 {
-		fmt.Fprintf(os.Stderr, "expected 0 argument\n")
+	if pflag.NArg() != 1 {
+		fmt.Fprintf(os.Stderr, "expected 1 argument\n")
 		os.Exit(1)
 	}
+
+	channelSlug := pflag.Arg(0)
 
 	ctx := logger.CtxWithLogger(context.Background(), xlogrus.Default().WithLevel(logLevel))
 	logger.Default = func() logger.Logger {
@@ -44,14 +44,11 @@ func main() {
 	}
 	defer belt.Flush(ctx)
 
-	logger.Debugf(ctx, "connecting to chat webhook server at %q", *chatwebhookAddr)
-	c := must(chatwebhookclient.New(ctx, *chatwebhookAddr))
-	h := must(kick.NewChatHandler(ctx, c))
+	h := must(kick.NewChatHandlerOBSOLETE(ctx, channelSlug))
 	msgCh := must(h.GetMessagesChan(ctx))
 
 	fmt.Println("started")
 	for ev := range msgCh {
 		spew.Dump(ev)
 	}
-	fmt.Println("ended")
 }
