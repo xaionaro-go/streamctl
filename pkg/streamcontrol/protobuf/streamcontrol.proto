@@ -4,3 +4,5 @@ option go_package = "github.com/xaionaro-go/streamctl/pkg/streamcontrol/protobuf
 
 import public "chat/chatwebhook.proto";
 
+message Placeholder {}
+
