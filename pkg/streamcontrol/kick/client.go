@@ -32,6 +32,12 @@ type Client interface {
 	SetAppAccessToken(token string)
 	SetUserAccessToken(token string)
 	SetUserRefreshToken(token string)
+	CreateSubscriptions(
+		ctx context.Context,
+		method gokick.SubscriptionMethod,
+		subscriptions []gokick.SubscriptionRequest,
+		broadcasterUserID *int,
+	) (gokick.CreateSubscriptionsResponseWrapper, error)
 }
 
 type clientScorfly struct {

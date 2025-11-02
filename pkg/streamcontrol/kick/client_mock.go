@@ -2,6 +2,7 @@ package kick
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/scorfly/gokick"
 )
@@ -97,3 +98,12 @@ func (clientMock) BanUser(
 func (clientMock) SetAppAccessToken(token string)   {}
 func (clientMock) SetUserAccessToken(token string)  {}
 func (clientMock) SetUserRefreshToken(token string) {}
+
+func (clientMock) CreateSubscriptions(
+	ctx context.Context,
+	method gokick.SubscriptionMethod,
+	subscriptions []gokick.SubscriptionRequest,
+	broadcasterUserID *int,
+) (gokick.CreateSubscriptionsResponseWrapper, error) {
+	return gokick.CreateSubscriptionsResponseWrapper{}, fmt.Errorf("not implemented in mock client")
+}

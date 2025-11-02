@@ -155,12 +155,6 @@ func (k *Kick) keepAliveLoop(
 	}
 }
 
-func (k *Kick) initChatHandler(
-	ctx context.Context,
-) error {
-	return xsync.DoA1R1(ctx, &k.ChatHandlerLocker, k.initChatHandlerNoLock, ctx)
-}
-
 func (k *Kick) initChatHandlerNoLock(
 	ctx context.Context,
 ) error {
@@ -763,6 +757,9 @@ func (k *Kick) prepareNoLock(ctx context.Context) error {
 			err = fmt.Errorf("initChannelInfo: %w", err)
 			return
 		}
+		observability.Go(ctx, func(ctx context.Context) {
+			k.subscribeToEvents(ctx)
+		})
 	})
 	return err
 }

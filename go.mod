@@ -1,8 +1,6 @@
 module github.com/xaionaro-go/streamctl
 
-go 1.24.4
-
-toolchain go1.24.5
+go 1.25.1
 
 // The original go-yaml is very slow, using the improved version instead
 replace github.com/goccy/go-yaml v1.11.3 => github.com/yoelsusanto/go-yaml v0.0.0-20240324162521-2018c1ab915b
@@ -31,7 +29,7 @@ replace github.com/bluenviron/mediacommon/v2 v2.0.1-0.20250324151931-b8ce69d15d3
 
 replace github.com/joeyak/go-twitch-eventsub/v3 => github.com/xaionaro-go/go-twitch-eventsub/v3 v3.0.0-20250713163657-276e5a5b7adc
 
-replace github.com/scorfly/gokick => github.com/xaionaro-go/gokick v0.0.0-20250713175656-f538d6396851
+replace github.com/scorfly/gokick => github.com/xaionaro-go/gokick v0.0.0-20251102014634-da873fca8799
 
 replace github.com/Danny-Dasilva/CycleTLS => github.com/xaionaro-go/CycleTLS v0.0.0-20250923213111-aed0022ae7b5
 
@@ -87,12 +85,12 @@ require (
 	github.com/bluenviron/gohlslib/v2 v2.1.4-0.20250210133907-d3dddacbb9fc // indirect
 	github.com/bluenviron/mediacommon/v2 v2.0.1-0.20250324151931-b8ce69d15d3d // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
-	github.com/bytedance/sonic v1.13.3 // indirect
-	github.com/bytedance/sonic/loader v0.2.4 // indirect
+	github.com/bytedance/sonic v1.14.2 // indirect
+	github.com/bytedance/sonic/loader v0.4.0 // indirect
 	github.com/campoy/embedmd v1.0.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cloudflare/circl v1.6.0 // indirect
-	github.com/cloudwego/base64x v0.1.5 // indirect
+	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/cloudwego/eino-ext/libs/acl/openai v0.0.0-20250422092704-54e372e1fa3d // indirect
 	github.com/coreos/go-oidc/v3 v3.11.0 // indirect
 	github.com/cyphar/filepath-securejoin v0.4.1 // indirect
@@ -322,7 +320,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/spf13/pflag v1.0.6
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	github.com/xaionaro-go/audio v0.0.0-20250210102901-abfced9d5ef3
 	github.com/xaionaro-go/avpipeline v0.0.0-20250929013757-2eb9ecc88185
 	github.com/xaionaro-go/datacounter v1.0.4
@@ -358,6 +356,8 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
+require github.com/bytedance/gopkg v0.1.3 // indirect
+
 require (
 	github.com/BurntSushi/xgbutil v0.0.0-20190907113008-ad855c713046
 	github.com/cloudwego/eino-ext/components/model/openai v0.0.0-20250424061409-ccd60fbc7c1c
@@ -375,4 +375,5 @@ require (
 	github.com/pion/turn/v2 v2.1.6 // indirect
 	github.com/pion/webrtc/v3 v3.3.0 // indirect
 	github.com/tiendc/go-deepcopy v1.5.2
+	github.com/xaionaro-go/chatwebhook v0.0.0-20251102013345-80b205a8c53d
 )
