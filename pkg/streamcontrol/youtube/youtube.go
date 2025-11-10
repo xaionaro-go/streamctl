@@ -907,7 +907,8 @@ func (yt *YouTube) StartStream(
 			err = yt.YouTubeClient.UpdateVideo(ctx, video, videoParts)
 			logger.Debugf(ctx, "YouTube.Update result: %v", err)
 			if err != nil {
-				return fmt.Errorf("unable to update video data: %w", err)
+				videoJSON, _ := json.Marshal(video)
+				return fmt.Errorf("unable to update video data (%s: %s): %w", strings.Join(videoParts, "+"), videoJSON, err)
 			}
 
 			playlistIDs := make([]string, 0, len(playlistIDMap[templateBroadcastID]))

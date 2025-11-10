@@ -124,7 +124,7 @@ func (d *StreamD) shoutoutIfNeeded(
 	}
 
 	if !found {
-		logger.Debugf(ctx, "'%s' not in the list for auto-shoutout at '%s'", userID, msg.Platform)
+		logger.Debugf(ctx, "'%s' not in the list for auto-shoutout at '%s'", userID.User, msg.Platform)
 		return false
 	}
 
