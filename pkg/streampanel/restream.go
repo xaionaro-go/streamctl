@@ -772,22 +772,35 @@ func (p *Panel) openAddOrEditPlayerWindow(
 	}
 	overrideURL.OnChanged(overrideURL.Text)
 
-	jitterBufDuration := xfyne.NewNumericalEntry()
-	jitterBufDuration.SetPlaceHolder("amount of seconds")
-	jitterBufDuration.SetText(fmt.Sprintf("%v", cfg.JitterBufDuration.Seconds()))
-	jitterBufDuration.OnChanged = func(s string) {
+	jitterBufMinDuration := xfyne.NewNumericalEntry()
+	jitterBufMinDuration.SetPlaceHolder("amount of seconds")
+	jitterBufMinDuration.SetText(fmt.Sprintf("%v", cfg.JitterBufMinDuration.Seconds()))
+	jitterBufMinDuration.OnChanged = func(s string) {
 		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
 			p.DisplayError(fmt.Errorf("unable to parse '%s' as float: %w", s, err))
 			return
 		}
 
-		cfg.JitterBufDuration = time.Duration(f * float64(time.Second))
+		cfg.JitterBufMinDuration = time.Duration(f * float64(time.Second))
+	}
+
+	jitterBufMaxDuration := xfyne.NewNumericalEntry()
+	jitterBufMaxDuration.SetPlaceHolder("amount of seconds")
+	jitterBufMaxDuration.SetText(fmt.Sprintf("%v", cfg.JitterBufMaxDuration.Seconds()))
+	jitterBufMaxDuration.OnChanged = func(s string) {
+		f, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to parse '%s' as float: %w", s, err))
+			return
+		}
+
+		cfg.JitterBufMaxDuration = time.Duration(f * float64(time.Second))
 	}
 
 	maxCatchupAtLag := xfyne.NewNumericalEntry()
 	maxCatchupAtLag.SetPlaceHolder("amount of seconds")
-	maxCatchupAtLag.SetText(fmt.Sprintf("%v", cfg.MaxCatchupAtLag.Seconds()))
+	maxCatchupAtLag.SetText(fmt.Sprintf("%v", cfg.CatchupAtMaxLag.Seconds()))
 	maxCatchupAtLag.OnChanged = func(s string) {
 		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
@@ -795,7 +808,7 @@ func (p *Panel) openAddOrEditPlayerWindow(
 			return
 		}
 
-		cfg.MaxCatchupAtLag = time.Duration(f * float64(time.Second))
+		cfg.CatchupAtMaxLag = time.Duration(f * float64(time.Second))
 	}
 
 	startTimeout := xfyne.NewNumericalEntry()
@@ -876,8 +889,10 @@ func (p *Panel) openAddOrEditPlayerWindow(
 			startTimeout,
 			widget.NewLabel("Read timeout (seconds):"),
 			readTimeout,
-			widget.NewLabel("Jitter buffer size (seconds):"),
-			jitterBufDuration,
+			widget.NewLabel("Jitter buffer min size (seconds):"),
+			jitterBufMinDuration,
+			widget.NewLabel("Jitter buffer max size (seconds):"),
+			jitterBufMaxDuration,
 			widget.NewLabel("Maximal catchup speed (float):"),
 			catchupMaxSpeedFactor,
 			widget.NewLabel("Maximal catchup at lab (seconds):"),

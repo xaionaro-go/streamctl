@@ -12,9 +12,10 @@ type FuncNotifyStart func(ctx context.Context, streamID streamtypes.StreamID)
 type GetRestartChanFunc func() <-chan struct{}
 
 type Config struct {
-	JitterBufDuration     time.Duration
+	JitterBufMaxDuration  time.Duration
+	JitterBufMinDuration  time.Duration
 	CatchupMaxSpeedFactor float64
-	MaxCatchupAtLag       time.Duration
+	CatchupAtMaxLag       time.Duration
 	StartTimeout          time.Duration
 	ReadTimeout           time.Duration
 	NotifierStart         []FuncNotifyStart `yaml:"-"`
@@ -27,14 +28,17 @@ type Config struct {
 
 func (cfg Config) Options() Options {
 	var opts Options
-	if cfg.JitterBufDuration != 0 {
-		opts = append(opts, OptionJitterBufDuration(cfg.JitterBufDuration))
+	if cfg.JitterBufMaxDuration != 0 {
+		opts = append(opts, OptionJitterBufMaxDuration(cfg.JitterBufMaxDuration))
+	}
+	if cfg.JitterBufMinDuration != 0 {
+		opts = append(opts, OptionJitterBufMinDuration(cfg.JitterBufMinDuration))
 	}
 	if cfg.CatchupMaxSpeedFactor != 0 {
 		opts = append(opts, OptionCatchupMaxSpeedFactor(cfg.CatchupMaxSpeedFactor))
 	}
-	if cfg.MaxCatchupAtLag != 0 {
-		opts = append(opts, OptionMaxCatchupAtLag(cfg.MaxCatchupAtLag))
+	if cfg.CatchupAtMaxLag != 0 {
+		opts = append(opts, OptionMaxCatchupAtLag(cfg.CatchupAtMaxLag))
 	}
 	if cfg.StartTimeout != 0 {
 		opts = append(opts, OptionStartTimeout(cfg.StartTimeout))
@@ -83,18 +87,25 @@ func (s Options) apply(cfg *Config) {
 
 var DefaultConfig = func(ctx context.Context) Config {
 	return Config{
-		JitterBufDuration:     3 * time.Second,
-		CatchupMaxSpeedFactor: 10,
-		MaxCatchupAtLag:       21 * time.Second,
+		JitterBufMinDuration:  200 * time.Millisecond,
+		JitterBufMaxDuration:  3 * time.Minute,
+		CatchupMaxSpeedFactor: 1.1,
+		CatchupAtMaxLag:       3 * time.Minute,
 		StartTimeout:          10 * time.Second,
 		ReadTimeout:           10 * time.Second,
 	}
 }
 
-type OptionJitterBufDuration time.Duration
+type OptionJitterBufMaxDuration time.Duration
 
-func (s OptionJitterBufDuration) Apply(cfg *Config) {
-	cfg.JitterBufDuration = time.Duration(s)
+func (s OptionJitterBufMaxDuration) Apply(cfg *Config) {
+	cfg.JitterBufMaxDuration = time.Duration(s)
+}
+
+type OptionJitterBufMinDuration time.Duration
+
+func (s OptionJitterBufMinDuration) Apply(cfg *Config) {
+	cfg.JitterBufMinDuration = time.Duration(s)
 }
 
 type OptionCatchupMaxSpeedFactor float64
@@ -106,7 +117,7 @@ func (s OptionCatchupMaxSpeedFactor) Apply(cfg *Config) {
 type OptionMaxCatchupAtLag time.Duration
 
 func (s OptionMaxCatchupAtLag) Apply(cfg *Config) {
-	cfg.MaxCatchupAtLag = time.Duration(s)
+	cfg.CatchupAtMaxLag = time.Duration(s)
 }
 
 type OptionStartTimeout time.Duration

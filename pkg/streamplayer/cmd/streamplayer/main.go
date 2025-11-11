@@ -153,7 +153,7 @@ func main() {
 
 	jitterBufDuration := xfyne.NewNumericalEntry()
 	jitterBufDuration.SetPlaceHolder("amount of seconds")
-	jitterBufDuration.SetText(fmt.Sprintf("%f", defaultCfg.JitterBufDuration.Seconds()))
+	jitterBufDuration.SetText(fmt.Sprintf("%f", defaultCfg.JitterBufMaxDuration.Seconds()))
 	jitterBufDuration.OnSubmitted = func(s string) {
 		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
@@ -161,12 +161,12 @@ func main() {
 			return
 		}
 
-		p.Resetup(types.OptionJitterBufDuration(time.Duration(f * float64(time.Second))))
+		p.Resetup(types.OptionJitterBufMaxDuration(time.Duration(f * float64(time.Second))))
 	}
 
 	maxCatchupAtLag := xfyne.NewNumericalEntry()
 	maxCatchupAtLag.SetPlaceHolder("amount of seconds")
-	maxCatchupAtLag.SetText(fmt.Sprintf("%f", defaultCfg.MaxCatchupAtLag.Seconds()))
+	maxCatchupAtLag.SetText(fmt.Sprintf("%f", defaultCfg.CatchupAtMaxLag.Seconds()))
 	maxCatchupAtLag.OnSubmitted = func(s string) {
 		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {

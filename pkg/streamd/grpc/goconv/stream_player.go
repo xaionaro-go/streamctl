@@ -36,9 +36,9 @@ func StreamPlaybackConfigGo2GRPC(
 	cfg *sptypes.Config,
 ) *streamd_grpc.StreamPlaybackConfig {
 	return &streamd_grpc.StreamPlaybackConfig{
-		JitterBufDurationSecs: cfg.JitterBufDuration.Seconds(),
+		JitterBufDurationSecs: cfg.JitterBufMaxDuration.Seconds(),
 		CatchupMaxSpeedFactor: cfg.CatchupMaxSpeedFactor,
-		MaxCatchupAtLagSecs:   cfg.MaxCatchupAtLag.Seconds(),
+		MaxCatchupAtLagSecs:   cfg.CatchupAtMaxLag.Seconds(),
 		StartTimeoutSecs:      cfg.StartTimeout.Seconds(),
 		ReadTimeoutSecs:       cfg.ReadTimeout.Seconds(),
 		OverriddenURL:         cfg.OverrideURL,
@@ -51,9 +51,9 @@ func StreamPlaybackConfigGRPC2Go(
 	cfg *streamd_grpc.StreamPlaybackConfig,
 ) sptypes.Config {
 	return sptypes.Config{
-		JitterBufDuration:     secsGRPC2Go(cfg.JitterBufDurationSecs),
+		JitterBufMaxDuration:  secsGRPC2Go(cfg.JitterBufDurationSecs),
 		CatchupMaxSpeedFactor: cfg.CatchupMaxSpeedFactor,
-		MaxCatchupAtLag:       secsGRPC2Go(cfg.MaxCatchupAtLagSecs),
+		CatchupAtMaxLag:       secsGRPC2Go(cfg.MaxCatchupAtLagSecs),
 		StartTimeout:          secsGRPC2Go(cfg.StartTimeoutSecs),
 		ReadTimeout:           secsGRPC2Go(cfg.ReadTimeoutSecs),
 		OverrideURL:           cfg.GetOverriddenURL(),
