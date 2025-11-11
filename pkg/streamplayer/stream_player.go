@@ -820,6 +820,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 	var prevPos time.Duration
 	var prevLength time.Duration
 	posUpdatedAt := time.Now()
+	lastDebugReportAt := time.Now()
 	curSpeed := float64(1)
 	for {
 		if isClosed {
@@ -838,6 +839,11 @@ func (p *StreamPlayerHandler) controllerLoop(
 			restart()
 			return
 		case <-t.C:
+		}
+		traceLogLevel := logger.LevelTrace
+		if time.Since(lastDebugReportAt) > 10*time.Second {
+			traceLogLevel = logger.LevelDebug
+			lastDebugReportAt = time.Now()
 		}
 
 		err := p.withPlayer(ctx, func(ctx context.Context, player player.Player) {
@@ -877,7 +883,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 					time.Sleep(time.Second)
 					return
 				}
-				logger.Tracef(ctx, "cached duration: %v", dur)
+				logger.Logf(ctx, traceLogLevel, "cached duration: %v", dur)
 				l = pos + dur
 			}
 			if l < 0 {
@@ -897,11 +903,11 @@ func (p *StreamPlayerHandler) controllerLoop(
 					time.Sleep(time.Second)
 					return
 				}
-				logger.Tracef(ctx, "length: %v", l)
+				logger.Logf(ctx, traceLogLevel, "length: %v", l)
 			}
 			prevLength = l
 
-			logger.Tracef(ctx,
+			logger.Logf(ctx, traceLogLevel,
 				"StreamPlayer[%s].controllerLoop: now == %v, posUpdatedAt == %v, len == %v; pos == %v; readTimeout == %v",
 				p.StreamID, now, posUpdatedAt, l, pos, p.Config.ReadTimeout,
 			)
@@ -933,7 +939,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 			}
 
 			lag := l - pos
-			logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: lag == %v", p.StreamID, lag)
+			logger.Logf(ctx, traceLogLevel, "StreamPlayer[%s].controllerLoop: lag == %v", p.StreamID, lag)
 			minBufDuration := p.CurrentJitterBufDuration / 2
 			// [ lag < jitBuf/2 ]
 			if enableSlowDown && protocol == streamtypes.ServerTypeRTMP && p.CurrentJitterBufDuration > time.Second && lag < minBufDuration {
@@ -975,7 +981,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 				time.Duration(float64(p.CurrentJitterBufDuration)*jitterBufFactor),
 				p.Config.JitterBufMinDuration,
 			)
-			logger.Tracef(ctx,
+			logger.Logf(ctx, traceLogLevel,
 				"StreamPlayer[%s].controllerLoop: increasing jitter buffer duration factor: %v (halftime: %v, interval: %v); new duration: %v",
 				p.StreamID,
 				jitterBufFactor,
