@@ -935,7 +935,8 @@ func (p *StreamPlayerHandler) controllerLoop(
 			lag := l - pos
 			logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: lag == %v", p.StreamID, lag)
 			minBufDuration := p.CurrentJitterBufDuration / 2
-			if enableSlowDown && protocol == streamtypes.ServerTypeRTMP && p.CurrentJitterBufDuration > time.Second && minBufDuration > lag {
+			// [ lag < jitBuf/2 ]
+			if enableSlowDown && protocol == streamtypes.ServerTypeRTMP && p.CurrentJitterBufDuration > time.Second && lag < minBufDuration {
 				jitterBufDurationIncrease = max(jitterBufDurationIncrease, minBufDuration-lag)
 				k := lag.Seconds() / minBufDuration.Seconds()
 				wantSpeed := 1 - (1-k)*(1-minSpeed)
@@ -962,6 +963,28 @@ func (p *StreamPlayerHandler) controllerLoop(
 			if jitterBufDurationIncrease > 0 {
 				commitJitterBufferIncrease()
 			}
+
+			// [ jitBuf/2 <= lag ]
+			//
+			// x^(halftime/interval) = 0.5
+			// log(x) * (halftime/interval) = log(0.5)
+			// log(x) = log(0.5) / (halftime/interval)
+			// x = e^(log(0.5)/(halftime/interval))
+			jitterBufFactor := math.Exp(math.Log(2) / (jitterBufDecayHalftime.Seconds() / playerCheckInterval.Seconds()))
+			p.CurrentJitterBufDuration = max(
+				time.Duration(float64(p.CurrentJitterBufDuration)*jitterBufFactor),
+				p.Config.JitterBufMinDuration,
+			)
+			logger.Tracef(ctx,
+				"StreamPlayer[%s].controllerLoop: increasing jitter buffer duration factor: %v (halftime: %v, interval: %v); new duration: %v",
+				p.StreamID,
+				jitterBufFactor,
+				jitterBufDecayHalftime,
+				playerCheckInterval,
+				p.CurrentJitterBufDuration,
+			)
+
+			// [ jitBuf/2 <= lag <= jitBuf ]
 			if lag <= p.CurrentJitterBufDuration {
 				p.WantSpeedAverage.Update(1)
 				if curSpeed == 1 {
@@ -980,23 +1003,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 				return
 			}
 
-			// x^(halftime/interval) = 0.5
-			// log(x) * (halftime/interval) = log(0.5)
-			// log(x) = log(0.5) / (halftime/interval)
-			// x = e^(log(0.5)/(halftime/interval))
-			jitterBufFactor := math.Exp(math.Log(2) / (jitterBufDecayHalftime.Seconds() / playerCheckInterval.Seconds()))
-			p.CurrentJitterBufDuration = max(
-				time.Duration(float64(p.CurrentJitterBufDuration)*jitterBufFactor),
-				p.Config.JitterBufMinDuration,
-			)
-			logger.Tracef(ctx,
-				"StreamPlayer[%s].controllerLoop: increasing jitter buffer duration factor: %v (halftime: %v, interval: %v); new duration: %v",
-				p.StreamID,
-				jitterBufFactor,
-				jitterBufDecayHalftime,
-				playerCheckInterval,
-				p.CurrentJitterBufDuration,
-			)
+			// [ jitBuf < lag ]
 
 			wantSpeed := float64(1) +
 				(p.Config.CatchupMaxSpeedFactor-float64(1))*
