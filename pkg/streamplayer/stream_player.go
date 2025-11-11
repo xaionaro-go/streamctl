@@ -977,6 +977,10 @@ func (p *StreamPlayerHandler) controllerLoop(
 			// log(x) = log(0.5) / (halftime/interval)
 			// x = e^(log(0.5)/(halftime/interval))
 			jitterBufFactor := math.Exp(math.Log(2) / (jitterBufDecayHalftime.Seconds() / playerCheckInterval.Seconds()))
+			if jitterBufFactor > 1 {
+				logger.Logf(ctx, traceLogLevel, "invalid computation of the jitterBufFactor: %v, correcting to be <= 1", jitterBufFactor)
+				jitterBufFactor = 1 / jitterBufFactor
+			}
 			p.CurrentJitterBufDuration = max(
 				time.Duration(float64(p.CurrentJitterBufDuration)*jitterBufFactor),
 				p.Config.JitterBufMinDuration,
