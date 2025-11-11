@@ -939,18 +939,23 @@ func (p *StreamPlayerHandler) controllerLoop(
 			}
 
 			lag := l - pos
-			logger.Logf(ctx, traceLogLevel, "StreamPlayer[%s].controllerLoop: lag == %v", p.StreamID, lag)
+			logger.Logf(ctx, traceLogLevel, "StreamPlayer[%s].controllerLoop: speed == %v; lag == %v; protocol == %v; jitterBuf == %v", curSpeed, p.StreamID, lag, protocol, p.CurrentJitterBufDuration)
 			minBufDuration := p.CurrentJitterBufDuration / 2
 			// [ lag < jitBuf/2 ]
-			if enableSlowDown && protocol == streamtypes.ServerTypeRTMP && p.CurrentJitterBufDuration > time.Second && lag < minBufDuration {
-				jitterBufDurationIncrease = max(jitterBufDurationIncrease, minBufDuration-lag)
+			if enableSlowDown && protocol == streamtypes.ServerTypeRTMP && lag < minBufDuration {
+				jitterBufDurationIncrease = max(jitterBufDurationIncrease, p.CurrentJitterBufDuration-lag)
 				k := lag.Seconds() / minBufDuration.Seconds()
 				wantSpeed := 1 - (1-k)*(1-minSpeed)
 				if wantSpeed <= 0 {
+					logger.Errorf(ctx, "invalid wantSpeed: %f", wantSpeed)
 					return
 				}
 				setSpeed := p.WantSpeedAverage.Update(wantSpeed)
 				if math.Abs(wantSpeed-curSpeed) < minSpeedDifference {
+					logger.Logf(ctx, traceLogLevel,
+						"StreamPlayer[%s].controllerLoop: want to slow down to %f, but the difference is too small vs current speed %f",
+						p.StreamID, setSpeed, curSpeed,
+					)
 					return
 				}
 				curSpeed = setSpeed
@@ -977,6 +982,10 @@ func (p *StreamPlayerHandler) controllerLoop(
 			// log(x) = log(0.5) / (halftime/interval)
 			// x = e^(log(0.5)/(halftime/interval))
 			jitterBufFactor := math.Exp(math.Log(2) / (jitterBufDecayHalftime.Seconds() / playerCheckInterval.Seconds()))
+			if jitterBufFactor > 1 {
+				logger.Logf(ctx, traceLogLevel, "invalid computation of the jitterBufFactor: %v [e^(%f / (%f / %f)], correcting to be <= 1", jitterBufFactor, math.Log(0.5), jitterBufDecayHalftime.Seconds(), playerCheckInterval.Seconds())
+				jitterBufFactor = 1 / jitterBufFactor
+			}
 			p.CurrentJitterBufDuration = max(
 				time.Duration(float64(p.CurrentJitterBufDuration)*jitterBufFactor),
 				p.Config.JitterBufMinDuration,
