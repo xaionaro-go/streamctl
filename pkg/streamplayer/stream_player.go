@@ -934,8 +934,6 @@ func (p *StreamPlayerHandler) controllerLoop(
 				if now.Sub(posUpdatedAt) > p.Config.ReadTimeout {
 					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: now == %v, posUpdatedAt == %v, len == %v; pos == %v; readTimeout == %v, restarting", p.StreamID, now, posUpdatedAt, l, pos, p.Config.ReadTimeout)
 					commitJitterBufferIncrease()
-					jitterBufDurationIncrease = p.Config.ReadTimeout
-					commitJitterBufferIncrease()
 					restart()
 					return
 				}
