@@ -32,7 +32,7 @@ const (
 	enableSeekOnStart      = true
 	enableTracksRotation   = false
 	enableSlowDown         = true
-	minSpeed               = 0.975
+	minSpeed               = 0.95
 	minSpeedDifference     = 0.01
 	jitterBufDecayHalftime = 5 * time.Minute
 	playerCheckInterval    = 100 * time.Millisecond
@@ -795,21 +795,24 @@ func (p *StreamPlayerHandler) controllerLoop(
 	logger.Debugf(ctx, "finished waiting for a publisher at '%s'", p.StreamID)
 
 	jitterBufDurationIncrease := time.Duration(0)
-	commitJitterBufferIncrease := func() {
-		if jitterBufDurationIncrease == 0 {
+	increaseJitterBufferBy := func(inc time.Duration) {
+		if inc == 0 {
 			return
 		}
 		p.CurrentJitterBufDuration = min(
-			p.CurrentJitterBufDuration+jitterBufDurationIncrease,
+			p.CurrentJitterBufDuration+inc,
 			p.Config.JitterBufMaxDuration,
 		)
 		logger.Debugf(ctx,
 			"StreamPlayer[%s].controllerLoop: increased jitter buffer duration to %v (increased by %v)",
 			p.StreamID,
 			p.CurrentJitterBufDuration,
-			jitterBufDurationIncrease,
+			inc,
 		)
-		jitterBufDurationIncrease = 0
+		inc = 0
+	}
+	commitJitterBufferIncrease := func() {
+		increaseJitterBufferBy(jitterBufDurationIncrease)
 	}
 	defer commitJitterBufferIncrease()
 
@@ -908,8 +911,8 @@ func (p *StreamPlayerHandler) controllerLoop(
 			prevLength = l
 
 			logger.Logf(ctx, traceLogLevel,
-				"StreamPlayer[%s].controllerLoop: now == %v, posUpdatedAt == %v, len == %v; pos == %v; readTimeout == %v",
-				p.StreamID, now, posUpdatedAt, l, pos, p.Config.ReadTimeout,
+				"StreamPlayer[%s].controllerLoop: now == %v, posUpdatedAt == %v, len == %v; pos == %v; jitterBuf == %v; readTimeout == %v",
+				p.StreamID, now, posUpdatedAt, l, pos, p.CurrentJitterBufDuration, p.Config.ReadTimeout,
 			)
 
 			if pos < -p.Config.ReadTimeout {
@@ -939,12 +942,19 @@ func (p *StreamPlayerHandler) controllerLoop(
 			}
 
 			lag := l - pos
-			logger.Logf(ctx, traceLogLevel, "StreamPlayer[%s].controllerLoop: speed == %v; lag == %v; protocol == %v; jitterBuf == %v", curSpeed, p.StreamID, lag, protocol, p.CurrentJitterBufDuration)
-			minBufDuration := p.CurrentJitterBufDuration / 2
-			// [ lag < jitBuf/2 ]
-			if enableSlowDown && protocol == streamtypes.ServerTypeRTMP && lag < minBufDuration {
-				jitterBufDurationIncrease = max(jitterBufDurationIncrease, p.CurrentJitterBufDuration-lag)
-				k := lag.Seconds() / minBufDuration.Seconds()
+			logger.Logf(ctx, traceLogLevel, "StreamPlayer[%s].controllerLoop: speed == %v; lag == %v; protocol == %v; jitterBuf == %v", p.StreamID, curSpeed, lag, protocol, p.CurrentJitterBufDuration)
+
+			// [ lag < jitBuf ]
+			if enableSlowDown && protocol == streamtypes.ServerTypeRTMP && lag < p.CurrentJitterBufDuration {
+				jitterBufDurationIncreaseNew := p.CurrentJitterBufDuration/2 - lag
+				if jitterBufDurationIncreaseNew < jitterBufDurationIncrease {
+					if jitterBufDurationIncreaseNew < 0 {
+						jitterBufDurationIncreaseNew = 0
+					}
+					increaseJitterBufferBy(jitterBufDurationIncrease - jitterBufDurationIncreaseNew)
+					jitterBufDurationIncrease = jitterBufDurationIncreaseNew
+				}
+				k := lag.Seconds() / p.CurrentJitterBufDuration.Seconds()
 				wantSpeed := 1 - (1-k)*(1-minSpeed)
 				if wantSpeed <= 0 {
 					logger.Errorf(ctx, "invalid wantSpeed: %f", wantSpeed)
@@ -975,17 +985,13 @@ func (p *StreamPlayerHandler) controllerLoop(
 				commitJitterBufferIncrease()
 			}
 
-			// [ jitBuf/2 <= lag ]
+			// [ jitBuf <= lag ]
 			//
 			// x^(halftime/interval) = 0.5
 			// log(x) * (halftime/interval) = log(0.5)
 			// log(x) = log(0.5) / (halftime/interval)
 			// x = e^(log(0.5)/(halftime/interval))
-			jitterBufFactor := math.Exp(math.Log(2) / (jitterBufDecayHalftime.Seconds() / playerCheckInterval.Seconds()))
-			if jitterBufFactor > 1 {
-				logger.Logf(ctx, traceLogLevel, "invalid computation of the jitterBufFactor: %v [e^(%f / (%f / %f)], correcting to be <= 1", jitterBufFactor, math.Log(0.5), jitterBufDecayHalftime.Seconds(), playerCheckInterval.Seconds())
-				jitterBufFactor = 1 / jitterBufFactor
-			}
+			jitterBufFactor := math.Exp(math.Log(0.5) / (jitterBufDecayHalftime.Seconds() / playerCheckInterval.Seconds()))
 			p.CurrentJitterBufDuration = max(
 				time.Duration(float64(p.CurrentJitterBufDuration)*jitterBufFactor),
 				p.Config.JitterBufMinDuration,
@@ -998,27 +1004,6 @@ func (p *StreamPlayerHandler) controllerLoop(
 				playerCheckInterval,
 				p.CurrentJitterBufDuration,
 			)
-
-			// [ jitBuf/2 <= lag <= jitBuf ]
-			if lag <= p.CurrentJitterBufDuration {
-				p.WantSpeedAverage.Update(1)
-				if curSpeed == 1 {
-					return
-				}
-				logger.Debugf(ctx,
-					"StreamPlayer[%s].controllerLoop: resetting the speed to 1",
-					p.StreamID,
-				)
-				err := player.SetSpeed(ctx, 1)
-				if err != nil {
-					logger.Errorf(ctx, "unable to reset the speed to 1: %v", err)
-					return
-				}
-				curSpeed = 1
-				return
-			}
-
-			// [ jitBuf < lag ]
 
 			wantSpeed := float64(1) +
 				(p.Config.CatchupMaxSpeedFactor-float64(1))*
