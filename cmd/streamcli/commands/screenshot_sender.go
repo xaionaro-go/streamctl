@@ -11,7 +11,9 @@ import (
 	"github.com/bamiaux/rez"
 	"github.com/chai2010/webp"
 	"github.com/facebookincubator/go-belt/tool/logger"
-	player "github.com/xaionaro-go/player/pkg/player/builtin"
+	videodecoder "github.com/xaionaro-go/player/pkg/player/decoder/libav"
+	"github.com/xaionaro-go/player/pkg/player/imagerenderer"
+	videorenderer "github.com/xaionaro-go/player/pkg/player/imagerenderer"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/client"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	"github.com/xaionaro-go/xsync"
@@ -22,29 +24,29 @@ type screenshotSender struct {
 	StreamD                    *client.Client
 	VariableKey                consts.VarKey
 	stepSize                   time.Duration
-	PlayerPriority             *xsync.Map[*player.Player[player.ImageGeneric], int]
-	LastPTS                    map[*player.Player[player.ImageGeneric]]time.Duration
-	ImageResized               map[*player.Player[player.ImageGeneric]]image.Image
+	PlayerPriority             *xsync.Map[*videodecoder.Decoder, int]
+	LastPTS                    map[*videodecoder.Decoder]time.Duration
+	ImageResized               map[*videodecoder.Decoder]image.Image
 	Buffer                     bytes.Buffer
 	LastRenderedPlayerPriority int
 	LastRenderTS               time.Time
 }
 
-var _ player.ImageRenderer[player.ImageGeneric] = (*screenshotSender)(nil)
+var _ videorenderer.ImageRenderer = (*screenshotSender)(nil)
 
 func newScreenshotSender(
 	streamD *client.Client,
 	variableKey consts.VarKey,
 	fps float64,
-	playerPriority *xsync.Map[*player.Player[player.ImageGeneric], int],
+	playerPriority *xsync.Map[*videodecoder.Decoder, int],
 ) *screenshotSender {
 	return &screenshotSender{
 		StreamD:                    streamD,
 		VariableKey:                variableKey,
 		stepSize:                   time.Duration(float64(time.Second) / fps),
 		PlayerPriority:             playerPriority,
-		LastPTS:                    map[*player.Player[player.ImageGeneric]]time.Duration{},
-		ImageResized:               map[*player.Player[player.ImageGeneric]]image.Image{},
+		LastPTS:                    map[*videodecoder.Decoder]time.Duration{},
+		ImageResized:               map[*videodecoder.Decoder]image.Image{},
 		LastRenderedPlayerPriority: math.MaxInt,
 	}
 }
@@ -53,20 +55,21 @@ func (s *screenshotSender) Close() error {
 	return nil
 }
 
-func (s *screenshotSender) SetImage(ctx context.Context, img player.ImageGeneric) error {
-	return xsync.DoA2R1(ctx, &s.Mutex, s.setImage, ctx, img)
+func (s *screenshotSender) SetImage(ctx context.Context, imgGetter imagerenderer.ImageGetter) error {
+	return xsync.DoA2R1(ctx, &s.Mutex, s.setImage, ctx, imgGetter)
 }
 
 func (s *screenshotSender) setImage(
 	ctx context.Context,
-	img player.ImageGeneric,
+	imgGetter imagerenderer.ImageGetter,
 ) (_err error) {
+	img := imgGetter.(*videodecoder.ImageGeneric)
 	if img.Bounds().Empty() {
 		return nil
 	}
 	now := time.Now()
 
-	priority, ok := s.PlayerPriority.Load(img.Player)
+	priority, ok := s.PlayerPriority.Load(img.Decoder)
 	if !ok {
 		return fmt.Errorf("unknown player")
 	}
@@ -76,7 +79,7 @@ func (s *screenshotSender) setImage(
 	s.LastRenderedPlayerPriority = priority
 	s.LastRenderTS = now
 
-	imageResized := s.ImageResized[img.Player]
+	imageResized := s.ImageResized[img.Decoder]
 	if imageResized == nil {
 		var err error
 		imageResized, err = imgLike(
@@ -87,10 +90,10 @@ func (s *screenshotSender) setImage(
 			return fmt.Errorf("unable to create resized image: %w", err)
 		}
 		logger.Debugf(ctx, "initialized the screenshot sender: image format %T, size %v, resized size %v", img.Image, img.Image.Bounds().Size(), imageResized.Bounds().Size())
-		s.ImageResized[img.Player] = imageResized
+		s.ImageResized[img.Decoder] = imageResized
 	}
 
-	lastPTS, ok := s.LastPTS[img.Player]
+	lastPTS, ok := s.LastPTS[img.Decoder]
 	if !ok {
 		lastPTS = time.Duration(math.MinInt64)
 	}
@@ -99,7 +102,7 @@ func (s *screenshotSender) setImage(
 	if pts < lastPTS+s.stepSize {
 		return nil
 	}
-	s.LastPTS[img.Player] = pts
+	s.LastPTS[img.Decoder] = pts
 
 	err := rez.Convert(imageResized, img.Image, rez.NewLanczosFilter(3))
 	if err != nil {

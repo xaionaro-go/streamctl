@@ -18,7 +18,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/spf13/cobra"
 	"github.com/xaionaro-go/observability"
-	player "github.com/xaionaro-go/player/pkg/player/builtin"
+	videodecoder "github.com/xaionaro-go/player/pkg/player/decoder/libav"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	kick "github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick/types"
 	obs "github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs/types"
@@ -320,7 +320,7 @@ func variablesSetImageFromURL(cmd *cobra.Command, args []string) {
 	streamD, err := client.New(ctx, remoteAddr)
 	assertNoError(ctx, err)
 
-	var playerMap xsync.Map[*player.Player[player.ImageGeneric], int]
+	var playerMap xsync.Map[*videodecoder.Decoder, int]
 
 	imageRenderer := newScreenshotSender(streamD, consts.VarKeyImage(imageKey), fps, &playerMap)
 	defer imageRenderer.Close()
@@ -337,7 +337,7 @@ func variablesSetImageFromURL(cmd *cobra.Command, args []string) {
 			defer wg.Done()
 			for {
 				func() {
-					p := player.New(ctx, imageRenderer, nil)
+					p := videodecoder.New(ctx, imageRenderer, nil)
 					defer p.Close(ctx)
 
 					playerMap.Store(p, idx)
