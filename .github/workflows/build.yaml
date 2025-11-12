@@ -20,7 +20,7 @@ jobs:
         if: ${{ matrix.target.name == 'ENABLE_VLC=false dockerbuild-streampanel-android-arm64' }}
         uses: jlumbroso/free-disk-space@main
       - uses: actions/checkout@v4
-      - uses: crazy-max/ghaction-setup-docker@v3
+      - uses: docker/setup-docker-action@v4
         if: ${{ matrix.target.name == 'ENABLE_VLC=false dockerbuild-streampanel-android-arm64' }}
         timeout-minutes: 12
       - name: setup go
