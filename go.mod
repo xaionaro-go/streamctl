@@ -322,6 +322,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/xaionaro-go/audio v0.0.0-20250426140416-6a9b3f1c8737
 	github.com/xaionaro-go/avpipeline v0.0.0-20251103024353-56f5eb90fa6e
+	github.com/xaionaro-go/buildvars v0.0.0-20250111161425-ed39f98139d0
 	github.com/xaionaro-go/datacounter v1.0.4
 	github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42
 	github.com/xaionaro-go/grpcproxy v0.0.0-20241103205849-a8fef42e72f9
