@@ -659,7 +659,7 @@ func (p *monitorPage) startMonitorNoLock(
 	playerHandler, err := p.streamPlayers.Create(
 		xcontext.DetachDone(ctx),
 		streamID,
-		playertypes.BackendBuiltinLibAV,
+		playertypes.BackendLibAVFyne,
 		opts...,
 	)
 	if err != nil {
