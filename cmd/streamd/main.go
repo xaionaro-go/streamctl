@@ -65,6 +65,7 @@ func main() {
 	cpuProfile := pflag.String("go-profile-cpu", "", "file to write cpu profile to")
 	heapProfile := pflag.String("go-profile-heap", "", "file to write memory profile to")
 	sentryDSN := pflag.String("sentry-dsn", "", "DSN of a Sentry instance to send error reports")
+	version := pflag.Bool("version", false, "print version and exit")
 	pflag.Parse()
 
 	l := logrus.Default().WithLevel(logger.LevelTrace)
@@ -145,6 +146,11 @@ func main() {
 		return l
 	}
 	defer belt.Flush(ctx)
+
+	if *version {
+		printBuildInfo(ctx, os.Stdout)
+		return
+	}
 
 	eventbus.LoggingEnabled = true
 

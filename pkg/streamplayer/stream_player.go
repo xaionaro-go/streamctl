@@ -34,7 +34,7 @@ const (
 	enableSlowDown         = true
 	minSpeed               = 0.95
 	minSpeedDifference     = 0.01
-	jitterBufDecayHalftime = 5 * time.Minute
+	jitterBufDecayHalftime = 2*time.Minute + 30*time.Second
 	playerCheckInterval    = 100 * time.Millisecond
 )
 
@@ -809,10 +809,10 @@ func (p *StreamPlayerHandler) controllerLoop(
 			p.CurrentJitterBufDuration,
 			inc,
 		)
-		inc = 0
 	}
 	commitJitterBufferIncrease := func() {
 		increaseJitterBufferBy(jitterBufDurationIncrease)
+		jitterBufDurationIncrease = 0
 	}
 	defer commitJitterBufferIncrease()
 

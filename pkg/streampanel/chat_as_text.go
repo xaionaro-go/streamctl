@@ -315,7 +315,10 @@ func (ui *chatUIAsText) newItem(
 	item.TimestampSegment.Style.ColorName = colorForPlatform(msg.Platform)
 	item.UsernameSegment.Text = msg.User.Name
 	item.UsernameSegment.Style.ColorName = colorForUsername(msg.User.Name)
-	item.MessageSegment.Text = msg.Message.Content
+	item.MessageSegment.Text = ""
+	if msg.Message != nil {
+		item.MessageSegment.Text = msg.Message.Content
+	}
 	logger.Tracef(ctx, "%d: updated message is: '%s'", itemIdx, msg.Message)
 
 	ui.ItemsByMessageID[msg.ID] = item
