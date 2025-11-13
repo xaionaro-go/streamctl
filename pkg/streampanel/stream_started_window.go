@@ -123,7 +123,9 @@ func (w *streamStartedWindow) setStreamStatusColorAndText(
 	dst.Container.RemoveAll()
 	dst.Container.Add(background)
 	dst.Container.Add(textWidget)
-	dst.Refresh()
+	observability.Go(ctx, func(ctx context.Context) {
+		dst.Refresh()
+	})
 }
 
 func (w *streamStartedWindow) updateStreamStatusLoop(

@@ -34,7 +34,7 @@ const (
 	enableSlowDown         = true
 	minSpeed               = 0.95
 	minSpeedDifference     = 0.01
-	jitterBufDecayHalftime = 5 * time.Minute
+	jitterBufDecayHalftime = 2*time.Minute + 30*time.Second
 	playerCheckInterval    = 100 * time.Millisecond
 )
 
@@ -809,10 +809,10 @@ func (p *StreamPlayerHandler) controllerLoop(
 			p.CurrentJitterBufDuration,
 			inc,
 		)
-		inc = 0
 	}
 	commitJitterBufferIncrease := func() {
 		increaseJitterBufferBy(jitterBufDurationIncrease)
+		jitterBufDurationIncrease = 0
 	}
 	defer commitJitterBufferIncrease()
 
@@ -931,11 +931,16 @@ func (p *StreamPlayerHandler) controllerLoop(
 				posUpdatedAt = now
 				prevPos = pos
 			} else {
-				if now.Sub(posUpdatedAt) > p.Config.ReadTimeout {
+				noMovementDuration := now.Sub(posUpdatedAt)
+				if noMovementDuration > p.Config.ReadTimeout {
 					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: now == %v, posUpdatedAt == %v, len == %v; pos == %v; readTimeout == %v, restarting", p.StreamID, now, posUpdatedAt, l, pos, p.Config.ReadTimeout)
-					commitJitterBufferIncrease()
+					jitterBufDurationIncrease = 0 // we are not sure why this happened, so not raising the latency without a good reason
 					restart()
 					return
+				}
+				if noMovementDuration > jitterBufDurationIncrease {
+					jitterBufDurationIncrease = noMovementDuration
+					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: no movement duration == %v, setting the jitterBufDurationIncrease to the same value", p.StreamID, noMovementDuration)
 				}
 			}
 
