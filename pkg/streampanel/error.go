@@ -70,7 +70,7 @@ func (p *Panel) statusPanelSet(text string) {
 		newText = "status:  " + text
 	})
 	if panel != nil {
-		observability.CallSafe(ctx, func(ctx context.Context) {
+		observability.GoSafe(ctx, func(ctx context.Context) {
 			panel.SetText(newText)
 		})
 	}
