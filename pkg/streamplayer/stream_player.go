@@ -613,7 +613,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 						logger.Debugf(ctx, "checking if we get get the position")
 						err = p.withPlayer(ctx, func(ctx context.Context, player player.Player) {
 							var pos time.Duration
-							pos, err = player.GetPosition(ctx)
+							pos, err = player.GetAudioPosition(ctx)
 							logger.Debugf(ctx, "result of getting the position: %v %v", pos, err)
 							if err != nil {
 								err = fmt.Errorf("unable to get the position: %w", err)
@@ -669,7 +669,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 							logger.Errorf(ctx, "unable to unpause: %v", err)
 						}
 					}
-					pos, err = player.GetPosition(ctx)
+					pos, err = player.GetAudioPosition(ctx)
 					if err != nil {
 						err = fmt.Errorf("unable to get position: %w", err)
 					}
@@ -794,6 +794,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 
 	logger.Debugf(ctx, "finished waiting for a publisher at '%s'", p.StreamID)
 
+	traceLogLevel := logger.LevelTrace
 	jitterBufDurationIncrease := time.Duration(0)
 	increaseJitterBufferBy := func(inc time.Duration) {
 		if inc == 0 {
@@ -811,6 +812,11 @@ func (p *StreamPlayerHandler) controllerLoop(
 		)
 	}
 	commitJitterBufferIncrease := func() {
+		logger.Logf(ctx, traceLogLevel,
+			"StreamPlayer[%s].controllerLoop: committing jitter buffer increase of %v",
+			p.StreamID,
+			jitterBufDurationIncrease,
+		)
 		increaseJitterBufferBy(jitterBufDurationIncrease)
 		jitterBufDurationIncrease = 0
 	}
@@ -848,7 +854,6 @@ func (p *StreamPlayerHandler) controllerLoop(
 		timeDelta := now.Sub(prevNow)
 		prevNow = now
 
-		traceLogLevel := logger.LevelTrace
 		if time.Since(lastDebugReportAt) > 10*time.Second {
 			traceLogLevel = logger.LevelDebug
 			lastDebugReportAt = time.Now()
@@ -856,7 +861,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 
 		err := p.withPlayer(ctx, func(ctx context.Context, player player.Player) {
 			now := time.Now()
-			pos, err := player.GetPosition(ctx)
+			pos, err := player.GetAudioPosition(ctx)
 			if err != nil {
 				logger.Errorf(ctx,
 					"StreamPlayer[%s].controllerLoop: unable to get the current position: %v",
@@ -945,10 +950,10 @@ func (p *StreamPlayerHandler) controllerLoop(
 					restart()
 					return
 				}
-				minBuf := noMovementDuration + p.CurrentJitterBufDuration
-				if minBuf > jitterBufDurationIncrease {
-					jitterBufDurationIncrease = minBuf
-					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: no movement duration == %v, setting the jitterBufDurationIncrease to %v", p.StreamID, noMovementDuration, minBuf)
+				minExtraBuf := noMovementDuration
+				if minExtraBuf > jitterBufDurationIncrease {
+					jitterBufDurationIncrease = minExtraBuf
+					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: no movement duration == %v, setting the jitterBufDurationIncrease to %v", p.StreamID, noMovementDuration, minExtraBuf)
 				}
 			}
 
@@ -983,7 +988,14 @@ func (p *StreamPlayerHandler) controllerLoop(
 						if jitterBufDurationIncreaseNew < 0 {
 							jitterBufDurationIncreaseNew = 0
 						}
-						increaseJitterBufferBy(jitterBufDurationIncrease - jitterBufDurationIncreaseNew)
+						commitIncreaseNowDuration := jitterBufDurationIncrease - jitterBufDurationIncreaseNew
+						logger.Logf(ctx, traceLogLevel,
+							"StreamPlayer[%s].controllerLoop: increasing the jitter buffer by %v (%v - %v)",
+							p.StreamID,
+							commitIncreaseNowDuration,
+							jitterBufDurationIncrease, jitterBufDurationIncreaseNew,
+						)
+						increaseJitterBufferBy(commitIncreaseNowDuration)
 						jitterBufDurationIncrease = jitterBufDurationIncreaseNew
 					}
 				}

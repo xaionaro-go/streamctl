@@ -1192,8 +1192,8 @@ github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20241018162120-5faf4e7a684a h1:PyX7
 github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20241018162120-5faf4e7a684a/go.mod h1:exSKIlCibB0ww+ABDwH+YG/iNdqVfdzXBBg5LYxkxGw=
 github.com/xaionaro-go/observability v0.0.0-20251102143534-3aeb2a25e57d h1:3oelsD973xao6Y1ucukBXElEfoSoEJ6naArGf7OQKTU=
 github.com/xaionaro-go/observability v0.0.0-20251102143534-3aeb2a25e57d/go.mod h1:83Ywq4Ukg4EtS3+1HvaboKpt6sqZzwv7oZ5+jLkzSNc=
-github.com/xaionaro-go/player v0.0.0-20251127191624-d3a6c7c1f163 h1:ZeOE/VpnD4HVkw/JuL0Za13j9BC/SqYINw3FXuA4yrQ=
-github.com/xaionaro-go/player v0.0.0-20251127191624-d3a6c7c1f163/go.mod h1:bCGjK/1IxW07oYchODaFbDX4wseHsNvET+n4GUSLG8U=
+github.com/xaionaro-go/player v0.0.0-20251127204930-bb08c95234d2 h1:QaCnhOGiX4k14bdNjdRQ9S43ncxEgqQwRGCBnu3xUBE=
+github.com/xaionaro-go/player v0.0.0-20251127204930-bb08c95234d2/go.mod h1:bCGjK/1IxW07oYchODaFbDX4wseHsNvET+n4GUSLG8U=
 github.com/xaionaro-go/proxy v0.0.0-20250525144747-579f5a891c15 h1:Qqoy9MDWq2Yh6uazAqQDzqU0doalTL3tRjNCo7X7GXA=
 github.com/xaionaro-go/proxy v0.0.0-20250525144747-579f5a891c15/go.mod h1:6kxHtLmOImv/zwXSvaI1CW9Q8Pw+m5b891ZoejMKHPA=
 github.com/xaionaro-go/pulse v0.0.0-20241023202712-7151fa00d4bb h1:9iHPI27CYbmJDhzEuCABQthE/DGVNvT60ybWvv3BV8w=
