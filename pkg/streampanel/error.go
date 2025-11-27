@@ -125,6 +125,7 @@ func (p *Panel) DisplayError(err error) {
 		return
 	}
 
+	ctx := context.TODO()
 	p.ReportError(err)
 
 	errorMessage := fmt.Sprintf("Error: %v\n\nstack trace:\n%s", err, debug.Stack())
@@ -136,7 +137,6 @@ func (p *Panel) DisplayError(err error) {
 		Monospace: true,
 	}
 
-	ctx := context.TODO()
 	p.displayErrorLocker.Do(ctx, func() {
 		if p.lastDisplayedError != nil {
 			// protection against flood:

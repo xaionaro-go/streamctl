@@ -32,7 +32,7 @@ func ProfileGRPC2Go(
 	}
 	err = yaml.Unmarshal([]byte(profileString), profile)
 	if err != nil {
-		return nil, fmt.Errorf("unable to unserialize the profile: %w", err)
+		return nil, fmt.Errorf("(goconv) unable to unserialize the profile: %w", err)
 	}
 	return profile, nil
 }

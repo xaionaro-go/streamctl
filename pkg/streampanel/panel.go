@@ -183,6 +183,8 @@ type Panel struct {
 	lastOpenedBrowserURL       string
 	lastOpenedBrowserURLAt     time.Time
 	lastOpenedBrowserURLLocker xsync.Mutex
+
+	backgroundRenderer *backgroundRenderer
 }
 
 func New(
@@ -249,6 +251,7 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) (_err error) {
 	if p.defaultContext != nil {
 		return fmt.Errorf("Loop was already used, and cannot be used the second time")
 	}
+	p.backgroundRenderer = newBackgroundRenderer(ctx, p)
 	p.dumpConfig(ctx)
 
 	initCfg := loopOptions(opts).Config()
@@ -2279,10 +2282,11 @@ func (p *Panel) doStopStream(ctx context.Context) {
 		wg.Add(1)
 		observability.Go(ctx, func(ctx context.Context) {
 			defer wg.Done()
-			p.startStopButton.SetText("Stopping YouTube...")
 			err := p.StreamD.EndStream(ctx, youtube.ID)
 			if err != nil {
-				p.DisplayError(fmt.Errorf("unable to stop the stream on YouTube: %w", err))
+				p.backgroundRenderer.Q <- func() {
+					p.DisplayError(fmt.Errorf("unable to stop the stream on YouTube: %w", err))
+				}
 			}
 		})
 	}
@@ -2291,10 +2295,11 @@ func (p *Panel) doStopStream(ctx context.Context) {
 		wg.Add(1)
 		observability.Go(ctx, func(ctx context.Context) {
 			defer wg.Done()
-			p.startStopButton.SetText("Stopping Twitch...")
 			err := p.StreamD.EndStream(ctx, twitch.ID)
 			if err != nil {
-				p.DisplayError(fmt.Errorf("unable to stop the stream on Twitch: %w", err))
+				p.backgroundRenderer.Q <- func() {
+					p.DisplayError(fmt.Errorf("unable to stop the stream on Twitch: %w", err))
+				}
 			}
 		})
 	}
@@ -2303,10 +2308,11 @@ func (p *Panel) doStopStream(ctx context.Context) {
 		wg.Add(1)
 		observability.Go(ctx, func(ctx context.Context) {
 			defer wg.Done()
-			p.startStopButton.SetText("Stopping Kick...")
 			err := p.StreamD.EndStream(ctx, kick.ID)
 			if err != nil {
-				p.DisplayError(fmt.Errorf("unable to stop the stream on Kick: %w", err))
+				p.backgroundRenderer.Q <- func() {
+					p.DisplayError(fmt.Errorf("unable to stop the stream on Kick: %w", err))
+				}
 			}
 		})
 	}
@@ -2346,7 +2352,7 @@ func (p *Panel) doStopStream(ctx context.Context) {
 		p.youtubeCheck.Enable()
 	}
 
-	p.startStopButton.SetText("OnStopStream command...")
+	p.backgroundRenderer.Q <- func() { p.startStopButton.SetText("OnStopStream command...") }
 
 	var platCfg *streamcontrol.AbstractPlatformConfig
 	p.configCacheLocker.Do(ctx, func() {

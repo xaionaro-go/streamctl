@@ -449,7 +449,7 @@ func (grpc *GRPCServer) ApplyProfile(
 	err = yaml.Unmarshal([]byte(req.GetProfile()), profile)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"unable to unserialize the profile '%s': %w",
+			"(ApplyProfile) unable to unserialize the profile '%s': %w",
 			req.GetProfile(),
 			err,
 		)
@@ -492,7 +492,7 @@ func (grpc *GRPCServer) UpdateStream(
 	err = yaml.Unmarshal([]byte(req.GetProfile()), profile)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"unable to unserialize the profile '%s': %w",
+			"(UpdateStream) unable to unserialize the profile '%s': %w",
 			req.GetProfile(),
 			err,
 		)

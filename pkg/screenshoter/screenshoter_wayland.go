@@ -101,7 +101,7 @@ func (s *ScreenshoterWayland) Loop(
 
 	decoderNode := node.NewFromKernel(ctx, decoderKernel)
 	defer decoderNode.GetProcessor().Close(ctx)
-	inputNode.AddPushPacketsTo(decoderNode)
+	inputNode.AddPushPacketsTo(ctx, decoderNode)
 
 	var img image.Image
 	receiverNode := node.NewFromKernel(
@@ -134,7 +134,7 @@ func (s *ScreenshoterWayland) Loop(
 		),
 	)
 	defer receiverNode.GetProcessor().Close(ctx)
-	decoderNode.AddPushFramesTo(receiverNode)
+	decoderNode.AddPushFramesTo(ctx, receiverNode)
 
 	logger.Debugf(ctx, "starting the decoding loop")
 	errCh := make(chan node.Error, 100)

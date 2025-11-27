@@ -963,7 +963,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 					p.Config.JitterBufMinDuration,
 				)
 				logger.Logf(ctx, traceLogLevel,
-					"StreamPlayer[%s].controllerLoop: increasing jitter buffer duration factor: %v (halftime: %v, interval: %v); new duration: %v",
+					"StreamPlayer[%s].controllerLoop: decreasing the jitter buffer duration: factor:%v (halftime: %v, interval: %v); new duration: %v",
 					p.StreamID,
 					jitterBufFactor,
 					jitterBufDecayHalftime,
