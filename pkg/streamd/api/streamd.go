@@ -18,7 +18,6 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	sstypes "github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
@@ -145,7 +144,7 @@ type StreamD interface {
 		streamID StreamID,
 		destinationID DestinationID,
 		enabled bool,
-		encode types.EncodeConfig,
+		encode sstypes.EncodeConfig,
 		quirks StreamForwardingQuirks,
 	) error
 	UpdateStreamForward(
@@ -153,7 +152,7 @@ type StreamD interface {
 		streamID StreamID,
 		destinationID DestinationID,
 		enabled bool,
-		encode types.EncodeConfig,
+		encode sstypes.EncodeConfig,
 		quirks StreamForwardingQuirks,
 	) error
 	RemoveStreamForward(
@@ -216,6 +215,10 @@ type StreamD interface {
 		ctx context.Context,
 		streamID StreamID,
 	) (time.Duration, error)
+	StreamPlayerGetLag(
+		ctx context.Context,
+		streamID StreamID,
+	) (time.Duration, time.Time, error)
 	StreamPlayerSetSpeed(
 		ctx context.Context,
 		streamID StreamID,

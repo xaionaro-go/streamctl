@@ -323,7 +323,7 @@ func callWrapper[REQ any, REPLY any](
 	req *REQ,
 	opts ...grpc.CallOption,
 ) (REPLY, error) {
-	return xgrpc.CallRetryable[REQ, REPLY, streamd_grpc.StreamDClient, *Client](ctx, c, fn, req, opts...)
+	return xgrpc.CallRetryable(ctx, c, fn, req, opts...)
 }
 
 func withStreamDClient[REPLY any](
@@ -1957,6 +1957,37 @@ func (c *Client) StreamPlayerGetLength(
 		) * resp.GetReply().
 			GetLengthSecs(),
 	), nil
+}
+
+func (c *Client) StreamPlayerGetLag(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+) (time.Duration, time.Time, error) {
+	resp, err := withStreamDClient(ctx, c, func(
+		ctx context.Context,
+		client streamd_grpc.StreamDClient,
+		conn io.Closer,
+	) (*streamd_grpc.StreamPlayerGetLagReply, error) {
+		return callWrapper(
+			ctx,
+			c,
+			client.StreamPlayerGetLag,
+			&streamd_grpc.StreamPlayerGetLagRequest{
+				StreamID: string(streamID),
+			},
+		)
+	})
+	if err != nil {
+		return 0, time.Time{}, fmt.Errorf("unable to query: %w", err)
+	}
+	return time.Nanosecond * time.Duration(resp.GetLagU()), unixNanoToTime(resp.GetNowUnixNano()), nil
+}
+
+func unixNanoToTime(unixNano int64) time.Time {
+	return time.Unix(
+		unixNano/time.Second.Nanoseconds(),
+		unixNano%time.Second.Nanoseconds(),
+	)
 }
 
 func (c *Client) StreamPlayerSetSpeed(

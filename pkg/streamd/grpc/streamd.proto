@@ -71,6 +71,7 @@ service StreamD {
 	rpc StreamPlayerIsEnded(StreamPlayerIsEndedRequest) returns (StreamPlayerIsEndedReply) {}
 	rpc StreamPlayerGetPosition(StreamPlayerGetPositionRequest) returns (StreamPlayerGetPositionReply) {}
 	rpc StreamPlayerGetLength(StreamPlayerGetLengthRequest) returns (StreamPlayerGetLengthReply) {}
+	rpc StreamPlayerGetLag(StreamPlayerGetLagRequest) returns (StreamPlayerGetLagReply) {}
 	rpc StreamPlayerSetSpeed(StreamPlayerSetSpeedRequest) returns (StreamPlayerSetSpeedReply) {}
 	rpc StreamPlayerSetPause(StreamPlayerSetPauseRequest) returns (StreamPlayerSetPauseReply) {}
 	rpc StreamPlayerStop(StreamPlayerStopRequest) returns (StreamPlayerStopReply) {}
@@ -591,6 +592,13 @@ message StreamPlayerGetLengthRequest {
 }
 message StreamPlayerGetLengthReply {
     player.GetLengthReply reply = 1;
+}
+message StreamPlayerGetLagRequest {
+    string streamID = 1;
+}
+message StreamPlayerGetLagReply {
+    int64 nowUnixNano = 1;
+    int64 lagU = 2;
 }
 message StreamPlayerSetSpeedRequest {
     string streamID = 1;

@@ -1856,6 +1856,26 @@ func (d *StreamD) StreamPlayerGetLength(
 	}
 	return streamPlayer.GetLength(ctx)
 }
+func (d *StreamD) StreamPlayerGetLag(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+) (time.Duration, time.Time, error) {
+	now := time.Now()
+	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamID)
+	if err != nil {
+		return 0, now, err
+	}
+	pos, err := streamPlayer.GetAudioPosition(ctx)
+	if err != nil {
+		return 0, now, fmt.Errorf("unable to get audio position: %w", err)
+	}
+	length, err := streamPlayer.GetLength(ctx)
+	if err != nil {
+		return 0, now, fmt.Errorf("unable to get stream length: %w", err)
+	}
+	lag := max(length-pos, 0)
+	return lag, now, nil
+}
 func (d *StreamD) StreamPlayerSetSpeed(
 	ctx context.Context,
 	streamID streamtypes.StreamID,

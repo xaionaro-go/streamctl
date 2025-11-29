@@ -79,6 +79,7 @@ const (
 	StreamD_StreamPlayerIsEnded_FullMethodName                  = "/streamd.StreamD/StreamPlayerIsEnded"
 	StreamD_StreamPlayerGetPosition_FullMethodName              = "/streamd.StreamD/StreamPlayerGetPosition"
 	StreamD_StreamPlayerGetLength_FullMethodName                = "/streamd.StreamD/StreamPlayerGetLength"
+	StreamD_StreamPlayerGetLag_FullMethodName                   = "/streamd.StreamD/StreamPlayerGetLag"
 	StreamD_StreamPlayerSetSpeed_FullMethodName                 = "/streamd.StreamD/StreamPlayerSetSpeed"
 	StreamD_StreamPlayerSetPause_FullMethodName                 = "/streamd.StreamD/StreamPlayerSetPause"
 	StreamD_StreamPlayerStop_FullMethodName                     = "/streamd.StreamD/StreamPlayerStop"
@@ -165,6 +166,7 @@ type StreamDClient interface {
 	StreamPlayerIsEnded(ctx context.Context, in *StreamPlayerIsEndedRequest, opts ...grpc.CallOption) (*StreamPlayerIsEndedReply, error)
 	StreamPlayerGetPosition(ctx context.Context, in *StreamPlayerGetPositionRequest, opts ...grpc.CallOption) (*StreamPlayerGetPositionReply, error)
 	StreamPlayerGetLength(ctx context.Context, in *StreamPlayerGetLengthRequest, opts ...grpc.CallOption) (*StreamPlayerGetLengthReply, error)
+	StreamPlayerGetLag(ctx context.Context, in *StreamPlayerGetLagRequest, opts ...grpc.CallOption) (*StreamPlayerGetLagReply, error)
 	StreamPlayerSetSpeed(ctx context.Context, in *StreamPlayerSetSpeedRequest, opts ...grpc.CallOption) (*StreamPlayerSetSpeedReply, error)
 	StreamPlayerSetPause(ctx context.Context, in *StreamPlayerSetPauseRequest, opts ...grpc.CallOption) (*StreamPlayerSetPauseReply, error)
 	StreamPlayerStop(ctx context.Context, in *StreamPlayerStopRequest, opts ...grpc.CallOption) (*StreamPlayerStopReply, error)
@@ -1048,6 +1050,16 @@ func (c *streamDClient) StreamPlayerGetLength(ctx context.Context, in *StreamPla
 	return out, nil
 }
 
+func (c *streamDClient) StreamPlayerGetLag(ctx context.Context, in *StreamPlayerGetLagRequest, opts ...grpc.CallOption) (*StreamPlayerGetLagReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StreamPlayerGetLagReply)
+	err := c.cc.Invoke(ctx, StreamD_StreamPlayerGetLag_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *streamDClient) StreamPlayerSetSpeed(ctx context.Context, in *StreamPlayerSetSpeedRequest, opts ...grpc.CallOption) (*StreamPlayerSetSpeedReply, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(StreamPlayerSetSpeedReply)
@@ -1335,6 +1347,7 @@ type StreamDServer interface {
 	StreamPlayerIsEnded(context.Context, *StreamPlayerIsEndedRequest) (*StreamPlayerIsEndedReply, error)
 	StreamPlayerGetPosition(context.Context, *StreamPlayerGetPositionRequest) (*StreamPlayerGetPositionReply, error)
 	StreamPlayerGetLength(context.Context, *StreamPlayerGetLengthRequest) (*StreamPlayerGetLengthReply, error)
+	StreamPlayerGetLag(context.Context, *StreamPlayerGetLagRequest) (*StreamPlayerGetLagReply, error)
 	StreamPlayerSetSpeed(context.Context, *StreamPlayerSetSpeedRequest) (*StreamPlayerSetSpeedReply, error)
 	StreamPlayerSetPause(context.Context, *StreamPlayerSetPauseRequest) (*StreamPlayerSetPauseReply, error)
 	StreamPlayerStop(context.Context, *StreamPlayerStopRequest) (*StreamPlayerStopReply, error)
@@ -1541,6 +1554,9 @@ func (UnimplementedStreamDServer) StreamPlayerGetPosition(context.Context, *Stre
 }
 func (UnimplementedStreamDServer) StreamPlayerGetLength(context.Context, *StreamPlayerGetLengthRequest) (*StreamPlayerGetLengthReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StreamPlayerGetLength not implemented")
+}
+func (UnimplementedStreamDServer) StreamPlayerGetLag(context.Context, *StreamPlayerGetLagRequest) (*StreamPlayerGetLagReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StreamPlayerGetLag not implemented")
 }
 func (UnimplementedStreamDServer) StreamPlayerSetSpeed(context.Context, *StreamPlayerSetSpeedRequest) (*StreamPlayerSetSpeedReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StreamPlayerSetSpeed not implemented")
@@ -2728,6 +2744,24 @@ func _StreamD_StreamPlayerGetLength_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _StreamD_StreamPlayerGetLag_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StreamPlayerGetLagRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).StreamPlayerGetLag(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: StreamD_StreamPlayerGetLag_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).StreamPlayerGetLag(ctx, req.(*StreamPlayerGetLagRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _StreamD_StreamPlayerSetSpeed_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(StreamPlayerSetSpeedRequest)
 	if err := dec(in); err != nil {
@@ -3293,6 +3327,10 @@ var StreamD_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StreamPlayerGetLength",
 			Handler:    _StreamD_StreamPlayerGetLength_Handler,
+		},
+		{
+			MethodName: "StreamPlayerGetLag",
+			Handler:    _StreamD_StreamPlayerGetLag_Handler,
 		},
 		{
 			MethodName: "StreamPlayerSetSpeed",
