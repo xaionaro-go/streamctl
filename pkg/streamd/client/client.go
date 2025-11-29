@@ -1973,14 +1973,15 @@ func (c *Client) StreamPlayerGetLag(
 			c,
 			client.StreamPlayerGetLag,
 			&streamd_grpc.StreamPlayerGetLagRequest{
-				StreamID: string(streamID),
+				RequestUnixNano: time.Now().UnixNano(),
+				StreamID:        string(streamID),
 			},
 		)
 	})
 	if err != nil {
 		return 0, time.Time{}, fmt.Errorf("unable to query: %w", err)
 	}
-	return time.Nanosecond * time.Duration(resp.GetLagU()), unixNanoToTime(resp.GetNowUnixNano()), nil
+	return time.Nanosecond * time.Duration(resp.GetLagU()), unixNanoToTime(resp.GetReplyUnixNano()), nil
 }
 
 func unixNanoToTime(unixNano int64) time.Time {

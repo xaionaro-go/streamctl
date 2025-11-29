@@ -1596,7 +1596,7 @@ func (grpc *GRPCServer) StreamPlayerGetLag(
 	ctx context.Context,
 	req *streamd_grpc.StreamPlayerGetLagRequest,
 ) (*streamd_grpc.StreamPlayerGetLagReply, error) {
-	l, now, err := grpc.StreamD.StreamPlayerGetLag(
+	l, replyTime, err := grpc.StreamD.StreamPlayerGetLag(
 		ctx,
 		streamtypes.StreamID(req.GetStreamID()),
 	)
@@ -1604,8 +1604,9 @@ func (grpc *GRPCServer) StreamPlayerGetLag(
 		return nil, err
 	}
 	return &streamd_grpc.StreamPlayerGetLagReply{
-		NowUnixNano: now.UnixNano(),
-		LagU:        l.Nanoseconds(),
+		RequestUnixNano: req.GetRequestUnixNano(),
+		ReplyUnixNano:   replyTime.UnixNano(),
+		LagU:            l.Nanoseconds(),
 	}, nil
 }
 

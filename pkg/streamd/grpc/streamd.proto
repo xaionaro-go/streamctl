@@ -595,10 +595,12 @@ message StreamPlayerGetLengthReply {
 }
 message StreamPlayerGetLagRequest {
     string streamID = 1;
+    int64 requestUnixNano = 2;
 }
 message StreamPlayerGetLagReply {
-    int64 nowUnixNano = 1;
-    int64 lagU = 2;
+    int64 requestUnixNano = 1;
+    int64 replyUnixNano = 2;
+    int64 lagU = 3;
 }
 message StreamPlayerSetSpeedRequest {
     string streamID = 1;
