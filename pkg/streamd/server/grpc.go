@@ -1478,6 +1478,7 @@ func (grpc *GRPCServer) StreamPlayerOpen(
 		Reply: &player_grpc.OpenReply{},
 	}, nil
 }
+
 func (grpc *GRPCServer) StreamPlayerProcessTitle(
 	ctx context.Context,
 	req *streamd_grpc.StreamPlayerProcessTitleRequest,
@@ -1495,6 +1496,7 @@ func (grpc *GRPCServer) StreamPlayerProcessTitle(
 		},
 	}, nil
 }
+
 func (grpc *GRPCServer) StreamPlayerGetLink(
 	ctx context.Context,
 	req *streamd_grpc.StreamPlayerGetLinkRequest,
@@ -1512,6 +1514,7 @@ func (grpc *GRPCServer) StreamPlayerGetLink(
 		},
 	}, nil
 }
+
 func (grpc *GRPCServer) StreamPlayerEndChan(
 	req *streamd_grpc.StreamPlayerEndChanRequest,
 	srv streamd_grpc.StreamD_StreamPlayerEndChanServer,
@@ -1534,6 +1537,7 @@ func (grpc *GRPCServer) StreamPlayerEndChan(
 		Reply: &player_grpc.EndChanReply{},
 	})
 }
+
 func (grpc *GRPCServer) StreamPlayerIsEnded(
 	ctx context.Context,
 	req *streamd_grpc.StreamPlayerIsEndedRequest,
@@ -1551,6 +1555,7 @@ func (grpc *GRPCServer) StreamPlayerIsEnded(
 		},
 	}, nil
 }
+
 func (grpc *GRPCServer) StreamPlayerGetPosition(
 	ctx context.Context,
 	req *streamd_grpc.StreamPlayerGetPositionRequest,
@@ -1568,6 +1573,7 @@ func (grpc *GRPCServer) StreamPlayerGetPosition(
 		},
 	}, nil
 }
+
 func (grpc *GRPCServer) StreamPlayerGetLength(
 	ctx context.Context,
 	req *streamd_grpc.StreamPlayerGetLengthRequest,
@@ -1585,6 +1591,24 @@ func (grpc *GRPCServer) StreamPlayerGetLength(
 		},
 	}, nil
 }
+
+func (grpc *GRPCServer) StreamPlayerGetLag(
+	ctx context.Context,
+	req *streamd_grpc.StreamPlayerGetLagRequest,
+) (*streamd_grpc.StreamPlayerGetLagReply, error) {
+	l, now, err := grpc.StreamD.StreamPlayerGetLag(
+		ctx,
+		streamtypes.StreamID(req.GetStreamID()),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.StreamPlayerGetLagReply{
+		NowUnixNano: now.UnixNano(),
+		LagU:        l.Nanoseconds(),
+	}, nil
+}
+
 func (grpc *GRPCServer) StreamPlayerSetSpeed(
 	ctx context.Context,
 	req *streamd_grpc.StreamPlayerSetSpeedRequest,
@@ -1601,6 +1625,7 @@ func (grpc *GRPCServer) StreamPlayerSetSpeed(
 		Reply: &player_grpc.SetSpeedReply{},
 	}, nil
 }
+
 func (grpc *GRPCServer) StreamPlayerSetPause(
 	ctx context.Context,
 	req *streamd_grpc.StreamPlayerSetPauseRequest,
@@ -1617,6 +1642,7 @@ func (grpc *GRPCServer) StreamPlayerSetPause(
 		Reply: &player_grpc.SetPauseReply{},
 	}, nil
 }
+
 func (grpc *GRPCServer) StreamPlayerStop(
 	ctx context.Context,
 	req *streamd_grpc.StreamPlayerStopRequest,
@@ -1632,6 +1658,7 @@ func (grpc *GRPCServer) StreamPlayerStop(
 		Reply: &player_grpc.StopReply{},
 	}, nil
 }
+
 func (grpc *GRPCServer) StreamPlayerClose(
 	ctx context.Context,
 	req *streamd_grpc.StreamPlayerCloseRequest,

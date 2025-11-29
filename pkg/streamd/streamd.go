@@ -35,7 +35,6 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/ui"
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver"
-	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	sstypes "github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
@@ -1349,7 +1348,7 @@ func (d *StreamD) listIncomingStreamsNoLock(
 	if err != nil {
 		logger.Errorf(ctx, "unable to get the list of active incoming streams: %w", err)
 	}
-	isActive := map[types.StreamID]struct{}{}
+	isActive := map[sstypes.StreamID]struct{}{}
 	for _, streamID := range activeIncomingStreams {
 		isActive[streamID] = struct{}{}
 	}
@@ -1520,7 +1519,7 @@ func (d *StreamD) AddStreamForward(
 	streamID api.StreamID,
 	destinationID api.DestinationID,
 	enabled bool,
-	encode types.EncodeConfig,
+	encode sstypes.EncodeConfig,
 	quirks api.StreamForwardingQuirks,
 ) error {
 	logger.Debugf(ctx, "AddStreamForward")
@@ -1557,7 +1556,7 @@ func (d *StreamD) UpdateStreamForward(
 	streamID api.StreamID,
 	destinationID api.DestinationID,
 	enabled bool,
-	encode types.EncodeConfig,
+	encode sstypes.EncodeConfig,
 	quirks api.StreamForwardingQuirks,
 ) (_err error) {
 	logger.Debugf(ctx, "UpdateStreamForward")
@@ -1855,6 +1854,26 @@ func (d *StreamD) StreamPlayerGetLength(
 		return 0, err
 	}
 	return streamPlayer.GetLength(ctx)
+}
+func (d *StreamD) StreamPlayerGetLag(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+) (time.Duration, time.Time, error) {
+	now := time.Now()
+	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamID)
+	if err != nil {
+		return 0, now, err
+	}
+	pos, err := streamPlayer.GetAudioPosition(ctx)
+	if err != nil {
+		return 0, now, fmt.Errorf("unable to get audio position: %w", err)
+	}
+	length, err := streamPlayer.GetLength(ctx)
+	if err != nil {
+		return 0, now, fmt.Errorf("unable to get stream length: %w", err)
+	}
+	lag := max(length-pos, 0)
+	return lag, now, nil
 }
 func (d *StreamD) StreamPlayerSetSpeed(
 	ctx context.Context,
