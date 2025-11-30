@@ -245,7 +245,7 @@ func (p *StreamPlayerHandler) startU(ctx context.Context) error {
 		cancelFn()
 		return fmt.Errorf("player == nil")
 	}
-	p.Player = player
+	p.Player = wrapPlayer(player)
 	logger.Debugf(ctx, "initialized player %#+v", player)
 
 	observability.Go(ctx, func(ctx context.Context) { p.controllerLoop(ctx, cancelFn) })
@@ -881,7 +881,12 @@ func (p *StreamPlayerHandler) controllerLoop(
 				GetCachedDuration(context.Context) (time.Duration, error)
 			}); ok {
 				dur, err := mpv.GetCachedDuration(ctx)
-				if err != nil {
+				switch {
+				case err == nil:
+					logger.Logf(ctx, traceLogLevel, "cached duration: %v", dur)
+					l = pos + dur
+				case errors.As(err, &ErrNotImplemented{}):
+				default:
 					logger.Errorf(ctx,
 						"StreamPlayer[%s].controllerLoop: unable to get the current cache duration: %v",
 						p.StreamID, err,
@@ -896,8 +901,6 @@ func (p *StreamPlayerHandler) controllerLoop(
 					time.Sleep(time.Second)
 					return
 				}
-				logger.Logf(ctx, traceLogLevel, "cached duration: %v", dur)
-				l = pos + dur
 			}
 			if l < 0 {
 				l, err = player.GetLength(ctx)
