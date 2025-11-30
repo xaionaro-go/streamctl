@@ -33,7 +33,7 @@ func retryA1R2[A0 any, R0 any](
 		if err == nil {
 			return res, nil
 		}
-		logger.Errorf(ctx, "player: attempt %d failed: %v", i+1, err)
+		logger.Tracef(ctx, "player: attempt %d failed: %v", i+1, err)
 		lastErr = err
 	}
 	var zero R0
