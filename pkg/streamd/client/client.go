@@ -863,7 +863,9 @@ func (c *Client) UpdateStream(
 func (c *Client) SubscribeToOAuthURLs(
 	ctx context.Context,
 	listenPort uint16,
-) (<-chan *streamd_grpc.OAuthRequest, error) {
+) (_ret <-chan *streamd_grpc.OAuthRequest, _err error) {
+	logger.Tracef(ctx, "SubscribeToOAuthURLs(ctx, %d)", listenPort)
+	defer func() { logger.Tracef(ctx, "/SubscribeToOAuthURLs(ctx, %d): %v", listenPort, _err) }()
 	return unwrapStreamDChan(
 		ctx,
 		c,

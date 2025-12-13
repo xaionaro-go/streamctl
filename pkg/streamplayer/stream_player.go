@@ -1041,6 +1041,10 @@ func (p *StreamPlayerHandler) controllerLoop(
 					(p.Config.CatchupAtMaxLag-p.CurrentJitterBufDuration+time.Millisecond).Seconds()
 
 			setSpeed := p.WantSpeedAverage.Update(wantSpeed)
+			logger.Logf(ctx, traceLogLevel,
+				"StreamPlayer[%s].controllerLoop: optimal speed %f (wantSpeed == %f)",
+				p.StreamID, setSpeed, wantSpeed,
+			)
 			setSpeed = float64(uint(setSpeed*200)) / 200 // to avoid flickering (for example between 1.0001 and 1.0000)
 
 			if setSpeed > p.Config.CatchupMaxSpeedFactor {

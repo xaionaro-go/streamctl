@@ -223,7 +223,7 @@ func (k *Kick) getAccessTokenNoLock(
 	if len(oauthPorts) < 2 {
 		// we require two ports, because the first port is used by Twitch
 		// TODO: remove all this ugly hardcodes
-		return fmt.Errorf("the function GetOAuthListenPorts returned less than 2 ports (%d)", len(oauthPorts))
+		return fmt.Errorf("the function GetOAuthListenPorts returned less than 2 ports (%d: %v)", len(oauthPorts), oauthPorts)
 	}
 
 	listenPort := oauthPorts[1] // TODO: remove this hardcode [1]; it currently exists to use the different port from what we use for Twitch authentication

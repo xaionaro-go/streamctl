@@ -17,7 +17,7 @@ func (p *Panel) generateNewTitle(
 	logger.Debugf(ctx, "tags == %s", tagsString)
 
 	// the prompt is developed by noguri
-	t, err := p.generateAlternativeTextFor(ctx, fmt.Sprintf(`Based on my keywords, generate one short YouTube title for a stream.
+	t, err := p.generateAlternativeTextFor(ctx, fmt.Sprintf(`Based on my keywords, generate one short YouTube single-line title for a stream.
 
 Start with a red dot emoji (🔴).
 
@@ -34,6 +34,8 @@ My keywords: %s`, tagsString))
 		p.DisplayError(err)
 		return
 	}
+	t = strings.ReplaceAll(t, "\n", " | ")
+	t = strings.Join(strings.Fields(t), " ") // multi-spaces -> single-spaces
 	p.streamTitleField.SetText(t)
 	p.streamTitleLabel.SetText(t)
 }

@@ -13,3 +13,4 @@ termux-packages
 priv
 .cache
 .ccache
+/.github/copilot-instructions.md
