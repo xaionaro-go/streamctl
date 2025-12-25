@@ -23,7 +23,7 @@ Start with a red dot emoji (🔴).
 
 Keep it under 95 characters.
 
-Use a calm, cozy, aesthetic vibe (not loud, not overhyped).
+Use not loud / not overhyped language.
 
 Make it sound viral and inviting but still relaxed.
 
