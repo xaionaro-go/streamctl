@@ -12,18 +12,21 @@ type FuncNotifyStart func(ctx context.Context, streamID streamtypes.StreamID)
 type GetRestartChanFunc func() <-chan struct{}
 
 type Config struct {
-	JitterBufMaxDuration  time.Duration
-	JitterBufMinDuration  time.Duration
-	CatchupMaxSpeedFactor float64
-	CatchupAtMaxLag       time.Duration
-	StartTimeout          time.Duration
-	ReadTimeout           time.Duration
-	NotifierStart         []FuncNotifyStart `yaml:"-"`
-	OverrideURL           string
-	GetRestartChanFunc    GetRestartChanFunc   `yaml:"-"`
-	CustomPlayerOptions   []playertypes.Option `yaml:"-"`
-	ForceWaitForPublisher bool
-	EnableObserver        bool
+	JitterBufMaxDuration   time.Duration
+	JitterBufMinDuration   time.Duration
+	CatchupMaxSpeedFactor  float64
+	CatchupAtMaxLag        time.Duration
+	StartTimeout           time.Duration
+	ReadTimeout            time.Duration
+	NotifierStart          []FuncNotifyStart `yaml:"-"`
+	OverrideURL            string
+	GetRestartChanFunc     GetRestartChanFunc   `yaml:"-"`
+	CustomPlayerOptions    []playertypes.Option `yaml:"-"`
+	ForceWaitForPublisher  bool
+	EnableObserver         bool
+	MinSpeed               float64
+	MinSpeedDifference     float64
+	JitterBufDecayHalftime time.Duration
 }
 
 func (cfg Config) Options() Options {
@@ -64,6 +67,15 @@ func (cfg Config) Options() Options {
 	if cfg.EnableObserver {
 		opts = append(opts, OptionEnableObserver(cfg.EnableObserver))
 	}
+	if cfg.MinSpeed != 0 {
+		opts = append(opts, OptionMinSpeed(cfg.MinSpeed))
+	}
+	if cfg.MinSpeedDifference != 0 {
+		opts = append(opts, OptionMinSpeedDifference(cfg.MinSpeedDifference))
+	}
+	if cfg.JitterBufDecayHalftime != 0 {
+		opts = append(opts, OptionJitterBufDecayHalftime(cfg.JitterBufDecayHalftime))
+	}
 	return opts
 }
 
@@ -87,12 +99,15 @@ func (s Options) apply(cfg *Config) {
 
 var DefaultConfig = func(ctx context.Context) Config {
 	return Config{
-		JitterBufMinDuration:  200 * time.Millisecond,
-		JitterBufMaxDuration:  3 * time.Minute,
-		CatchupMaxSpeedFactor: 1.1,
-		CatchupAtMaxLag:       3 * time.Minute,
-		StartTimeout:          10 * time.Second,
-		ReadTimeout:           10 * time.Second,
+		JitterBufMinDuration:   200 * time.Millisecond,
+		JitterBufMaxDuration:   3 * time.Minute,
+		CatchupMaxSpeedFactor:  1.1,
+		CatchupAtMaxLag:        3 * time.Minute,
+		StartTimeout:           10 * time.Second,
+		ReadTimeout:            10 * time.Second,
+		MinSpeed:               0.95,
+		MinSpeedDifference:     0.01,
+		JitterBufDecayHalftime: 2*time.Minute + 30*time.Second,
 	}
 }
 
@@ -166,4 +181,22 @@ type OptionEnableObserver bool
 
 func (s OptionEnableObserver) Apply(cfg *Config) {
 	cfg.EnableObserver = bool(s)
+}
+
+type OptionMinSpeed float64
+
+func (s OptionMinSpeed) Apply(cfg *Config) {
+	cfg.MinSpeed = float64(s)
+}
+
+type OptionMinSpeedDifference float64
+
+func (s OptionMinSpeedDifference) Apply(cfg *Config) {
+	cfg.MinSpeedDifference = float64(s)
+}
+
+type OptionJitterBufDecayHalftime time.Duration
+
+func (s OptionJitterBufDecayHalftime) Apply(cfg *Config) {
+	cfg.JitterBufDecayHalftime = time.Duration(s)
 }

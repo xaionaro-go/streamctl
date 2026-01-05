@@ -29,13 +29,10 @@ import (
 )
 
 const (
-	enableSeekOnStart      = true
-	enableTracksRotation   = false
-	enableSlowDown         = true
-	minSpeed               = 0.95
-	minSpeedDifference     = 0.01
-	jitterBufDecayHalftime = 2*time.Minute + 30*time.Second
-	playerCheckInterval    = 100 * time.Millisecond
+	enableSeekOnStart    = true
+	enableTracksRotation = false
+	enableSlowDown       = true
+	playerCheckInterval  = 100 * time.Millisecond
 )
 
 type Publisher interface {
@@ -378,11 +375,15 @@ func (p *StreamPlayerHandler) startObserver(
 
 		for {
 			select {
-			case pkt, ok := <-inputNode.OutputPacketCh:
+			case out, ok := <-inputNode.OutputCh:
 				if !ok {
 					return
 				}
-				if err := p.acknowledgeInputPacket(ctx, pkt); err != nil {
+				pkt := out.Packet
+				if pkt == nil {
+					continue
+				}
+				if err := p.acknowledgeInputPacket(ctx, *pkt); err != nil {
 					logger.Errorf(ctx, "unable to acknowledge a packet: %v", err)
 					return
 				}
@@ -413,7 +414,7 @@ func (p *StreamPlayerHandler) acknowledgeInputPacket(
 	}
 
 	var trackID int
-	if pkt.StreamIndex() == 0 {
+	if pkt.GetStreamIndex() == 0 {
 		trackID = 1
 	} else {
 		trackID = 2
@@ -438,18 +439,21 @@ func (p *StreamPlayerHandler) changeTrackTo(
 	ctx context.Context,
 	trackID int,
 ) {
-	p.withPlayer(ctx, func(ctx context.Context, player player.Player) {
+	p.withPlayer(ctx, func(ctx context.Context, player player.Player) error {
 		if err := player.SetVideoTrack(ctx, int64(trackID)); err != nil {
 			err = fmt.Errorf("unable to rotate the video track: %w", err)
 			logger.Errorf(ctx, "%v", err)
+			return err
 		}
 		if err := player.SetAudioTrack(ctx, int64(trackID)); err != nil {
 			err = fmt.Errorf("unable to rotate the audio track: %w", err)
 			logger.Errorf(ctx, "%v", err)
+			return err
 		}
 		p.CurrentVideoTrackID = trackID
 		p.CurrentAudioTrackID = trackID
 		p.NextVideoTrackIDCount = 0
+		return nil
 	})
 }
 
@@ -472,7 +476,7 @@ func (p *StreamPlayerHandler) openStream(
 		p.startObserver(ctx, u, restartFn)
 	}
 
-	err = p.withPlayer(ctx, func(ctx context.Context, player player.Player) {
+	err = p.withPlayer(ctx, func(ctx context.Context, player player.Player) error {
 		ctx, cancelFn := context.WithTimeout(ctx, openURLTimeout)
 		defer cancelFn()
 		var once sync.Once
@@ -484,11 +488,12 @@ func (p *StreamPlayerHandler) openStream(
 				logger.Debugf(ctx, "closing timed-out player result: %v", err)
 			})
 		})
-		err = player.OpenURL(ctx, u.String())
+		err := player.OpenURL(ctx, u.String())
 		once.Do(func() {})
 		if err != nil {
-			err = fmt.Errorf("unable to open the URL: %w", err)
+			return fmt.Errorf("unable to open the URL: %w", err)
 		}
+		return nil
 	})
 	logger.Debugf(ctx, "opened '%s': %v", u.String(), err)
 	if err != nil {
@@ -611,13 +616,13 @@ func (p *StreamPlayerHandler) controllerLoop(
 						case <-t.C:
 						}
 						logger.Debugf(ctx, "checking if we get get the position")
-						err = p.withPlayer(ctx, func(ctx context.Context, player player.Player) {
-							var pos time.Duration
-							pos, err = player.GetAudioPosition(ctx)
+						err = p.withPlayer(ctx, func(ctx context.Context, player player.Player) error {
+							pos, err := player.GetAudioPosition(ctx)
 							logger.Debugf(ctx, "result of getting the position: %v %v", pos, err)
 							if err != nil {
-								err = fmt.Errorf("unable to get the position: %w", err)
+								return fmt.Errorf("unable to get the position: %w", err)
 							}
+							return nil
 						})
 						if errors.As(err, &ErrNilPlayer{}) {
 							logger.Debugf(ctx, "player is nil, finishing")
@@ -650,7 +655,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 					pos time.Duration
 					err error
 				)
-				err = p.withPlayer(ctx, func(ctx context.Context, player player.Player) {
+				err = p.withPlayer(ctx, func(ctx context.Context, player player.Player) error {
 					if !triedToFixEmptyLinkViaReopen {
 						if link, err := player.GetLink(ctx); link == "" {
 							logger.Debugf(ctx, "the link is empty for some reason, reopening the link (BTW, err if any is: %v)", err)
@@ -660,32 +665,36 @@ func (p *StreamPlayerHandler) controllerLoop(
 								}
 							})
 							triedToFixEmptyLinkViaReopen = true
-							return
+							return nil
 						}
 					}
 					if isPaused, _ := player.GetPause(ctx); isPaused {
 						logger.Debugf(ctx, "is paused for some reason, unpausing")
 						if err := player.SetPause(ctx, false); err != nil {
 							logger.Errorf(ctx, "unable to unpause: %v", err)
+							return err
 						}
 					}
+					var err error
 					pos, err = player.GetAudioPosition(ctx)
 					if err != nil {
-						err = fmt.Errorf("unable to get position: %w", err)
+						return fmt.Errorf("unable to get position: %w", err)
 					}
 					if enableSeekOnStart && protocol != streamtypes.ServerTypeRTMP && !triedToSeek {
 						var l time.Duration
 						l, err = player.GetLength(ctx)
 						if err != nil {
-							err = fmt.Errorf("unable to get length: %w", err)
+							return fmt.Errorf("unable to get length: %w", err)
 						}
 						if l > p.Config.JitterBufMaxDuration/2 {
 							if err := player.Seek(ctx, -time.Second, true, true); err != nil {
 								logger.Errorf(ctx, "unable to seek: %v", err)
+								return err
 							}
 							triedToSeek = true
 						}
 					}
+					return nil
 				})
 				if err != nil {
 					logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: unable to get the current position: %v", p.StreamID, err)
@@ -694,11 +703,13 @@ func (p *StreamPlayerHandler) controllerLoop(
 				}
 				logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: pos == %v", p.StreamID, pos)
 				var l time.Duration
-				err = p.withPlayer(ctx, func(ctx context.Context, player player.Player) {
+				err = p.withPlayer(ctx, func(ctx context.Context, player player.Player) error {
+					var err error
 					l, err = player.GetLength(ctx)
 					if err != nil {
-						err = fmt.Errorf("unable to get length: %w", err)
+						return fmt.Errorf("unable to get length: %w", err)
 					}
+					return nil
 				})
 				logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: length == %v", p.StreamID, l)
 				if l < 0 {
@@ -750,12 +761,12 @@ func (p *StreamPlayerHandler) controllerLoop(
 	default:
 	}
 
-	err := p.withPlayer(ctx, func(ctx context.Context, player player.Player) {
+	err := p.withPlayer(ctx, func(ctx context.Context, player player.Player) error {
 		closeChan, err := player.EndChan(ctx)
 		if err != nil {
 			logger.Errorf(ctx, "unable to get the EndChan of the player")
 			cancelFn()
-			return
+			return err
 		} else {
 			observability.Go(ctx, func(ctx context.Context) {
 				select {
@@ -771,12 +782,15 @@ func (p *StreamPlayerHandler) controllerLoop(
 		err = player.SetupForStreaming(ctx)
 		if err != nil {
 			logger.Errorf(ctx, "unable to setup the player for streaming: %v", err)
+			return err
 		}
 		if enableSeekOnStart && protocol != streamtypes.ServerTypeRTMP {
 			if err := player.Seek(ctx, -time.Second, true, true); err != nil {
 				logger.Errorf(ctx, "unable to seek: %v", err)
+				return err
 			}
 		}
+		return nil
 	})
 	if err != nil {
 		logger.Error(ctx, "unable to access the player for setting it up for streaming: %v", err)
@@ -859,7 +873,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 			lastDebugReportAt = time.Now()
 		}
 
-		err := p.withPlayer(ctx, func(ctx context.Context, player player.Player) {
+		err := p.withPlayer(ctx, func(ctx context.Context, player player.Player) error {
 			now := time.Now()
 			pos, err := player.GetAudioPosition(ctx)
 			if err != nil {
@@ -870,10 +884,10 @@ func (p *StreamPlayerHandler) controllerLoop(
 				if now.Sub(posUpdatedAt) > p.Config.ReadTimeout {
 					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: now == %v, posUpdatedAt == %v, pos == %v; readTimeout == %v, restarting (cannot even get a position)", p.StreamID, now, posUpdatedAt, pos, p.Config.ReadTimeout)
 					restart()
-					return
+					return nil
 				}
 				time.Sleep(time.Second)
-				return
+				return nil
 			}
 
 			l := time.Duration(-1)
@@ -896,10 +910,10 @@ func (p *StreamPlayerHandler) controllerLoop(
 							"previously GetCachedDuration worked, so it seems like the player died or something, restarting",
 						)
 						restart()
-						return
+						return nil
 					}
 					time.Sleep(time.Second)
-					return
+					return nil
 				}
 			}
 			if l < 0 {
@@ -914,10 +928,10 @@ func (p *StreamPlayerHandler) controllerLoop(
 							"previously GetLength worked, so it seems like the player died or something, restarting",
 						)
 						restart()
-						return
+						return nil
 					}
 					time.Sleep(time.Second)
-					return
+					return nil
 				}
 				logger.Logf(ctx, traceLogLevel, "length: %v", l)
 			}
@@ -931,13 +945,13 @@ func (p *StreamPlayerHandler) controllerLoop(
 			if pos < -p.Config.ReadTimeout {
 				logger.Debugf(ctx, "negative position: %v", pos)
 				restart()
-				return
+				return nil
 			}
 
 			if l < 0 {
 				logger.Debugf(ctx, "negative length: %v", l)
 				restart()
-				return
+				return nil
 			}
 
 			var stalling bool
@@ -951,7 +965,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: now == %v, posUpdatedAt == %v, len == %v; pos == %v; readTimeout == %v, restarting", p.StreamID, now, posUpdatedAt, l, pos, p.Config.ReadTimeout)
 					jitterBufDurationIncrease = 0 // we are not sure why this happened, so not raising the latency without a good reason
 					restart()
-					return
+					return nil
 				}
 				minExtraBuf := noMovementDuration
 				if minExtraBuf > jitterBufDurationIncrease {
@@ -965,7 +979,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 				// log(x) * (halftime/interval) = log(0.5)
 				// log(x) = log(0.5) / (halftime/interval)
 				// x = e^(log(0.5)/(halftime/interval))
-				jitterBufFactor := math.Exp(math.Log(0.5) / (jitterBufDecayHalftime.Seconds() / timeDelta.Seconds()))
+				jitterBufFactor := math.Exp(math.Log(0.5) / (p.Config.JitterBufDecayHalftime.Seconds() / timeDelta.Seconds()))
 				p.CurrentJitterBufDuration = max(
 					time.Duration(float64(p.CurrentJitterBufDuration)*jitterBufFactor),
 					p.Config.JitterBufMinDuration,
@@ -974,7 +988,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 					"StreamPlayer[%s].controllerLoop: decreasing the jitter buffer duration: factor:%v (halftime: %v, interval: %v); new duration: %v",
 					p.StreamID,
 					jitterBufFactor,
-					jitterBufDecayHalftime,
+					p.Config.JitterBufDecayHalftime,
 					playerCheckInterval,
 					p.CurrentJitterBufDuration,
 				)
@@ -1003,18 +1017,18 @@ func (p *StreamPlayerHandler) controllerLoop(
 					}
 				}
 				k := lag.Seconds() / p.CurrentJitterBufDuration.Seconds()
-				wantSpeed := 1 - (1-k)*(1-minSpeed)
+				wantSpeed := 1 - (1-k)*(1-p.Config.MinSpeed)
 				if wantSpeed <= 0 {
 					logger.Errorf(ctx, "invalid wantSpeed: %f", wantSpeed)
-					return
+					return nil
 				}
 				setSpeed := p.WantSpeedAverage.Update(wantSpeed)
-				if math.Abs(wantSpeed-curSpeed) < minSpeedDifference {
+				if math.Abs(wantSpeed-curSpeed) < p.Config.MinSpeedDifference {
 					logger.Logf(ctx, traceLogLevel,
 						"StreamPlayer[%s].controllerLoop: want to slow down to %f, but the difference is too small vs current speed %f",
 						p.StreamID, setSpeed, curSpeed,
 					)
-					return
+					return nil
 				}
 				curSpeed = setSpeed
 				logger.Debugf(ctx,
@@ -1024,10 +1038,10 @@ func (p *StreamPlayerHandler) controllerLoop(
 				err := player.SetSpeed(ctx, curSpeed)
 				if err != nil {
 					logger.Errorf(ctx, "unable to slow down to %f: %v", curSpeed, err)
-					return
+					return nil
 				}
 				time.Sleep(100 * time.Millisecond) // let it catch up at least a bit, before changing the speed back (to avoid flickering)
-				return
+				return nil
 			}
 			if jitterBufDurationIncrease > 0 {
 				commitJitterBufferIncrease()
@@ -1063,7 +1077,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 			}
 
 			if setSpeed == curSpeed {
-				return
+				return nil
 			}
 
 			logger.Debugf(
@@ -1074,9 +1088,10 @@ func (p *StreamPlayerHandler) controllerLoop(
 			err = player.SetSpeed(ctx, setSpeed)
 			if err != nil {
 				logger.Errorf(ctx, "unable to set the speed to %v: %v", setSpeed, err)
-				return
+				return nil
 			}
 			curSpeed = setSpeed
+			return nil
 		})
 		if err != nil {
 			logger.Error(ctx, "unable to get the player: %v", err)
@@ -1091,9 +1106,34 @@ func (e ErrNilPlayer) Error() string {
 	return "p.Player is nil"
 }
 
+func (p *StreamPlayerHandler) SetJitterBuffer(
+	ctx context.Context,
+	size time.Duration,
+	seekToOptimum bool,
+) (_err error) {
+	p.CurrentJitterBufDuration = min(max(p.Config.JitterBufMinDuration, size), p.Config.JitterBufMaxDuration)
+	if !seekToOptimum {
+		return nil
+	}
+	err := p.withPlayer(ctx, func(ctx context.Context, player player.Player) error {
+		l, err := player.GetLength(ctx)
+		if err != nil {
+			return fmt.Errorf("unable to get length for seeking to end: %w", err)
+		}
+		if err := player.Seek(ctx, l-size, false, true); err != nil {
+			return fmt.Errorf("unable to seek to end: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("unable to seek to end: %w", err)
+	}
+	return nil
+}
+
 func (p *StreamPlayerHandler) withPlayer(
 	ctx context.Context,
-	fn func(context.Context, player.Player),
+	fn func(context.Context, player.Player) error,
 ) error {
 	select {
 	case <-ctx.Done():
@@ -1104,8 +1144,7 @@ func (p *StreamPlayerHandler) withPlayer(
 		if p.Player == nil {
 			return ErrNilPlayer{}
 		}
-		fn(ctx, p.Player)
-		return nil
+		return fn(ctx, p.Player)
 	})
 }
 
