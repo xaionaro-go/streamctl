@@ -1,3 +1,6 @@
+// Package streampanel provides a Fyne-based graphical user interface for controlling
+// and monitoring live streams. This file implements the "Dashboard" window,
+// providing a customizable layout of stream information and controls.
 package streampanel
 
 import (
@@ -63,6 +66,22 @@ func (p *Panel) focusDashboardWindow(
 	}
 }
 
+func (p *Panel) toggleDashboardWindow(
+	ctx context.Context,
+) error {
+	return xsync.DoA1R1(ctx, &p.dashboardLocker, p.toggleDashboardWindowNoLock, ctx)
+}
+
+func (p *Panel) toggleDashboardWindowNoLock(
+	ctx context.Context,
+) error {
+	if p.dashboardWindow != nil {
+		p.dashboardWindow.Window.Close()
+		return nil
+	}
+	return p.openDashboardWindowNoLock(ctx)
+}
+
 func (p *Panel) openDashboardWindow(
 	ctx context.Context,
 ) (_err error) {
@@ -82,7 +101,7 @@ type dashboardWindow struct {
 	imagesLayerObj      *canvas.Raster
 	images              []imageInfo
 	renderedImagesLayer *image.NRGBA
-	streamStatus        map[streamcontrol.PlatformName]*widget.Label
+	streamStatus        map[streamcontrol.PlatformID]*widget.Label
 	streamStatusLocker  xsync.Mutex
 	changedImages       []*imageInfo
 	lastFullUpdateAt    time.Time
@@ -189,9 +208,9 @@ func (w *dashboardWindow) renderStreamStatus(ctx context.Context) {
 			bwIn := float64(bytesInDiff) * 8 / tsDiff.Seconds() / 1000
 			bwOut := float64(bytesOutDiff) * 8 / tsDiff.Seconds() / 1000
 			newAppStatusText := fmt.Sprintf("%4.0fKb/s | %4.0fKb/s", bwIn, bwOut)
-			observability.Go(ctx, func(ctx context.Context) {
+			w.Panel.app.Driver().DoFromGoroutine(func() {
 				w.appStatus.SetText(newAppStatusText)
-			})
+			}, false)
 		}
 		w.appStatusData.prevUpdateTS = now
 		w.appStatusData.prevBytesIn = appBytesIn
@@ -210,33 +229,33 @@ func (w *dashboardWindow) renderStreamStatus(ctx context.Context) {
 					defer dst.Refresh()
 
 					if !src.BackendIsEnabled {
-						observability.Go(ctx, func(ctx context.Context) {
+						w.Panel.app.Driver().DoFromGoroutine(func() {
 							dst.SetText("disabled")
-						})
+						}, false)
 						return
 					}
 
 					if src.BackendError != nil {
 						dst.Importance = widget.LowImportance
-						observability.Go(ctx, func(ctx context.Context) {
+						w.Panel.app.Driver().DoFromGoroutine(func() {
 							dst.SetText("error")
-						})
+						}, false)
 						return
 					}
 
 					if !src.IsActive {
 						dst.Importance = widget.DangerImportance
-						observability.Go(ctx, func(ctx context.Context) {
+						w.Panel.app.Driver().DoFromGoroutine(func() {
 							dst.SetText("stopped")
-						})
+						}, false)
 						return
 					}
 
 					dst.Importance = widget.SuccessImportance
 					if src.StartedAt == nil {
-						observability.Go(ctx, func(ctx context.Context) {
+						w.Panel.app.Driver().DoFromGoroutine(func() {
 							dst.SetText("started")
-						})
+						}, false)
 						return
 					}
 
@@ -247,9 +266,9 @@ func (w *dashboardWindow) renderStreamStatus(ctx context.Context) {
 						viewerCountString = fmt.Sprintf(" (%d)", *src.ViewersCount)
 					}
 
-					observability.Go(ctx, func(ctx context.Context) {
+					w.Panel.app.Driver().DoFromGoroutine(func() {
 						dst.SetText(fmt.Sprintf("%s%s", duration.Truncate(time.Second).String(), viewerCountString))
-					})
+					}, false)
 				})
 			}
 		})
@@ -267,9 +286,9 @@ func (p *Panel) newDashboardWindow(
 		Window:       p.app.NewWindow("Dashboard"),
 		Panel:        p,
 		chat:         chatUI,
-		streamStatus: map[streamcontrol.PlatformName]*widget.Label{},
+		streamStatus: map[streamcontrol.PlatformID]*widget.Label{},
 	}
-	for _, platID := range []streamcontrol.PlatformName{
+	for _, platID := range []streamcontrol.PlatformID{
 		obs.ID,
 		twitch.ID,
 		kick.ID,
@@ -1111,7 +1130,9 @@ func (p *Panel) newDashboardSettingsWindow(ctx context.Context) {
 			p.dashboardLocker.Do(ctx, func() {
 				if p.dashboardWindow != nil {
 					p.dashboardWindow.Window.Close()
-					observability.Go(ctx, func(ctx context.Context) { p.focusDashboardWindow(ctx) })
+					p.app.Driver().DoFromGoroutine(func() {
+						p.focusDashboardWindow(ctx)
+					}, false)
 				}
 			})
 
@@ -1232,7 +1253,7 @@ func (p *Panel) editDashboardElementWindow(
 		elementName.Disable()
 	}
 
-	obsServer, obsServerClose, err := p.StreamD.OBS(ctx)
+	obsServer, obsServerClose, err := p.StreamD.OBS(ctx, "")
 	if err != nil {
 		p.DisplayError(fmt.Errorf("unable to init a connection to OBS: %w", err))
 		return
@@ -1320,7 +1341,7 @@ func (p *Panel) editDashboardElementWindow(
 		obsVideoSource.Height = v
 	}
 
-	if obsVideoSource.ImageFormat == streamdconfig.ImageFormatUndefined {
+	if obsVideoSource.ImageFormat == streamdconfig.UndefinedImageFormat {
 		obsVideoSource.ImageFormat = streamdconfig.ImageFormatJPEG
 	}
 

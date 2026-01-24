@@ -14,7 +14,7 @@ import (
 
 func (p *imageDataProvider) newStreamImageTaker(
 	ctx context.Context,
-	streamID streamtypes.StreamID,
+	streamSourceID streamtypes.StreamSourceID,
 ) (_ret *streamImageTaker, _err error) {
 	/*factory, err := libav.NewFactory(ctx)
 	if err != nil {
@@ -35,7 +35,7 @@ func (p *imageDataProvider) newStreamImageTaker(
 	if err != nil {
 		return nil, fmt.Errorf("unable to get an URL to myself: %w", err)
 	}
-	myURL.Path = string(streamID)
+	myURL.Path = string(streamSourceID)
 
 	input, err := r.NewInputFromURL(ctx, myURL.String(), "", recoder.InputConfig{})
 	if err != nil {

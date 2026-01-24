@@ -9,7 +9,7 @@ func EventTypeGo2GRPC(
 	ev streamcontrol.EventType,
 ) streamcontrol_grpc.PlatformEventType {
 	switch ev {
-	case streamcontrol.EventTypeUndefined:
+	case streamcontrol.UndefinedEventType:
 		return streamcontrol_grpc.PlatformEventType_platformEventTypeUndefined
 	case streamcontrol.EventTypeChatMessage:
 		return streamcontrol_grpc.PlatformEventType_platformEventTypeChatMessage
@@ -48,7 +48,7 @@ func PlatformEventTypeGRPC2Go(
 ) streamcontrol.EventType {
 	switch ev {
 	case streamcontrol_grpc.PlatformEventType_platformEventTypeUndefined:
-		return streamcontrol.EventTypeUndefined
+		return streamcontrol.UndefinedEventType
 	case streamcontrol_grpc.PlatformEventType_platformEventTypeChatMessage:
 		return streamcontrol.EventTypeChatMessage
 	case streamcontrol_grpc.PlatformEventType_platformEventTypeCheer:

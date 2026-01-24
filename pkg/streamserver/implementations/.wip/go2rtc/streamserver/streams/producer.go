@@ -199,13 +199,16 @@ func (p *Producer) reconnectNoLock(workerID, retry int) {
 	if err != nil {
 		logger.Default().Debugf("[streams] producer=%s", err)
 
-		timeout := time.Minute
-		if retry < 5 {
+		var timeout time.Duration
+		switch {
+		case retry < 5:
 			timeout = time.Second
-		} else if retry < 10 {
+		case retry < 10:
 			timeout = time.Second * 5
-		} else if retry < 20 {
+		case retry < 20:
 			timeout = time.Second * 10
+		default:
+			timeout = time.Minute
 		}
 
 		time.AfterFunc(timeout, func() {

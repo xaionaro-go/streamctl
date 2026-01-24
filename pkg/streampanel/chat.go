@@ -1,3 +1,6 @@
+// Package streampanel provides a Fyne-based graphical user interface for controlling
+// and monitoring live streams. This file implements the chat-related functionality,
+// including unified chat view and specific platform chat handlers.
 package streampanel
 
 import (
@@ -186,7 +189,7 @@ func (p *Panel) onReceiveMessage(
 
 func (p *Panel) getPlatformCapabilities(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
+	platID streamcontrol.PlatformID,
 ) (_ret map[streamcontrol.Capability]struct{}, _err error) {
 	logger.Tracef(ctx, "getPlatformCapabilities(ctx, '%s')", platID)
 	defer func() { logger.Tracef(ctx, "/getPlatformCapabilities(ctx, '%s'): %#+v, %v", platID, _ret, _err) }()
@@ -212,7 +215,7 @@ func (p *Panel) getPlatformCapabilities(
 }
 func (p *Panel) chatUserBan(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
+	platID streamcontrol.PlatformID,
 	userID streamcontrol.UserID,
 ) error {
 	// TODO: add controls for the reason and deadline
@@ -247,7 +250,7 @@ func (p *Panel) onRemoveChatMessageClicked(
 
 func (p *Panel) chatMessageRemove(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
+	platID streamcontrol.PlatformID,
 	msgID streamcontrol.EventID,
 ) error {
 	return p.StreamD.RemoveChatMessage(ctx, platID, msgID)

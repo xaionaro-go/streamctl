@@ -43,8 +43,8 @@ func (p *Panel) openSettingsWindowNoLock(
 		}
 	}
 
-	backendEnabled := map[streamcontrol.PlatformName]bool{}
-	for _, backendID := range []streamcontrol.PlatformName{
+	backendEnabled := map[streamcontrol.PlatformID]bool{}
+	for _, backendID := range []streamcontrol.PlatformID{
 		obs.ID,
 		twitch.ID,
 		kick.ID,
@@ -60,9 +60,9 @@ func (p *Panel) openSettingsWindowNoLock(
 	w := p.app.NewWindow(gconsts.AppName + ": Settings")
 	resizeWindow(w, fyne.NewSize(400, 900))
 
-	var obsCfg *streamcontrol.PlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile]
+	var obsCfg *streamcontrol.PlatformConfig[obs.AccountConfig, obs.StreamProfile]
 	if backendEnabled[obs.ID] {
-		obsCfg = streamcontrol.GetPlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile](ctx, streamDCfg.Backends, obs.ID)
+		obsCfg = streamcontrol.GetPlatformConfig[obs.AccountConfig, obs.StreamProfile](ctx, streamDCfg.Backends, obs.ID)
 		if obsCfg != nil {
 			logger.Debugf(ctx, "current OBS config: %#+v", *obsCfg)
 		}
@@ -128,15 +128,17 @@ func (p *Panel) openSettingsWindowNoLock(
 			}
 		}
 
-		obsCfg.SetCustomString(
-			config.CustomConfigKeyBeforeStreamStart, beforeStartStreamCommandEntry.Text)
-		obsCfg.SetCustomString(
-			config.CustomConfigKeyBeforeStreamStop, beforeStopStreamCommandEntry.Text)
-		obsCfg.SetCustomString(
-			config.CustomConfigKeyAfterStreamStart, afterStartStreamCommandEntry.Text)
-		obsCfg.SetCustomString(
-			config.CustomConfigKeyAfterStreamStop, afterStopStreamCommandEntry.Text)
-		streamDCfg.Backends[obs.ID] = streamcontrol.ToAbstractPlatformConfig(ctx, obsCfg)
+		if obsCfg != nil {
+			obsCfg.SetCustomString(
+				config.CustomConfigKeyBeforeStreamStart, beforeStartStreamCommandEntry.Text)
+			obsCfg.SetCustomString(
+				config.CustomConfigKeyBeforeStreamStop, beforeStopStreamCommandEntry.Text)
+			obsCfg.SetCustomString(
+				config.CustomConfigKeyAfterStreamStart, afterStartStreamCommandEntry.Text)
+			obsCfg.SetCustomString(
+				config.CustomConfigKeyAfterStreamStop, afterStopStreamCommandEntry.Text)
+			streamDCfg.Backends[obs.ID] = streamcontrol.ToAbstractPlatformConfig(ctx, obsCfg)
+		}
 
 		if err := p.SetStreamDConfig(ctx, streamDCfg); err != nil {
 			p.DisplayError(fmt.Errorf("unable to update the remote config: %w", err))
@@ -154,62 +156,10 @@ func (p *Panel) openSettingsWindowNoLock(
 	)
 	templateInstruction.Wrapping = fyne.TextWrapWord
 
-	obsAlreadyLoggedIn := widget.NewLabel("")
-	twitchAlreadyLoggedIn := widget.NewLabel("")
-	kickAlreadyLoggedIn := widget.NewLabel("")
-	youtubeAlreadyLoggedIn := widget.NewLabel("")
-
-	updateLoggedInLabels := func() {
-		if !backendEnabled[obs.ID] {
-			obsAlreadyLoggedIn.SetText("(not logged in)")
-		} else {
-			obsAlreadyLoggedIn.SetText("(already logged in)")
-		}
-		if !backendEnabled[twitch.ID] {
-			twitchAlreadyLoggedIn.SetText("(not logged in)")
-		} else {
-			twitchAlreadyLoggedIn.SetText("(already logged in)")
-		}
-		if !backendEnabled[kick.ID] {
-			kickAlreadyLoggedIn.SetText("(not logged in)")
-		} else {
-			kickAlreadyLoggedIn.SetText("(already logged in)")
-		}
-		if !backendEnabled[youtube.ID] {
-			youtubeAlreadyLoggedIn.SetText("(not logged in)")
-		} else {
-			youtubeAlreadyLoggedIn.SetText("(already logged in)")
-		}
-	}
-	updateLoggedInLabels()
-
-	onUpdateBackendConfig := func(platID streamcontrol.PlatformName, enable bool) {
-		logger.Debugf(ctx, "backend '%s', enabled:%v", platID, enable)
-		streamDCfg.Backends[platID].Enable = ptr(enable)
-
-		if err := p.SetStreamDConfig(ctx, streamDCfg); err != nil {
-			p.DisplayError(fmt.Errorf("unable to set the config: %w", err))
-			return
-		}
-
-		if err := p.StreamD.SaveConfig(ctx); err != nil {
-			p.DisplayError(fmt.Errorf("unable to save the remote config: %w", err))
-			return
-		}
-
-		if err := p.StreamD.EXPERIMENTAL_ReinitStreamControllers(ctx); err != nil {
-			p.DisplayError(err)
-			return
-		}
-
-		isEnabled, err := p.StreamD.IsBackendEnabled(ctx, platID)
-		if err != nil {
-			p.DisplayError(fmt.Errorf("unable to get info if backend '%s' is enabled: %w", platID, err))
-			return
-		}
-		backendEnabled[platID] = isEnabled
-		updateLoggedInLabels()
-	}
+	manageAccountsButton := widget.NewButtonWithIcon("Manage accounts", theme.SettingsIcon(), func() {
+		p.OpenAccountManagementWindow(ctx)
+		w.Close() // Close settings when opening account management to avoid confusion? Or keep both open?
+	})
 
 	screenshotBoundsXEntry := widget.NewEntry()
 	screenshotBoundsXEntry.SetPlaceHolder("x")
@@ -322,12 +272,15 @@ func (p *Panel) openSettingsWindowNoLock(
 			for _, scene := range resp.Scenes {
 				options = append(options, scene.GetSceneName())
 			}
+			accountCfg := obsCfg.Accounts[""]
 			sceneAfterStreamingSelector := widget.NewSelect(options, func(s string) {
-				obsCfg.Config.SceneAfterStream.Name = s
+				accountCfg := obsCfg.Accounts[""]
+				accountCfg.SceneAfterStream.Name = s
+				obsCfg.Accounts[""] = accountCfg
 			})
-			sceneAfterStreamingSelector.SetSelected(obsCfg.Config.SceneAfterStream.Name)
+			sceneAfterStreamingSelector.SetSelected(accountCfg.SceneAfterStream.Name)
 			sceneAfterStreamingDuration := xfyne.NewNumericalEntry()
-			sceneAfterStreamingDuration.SetText(fmt.Sprintf("%f", obsCfg.Config.SceneAfterStream.Duration.Seconds()))
+			sceneAfterStreamingDuration.SetText(fmt.Sprintf("%f", accountCfg.SceneAfterStream.Duration.Seconds()))
 			sceneAfterStreamingDuration.OnChanged = func(s string) {
 				if s == "" || s == "-" {
 					s = "0"
@@ -337,28 +290,34 @@ func (p *Panel) openSettingsWindowNoLock(
 					p.DisplayError(fmt.Errorf("unable to parse '%s' as a float: %w", s, err))
 					return
 				}
-				obsCfg.Config.SceneAfterStream.Duration = time.Duration(float64(time.Second) * v)
+				accountCfg := obsCfg.Accounts[""]
+				accountCfg.SceneAfterStream.Duration = time.Duration(float64(time.Second) * v)
+				obsCfg.Accounts[""] = accountCfg
 			}
 
 			obsExecCommand := widget.NewEntry()
 			obsExecCommand.SetPlaceHolder("command to exec OBS")
-			obsExecCommand.SetText(obsCfg.Config.RestartOnUnavailable.ExecCommand)
-			if !obsCfg.Config.RestartOnUnavailable.Enable {
+			obsExecCommand.SetText(accountCfg.RestartOnUnavailable.ExecCommand)
+			if !accountCfg.RestartOnUnavailable.Enable {
 				obsExecCommand.Hide()
 			}
 			obsExecCommand.OnChanged = func(s string) {
-				obsCfg.Config.RestartOnUnavailable.ExecCommand = s
+				accountCfg := obsCfg.Accounts[""]
+				accountCfg.RestartOnUnavailable.ExecCommand = s
+				obsCfg.Accounts[""] = accountCfg
 			}
 
 			autoRestartEnable := widget.NewCheck("Auto-restart (if OBS is hanging or not started)", func(b bool) {
-				obsCfg.Config.RestartOnUnavailable.Enable = b
-				if obsCfg.Config.RestartOnUnavailable.Enable {
+				accountCfg := obsCfg.Accounts[""]
+				accountCfg.RestartOnUnavailable.Enable = b
+				obsCfg.Accounts[""] = accountCfg
+				if accountCfg.RestartOnUnavailable.Enable {
 					obsExecCommand.Show()
 				} else {
 					obsExecCommand.Hide()
 				}
 			})
-			autoRestartEnable.SetChecked(obsCfg.Config.RestartOnUnavailable.Enable)
+			autoRestartEnable.SetChecked(accountCfg.RestartOnUnavailable.Enable)
 
 			obsSettings.Add(container.NewVBox(
 				widget.NewRichTextFromMarkdown(`# OBS`),
@@ -396,54 +355,7 @@ func (p *Panel) openSettingsWindowNoLock(
 				container.NewVBox(
 					container.NewVBox(
 						widget.NewRichTextFromMarkdown(`# Streaming platforms`),
-						container.NewHBox(
-							widget.NewButtonWithIcon("(Re-)login in OBS", theme.LoginIcon(), func() {
-								platCfg := streamcontrol.GetPlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile](ctx, streamDCfg.Backends, obs.ID)
-								s := p.InputOBSConnectInfo(ctx, platCfg)
-								if s == BackendStatusCodeNotNow {
-									return
-								}
-								streamDCfg.Backends[obs.ID] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
-								onUpdateBackendConfig(obs.ID, s == BackendStatusCodeReady)
-							}),
-							obsAlreadyLoggedIn,
-						),
-						container.NewHBox(
-							widget.NewButtonWithIcon("(Re-)login in Twitch", theme.LoginIcon(), func() {
-								platCfg := streamcontrol.GetPlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile](ctx, streamDCfg.Backends, twitch.ID)
-								s := p.InputTwitchUserInfo(ctx, platCfg)
-								if s == BackendStatusCodeNotNow {
-									return
-								}
-								streamDCfg.Backends[twitch.ID] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
-								onUpdateBackendConfig(twitch.ID, s == BackendStatusCodeReady)
-							}),
-							twitchAlreadyLoggedIn,
-						),
-						container.NewHBox(
-							widget.NewButtonWithIcon("(Re-)login in Kick", theme.LoginIcon(), func() {
-								platCfg := streamcontrol.GetPlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile](ctx, streamDCfg.Backends, kick.ID)
-								s := p.InputKickUserInfo(ctx, platCfg)
-								if s == BackendStatusCodeNotNow {
-									return
-								}
-								streamDCfg.Backends[kick.ID] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
-								onUpdateBackendConfig(kick.ID, s == BackendStatusCodeReady)
-							}),
-							kickAlreadyLoggedIn,
-						),
-						container.NewHBox(
-							widget.NewButtonWithIcon("(Re-)login in YouTube", theme.LoginIcon(), func() {
-								platCfg := streamcontrol.GetPlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile](ctx, streamDCfg.Backends, youtube.ID)
-								s := p.InputYouTubeUserInfo(ctx, platCfg)
-								if s == BackendStatusCodeNotNow {
-									return
-								}
-								streamDCfg.Backends[youtube.ID] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
-								onUpdateBackendConfig(youtube.ID, s == BackendStatusCodeReady)
-							}),
-							youtubeAlreadyLoggedIn,
-						),
+						manageAccountsButton,
 					),
 					container.NewVBox(
 						widget.NewRichTextFromMarkdown(`# Chat`),

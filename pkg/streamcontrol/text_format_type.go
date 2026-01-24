@@ -8,16 +8,16 @@ import (
 type TextFormatType int
 
 const (
-	TextFormatTypeUndefined = TextFormatType(iota)
+	UndefinedTextFormatType = TextFormatType(iota)
 	TextFormatTypePlain
 	TextFormatTypeMarkdown
 	TextFormatTypeHTML
-	EndOfTextFormatType
+	endOfTextFormatType
 )
 
 func (t TextFormatType) String() string {
 	switch t {
-	case TextFormatTypeUndefined:
+	case UndefinedTextFormatType:
 		return "undefined"
 	case TextFormatTypePlain:
 		return "plain"
@@ -34,13 +34,21 @@ func (t TextFormatType) MarshalJSON() ([]byte, error) {
 	return json.Marshal(t.String())
 }
 
-func TextFormatTypeFromString(s string) (TextFormatType, error) {
-	for i := range EndOfTextFormatType {
-		if s == i.String() {
-			return i, nil
+func ParseTextFormatType(s string) TextFormatType {
+	for c := range endOfTextFormatType {
+		if c.String() == s {
+			return c
 		}
 	}
-	return TextFormatTypeUndefined, fmt.Errorf("unknown text format type: '%v'", s)
+	return UndefinedTextFormatType
+}
+
+func TextFormatTypeFromString(s string) (TextFormatType, error) {
+	v := ParseTextFormatType(s)
+	if v == UndefinedTextFormatType && s != "undefined" {
+		return UndefinedTextFormatType, fmt.Errorf("unknown text format type: '%v'", s)
+	}
+	return v, nil
 }
 
 func (t *TextFormatType) UnmarshalJSON(data []byte) error {

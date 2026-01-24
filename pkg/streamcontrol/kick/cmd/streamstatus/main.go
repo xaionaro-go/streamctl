@@ -11,6 +11,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	xlogrus "github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
 	"github.com/spf13/pflag"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 )
 
@@ -39,15 +40,15 @@ func main() {
 	}
 	defer belt.Flush(ctx)
 
-	k, err := kick.New(ctx, kick.Config{
-		Enable: ptr(true),
-		Config: kick.PlatformSpecificConfig{
-			Channel: channelSlug,
+	k, err := kick.New(ctx, kick.AccountConfig{
+		AccountConfigBase: streamcontrol.AccountConfigBase[kick.StreamProfile]{
+			Enable: ptr(true),
 		},
-	}, nil)
+		Channel: channelSlug,
+	}, func(kick.AccountConfig) error { return nil })
 	assertNoError(err)
 
-	status, err := k.GetStreamStatus(ctx)
+	status, err := k.GetStreamStatus(ctx, "")
 	assertNoError(err)
 
 	enc := json.NewEncoder(os.Stdout)

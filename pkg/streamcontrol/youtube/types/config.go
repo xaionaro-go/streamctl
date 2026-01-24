@@ -6,39 +6,43 @@ import (
 
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/secret"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	streamctl "github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"golang.org/x/oauth2"
 )
 
-const ID = streamctl.PlatformName("youtube")
+const ID = streamctl.PlatformID("youtube")
 
 type OAuthHandler func(context.Context, oauthhandler.OAuthHandlerArgument) error
 
 type OAuth2Token = secret.Any[oauth2.Token]
 
-type PlatformSpecificConfig struct {
+type AccountConfig struct {
+	streamcontrol.AccountConfigBase[StreamProfile] `yaml:",inline"`
+
 	ChannelID           string
 	ClientID            string
 	ClientSecret        secret.String
 	Token               *OAuth2Token
+	ActiveStreamIDs     []string
 	CustomOAuthHandler  OAuthHandler    `yaml:"-"`
 	GetOAuthListenPorts func() []uint16 `yaml:"-"`
 }
 
-type Config = streamctl.PlatformConfig[PlatformSpecificConfig, StreamProfile]
+type Config = streamctl.PlatformConfig[AccountConfig, StreamProfile]
 
 func InitConfig(cfg streamctl.Config) {
 	streamctl.InitConfig(cfg, ID, Config{})
 }
 
-func (cfg PlatformSpecificConfig) IsInitialized() bool {
+func (cfg AccountConfig) IsInitialized() bool {
 	return cfg.ClientID != "" && cfg.ClientSecret.Get() != ""
 }
 
 type TemplateTags string
 
 const (
-	TemplateTagsUndefined       = TemplateTags("")
+	UndefinedTemplateTags       = TemplateTags("")
 	TemplateTagsIgnore          = TemplateTags("ignore")
 	TemplateTagsUseAsPrimary    = TemplateTags("use_as_primary")
 	TemplateTagsUseAsAdditional = TemplateTags("use_as_additional")
@@ -53,7 +57,7 @@ func (t *TemplateTags) String() string {
 
 func (t *TemplateTags) Parse(in string) error {
 	for _, candidate := range []TemplateTags{
-		TemplateTagsUndefined,
+		UndefinedTemplateTags,
 		TemplateTagsIgnore,
 		TemplateTagsUseAsPrimary,
 		TemplateTagsUseAsAdditional,
@@ -67,7 +71,7 @@ func (t *TemplateTags) Parse(in string) error {
 }
 
 type StreamProfile struct {
-	streamctl.StreamProfileBase `yaml:",omitempty,inline,alias"`
+	streamctl.StreamProfileBase `yaml:",inline"`
 
 	AutoNumerate         bool
 	TemplateBroadcastIDs []string

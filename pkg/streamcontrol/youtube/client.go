@@ -16,7 +16,7 @@ import (
 type BroadcastType int
 
 const (
-	broadcastTypeUndefined = BroadcastType(iota)
+	undefinedBroadcastType = BroadcastType(iota)
 	BroadcastTypeAll
 	BroadcastTypeUpcoming
 	BroadcastTypeActive
@@ -24,7 +24,7 @@ const (
 
 func (t BroadcastType) String() string {
 	switch t {
-	case broadcastTypeUndefined:
+	case undefinedBroadcastType:
 		return "<undefined>"
 	case BroadcastTypeAll:
 		return "all"

@@ -15,10 +15,6 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
-	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
-	obs "github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs/types"
-	twitch "github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/types"
-	youtube "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config/action"
 	"github.com/xaionaro-go/xcontext"
 	xfyne "github.com/xaionaro-go/xfyne/widget"
@@ -131,12 +127,13 @@ func (ui *timersUI) refreshFromRemote(
 
 	var triggerAt time.Time
 	for _, timer := range timers {
-		switch timer.Action.(type) {
+		switch act := timer.Action.(type) {
 		case *action.Noop:
 			continue
-		case *action.StartStream:
-			continue
-		case *action.EndStream:
+		case *action.SetStreamActive:
+			if act.IsActive {
+				continue
+			}
 			triggerAt = timer.TriggerAt
 		default:
 			continue
@@ -181,7 +178,7 @@ func (ui *timersUI) startStopButton(
 			ui.start(ctx)
 			return
 		}
-		ui.stop(ctx)
+		ui.stopNoLock(ctx)
 	})
 }
 
@@ -248,18 +245,18 @@ func (ui *timersUI) kickOffRemotely(
 
 	streamD := ui.panel.StreamD
 	var result error
-	for _, platID := range []streamcontrol.PlatformName{
-		youtube.ID,
-		twitch.ID,
-		kick.ID,
-		obs.ID,
-	} {
-		_, err := streamD.AddTimer(ctx, deadline, &action.EndStream{
-			PlatID: platID,
+	accounts, err := streamD.GetAccounts(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to get accounts: %w", err)
+	}
+	for _, accountIDFQ := range accounts {
+		streamID := streamcontrol.NewStreamIDFullyQualified(accountIDFQ.PlatformID, accountIDFQ.AccountID, streamcontrol.DefaultStreamID)
+		_, err := streamD.AddTimer(ctx, deadline, &action.SetStreamActive{
+			StreamID: streamID,
+			IsActive: false,
 		})
 		if err != nil {
-			result = fmt.Errorf("unable to start a timer for platform '%s': %w", platID, err)
-			break
+			result = multierror.Append(result, fmt.Errorf("unable to start a timer for account '%s': %w", accountIDFQ, err))
 		}
 	}
 
@@ -431,10 +428,9 @@ func (ui *timersUI) doStop(
 	})
 }
 
-func (ui *timersUI) stop(
+func (ui *timersUI) stopNoLock(
 	ctx context.Context,
 ) {
-	logger.Debugf(ctx, "stop")
 	if ui.timerCancelFunc == nil {
 		return
 	}
@@ -442,5 +438,14 @@ func (ui *timersUI) stop(
 	ui.timerCancelFunc()
 	ui.locker.UDo(ctx, func() {
 		<-closeChan
+	})
+}
+
+func (ui *timersUI) stop(
+	ctx context.Context,
+) {
+	logger.Debugf(ctx, "stop")
+	ui.locker.Do(ctx, func() {
+		ui.stopNoLock(ctx)
 	})
 }

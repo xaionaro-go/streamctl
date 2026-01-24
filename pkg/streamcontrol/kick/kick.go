@@ -25,48 +25,97 @@ import (
 	"github.com/xaionaro-go/xsync"
 )
 
-const (
-	debugUseMockClient = false
+var (
+	debugUseMockClient    = false
+	debugMockClient       *clientMock
+	debugMockClientLocker sync.Mutex
 )
+
+func SetDebugUseMockClient(v bool) {
+	debugUseMockClient = v
+}
+
+func SetMockIsLive(v bool) {
+	debugMockClientLocker.Lock()
+	defer debugMockClientLocker.Unlock()
+	if debugMockClient != nil {
+		debugMockClient.locker.Lock()
+		defer debugMockClient.locker.Unlock()
+		debugMockClient.isLive = v
+		for id, ch := range debugMockClient.channels {
+			ch.Stream.IsLive = v
+			debugMockClient.channels[id] = ch
+		}
+	}
+}
+
+type ClientOBSOLETE interface {
+	GetChannelV1(ctx context.Context, channel string) (*kickcom.ChannelV1, error)
+	GetLivestreamV2(ctx context.Context, channelSlug string) (*kickcom.LivestreamV2Reply, error)
+	GetSubcategoriesV1(ctx context.Context) (*kickcom.CategoriesV1Reply, error)
+}
 
 type Kick struct {
 	CloseCtx               context.Context
 	CloseFn                context.CancelFunc
 	Channel                *kickcom.ChannelV1
-	Client                 *Client
-	ClientOBSOLETE         *kickclientobsolete.KickClientOBSOLETE
+	Client                 Client
+	ClientOBSOLETE         ClientOBSOLETE
 	ChatHandler            ChatHandlerAbstract
 	ChatHandlerInitStarted bool
 	ChatHandlerLocker      xsync.CtxLocker
-	CurrentConfig          Config
+	CurrentConfig          AccountConfig
 	CurrentConfigLocker    xsync.Mutex
-	SaveCfgFn              func(Config) error
+	SaveCfgFn              func(AccountConfig) error
 	PrepareLocker          xsync.Mutex
 
 	lazyInitOnce         sync.Once
 	getAccessTokenLocker xsync.Mutex
 }
 
-var _ streamcontrol.StreamController[StreamProfile] = (*Kick)(nil)
+var _ streamcontrol.AccountGeneric[StreamProfile] = (*Kick)(nil)
+
+func (k *Kick) String() string {
+	return string(ID)
+}
+
+func (k *Kick) GetPlatformID() streamcontrol.PlatformID {
+	return ID
+}
+
+func (k *Kick) Platform() streamcontrol.PlatformID {
+	return ID
+}
 
 func New(
 	ctx context.Context,
-	cfg Config,
-	saveCfgFn func(Config) error,
+	cfg AccountConfig,
+	saveCfgFn func(AccountConfig) error,
+) (*Kick, error) {
+	return NewWithClient(ctx, cfg, saveCfgFn, nil)
+}
+
+func NewWithClient(
+	ctx context.Context,
+	cfg AccountConfig,
+	saveCfgFn func(AccountConfig) error,
+	client Client,
 ) (*Kick, error) {
 	ctx = belt.WithField(ctx, "controller", ID)
-	if cfg.Config.Channel == "" {
-		return nil, fmt.Errorf("channel is not set")
+
+	if cfg.Channel == "" {
+		if client == nil {
+			return nil, fmt.Errorf("channel is not set")
+		}
+		cfg.Channel = "mock-channel"
 	}
 
-	clientOld, err := kickclientobsolete.New()
-	if err != nil {
-		return nil, fmt.Errorf("unable to initialize the old client: %w", err)
-	}
-
-	client, err := getClient(cfg.Config)
-	if err != nil {
-		return nil, fmt.Errorf("unable to initialize the client: %w", err)
+	if client == nil {
+		var err error
+		client, err = getClient(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("unable to initialize the client: %w", err)
+		}
 	}
 
 	ctx, closeFn := context.WithCancel(ctx)
@@ -75,8 +124,16 @@ func New(
 		CloseFn:           closeFn,
 		ChatHandlerLocker: make(xsync.CtxLocker, 1),
 		CurrentConfig:     cfg,
-		ClientOBSOLETE:    clientOld,
 		SaveCfgFn:         saveCfgFn,
+	}
+	if obs, ok := client.(ClientOBSOLETE); ok {
+		k.ClientOBSOLETE = obs
+	} else {
+		clientOld, err := kickclientobsolete.New()
+		if err != nil {
+			return nil, fmt.Errorf("unable to initialize the old client: %w", err)
+		}
+		k.ClientOBSOLETE = clientOld
 	}
 	k.SetClient(client)
 	client.OnUserAccessTokenRefreshed(k.onUserAccessTokenRefreshed)
@@ -87,10 +144,15 @@ func New(
 }
 
 func getClient(
-	cfg PlatformSpecificConfig,
+	cfg AccountConfig,
 ) (Client, error) {
 	if debugUseMockClient {
-		return newClientMock(), nil
+		debugMockClientLocker.Lock()
+		defer debugMockClientLocker.Unlock()
+		if debugMockClient == nil {
+			debugMockClient = newClientMock()
+		}
+		return debugMockClient, nil
 	}
 
 	client, err := newClient(&gokick.ClientOptions{
@@ -115,8 +177,8 @@ func (k *Kick) onUserAccessTokenRefreshed(
 	defer logger.Debugf(ctx, "/onUserAccessTokenRefreshed")
 	k.CurrentConfigLocker.Do(ctx, func() {
 		logger.Infof(ctx, "UserAccessToken had been refreshed")
-		k.CurrentConfig.Config.UserAccessToken.Set(userAccessToken)
-		k.CurrentConfig.Config.RefreshToken.Set(refreshToken)
+		k.CurrentConfig.UserAccessToken.Set(userAccessToken)
+		k.CurrentConfig.RefreshToken.Set(refreshToken)
 		err := k.SaveCfgFn(k.CurrentConfig)
 		if err != nil {
 			logger.Errorf(ctx, "unable to save the config: %v", err)
@@ -206,7 +268,7 @@ func (k *Kick) getAccessTokenNoLock(
 	logger.Tracef(ctx, "getAccessTokenNoLock")
 	defer func() { logger.Tracef(ctx, "/getAccessTokenNoLock: %v", _err) }()
 
-	getPortsFn := k.CurrentConfig.Config.GetOAuthListenPorts
+	getPortsFn := k.CurrentConfig.GetOAuthListenPorts
 	if getPortsFn == nil {
 		// TODO: find a way to adjust the OAuth ports dynamically without re-creating the Kick client.
 		return fmt.Errorf("the function GetOAuthListenPorts is not set")
@@ -254,7 +316,7 @@ func (k *Kick) getAccessTokenNoLock(
 		return fmt.Errorf("unable to get an authorization endpoint URL: %w", err)
 	}
 
-	err = k.CurrentConfig.Config.CustomOAuthHandler(ctx, oauthhandler.OAuthHandlerArgument{
+	err = k.CurrentConfig.CustomOAuthHandler(ctx, oauthhandler.OAuthHandlerArgument{
 		AuthURL:    authURL,
 		ListenPort: listenPort,
 		ExchangeFn: func(
@@ -289,10 +351,10 @@ func (k *Kick) setToken(
 		client.SetUserAccessToken(token.AccessToken)
 		client.SetUserRefreshToken(token.AccessToken)
 	}
-	k.CurrentConfig.Config.UserAccessToken.Set(token.AccessToken)
-	k.CurrentConfig.Config.UserAccessTokenExpiresAt = now.Add(time.Second * time.Duration(token.ExpiresIn))
-	k.CurrentConfig.Config.RefreshToken.Set(token.RefreshToken)
-	logger.Tracef(ctx, "'%v' '%v' '%v'", k.CurrentConfig.Config.UserAccessToken.Get(), k.CurrentConfig.Config.UserAccessTokenExpiresAt, k.CurrentConfig.Config.RefreshToken.Get())
+	k.CurrentConfig.UserAccessToken.Set(token.AccessToken)
+	k.CurrentConfig.UserAccessTokenExpiresAt = now.Add(time.Second * time.Duration(token.ExpiresIn))
+	k.CurrentConfig.RefreshToken.Set(token.RefreshToken)
+	logger.Tracef(ctx, "'%v' '%v' '%v'", k.CurrentConfig.UserAccessToken.Get(), k.CurrentConfig.UserAccessTokenExpiresAt, k.CurrentConfig.RefreshToken.Get())
 	err := k.SaveCfgFn(k.CurrentConfig)
 	if err != nil {
 		return fmt.Errorf("unable to save the config: %w", err)
@@ -308,7 +370,12 @@ func (k *Kick) Close() (_err error) {
 	return nil
 }
 
-func (k *Kick) SetTitle(ctx context.Context, title string) (err error) {
+func (k *Kick) SetTitle(
+	ctx context.Context,
+	streamID streamcontrol.StreamID,
+	title string,
+) (err error) {
+
 	logger.Debugf(ctx, "SetTitle(ctx, '%s')", title)
 	defer func() { logger.Debugf(ctx, "/SetTitle(ctx, '%s'): %v", title, err) }()
 
@@ -320,22 +387,32 @@ func (k *Kick) SetTitle(ctx context.Context, title string) (err error) {
 	return
 }
 
-func (k *Kick) SetDescription(ctx context.Context, description string) error {
+func (k *Kick) SetDescription(
+	ctx context.Context,
+	streamID streamcontrol.StreamID,
+	description string,
+) error {
+
 	logger.Warnf(ctx, "not implemented yet")
 	return nil
 }
 
-func (k *Kick) InsertAdsCuePoint(ctx context.Context, ts time.Time, duration time.Duration) error {
+func (k *Kick) InsertAdsCuePoint(
+	ctx context.Context,
+	streamID streamcontrol.StreamID,
+	ts time.Time,
+	duration time.Duration,
+) error {
+
 	logger.Warnf(ctx, "not implemented yet")
 	return nil
 }
 
-func (k *Kick) Flush(ctx context.Context) error {
-	return nil
-}
+func (k *Kick) Flush(
+	ctx context.Context,
+	streamID streamcontrol.StreamID,
+) error {
 
-func (k *Kick) EndStream(ctx context.Context) error {
-	// Kick ends a stream automatically, nothing to do:
 	return nil
 }
 
@@ -365,6 +442,7 @@ func (k *Kick) getLivestreams(
 
 func (k *Kick) GetStreamStatus(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 ) (_ret *streamcontrol.StreamStatus, _err error) {
 	logger.Debugf(ctx, "GetStreamStatus")
 	defer func() { logger.Debugf(ctx, "/GetStreamStatus: %v, %v", _ret, _err) }()
@@ -553,6 +631,7 @@ func (k *Kick) getChatHandler(
 
 func (k *Kick) GetChatMessagesChan(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 ) (<-chan streamcontrol.Event, error) {
 	logger.Debugf(ctx, "GetChatMessagesChan")
 	defer func() { logger.Debugf(ctx, "/GetChatMessagesChan") }()
@@ -635,7 +714,7 @@ func (k *Kick) resetChatHandler(ctx context.Context) {
 	})
 }
 
-func (k *Kick) SendChatMessage(ctx context.Context, message string) (_err error) {
+func (k *Kick) SendChatMessage(ctx context.Context, streamID streamcontrol.StreamID, message string) (_err error) {
 	logger.Debugf(ctx, "SendChatMessage(ctx, '%s')", message)
 	defer func() { logger.Debugf(ctx, "/SendChatMessage(ctx, '%s'): %v", message, _err) }()
 
@@ -648,13 +727,14 @@ func (k *Kick) SendChatMessage(ctx context.Context, message string) (_err error)
 	return err
 }
 
-func (k *Kick) RemoveChatMessage(ctx context.Context, messageID streamcontrol.EventID) error {
+func (k *Kick) RemoveChatMessage(ctx context.Context, streamID streamcontrol.StreamID, messageID streamcontrol.EventID) error {
 	logger.Warnf(ctx, "not implemented yet")
 	return nil
 }
 
 func (k *Kick) BanUser(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 	userID streamcontrol.UserID,
 	reason string,
 	deadline time.Time,
@@ -689,6 +769,7 @@ func (k *Kick) BanUser(
 
 func (k *Kick) ApplyProfile(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 	profile StreamProfile,
 	customArgs ...any,
 ) (_err error) {
@@ -712,34 +793,18 @@ func (k *Kick) ApplyProfile(
 	return errors.Join(result...)
 }
 
-func (k *Kick) StartStream(
+func (k *Kick) GetStreams(ctx context.Context) ([]streamcontrol.StreamInfo, error) {
+	return []streamcontrol.StreamInfo{{ID: streamcontrol.DefaultStreamID, Name: k.CurrentConfig.Channel}}, nil
+}
+
+func (k *Kick) SetStreamActive(
 	ctx context.Context,
-	title string,
-	description string,
-	profile StreamProfile,
-	customArgs ...any,
-) (_err error) {
-	logger.Debugf(ctx, "StartStream")
-	defer func() { logger.Debugf(ctx, "/StartStream: %v", _err) }()
+	streamID streamcontrol.StreamID,
+	isActive bool,
+) error {
 
-	if err := k.prepare(ctx); err != nil {
-		return fmt.Errorf("unable to get a prepared client: %w", err)
-	}
-
-	var result []error
-	if err := k.SetTitle(ctx, title); err != nil {
-		result = append(result, fmt.Errorf("unable to set title: %w", err))
-	}
-	if err := k.SetDescription(ctx, description); err != nil {
-		result = append(result, fmt.Errorf("unable to set description: %w", err))
-	}
-	if err := k.ApplyProfile(ctx, profile, customArgs...); err != nil {
-		result = append(
-			result,
-			fmt.Errorf("unable to apply the stream-specific profile: %w", err),
-		)
-	}
-	return errors.Join(result...)
+	// Kick starts/ends a stream automatically, nothing to do:
+	return nil
 }
 
 func (k *Kick) prepare(ctx context.Context) (_err error) {
@@ -778,14 +843,14 @@ func (k *Kick) initChannelInfo(
 ) error {
 	//var channel *gokick.ChannelResponse
 	cache := CacheFromCtx(ctx)
-	if chanInfo := cache.GetChanInfo(); chanInfo != nil && chanInfo.Slug == k.CurrentConfig.Config.Channel {
+	if chanInfo := cache.GetChanInfo(); chanInfo != nil && chanInfo.Slug == k.CurrentConfig.Channel {
 		logger.Debugf(ctx, "reuse the cache, instead of querying channel info")
 		k.Channel = chanInfo
 		return nil
 	}
 
 	for {
-		slug := k.CurrentConfig.Config.Channel
+		slug := k.CurrentConfig.Channel
 		chanInfo, err := k.ClientOBSOLETE.GetChannelV1(ctx, slug)
 		//channelResp, err := k.Client.GetChannels(ctx, gokick.NewChannelListFilter().SetSlug([]string{slug}))
 		if err != nil {
@@ -813,15 +878,15 @@ func (k *Kick) getAccessTokenIfNeeded(
 	logger.Tracef(ctx, "getAccessTokenIfNeeded")
 	defer func() { logger.Tracef(ctx, "/getAccessTokenIfNeeded: %v", _err) }()
 
-	if time.Now().After(k.CurrentConfig.Config.UserAccessTokenExpiresAt.Add(-30 * time.Second)) {
-		if k.CurrentConfig.Config.RefreshToken.Get() != "" {
+	if time.Now().After(k.CurrentConfig.UserAccessTokenExpiresAt.Add(-30 * time.Second)) {
+		if k.CurrentConfig.RefreshToken.Get() != "" {
 			if err := k.refreshAccessToken(ctx); err != nil {
 				return fmt.Errorf("unable to refresh the access token: %w", err)
 			}
 		}
 	}
 
-	if k.CurrentConfig.Config.UserAccessToken.Get() != "" {
+	if k.CurrentConfig.UserAccessToken.Get() != "" {
 		return nil
 	}
 
@@ -839,7 +904,7 @@ func (k *Kick) refreshAccessToken(
 	logger.Tracef(ctx, "refreshAccessToken")
 	defer func() { logger.Tracef(ctx, "/refreshAccessToken: %v", _err) }()
 
-	resp, err := k.GetClient().RefreshToken(ctx, k.CurrentConfig.Config.RefreshToken.Get())
+	resp, err := k.GetClient().RefreshToken(ctx, k.CurrentConfig.RefreshToken.Get())
 	if err != nil {
 		logger.Errorf(ctx, "unable to refresh the token: %v", err)
 		if getErr := k.getAccessToken(ctx); getErr != nil {
@@ -893,6 +958,7 @@ func (k *Kick) IsChannelStreaming(
 
 func (k *Kick) RaidTo(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 	chanID streamcontrol.UserID,
 ) (_err error) {
 	logger.Debugf(ctx, "RaidTo(ctx, '%s')", chanID)
@@ -977,6 +1043,7 @@ func (k *Kick) getChanInfo(
 
 func (k *Kick) Shoutout(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 	idOrLogin streamcontrol.UserID,
 ) (_err error) {
 	logger.Debugf(ctx, "Shoutout(ctx, '%s')", idOrLogin)
@@ -1008,7 +1075,7 @@ func (k *Kick) sendShoutoutMessage(
 	}
 	message = append(message, fmt.Sprintf("Take a look at their channel and click that follow button! https://kick.com/%s", chanInfo.Slug))
 
-	err := k.SendChatMessage(ctx, strings.Join(message, " "))
+	err := k.SendChatMessage(ctx, "", strings.Join(message, " "))
 	if err != nil {
 		return fmt.Errorf("unable to send the message (case #1): %w", err)
 	}

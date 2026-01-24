@@ -9,7 +9,6 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/joeyak/go-twitch-eventsub/v3"
 	twitcheventsub "github.com/joeyak/go-twitch-eventsub/v3"
 	"github.com/nicklaw5/helix/v2"
 	"github.com/xaionaro-go/observability"
@@ -358,10 +357,10 @@ func NewChatHandlerSub(
 				case twitcheventsub.SubChannelChatMessage:
 					continue
 				case twitcheventsub.SubConduitShardDisabled,
-					twitch.SubExtensionBitsTransactionCreate,
-					twitch.SubDropEntitlementGrant,
-					twitch.SubUserAuthorizationRevoke,
-					twitch.SubUserAuthorizationGrant:
+					twitcheventsub.SubExtensionBitsTransactionCreate,
+					twitcheventsub.SubDropEntitlementGrant,
+					twitcheventsub.SubUserAuthorizationRevoke,
+					twitcheventsub.SubUserAuthorizationGrant:
 					continue
 
 				}
@@ -370,7 +369,7 @@ func NewChatHandlerSub(
 					logger.Errorf(ctx, "unable to create a subscription (%#+v): %w", params, err)
 				}
 				if resp.ErrorMessage != "" {
-					logger.Warnf(ctx, "unable to subscribe to '%s': %v", chanName, err)
+					logger.Warnf(ctx, "unable to subscribe to '%s': %q", chanName, resp.ErrorMessage)
 					continue
 				}
 				logger.Debugf(ctx, "successfully subscribed to '%s'", chanName)

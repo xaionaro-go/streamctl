@@ -26,9 +26,9 @@ type StreamServer struct {
 	xsync.Mutex
 	Config                  *types.Config
 	ServerHandlers          []types.PortServer
-	StreamIDs               map[types.StreamID]struct{}
-	StreamDestinations      []types.StreamDestination
-	ActiveStreamForwardings map[types.DestinationID]*ActiveStreamForwarding
+	StreamIDs               map[types.StreamSourceID]struct{}
+	StreamSinks      []types.StreamSink
+	ActiveStreamForwardings map[types.StreamSinkID]*ActiveStreamForwarding
 }
 
 func New(
@@ -38,9 +38,9 @@ func New(
 ) *StreamServer {
 	return &StreamServer{
 		Config:    cfg,
-		StreamIDs: map[types.StreamID]struct{}{},
+		StreamIDs: map[types.StreamSourceID]struct{}{},
 
-		ActiveStreamForwardings: map[types.DestinationID]*ActiveStreamForwarding{},
+		ActiveStreamForwardings: map[types.StreamSinkID]*ActiveStreamForwarding{},
 	}
 }
 
@@ -63,7 +63,7 @@ func (s *StreamServer) init(ctx context.Context) error {
 	}
 
 	for dstID, dstCfg := range cfg.Destinations {
-		err := s.addStreamDestination(ctx, dstID, dstCfg.URL)
+		err := s.addStreamSink(ctx, dstID, dstCfg.URL)
 		if err != nil {
 			return fmt.Errorf(
 				"unable to initialize stream destination '%s' to %#+v: %w",
@@ -74,19 +74,19 @@ func (s *StreamServer) init(ctx context.Context) error {
 		}
 	}
 
-	for streamID, streamCfg := range cfg.Streams {
-		err := s.addIncomingStream(ctx, streamID)
+	for streamSourceID, streamCfg := range cfg.Streams {
+		err := s.addStreamSource(ctx, streamSourceID)
 		if err != nil {
-			return fmt.Errorf("unable to initialize stream '%s': %w", streamID, err)
+			return fmt.Errorf("unable to initialize stream '%s': %w", streamSourceID, err)
 		}
 
 		for dstID, fwd := range streamCfg.Forwardings {
 			if !fwd.Disabled {
-				_, err := s.addStreamForward(ctx, streamID, dstID, fwd.Quirks)
+				_, err := s.addStreamForward(ctx, streamSourceID, dstID, fwd.Quirks)
 				if err != nil {
 					return fmt.Errorf(
 						"unable to launch stream forward from '%s' to '%s': %w",
-						streamID,
+						streamSourceID,
 						dstID,
 						err,
 					)
@@ -215,16 +215,16 @@ func (s *StreamServer) stopServer(
 	return server.Close()
 }
 
-func (s *StreamServer) AddIncomingStream(
+func (s *StreamServer) AddStreamSource(
 	ctx context.Context,
-	streamID types.StreamID,
+	streamSourceID types.StreamSourceID,
 ) error {
 	return xsync.DoR1(ctx, &s.Mutex, func() error {
-		err := s.addIncomingStream(ctx, streamID)
+		err := s.addStreamSource(ctx, streamSourceID)
 		if err != nil {
 			return err
 		}
-		s.Config.Streams[streamID] = &types.StreamConfig{}
+		s.Config.Streams[streamSourceID] = &types.StreamConfig{}
 		return nil
 	})
 }
@@ -235,15 +235,15 @@ func assertEqual(a, b any) {
 	}
 }
 
-func (s *StreamServer) addIncomingStream(
+func (s *StreamServer) addStreamSource(
 	ctx context.Context,
-	streamID types.StreamID,
+	streamSourceID types.StreamSourceID,
 ) error {
-	if _, ok := s.StreamIDs[streamID]; ok {
-		return fmt.Errorf("stream '%s' already exists", streamID)
+	if _, ok := s.StreamIDs[streamSourceID]; ok {
+		return fmt.Errorf("stream '%s' already exists", streamSourceID)
 	}
 
-	s.StreamIDs[streamID] = struct{}{}
+	s.StreamIDs[streamSourceID] = struct{}{}
 
 	if err := s.updateNewStreamIDs(ctx); err != nil {
 		return fmt.Errorf("unable to update the livego config: %w", err)
@@ -255,9 +255,9 @@ func (s *StreamServer) updateNewStreamIDs(
 	ctx context.Context,
 ) error {
 	apps := make(configure.Applications, 0, len(s.StreamIDs))
-	for streamID := range s.StreamIDs {
+	for streamSourceID := range s.StreamIDs {
 		apps = append(apps, configure.Application{
-			Appname: string(streamID),
+			Appname: string(streamSourceID),
 			Live:    true,
 		})
 	}
@@ -284,21 +284,21 @@ func (s *StreamServer) updateNewStreamIDs(
 	return nil
 }
 
-func (s *StreamServer) ListIncomingStreams(
+func (s *StreamServer) ListStreamSources(
 	ctx context.Context,
-) []types.IncomingStream {
-	return xsync.DoA1R1(ctx, &s.Mutex, s.listIncomingStreams, ctx)
+) []types.StreamSource {
+	return xsync.DoA1R1(ctx, &s.Mutex, s.listStreamSources, ctx)
 }
 
-func (s *StreamServer) listIncomingStreams(
+func (s *StreamServer) listStreamSources(
 	_ context.Context,
-) []types.IncomingStream {
-	var result []types.IncomingStream
-	for streamID := range s.StreamIDs {
+) []types.StreamSource {
+	var result []types.StreamSource
+	for streamSourceID := range s.StreamIDs {
 		result = append(
 			result,
-			types.IncomingStream{
-				StreamID:      streamID,
+			types.StreamSource{
+				StreamSourceID:      streamSourceID,
 				NumBytesWrote: 0, // TODO: fill the value
 				NumBytesRead:  0, // TODO: fill the value
 			},
@@ -307,24 +307,24 @@ func (s *StreamServer) listIncomingStreams(
 	return result
 }
 
-func (s *StreamServer) RemoveIncomingStream(
+func (s *StreamServer) RemoveStreamSource(
 	ctx context.Context,
-	streamID types.StreamID,
+	streamSourceID types.StreamSourceID,
 ) error {
 	return xsync.DoR1(ctx, &s.Mutex, func() error {
-		delete(s.Config.Streams, streamID)
-		return s.removeIncomingStream(ctx, streamID)
+		delete(s.Config.Streams, streamSourceID)
+		return s.removeStreamSource(ctx, streamSourceID)
 	})
 }
 
-func (s *StreamServer) removeIncomingStream(
+func (s *StreamServer) removeStreamSource(
 	ctx context.Context,
-	streamID types.StreamID,
+	streamSourceID types.StreamSourceID,
 ) error {
-	if _, ok := s.StreamIDs[streamID]; !ok {
-		return fmt.Errorf("stream '%s' does not exist", streamID)
+	if _, ok := s.StreamIDs[streamSourceID]; !ok {
+		return fmt.Errorf("stream '%s' does not exist", streamSourceID)
 	}
-	delete(s.StreamIDs, streamID)
+	delete(s.StreamIDs, streamSourceID)
 
 	if err := s.updateNewStreamIDs(ctx); err != nil {
 		return fmt.Errorf("unable to update the livego config: %w", err)
@@ -337,19 +337,19 @@ type StreamForward = types.StreamForward[*ActiveStreamForwarding]
 
 func (s *StreamServer) AddStreamForward(
 	ctx context.Context,
-	streamID types.StreamID,
-	destinationID types.DestinationID,
+	streamSourceID types.StreamSourceID,
+	streamSinkID types.StreamSinkID,
 	enabled bool,
 	quirks types.ForwardingQuirks,
 ) (*types.StreamForward[*ActiveStreamForwarding], error) {
 	return xsync.DoR2(ctx, &s.Mutex, func() (*types.StreamForward[*ActiveStreamForwarding], error) {
-		streamConfig := s.Config.Streams[streamID]
+		streamConfig := s.Config.Streams[streamSourceID]
 		if streamConfig.Forwardings == nil {
-			streamConfig.Forwardings = map[types.DestinationID]types.ForwardingConfig{}
+			streamConfig.Forwardings = map[types.StreamSinkID]types.ForwardingConfig{}
 		}
 
-		if _, ok := streamConfig.Forwardings[destinationID]; ok {
-			return nil, fmt.Errorf("the forwarding %s->%s already exists", streamID, destinationID)
+		if _, ok := streamConfig.Forwardings[streamSinkID]; ok {
+			return nil, fmt.Errorf("the forwarding %s->%s already exists", streamSourceID, streamSinkID)
 		}
 
 		cfg := types.ForwardingConfig{
@@ -360,22 +360,22 @@ func (s *StreamServer) AddStreamForward(
 		var fwd *types.StreamForward[*ActiveStreamForwarding]
 		if enabled {
 			var err error
-			fwd, err = s.addStreamForward(ctx, streamID, destinationID, quirks)
+			fwd, err = s.addStreamForward(ctx, streamSourceID, streamSinkID, quirks)
 			if err != nil {
 				return fwd, err
 			}
 		} else {
-			fwd = buildStreamForward(streamID, destinationID, cfg, nil)
+			fwd = buildStreamForward(streamSourceID, streamSinkID, cfg, nil)
 		}
-		streamConfig.Forwardings[destinationID] = cfg
+		streamConfig.Forwardings[streamSinkID] = cfg
 		return fwd, nil
 	})
 }
 
 func (s *StreamServer) addStreamForward(
 	ctx context.Context,
-	streamID types.StreamID,
-	destinationID types.DestinationID,
+	streamSourceID types.StreamSourceID,
+	streamSinkID types.StreamSinkID,
 	quirks types.ForwardingQuirks,
 ) (*types.StreamForward[*ActiveStreamForwarding], error) {
 	cfg := types.ForwardingConfig{
@@ -383,22 +383,22 @@ func (s *StreamServer) addStreamForward(
 		Quirks:   quirks,
 	}
 
-	ctx = belt.WithField(ctx, "stream_forward", fmt.Sprintf("%s->%s", streamID, destinationID))
-	if actFwd, ok := s.ActiveStreamForwardings[destinationID]; ok {
+	ctx = belt.WithField(ctx, "stream_forward", fmt.Sprintf("%s->%s", streamSourceID, streamSinkID))
+	if actFwd, ok := s.ActiveStreamForwardings[streamSinkID]; ok {
 		return buildStreamForward(
-				streamID,
-				destinationID,
+				streamSourceID,
+				streamSinkID,
 				cfg,
 				actFwd,
 			), fmt.Errorf(
 				"there is already an active stream forwarding to '%s'",
-				destinationID,
+				streamSinkID,
 			)
 	}
 
-	dst, err := s.findStreamDestinationByID(ctx, destinationID)
+	dst, err := s.findStreamSinkByID(ctx, streamSinkID)
 	if err != nil {
-		return nil, fmt.Errorf("unable to find stream destination '%s': %w", destinationID, err)
+		return nil, fmt.Errorf("unable to find stream destination '%s': %w", streamSinkID, err)
 	}
 
 	if len(s.ServerHandlers) == 0 {
@@ -406,25 +406,25 @@ func (s *StreamServer) addStreamForward(
 	}
 	h := s.ServerHandlers[0]
 
-	urlSrc := "rtmp://" + h.ListenAddr() + "/" + string(streamID)
-	actFwd, err := newActiveStreamForward(ctx, streamID, destinationID, urlSrc, dst.URL)
+	urlSrc := "rtmp://" + h.ListenAddr() + "/" + string(streamSourceID)
+	actFwd, err := newActiveStreamForward(ctx, streamSourceID, streamSinkID, urlSrc, dst.URL)
 	if err != nil {
 		return nil, fmt.Errorf("unable to run the stream forwarding: %w", err)
 	}
-	s.ActiveStreamForwardings[destinationID] = actFwd
+	s.ActiveStreamForwardings[streamSinkID] = actFwd
 
-	return buildStreamForward(streamID, destinationID, cfg, actFwd), nil
+	return buildStreamForward(streamSourceID, streamSinkID, cfg, actFwd), nil
 }
 
 func buildStreamForward(
-	streamID types.StreamID,
-	destinationID types.DestinationID,
+	streamSourceID types.StreamSourceID,
+	streamSinkID types.StreamSinkID,
 	cfg types.ForwardingConfig,
 	actFwd *ActiveStreamForwarding,
 ) *types.StreamForward[*ActiveStreamForwarding] {
 	return &types.StreamForward[*ActiveStreamForwarding]{
-		StreamID:         streamID,
-		DestinationID:    destinationID,
+		StreamSourceID:         streamSourceID,
+		StreamSinkID:    streamSinkID,
 		Enabled:          !cfg.Disabled,
 		Quirks:           cfg.Quirks,
 		ActiveForwarding: actFwd,
@@ -433,42 +433,42 @@ func buildStreamForward(
 	}
 }
 
-func (a *StreamServer) ActiveIncomingStreamIDs() []types.StreamID {
+func (a *StreamServer) ActiveStreamSourceIDs() []types.StreamSourceID {
 }
 
 func (a *StreamServer) WaitPublisherChan(
 	ctx context.Context,
-	streamID types.StreamID,
+	streamSourceID types.StreamSourceID,
 ) (<-chan types.Publisher, error) {
 }
 
 func (s *StreamServer) UpdateStreamForward(
 	ctx context.Context,
-	streamID types.StreamID,
-	destinationID types.DestinationID,
+	streamSourceID types.StreamSourceID,
+	streamSinkID types.StreamSinkID,
 	enabled bool,
 	quirks types.ForwardingQuirks,
 ) (*types.StreamForward[*ActiveStreamForwarding], error) {
 	return xsync.DoR1(ctx, &s.Mutex, func() error {
-		streamConfig := s.Config.Streams[streamID]
-		fwdCfg, ok := streamConfig.Forwardings[destinationID]
+		streamConfig := s.Config.Streams[streamSourceID]
+		fwdCfg, ok := streamConfig.Forwardings[streamSinkID]
 		if !ok {
-			return fmt.Errorf("the forwarding %s->%s does not exist", streamID, destinationID)
+			return fmt.Errorf("the forwarding %s->%s does not exist", streamSourceID, streamSinkID)
 		}
 
 		if fwdCfg.Disabled && enabled {
-			err := s.addStreamForward(ctx, streamID, destinationID)
+			err := s.addStreamForward(ctx, streamSourceID, streamSinkID)
 			if err != nil {
 				return err
 			}
 		}
 		if !fwdCfg.Disabled && !enabled {
-			err := s.removeStreamForward(ctx, streamID, destinationID)
+			err := s.removeStreamForward(ctx, streamSourceID, streamSinkID)
 			if err != nil {
 				return err
 			}
 		}
-		streamConfig.Forwardings[destinationID] = types.ForwardingConfig{
+		streamConfig.Forwardings[streamSinkID] = types.ForwardingConfig{
 			Disabled: !enabled,
 		}
 		return nil
@@ -485,34 +485,34 @@ func (s *StreamServer) ListStreamForwards(
 		}
 
 		type fwdID struct {
-			StreamID types.StreamID
-			DestID   types.DestinationID
+			StreamSourceID types.StreamSourceID
+			DestID   types.StreamSinkID
 		}
 		m := map[fwdID]*StreamForward{}
 		for idx := range activeStreamForwards {
 			fwd := &activeStreamForwards[idx]
 			m[fwdID{
-				StreamID: fwd.StreamID,
-				DestID:   fwd.DestinationID,
+				StreamSourceID: fwd.StreamSourceID,
+				DestID:   fwd.StreamSinkID,
 			}] = fwd
 		}
 
 		var result []StreamForward
-		for streamID, stream := range s.Config.Streams {
+		for streamSourceID, stream := range s.Config.Streams {
 			for dstID, cfg := range stream.Forwardings {
 				item := StreamForward{
-					StreamID:      streamID,
-					DestinationID: dstID,
+					StreamSourceID:      streamSourceID,
+					StreamSinkID: dstID,
 					Enabled:       !cfg.Disabled,
 				}
 				if activeFwd, ok := m[fwdID{
-					StreamID: streamID,
+					StreamSourceID: streamSourceID,
 					DestID:   dstID,
 				}]; ok {
 					item.NumBytesWrote = activeFwd.NumBytesWrote
 					item.NumBytesRead = activeFwd.NumBytesRead
 				}
-				logger.Tracef(ctx, "stream forwarding '%s->%s': %#+v", streamID, dstID, cfg)
+				logger.Tracef(ctx, "stream forwarding '%s->%s': %#+v", streamSourceID, dstID, cfg)
 				result = append(result, item)
 			}
 		}
@@ -526,8 +526,8 @@ func (s *StreamServer) listStreamForwards(
 	var result []StreamForward
 	for _, fwd := range s.ActiveStreamForwardings {
 		result = append(result, StreamForward{
-			StreamID:      fwd.StreamID,
-			DestinationID: fwd.DestinationID,
+			StreamSourceID:      fwd.StreamSourceID,
+			StreamSinkID: fwd.StreamSinkID,
 			Enabled:       true,
 			NumBytesWrote: 0,
 			NumBytesRead:  0,
@@ -538,23 +538,23 @@ func (s *StreamServer) listStreamForwards(
 
 func (s *StreamServer) RemoveStreamForward(
 	ctx context.Context,
-	streamID types.StreamID,
-	dstID types.DestinationID,
+	streamSourceID types.StreamSourceID,
+	dstID types.StreamSinkID,
 ) error {
 	return xsync.DoR1(ctx, &s.Mutex, func() error {
-		streamCfg := s.Config.Streams[streamID]
+		streamCfg := s.Config.Streams[streamSourceID]
 		if _, ok := streamCfg.Forwardings[dstID]; !ok {
-			return fmt.Errorf("the forwarding %s->%s does not exist", streamID, dstID)
+			return fmt.Errorf("the forwarding %s->%s does not exist", streamSourceID, dstID)
 		}
 		delete(streamCfg.Forwardings, dstID)
-		return s.removeStreamForward(ctx, streamID, dstID)
+		return s.removeStreamForward(ctx, streamSourceID, dstID)
 	})
 }
 
 func (s *StreamServer) removeStreamForward(
 	_ context.Context,
-	_ types.StreamID,
-	dstID types.DestinationID,
+	_ types.StreamSourceID,
+	dstID types.StreamSinkID,
 ) error {
 	fwd := s.ActiveStreamForwardings[dstID]
 	if fwd == nil {
@@ -568,102 +568,102 @@ func (s *StreamServer) removeStreamForward(
 	return nil
 }
 
-func (s *StreamServer) ListStreamDestinations(
+func (s *StreamServer) ListStreamSinks(
 	ctx context.Context,
-) ([]types.StreamDestination, error) {
-	return xsync.DoA1R2(ctx, &s.Mutex, s.listStreamDestinations, ctx)
+) ([]types.StreamSink, error) {
+	return xsync.DoA1R2(ctx, &s.Mutex, s.listStreamSinks, ctx)
 }
 
-func (s *StreamServer) listStreamDestinations(
+func (s *StreamServer) listStreamSinks(
 	_ context.Context,
-) ([]types.StreamDestination, error) {
-	c := make([]types.StreamDestination, len(s.StreamDestinations))
-	copy(c, s.StreamDestinations)
+) ([]types.StreamSink, error) {
+	c := make([]types.StreamSink, len(s.StreamSinks))
+	copy(c, s.StreamSinks)
 	return c, nil
 }
 
-func (s *StreamServer) AddStreamDestination(
+func (s *StreamServer) AddStreamSink(
 	ctx context.Context,
-	destinationID types.DestinationID,
+	streamSinkID types.StreamSinkID,
 	url string,
 ) error {
 	return xsync.DoR1(ctx, &s.Mutex, func() error {
-		err := s.addStreamDestination(ctx, destinationID, url)
+		err := s.addStreamSink(ctx, streamSinkID, url)
 		if err != nil {
 			return err
 		}
-		s.Config.Destinations[destinationID] = &types.DestinationConfig{URL: url}
+		s.Config.Destinations[streamSinkID] = &types.StreamSinkConfig{URL: url}
 		return nil
 	})
 }
 
-func (s *StreamServer) addStreamDestination(
+func (s *StreamServer) addStreamSink(
 	_ context.Context,
-	destinationID types.DestinationID,
+	streamSinkID types.StreamSinkID,
 	url string,
 ) error {
-	s.StreamDestinations = append(s.StreamDestinations, types.StreamDestination{
-		ID:  destinationID,
+	s.StreamSinks = append(s.StreamSinks, types.StreamSink{
+		ID:  streamSinkID,
 		URL: url,
 	})
 	return nil
 }
 
-func (s *StreamServer) RemoveStreamDestination(
+func (s *StreamServer) RemoveStreamSink(
 	ctx context.Context,
-	destinationID types.DestinationID,
+	streamSinkID types.StreamSinkID,
 ) error {
 	return xsync.DoR1(ctx, &s.Mutex, func() error {
 		for _, streamCfg := range s.Config.Streams {
-			delete(streamCfg.Forwardings, destinationID)
+			delete(streamCfg.Forwardings, streamSinkID)
 		}
-		delete(s.Config.Destinations, destinationID)
-		return s.removeStreamDestination(ctx, destinationID)
+		delete(s.Config.Destinations, streamSinkID)
+		return s.removeStreamSink(ctx, streamSinkID)
 	})
 }
 
-func (s *StreamServer) removeStreamDestination(
+func (s *StreamServer) removeStreamSink(
 	ctx context.Context,
-	destinationID types.DestinationID,
+	streamSinkID types.StreamSinkID,
 ) error {
 	streamForwards, err := s.listStreamForwards(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to list stream forwardings: %w", err)
 	}
 	for _, fwd := range streamForwards {
-		if fwd.DestinationID == destinationID {
-			s.removeStreamForward(ctx, fwd.StreamID, fwd.DestinationID)
+		if fwd.StreamSinkID == streamSinkID {
+			s.removeStreamForward(ctx, fwd.StreamSourceID, fwd.StreamSinkID)
 		}
 	}
 
-	for i := range s.StreamDestinations {
-		if s.StreamDestinations[i].ID == destinationID {
-			s.StreamDestinations = append(s.StreamDestinations[:i], s.StreamDestinations[i+1:]...)
+	for i := range s.StreamSinks {
+		if s.StreamSinks[i].ID == streamSinkID {
+			s.StreamSinks = append(s.StreamSinks[:i], s.StreamSinks[i+1:]...)
 			return nil
 		}
 	}
 
-	return fmt.Errorf("have not found stream destination with id %s", destinationID)
+	return fmt.Errorf("have not found stream destination with id %s", streamSinkID)
 }
 
-func (s *StreamServer) findStreamDestinationByID(
+func (s *StreamServer) findStreamSinkByID(
 	_ context.Context,
-	destinationID types.DestinationID,
-) (types.StreamDestination, error) {
-	for _, dst := range s.StreamDestinations {
-		if dst.ID == destinationID {
+	streamSinkID types.StreamSinkID,
+) (types.StreamSink, error) {
+	for _, dst := range s.StreamSinks {
+		if dst.ID == streamSinkID {
 			return dst, nil
 		}
 	}
-	return types.StreamDestination{}, fmt.Errorf(
-		"unable to find a stream destination by StreamID '%s'",
-		destinationID,
+	return types.StreamSink{}, fmt.Errorf(
+		"unable to find a stream destination by StreamSourceID '%s'",
+		streamSinkID,
 	)
 }
 
 func (s *StreamServer) AddStreamPlayer(
 	ctx context.Context,
-	streamID types.StreamID,
+	streamSourceID types.StreamSourceID,
 	playerType player.Backend,
 	disabled bool,
 	streamPlaybackConfig sptypes.Config,
@@ -674,7 +674,7 @@ func (s *StreamServer) AddStreamPlayer(
 
 func (s *StreamServer) UpdateStreamPlayer(
 	ctx context.Context,
-	streamID types.StreamID,
+	streamSourceID types.StreamSourceID,
 	playerType player.Backend,
 	disabled bool,
 	streamPlaybackConfig sptypes.Config,
@@ -685,7 +685,7 @@ func (s *StreamServer) UpdateStreamPlayer(
 
 func (s *StreamServer) RemoveStreamPlayer(
 	ctx context.Context,
-	streamID types.StreamID,
+	streamSourceID types.StreamSourceID,
 ) error {
 
 }
@@ -698,14 +698,14 @@ func (s *StreamServer) ListStreamPlayers(
 
 func (s *StreamServer) GetStreamPlayer(
 	ctx context.Context,
-	streamID types.StreamID,
+	streamSourceID types.StreamSourceID,
 ) (*types.StreamPlayer, error) {
 
 }
 
 func (s *StreamServer) GetActiveStreamPlayer(
 	ctx context.Context,
-	streamID types.StreamID,
+	streamSourceID types.StreamSourceID,
 ) (player.Player, error) {
 
 }

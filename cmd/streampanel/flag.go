@@ -47,9 +47,7 @@ type Flags struct {
 	RemoveSecretsFromLogs bool          `yaml:"RemoveSecretsFromLogs,omitempty"`
 	DisableAutoUpdater    bool          `yaml:"DisableAutoUpdater,omitempty"`
 
-	OAuthListenPortTwitch  uint16 `yaml:"OAuthListenPortTwitch,omitempty"`
-	OAuthListenPortKick    uint16 `yaml:"OAuthListenPortKick,omitempty"`
-	OAuthListenPortYouTube uint16 `yaml:"OAuthListenPortYouTube,omitempty"`
+	OAuthListenPorts map[string]uint16 `yaml:"OAuthListenPorts,omitempty"`
 }
 
 var platformGetFlagsFuncs []func(*Flags)
@@ -176,9 +174,11 @@ func parseFlags() Flags {
 		SplitProcess:        *splitProcess,
 		LockTimeout:         *lockTimeout,
 
-		OAuthListenPortTwitch:  *oauthListenPortTwitch,
-		OAuthListenPortKick:    *oauthListenPortKick,
-		OAuthListenPortYouTube: *oauthListenPortYouTube,
+		OAuthListenPorts: map[string]uint16{
+			"twitch":  *oauthListenPortTwitch,
+			"kick":    *oauthListenPortKick,
+			"youtube": *oauthListenPortYouTube,
+		},
 
 		InsecureDebug:         *insecureDebug,
 		RemoveSecretsFromLogs: *removeSecretsFromLogs,

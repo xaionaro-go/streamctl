@@ -85,27 +85,22 @@ func (s *StreamServer) init(
 	logger.Debugf(ctx, "config == %#+v", *cfg)
 
 	for _, srv := range cfg.PortServers {
-		{
-			srv := srv
-			observability.Go(ctx, func(ctx context.Context) {
-				_, err := s.startServer(ctx, srv.Type, srv.ListenAddr)
-				if err != nil {
-					logger.Errorf(
-						ctx,
-						"unable to initialize %s server at %s: %w",
-						srv.Type,
-						srv.ListenAddr,
-						err,
-					)
-				}
-			})
+		_, err := s.startServer(ctx, srv.Type, srv.ListenAddr)
+		if err != nil {
+			logger.Errorf(
+				ctx,
+				"unable to initialize %s server at %s: %w",
+				srv.Type,
+				srv.ListenAddr,
+				err,
+			)
 		}
 	}
 
-	for streamID := range cfg.Streams {
-		err := s.addIncomingStream(ctx, streamID)
+	for streamSourceID := range cfg.Streams {
+		err := s.addStreamSource(ctx, streamSourceID)
 		if err != nil {
-			return fmt.Errorf("unable to initialize stream '%s': %w", streamID, err)
+			return fmt.Errorf("unable to initialize stream '%s': %w", streamSourceID, err)
 		}
 	}
 
@@ -149,11 +144,11 @@ func (pubsub *pubsubAdapter) Sub(
 	return pubsub.Pubsub.Sub(conn, callback)
 }
 
-func (s *StreamServer) ActiveIncomingStreamIDs() ([]types.StreamID, error) {
+func (s *StreamServer) ActiveStreamSourceIDs() ([]types.StreamSourceID, error) {
 	pss := s.RelayService.PubsubNames()
-	r := make([]types.StreamID, 0, len(pss))
+	r := make([]types.StreamSourceID, 0, len(pss))
 	for _, ps := range pss {
-		r = append(r, types.StreamID(ps))
+		r = append(r, types.StreamSourceID(ps))
 	}
 	return r, nil
 }
@@ -304,13 +299,13 @@ func (s *StreamServer) stopServer(
 	return server.Close()
 }
 
-func (s *StreamServer) AddIncomingStream(
+func (s *StreamServer) AddStreamSource(
 	ctx context.Context,
-	streamID types.StreamID,
+	streamSourceID types.StreamSourceID,
 ) error {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
 	return xsync.DoR1(ctx, &s.Mutex, func() error {
-		err := s.addIncomingStream(ctx, streamID)
+		err := s.addStreamSource(ctx, streamSourceID)
 		if err != nil {
 			return err
 		}
@@ -318,64 +313,64 @@ func (s *StreamServer) AddIncomingStream(
 	})
 }
 
-func (s *StreamServer) addIncomingStream(
+func (s *StreamServer) addStreamSource(
 	_ context.Context,
-	streamID types.StreamID,
+	streamSourceID types.StreamSourceID,
 ) error {
-	if _, ok := s.Config.Streams[streamID]; ok {
+	if _, ok := s.Config.Streams[streamSourceID]; ok {
 		return nil
 	}
-	s.Config.Streams[streamID] = &types.StreamConfig{}
+	s.Config.Streams[streamSourceID] = &types.StreamConfig{}
 	return nil
 }
 
-type IncomingStream = types.IncomingStream
+type StreamSource = types.StreamSource
 
-func (s *StreamServer) ListIncomingStreams(
+func (s *StreamServer) ListStreamSources(
 	ctx context.Context,
-) []IncomingStream {
+) []StreamSource {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
 	_ = ctx
-	return xsync.DoA1R1(ctx, &s.Mutex, s.listIncomingStreams, ctx)
+	return xsync.DoA1R1(ctx, &s.Mutex, s.listStreamSources, ctx)
 }
 
-func (s *StreamServer) listIncomingStreams(
+func (s *StreamServer) listStreamSources(
 	_ context.Context,
-) []IncomingStream {
-	var result []IncomingStream
-	for streamID := range s.Config.Streams {
-		result = append(result, IncomingStream{
-			StreamID: streamID,
+) []StreamSource {
+	var result []StreamSource
+	for streamSourceID := range s.Config.Streams {
+		result = append(result, StreamSource{
+			StreamSourceID: streamSourceID,
 		})
 	}
 	return result
 }
 
-func (s *StreamServer) RemoveIncomingStream(
+func (s *StreamServer) RemoveStreamSource(
 	ctx context.Context,
-	streamID types.StreamID,
+	streamSourceID types.StreamSourceID,
 ) error {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
-	return xsync.DoA2R1(ctx, &s.Mutex, s.removeIncomingStream, ctx, streamID)
+	return xsync.DoA2R1(ctx, &s.Mutex, s.removeStreamSource, ctx, streamSourceID)
 }
 
-func (s *StreamServer) removeIncomingStream(
+func (s *StreamServer) removeStreamSource(
 	_ context.Context,
-	streamID types.StreamID,
+	streamSourceID types.StreamSourceID,
 ) error {
-	delete(s.Config.Streams, streamID)
+	delete(s.Config.Streams, streamSourceID)
 	return nil
 }
 
 func (s *StreamServer) WaitPublisherChan(
 	ctx context.Context,
-	streamID types.StreamID,
+	streamSourceID types.StreamSourceID,
 	waitForNext bool,
 ) (<-chan types.Publisher, error) {
 
 	ch := make(chan types.Publisher, 1)
 	observability.Go(ctx, func(ctx context.Context) {
-		ch <- s.RelayService.WaitPubsub(ctx, types.StreamID2LocalAppName(streamID), waitForNext)
+		ch <- s.RelayService.WaitPubsub(ctx, types.StreamSourceID2LocalAppName(streamSourceID), waitForNext)
 		close(ch)
 	})
 	return ch, nil

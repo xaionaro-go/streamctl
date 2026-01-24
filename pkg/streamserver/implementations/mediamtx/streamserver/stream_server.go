@@ -1,3 +1,6 @@
+// Package streamserver implements a media server based on MediaMTX.
+// This file contains the main StreamServer struct and its initialization.
+//
 // This implementation does not stream more than 280 minutes, because of
 // some bug with implementing the extended timestamp of RTMP.
 
@@ -113,20 +116,13 @@ func (s *StreamServer) init(
 	s.reloadPathConfs(ctx)
 
 	for _, srv := range cfg.PortServers {
-		{
-			srv := srv
-			observability.Go(ctx, func(ctx context.Context) {
-				s.mutex.Do(ctx, func() {
-					_, err := s.startServer(ctx, srv.Type, srv.ListenAddr, srv.Options()...)
-					if err != nil {
-						err = fmt.Errorf(
-							"unable to initialize %s server at %s: %w",
-							srv.Type, srv.ListenAddr, err,
-						)
-						logger.Errorf(ctx, "%v", err)
-					}
-				})
-			})
+		_, err := s.startServer(ctx, srv.Type, srv.ListenAddr, srv.Options()...)
+		if err != nil {
+			err = fmt.Errorf(
+				"unable to initialize %s server at %s: %w",
+				srv.Type, srv.ListenAddr, err,
+			)
+			logger.Errorf(ctx, "%v", err)
 		}
 	}
 
@@ -197,16 +193,16 @@ func (s *StreamServer) WithConfig(
 	})
 }
 
-func (s *StreamServer) ActiveIncomingStreamIDs() ([]types.StreamID, error) {
+func (s *StreamServer) ActiveStreamSourceIDs() ([]types.StreamSourceID, error) {
 	pathList, err := s.pathManager.APIPathsList()
 	if err != nil {
 		return nil, fmt.Errorf("unable to query the list of available pubsub names: %w", err)
 	}
 
-	var result []types.StreamID
+	var result []types.StreamSourceID
 	for _, item := range pathList.Items {
 		if item.Ready {
-			result = append(result, types.StreamID(item.Name))
+			result = append(result, types.StreamSourceID(item.Name))
 		}
 	}
 
@@ -292,13 +288,13 @@ func (s *StreamServer) stopServer(
 	return server.Close()
 }
 
-func (s *StreamServer) AddIncomingStream(
+func (s *StreamServer) AddStreamSource(
 	ctx context.Context,
-	streamID types.StreamID,
+	streamSourceID types.StreamSourceID,
 ) error {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
 	return xsync.DoR1(ctx, &s.mutex, func() error {
-		err := s.addIncomingStream(ctx, streamID)
+		err := s.addStreamSource(ctx, streamSourceID)
 		if err != nil {
 			return err
 		}
@@ -306,14 +302,14 @@ func (s *StreamServer) AddIncomingStream(
 	})
 }
 
-func (s *StreamServer) addIncomingStream(
+func (s *StreamServer) addStreamSource(
 	ctx context.Context,
-	streamID types.StreamID,
+	streamSourceID types.StreamSourceID,
 ) error {
-	if _, ok := s.config.Streams[streamID]; ok {
+	if _, ok := s.config.Streams[streamSourceID]; ok {
 		return nil
 	}
-	s.config.Streams[streamID] = &types.StreamConfig{}
+	s.config.Streams[streamSourceID] = &types.StreamConfig{}
 	s.reloadPathConfs(ctx)
 	return nil
 }
@@ -324,9 +320,9 @@ func (s *StreamServer) reloadPathConfs(
 	// TODO: fix race condition with a client connecting to a server
 	pathConfs := make(map[string]*conf.Path, len(s.config.Streams))
 
-	for streamID := range s.config.Streams {
-		pathConfs[string(streamID)] = &conf.Path{
-			Name:   string(types.StreamID2LocalAppName(streamID)),
+	for streamSourceID := range s.config.Streams {
+		pathConfs[string(streamSourceID)] = &conf.Path{
+			Name:   string(types.StreamSourceID2LocalAppName(streamSourceID)),
 			Source: "publisher",
 		}
 	}
@@ -336,60 +332,60 @@ func (s *StreamServer) reloadPathConfs(
 	s.pathManager.ReloadPathConfs(pathConfs)
 }
 
-type IncomingStream = types.IncomingStream
+type StreamSource = types.StreamSource
 
-func (s *StreamServer) ListIncomingStreams(
+func (s *StreamServer) ListStreamSources(
 	ctx context.Context,
-) []IncomingStream {
-	logger.Debugf(ctx, "ListIncomingStreams")
-	defer func() { logger.Debugf(ctx, "/ListIncomingStreams") }()
+) []StreamSource {
+	logger.Debugf(ctx, "ListStreamSources")
+	defer func() { logger.Debugf(ctx, "/ListStreamSources") }()
 	ctx = belt.WithField(ctx, "module", "StreamServer")
 	if s == nil {
 		logger.Errorf(ctx, "s == nil")
 		return nil
 	}
-	return xsync.DoA1R1(ctx, &s.mutex, s.listIncomingStreams, ctx)
+	return xsync.DoA1R1(ctx, &s.mutex, s.listStreamSources, ctx)
 }
 
-func (s *StreamServer) listIncomingStreams(
+func (s *StreamServer) listStreamSources(
 	ctx context.Context,
-) []IncomingStream {
+) []StreamSource {
 	if s.config == nil {
 		logger.Errorf(ctx, "s.config == nil")
 		return nil
 	}
-	var result []IncomingStream
-	for streamID := range s.config.Streams {
-		result = append(result, IncomingStream{
-			StreamID: streamID,
+	var result []StreamSource
+	for streamSourceID := range s.config.Streams {
+		result = append(result, StreamSource{
+			StreamSourceID: streamSourceID,
 		})
 	}
 	return result
 }
 
-func (s *StreamServer) RemoveIncomingStream(
+func (s *StreamServer) RemoveStreamSource(
 	ctx context.Context,
-	streamID types.StreamID,
+	streamSourceID types.StreamSourceID,
 ) error {
 	ctx = belt.WithField(ctx, "module", "StreamServer")
-	return xsync.DoA2R1(ctx, &s.mutex, s.removeIncomingStream, ctx, streamID)
+	return xsync.DoA2R1(ctx, &s.mutex, s.removeStreamSource, ctx, streamSourceID)
 }
 
-func (s *StreamServer) removeIncomingStream(
+func (s *StreamServer) removeStreamSource(
 	ctx context.Context,
-	streamID types.StreamID,
+	streamSourceID types.StreamSourceID,
 ) error {
-	delete(s.config.Streams, streamID)
+	delete(s.config.Streams, streamSourceID)
 	s.reloadPathConfs(ctx)
 	return nil
 }
 
 func (s *StreamServer) WaitPublisherChan(
 	ctx context.Context,
-	streamID types.StreamID,
+	streamSourceID types.StreamSourceID,
 	waitForNext bool,
 ) (<-chan types.Publisher, error) {
-	appKey := types.AppKey(streamID)
+	appKey := types.AppKey(streamSourceID)
 
 	ch := make(chan types.Publisher, 1)
 	observability.Go(ctx, func(ctx context.Context) {

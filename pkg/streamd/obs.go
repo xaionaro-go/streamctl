@@ -13,6 +13,7 @@ import (
 	"github.com/xaionaro-go/obs-grpc-proxy/pkg/obsgrpcproxy"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/observability"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config/event"
 	"github.com/xaionaro-go/xsync"
@@ -20,6 +21,7 @@ import (
 
 func (d *StreamD) OBS(
 	ctx context.Context,
+	accountID streamcontrol.AccountID,
 ) (obs_grpc.OBSServer, context.CancelFunc, error) {
 	logger.Tracef(ctx, "OBS()")
 	defer logger.Tracef(ctx, "/OBS()")
@@ -29,20 +31,41 @@ func (d *StreamD) OBS(
 		func(ctx context.Context) (*goobs.Client, context.CancelFunc, error) {
 			logger.Tracef(ctx, "OBS proxy getting client")
 			defer logger.Tracef(ctx, "/OBS proxy getting client")
-			obs := xsync.RDoR1(ctx, &d.ControllersLocker, func() *obs.OBS {
-				return d.StreamControllers.OBS
-			})
-			if obs == nil {
+			obsInstance := func() *obs.OBS {
+				controllers := d.getControllersByPlatform(obs.ID)
+				if controllers == nil {
+					return nil
+				}
+				if accountID != "" {
+					if c, ok := controllers[accountID]; ok {
+						return c.GetImplementation().(*obs.OBS)
+					}
+					return nil
+				}
+				if c, ok := controllers[""]; ok {
+					return c.GetImplementation().(*obs.OBS)
+				}
+				for _, c := range controllers {
+					return c.GetImplementation().(*obs.OBS)
+				}
+				return nil
+			}()
+			if obsInstance == nil {
 				return nil, nil, fmt.Errorf("connection to OBS is not initialized")
 			}
 
-			client, err := obs.GetClient()
+			client, err := obsInstance.GetClient()
 			logger.Tracef(ctx, "getting OBS client result: %v %v", client, err)
 			if err != nil {
 				return nil, nil, err
 			}
 
-			return client, func() {
+			clientGoobs := client.GetGoobsClient()
+			if clientGoobs == nil {
+				return nil, nil, fmt.Errorf("the client is not a *goobs.Client (it is %T)", client)
+			}
+
+			return clientGoobs, func() {
 				err := client.Disconnect()
 				if err != nil {
 					logger.Errorf(ctx, "unable to disconnect from OBS: %v", err)
@@ -53,25 +76,6 @@ func (d *StreamD) OBS(
 		},
 	)
 	return proxy, func() {}, nil
-}
-
-func (d *StreamD) initOBSBackend(ctx context.Context) error {
-	obs, err := newOBS(
-		ctx,
-		d.Config.Backends[obs.ID],
-	)
-	if err != nil {
-		return err
-	}
-	if d.StreamControllers.OBS != nil {
-		err := d.StreamControllers.OBS.Close()
-		if err != nil {
-			logger.Warnf(ctx, "unable to close OBS: %v", err)
-		}
-	}
-	d.StreamControllers.OBS = obs
-	go d.listenOBSEvents(ctx, obs)
-	return nil
 }
 
 func (d *StreamD) listenOBSEvents(
@@ -108,7 +112,7 @@ func (d *StreamD) listenOBSEvents(
 				select {
 				case <-ctx.Done():
 					return
-				case ev, ok := <-client.IncomingEvents:
+				case ev, ok := <-client.IncomingEvents():
 					if !ok {
 						return
 					}
@@ -181,7 +185,7 @@ func (d *StreamD) OBSElementSetShow(
 		return fmt.Errorf("elID.Name == nil && elID.UUID == nil (which is legit, but unexpected, so we fail just in case)")
 	}
 
-	obsServer, obsServerClose, err := d.OBS(ctx)
+	obsServer, obsServerClose, err := d.OBS(ctx, "")
 	if obsServerClose != nil {
 		defer obsServerClose()
 	}

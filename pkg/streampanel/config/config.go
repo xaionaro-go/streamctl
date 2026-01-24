@@ -8,6 +8,7 @@ import (
 	"path"
 	"time"
 
+	"fyne.io/fyne/v2"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/screenshot"
@@ -54,11 +55,11 @@ type DashboardConfig struct {
 }
 
 type StreamMonitor struct {
-	IsEnabled   bool                 `yaml:"is_enabled"`
-	StreamDAddr string               `yaml:"streamd_addr"`
-	StreamID    streamtypes.StreamID `yaml:"stream_id"`
-	VideoTracks []uint               `yaml:"tracks_video,omitempty"`
-	AudioTracks []uint               `yaml:"tracks_audio,omitempty"`
+	IsEnabled      bool                       `yaml:"is_enabled"`
+	StreamDAddr    string                     `yaml:"streamd_addr"`
+	StreamSourceID streamtypes.StreamSourceID `yaml:"stream_source_id"`
+	VideoTracks    []uint                     `yaml:"tracks_video,omitempty"`
+	AudioTracks    []uint                     `yaml:"tracks_audio,omitempty"`
 }
 
 type MonitorsConfig struct {
@@ -66,6 +67,7 @@ type MonitorsConfig struct {
 }
 
 type Config struct {
+	App               fyne.App         `yaml:"-"`
 	RemoteStreamDAddr string           `yaml:"streamd_remote"`
 	BuiltinStreamD    streamd.Config   `yaml:"streamd_builtin"`
 	Screenshot        ScreenshotConfig `yaml:"screenshot"`

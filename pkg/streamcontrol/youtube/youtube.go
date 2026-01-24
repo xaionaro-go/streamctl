@@ -41,10 +41,10 @@ const (
 
 type YouTube struct {
 	locker         xsync.Mutex
-	Config         Config
+	Config         AccountConfig
 	YouTubeClient  *ClientCalcPoints
 	CancelFunc     context.CancelFunc
-	SaveConfigFunc func(Config) error
+	SaveConfigFunc func(AccountConfig) error
 
 	currentLiveBroadcastsLocker xsync.Mutex
 	currentLiveBroadcasts       []*youtube.LiveBroadcast
@@ -52,12 +52,35 @@ type YouTube struct {
 	chatListeners map[string]*chatListener
 
 	messagesOutChan chan streamcontrol.Event
+
+	plannedStreamsLocker xsync.Mutex
+	plannedStreams       map[streamcontrol.StreamID]*plannedStream
 }
 
-var _ streamcontrol.StreamController[StreamProfile] = (*YouTube)(nil)
+type plannedStream struct {
+	Profile    StreamProfile
+	CustomArgs []any
+}
+
+var _ streamcontrol.AccountGeneric[StreamProfile] = (*YouTube)(nil)
+
+func (yt *YouTube) String() string {
+	return "youtube"
+}
+
+func (yt *YouTube) GetPlatformID() streamcontrol.PlatformID {
+	return "youtube"
+}
 
 const (
-	copyThumbnail      = false
+	copyThumbnail = false
+)
+
+func SetDebugUseMockClient(v bool) {
+	debugUseMockClient = v
+}
+
+var (
 	debugUseMockClient = false
 )
 
@@ -65,11 +88,11 @@ type chatListener = ChatListenerOBSOLETE
 
 func New(
 	ctx context.Context,
-	cfg Config,
-	saveCfgFn func(Config) error,
+	cfg AccountConfig,
+	saveCfgFn func(AccountConfig) error,
 ) (*YouTube, error) {
 	ctx = belt.WithField(ctx, "controller", ID)
-	if cfg.Config.ClientID == "" || cfg.Config.ClientSecret.Get() == "" {
+	if cfg.ClientID == "" || cfg.ClientSecret.Get() == "" {
 		return nil, fmt.Errorf(
 			"'clientid' or/and 'clientsecret' is/are not set; go to https://console.cloud.google.com/apis/credentials and create an app if it not created, yet",
 		)
@@ -85,6 +108,8 @@ func New(
 		chatListeners: map[string]*chatListener{},
 
 		messagesOutChan: make(chan streamcontrol.Event, 100),
+
+		plannedStreams: make(map[streamcontrol.StreamID]*plannedStream),
 	}
 
 	err := yt.init(ctx)
@@ -131,7 +156,7 @@ func (yt *YouTube) checkTokenNoLock(ctx context.Context) (_err error) {
 	logger.Tracef(ctx, "YouTube.checkTokenNoLock")
 	defer func() { logger.Tracef(ctx, "/YouTube.checkTokenNoLock: %v", _err) }()
 
-	cfgToken := yt.Config.Config.Token.GetPointer()
+	cfgToken := yt.Config.Token.GetPointer()
 	tokenSource := getAuthCfgBase(yt.Config).TokenSource(ctx, cfgToken)
 	counter := 0
 	for {
@@ -148,7 +173,7 @@ func (yt *YouTube) checkTokenNoLock(ctx context.Context) (_err error) {
 			return nil
 		}
 		logger.Debugf(ctx, "the token have changed")
-		yt.Config.Config.Token = ptr(secret.New(*token))
+		yt.Config.Token = ptr(secret.New(*token))
 		err = yt.SaveConfigFunc(yt.Config)
 		logger.Debugf(ctx, "saved the new token token; %v", err)
 		return err
@@ -162,7 +187,7 @@ func (yt *YouTube) getNewToken(ctx context.Context) (_ret *oauth2.Token, _err er
 	if err != nil {
 		return nil, fmt.Errorf("unable to get an access token: %w", err)
 	}
-	yt.Config.Config.Token = ptr(secret.New(*t))
+	yt.Config.Token = ptr(secret.New(*t))
 	err = yt.SaveConfigFunc(yt.Config)
 	errmon.ObserveErrorCtx(ctx, err)
 	return t, nil
@@ -178,7 +203,7 @@ func (yt *YouTube) init(ctx context.Context) (_err error) {
 func (yt *YouTube) initNoLock(ctx context.Context) (_err error) {
 	isNewToken := false
 
-	if yt.Config.Config.Token == nil {
+	if yt.Config.Token == nil {
 		_, err := yt.getNewToken(ctx)
 		if err != nil {
 			yt.CancelFunc()
@@ -189,7 +214,7 @@ func (yt *YouTube) initNoLock(ctx context.Context) (_err error) {
 
 	authCfg := getAuthCfgBase(yt.Config)
 
-	tokenSource := authCfg.TokenSource(ctx, yt.Config.Config.Token.GetPointer())
+	tokenSource := authCfg.TokenSource(ctx, yt.Config.Token.GetPointer())
 
 	if !isNewToken {
 		if err := yt.checkTokenNoLock(ctx); err != nil {
@@ -200,7 +225,7 @@ func (yt *YouTube) initNoLock(ctx context.Context) (_err error) {
 				return err
 			}
 			isNewToken = true
-			tokenSource = authCfg.TokenSource(ctx, yt.Config.Config.Token.GetPointer())
+			tokenSource = authCfg.TokenSource(ctx, yt.Config.Token.GetPointer())
 		}
 	}
 
@@ -229,10 +254,10 @@ func (yt *YouTube) initNoLock(ctx context.Context) (_err error) {
 	return nil
 }
 
-func getAuthCfgBase(cfg Config) *oauth2.Config {
+func getAuthCfgBase(cfg AccountConfig) *oauth2.Config {
 	return &oauth2.Config{
-		ClientID:     cfg.Config.ClientID,
-		ClientSecret: cfg.Config.ClientSecret.Get(),
+		ClientID:     cfg.ClientID,
+		ClientSecret: cfg.ClientSecret.Get(),
 		Endpoint:     google.Endpoint,
 		Scopes: []string{
 			"https://www.googleapis.com/auth/youtube.force-ssl",
@@ -242,8 +267,8 @@ func getAuthCfgBase(cfg Config) *oauth2.Config {
 	}
 }
 
-func getToken(ctx context.Context, cfg Config) (*oauth2.Token, error) {
-	if cfg.Config.GetOAuthListenPorts == nil {
+func getToken(ctx context.Context, cfg AccountConfig) (*oauth2.Token, error) {
+	if cfg.GetOAuthListenPorts == nil {
 		return nil, fmt.Errorf("function GetOAuthListenPorts is not set")
 	}
 
@@ -297,7 +322,7 @@ func getToken(ctx context.Context, cfg Config) (*oauth2.Token, error) {
 					},
 				}
 
-				oauthHandler := cfg.Config.CustomOAuthHandler
+				oauthHandler := cfg.CustomOAuthHandler
 				if oauthHandler == nil {
 					oauthHandler = oauthhandler.OAuth2HandlerViaCLI
 				}
@@ -312,7 +337,7 @@ func getToken(ctx context.Context, cfg Config) (*oauth2.Token, error) {
 		}
 	}
 
-	for _, listenPort := range cfg.Config.GetOAuthListenPorts() {
+	for _, listenPort := range cfg.GetOAuthListenPorts() {
 		startHandlerForPort(listenPort)
 	}
 
@@ -327,7 +352,7 @@ func getToken(ctx context.Context, cfg Config) (*oauth2.Token, error) {
 				return
 			case <-t.C:
 			}
-			ports := cfg.Config.GetOAuthListenPorts()
+			ports := cfg.GetOAuthListenPorts()
 			logger.Tracef(ctx, "oauth listener ports: %#+v", ports)
 
 			alreadyListeningNext := map[uint16]struct{}{}
@@ -429,6 +454,13 @@ func (yt *YouTube) IterateActiveBroadcasts(
 	return nil
 }
 
+func (yt *YouTube) isMatchingStreamID(broadcast *youtube.LiveBroadcast, streamID streamcontrol.StreamID) bool {
+	if streamID == "" {
+		return true
+	}
+	return broadcast.ContentDetails != nil && broadcast.ContentDetails.BoundStreamId == string(streamID)
+}
+
 func (yt *YouTube) updateActiveBroadcasts(
 	ctx context.Context,
 	updateBroadcast func(broadcast *youtube.LiveBroadcast) error,
@@ -453,10 +485,20 @@ func (yt *YouTube) updateActiveBroadcasts(
 
 func (yt *YouTube) ApplyProfile(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 	profile StreamProfile,
 	customArgs ...any,
 ) error {
+	yt.plannedStreamsLocker.Do(ctx, func() {
+		yt.plannedStreams[streamID] = &plannedStream{
+			Profile:    profile,
+			CustomArgs: customArgs,
+		}
+	})
 	return yt.updateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
+		if !yt.isMatchingStreamID(broadcast, streamID) {
+			return nil
+		}
 		if broadcast.Snippet == nil {
 			return fmt.Errorf(
 				"YouTube have not provided the current snippet of broadcast %v",
@@ -470,9 +512,21 @@ func (yt *YouTube) ApplyProfile(
 
 func (yt *YouTube) SetTitle(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 	title string,
 ) error {
+	yt.plannedStreamsLocker.Do(ctx, func() {
+		planned, ok := yt.plannedStreams[streamID]
+		if !ok {
+			planned = &plannedStream{}
+			yt.plannedStreams[streamID] = planned
+		}
+		planned.Profile.Title = title
+	})
 	return yt.updateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
+		if !yt.isMatchingStreamID(broadcast, streamID) {
+			return nil
+		}
 		if broadcast.Snippet == nil {
 			return fmt.Errorf(
 				"YouTube have not provided the current snippet of broadcast %v",
@@ -486,9 +540,21 @@ func (yt *YouTube) SetTitle(
 
 func (yt *YouTube) SetDescription(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 	description string,
 ) error {
+	yt.plannedStreamsLocker.Do(ctx, func() {
+		planned, ok := yt.plannedStreams[streamID]
+		if !ok {
+			planned = &plannedStream{}
+			yt.plannedStreams[streamID] = planned
+		}
+		planned.Profile.Description = description
+	})
 	return yt.updateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
+		if !yt.isMatchingStreamID(broadcast, streamID) {
+			return nil
+		}
 		if broadcast.Snippet == nil {
 			return fmt.Errorf(
 				"YouTube have not provided the current snippet of broadcast %v",
@@ -502,6 +568,7 @@ func (yt *YouTube) SetDescription(
 
 func (yt *YouTube) InsertAdsCuePoint(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 	ts time.Time,
 	duration time.Duration,
 ) error {
@@ -510,6 +577,9 @@ func (yt *YouTube) InsertAdsCuePoint(
 	}
 
 	return yt.IterateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
+		if !yt.isMatchingStreamID(broadcast, streamID) {
+			return nil
+		}
 		err := yt.YouTubeClient.InsertCuepoint(ctx, &youtube.Cuepoint{
 			CueType:      "cueTypeAd",
 			DurationSecs: int64(duration.Seconds()),
@@ -518,6 +588,13 @@ func (yt *YouTube) InsertAdsCuePoint(
 		logger.Debugf(ctx, "YouTube.LiveBroadcasts result: %v", err)
 		return err
 	})
+}
+
+func (yt *YouTube) Flush(
+	ctx context.Context,
+	streamID streamcontrol.StreamID,
+) error {
+	return nil
 }
 
 func (yt *YouTube) DeleteActiveBroadcasts(
@@ -615,31 +692,31 @@ var playlistItemParts = []string{
 
 var streamNumInTitleRegex = regexp.MustCompile(`\[#([0-9]*)(\.[0-9]*)*\]`)
 
-func (yt *YouTube) StartStream(
+func (yt *YouTube) startStream(
 	ctx context.Context,
-	title string,
-	description string,
-	profile StreamProfile,
-	customArgs ...any,
+	streamID streamcontrol.StreamID,
 ) (_err error) {
 	// TODO: split this function!
+
+	planned, ok := xsync.DoR2(ctx, &yt.plannedStreamsLocker, func() (*plannedStream, bool) {
+		p, ok := yt.plannedStreams[streamID]
+		return p, ok
+	})
+	if !ok {
+		return fmt.Errorf("no profile applied for stream %s", streamID)
+	}
+	profile := planned.Profile
+	customArgs := planned.CustomArgs
 
 	if err := checkCtx(ctx); err != nil {
 		return err
 	}
 
-	err := xsync.DoR1(ctx, &yt.currentLiveBroadcastsLocker, func() error {
-		if len(yt.currentLiveBroadcasts) != 0 {
-			return fmt.Errorf("streams are already started")
-		}
-		return nil
-	})
-	if err != nil {
-		return err
-	}
+	logger.Debugf(ctx, "YouTube.startStream")
+	defer func() { logger.Debugf(ctx, "/YouTube.startStream: %v", _err) }()
 
-	logger.Debugf(ctx, "YouTube.StartStream")
-	defer func() { logger.Debugf(ctx, "/YouTube.StartStream: %v", _err) }()
+	title, _ := profile.GetTitle()
+	description, _ := profile.GetDescription()
 
 	var templateBroadcastIDs []string
 	for _, templateBroadcastIDCandidate := range customArgs {
@@ -668,7 +745,7 @@ func (yt *YouTube) StartStream(
 		templateBroadcastIDMap[broadcastID] = struct{}{}
 	}
 
-	err = yt.IterateUpcomingBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
+	err := yt.IterateUpcomingBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
 		if _, ok := templateBroadcastIDMap[broadcast.Id]; ok {
 			return nil
 		}
@@ -802,7 +879,11 @@ func (yt *YouTube) StartStream(
 			broadcast.Etag = ""
 			broadcast.ContentDetails.EnableAutoStop = false
 			broadcast.ContentDetails.BoundStreamLastUpdateTimeMs = ""
-			broadcast.ContentDetails.BoundStreamId = ""
+			if streamID != "" {
+				broadcast.ContentDetails.BoundStreamId = string(streamID)
+			} else {
+				broadcast.ContentDetails.BoundStreamId = ""
+			}
 			broadcast.ContentDetails.MonitorStream = nil
 			broadcast.ContentDetails.ForceSendFields = []string{"EnableAutoStop"}
 			broadcast.Snippet.ScheduledStartTime = now.Format("2006-01-02T15:04:05") + ".00Z"
@@ -870,7 +951,7 @@ func (yt *YouTube) StartStream(
 			video.Snippet.PublishedAt = ""
 			video.Status.PublishAt = ""
 			switch profile.TemplateTags {
-			case TemplateTagsUndefined, TemplateTagsIgnore:
+			case UndefinedTemplateTags, TemplateTagsIgnore:
 				video.Snippet.Tags = profile.Tags
 			case TemplateTagsUseAsPrimary:
 				video.Snippet.Tags = append(video.Snippet.Tags, profile.Tags...)
@@ -1097,18 +1178,54 @@ func (yt *YouTube) getChatListener(
 	})
 }
 
-func (yt *YouTube) EndStream(
+func (yt *YouTube) SetStreamActive(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
+	isActive bool,
+) error {
+	if !isActive {
+		return yt.endStream(ctx, streamID)
+	}
+
+	// Check if already active
+	var activeBroadcasts []*youtube.LiveBroadcast
+	err := yt.IterateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
+		if yt.isMatchingStreamID(broadcast, streamID) {
+			activeBroadcasts = append(activeBroadcasts, broadcast)
+		}
+		return nil
+	}, "contentDetails")
+	if err != nil {
+		return fmt.Errorf("unable to check for active broadcasts: %w", err)
+	}
+
+	if len(activeBroadcasts) > 0 {
+		return nil
+	}
+
+	return yt.startStream(ctx, streamID)
+}
+
+func (yt *YouTube) endStream(
+	ctx context.Context,
+	streamID streamcontrol.StreamID,
 ) error {
 	expectedVideoIDs := map[string]struct{}{}
 	yt.currentLiveBroadcastsLocker.Do(ctx, func() {
-		for _, broadcast := range yt.currentLiveBroadcasts {
-			expectedVideoIDs[broadcast.Id] = struct{}{}
+		for i := 0; i < len(yt.currentLiveBroadcasts); i++ {
+			broadcast := yt.currentLiveBroadcasts[i]
+			if yt.isMatchingStreamID(broadcast, streamID) {
+				expectedVideoIDs[broadcast.Id] = struct{}{}
+				yt.currentLiveBroadcasts = append(yt.currentLiveBroadcasts[:i], yt.currentLiveBroadcasts[i+1:]...)
+				i--
+			}
 		}
-		yt.currentLiveBroadcasts = yt.currentLiveBroadcasts[:0]
 	})
 
 	return yt.updateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
+		if !yt.isMatchingStreamID(broadcast, streamID) {
+			return nil
+		}
 		if err := yt.deleteChatListenerByBroadcast(ctx, broadcast); err != nil {
 			logger.Warnf(ctx, "unable to delete the chat listener for %s: %v", broadcast.Id, err)
 		}
@@ -1138,6 +1255,7 @@ func ParseTimestamp(s string) (time.Time, error) {
 
 func (yt *YouTube) GetStreamStatus(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 ) (_ret *streamcontrol.StreamStatus, _err error) {
 	// TODO: try to use yt.currentLiveBroadcasts instead of re-requesting the list to
 	//       save some API quota points.
@@ -1154,6 +1272,10 @@ func (yt *YouTube) GetStreamStatus(
 
 	var requestStatsVideoIDs []string
 	err := yt.IterateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
+		activeBroadcasts = append(activeBroadcasts, broadcast)
+		if !yt.isMatchingStreamID(broadcast, streamID) {
+			return nil
+		}
 		ts := broadcast.Snippet.ActualStartTime
 		_startedAt, err := ParseTimestamp(ts)
 		if err != nil {
@@ -1165,7 +1287,6 @@ func (yt *YouTube) GetStreamStatus(
 		} else {
 			requestStatsVideoIDs = append(requestStatsVideoIDs, broadcast.Id)
 		}
-		activeBroadcasts = append(activeBroadcasts, broadcast)
 		isActive = true
 		return nil
 	}, liveBroadcastParts...)
@@ -1268,17 +1389,32 @@ func (yt *YouTube) GetStreamStatus(
 	}, nil
 }
 
-func (yt *YouTube) Flush(
+func (yt *YouTube) GetStreams(
 	ctx context.Context,
-) error {
-	// Unfortunately, we do not support sending accumulated changes, and we change things immediately right away.
-	// So nothing to do here:
-	return nil
+) (_ret []streamcontrol.StreamInfo, _err error) {
+	logger.Debugf(ctx, "GetStreams")
+	defer func() { logger.Debugf(ctx, "/GetStreams: len(result):%d; err:%v", len(_ret), _err) }()
+	streams, err := yt.ListStreams(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ret := make([]streamcontrol.StreamInfo, 0, len(streams))
+	for _, s := range streams {
+		ret = append(ret, streamcontrol.StreamInfo{
+			ID:   streamcontrol.StreamID(s.Id),
+			Name: s.Snippet.Title,
+		})
+	}
+	return ret, nil
 }
 
 func (yt *YouTube) ListStreams(
 	ctx context.Context,
-) ([]*youtube.LiveStream, error) {
+) (_ret []*youtube.LiveStream, _err error) {
+	logger.Debugf(ctx, "ListStreams")
+	defer func() {
+		logger.Debugf(ctx, "/ListStreams: len(result):%d; err:%v", len(_ret), _err)
+	}()
 	response, err := yt.YouTubeClient.GetStreams(ctx, []string{"id", "snippet", "cdn", "status"})
 	logger.Debugf(ctx, "YouTube.LiveStreams result: %v", err)
 	if err != nil {
@@ -1397,6 +1533,7 @@ func (yt *YouTube) fixError(ctx context.Context, err error, counterPtr *int) boo
 
 func (yt *YouTube) GetChatMessagesChan(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 ) (<-chan streamcontrol.Event, error) {
 	logger.Debugf(ctx, "GetChatMessagesChan")
 	defer logger.Debugf(ctx, "/GetChatMessagesChan")
@@ -1426,6 +1563,7 @@ func (yt *YouTube) GetChatMessagesChan(
 
 func (yt *YouTube) SendChatMessage(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 	message string,
 ) (_err error) {
 	logger.Debugf(ctx, "SendChatMessage(ctx, '%s')", message)
@@ -1435,7 +1573,7 @@ func (yt *YouTube) SendChatMessage(
 		for _, broadcast := range yt.currentLiveBroadcasts {
 			commentInfo := &youtube.CommentThread{
 				Snippet: &youtube.CommentThreadSnippet{
-					ChannelId: yt.Config.Config.ChannelID,
+					ChannelId: yt.Config.ChannelID,
 					TopLevelComment: &youtube.Comment{
 						Snippet: &youtube.CommentSnippet{
 							TextOriginal: message,
@@ -1456,6 +1594,7 @@ func (yt *YouTube) SendChatMessage(
 
 func (yt *YouTube) RemoveChatMessage(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 	messageID streamcontrol.EventID,
 ) (_err error) {
 	logger.Debugf(ctx, "RemoveChatMessage(ctx, '%s')", messageID)
@@ -1500,6 +1639,7 @@ func (yt *YouTube) RemoveChatMessage(
 }
 func (yt *YouTube) BanUser(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 	userID streamcontrol.UserID,
 	reason string,
 	deadline time.Time,
@@ -1545,6 +1685,7 @@ func (yt *YouTube) IsChannelStreaming(
 
 func (yt *YouTube) RaidTo(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 	chanID streamcontrol.UserID,
 ) error {
 	// https://issuetracker.google.com/issues/408498307?pli=1
@@ -1553,19 +1694,20 @@ func (yt *YouTube) RaidTo(
 
 func (yt *YouTube) Shoutout(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 	chanID streamcontrol.UserID,
 ) error {
 	resp, err := yt.YouTubeClient.Search(ctx, string(chanID), "", []string{"snippet"})
 	if err != nil {
 		logger.Errorf(ctx, "unable to get channel info ('%s'): %w", chanID, err)
-		return yt.shoutoutWithoutSearch(ctx, chanID)
+		return yt.shoutoutWithoutSearch(ctx, streamID, chanID)
 	}
 	if len(resp.Items) == 0 {
-		return yt.shoutoutWithoutSearch(ctx, chanID)
+		return yt.shoutoutWithoutSearch(ctx, streamID, chanID)
 	}
 	lastStream := resp.Items[0]
 
-	err = yt.SendChatMessage(ctx, fmt.Sprintf("Shoutout to %s! Great creator! Their last stream: '%s'. Take a look at their channel and click that subscribe button! https://www.youtube.com/channel/%s", lastStream.Snippet.ChannelTitle, lastStream.Snippet.Title, chanID))
+	err = yt.SendChatMessage(ctx, streamID, fmt.Sprintf("Shoutout to %s! Great creator! Their last stream: '%s'. Take a look at their channel and click that subscribe button! https://www.youtube.com/channel/%s", lastStream.Snippet.ChannelTitle, lastStream.Snippet.Title, chanID))
 	if err != nil {
 		return fmt.Errorf("unable to send the message (case #0): %w", err)
 	}
@@ -1574,9 +1716,10 @@ func (yt *YouTube) Shoutout(
 
 func (yt *YouTube) shoutoutWithoutSearch(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 	chanID streamcontrol.UserID,
 ) error {
-	err := yt.SendChatMessage(ctx, fmt.Sprintf("Shoutout to a great creator! Take a look at their channel and click that subscribe button! https://www.youtube.com/channel/%s", chanID))
+	err := yt.SendChatMessage(ctx, streamID, fmt.Sprintf("Shoutout to a great creator! Take a look at their channel and click that subscribe button! https://www.youtube.com/channel/%s", chanID))
 	if err != nil {
 		return fmt.Errorf("unable to send the message (case #1): %w", err)
 	}

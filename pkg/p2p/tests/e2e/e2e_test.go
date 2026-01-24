@@ -1,5 +1,4 @@
-//go:build e2e_tests
-// +build e2e_tests
+//go:build test_e2e
 
 package e2e
 
@@ -68,7 +67,7 @@ func newSignaler(ctx context.Context) (*wrtcsgl.Signaler, error) {
 	return signaler, nil
 }
 
-func TestE2E(t *testing.T) {
+func TestP2PE2E(t *testing.T) {
 	var wg sync.WaitGroup
 
 	ctx := logger.CtxWithLogger(context.Background(), xlogrus.Default().WithLevel(logger.LevelTrace))

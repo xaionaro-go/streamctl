@@ -30,7 +30,7 @@ func (p *Panel) updateStreamStatus(
 	defer cancelFn()
 
 	var wg sync.WaitGroup
-	for _, platID := range []streamcontrol.PlatformName{
+	for _, platID := range []streamcontrol.PlatformID{
 		obs.ID,
 		youtube.ID,
 		twitch.ID,
@@ -50,13 +50,26 @@ func (p *Panel) updateStreamStatus(
 			}
 
 			if !ok {
-				p.streamStatusLocker.Do(ctx, func() {
-					p.setStreamStatus(ctx, platID, streamStatus{})
-				})
+				p.setStreamStatus(ctx, platID, streamStatus{})
 				return
 			}
 
-			status, err := p.StreamD.GetStreamStatus(ctx, platID)
+			accounts, err := p.StreamD.GetAccounts(ctx, platID)
+			if err != nil {
+				logger.Error(ctx, err)
+				p.setStreamStatus(ctx, platID, streamStatus{
+					BackendIsEnabled: true,
+					BackendError:     err,
+				})
+				return
+			}
+			if len(accounts) == 0 {
+				p.setStreamStatus(ctx, platID, streamStatus{})
+				return
+			}
+
+			streamID := streamcontrol.NewStreamIDFullyQualified(platID, accounts[0].AccountID, streamcontrol.DefaultStreamID)
+			status, err := p.StreamD.GetStreamStatus(ctx, streamID)
 			if err != nil {
 				logger.Error(ctx, err)
 				p.setStreamStatus(ctx, platID, streamStatus{
@@ -78,7 +91,7 @@ func (p *Panel) updateStreamStatus(
 
 func (p *Panel) setStreamStatus(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
+	platID streamcontrol.PlatformID,
 	newStatus streamStatus,
 ) {
 	p.streamStatusLocker.Do(ctx, func() {

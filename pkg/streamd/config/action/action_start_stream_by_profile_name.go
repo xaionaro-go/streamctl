@@ -1,6 +1,8 @@
 package action
 
 import (
+	"encoding/json"
+
 	"github.com/xaionaro-go/serializable"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 )
@@ -10,10 +12,8 @@ func init() {
 }
 
 type StartStreamByProfileName struct {
-	PlatID      streamcontrol.PlatformName `yaml:"platform,omitempty"     json:"platform,omitempty"`
-	Title       *string                    `yaml:"title,omitempty"        json:"title,omitempty"`
-	Description *string                    `yaml:"description,omitempty"  json:"description,omitempty"`
-	ProfileName string                     `yaml:"profile_name,omitempty" json:"profile_name,omitempty"`
+	StreamID    streamcontrol.StreamIDFullyQualified `yaml:"stream_id,omitempty" json:"stream_id,omitempty"`
+	ProfileName streamcontrol.ProfileName            `yaml:"profile_name,omitempty" json:"profile_name,omitempty"`
 }
 
 var _ Action = (*StartStreamByProfileName)(nil)
@@ -24,5 +24,6 @@ func (a *StartStreamByProfileName) String() string {
 	if a == nil {
 		return "null"
 	}
-	return string(tryJSON(*a))
+	b, _ := json.Marshal(a)
+	return string(b)
 }

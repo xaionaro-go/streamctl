@@ -17,7 +17,6 @@ import (
 type ProfileMetadata struct {
 	DefaultStreamTitle       string
 	DefaultStreamDescription string
-	TopicTags                []string
 	MaxOrder                 int
 }
 
@@ -57,23 +56,47 @@ func NewConfig() Config {
 
 func NewSampleConfig() Config {
 	cfg := NewConfig()
-	cfg.Backends[obs.ID].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{
-		"some_profile": obs.StreamProfile{},
+	cfg.Backends[obs.ID].Accounts = map[streamcontrol.AccountID]streamcontrol.RawMessage{
+		streamcontrol.DefaultAccountID: streamcontrol.ToRawMessage(streamcontrol.AccountConfigBase[obs.StreamProfile]{
+			StreamProfiles: map[streamcontrol.StreamID]streamcontrol.StreamProfiles[obs.StreamProfile]{
+				streamcontrol.DefaultStreamID: {
+					"some_profile": {},
+				},
+			},
+		}),
 	}
-	cfg.Backends[twitch.ID].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{
-		"some_profile": twitch.StreamProfile{},
+	cfg.Backends[twitch.ID].Accounts = map[streamcontrol.AccountID]streamcontrol.RawMessage{
+		streamcontrol.DefaultAccountID: streamcontrol.ToRawMessage(streamcontrol.AccountConfigBase[twitch.StreamProfile]{
+			StreamProfiles: map[streamcontrol.StreamID]streamcontrol.StreamProfiles[twitch.StreamProfile]{
+				streamcontrol.DefaultStreamID: {
+					"some_profile": {},
+				},
+			},
+		}),
 	}
-	cfg.Backends[kick.ID].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{
-		"some_profile": kick.StreamProfile{},
+	cfg.Backends[kick.ID].Accounts = map[streamcontrol.AccountID]streamcontrol.RawMessage{
+		streamcontrol.DefaultAccountID: streamcontrol.ToRawMessage(streamcontrol.AccountConfigBase[kick.StreamProfile]{
+			StreamProfiles: map[streamcontrol.StreamID]streamcontrol.StreamProfiles[kick.StreamProfile]{
+				streamcontrol.DefaultStreamID: {
+					"some_profile": {},
+				},
+			},
+		}),
 	}
-	cfg.Backends[youtube.ID].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{
-		"some_profile": youtube.StreamProfile{},
+	cfg.Backends[youtube.ID].Accounts = map[streamcontrol.AccountID]streamcontrol.RawMessage{
+		streamcontrol.DefaultAccountID: streamcontrol.ToRawMessage(streamcontrol.AccountConfigBase[youtube.StreamProfile]{
+			StreamProfiles: map[streamcontrol.StreamID]streamcontrol.StreamProfiles[youtube.StreamProfile]{
+				streamcontrol.DefaultStreamID: {
+					"some_profile": {},
+				},
+			},
+		}),
 	}
 	return cfg
 }
 
 func (cfg *Config) Convert() error {
-	return cfg.Backends.Convert()
+	return nil
 }
 
 var _ = NewSampleConfig

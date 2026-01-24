@@ -7,7 +7,7 @@ import (
 )
 
 type StreamPlayer struct {
-	StreamID             StreamID
+	StreamSourceID       StreamSourceID
 	PlayerType           player.Backend
 	Disabled             bool
 	StreamPlaybackConfig sptypes.Config

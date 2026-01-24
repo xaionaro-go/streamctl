@@ -244,7 +244,7 @@ func main() {
 		)
 		streamdGRPC = server.NewGRPCServer(streamD)
 		var obsGRPCClose context.CancelFunc
-		obsGRPC, obsGRPCClose, err = streamD.OBS(ctx)
+		obsGRPC, obsGRPCClose, err = streamD.OBS(ctx, "")
 		if obsGRPCClose != nil {
 			defer obsGRPCClose()
 		}
@@ -276,7 +276,7 @@ func main() {
 			errmon.ObserveErrorCtx(ctx, err)
 			return err
 		},
-		func(listenPort uint16, platID streamcontrol.PlatformName, authURL string) bool {
+		func(listenPort uint16, platID streamcontrol.PlatformID, authURL string) bool {
 			logger.Debugf(ctx, "streamd.UI.OpenOAuthURL(%d, %s, '%s')", listenPort, platID, authURL)
 			defer logger.Debugf(
 				ctx,

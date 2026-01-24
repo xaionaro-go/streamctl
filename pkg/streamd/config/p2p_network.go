@@ -22,6 +22,7 @@ type P2PVPNConfig struct {
 }
 
 type P2PNetwork struct {
+	Enable     bool          `yaml:"enable"`
 	NetworkID  string        `yaml:"network_id"`
 	PeerName   string        `yaml:"peer_name"`
 	PrivateKey P2PPrivateKey `yaml:"private_key"`

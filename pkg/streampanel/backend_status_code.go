@@ -3,7 +3,7 @@ package streampanel
 type BackendStatusCode uint
 
 const (
-	BackendStatusCodeUndefined = BackendStatusCode(iota)
+	UndefinedBackendStatusCode = BackendStatusCode(iota)
 	BackendStatusCodeReady
 	BackendStatusCodeNotNow
 	BackendStatusCodeDisable

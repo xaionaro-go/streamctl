@@ -3,9 +3,9 @@ package streampanel
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
-	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -13,26 +13,37 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/go-ng/xmath"
-	"github.com/xaionaro-go/kickcom"
-	"github.com/xaionaro-go/observability"
+	"github.com/goccy/go-yaml"
 	gconsts "github.com/xaionaro-go/streamctl/pkg/consts"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
-	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	streamdconfig "github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/xsync"
 )
 
 type Profile struct {
 	streamdconfig.ProfileMetadata
-	Name        streamcontrol.ProfileName
-	PerPlatform map[streamcontrol.PlatformName]streamcontrol.AbstractStreamProfile
+	Name      streamcontrol.ProfileName
+	PerStream map[streamcontrol.StreamIDFullyQualified]streamcontrol.StreamProfile
+}
+
+func getStreamProfileBase(prof streamcontrol.StreamProfile) *streamcontrol.StreamProfileBase {
+	if prof == nil {
+		return &streamcontrol.StreamProfileBase{}
+	}
+	raw := streamcontrol.ToRawMessage(prof)
+	var base streamcontrol.StreamProfileBase
+	_ = yaml.Unmarshal(raw, &base)
+	return &base
 }
 
 func (p *Panel) editProfileWindow(ctx context.Context) fyne.Window {
+	if p.selectedProfileName == nil {
+		return nil
+	}
 	oldProfile := xsync.DoA2R1(ctx, &p.configCacheLocker, getProfile, p.configCache, *p.selectedProfileName)
 	w := p.profileWindow(
 		ctx,
@@ -55,6 +66,9 @@ func (p *Panel) editProfileWindow(ctx context.Context) fyne.Window {
 }
 
 func (p *Panel) cloneProfileWindow(ctx context.Context) fyne.Window {
+	if p.selectedProfileName == nil {
+		return nil
+	}
 	oldProfile := xsync.DoA2R1(ctx, &p.configCacheLocker, getProfile, p.configCache, *p.selectedProfileName)
 	w := p.profileWindow(
 		ctx,
@@ -75,6 +89,9 @@ func (p *Panel) cloneProfileWindow(ctx context.Context) fyne.Window {
 }
 
 func (p *Panel) deleteProfileWindow(ctx context.Context) fyne.Window {
+	if p.selectedProfileName == nil {
+		return nil
+	}
 	w := p.app.NewWindow(gconsts.AppName + ": Delete the profile?")
 
 	yesButton := widget.NewButton("YES", func() {
@@ -112,9 +129,18 @@ func (p *Panel) newProfileWindow(ctx context.Context) fyne.Window {
 			found := false
 			p.configCacheLocker.Do(ctx, func() {
 				for _, platCfg := range p.configCache.Backends {
-					_, ok := platCfg.GetStreamProfile(profile.Name)
-					if ok {
-						found = true
+					for _, accRaw := range platCfg.Accounts {
+						for _, sProfs := range accRaw.GetStreamProfiles() {
+							if _, ok := sProfs[profile.Name]; ok {
+								found = true
+								break
+							}
+						}
+						if found {
+							break
+						}
+					}
+					if found {
 						break
 					}
 				}
@@ -138,13 +164,6 @@ func (p *Panel) profileWindow(
 	values Profile,
 	commitFn func(context.Context, Profile) error,
 ) fyne.Window {
-	var (
-		obsProfile     *obs.StreamProfile
-		twitchProfile  *twitch.StreamProfile
-		kickProfile    *kick.StreamProfile
-		youtubeProfile *youtube.StreamProfile
-	)
-
 	w := p.app.NewWindow(windowName)
 	resizeWindow(w, fyne.NewSize(1500, 1000))
 	profileName := widget.NewEntry()
@@ -161,12 +180,11 @@ func (p *Panel) profileWindow(
 	defaultStreamDescription := widget.NewMultiLineEntry()
 	defaultStreamDescription.SetPlaceHolder("default stream description")
 	defaultStreamDescription.SetText(values.DefaultStreamDescription)
+	defaultStreamDescription.SetMinRowsVisible(3)
 
-	commonTagsEditor := newTagsEditor(values.TopicTags, 0, 0)
-
-	backendEnabled := map[streamcontrol.PlatformName]bool{}
-	backendData := map[streamcontrol.PlatformName]any{}
-	for _, backendID := range []streamcontrol.PlatformName{
+	backendEnabled := map[streamcontrol.PlatformID]bool{}
+	backendData := map[streamcontrol.PlatformID]any{}
+	for _, backendID := range []streamcontrol.PlatformID{
 		obs.ID,
 		twitch.ID,
 		kick.ID,
@@ -191,449 +209,51 @@ func (p *Panel) profileWindow(
 
 		backendData[backendID] = info.Data
 	}
-	_ = backendData[obs.ID].(api.BackendDataOBS)
-	dataTwitch := backendData[twitch.ID].(api.BackendDataTwitch)
-	dataKick := backendData[kick.ID].(api.BackendDataKick)
-	_ = dataKick // TODO: delete me!
-	dataYouTube := backendData[youtube.ID].(api.BackendDataYouTube)
 
 	var bottomContentLeft, bottomContentRight, bottomContentCommon []fyne.CanvasObject
 
-	bottomContentLeft = append(bottomContentLeft, widget.NewLabel("Tags for LLM (to re-generate the title):"))
-	bottomContentLeft = append(bottomContentLeft, commonTagsEditor.CanvasObject)
-	bottomContentLeft = append(bottomContentLeft, widget.NewSeparator())
-	bottomContentLeft = append(bottomContentLeft, widget.NewRichTextFromMarkdown("# OBS:"))
-	if backendEnabled[obs.ID] {
-		if platProfile := values.PerPlatform[obs.ID]; platProfile != nil {
-			var err error
-			obsProfile, err = streamcontrol.GetStreamProfile[obs.StreamProfile](ctx, platProfile)
-			if err != nil {
-				p.DisplayError(fmt.Errorf("unable to convert the stream profile: %w", err))
-			}
-		} else {
-			obsProfile = &obs.StreamProfile{}
-		}
+	// Initialize individual platform profiles to track their streams
+	perStream := make(map[streamcontrol.StreamIDFullyQualified]streamcontrol.StreamProfile)
+	maps.Copy(perStream, values.PerStream)
 
-		enableRecordingCheck := widget.NewCheck("Enable recording", func(b bool) {
-			obsProfile.EnableRecording = b
-		})
-		enableRecordingCheck.SetChecked(obsProfile.EnableRecording)
-		bottomContentLeft = append(bottomContentLeft, enableRecordingCheck)
-	}
+	streamsUI, streamsSaveFunc := p.newGlobalStreamsSelectUI(
+		ctx,
+		w,
+		backendEnabled,
+		backendData,
+		perStream,
+	)
 
-	var getTwitchTags func() []string
-	bottomContentRight = append(bottomContentRight, widget.NewRichTextFromMarkdown("# Twitch:"))
-	if backendEnabled[twitch.ID] {
-		if platProfile := values.PerPlatform[twitch.ID]; platProfile != nil {
-			var err error
-			twitchProfile, err = streamcontrol.GetStreamProfile[twitch.StreamProfile](ctx, platProfile)
-			if err != nil {
-				p.DisplayError(fmt.Errorf("unable to convert the stream profile: %w", err))
-			}
-		} else {
-			twitchProfile = &twitch.StreamProfile{}
-		}
-
-		twitchCategory := widget.NewEntry()
-		twitchCategory.SetPlaceHolder("twitch category")
-
-		selectTwitchCategoryBox := container.NewHBox()
-		bottomContentRight = append(bottomContentRight, selectTwitchCategoryBox)
-		twitchCategory.OnChanged = func(text string) {
-			selectTwitchCategoryBox.RemoveAll()
-			if text == "" {
-				return
-			}
-			text = cleanTwitchCategoryName(text)
-			count := 0
-			for _, cat := range dataTwitch.Cache.Categories {
-				if strings.Contains(cleanTwitchCategoryName(cat.Name), text) {
-					selectedTwitchCategoryContainer := container.NewHBox()
-					catName := cat.Name
-					tagContainerRemoveButton := widget.NewButtonWithIcon(
-						catName,
-						theme.ContentAddIcon(),
-						func() {
-							twitchCategory.OnSubmitted(catName)
-						},
-					)
-					selectedTwitchCategoryContainer.Add(tagContainerRemoveButton)
-					selectTwitchCategoryBox.Add(selectedTwitchCategoryContainer)
-					count++
-					if count > 10 {
-						break
-					}
-				}
-			}
-		}
-
-		selectedTwitchCategoryBox := container.NewHBox()
-		bottomContentRight = append(bottomContentRight, selectedTwitchCategoryBox)
-
-		setSelectedTwitchCategory := func(catName string) {
-			selectedTwitchCategoryBox.RemoveAll()
-			selectedTwitchCategoryContainer := container.NewHBox()
-			tagContainerRemoveButton := widget.NewButtonWithIcon(
-				catName,
-				theme.ContentClearIcon(),
-				func() {
-					selectedTwitchCategoryBox.Remove(selectedTwitchCategoryContainer)
-					twitchProfile.CategoryName = nil
-				},
-			)
-			selectedTwitchCategoryContainer.Add(tagContainerRemoveButton)
-			selectedTwitchCategoryBox.Add(selectedTwitchCategoryContainer)
-			twitchProfile.CategoryName = &catName
-		}
-
-		if twitchProfile.CategoryName != nil {
-			setSelectedTwitchCategory(*twitchProfile.CategoryName)
-		}
-		if twitchProfile.CategoryID != nil {
-			catID := *twitchProfile.CategoryID
-			for _, cat := range dataTwitch.Cache.Categories {
-				if cat.ID == catID {
-					setSelectedTwitchCategory(cat.Name)
-					break
-				}
-			}
-		}
-
-		twitchCategory.OnSubmitted = func(text string) {
-			if text == "" {
-				return
-			}
-			text = cleanTwitchCategoryName(text)
-			for _, cat := range dataTwitch.Cache.Categories {
-				if cleanTwitchCategoryName(cat.Name) == text {
-					setSelectedTwitchCategory(cat.Name)
-					observability.Go(ctx, func(ctx context.Context) {
-						time.Sleep(100 * time.Millisecond)
-						twitchCategory.SetText("")
-					})
-					return
-				}
-			}
-		}
-		bottomContentRight = append(bottomContentRight, twitchCategory)
-
-		twitchTagsEditor := newTagsEditor(twitchProfile.Tags[:], 10, 0)
-		bottomContentRight = append(bottomContentRight, widget.NewLabel("Tags:"))
-		bottomContentRight = append(bottomContentRight, twitchTagsEditor.CanvasObject)
-		getTwitchTags = twitchTagsEditor.GetTags
-	} else {
-		bottomContentRight = append(bottomContentRight, widget.NewLabel("Twitch is disabled"))
-	}
-
-	bottomContentRight = append(bottomContentRight, widget.NewSeparator())
-	bottomContentRight = append(bottomContentRight, widget.NewRichTextFromMarkdown("# Kick:"))
-	if backendEnabled[kick.ID] {
-		if platProfile := values.PerPlatform[kick.ID]; platProfile != nil {
-			var err error
-			kickProfile, err = streamcontrol.GetStreamProfile[kick.StreamProfile](ctx, platProfile)
-			if err != nil {
-				p.DisplayError(fmt.Errorf("unable to convert the stream profile: %w", err))
-			}
-		} else {
-			kickProfile = &kick.StreamProfile{}
-		}
-
-		kickCategories := dataKick.Cache.GetCategories()
-		catN := map[string]kickcom.CategoryV1Short{}
-		catI := map[uint64]kickcom.CategoryV1Short{}
-		for _, cat := range kickCategories {
-			catN[cleanKickCategoryName(cat.Name)] = cat
-			catI[cat.ID] = cat
-		}
-
-		kickCategory := widget.NewEntry()
-		kickCategory.SetPlaceHolder("kick category")
-
-		selectKickCategoryBox := container.NewHBox()
-		bottomContentRight = append(bottomContentRight, selectKickCategoryBox)
-		kickCategory.OnChanged = func(text string) {
-			selectKickCategoryBox.RemoveAll()
-			if text == "" {
-				return
-			}
-			text = cleanKickCategoryName(text)
-			count := 0
-			for _, cat := range kickCategories {
-				if strings.Contains(cleanKickCategoryName(cat.Name), text) {
-					selectedKickCategoryContainer := container.NewHBox()
-					catName := cat.Name
-					tagContainerRemoveButton := widget.NewButtonWithIcon(
-						catName,
-						theme.ContentAddIcon(),
-						func() {
-							kickCategory.OnSubmitted(catName)
-						},
-					)
-					selectedKickCategoryContainer.Add(tagContainerRemoveButton)
-					selectKickCategoryBox.Add(selectedKickCategoryContainer)
-					count++
-					if count > 10 {
-						break
-					}
-				}
-			}
-		}
-
-		selectedKickCategoryBox := container.NewHBox()
-		bottomContentRight = append(bottomContentRight, selectedKickCategoryBox)
-
-		setSelectedKickCategory := func(catID uint64) {
-			selectedKickCategoryBox.RemoveAll()
-			selectedKickCategoryContainer := container.NewHBox()
-			tagContainerRemoveButton := widget.NewButtonWithIcon(
-				catI[catID].Name,
-				theme.ContentClearIcon(),
-				func() {
-					selectedKickCategoryBox.Remove(selectedKickCategoryContainer)
-					kickProfile.CategoryID = nil
-				},
-			)
-			selectedKickCategoryContainer.Add(tagContainerRemoveButton)
-			selectedKickCategoryBox.Add(selectedKickCategoryContainer)
-			kickProfile.CategoryID = &catID
-		}
-
-		if kickProfile.CategoryID != nil {
-			setSelectedKickCategory(*kickProfile.CategoryID)
-		}
-
-		kickCategory.OnSubmitted = func(text string) {
-			if text == "" {
-				return
-			}
-			text = cleanKickCategoryName(text)
-			cat := catN[text]
-			setSelectedKickCategory(uint64(cat.ID))
-			observability.Go(ctx, func(ctx context.Context) {
-				time.Sleep(100 * time.Millisecond)
-				kickCategory.SetText("")
-			})
-		}
-		bottomContentRight = append(bottomContentRight, kickCategory)
-	} else {
-		bottomContentRight = append(bottomContentRight, widget.NewLabel("Kick is disabled"))
-	}
-
-	var getYoutubeTags func() []string
-	bottomContentRight = append(bottomContentRight, widget.NewSeparator())
-	bottomContentRight = append(bottomContentRight, widget.NewRichTextFromMarkdown("# YouTube:"))
-	if backendEnabled[youtube.ID] {
-		if platProfile := values.PerPlatform[youtube.ID]; platProfile != nil {
-			var err error
-			youtubeProfile, err = streamcontrol.GetStreamProfile[youtube.StreamProfile](ctx, platProfile)
-			if err != nil {
-				p.DisplayError(fmt.Errorf("unable to convert the stream profile: %w", err))
-			}
-		} else {
-			youtubeProfile = &youtube.StreamProfile{}
-		}
-
-		autoNumerateCheck := widget.NewCheck("Auto-numerate", func(b bool) {
-			youtubeProfile.AutoNumerate = b
-		})
-		autoNumerateCheck.SetChecked(youtubeProfile.AutoNumerate)
-		autoNumerateHint := NewHintWidget(
-			w,
-			"When enabled, it adds the number of the stream to the stream's title.\n\nFor example 'Watching presidential debate' -> 'Watching presidential debate [#52]'.",
-		)
-		bottomContentRight = append(
-			bottomContentRight,
-			container.NewHBox(autoNumerateCheck, autoNumerateHint),
-		)
-
-		youtubeTemplate := widget.NewEntry()
-		youtubeTemplate.SetPlaceHolder("youtube live recording template")
-
-		selectYoutubeTemplateBox := container.NewHBox()
-		bottomContentRight = append(bottomContentRight, selectYoutubeTemplateBox)
-		youtubeTemplate.OnChanged = func(text string) {
-			selectYoutubeTemplateBox.RemoveAll()
-			if text == "" {
-				return
-			}
-			text = cleanYoutubeRecordingName(text)
-			count := 0
-			for _, bc := range dataYouTube.Cache.Broadcasts {
-				if strings.Contains(cleanYoutubeRecordingName(bc.Snippet.Title), text) {
-					selectedYoutubeRecordingsContainer := container.NewHBox()
-					recName := bc.Snippet.Title
-					tagContainerRemoveButton := widget.NewButtonWithIcon(
-						recName,
-						theme.ContentAddIcon(),
-						func() {
-							youtubeTemplate.OnSubmitted(recName)
-						},
-					)
-					selectedYoutubeRecordingsContainer.Add(tagContainerRemoveButton)
-					selectYoutubeTemplateBox.Add(selectedYoutubeRecordingsContainer)
-					count++
-					if count > 10 {
-						break
-					}
-				}
-			}
-		}
-
-		selectedYoutubeBroadcastBox := container.NewHBox()
-		bottomContentRight = append(bottomContentRight, selectedYoutubeBroadcastBox)
-
-		setSelectedYoutubeBroadcast := func(bc *youtube.LiveBroadcast) {
-			selectedYoutubeBroadcastBox.RemoveAll()
-			selectedYoutubeBroadcastContainer := container.NewHBox()
-			recName := bc.Snippet.Title
-			tagContainerRemoveButton := widget.NewButtonWithIcon(
-				recName,
-				theme.ContentClearIcon(),
-				func() {
-					selectedYoutubeBroadcastBox.Remove(selectedYoutubeBroadcastContainer)
-					youtubeProfile.TemplateBroadcastIDs = youtubeProfile.TemplateBroadcastIDs[:0]
-				},
-			)
-			selectedYoutubeBroadcastContainer.Add(tagContainerRemoveButton)
-			selectedYoutubeBroadcastBox.Add(selectedYoutubeBroadcastContainer)
-			youtubeProfile.TemplateBroadcastIDs = []string{bc.Id}
-		}
-
-		for _, bcID := range youtubeProfile.TemplateBroadcastIDs {
-			for _, bc := range dataYouTube.Cache.Broadcasts {
-				if bc.Id != bcID {
-					continue
-				}
-				setSelectedYoutubeBroadcast(bc)
-			}
-		}
-
-		youtubeTemplate.OnSubmitted = func(text string) {
-			if text == "" {
-				return
-			}
-			text = cleanYoutubeRecordingName(text)
-			for _, bc := range dataYouTube.Cache.Broadcasts {
-				if cleanYoutubeRecordingName(bc.Snippet.Title) == text {
-					setSelectedYoutubeBroadcast(bc)
-					observability.Go(ctx, func(ctx context.Context) {
-						time.Sleep(100 * time.Millisecond)
-						youtubeTemplate.SetText("")
-					})
-					return
-				}
-			}
-		}
-		bottomContentRight = append(bottomContentRight, youtubeTemplate)
-
-		templateTagsLabel := widget.NewLabel("Template tags:")
-		templateTags := widget.NewSelect(
-			[]string{"ignore", "use as primary", "use as additional"},
-			func(s string) {
-				switch s {
-				case "ignore":
-					youtubeProfile.TemplateTags = youtube.TemplateTagsIgnore
-				case "use as primary":
-					youtubeProfile.TemplateTags = youtube.TemplateTagsUseAsPrimary
-				case "use as additional":
-					youtubeProfile.TemplateTags = youtube.TemplateTagsUseAsAdditional
-				default:
-					p.DisplayError(fmt.Errorf("unexpected new value of 'template tags': '%s'", s))
-				}
-			},
-		)
-		switch youtubeProfile.TemplateTags {
-		case youtube.TemplateTagsUndefined, youtube.TemplateTagsIgnore:
-			templateTags.SetSelected("ignore")
-		case youtube.TemplateTagsUseAsPrimary:
-			templateTags.SetSelected("use as primary")
-		case youtube.TemplateTagsUseAsAdditional:
-			templateTags.SetSelected("use as additional")
-		default:
-			p.DisplayError(
-				fmt.Errorf(
-					"unexpected current value of 'template tags': '%s'",
-					youtubeProfile.TemplateTags,
-				),
-			)
-		}
-		templateTags.SetSelected(youtubeProfile.TemplateTags.String())
-		templateTagsHint := NewHintWidget(
-			w,
-			"'ignore' will ignore the tags set in the template; 'use as primary' will put the tags of the template first and then add the profile tags; 'use as additional' will put the tags of the profile first and then add the template tags",
-		)
-		bottomContentRight = append(
-			bottomContentRight,
-			container.NewHBox(templateTagsLabel, templateTags, templateTagsHint),
-		)
-
-		youtubeTagsEditor := newTagsEditor(youtubeProfile.Tags, 0, youtube.LimitTagsLength)
-		bottomContentRight = append(bottomContentRight, widget.NewLabel("Tags:"))
-		bottomContentRight = append(bottomContentRight, youtubeTagsEditor.CanvasObject)
-		getYoutubeTags = youtubeTagsEditor.GetTags
-	} else {
-		bottomContentRight = append(bottomContentRight, widget.NewLabel("YouTube is disabled"))
-	}
+	bottomContentRight = append(bottomContentRight, widget.NewRichTextFromMarkdown("# STREAMS:"))
+	bottomContentRight = append(bottomContentRight, streamsUI)
 
 	bottomContentCommon = append(bottomContentCommon,
 		widget.NewButton("Save", func() {
 			profile := Profile{
-				Name:        streamcontrol.ProfileName(profileName.Text),
-				PerPlatform: map[streamcontrol.PlatformName]streamcontrol.AbstractStreamProfile{},
+				Name: streamcontrol.ProfileName(profileName.Text),
 				ProfileMetadata: streamdconfig.ProfileMetadata{
 					DefaultStreamTitle:       defaultStreamTitle.Text,
 					DefaultStreamDescription: defaultStreamDescription.Text,
 					MaxOrder:                 0,
 				},
-			}
-			if obsProfile != nil {
-				profile.PerPlatform[obs.ID] = obsProfile
+				PerStream: map[streamcontrol.StreamIDFullyQualified]streamcontrol.StreamProfile{},
 			}
 
-			sanitizeTags := func(in []string) []string {
-				out := make([]string, 0, len(in))
-				for _, k := range in {
-					if k == "" {
-						continue
-					}
-					out = append(out, k)
-				}
-				return out
-			}
-			profile.TopicTags = sanitizeTags(commonTagsEditor.GetTags())
-			if twitchProfile != nil {
-				if getTwitchTags != nil {
-					twitchTags := sanitizeTags(getTwitchTags())
-					for i := 0; i < len(twitchProfile.Tags); i++ {
-						var v string
-						if i < len(twitchTags) {
-							v = twitchTags[i]
-						} else {
-							v = ""
-						}
-						twitchProfile.Tags[i] = v
-					}
-				}
-				profile.PerPlatform[twitch.ID] = twitchProfile
-			}
-			if kickProfile != nil {
-				profile.PerPlatform[kick.ID] = kickProfile
-			}
-			if youtubeProfile != nil {
-				if getYoutubeTags != nil {
-					youtubeProfile.Tags = sanitizeTags(getYoutubeTags())
-				}
-				profile.PerPlatform[youtube.ID] = youtubeProfile
-				if len(youtubeProfile.TemplateBroadcastIDs) == 0 {
-					p.DisplayError(fmt.Errorf("no youtube template stream is selected"))
-					return
-				}
-			}
-			err := commitFn(ctx, profile)
+			updatedStreams, err := streamsSaveFunc()
 			if err != nil {
 				p.DisplayError(err)
 				return
 			}
+			profile.PerStream = updatedStreams
+
+			err = commitFn(ctx, profile)
+			if err != nil {
+				p.DisplayError(err)
+				return
+			}
+			w.Close()
+		}),
+		widget.NewButton("Cancel", func() {
 			w.Close()
 		}),
 	)
@@ -655,7 +275,7 @@ func (p *Panel) profileWindow(
 			nil,
 			nil,
 			container.NewHSplit(
-				container.NewBorder(
+				container.NewVScroll(container.NewBorder(
 					container.NewVBox(
 						profileName,
 						defaultStreamTitle,
@@ -666,10 +286,10 @@ func (p *Panel) profileWindow(
 					nil,
 					nil,
 					defaultStreamDescription,
-				),
-				container.NewVBox(
+				)),
+				container.NewVScroll(container.NewVBox(
 					bottomContentRight...,
-				),
+				)),
 			),
 		)
 	}
@@ -682,35 +302,88 @@ func (p *Panel) profileWindow(
 func (p *Panel) profileCreateOrUpdate(ctx context.Context, profile Profile) error {
 	cfg, err := p.GetStreamDConfig(ctx)
 	if err != nil {
+		fmt.Printf("DEBUG: profileCreateOrUpdate GetStreamDConfig FAILED: %v\n", err)
 		return fmt.Errorf("unable to get config: %w", err)
 	}
 
 	logger.Debugf(ctx, "profileCreateOrUpdate(%s)", profile.Name)
-	for platformName, platformProfile := range profile.PerPlatform {
-		if platformProfile == nil {
+
+	// First, remove this profile from all accounts across all platforms.
+	// We will then add it back to the specific accounts it belongs to.
+	for _, platCfg := range cfg.Backends {
+		if platCfg == nil {
 			continue
 		}
-		cfg.Backends[platformName].StreamProfiles[profile.Name] = platformProfile
-		logger.Debugf(
-			ctx,
-			"profileCreateOrUpdate(%s): cfg.Backends[%s].StreamProfiles[%s] = %#+v",
-			profile.Name,
-			platformName,
-			profile.Name,
-			platformProfile,
-		)
+		for accID, accRaw := range platCfg.Accounts {
+			var accMap map[string]any
+			_ = yaml.Unmarshal(accRaw, &accMap)
+			if accMap == nil {
+				continue
+			}
+			profilesRaw, ok := accMap["stream_profiles"]
+			var allStreamsProfiles map[streamcontrol.StreamID]map[streamcontrol.ProfileName]any
+			if ok {
+				_ = yaml.Unmarshal(streamcontrol.ToRawMessage(profilesRaw), &allStreamsProfiles)
+			}
+			if allStreamsProfiles == nil {
+				allStreamsProfiles = make(map[streamcontrol.StreamID]map[streamcontrol.ProfileName]any)
+			}
+			for _, streamsProfiles := range allStreamsProfiles {
+				if _, ok := streamsProfiles[profile.Name]; ok {
+					delete(streamsProfiles, profile.Name)
+				}
+			}
+			accMap["stream_profiles"] = allStreamsProfiles
+			newRaw, _ := yaml.Marshal(accMap)
+			platCfg.Accounts[accID] = newRaw
+		}
 	}
-	cfg.ProfileMetadata[profile.Name] = profile.ProfileMetadata
 
-	logger.Debugf(
-		ctx,
-		"profileCreateOrUpdate(%s): cfg.Backends == %#+v",
-		profile.Name,
-		cfg.Backends,
-	)
+	// Now add/update the profile in the specified accounts.
+	for sID, sProf := range profile.PerStream {
+		platCfg := cfg.Backends[sID.PlatformID]
+		if platCfg == nil {
+			platCfg = &streamcontrol.AbstractPlatformConfig{
+				Accounts: make(map[streamcontrol.AccountID]streamcontrol.RawMessage),
+			}
+			cfg.Backends[sID.PlatformID] = platCfg
+		}
+		accRaw, ok := platCfg.Accounts[sID.AccountID]
+		if !ok {
+			// If account doesn't exist, we skip or create a minimal one.
+			// Let's assume it should exist if it's in the UI.
+			continue
+		}
+
+		var accMap map[string]any
+		_ = yaml.Unmarshal(accRaw, &accMap)
+		if accMap == nil {
+			accMap = make(map[string]any)
+		}
+		profilesRaw, ok := accMap["stream_profiles"]
+		var allStreamsProfiles map[streamcontrol.StreamID]map[streamcontrol.ProfileName]any
+		if ok {
+			_ = yaml.Unmarshal(streamcontrol.ToRawMessage(profilesRaw), &allStreamsProfiles)
+		}
+		if allStreamsProfiles == nil {
+			allStreamsProfiles = make(map[streamcontrol.StreamID]map[streamcontrol.ProfileName]any)
+		}
+		profiles := allStreamsProfiles[sID.StreamID]
+		if profiles == nil {
+			profiles = make(map[streamcontrol.ProfileName]any)
+			allStreamsProfiles[sID.StreamID] = profiles
+		}
+		profiles[profile.Name] = sProf
+		accMap["stream_profiles"] = allStreamsProfiles
+		newAccRaw, _ := yaml.Marshal(accMap)
+		platCfg.Accounts[sID.AccountID] = newAccRaw
+	}
+
+	cfg.ProfileMetadata[profile.Name] = profile.ProfileMetadata
 
 	err = p.SetStreamDConfig(ctx, cfg)
 	if err != nil {
+		fmt.Printf("DEBUG: profileCreateOrUpdate SetStreamDConfig FAILED: %v\n", err)
 		return fmt.Errorf("unable to set config: %w", err)
 	}
 
@@ -721,18 +394,50 @@ func (p *Panel) profileCreateOrUpdate(ctx context.Context, profile Profile) erro
 	if err := p.StreamD.SaveConfig(ctx); err != nil {
 		return fmt.Errorf("unable to save the profile: %w", err)
 	}
+	fmt.Printf("DEBUG: profileCreateOrUpdate FINISHED for profile: %s\n", profile.Name)
 	return nil
 }
 
 func (p *Panel) profileDelete(ctx context.Context, profileName streamcontrol.ProfileName) error {
+	fmt.Printf("DEBUG: profileDelete called for profile: %s\n", profileName)
 	cfg, err := p.GetStreamDConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to get config: %w", err)
 	}
 
 	logger.Debugf(ctx, "onProfileDeleted(%s)", profileName)
-	for platformName := range cfg.Backends {
-		delete(cfg.Backends[platformName].StreamProfiles, profileName)
+	for _, platCfg := range cfg.Backends {
+		if platCfg == nil {
+			continue
+		}
+		for accID, accRaw := range platCfg.Accounts {
+			var accMap map[string]any
+			_ = yaml.Unmarshal(accRaw, &accMap)
+			if accMap == nil {
+				continue
+			}
+			profilesRaw, ok := accMap["stream_profiles"]
+			if !ok {
+				continue
+			}
+			var allStreamsProfiles map[streamcontrol.StreamID]map[streamcontrol.ProfileName]any
+			_ = yaml.Unmarshal(streamcontrol.ToRawMessage(profilesRaw), &allStreamsProfiles)
+			if allStreamsProfiles == nil {
+				continue
+			}
+			changed := false
+			for _, profiles := range allStreamsProfiles {
+				if _, ok := profiles[profileName]; ok {
+					delete(profiles, profileName)
+					changed = true
+				}
+			}
+			if changed {
+				accMap["stream_profiles"] = allStreamsProfiles
+				newRaw, _ := yaml.Marshal(accMap)
+				platCfg.Accounts[accID] = newRaw
+			}
+		}
 	}
 	delete(cfg.ProfileMetadata, profileName)
 
@@ -751,18 +456,36 @@ func (p *Panel) profileDelete(ctx context.Context, profileName streamcontrol.Pro
 	return nil
 }
 
+func (p Profile) GetPlatformProfile(platID streamcontrol.PlatformID) streamcontrol.StreamProfile {
+	for sID, prof := range p.PerStream {
+		if sID.PlatformID == platID {
+			return prof
+		}
+	}
+	return nil
+}
+
 func getProfile(cfg *streamdconfig.Config, profileName streamcontrol.ProfileName) Profile {
 	prof := Profile{
 		ProfileMetadata: cfg.ProfileMetadata[profileName],
 		Name:            profileName,
-		PerPlatform:     map[streamcontrol.PlatformName]streamcontrol.AbstractStreamProfile{},
+		PerStream:       map[streamcontrol.StreamIDFullyQualified]streamcontrol.StreamProfile{},
 	}
-	for platName, platCfg := range cfg.Backends {
-		platProf, ok := platCfg.GetStreamProfile(profileName)
-		if !ok {
+	for platID, platCfg := range cfg.Backends {
+		if platCfg == nil {
 			continue
 		}
-		prof.PerPlatform[platName] = platProf
+		for accID, accRaw := range platCfg.Accounts {
+			for sID, sProfs := range accRaw.GetStreamProfiles() {
+				for name, sProf := range sProfs {
+					if name != profileName {
+						continue
+					}
+					fqID := streamcontrol.NewStreamIDFullyQualified(platID, accID, sID)
+					prof.PerStream[fqID] = sProf
+				}
+			}
+		}
 	}
 	return prof
 }
@@ -773,19 +496,41 @@ func (p *Panel) rearrangeProfiles(ctx context.Context) error {
 		cfg = p.configCache
 	})
 
+	if cfg == nil {
+		return nil
+	}
+
 	curProfilesMap := map[streamcontrol.ProfileName]*Profile{}
-	for platName, platCfg := range cfg.Backends {
-		for profName, platProf := range platCfg.StreamProfiles {
-			prof := curProfilesMap[profName]
-			if prof == nil {
-				prof = &Profile{
-					Name:        profName,
-					PerPlatform: map[streamcontrol.PlatformName]streamcontrol.AbstractStreamProfile{},
+	for platID, platCfg := range cfg.Backends {
+		if platCfg == nil {
+			continue
+		}
+		for accID, accRaw := range platCfg.Accounts {
+			for sID, sProfs := range accRaw.GetStreamProfiles() {
+				for profName, platProf := range sProfs {
+					prof := curProfilesMap[profName]
+					if prof == nil {
+						prof = &Profile{
+							Name:      profName,
+							PerStream: map[streamcontrol.StreamIDFullyQualified]streamcontrol.StreamProfile{},
+						}
+						curProfilesMap[profName] = prof
+					}
+					fqID := streamcontrol.NewStreamIDFullyQualified(platID, accID, sID)
+					prof.PerStream[fqID] = platProf
+					prof.MaxOrder = xmath.Max(prof.MaxOrder, platProf.GetOrder())
 				}
-				curProfilesMap[profName] = prof
 			}
-			prof.PerPlatform[platName] = platProf
-			prof.MaxOrder = xmath.Max(prof.MaxOrder, platProf.GetOrder())
+		}
+	}
+	for profName := range cfg.ProfileMetadata {
+		prof := curProfilesMap[profName]
+		if prof == nil {
+			prof = &Profile{
+				Name:      profName,
+				PerStream: map[streamcontrol.StreamIDFullyQualified]streamcontrol.StreamProfile{},
+			}
+			curProfilesMap[profName] = prof
 		}
 	}
 
@@ -823,6 +568,9 @@ func (p *Panel) rearrangeProfiles(ctx context.Context) error {
 }
 
 func (p *Panel) refilterProfiles(ctx context.Context) {
+	if p.configCache == nil {
+		return
+	}
 	if cap(p.profilesOrderFiltered) < len(p.profilesOrder) {
 		p.profilesOrderFiltered = make([]streamcontrol.ProfileName, 0, len(p.profilesOrder)*2)
 	} else {
@@ -837,7 +585,11 @@ func (p *Panel) refilterProfiles(ctx context.Context) {
 			p.profilesOrder,
 		)
 		logger.Tracef(ctx, "refilterProfiles(): p.profilesListWidget.Refresh()")
-		p.profilesListWidget.Refresh()
+		if p.profilesListWidget != nil {
+			p.app.Driver().DoFromGoroutine(func() {
+				p.profilesListWidget.Refresh()
+			}, false)
+		}
 		return
 	}
 
@@ -846,27 +598,39 @@ func (p *Panel) refilterProfiles(ctx context.Context) {
 		titleMatch := strings.Contains(strings.ToLower(string(profileName)), filterValue)
 		subValueMatch := false
 		p.configCacheLocker.Do(ctx, func() {
-			for _, platCfg := range p.configCache.Backends {
-				prof, ok := platCfg.GetStreamProfile(profileName)
-				if !ok {
+			for platID, platCfg := range p.configCache.Backends {
+				if platCfg == nil {
 					continue
 				}
+				for _, accRaw := range platCfg.Accounts {
+					for _, sProfs := range accRaw.GetStreamProfiles() {
+						profRaw, ok := sProfs[profileName]
+						if !ok {
+							continue
+						}
 
-				switch prof := prof.(type) {
-				case twitch.StreamProfile:
-					if containTagSubstringCI(prof.Tags[:], filterValue) {
-						subValueMatch = true
-						break
-					}
-					if ptrStringMatchCI(prof.Language, filterValue) {
-						subValueMatch = true
-						break
-					}
-				case kick.StreamProfile:
-				case youtube.StreamProfile:
-					if containTagSubstringCI(prof.Tags, filterValue) {
-						subValueMatch = true
-						break
+						switch platID {
+						case twitch.ID:
+							prof, err := streamcontrol.GetStreamProfile[twitch.StreamProfile](ctx, profRaw)
+							if err != nil {
+								continue
+							}
+							if containTagSubstringCI(prof.Tags[:], filterValue) {
+								subValueMatch = true
+							}
+							if ptrStringMatchCI(prof.Language, filterValue) {
+								subValueMatch = true
+							}
+						case kick.ID:
+						case youtube.ID:
+							prof, err := streamcontrol.GetStreamProfile[youtube.StreamProfile](ctx, profRaw)
+							if err != nil {
+								continue
+							}
+							if containTagSubstringCI(prof.Tags, filterValue) {
+								subValueMatch = true
+							}
+						}
 					}
 				}
 			}
@@ -884,7 +648,11 @@ func (p *Panel) refilterProfiles(ctx context.Context) {
 	}
 
 	logger.Tracef(ctx, "refilterProfiles(): p.profilesListWidget.Refresh()")
-	p.profilesListWidget.Refresh()
+	if p.profilesListWidget != nil {
+		p.app.Driver().DoFromGoroutine(func() {
+			p.profilesListWidget.Refresh()
+		}, false)
+	}
 }
 
 func (p *Panel) profilesListLength() int {
@@ -918,10 +686,13 @@ func ptrCopy[T any](v T) *T {
 func (p *Panel) onProfilesListSelect(
 	id widget.ListItemID,
 ) {
+	if id < 0 || id >= len(p.profilesOrderFiltered) {
+		return
+	}
 	ctx := context.TODO()
 	p.setupStreamButton.Enable()
 
-	profileName := p.profilesOrder[id]
+	profileName := p.profilesOrderFiltered[id]
 	var profile Profile
 	p.configCacheLocker.Do(ctx, func() {
 		profile = getProfile(p.configCache, profileName)
@@ -936,6 +707,7 @@ func (p *Panel) onProfilesListSelect(
 func (p *Panel) onProfilesListUnselect(
 	_ widget.ListItemID,
 ) {
+	p.selectedProfileName = nil
 	p.setupStreamButton.Disable()
 	p.streamTitleField.SetText("")
 	p.streamDescriptionField.SetText("")
@@ -952,4 +724,265 @@ func (p *Panel) getSelectedProfile() Profile {
 	}
 	ctx := context.TODO()
 	return xsync.DoA2R1(ctx, &p.configCacheLocker, getProfile, p.configCache, *p.selectedProfileName)
+}
+
+func (p *Panel) newGlobalStreamsSelectUI(
+	ctx context.Context,
+	w fyne.Window,
+	backendEnabled map[streamcontrol.PlatformID]bool,
+	backendData map[streamcontrol.PlatformID]any,
+	perStream map[streamcontrol.StreamIDFullyQualified]streamcontrol.StreamProfile,
+) (fyne.CanvasObject, func() (map[streamcontrol.StreamIDFullyQualified]streamcontrol.StreamProfile, error)) {
+	platforms := []streamcontrol.PlatformID{
+		obs.ID,
+		twitch.ID,
+		kick.ID,
+		youtube.ID,
+	}
+
+	// Collect all available streams across all platforms
+	allAvailableStreams := make(map[streamcontrol.StreamIDFullyQualified]string)
+	for _, platID := range platforms {
+		if !backendEnabled[platID] {
+			continue
+		}
+		accounts, err := p.StreamD.GetAccounts(ctx, platID)
+		if err != nil {
+			continue
+		}
+		for _, accID := range accounts {
+			streams, err := p.StreamD.GetStreams(ctx, accID)
+			if err != nil {
+				continue
+			}
+			if len(streams) == 0 {
+				streams = []streamcontrol.StreamInfo{{ID: streamcontrol.DefaultStreamID}}
+			}
+			for _, stream := range streams {
+				sID := streamcontrol.StreamIDFullyQualified{
+					AccountIDFullyQualified: accID,
+					StreamID:                stream.ID,
+				}
+				label := fmt.Sprintf("[%s] %s", strings.ToUpper(string(platID)), accID.AccountID)
+				if stream.Name != "" {
+					label += " - " + stream.Name
+				} else if stream.ID != streamcontrol.DefaultStreamID {
+					label += " - " + string(stream.ID)
+				}
+				allAvailableStreams[sID] = label
+			}
+		}
+	}
+
+	if len(perStream) == 0 {
+		for sID := range allAvailableStreams {
+			var prof streamcontrol.StreamProfile
+			switch sID.PlatformID {
+			case obs.ID:
+				prof = &obs.StreamProfile{}
+			case twitch.ID:
+				prof = &twitch.StreamProfile{}
+			case kick.ID:
+				prof = &kick.StreamProfile{}
+			case youtube.ID:
+				prof = &youtube.StreamProfile{}
+			default:
+				prof = streamcontrol.RawMessage("{}")
+			}
+			perStream[sID] = prof
+		}
+	}
+
+	streamsList := container.NewVBox()
+	var refreshStreams func()
+
+	addStreamSelect := widget.NewSelect(nil, nil)
+	addStreamSelect.PlaceHolder = "Add a stream for any platform..."
+
+	updateAddSelect := func() {
+		var options []string
+		for sID, label := range allAvailableStreams {
+			if _, ok := perStream[sID]; ok {
+				continue
+			}
+			options = append(options, label)
+		}
+		sort.Strings(options)
+		addStreamSelect.Options = options
+		addStreamSelect.Refresh()
+	}
+
+	addStreamSelect.OnChanged = func(label string) {
+		if label == "" {
+			return
+		}
+		for sID, l := range allAvailableStreams {
+			if l == label {
+				var prof streamcontrol.StreamProfile
+				switch sID.PlatformID {
+				case obs.ID:
+					prof = &obs.StreamProfile{}
+				case twitch.ID:
+					prof = &twitch.StreamProfile{}
+				case kick.ID:
+					prof = &kick.StreamProfile{}
+				case youtube.ID:
+					prof = &youtube.StreamProfile{}
+				default:
+					prof = streamcontrol.RawMessage("{}")
+				}
+				perStream[sID] = prof
+				break
+			}
+		}
+		addStreamSelect.SetSelected("")
+		refreshStreams()
+	}
+
+	type streamSaveResult struct {
+		sID  streamcontrol.StreamIDFullyQualified
+		prof streamcontrol.StreamProfile
+	}
+	var saveFuncs []func() (streamSaveResult, error)
+
+	refreshStreams = func() {
+		streamsList.RemoveAll()
+		saveFuncs = nil
+
+		var sortedIDs []streamcontrol.StreamIDFullyQualified
+		for sID := range perStream {
+			sortedIDs = append(sortedIDs, sID)
+		}
+
+		sort.Slice(sortedIDs, func(i, j int) bool {
+			return allAvailableStreams[sortedIDs[i]] < allAvailableStreams[sortedIDs[j]]
+		})
+
+		for _, sID := range sortedIDs {
+			sID := sID
+			label := allAvailableStreams[sID]
+			if label == "" {
+				label = fmt.Sprintf("[%s] %v/%v", sID.PlatformID, sID.AccountID, sID.StreamID)
+			}
+
+			ui, ok := platformUIs[sID.PlatformID]
+			if !ok {
+				logger.Errorf(ctx, "no platform UI for platform ID '%s'", sID.PlatformID)
+				continue
+			}
+
+			prof := perStream[sID]
+
+			// Parent select logic
+			var availableProfiles []string
+			availableProfiles = append(availableProfiles, "<default>")
+			p.configCacheLocker.Do(ctx, func() {
+				if p.configCache == nil {
+					return
+				}
+				platCfg := p.configCache.Backends[sID.PlatformID]
+				if platCfg != nil {
+					for _, acc := range platCfg.Accounts {
+						for _, sProfs := range acc.GetStreamProfiles() {
+							for profName := range sProfs {
+								availableProfiles = append(availableProfiles, string(profName))
+							}
+						}
+					}
+				}
+			})
+			sort.Strings(availableProfiles[1:])
+			// unique available profiles
+			uniqueProfiles := make(map[string]struct{})
+			var uniqueOptions []string
+			for _, opt := range availableProfiles {
+				if _, ok := uniqueProfiles[opt]; !ok {
+					uniqueProfiles[opt] = struct{}{}
+					uniqueOptions = append(uniqueOptions, opt)
+				}
+			}
+
+			profileSelect := widget.NewSelect(uniqueOptions, nil)
+			currentParent, hasParent := prof.GetParent()
+			if !hasParent {
+				profileSelect.SetSelected("<default>")
+			} else {
+				profileSelect.SetSelected(string(currentParent))
+			}
+			profileSelect.OnChanged = func(s string) {
+				if s == "<default>" {
+					s = ""
+				}
+				p.setStreamProfileParent(prof, streamcontrol.ProfileName(s))
+			}
+
+			removeButton := widget.NewButtonWithIcon("", theme.ContentRemoveIcon(), func() {
+				delete(perStream, sID)
+				refreshStreams()
+			})
+
+			streamUI, saveFunc := ui.RenderStream(
+				ctx,
+				p,
+				w,
+				sID.PlatformID,
+				sID,
+				backendData[sID.PlatformID],
+				prof,
+			)
+
+			saveStreamConfig := func() (streamSaveResult, error) {
+				config, err := saveFunc()
+				if err != nil {
+					return streamSaveResult{sID: sID}, err
+				}
+				return streamSaveResult{sID: sID, prof: config.(streamcontrol.StreamProfile)}, nil
+			}
+			saveFuncs = append(saveFuncs, saveStreamConfig)
+
+			streamsList.Add(widget.NewRichTextFromMarkdown(fmt.Sprintf("## %s", label)))
+			streamsList.Add(container.NewVBox(
+				container.NewHBox(
+					widget.NewLabel("Parent profile:"),
+					profileSelect,
+					removeButton,
+				),
+				streamUI,
+			))
+			streamsList.Add(widget.NewSeparator())
+		}
+		updateAddSelect()
+		streamsList.Refresh()
+	}
+
+	refreshStreams()
+
+	return container.NewVBox(
+			addStreamSelect,
+			streamsList,
+		), func() (map[streamcontrol.StreamIDFullyQualified]streamcontrol.StreamProfile, error) {
+			result := make(map[streamcontrol.StreamIDFullyQualified]streamcontrol.StreamProfile)
+			for _, f := range saveFuncs {
+				res, err := f()
+				if err != nil {
+					return nil, err
+				}
+				result[res.sID] = res.prof
+			}
+			return result, nil
+		}
+}
+
+func (p *Panel) setStreamProfileParent(prof streamcontrol.StreamProfile, parent streamcontrol.ProfileName) {
+	// This is a helper because StreamProfile doesn't have a SetParent method.
+	switch v := prof.(type) {
+	case *obs.StreamProfile:
+		v.Parent = parent
+	case *twitch.StreamProfile:
+		v.Parent = parent
+	case *kick.StreamProfile:
+		v.Parent = parent
+	case *youtube.StreamProfile:
+		v.Parent = parent
+	}
 }

@@ -34,49 +34,58 @@ type StreamD interface {
 	SetConfig(ctx context.Context, cfg *config.Config) error
 	IsBackendEnabled(
 		ctx context.Context,
-		id streamcontrol.PlatformName,
+		platformID streamcontrol.PlatformID,
 	) (bool, error)
-	StartStream(
+	SetStreamActive(
 		ctx context.Context,
-		platID streamcontrol.PlatformName,
-		title string, description string,
-		profile streamcontrol.AbstractStreamProfile,
-		customArgs ...any,
-	) error
-	EndStream(ctx context.Context, platID streamcontrol.PlatformName) error
-	UpdateStream(
-		ctx context.Context,
-		platID streamcontrol.PlatformName,
-		title string, description string,
-		profile streamcontrol.AbstractStreamProfile,
-		customArgs ...any,
+		streamID streamcontrol.StreamIDFullyQualified,
+		active bool,
 	) error
 	SetTitle(
 		ctx context.Context,
-		platID streamcontrol.PlatformName,
+		streamID streamcontrol.StreamIDFullyQualified,
 		title string,
 	) error
 	SetDescription(
 		ctx context.Context,
-		platID streamcontrol.PlatformName,
+		streamID streamcontrol.StreamIDFullyQualified,
 		description string,
 	) error
 	ApplyProfile(
 		ctx context.Context,
-		platID streamcontrol.PlatformName,
-		profile streamcontrol.AbstractStreamProfile,
-		customArgs ...any,
+		streamID streamcontrol.StreamIDFullyQualified,
+		profile streamcontrol.StreamProfile,
 	) error
 	GetBackendInfo(
 		ctx context.Context,
-		platID streamcontrol.PlatformName,
+		platID streamcontrol.PlatformID,
 		includeData bool,
 	) (*BackendInfo, error)
 	EXPERIMENTAL_ReinitStreamControllers(ctx context.Context) error
 	GetStreamStatus(
 		ctx context.Context,
-		platID streamcontrol.PlatformName,
+		streamID streamcontrol.StreamIDFullyQualified,
 	) (*streamcontrol.StreamStatus, error)
+	WaitStreamStartedByStreamSourceID(
+		ctx context.Context,
+		streamID streamcontrol.StreamIDFullyQualified,
+	) error
+	GetPlatforms(ctx context.Context) []streamcontrol.PlatformID
+	GetAccounts(
+		ctx context.Context,
+		platformID ...streamcontrol.PlatformID,
+	) ([]streamcontrol.AccountIDFullyQualified, error)
+	GetStreams(
+		ctx context.Context,
+		accountID ...streamcontrol.AccountIDFullyQualified,
+	) ([]streamcontrol.StreamInfo, error)
+	GetActiveStreamIDs(
+		ctx context.Context,
+	) ([]streamcontrol.StreamIDFullyQualified, error)
+	GetStreamSinkConfig(
+		ctx context.Context,
+		streamID streamcontrol.StreamIDFullyQualified,
+	) (sstypes.StreamSinkConfig, error)
 	GetVariable(ctx context.Context, key consts.VarKey) (VariableValue, error)
 	GetVariableHash(
 		ctx context.Context,
@@ -86,7 +95,7 @@ type StreamD interface {
 	SetVariable(ctx context.Context, key consts.VarKey, value VariableValue) error
 	SubscribeToVariable(ctx context.Context, key consts.VarKey) (<-chan VariableValue, error)
 
-	OBS(ctx context.Context) (obs_grpc.OBSServer, context.CancelFunc, error)
+	OBS(ctx context.Context, accountID streamcontrol.AccountID) (obs_grpc.OBSServer, context.CancelFunc, error)
 
 	SubmitOAuthCode(
 		context.Context,
@@ -106,143 +115,141 @@ type StreamD interface {
 		ctx context.Context,
 		listenAddr string,
 	) error
-	AddIncomingStream(
+	AddStreamSource(
 		ctx context.Context,
-		streamID StreamID,
+		streamSourceID StreamSourceID,
 	) error
-	RemoveIncomingStream(
+	RemoveStreamSource(
 		ctx context.Context,
-		streamID StreamID,
+		streamSourceID StreamSourceID,
 	) error
-	ListIncomingStreams(
+	ListStreamSources(
 		ctx context.Context,
-	) ([]IncomingStream, error)
-	ListStreamDestinations(
+	) ([]StreamSource, error)
+	ListStreamSinks(
 		ctx context.Context,
-	) ([]StreamDestination, error)
-	AddStreamDestination(
+	) ([]StreamSink, error)
+	AddStreamSink(
 		ctx context.Context,
-		destinationID DestinationID,
-		url string,
-		streamKey string,
+		streamSinkID StreamSinkIDFullyQualified,
+		dst sstypes.StreamSinkConfig,
 	) error
-	UpdateStreamDestination(
+	UpdateStreamSink(
 		ctx context.Context,
-		destinationID DestinationID,
-		url string,
-		streamKey string,
+		streamSinkID StreamSinkIDFullyQualified,
+		dst sstypes.StreamSinkConfig,
 	) error
-	RemoveStreamDestination(
+	RemoveStreamSink(
 		ctx context.Context,
-		destinationID DestinationID,
+		streamSinkID StreamSinkIDFullyQualified,
 	) error
 	ListStreamForwards(
 		ctx context.Context,
 	) ([]StreamForward, error)
 	AddStreamForward(
 		ctx context.Context,
-		streamID StreamID,
-		destinationID DestinationID,
+		streamSourceID StreamSourceID,
+		streamSinkID StreamSinkIDFullyQualified,
 		enabled bool,
 		encode sstypes.EncodeConfig,
 		quirks StreamForwardingQuirks,
 	) error
 	UpdateStreamForward(
 		ctx context.Context,
-		streamID StreamID,
-		destinationID DestinationID,
+		streamSourceID StreamSourceID,
+		streamSinkID StreamSinkIDFullyQualified,
 		enabled bool,
 		encode sstypes.EncodeConfig,
 		quirks StreamForwardingQuirks,
 	) error
 	RemoveStreamForward(
 		ctx context.Context,
-		streamID StreamID,
-		destinationID DestinationID,
+		streamSourceID StreamSourceID,
+		streamSinkID StreamSinkIDFullyQualified,
 	) error
 	WaitForStreamPublisher(
 		ctx context.Context,
-		streamID StreamID,
+		streamSourceID StreamSourceID,
 		waitForNext bool,
 	) (<-chan struct{}, error)
 
 	AddStreamPlayer(
 		ctx context.Context,
-		streamID streamtypes.StreamID,
+		streamSourceID streamtypes.StreamSourceID,
 		playerType player.Backend,
 		disabled bool,
 		streamPlaybackConfig sptypes.Config,
 	) error
 	UpdateStreamPlayer(
 		ctx context.Context,
-		streamID streamtypes.StreamID,
+		streamSourceID streamtypes.StreamSourceID,
 		playerType player.Backend,
 		disabled bool,
 		streamPlaybackConfig sptypes.Config,
 	) error
 	RemoveStreamPlayer(
 		ctx context.Context,
-		streamID streamtypes.StreamID,
+		streamSourceID streamtypes.StreamSourceID,
 	) error
 	ListStreamPlayers(
 		ctx context.Context,
 	) ([]StreamPlayer, error)
 	GetStreamPlayer(
 		ctx context.Context,
-		streamID streamtypes.StreamID,
+		streamSourceID streamtypes.StreamSourceID,
 	) (*StreamPlayer, error)
 
 	StreamPlayerProcessTitle(
 		ctx context.Context,
-		streamID StreamID,
+		streamSourceID StreamSourceID,
 	) (string, error)
 	StreamPlayerOpenURL(
 		ctx context.Context,
-		streamID StreamID,
+		streamSourceID StreamSourceID,
 		link string,
 	) error
-	StreamPlayerGetLink(ctx context.Context, streamID StreamID) (string, error)
+	StreamPlayerGetLink(ctx context.Context, streamSourceID StreamSourceID) (string, error)
 	StreamPlayerEndChan(
 		ctx context.Context,
-		streamID StreamID,
+		streamSourceID StreamSourceID,
 	) (<-chan struct{}, error)
-	StreamPlayerIsEnded(ctx context.Context, streamID StreamID) (bool, error)
+	StreamPlayerIsEnded(ctx context.Context, streamSourceID StreamSourceID) (bool, error)
 	StreamPlayerGetPosition(
 		ctx context.Context,
-		streamID StreamID,
+		streamSourceID StreamSourceID,
 	) (time.Duration, error)
 	StreamPlayerGetLength(
 		ctx context.Context,
-		streamID StreamID,
+		streamSourceID StreamSourceID,
 	) (time.Duration, error)
 	StreamPlayerGetLag(
 		ctx context.Context,
-		streamID StreamID,
+		streamSourceID StreamSourceID,
 	) (time.Duration, time.Time, error)
 	StreamPlayerSetSpeed(
 		ctx context.Context,
-		streamID StreamID,
+		streamSourceID StreamSourceID,
 		speed float64,
 	) error
 	StreamPlayerSetPause(
 		ctx context.Context,
-		streamID StreamID,
+		streamSourceID StreamSourceID,
 		pause bool,
 	) error
-	StreamPlayerStop(ctx context.Context, streamID StreamID) error
-	StreamPlayerClose(ctx context.Context, streamID StreamID) error
+	StreamPlayerStop(ctx context.Context, streamSourceID StreamSourceID) error
+	StreamPlayerClose(ctx context.Context, streamSourceID StreamSourceID) error
 
 	SubscribeToConfigChanges(ctx context.Context) (<-chan DiffConfig, error)
 	SubscribeToStreamsChanges(ctx context.Context) (<-chan DiffStreams, error)
 	SubscribeToStreamServersChanges(
 		ctx context.Context,
 	) (<-chan DiffStreamServers, error)
-	SubscribeToStreamDestinationsChanges(
+	SubscribeToStreamSinksChanges(
 		ctx context.Context,
-	) (<-chan DiffStreamDestinations, error)
-	SubscribeToIncomingStreamsChanges(
+	) (<-chan DiffStreamSinks, error)
+	SubscribeToStreamSourcesChanges(
 		ctx context.Context,
-	) (<-chan DiffIncomingStreams, error)
+	) (<-chan DiffStreamSources, error)
 	SubscribeToStreamForwardsChanges(
 		ctx context.Context,
 	) (<-chan DiffStreamForwards, error)
@@ -287,29 +294,29 @@ type StreamD interface {
 	) (<-chan ChatMessage, error)
 	SendChatMessage(
 		ctx context.Context,
-		platID streamcontrol.PlatformName,
+		platID streamcontrol.PlatformID,
 		message string,
 	) error
 	RemoveChatMessage(
 		ctx context.Context,
-		platID streamcontrol.PlatformName,
+		platID streamcontrol.PlatformID,
 		msgID streamcontrol.EventID,
 	) error
 	BanUser(
 		ctx context.Context,
-		platID streamcontrol.PlatformName,
+		platID streamcontrol.PlatformID,
 		userID streamcontrol.UserID,
 		reason string,
 		deadline time.Time,
 	) error
 	Shoutout(
 		ctx context.Context,
-		platID streamcontrol.PlatformName,
+		platID streamcontrol.PlatformID,
 		userID streamcontrol.UserID,
 	) error
 	RaidTo(
 		ctx context.Context,
-		platID streamcontrol.PlatformName,
+		platID streamcontrol.PlatformID,
 		userID streamcontrol.UserID,
 	) error
 
@@ -333,15 +340,15 @@ type StreamPlayer = sstypes.StreamPlayer
 type BackendDataOBS struct{}
 
 type BackendDataTwitch struct {
-	Cache cache.Twitch
+	Cache *cache.Twitch
 }
 
 type BackendDataKick struct {
-	Cache cache.Kick
+	Cache *cache.Kick
 }
 
 type BackendDataYouTube struct {
-	Cache cache.YouTube
+	Cache *cache.YouTube
 }
 
 type StreamServerType = streamtypes.ServerType
@@ -353,43 +360,43 @@ type StreamServer struct {
 	NumBytesProducerRead  uint64
 }
 
-type StreamDestination struct {
-	ID        DestinationID
-	URL       string
-	StreamKey string
+type StreamSink struct {
+	ID StreamSinkIDFullyQualified
+	sstypes.StreamSinkConfig
 }
 
 type StreamForward struct {
-	Enabled       bool
-	StreamID      StreamID
-	DestinationID DestinationID
-	Encode        sstypes.EncodeConfig
-	Quirks        StreamForwardingQuirks
-	NumBytesWrote uint64
-	NumBytesRead  uint64
+	Enabled        bool
+	StreamSourceID StreamSourceID
+	StreamSinkID   StreamSinkIDFullyQualified
+	Encode         sstypes.EncodeConfig
+	Quirks         StreamForwardingQuirks
+	NumBytesWrote  uint64
+	NumBytesRead   uint64
 }
 
-type IncomingStream struct {
-	StreamID StreamID
-	IsActive bool
+type StreamSource struct {
+	StreamSourceID StreamSourceID
+	IsActive       bool
 }
 
-type StreamID = streamtypes.StreamID
-type DestinationID = streamtypes.DestinationID
+type StreamSourceID = streamtypes.StreamSourceID
+type StreamSinkID = streamtypes.StreamSinkID
+type StreamSinkIDFullyQualified = streamtypes.StreamSinkIDFullyQualified
 type OBSInstanceID = streamtypes.OBSInstanceID
 
 type StreamForwardingQuirks = sstypes.ForwardingQuirks
 
-type RestartUntilYoutubeRecognizesStream = sstypes.RestartUntilYoutubeRecognizesStream
+type RestartUntilPlatformRecognizesStream = sstypes.RestartUntilPlatformRecognizesStream
 
-type StartAfterYoutubeRecognizedStream = sstypes.StartAfterYoutubeRecognizedStream
+type WaitUntilPlatformRecognizesStream = sstypes.WaitUntilPlatformRecognizesStream
 
 type DiffConfig struct{}
 type DiffDashboard struct{}
 type DiffStreams struct{}
 type DiffStreamServers struct{}
-type DiffStreamDestinations struct{}
-type DiffIncomingStreams struct{}
+type DiffStreamSinks struct{}
+type DiffStreamSources struct{}
 type DiffStreamForwards struct{}
 type DiffStreamPlayers struct{}
 
@@ -409,7 +416,7 @@ type TriggerRules = config.TriggerRules
 
 type ChatMessage struct {
 	streamcontrol.Event
-	Platform streamcontrol.PlatformName
+	Platform streamcontrol.PlatformID
 	IsLive   bool
 }
 

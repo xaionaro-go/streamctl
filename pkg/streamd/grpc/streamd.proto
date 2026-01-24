@@ -16,10 +16,10 @@ service StreamD {
     rpc SubscribeToConfigChanges(SubscribeToConfigChangesRequest) returns (stream ConfigChange) {}
     rpc ResetCache(ResetCacheRequest) returns (ResetCacheReply) {}
     rpc InitCache(InitCacheRequest) returns (InitCacheReply) {}
-    rpc StartStream(StartStreamRequest) returns (StartStreamReply) {}
-    rpc StartStreamByProfileName(StartStreamByProfileNameRequest) returns (StartStreamReply) {}
-    rpc EndStream(EndStreamRequest) returns (EndStreamReply) {}
+    rpc SetStreamActive(SetStreamActiveRequest) returns (SetStreamActiveReply) {}
     rpc GetStreamStatus(GetStreamStatusRequest) returns (GetStreamStatusReply) {}
+    rpc GetStreams(GetStreamsRequest) returns (GetStreamsReply) {}
+    rpc GetAccounts(GetAccountsRequest) returns (GetAccountsReply) {}
     rpc IsBackendEnabled(IsBackendEnabledRequest) returns (IsBackendEnabledReply) {}
     rpc GetBackendInfo(GetBackendInfoRequest) returns (GetBackendInfoReply) {}
     rpc SubscribeToStreamsChanges(SubscribeToStreamsChangesRequest) returns (stream StreamsChange) {}
@@ -27,11 +27,13 @@ service StreamD {
     rpc SetTitle(SetTitleRequest) returns (SetTitleReply) {}
     rpc SetDescription(SetDescriptionRequest) returns (SetDescriptionReply) {}
     rpc ApplyProfile(ApplyProfileRequest) returns (ApplyProfileReply) {}
-    rpc UpdateStream(UpdateStreamRequest) returns (UpdateStreamReply) {}
     rpc GetVariable(GetVariableRequest) returns(GetVariableReply) {}
     rpc GetVariableHash(GetVariableHashRequest) returns(GetVariableHashReply) {}
     rpc SetVariable(SetVariableRequest) returns(SetVariableReply) {}
     rpc SubscribeToVariable(SubscribeToVariableRequest) returns(stream VariableChange) {}
+
+    rpc GetActiveStreamIDs(GetActiveStreamIDsRequest) returns (GetActiveStreamIDsReply) {}
+    rpc GetPlatforms(GetPlatformsRequest) returns (GetPlatformsReply) {}
 
     rpc EXPERIMENTAL_ReinitStreamControllers(EXPERIMENTAL_ReinitStreamControllersRequest) returns (EXPERIMENTAL_ReinitStreamControllersReply) {}
 
@@ -42,15 +44,17 @@ service StreamD {
 	rpc StartStreamServer(StartStreamServerRequest) returns (StartStreamServerReply) {}
 	rpc StopStreamServer(StopStreamServerRequest) returns (StopStreamServerReply) {}
     rpc SubscribeToStreamServersChanges(SubscribeToStreamServersChangesRequest) returns (stream StreamServersChange) {}
-	rpc ListStreamDestinations(ListStreamDestinationsRequest) returns (ListStreamDestinationsReply) {}
-	rpc AddStreamDestination(AddStreamDestinationRequest) returns (AddStreamDestinationReply) {}
-	rpc UpdateStreamDestination(UpdateStreamDestinationRequest) returns (UpdateStreamDestinationReply) {}
-	rpc RemoveStreamDestination(RemoveStreamDestinationRequest) returns (RemoveStreamDestinationReply) {}
-    rpc SubscribeToStreamDestinationsChanges(SubscribeToStreamDestinationsChangesRequest) returns (stream StreamDestinationsChange) {}
-    rpc AddIncomingStream(AddIncomingStreamRequest) returns (AddIncomingStreamReply) {}
-    rpc RemoveIncomingStream(RemoveIncomingStreamRequest) returns (RemoveIncomingStreamReply) {}
-    rpc ListIncomingStreams(ListIncomingStreamsRequest) returns (ListIncomingStreamsReply) {}
-    rpc SubscribeToIncomingStreamsChanges(SubscribeToIncomingStreamsChangesRequest) returns (stream IncomingStreamsChange) {}
+	rpc ListStreamSinks(ListStreamSinksRequest) returns (ListStreamSinksReply) {}
+	rpc AddStreamSink(AddStreamSinkRequest) returns (AddStreamSinkReply) {}
+	rpc UpdateStreamSink(UpdateStreamSinkRequest) returns (UpdateStreamSinkReply) {}
+    rpc GetStreamSinkConfig(GetStreamSinkConfigRequest) returns (GetStreamSinkConfigReply) {}
+	rpc WaitStreamStarted(WaitStreamStartedRequest) returns (WaitStreamStartedReply) {}
+	rpc RemoveStreamSink(RemoveStreamSinkRequest) returns (RemoveStreamSinkReply) {}
+    rpc SubscribeToStreamSinksChanges(SubscribeToStreamSinksChangesRequest) returns (stream StreamSinksChange) {}
+    rpc AddStreamSource(AddStreamSourceRequest) returns (AddStreamSourceReply) {}
+    rpc RemoveStreamSource(RemoveStreamSourceRequest) returns (RemoveStreamSourceReply) {}
+    rpc ListStreamSources(ListStreamSourcesRequest) returns (ListStreamSourcesReply) {}
+    rpc SubscribeToStreamSourcesChanges(SubscribeToStreamSourcesChangesRequest) returns (stream StreamSourcesChange) {}
 	rpc ListStreamForwards(ListStreamForwardsRequest) returns (ListStreamForwardsReply) {}
 	rpc AddStreamForward(AddStreamForwardRequest) returns (AddStreamForwardReply) {}
 	rpc UpdateStreamForward(UpdateStreamForwardRequest) returns (UpdateStreamForwardReply) {}
@@ -85,6 +89,8 @@ service StreamD {
     rpc AddTriggerRule(AddTriggerRuleRequest) returns (AddTriggerRuleReply) {}
     rpc RemoveTriggerRule(RemoveTriggerRuleRequest) returns (RemoveTriggerRuleReply) {}
     rpc UpdateTriggerRule(UpdateTriggerRuleRequest) returns (UpdateTriggerRuleReply) {}
+
+    rpc ListProfiles(ListProfilesRequest) returns (ListProfilesReply) {}
 
     rpc SubmitEvent(SubmitEventRequest) returns (SubmitEventReply) {}
 
@@ -145,25 +151,13 @@ message ResetCacheRequest {}
 message ResetCacheReply {}
 message InitCacheRequest {}
 message InitCacheReply {}
-message StartStreamRequest {
-    string platID = 1;
-    string title = 2;
-    string description = 3;
-    string profile = 4;
+message SetStreamActiveRequest {
+    StreamIDFullyQualified id = 1;
+    bool isActive = 2;
 }
-message StartStreamByProfileNameRequest {
-    string platID = 1;
-    optional string title = 2;
-    optional string description = 3;
-    string profileName = 4;
-}
-message StartStreamReply {}
-message EndStreamRequest {
-    string platID = 1;
-}
-message EndStreamReply {}
+message SetStreamActiveReply {}
 message GetStreamStatusRequest {
-    string platID = 1;
+    StreamIDFullyQualified id = 1;
     bool noCache = 2;
 }
 message GetStreamStatusReply {
@@ -172,6 +166,39 @@ message GetStreamStatusReply {
     string customData = 3;
     optional uint64 viewers_count = 4;
 }
+
+message GetStreamsRequest {
+    repeated AccountIDFullyQualified accountIDs = 1;
+}
+
+message StreamInfo {
+    string ID = 1;
+    string name = 2;
+}
+
+message GetStreamsReply {
+    repeated StreamInfo streams = 1;
+}
+
+message GetAccountsRequest {
+    repeated string platformIDs = 1;
+}
+
+message GetAccountsReply {
+    repeated AccountIDFullyQualified accountIDs = 1;
+}
+
+message GetActiveStreamIDsRequest {}
+
+message GetActiveStreamIDsReply {
+    repeated StreamIDFullyQualified streamSourceIDs = 1;
+}
+
+message GetPlatformsRequest {}
+message GetPlatformsReply {
+    repeated string platformIDs = 1;
+}
+
 message GetBackendInfoRequest {
     string platID = 1;
     bool includeData = 2;
@@ -201,27 +228,21 @@ message RestartRequest {}
 message RestartReply {}
 
 message SetTitleRequest {
-    string platID = 1;
+    StreamIDFullyQualified id = 1;
     string title = 2;
 }
 message SetTitleReply {}
-message SetDescriptionRequest  {
-    string platID = 1;
+message SetDescriptionRequest {
+    StreamIDFullyQualified id = 1;
     string description = 2;
 }
 message SetDescriptionReply {}
 message ApplyProfileRequest {
-    string platID = 1;
+    StreamIDFullyQualified id = 1;
     string profile = 2;
 }
-message ApplyProfileReply {}
-message UpdateStreamRequest {
-    string platID = 1;
-    string title = 2;
-    string description = 3;
-    string profile = 4;
+message ApplyProfileReply {
 }
-message UpdateStreamReply {}
 
 
 message EXPERIMENTAL_ReinitStreamControllersRequest {}
@@ -266,6 +287,14 @@ message SetVariableRequest {
     bytes value = 2;
 }
 message SetVariableReply {}
+
+message ListProfilesRequest {}
+message ListProfilesReply {
+    repeated ProfileInfo profiles = 1;
+}
+message ProfileInfo {
+    string name = 1;
+}
 
 message SubscribeToVariableRequest {
     string key =  1;
@@ -340,70 +369,92 @@ message StopStreamServerRequest {
 }
 message StopStreamServerReply {}
 
-message StreamDestination {
-    string destinationID = 1;
-    string url = 2;
-    string streamKey = 3;
+message StreamSinkConfig {
+    string url = 1;
+    string streamKey = 2;
+    StreamIDFullyQualified streamSourceID = 3;
 }
 
-message ListStreamDestinationsRequest {}
-message ListStreamDestinationsReply {
-    repeated StreamDestination streamDestinations = 1;
+enum StreamSinkType {
+	UndefinedStreamSinkType = 0;
+    StreamSinkTypeCustom = 1;
+	StreamSinkTypeLoopback = 2;
+	StreamSinkTypeExternalPlatform = 3;
 }
 
-message AddStreamDestinationRequest {
-    StreamDestination config = 1;
+message StreamSinkIDFullyQualified {
+    StreamSinkType type = 1;
+    string streamSinkID = 2;
 }
-message AddStreamDestinationReply {}
 
-message UpdateStreamDestinationRequest {
-    StreamDestination config = 1;
+message StreamSink {
+    StreamSinkIDFullyQualified streamSinkID = 1;
+    StreamSinkConfig config = 2;
 }
-message UpdateStreamDestinationReply {}
 
-message RemoveStreamDestinationRequest {
-    string destinationID = 1;
+message ListStreamSinksRequest {}
+message ListStreamSinksReply {
+    repeated StreamSink streamSinks = 1;
 }
-message RemoveStreamDestinationReply {}
 
-message IncomingStream {
-    string streamID = 1;
+message AddStreamSinkRequest {
+    StreamSink config = 1;
+}
+message AddStreamSinkReply {}
+
+message UpdateStreamSinkRequest {
+    StreamSink config = 1;
+}
+message UpdateStreamSinkReply {}
+
+message WaitStreamStartedRequest {
+    StreamIDFullyQualified streamSourceID = 1;
+}
+message WaitStreamStartedReply {}
+
+message RemoveStreamSinkRequest {
+    StreamSinkIDFullyQualified streamSinkID = 1;
+}
+message RemoveStreamSinkReply {}
+
+message StreamSource {
+    string streamSourceID = 1;
     bool isActive = 2;
 }
 
-message AddIncomingStreamRequest {
-    string streamID = 1;
+message AddStreamSourceRequest {
+    string streamSourceID = 1;
 }
-message AddIncomingStreamReply {}
+message AddStreamSourceReply {}
 
-message RemoveIncomingStreamRequest {
-    string streamID = 1;
+message RemoveStreamSourceRequest {
+    string streamSourceID = 1;
 }
-message RemoveIncomingStreamReply {}
+message RemoveStreamSourceReply {}
 
-message ListIncomingStreamsRequest {}
-message ListIncomingStreamsReply {
-    repeated IncomingStream incomingStreams = 1;
+message ListStreamSourcesRequest {}
+message ListStreamSourcesReply {
+    repeated StreamSource streamSources = 1;
 }
 
-message RestartUntilYoutubeRecognizesStream {
+message RestartUntilPlatformRecognizesStream {
     bool enabled = 1;
 	double startTimeout = 2;
     double stopStartDelay = 3;
 }
 
-message StartAfterYoutubeRecognizedStream {
+message WaitUntilPlatformRecognizesStream {
     bool enabled = 1;
 }
 
 message StreamForwardQuirks {
-    RestartUntilYoutubeRecognizesStream restartUntilYoutubeRecognizesStream = 1;
-    StartAfterYoutubeRecognizedStream startAfterYoutubeRecognizedStream = 2;
+    RestartUntilPlatformRecognizesStream restartUntilPlatformRecognizesStream = 1;
+    WaitUntilPlatformRecognizesStream waitUntilPlatformRecognizesStream = 2;
 }
 
 message StreamForward {
-    string streamID = 1;
-    string destinationID = 2;
+    string streamSourceID = 1;
+    StreamSinkIDFullyQualified streamSinkID = 2;
     bool enabled = 3;
     EncoderConfig encode = 4;
     StreamForwardQuirks quirks = 5;
@@ -493,7 +544,7 @@ message RemoveStreamForwardRequest {
 message RemoveStreamForwardReply {}
 
 message WaitForStreamPublisherRequest {
-    optional string streamID = 1;
+    optional string streamSourceID = 1;
     bool waitForNext = 2;
 }
 message StreamPublisher {}
@@ -515,7 +566,7 @@ message StreamPlaybackConfig {
     bool   enableObserver        = 8;
 }
 message StreamPlayerConfig {
-    string streamID = 1;
+    string streamSourceID = 1;
 	PlayerType playerType = 2;
 	bool disabled = 3;
 	StreamPlaybackConfig streamPlaybackConfig = 4;
@@ -525,7 +576,7 @@ message AddStreamPlayerRequest {
 }
 message AddStreamPlayerReply {}
 message RemoveStreamPlayerRequest {
-    string streamID = 1;
+    string streamSourceID = 1;
 }
 message RemoveStreamPlayerReply {}
 message UpdateStreamPlayerRequest {
@@ -538,63 +589,63 @@ message ListStreamPlayersReply {
     repeated StreamPlayerConfig players = 1;
 }
 message GetStreamPlayerRequest {
-    string streamID = 1;
+    string streamSourceID = 1;
 }
 message GetStreamPlayerReply {
     StreamPlayerConfig config = 1;
 }
 
 message StreamPlayerOpenRequest {
-    string streamID = 1;
+    string streamSourceID = 1;
     player.OpenRequest request = 2;
 }
 message StreamPlayerOpenReply {
     player.OpenReply reply = 1;
 }
 message StreamPlayerProcessTitleRequest  {
-    string streamID = 1;
+    string streamSourceID = 1;
     player.ProcessTitleRequest request = 2;
 }
 message StreamPlayerProcessTitleReply {
     player.ProcessTitleReply reply = 1;    
 }
 message StreamPlayerGetLinkRequest {
-    string streamID = 1;
+    string streamSourceID = 1;
     player.GetLinkRequest request = 2;
 }
 message StreamPlayerGetLinkReply {
     player.GetLinkReply reply = 1;
 }
 message StreamPlayerEndChanRequest {
-    string streamID = 1;
+    string streamSourceID = 1;
     player.EndChanRequest request = 2;
 }
 message StreamPlayerEndChanReply {
     player.EndChanReply reply = 1;
 }
 message StreamPlayerIsEndedRequest {
-    string streamID = 1;
+    string streamSourceID = 1;
     player.IsEndedRequest request = 2;
 }
 message StreamPlayerIsEndedReply {
     player.IsEndedReply reply = 1;
 }
 message StreamPlayerGetPositionRequest {
-    string streamID = 1;
+    string streamSourceID = 1;
     player.GetPositionRequest request = 2;
 }
 message StreamPlayerGetPositionReply {
     player.GetPositionReply reply = 1;
 }
 message StreamPlayerGetLengthRequest {
-    string streamID = 1;
+    string streamSourceID = 1;
     player.GetLengthRequest request = 2;
 }
 message StreamPlayerGetLengthReply {
     player.GetLengthReply reply = 1;
 }
 message StreamPlayerGetLagRequest {
-    string streamID = 1;
+    string streamSourceID = 1;
     int64 requestUnixNano = 2;
 }
 message StreamPlayerGetLagReply {
@@ -603,28 +654,28 @@ message StreamPlayerGetLagReply {
     int64 lagU = 3;
 }
 message StreamPlayerSetSpeedRequest {
-    string streamID = 1;
+    string streamSourceID = 1;
     player.SetSpeedRequest request = 2;
 }
 message StreamPlayerSetSpeedReply {
     player.SetSpeedReply reply = 1;
 }
 message StreamPlayerSetPauseRequest {
-    string streamID = 1;
+    string streamSourceID = 1;
     player.SetPauseRequest request = 2;
 }
 message StreamPlayerSetPauseReply {
     player.SetPauseReply reply = 1;
 }
 message StreamPlayerStopRequest {
-    string streamID = 1;
+    string streamSourceID = 1;
     player.StopRequest request = 2;
 }
 message StreamPlayerStopReply {
     player.StopReply reply = 1;
 }
 message StreamPlayerCloseRequest {
-    string streamID = 1;
+    string streamSourceID = 1;
     player.CloseRequest request = 2;
 }
 message StreamPlayerCloseReply {
@@ -637,10 +688,10 @@ message SubscribeToStreamsChangesRequest {}
 message StreamsChange {}
 message SubscribeToStreamServersChangesRequest {}
 message StreamServersChange {}
-message SubscribeToStreamDestinationsChangesRequest {}
-message StreamDestinationsChange {}
-message SubscribeToIncomingStreamsChangesRequest {}
-message IncomingStreamsChange {}
+message SubscribeToStreamSinksChangesRequest {}
+message StreamSinksChange {}
+message SubscribeToStreamSourcesChangesRequest {}
+message StreamSourcesChange {}
 message SubscribeToStreamForwardsChangesRequest {}
 message StreamForwardsChange {}
 message SubscribeToStreamPlayersChangesRequest {}
@@ -670,10 +721,11 @@ message OBSAction {
 message Action {
     oneof ActionOneof {
         NoopRequest noopRequest = 1;
-        StartStreamRequest startStreamRequest = 2;
-        StartStreamByProfileNameRequest startStreamByProfileNameRequest = 3;
-        EndStreamRequest endStreamRequest = 4;
-        OBSAction obsAction = 5;
+        SetStreamActiveRequest setStreamActiveRequest = 2;
+        SetTitleRequest setTitleRequest = 3;
+        SetDescriptionRequest setDescriptionRequest = 4;
+        ApplyProfileRequest applyProfileRequest = 5;
+        OBSAction obsAction = 6;
     }
 }
 
@@ -841,4 +893,23 @@ message LLMGenerateRequest {
 }
 message LLMGenerateReply {
     string response = 1;
+}
+
+message AccountIDFullyQualified {
+    string platformID = 1;
+    string accountID = 2;
+}
+
+message StreamIDFullyQualified {
+    string platformID = 1;
+    string accountID = 2;
+    string streamID = 3;
+}
+
+message GetStreamSinkConfigRequest {
+    StreamIDFullyQualified streamSourceID = 1;
+}
+
+message GetStreamSinkConfigReply {
+    StreamSinkConfig config = 1;
 }

@@ -17,7 +17,7 @@ func VarKeyImage(imageID ImageID) VarKey {
 type AlignX string
 
 const (
-	AlignXUndefined = AlignX("")
+	UndefinedAlignX = AlignX("")
 	AlignXLeft      = AlignX("left")
 	AlignXMiddle    = AlignX("middle")
 	AlignXRight     = AlignX("right")
@@ -26,7 +26,7 @@ const (
 type AlignY string
 
 const (
-	AlignYUndefined = AlignY("")
+	UndefinedAlignY = AlignY("")
 	AlignYTop       = AlignY("top")
 	AlignYMiddle    = AlignY("middle")
 	AlignYBottom    = AlignY("bottom")

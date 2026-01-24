@@ -1,3 +1,6 @@
+// Package streampanel provides a Fyne-based graphical user interface for controlling
+// and monitoring live streams. This file implements the "Restream" page, allowing
+// management of stream sources, servers, sinks, forwards, and players.
 package streampanel
 
 import (
@@ -20,6 +23,8 @@ import (
 	"github.com/xaionaro-go/player/pkg/player"
 	"github.com/xaionaro-go/recoder"
 	"github.com/xaionaro-go/streamctl/pkg/consts"
+	"github.com/xaionaro-go/streamctl/pkg/secret"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	sstypes "github.com/xaionaro-go/streamctl/pkg/streamserver/types"
@@ -48,182 +53,189 @@ func (p *Panel) initRestreamPage(
 	logger.Debugf(ctx, "initRestreamPage")
 	defer logger.Debugf(ctx, "/initRestreamPage")
 
-	observability.Go(ctx, func(ctx context.Context) {
-		updateData := func() {
-			inStreams, err := p.StreamD.ListIncomingStreams(ctx)
-			if err != nil {
-				p.DisplayError(err)
-			} else {
-				p.displayIncomingServers(ctx, inStreams)
-			}
-		}
-		updateData()
-
-		ch, restartCh, err := autoResubscribe(ctx, p.StreamD.SubscribeToIncomingStreamsChanges)
-		if err != nil {
-			p.DisplayError(err)
+	p.restreamPageLocker.Do(ctx, func() {
+		if p.restreamPageInitialized {
 			return
 		}
-		for range ch {
-			var ok bool
-			select {
-			case _, ok = <-ch:
-				if ok {
-					logger.Debugf(ctx, "got event IncomingStreamsChange")
+		p.restreamPageInitialized = true
+
+		observability.Go(ctx, func(ctx context.Context) {
+			updateData := func() {
+				inStreams, err := p.StreamD.ListStreamSources(ctx)
+				if err != nil {
+					p.DisplayError(err)
+				} else {
+					p.displayStreamSources(ctx, inStreams)
 				}
-			case _, ok = <-restartCh:
-				if ok {
-					logger.Debugf(ctx, "restarted SubscribeToIncomingStreamsChanges")
-				}
-			}
-			if !ok {
-				break
 			}
 			updateData()
-		}
-	})
 
-	observability.Go(ctx, func(ctx context.Context) {
-		updateData := func() {
-			streamServers, err := p.StreamD.ListStreamServers(ctx)
+			ch, restartCh, err := autoResubscribe(ctx, p.StreamD.SubscribeToStreamSourcesChanges)
 			if err != nil {
 				p.DisplayError(err)
-			} else {
-				p.displayStreamServers(ctx, streamServers)
+				return
 			}
-		}
-		updateData()
+			for range ch {
+				var ok bool
+				select {
+				case _, ok = <-ch:
+					if ok {
+						logger.Debugf(ctx, "got event StreamSourcesChange")
+					}
+				case _, ok = <-restartCh:
+					if ok {
+						logger.Debugf(ctx, "restarted SubscribeToStreamSourcesChanges")
+					}
+				}
+				if !ok {
+					break
+				}
+				updateData()
+			}
+		})
 
-		ch, restartCh, err := autoResubscribe(ctx, p.StreamD.SubscribeToStreamServersChanges)
-		if err != nil {
-			p.DisplayError(err)
-			return
-		}
-		for {
-			var ok bool
-			select {
-			case _, ok = <-ch:
-				if ok {
-					logger.Debugf(ctx, "got event StreamServersChange")
+		observability.Go(ctx, func(ctx context.Context) {
+			updateData := func() {
+				streamServers, err := p.StreamD.ListStreamServers(ctx)
+				if err != nil {
+					p.DisplayError(err)
+				} else {
+					p.displayStreamServers(ctx, streamServers)
 				}
-			case _, ok = <-restartCh:
-				if ok {
-					logger.Debugf(ctx, "restarted SubscribeToStreamServersChanges")
-				}
-			}
-			if !ok {
-				break
 			}
 			updateData()
-		}
-	})
 
-	observability.Go(ctx, func(ctx context.Context) {
-		defer logger.Debugf(ctx, "/SubscribeToStreamDestinationsChanges")
-		updateData := func() {
-			dsts, err := p.StreamD.ListStreamDestinations(ctx)
+			ch, restartCh, err := autoResubscribe(ctx, p.StreamD.SubscribeToStreamServersChanges)
 			if err != nil {
 				p.DisplayError(err)
-			} else {
-				p.displayStreamDestinations(ctx, dsts)
+				return
 			}
-		}
-		updateData()
+			for {
+				var ok bool
+				select {
+				case _, ok = <-ch:
+					if ok {
+						logger.Debugf(ctx, "got event StreamServersChange")
+					}
+				case _, ok = <-restartCh:
+					if ok {
+						logger.Debugf(ctx, "restarted SubscribeToStreamServersChanges")
+					}
+				}
+				if !ok {
+					break
+				}
+				updateData()
+			}
+		})
 
-		ch, restartCh, err := autoResubscribe(ctx, p.StreamD.SubscribeToStreamDestinationsChanges)
-		if err != nil {
-			p.DisplayError(err)
-			return
-		}
-		for {
-			var ok bool
-			select {
-			case _, ok = <-ch:
-				if ok {
-					logger.Debugf(ctx, "got event StreamDestinationsChange")
+		observability.Go(ctx, func(ctx context.Context) {
+			defer logger.Debugf(ctx, "/SubscribeToStreamSinksChanges")
+			updateData := func() {
+				sinks, err := p.StreamD.ListStreamSinks(ctx)
+				if err != nil {
+					p.DisplayError(err)
+				} else {
+					p.displayStreamSinks(ctx, sinks)
 				}
-			case _, ok = <-restartCh:
-				if ok {
-					logger.Debugf(ctx, "restarted SubscribeToStreamDestinationsChanges")
-				}
-			}
-			if !ok {
-				break
 			}
 			updateData()
-		}
-	})
 
-	observability.Go(ctx, func(ctx context.Context) {
-		defer logger.Debugf(ctx, "/SubscribeToStreamForwardsChanges")
-		updateData := func() {
-			streamFwds, err := p.StreamD.ListStreamForwards(ctx)
+			ch, restartCh, err := autoResubscribe(ctx, p.StreamD.SubscribeToStreamSinksChanges)
 			if err != nil {
 				p.DisplayError(err)
-			} else {
-				p.displayStreamForwards(ctx, streamFwds)
+				return
 			}
-		}
-		updateData()
+			for {
+				var ok bool
+				select {
+				case _, ok = <-ch:
+					if ok {
+						logger.Debugf(ctx, "got event StreamSinksChange")
+					}
+				case _, ok = <-restartCh:
+					if ok {
+						logger.Debugf(ctx, "restarted SubscribeToStreamSinksChanges")
+					}
+				}
+				if !ok {
+					break
+				}
+				updateData()
+			}
+		})
 
-		ch, restartCh, err := autoResubscribe(ctx, p.StreamD.SubscribeToStreamForwardsChanges)
-		if err != nil {
-			p.DisplayError(err)
-			return
-		}
-		for {
-			var ok bool
-			select {
-			case _, ok = <-ch:
-				if ok {
-					logger.Debugf(ctx, "got event StreamForwardsChange")
+		observability.Go(ctx, func(ctx context.Context) {
+			defer logger.Debugf(ctx, "/SubscribeToStreamForwardsChanges")
+			updateData := func() {
+				streamFwds, err := p.StreamD.ListStreamForwards(ctx)
+				if err != nil {
+					p.DisplayError(err)
+				} else {
+					p.displayStreamForwards(ctx, streamFwds)
 				}
-			case _, ok = <-restartCh:
-				if ok {
-					logger.Debugf(ctx, "restarted SubscribeToStreamForwardsChanges")
-				}
-			}
-			if !ok {
-				break
 			}
 			updateData()
-		}
-	})
 
-	observability.Go(ctx, func(ctx context.Context) {
-		defer logger.Debugf(ctx, "/SubscribeToStreamPlayersChanges")
-		updateData := func() {
-			streamPlayers, err := p.StreamD.ListStreamPlayers(ctx)
+			ch, restartCh, err := autoResubscribe(ctx, p.StreamD.SubscribeToStreamForwardsChanges)
 			if err != nil {
 				p.DisplayError(err)
-			} else {
-				p.displayStreamPlayers(ctx, streamPlayers)
+				return
 			}
-		}
-		updateData()
+			for {
+				var ok bool
+				select {
+				case _, ok = <-ch:
+					if ok {
+						logger.Debugf(ctx, "got event StreamForwardsChange")
+					}
+				case _, ok = <-restartCh:
+					if ok {
+						logger.Debugf(ctx, "restarted SubscribeToStreamForwardsChanges")
+					}
+				}
+				if !ok {
+					break
+				}
+				updateData()
+			}
+		})
 
-		ch, restartCh, err := autoResubscribe(ctx, p.StreamD.SubscribeToStreamPlayersChanges)
-		if err != nil {
-			p.DisplayError(err)
-			return
-		}
-		for {
-			var ok bool
-			select {
-			case _, ok = <-ch:
-				if ok {
-					logger.Debugf(ctx, "got event StreamPlayersChange")
+		observability.Go(ctx, func(ctx context.Context) {
+			defer logger.Debugf(ctx, "/SubscribeToStreamPlayersChanges")
+			updateData := func() {
+				streamPlayers, err := p.StreamD.ListStreamPlayers(ctx)
+				if err != nil {
+					p.DisplayError(err)
+				} else {
+					p.displayStreamPlayers(ctx, streamPlayers)
 				}
-			case _, ok = <-restartCh:
-				if ok {
-					logger.Debugf(ctx, "restarted SubscribeToStreamPlayersChanges")
-				}
-			}
-			if !ok {
-				break
 			}
 			updateData()
-		}
+
+			ch, restartCh, err := autoResubscribe(ctx, p.StreamD.SubscribeToStreamPlayersChanges)
+			if err != nil {
+				p.DisplayError(err)
+				return
+			}
+			for {
+				var ok bool
+				select {
+				case _, ok = <-ch:
+					if ok {
+						logger.Debugf(ctx, "got event StreamPlayersChange")
+					}
+				case _, ok = <-restartCh:
+					if ok {
+						logger.Debugf(ctx, "restarted SubscribeToStreamPlayersChanges")
+					}
+				}
+				if !ok {
+					break
+				}
+				updateData()
+			}
+		})
 	})
 }
 
@@ -381,8 +393,7 @@ func (p *Panel) displayStreamServers(
 
 		objs = append(objs, c)
 	}
-	p.streamServersWidget.Objects = objs
-	p.streamServersWidget.Refresh()
+	p.updateObjects(p.streamServersWidget, objs)
 
 	p.streamServersLocker.Do(ctx, func() {
 		cancelFn := p.streamServersUpdaterCanceller
@@ -428,14 +439,14 @@ func bwString(
 }
 
 func (p *Panel) openAddStreamWindow(ctx context.Context) {
-	w := p.app.NewWindow(consts.AppName + ": Add incoming stream")
+	w := p.app.NewWindow(consts.AppName + ": Add stream source")
 	resizeWindow(w, fyne.NewSize(400, 300))
 
-	streamIDEntry := widget.NewEntry()
-	streamIDEntry.SetPlaceHolder("stream name")
+	streamSourceIDEntry := widget.NewEntry()
+	streamSourceIDEntry.SetPlaceHolder("stream name")
 
 	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
-		err := p.addIncomingStream(ctx, api.StreamID(streamIDEntry.Text))
+		err := p.addStreamSource(ctx, api.StreamSourceID(streamSourceIDEntry.Text))
 		if err != nil {
 			p.DisplayError(err)
 			return
@@ -449,29 +460,29 @@ func (p *Panel) openAddStreamWindow(ctx context.Context) {
 		nil,
 		nil,
 		container.NewVBox(
-			streamIDEntry,
+			streamSourceIDEntry,
 		),
 	))
 	w.Show()
 }
 
-func (p *Panel) addIncomingStream(
+func (p *Panel) addStreamSource(
 	ctx context.Context,
-	streamID api.StreamID,
+	streamSourceID api.StreamSourceID,
 ) error {
-	logger.Debugf(ctx, "addIncomingStream")
-	defer logger.Debugf(ctx, "/addIncomingStream")
-	return p.StreamD.AddIncomingStream(ctx, streamID)
+	logger.Debugf(ctx, "addStreamSource")
+	defer logger.Debugf(ctx, "/addStreamSource")
+	return p.StreamD.AddStreamSource(ctx, streamSourceID)
 }
 
-func (p *Panel) displayIncomingServers(
+func (p *Panel) displayStreamSources(
 	ctx context.Context,
-	inStreams []api.IncomingStream,
+	inStreams []api.StreamSource,
 ) {
-	logger.Debugf(ctx, "displayIncomingServers")
-	defer logger.Debugf(ctx, "/displayIncomingServers")
+	logger.Debugf(ctx, "displayStreamSources")
+	defer logger.Debugf(ctx, "/displayStreamSources")
 	sort.Slice(inStreams, func(i, j int) bool {
-		return inStreams[i].StreamID < inStreams[j].StreamID
+		return inStreams[i].StreamSourceID < inStreams[j].StreamSourceID
 	})
 
 	var objs []fyne.CanvasObject
@@ -484,15 +495,15 @@ func (p *Panel) displayIncomingServers(
 		playButton.Hide() // TODO: unhide when it will be implemented
 		deleteButton := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
 			w := dialog.NewConfirm(
-				fmt.Sprintf("Delete incoming server %s ?", stream.StreamID),
+				fmt.Sprintf("Delete stream source %s ?", stream.StreamSourceID),
 				"",
 				func(b bool) {
 					if !b {
 						return
 					}
-					logger.Debugf(ctx, "remove incoming stream")
-					defer logger.Debugf(ctx, "/remove incoming stream")
-					err := p.StreamD.RemoveIncomingStream(ctx, stream.StreamID)
+					logger.Debugf(ctx, "remove stream source")
+					defer logger.Debugf(ctx, "/remove stream source")
+					err := p.StreamD.RemoveStreamSource(ctx, stream.StreamSourceID)
 					if err != nil {
 						p.DisplayError(err)
 						return
@@ -502,73 +513,113 @@ func (p *Panel) displayIncomingServers(
 			)
 			w.Show()
 		})
-		label := widget.NewLabel(string(stream.StreamID))
+		label := widget.NewLabel(string(stream.StreamSourceID))
 		c.RemoveAll()
 		c.Add(playButton)
 		c.Add(deleteButton)
 		c.Add(label)
 		objs = append(objs, c)
 	}
-	p.streamsWidget.Objects = objs
-	p.streamsWidget.Refresh()
+	p.updateObjects(p.streamsWidget, objs)
 }
 
-func (p *Panel) openAddDestinationWindow(ctx context.Context) {
-	p.openAddOrEditDestinationWindow(
+func (p *Panel) openAddSinkWindow(ctx context.Context) {
+	p.openAddOrEditSinkWindow(
 		ctx,
-		"Add stream destination",
-		api.StreamDestination{},
-		p.addStreamDestination,
+		"Add stream sink",
+		api.StreamSink{},
+		p.addStreamSink,
 	)
 }
 
-func (p *Panel) openEditDestinationWindow(
+func (p *Panel) openEditSinkWindow(
 	ctx context.Context,
-	dst api.StreamDestination,
+	sink api.StreamSink,
 ) {
-	p.openAddOrEditDestinationWindow(
+	p.openAddOrEditSinkWindow(
 		ctx,
-		fmt.Sprintf("Edit stream destination '%s'", dst.ID),
-		dst,
-		p.updateStreamDestination,
+		fmt.Sprintf("Edit stream sink '%s'", sink.ID),
+		sink,
+		p.updateStreamSink,
 	)
 }
 
-func (p *Panel) openAddOrEditDestinationWindow(
+func (p *Panel) openAddOrEditSinkWindow(
 	ctx context.Context,
 	title string,
-	destination api.StreamDestination,
+	sink api.StreamSink,
 	commitFn func(
 		ctx context.Context,
-		destinationID api.DestinationID,
-		url string,
-		streamKey string,
+		streamSinkID api.StreamSinkIDFullyQualified,
+		config sstypes.StreamSinkConfig,
 	) error,
 ) {
 	w := p.app.NewWindow(consts.AppName + ": " + title)
 	resizeWindow(w, fyne.NewSize(400, 300))
 
-	destinationIDEntry := widget.NewEntry()
-	destinationIDEntry.SetPlaceHolder("destination ID")
-	if destination.ID != "" {
-		destinationIDEntry.SetText(string(destination.ID))
-		destinationIDEntry.Disable()
+	streamSinkIDEntry := widget.NewEntry()
+	streamSinkIDEntry.SetPlaceHolder("sink ID")
+	if sink.ID.ID != "" {
+		streamSinkIDEntry.SetText(string(sink.ID.ID))
+		streamSinkIDEntry.Disable()
 	}
+
+	isStatic := sink.ID.Type != sstypes.StreamSinkTypeCustom
 
 	urlEntry := widget.NewEntry()
 	urlEntry.SetPlaceHolder("URL")
-	urlEntry.SetText(destination.URL)
+	urlEntry.SetText(sink.URL)
+	if !isStatic {
+		urlEntry.Disable()
+	}
 
 	streamKeyEntry := widget.NewEntry()
 	streamKeyEntry.SetPlaceHolder("stream key")
-	streamKeyEntry.SetText(destination.StreamKey)
+	streamKeyEntry.SetText(sink.StreamKey.Get())
+
+	activeStreams, err := p.StreamD.GetActiveStreamIDs(ctx)
+	if err != nil {
+		p.DisplayError(fmt.Errorf("unable to list active streams: %w", err))
+	}
+	activeStreamOptions := []string{"<none>"}
+	for _, s := range activeStreams {
+		activeStreamOptions = append(activeStreamOptions, s.String())
+	}
+
+	var selectedStreamSourceID *streamcontrol.StreamIDFullyQualified
+	if sink.StreamSourceID != nil {
+		selectedStreamSourceID = sink.StreamSourceID
+	}
+	activeStreamSelect := widget.NewSelect(activeStreamOptions, func(s string) {
+		if s == "<none>" {
+			selectedStreamSourceID = nil
+			return
+		}
+		for _, as := range activeStreams {
+			if as.String() == s {
+				selectedStreamSourceID = &as
+				return
+			}
+		}
+	})
+	if selectedStreamSourceID != nil {
+		activeStreamSelect.SetSelected(selectedStreamSourceID.String())
+	} else {
+		activeStreamSelect.SetSelected("<none>")
+	}
 
 	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
 		err := commitFn(
 			ctx,
-			api.DestinationID(destinationIDEntry.Text),
-			urlEntry.Text,
-			streamKeyEntry.Text,
+			api.StreamSinkIDFullyQualified{
+				Type: sstypes.StreamSinkTypeCustom,
+				ID:   api.StreamSinkID(streamSinkIDEntry.Text),
+			},
+			sstypes.StreamSinkConfig{
+				URL:            urlEntry.Text,
+				StreamKey:      secret.New(streamKeyEntry.Text),
+				StreamSourceID: selectedStreamSourceID,
+			},
 		)
 		if err != nil {
 			p.DisplayError(err)
@@ -583,57 +634,60 @@ func (p *Panel) openAddOrEditDestinationWindow(
 		nil,
 		nil,
 		container.NewVBox(
-			destinationIDEntry,
+			widget.NewLabel("Sink ID:"),
+			streamSinkIDEntry,
+			widget.NewLabel("Dynamic source (optional):"),
+			activeStreamSelect,
+			widget.NewLabel("Static URL (if no dynamic source):"),
 			urlEntry,
+			widget.NewLabel("Static stream key (if no dynamic source):"),
 			streamKeyEntry,
 		),
 	))
 	w.Show()
 }
 
-func (p *Panel) addStreamDestination(
+func (p *Panel) addStreamSink(
 	ctx context.Context,
-	destinationID api.DestinationID,
-	url string,
-	streamKey string,
+	streamSinkID api.StreamSinkIDFullyQualified,
+	config sstypes.StreamSinkConfig,
 ) error {
-	logger.Debugf(ctx, "addStreamDestination")
-	defer logger.Debugf(ctx, "/addStreamDestination")
-	return p.StreamD.AddStreamDestination(ctx, destinationID, url, streamKey)
+	logger.Debugf(ctx, "addStreamSink")
+	defer logger.Debugf(ctx, "/addStreamSink")
+	return p.StreamD.AddStreamSink(ctx, streamSinkID, config)
 }
 
-func (p *Panel) updateStreamDestination(
+func (p *Panel) updateStreamSink(
 	ctx context.Context,
-	destinationID api.DestinationID,
-	url string,
-	streamKey string,
+	streamSinkID api.StreamSinkIDFullyQualified,
+	config sstypes.StreamSinkConfig,
 ) error {
-	logger.Debugf(ctx, "updateStreamDestination")
-	defer logger.Debugf(ctx, "/updateStreamDestination")
-	return p.StreamD.UpdateStreamDestination(ctx, destinationID, url, streamKey)
+	logger.Debugf(ctx, "updateStreamSink")
+	defer logger.Debugf(ctx, "/updateStreamSink")
+	return p.StreamD.UpdateStreamSink(ctx, streamSinkID, config)
 }
 
-func (p *Panel) displayStreamDestinations(
+func (p *Panel) displayStreamSinks(
 	ctx context.Context,
-	dsts []api.StreamDestination,
+	sinks []api.StreamSink,
 ) {
-	logger.Debugf(ctx, "displayStreamDestinations")
-	defer logger.Debugf(ctx, "/displayStreamDestinations")
+	logger.Debugf(ctx, "displayStreamSinks")
+	defer logger.Debugf(ctx, "/displayStreamSinks")
 
 	var objs []fyne.CanvasObject
-	for idx, dst := range dsts {
-		logger.Tracef(ctx, "dsts[%3d] == %#+v", idx, dst)
+	for idx, sink := range sinks {
+		logger.Tracef(ctx, "sinks[%3d] == %#+v", idx, sink)
 		deleteButton := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
 			w := dialog.NewConfirm(
-				fmt.Sprintf("Delete destination %s ?", dst.ID),
+				fmt.Sprintf("Delete sink %s ?", sink.ID),
 				"",
 				func(b bool) {
 					if !b {
 						return
 					}
-					logger.Debugf(ctx, "remove destination")
-					defer logger.Debugf(ctx, "/remove destination")
-					err := p.StreamD.RemoveStreamDestination(ctx, dst.ID)
+					logger.Debugf(ctx, "remove sink")
+					defer logger.Debugf(ctx, "/remove sink")
+					err := p.StreamD.RemoveStreamSink(ctx, sink.ID)
 					if err != nil {
 						p.DisplayError(err)
 						return
@@ -644,18 +698,17 @@ func (p *Panel) displayStreamDestinations(
 			w.Show()
 		})
 		editButton := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
-			p.openEditDestinationWindow(ctx, dst)
+			p.openEditSinkWindow(ctx, sink)
 		})
 
-		label := widget.NewLabel(string(dst.ID) + ": " + string(dst.URL))
+		label := widget.NewLabel(sink.ID.String() + ": " + sink.URL)
 		objs = append(objs, container.NewHBox(
 			deleteButton,
 			editButton,
 			label,
 		))
 	}
-	p.destinationsWidget.Objects = objs
-	p.destinationsWidget.Refresh()
+	p.updateObjects(p.sinksWidget, objs)
 }
 
 func (p *Panel) openAddPlayerWindow(ctx context.Context) {
@@ -672,21 +725,21 @@ func (p *Panel) openAddPlayerWindow(ctx context.Context) {
 
 func (p *Panel) openEditPlayerWindow(
 	ctx context.Context,
-	streamID api.StreamID,
+	streamSourceID api.StreamSourceID,
 ) {
 	cfg, err := p.GetStreamDConfig(ctx)
 	if err != nil {
 		p.DisplayError(fmt.Errorf("unable to get the current config: %w", err))
 		return
 	}
-	streamCfg, ok := cfg.StreamServer.Streams[streamID]
+	streamCfg, ok := cfg.StreamServer.Streams[streamSourceID]
 	if !ok {
-		p.DisplayError(fmt.Errorf("unable to find a stream '%s'", streamID))
+		p.DisplayError(fmt.Errorf("unable to find a stream '%s'", streamSourceID))
 		return
 	}
 	playerCfg := streamCfg.Player
 	if playerCfg == nil {
-		p.DisplayError(fmt.Errorf("unable to find a stream player for '%s'", streamID))
+		p.DisplayError(fmt.Errorf("unable to find a stream player for '%s'", streamSourceID))
 		return
 	}
 	p.openAddOrEditPlayerWindow(
@@ -695,7 +748,7 @@ func (p *Panel) openEditPlayerWindow(
 		!playerCfg.Disabled,
 		playerCfg.Player,
 		playerCfg.StreamPlayback,
-		&streamID,
+		&streamSourceID,
 		p.StreamD.UpdateStreamPlayer,
 	)
 }
@@ -706,10 +759,10 @@ func (p *Panel) openAddOrEditPlayerWindow(
 	isEnabled bool,
 	backend player.Backend,
 	cfg sptypes.Config,
-	forceStreamID *api.StreamID,
+	forceStreamSourceID *api.StreamSourceID,
 	addOrEditStreamPlayer func(
 		ctx context.Context,
-		streamID api.StreamID,
+		streamSourceID api.StreamSourceID,
 		playerType player.Backend,
 		disabled bool,
 		streamPlaybackConfig sptypes.Config,
@@ -733,7 +786,7 @@ func (p *Panel) openAddOrEditPlayerWindow(
 		playerSelect.SetSelectedIndex(0)
 	}
 
-	inStreams, err := p.StreamD.ListIncomingStreams(ctx)
+	inStreams, err := p.StreamD.ListStreamSources(ctx)
 	if err != nil {
 		p.DisplayError(err)
 		return
@@ -741,11 +794,11 @@ func (p *Panel) openAddOrEditPlayerWindow(
 
 	var inStreamStrs []string
 	for _, inStream := range inStreams {
-		inStreamStrs = append(inStreamStrs, string(inStream.StreamID))
+		inStreamStrs = append(inStreamStrs, string(inStream.StreamSourceID))
 	}
 	inStreamsSelect := widget.NewSelect(inStreamStrs, func(s string) {})
-	if forceStreamID != nil {
-		inStreamsSelect.SetSelected(string(*forceStreamID))
+	if forceStreamSourceID != nil {
+		inStreamsSelect.SetSelected(string(*forceStreamSourceID))
 		inStreamsSelect.Disable()
 	}
 
@@ -857,7 +910,7 @@ func (p *Panel) openAddOrEditPlayerWindow(
 		}
 		err := addOrEditStreamPlayer(
 			ctx,
-			api.StreamID(inStreamsSelect.Selected),
+			api.StreamSourceID(inStreamsSelect.Selected),
 			player.Backend(playerSelect.Selected),
 			!isEnabled,
 			cfg,
@@ -912,7 +965,7 @@ func (p *Panel) displayStreamPlayers(
 	hasDynamicValue := false
 
 	sort.Slice(players, func(i, j int) bool {
-		return players[i].StreamID < players[j].StreamID
+		return players[i].StreamSourceID < players[j].StreamSourceID
 	})
 
 	var objs []fyne.CanvasObject
@@ -923,7 +976,7 @@ func (p *Panel) displayStreamPlayers(
 			w := dialog.NewConfirm(
 				fmt.Sprintf(
 					"Delete player for stream '%s' (%s) ?",
-					player.StreamID,
+					player.StreamSourceID,
 					player.PlayerType,
 				),
 				"",
@@ -934,16 +987,16 @@ func (p *Panel) displayStreamPlayers(
 					logger.Debugf(
 						ctx,
 						"remove player '%s' (%s)",
-						player.StreamID,
+						player.StreamSourceID,
 						player.PlayerType,
 					)
 					defer logger.Debugf(
 						ctx,
 						"/remove player '%s' (%s)",
-						player.StreamID,
+						player.StreamSourceID,
 						player.PlayerType,
 					)
-					err := p.StreamD.RemoveStreamPlayer(ctx, player.StreamID)
+					err := p.StreamD.RemoveStreamPlayer(ctx, player.StreamSourceID)
 					if err != nil {
 						p.DisplayError(err)
 						return
@@ -954,15 +1007,15 @@ func (p *Panel) displayStreamPlayers(
 			w.Show()
 		})
 		editButton := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
-			p.openEditPlayerWindow(ctx, player.StreamID)
+			p.openEditPlayerWindow(ctx, player.StreamSourceID)
 		})
 		icon := theme.MediaStopIcon()
 		label := "Stop"
-		title := fmt.Sprintf("Stop %s on '%s' ?", player.PlayerType, player.StreamID)
+		title := fmt.Sprintf("Stop %s on '%s' ?", player.PlayerType, player.StreamSourceID)
 		if player.Disabled {
 			icon = theme.MediaPlayIcon()
 			label = "Start"
-			title = fmt.Sprintf("Start %s on '%s' ?", player.PlayerType, player.StreamID)
+			title = fmt.Sprintf("Start %s on '%s' ?", player.PlayerType, player.StreamSourceID)
 		}
 		playPauseButton := widget.NewButtonWithIcon(label, icon, func() {
 			w := dialog.NewConfirm(
@@ -976,7 +1029,7 @@ func (p *Panel) displayStreamPlayers(
 						ctx,
 						"stop/start player %s on '%s': disabled:%v->%v",
 						player.PlayerType,
-						player.StreamID,
+						player.StreamSourceID,
 						player.Disabled,
 						!player.Disabled,
 					)
@@ -984,13 +1037,13 @@ func (p *Panel) displayStreamPlayers(
 						ctx,
 						"/stop/start player %s on '%s': disabled:%v->%v",
 						player.PlayerType,
-						player.StreamID,
+						player.StreamSourceID,
 						player.Disabled,
 						!player.Disabled,
 					)
 					err := p.StreamD.UpdateStreamPlayer(
 						xcontext.DetachDone(ctx),
-						player.StreamID,
+						player.StreamSourceID,
 						player.PlayerType,
 						!player.Disabled,
 						player.StreamPlaybackConfig,
@@ -1004,19 +1057,19 @@ func (p *Panel) displayStreamPlayers(
 			)
 			w.Show()
 		})
-		caption := widget.NewLabel(string(player.StreamID) + " (" + string(player.PlayerType) + ")")
+		caption := widget.NewLabel(string(player.StreamSourceID) + " (" + string(player.PlayerType) + ")")
 		c.RemoveAll()
 		c.Add(deleteButton)
 		c.Add(editButton)
 		c.Add(playPauseButton)
 		c.Add(caption)
 		if !player.Disabled {
-			pos, err := p.StreamD.StreamPlayerGetPosition(ctx, player.StreamID)
+			pos, err := p.StreamD.StreamPlayerGetPosition(ctx, player.StreamSourceID)
 			if err != nil {
 				logger.Debugf(
 					ctx,
 					"unable to get the current position at player '%s': %v",
-					player.StreamID,
+					player.StreamSourceID,
 					err,
 				)
 			} else {
@@ -1029,8 +1082,7 @@ func (p *Panel) displayStreamPlayers(
 		}
 		objs = append(objs, c)
 	}
-	p.playersWidget.Objects = objs
-	p.playersWidget.Refresh()
+	p.updateObjects(p.playersWidget, objs)
 
 	p.streamPlayersLocker.Do(ctx, func() {
 		cancelFn := p.streamPlayersUpdaterCanceller
@@ -1049,29 +1101,29 @@ func (p *Panel) displayStreamPlayers(
 
 func (p *Panel) openEditRestreamWindow(
 	ctx context.Context,
-	streamID streamtypes.StreamID,
-	dstID streamtypes.DestinationID,
+	streamSourceID streamtypes.StreamSourceID,
+	streamSinkID api.StreamSinkIDFullyQualified,
 ) {
 	cfg, err := p.GetStreamDConfig(ctx)
 	if err != nil {
 		p.DisplayError(fmt.Errorf("unable to get the current config: %w", err))
 		return
 	}
-	streamCfg, ok := cfg.StreamServer.Streams[streamID]
+	streamCfg, ok := cfg.StreamServer.Streams[streamSourceID]
 	if !ok {
-		p.DisplayError(fmt.Errorf("unable to find a stream '%s'", streamID))
+		p.DisplayError(fmt.Errorf("unable to find a stream '%s'", streamSourceID))
 		return
 	}
-	fwd, ok := streamCfg.Forwardings[dstID]
+	fwd, ok := streamCfg.Forwardings[streamSinkID]
 	if !ok {
-		p.DisplayError(fmt.Errorf("unable to find a stream forwarding %s -> %s", streamID, dstID))
+		p.DisplayError(fmt.Errorf("unable to find a stream forwarding %s -> %s", streamSourceID, streamSinkID))
 		return
 	}
 	p.openAddOrEditRestreamWindow(
 		ctx,
 		"Edit the restreaming (stream forwarding)",
-		streamID,
-		dstID,
+		streamSourceID,
+		streamSinkID,
 		fwd,
 		p.updateStreamForward,
 	)
@@ -1082,11 +1134,11 @@ func (p *Panel) openAddRestreamWindow(ctx context.Context) {
 		ctx,
 		"Add a restreaming (stream forwarding)",
 		"",
-		"",
+		api.StreamSinkIDFullyQualified{},
 		sstypes.ForwardingConfig{
 			Disabled: false,
 			Quirks: sstypes.ForwardingQuirks{
-				RestartUntilYoutubeRecognizesStream: sstypes.DefaultRestartUntilYoutubeRecognizesStreamConfig(),
+				RestartUntilPlatformRecognizesStream: sstypes.DefaultRestartUntilPlatformRecognizesStreamConfig(),
 			},
 		},
 		p.addStreamForward,
@@ -1096,13 +1148,13 @@ func (p *Panel) openAddRestreamWindow(ctx context.Context) {
 func (p *Panel) openAddOrEditRestreamWindow(
 	ctx context.Context,
 	title string,
-	streamID streamtypes.StreamID,
-	dstID api.DestinationID,
+	streamSourceID streamtypes.StreamSourceID,
+	streamSinkID api.StreamSinkIDFullyQualified,
 	fwd sstypes.ForwardingConfig,
 	addOrEditStreamForward func(
 		ctx context.Context,
-		streamID api.StreamID,
-		dstID api.DestinationID,
+		streamSourceID api.StreamSourceID,
+		streamSinkID api.StreamSinkIDFullyQualified,
 		enabled bool,
 		encode sstypes.EncodeConfig,
 		quirks sstypes.ForwardingQuirks,
@@ -1112,16 +1164,16 @@ func (p *Panel) openAddOrEditRestreamWindow(
 		ctx,
 		"openAddOrEditRestreamWindow(ctx, '%s', '%s', '%s', %#+v)",
 		title,
-		streamID,
-		dstID,
+		streamSourceID,
+		streamSinkID,
 		fwd,
 	)
 	defer logger.Debugf(
 		ctx,
 		"/openAddOrEditRestreamWindow(ctx, '%s', '%s', '%s', %#+v)",
 		title,
-		streamID,
-		dstID,
+		streamSourceID,
+		streamSinkID,
 		fwd,
 	)
 	w := p.app.NewWindow(consts.AppName + ": " + title)
@@ -1129,13 +1181,13 @@ func (p *Panel) openAddOrEditRestreamWindow(
 
 	enabledCheck := widget.NewCheck("Enable", func(b bool) {})
 
-	inStreams, err := p.StreamD.ListIncomingStreams(ctx)
+	inStreams, err := p.StreamD.ListStreamSources(ctx)
 	if err != nil {
 		p.DisplayError(err)
 		return
 	}
 
-	dsts, err := p.StreamD.ListStreamDestinations(ctx)
+	sinks, err := p.StreamD.ListStreamSinks(ctx)
 	if err != nil {
 		p.DisplayError(err)
 		return
@@ -1143,27 +1195,27 @@ func (p *Panel) openAddOrEditRestreamWindow(
 
 	var inStreamStrs []string
 	for _, inStream := range inStreams {
-		inStreamStrs = append(inStreamStrs, string(inStream.StreamID))
+		inStreamStrs = append(inStreamStrs, string(inStream.StreamSourceID))
 	}
 	inStreamsSelect := widget.NewSelect(inStreamStrs, func(s string) {})
-	if streamID != "" {
-		inStreamsSelect.SetSelected(string(streamID))
+	if streamSourceID != "" {
+		inStreamsSelect.SetSelected(string(streamSourceID))
 		inStreamsSelect.Disable()
 	}
 
-	var dstStrs []string
-	dstMapCaption2ID := map[string]api.DestinationID{}
-	dstMapID2Caption := map[api.DestinationID]string{}
-	for _, dst := range dsts {
-		k := string(dst.ID) + ": " + dst.URL
-		dstStrs = append(dstStrs, k)
-		dstMapCaption2ID[k] = dst.ID
-		dstMapID2Caption[dst.ID] = k
+	var sinkStrs []string
+	sinkMapCaption2ID := map[string]api.StreamSinkIDFullyQualified{}
+	sinkMapID2Caption := map[api.StreamSinkIDFullyQualified]string{}
+	for _, sink := range sinks {
+		k := sink.ID.String() + ": " + sink.URL
+		sinkStrs = append(sinkStrs, k)
+		sinkMapCaption2ID[k] = sink.ID
+		sinkMapID2Caption[sink.ID] = k
 	}
-	dstSelect := widget.NewSelect(dstStrs, func(s string) {})
-	if dstID != "" {
-		dstSelect.SetSelected(dstMapID2Caption[dstID])
-		dstSelect.Disable()
+	sinkSelect := widget.NewSelect(sinkStrs, func(s string) {})
+	if streamSinkID.ID != "" {
+		sinkSelect.SetSelected(sinkMapID2Caption[streamSinkID])
+		sinkSelect.Disable()
 	}
 
 	if len(fwd.Encode.OutputVideoTracks) == 0 {
@@ -1238,7 +1290,7 @@ func (p *Panel) openAddOrEditRestreamWindow(
 			}
 		}
 	})
-	if fwd.Encode.OutputVideoTracks[0].Config.Codec == recoder.VideoCodecUndefined {
+	if fwd.Encode.OutputVideoTracks[0].Config.Codec == recoder.UndefinedVideoCodec {
 		recodingVideoCodecSelector.SetSelectedIndex(0)
 	} else {
 		recodingVideoCodecSelector.SetSelected(fwd.Encode.OutputVideoTracks[0].Config.Codec.String())
@@ -1274,7 +1326,7 @@ func (p *Panel) openAddOrEditRestreamWindow(
 			}
 		}
 	})
-	if fwd.Encode.OutputAudioTracks[0].Config.Codec == recoder.AudioCodecUndefined {
+	if fwd.Encode.OutputAudioTracks[0].Config.Codec == recoder.UndefinedAudioCodec {
 		recodingAudioCodecSelector.SetSelectedIndex(0)
 	} else {
 		recodingAudioCodecSelector.SetSelected(fwd.Encode.OutputAudioTracks[0].Config.Codec.String())
@@ -1302,7 +1354,7 @@ func (p *Panel) openAddOrEditRestreamWindow(
 
 	var restartUntilYouTubeStarts *widget.Check
 
-	quirksStartAfterYoutube := fwd.Quirks.StartAfterYoutubeRecognizedStream
+	quirksStartAfterYoutube := fwd.Quirks.WaitUntilPlatformRecognizesStream
 	startAfterYoutubeCheckbox := widget.NewCheck(
 		"Start this stream only after YouTube recognized a stream",
 		func(b bool) {
@@ -1316,14 +1368,14 @@ func (p *Panel) openAddOrEditRestreamWindow(
 		},
 	)
 
-	quirksYoutubeRestart := fwd.Quirks.RestartUntilYoutubeRecognizesStream
+	quirksYoutubeRestart := fwd.Quirks.RestartUntilPlatformRecognizesStream
 
 	if !quirksYoutubeRestart.Enabled {
 		if quirksYoutubeRestart.StartTimeout == 0 {
-			quirksYoutubeRestart.StartTimeout = sstypes.DefaultRestartUntilYoutubeRecognizesStreamConfig().StartTimeout
+			quirksYoutubeRestart.StartTimeout = sstypes.DefaultRestartUntilPlatformRecognizesStreamConfig().StartTimeout
 		}
 		if quirksYoutubeRestart.StopStartDelay == 0 {
-			quirksYoutubeRestart.StopStartDelay = sstypes.DefaultRestartUntilYoutubeRecognizesStreamConfig().StopStartDelay
+			quirksYoutubeRestart.StopStartDelay = sstypes.DefaultRestartUntilPlatformRecognizesStreamConfig().StopStartDelay
 		}
 	}
 
@@ -1375,13 +1427,13 @@ func (p *Panel) openAddOrEditRestreamWindow(
 	saveButton := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
 		err := addOrEditStreamForward(
 			ctx,
-			streamtypes.StreamID(inStreamsSelect.Selected),
-			dstMapCaption2ID[dstSelect.Selected],
+			streamtypes.StreamSourceID(inStreamsSelect.Selected),
+			sinkMapCaption2ID[sinkSelect.Selected],
 			enabledCheck.Checked,
 			fwd.Encode,
 			sstypes.ForwardingQuirks{
-				RestartUntilYoutubeRecognizesStream: quirksYoutubeRestart,
-				StartAfterYoutubeRecognizedStream:   quirksStartAfterYoutube,
+				RestartUntilPlatformRecognizesStream: quirksYoutubeRestart,
+				WaitUntilPlatformRecognizesStream:    quirksStartAfterYoutube,
 			},
 		)
 		if err != nil {
@@ -1400,7 +1452,7 @@ func (p *Panel) openAddOrEditRestreamWindow(
 			widget.NewLabel("From:"),
 			inStreamsSelect,
 			widget.NewLabel("To:"),
-			dstSelect,
+			sinkSelect,
 			widget.NewSeparator(),
 			widget.NewSeparator(),
 			widget.NewRichTextFromMarkdown("## Recode"),
@@ -1422,8 +1474,8 @@ func (p *Panel) openAddOrEditRestreamWindow(
 
 func (p *Panel) updateStreamForward(
 	ctx context.Context,
-	streamID api.StreamID,
-	dstID api.DestinationID,
+	streamSourceID api.StreamSourceID,
+	streamSinkID api.StreamSinkIDFullyQualified,
 	enabled bool,
 	encode sstypes.EncodeConfig,
 	quirks sstypes.ForwardingQuirks,
@@ -1432,8 +1484,8 @@ func (p *Panel) updateStreamForward(
 	defer logger.Debugf(ctx, "/updateStreamForward")
 	return p.StreamD.UpdateStreamForward(
 		ctx,
-		streamID,
-		dstID,
+		streamSourceID,
+		streamSinkID,
 		enabled,
 		encode,
 		quirks,
@@ -1442,8 +1494,8 @@ func (p *Panel) updateStreamForward(
 
 func (p *Panel) addStreamForward(
 	ctx context.Context,
-	streamID api.StreamID,
-	dstID api.DestinationID,
+	streamSourceID api.StreamSourceID,
+	streamSinkID api.StreamSinkIDFullyQualified,
 	enabled bool,
 	encode sstypes.EncodeConfig,
 	quirks sstypes.ForwardingQuirks,
@@ -1452,8 +1504,8 @@ func (p *Panel) addStreamForward(
 	defer logger.Debugf(ctx, "/addStreamForward")
 	return p.StreamD.AddStreamForward(
 		ctx,
-		streamID,
-		dstID,
+		streamSourceID,
+		streamSinkID,
 		enabled,
 		encode,
 		quirks,
@@ -1470,10 +1522,10 @@ func (p *Panel) displayStreamForwards(
 	hasDynamicValue := false
 
 	sort.Slice(fwds, func(i, j int) bool {
-		if fwds[i].StreamID != fwds[j].StreamID {
-			return fwds[i].StreamID < fwds[j].StreamID
+		if fwds[i].StreamSourceID != fwds[j].StreamSourceID {
+			return fwds[i].StreamSourceID < fwds[j].StreamSourceID
 		}
-		return fwds[i].DestinationID < fwds[j].DestinationID
+		return fwds[i].StreamSinkID.String() < fwds[j].StreamSinkID.String()
 	})
 
 	var objs []fyne.CanvasObject
@@ -1485,8 +1537,8 @@ func (p *Panel) displayStreamForwards(
 			w := dialog.NewConfirm(
 				fmt.Sprintf(
 					"Delete restreaming (stream forwarding) %s -> %s ?",
-					fwd.StreamID,
-					fwd.DestinationID,
+					fwd.StreamSourceID,
+					fwd.StreamSinkID,
 				),
 				"",
 				func(b bool) {
@@ -1495,7 +1547,7 @@ func (p *Panel) displayStreamForwards(
 					}
 					logger.Debugf(ctx, "remove restreaming (stream forwarding)")
 					defer logger.Debugf(ctx, "/remove restreaming (stream forwarding)")
-					err := p.StreamD.RemoveStreamForward(ctx, fwd.StreamID, fwd.DestinationID)
+					err := p.StreamD.RemoveStreamForward(ctx, fwd.StreamSourceID, fwd.StreamSinkID)
 					if err != nil {
 						p.DisplayError(err)
 						return
@@ -1506,15 +1558,15 @@ func (p *Panel) displayStreamForwards(
 			w.Show()
 		})
 		editButton := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
-			p.openEditRestreamWindow(ctx, fwd.StreamID, fwd.DestinationID)
+			p.openEditRestreamWindow(ctx, fwd.StreamSourceID, fwd.StreamSinkID)
 		})
 		icon := theme.MediaPauseIcon()
 		label := "Pause"
-		title := fmt.Sprintf("Pause forwarding %s -> %s ?", fwd.StreamID, fwd.DestinationID)
+		title := fmt.Sprintf("Pause forwarding %s -> %s ?", fwd.StreamSourceID, fwd.StreamSinkID)
 		if !fwd.Enabled {
 			icon = theme.MediaPlayIcon()
 			label = "Unpause"
-			title = fmt.Sprintf("Unpause forwarding %s -> %s ?", fwd.StreamID, fwd.DestinationID)
+			title = fmt.Sprintf("Unpause forwarding %s -> %s ?", fwd.StreamSourceID, fwd.StreamSinkID)
 		}
 		playPauseButton := widget.NewButtonWithIcon(label, icon, func() {
 			w := dialog.NewConfirm(
@@ -1538,8 +1590,8 @@ func (p *Panel) displayStreamForwards(
 					)
 					err := p.StreamD.UpdateStreamForward(
 						ctx,
-						fwd.StreamID,
-						fwd.DestinationID,
+						fwd.StreamSourceID,
+						fwd.StreamSinkID,
 						!fwd.Enabled,
 						fwd.Encode,
 						fwd.Quirks,
@@ -1553,12 +1605,12 @@ func (p *Panel) displayStreamForwards(
 			)
 			w.Show()
 		})
-		captionStr := string(fwd.StreamID) + " -> " + string(fwd.DestinationID)
+		captionStr := string(fwd.StreamSourceID) + " -> " + fwd.StreamSinkID.String()
 		var quirksStrings []string
-		if fwd.Quirks.RestartUntilYoutubeRecognizesStream.Enabled {
+		if fwd.Quirks.RestartUntilPlatformRecognizesStream.Enabled {
 			quirksStrings = append(quirksStrings, "YT-restart")
 		}
-		if fwd.Quirks.StartAfterYoutubeRecognizedStream.Enabled {
+		if fwd.Quirks.WaitUntilPlatformRecognizesStream.Enabled {
 			quirksStrings = append(quirksStrings, "after-YT")
 		}
 		if fwd.Encode.Enabled {
@@ -1585,10 +1637,10 @@ func (p *Panel) displayStreamForwards(
 			c.Add(widget.NewSeparator())
 
 			type numBytesID struct {
-				StrID api.StreamID
-				DstID api.DestinationID
+				StreamSourceID api.StreamSourceID
+				DstID          api.StreamSinkIDFullyQualified
 			}
-			key := numBytesID{StrID: fwd.StreamID, DstID: fwd.DestinationID}
+			key := numBytesID{StreamSourceID: fwd.StreamSourceID, DstID: fwd.StreamSinkID}
 			now := time.Now()
 			p.previousNumBytesLocker.Do(ctx, func() {
 				prevNumBytes := p.previousNumBytes[key]
@@ -1609,8 +1661,7 @@ func (p *Panel) displayStreamForwards(
 		}
 		objs = append(objs, c)
 	}
-	p.restreamsWidget.Objects = objs
-	p.restreamsWidget.Refresh()
+	p.updateObjects(p.restreamsWidget, objs)
 
 	p.streamForwardersLocker.Do(ctx, func() {
 		cancelFn := p.streamForwardersUpdaterCanceller

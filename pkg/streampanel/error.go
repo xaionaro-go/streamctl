@@ -12,7 +12,6 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/consts"
 	"github.com/xaionaro-go/xsync"
 )
@@ -70,9 +69,9 @@ func (p *Panel) statusPanelSet(text string) {
 		newText = "status:  " + text
 	})
 	if panel != nil {
-		observability.GoSafe(ctx, func(ctx context.Context) {
+		p.app.Driver().DoFromGoroutine(func() {
 			panel.SetText(newText)
-		})
+		}, false)
 	}
 }
 
@@ -133,7 +132,6 @@ func (p *Panel) DisplayError(err error) {
 	textWidget.SetText(errorMessage)
 	textWidget.Wrapping = fyne.TextWrapWord
 	textWidget.TextStyle = fyne.TextStyle{
-		Bold:      true,
 		Monospace: true,
 	}
 
@@ -146,21 +144,23 @@ func (p *Panel) DisplayError(err error) {
 		}
 		p.lastDisplayedError = err
 
-		if p.displayErrorWindow != nil {
-			p.displayErrorWindow.SetContent(textWidget)
-			return
-		}
-		w := p.app.NewWindow(consts.AppName + ": Got an error: " + err.Error())
-		resizeWindow(w, fyne.NewSize(400, 300))
-		w.SetContent(textWidget)
+		p.app.Driver().DoFromGoroutine(func() {
+			if p.displayErrorWindow != nil {
+				p.displayErrorWindow.SetContent(textWidget)
+				return
+			}
+			w := p.app.NewWindow(consts.AppName + ": Got an error: " + err.Error())
+			resizeWindow(w, fyne.NewSize(400, 300))
+			w.SetContent(textWidget)
 
-		w.SetOnClosed(func() {
-			p.displayErrorLocker.Do(ctx, func() {
-				p.displayErrorWindow = nil
+			w.SetOnClosed(func() {
+				p.displayErrorLocker.Do(ctx, func() {
+					p.displayErrorWindow = nil
+				})
 			})
-		})
-		w.Show()
-		logger.Tracef(p.defaultContext, "DisplayError(): w.Show()")
-		p.displayErrorWindow = w
+			w.Show()
+			logger.Tracef(p.defaultContext, "DisplayError(): w.Show()")
+			p.displayErrorWindow = w
+		}, true)
 	})
 }

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"reflect"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
@@ -38,22 +37,18 @@ func (c *YouTube) Clone() *YouTube {
 }
 
 type Cache struct {
-	Kick    Kick
-	Twitch  Twitch
-	Youtube YouTube
+	PerPlatform map[string]any `yaml:",inline"`
 }
 
 func (c *Cache) Clone() *Cache {
-	_ = (*Kick)(nil).Clone
-	_ = (*Twitch)(nil).Clone
-	_ = (*YouTube)(nil).Clone
-	result := &Cache{}
-	dst := reflect.ValueOf(result).Elem()
-	src := reflect.ValueOf(c).Elem()
-	for i := 0; i < src.NumField(); i++ {
-		srcField := src.Field(i).Addr()
-		dstField := dst.Field(i)
-		dstField.Set(srcField.MethodByName("Clone").Call(nil)[0].Elem())
+	if c == nil {
+		return nil
+	}
+	result := &Cache{
+		PerPlatform: make(map[string]any),
+	}
+	for k, v := range c.PerPlatform {
+		result.PerPlatform[k] = v // This is a shallow copy of the any value
 	}
 	return result
 }

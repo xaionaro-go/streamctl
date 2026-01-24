@@ -21,7 +21,7 @@ func PlatformEventGRPC2Go(
 	event *streamd_grpc.ChatMessage,
 ) api.ChatMessage {
 	return api.ChatMessage{
-		Platform: streamcontrol.PlatformName(event.GetPlatID()),
+		Platform: streamcontrol.PlatformID(event.GetPlatID()),
 		IsLive:   event.GetIsLive(),
 		Event:    goconv.EventGRPC2Go(event.GetContent()),
 	}

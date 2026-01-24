@@ -64,7 +64,7 @@ func main() {
 		"127.0.0.1:8892",
 		"the UDP port to serve an SRT server on",
 	)
-	streamID := pflag.String(
+	streamSourceID := pflag.String(
 		"stream-id",
 		"test/test",
 		"the 'path' of the stream in srt://address/path",
@@ -127,8 +127,8 @@ func main() {
 					ListenAddr: *rtmpListenAddr,
 				},
 			},
-			Streams: map[sstypes.StreamID]*sstypes.StreamConfig{
-				sstypes.StreamID(*streamID): {},
+			Streams: map[sstypes.StreamSourceID]*sstypes.StreamConfig{
+				sstypes.StreamSourceID(*streamSourceID): {},
 			},
 		},
 		dummyPlatformsController{},
@@ -137,7 +137,7 @@ func main() {
 	err = ss.Init(ctx)
 	assertNoError(ctx, err)
 	sp := streamplayer.New(ss, m)
-	p, err := sp.Create(ctx, api.StreamID(*streamID), ptypes.Backend(*backend))
+	p, err := sp.Create(ctx, api.StreamSourceID(*streamSourceID), ptypes.Backend(*backend))
 	assertNoError(ctx, err)
 
 	app := fyneapp.New()
@@ -145,7 +145,7 @@ func main() {
 	errorMessage := widget.NewLabel("")
 
 	closeButton := widget.NewButtonWithIcon("Close", theme.WindowCloseIcon(), func() {
-		err := sp.Remove(ctx, api.StreamID(*streamID))
+		err := sp.Remove(ctx, api.StreamSourceID(*streamSourceID))
 		assertNoError(ctx, err)
 	})
 

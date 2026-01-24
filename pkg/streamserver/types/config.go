@@ -4,16 +4,18 @@ import (
 	"time"
 
 	player "github.com/xaionaro-go/player/pkg/player/types"
+	"github.com/xaionaro-go/streamctl/pkg/secret"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
 
 type Config struct {
-	PortServers  []streamportserver.Config            `yaml:"servers"`
-	Streams      map[StreamID]*StreamConfig           `yaml:"streams"`
-	Destinations map[DestinationID]*DestinationConfig `yaml:"destinations"`
-	VideoPlayer  struct {
+	PortServers []streamportserver.Config          `yaml:"servers"`
+	Streams     map[StreamSourceID]*StreamConfig   `yaml:"streams"`
+	StaticSinks map[StreamSinkID]*StreamSinkConfig `yaml:"static_sinks"`
+	VideoPlayer struct {
 		MPV struct {
 			Path string `yaml:"path"`
 		} `yaml:"mpv"`
@@ -33,42 +35,43 @@ type PlayerConfig struct {
 }
 
 type StreamConfig struct {
-	Forwardings map[DestinationID]ForwardingConfig `yaml:"forwardings"`
-	Player      *PlayerConfig                      `yaml:"player,omitempty"`
+	Forwardings map[StreamSinkIDFullyQualified]ForwardingConfig `yaml:"forwardings"`
+	Player      *PlayerConfig                                   `yaml:"player,omitempty"`
 }
 
-type DestinationConfig struct {
-	URL       string `yaml:"url"`
-	StreamKey string `yaml:"stream_key"` // TODO: this should be secret.String
+type StreamSinkConfig struct {
+	URL            string                                `yaml:"url"`
+	StreamKey      secret.String                         `yaml:"stream_key"`
+	StreamSourceID *streamcontrol.StreamIDFullyQualified `yaml:"stream_source_id,omitempty"`
 }
 
-type RestartUntilYoutubeRecognizesStream struct {
+type RestartUntilPlatformRecognizesStream struct {
 	Enabled        bool          `yaml:"enabled,omitempty"`
 	StartTimeout   time.Duration `yaml:"start_timeout,omitempty"`
 	StopStartDelay time.Duration `yaml:"stop_start_delay,omitempty"`
 }
 
-func DefaultRestartUntilYoutubeRecognizesStreamConfig() RestartUntilYoutubeRecognizesStream {
-	return RestartUntilYoutubeRecognizesStream{
+func DefaultRestartUntilPlatformRecognizesStreamConfig() RestartUntilPlatformRecognizesStream {
+	return RestartUntilPlatformRecognizesStream{
 		Enabled:        false,
 		StartTimeout:   20 * time.Second,
 		StopStartDelay: 10 * time.Second,
 	}
 }
 
-type StartAfterYoutubeRecognizedStream struct {
+type WaitUntilPlatformRecognizesStream struct {
 	Enabled bool `yaml:"enabled,omitempty"`
 }
 
-func DefaultStartAfterYoutubeRecognizedStreamConfig() StartAfterYoutubeRecognizedStream {
-	return StartAfterYoutubeRecognizedStream{
+func DefaultWaitUntilPlatformRecognizesStreamConfig() WaitUntilPlatformRecognizesStream {
+	return WaitUntilPlatformRecognizesStream{
 		Enabled: false,
 	}
 }
 
 type ForwardingQuirks struct {
-	RestartUntilYoutubeRecognizesStream RestartUntilYoutubeRecognizesStream `yaml:"restart_until_youtube_recognizes_stream,omitempty"`
-	StartAfterYoutubeRecognizedStream   StartAfterYoutubeRecognizedStream   `yaml:"start_after_youtube_recognizes_stream"`
+	RestartUntilPlatformRecognizesStream RestartUntilPlatformRecognizesStream `yaml:"restart_until_platform_recognizes_stream,omitempty"`
+	WaitUntilPlatformRecognizesStream    WaitUntilPlatformRecognizesStream    `yaml:"wait_until_platform_recognizes_stream"`
 }
 
 type EncodeConfig struct {

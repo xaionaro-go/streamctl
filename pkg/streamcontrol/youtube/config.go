@@ -9,14 +9,29 @@ import (
 )
 
 const ID = youtube.ID
+const MaxTitleLength = 100
 
 type OAuthHandler = youtube.OAuthHandler
 type Config = youtube.Config
 type StreamProfile = youtube.StreamProfile
-type PlatformSpecificConfig = youtube.PlatformSpecificConfig
+type AccountConfig = youtube.AccountConfig
 
 func init() {
-	streamctl.RegisterPlatform[PlatformSpecificConfig, StreamProfile](ID)
+	streamcontrol.RegisterPlatform[
+		AccountConfig,
+		StreamProfile,
+		StreamStatusCustomData,
+	](
+		ID,
+		MaxTitleLength,
+		func(
+			ctx context.Context,
+			cfg AccountConfig,
+			saveCfgFn func(AccountConfig) error,
+		) (streamcontrol.AccountGeneric[StreamProfile], error) {
+			return New(ctx, cfg, saveCfgFn)
+		},
+	)
 }
 
 func InitConfig(cfg streamctl.Config) {
@@ -27,13 +42,13 @@ func GetConfig(
 	ctx context.Context,
 	cfg streamcontrol.Config,
 ) *Config {
-	return streamcontrol.GetPlatformConfig[PlatformSpecificConfig, StreamProfile](ctx, cfg, ID)
+	return streamcontrol.GetPlatformConfig[AccountConfig, StreamProfile](ctx, cfg, ID)
 }
 
 type TemplateTags = youtube.TemplateTags
 
 const (
-	TemplateTagsUndefined       = youtube.TemplateTagsUndefined
+	UndefinedTemplateTags       = youtube.UndefinedTemplateTags
 	TemplateTagsIgnore          = youtube.TemplateTagsIgnore
 	TemplateTagsUseAsPrimary    = youtube.TemplateTagsUseAsPrimary
 	TemplateTagsUseAsAdditional = youtube.TemplateTagsUseAsAdditional

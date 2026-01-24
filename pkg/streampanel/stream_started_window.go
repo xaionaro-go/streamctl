@@ -33,7 +33,7 @@ type streamStartedWindowStreamStatus struct {
 
 type streamStartedWindow struct {
 	*Panel
-	streamStatus map[streamcontrol.PlatformName]*streamStartedWindowStreamStatus
+	streamStatus map[streamcontrol.PlatformID]*streamStartedWindowStreamStatus
 }
 
 func (p *Panel) openStreamStartedWindow(
@@ -41,9 +41,9 @@ func (p *Panel) openStreamStartedWindow(
 ) {
 	w := &streamStartedWindow{
 		Panel:        p,
-		streamStatus: make(map[streamcontrol.PlatformName]*streamStartedWindowStreamStatus),
+		streamStatus: make(map[streamcontrol.PlatformID]*streamStartedWindowStreamStatus),
 	}
-	for _, platID := range []streamcontrol.PlatformName{
+	for _, platID := range []streamcontrol.PlatformID{
 		obs.ID,
 		twitch.ID,
 		kick.ID,
@@ -68,7 +68,7 @@ var (
 
 func (w *streamStartedWindow) setStreamStatus(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
+	platID streamcontrol.PlatformID,
 	src *streamStatus,
 ) {
 	logger.Debugf(ctx, "setStreamStatus(ctx, '%s', src)", platID)
@@ -184,7 +184,7 @@ func (w *streamStartedWindow) renderStreamStatus(
 func (w *streamStartedWindow) open(
 	ctx context.Context,
 ) {
-	obsServer, obsServerClose, err := w.StreamD.OBS(ctx)
+	obsServer, obsServerClose, err := w.StreamD.OBS(ctx, "")
 	if obsServerClose != nil {
 		defer obsServerClose()
 	}
@@ -219,7 +219,7 @@ func (w *streamStartedWindow) open(
 		for _, scene := range sceneListResp.Scenes {
 			sceneButtons.Add(widget.NewButton(scene.GetSceneName(), func() {
 				switchScene := func() {
-					obsServer, obsServerClose, err := w.StreamD.OBS(ctx)
+					obsServer, obsServerClose, err := w.StreamD.OBS(ctx, "")
 					if obsServerClose != nil {
 						defer obsServerClose()
 					}

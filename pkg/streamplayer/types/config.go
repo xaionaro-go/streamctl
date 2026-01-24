@@ -8,7 +8,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
 
-type FuncNotifyStart func(ctx context.Context, streamID streamtypes.StreamID)
+type FuncNotifyStart func(ctx context.Context, streamSourceID streamtypes.StreamSourceID)
 type GetRestartChanFunc func() <-chan struct{}
 
 type Config struct {

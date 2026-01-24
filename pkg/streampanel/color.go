@@ -12,7 +12,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 )
 
-func colorForPlatform(platID streamcontrol.PlatformName) fyne.ThemeColorName {
+func colorForPlatform(platID streamcontrol.PlatformID) fyne.ThemeColorName {
 	switch platID {
 	case twitch.ID:
 		return theme.ColorNameHyperlink

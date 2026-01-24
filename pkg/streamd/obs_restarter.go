@@ -59,16 +59,17 @@ func (r *obsRestarter) updateConfigNoLock(
 
 	obsCfg := obs.GetConfig(ctx, cfg.Backends)
 	if obsCfg == nil {
-		return fmt.Errorf("OBS config is not set")
-	}
-
-	if !obsCfg.Config.RestartOnUnavailable.Enable {
 		return nil
 	}
 
-	execCmd, err := command.Expand(ctx, obsCfg.Config.RestartOnUnavailable.ExecCommand, nil)
+	accountCfg := obsCfg.Accounts[""]
+	if !accountCfg.RestartOnUnavailable.Enable {
+		return nil
+	}
+
+	execCmd, err := command.Expand(ctx, accountCfg.RestartOnUnavailable.ExecCommand, nil)
 	if err != nil {
-		return fmt.Errorf("unable to expand the command '%s': %w", obsCfg.Config.RestartOnUnavailable.ExecCommand, err)
+		return fmt.Errorf("unable to expand the command '%s': %w", accountCfg.RestartOnUnavailable.ExecCommand, err)
 	}
 
 	ctx, cancelFn := context.WithCancel(ctx)
@@ -105,7 +106,7 @@ func (r *obsRestarter) checkOBSAndRestartIfNeeded(
 	ctx context.Context,
 	execCmd []string,
 ) {
-	obsServer, closeFn, err := r.streamD.OBS(ctx)
+	obsServer, closeFn, err := r.streamD.OBS(ctx, "")
 	if closeFn != nil {
 		defer closeFn()
 	}

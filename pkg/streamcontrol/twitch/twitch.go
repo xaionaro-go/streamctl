@@ -13,7 +13,6 @@ import (
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/hashicorp/go-multierror"
 	"github.com/nicklaw5/helix/v2"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/buildvars"
@@ -30,10 +29,10 @@ type Twitch struct {
 	chatHandlerSub *ChatHandlerSub
 	chatHandlerIRC *ChatHandlerIRC
 	client         client
-	config         Config
+	config         AccountConfig
 	broadcasterID  string
 	lazyInitOnce   sync.Once
-	saveCfgFn      func(Config) error
+	saveCfgFn      func(AccountConfig) error
 	tokenLocker    xsync.Mutex
 	prepareLocker  xsync.Mutex
 	clientID       string
@@ -41,30 +40,62 @@ type Twitch struct {
 }
 
 const (
-	twitchDebug        = false
-	debugUseMockClient = false
+	twitchDebug = false
 )
 
-var _ streamcontrol.StreamController[StreamProfile] = (*Twitch)(nil)
+var (
+	debugUseMockClient    = false
+	debugMockClient       *clientMock
+	debugMockClientLocker sync.Mutex
+)
+
+func SetDebugUseMockClient(v bool) {
+	debugUseMockClient = v
+}
+
+func SetMockIsLive(v bool) {
+	debugMockClientLocker.Lock()
+	defer debugMockClientLocker.Unlock()
+	if debugMockClient == nil {
+		debugMockClient = newClientMock()
+	}
+	debugMockClient.locker.Lock()
+	defer debugMockClient.locker.Unlock()
+	debugMockClient.isLive = v
+}
+
+var _ streamcontrol.AccountGeneric[StreamProfile] = (*Twitch)(nil)
+
+func (t *Twitch) String() string {
+	return string(ID)
+}
+
+func (t *Twitch) GetPlatformID() streamcontrol.PlatformID {
+	return ID
+}
+
+func (t *Twitch) Platform() streamcontrol.PlatformID {
+	return ID
+}
 
 func New(
 	ctx context.Context,
-	cfg Config,
-	saveCfgFn func(Config) error,
+	cfg AccountConfig,
+	saveCfgFn func(AccountConfig) error,
 ) (*Twitch, error) {
 	ctx = belt.WithField(ctx, "controller", ID)
-	if cfg.Config.Channel == "" {
+	if cfg.Channel == "" {
 		return nil, fmt.Errorf("'channel' is not set")
 	}
-	clientID := valueOrDefault(cfg.Config.ClientID, buildvars.TwitchClientID)
-	clientSecret := valueOrDefault(cfg.Config.ClientSecret.Get(), buildvars.TwitchClientID)
+	clientID := valueOrDefault(cfg.ClientID, buildvars.TwitchClientID)
+	clientSecret := valueOrDefault(cfg.ClientSecret.Get(), buildvars.TwitchClientID)
 	if clientID == "" || clientSecret == "" {
 		return nil, fmt.Errorf(
 			"'clientid' or/and 'clientsecret' is/are not set; go to https://dev.twitch.tv/console/apps/create and create an app if it not created, yet",
 		)
 	}
 
-	getPortsFn := cfg.Config.GetOAuthListenPorts
+	getPortsFn := cfg.GetOAuthListenPorts
 	if getPortsFn == nil {
 		// TODO: find a way to adjust the OAuth ports dynamically without re-creating the Twitch client.
 		return nil, fmt.Errorf("the function GetOAuthListenPorts is not set")
@@ -92,9 +123,9 @@ func New(
 		clientSecret: secret.New(clientSecret),
 	}
 
-	h, err := NewChatHandlerIRC(ctx, cfg.Config.Channel)
+	h, err := NewChatHandlerIRC(ctx, cfg.Channel)
 	if err != nil {
-		return nil, fmt.Errorf("unable to initialize a chat handler for channel '%s': %w", cfg.Config.Channel, err)
+		return nil, fmt.Errorf("unable to initialize a chat handler for channel '%s': %w", cfg.Channel, err)
 	}
 	t.chatHandlerIRC = h
 
@@ -109,7 +140,7 @@ func New(
 			logger.Debugf(ctx, "got new tokens, verifying")
 			_, err := client.GetChannelInformation(&helix.GetChannelInformationParams{
 				BroadcasterIDs: []string{
-					cfg.Config.Channel,
+					cfg.Channel,
 				},
 			})
 			if err != nil {
@@ -117,8 +148,8 @@ func New(
 			}
 		}
 		logger.Debugf(ctx, "saving the new tokens")
-		cfg.Config.UserAccessToken.Set(newAccessToken)
-		cfg.Config.RefreshToken.Set(newRefreshToken)
+		cfg.UserAccessToken.Set(newAccessToken)
+		cfg.RefreshToken.Set(newRefreshToken)
 		err = saveCfgFn(cfg)
 		errmon.ObserveErrorCtx(ctx, err)
 		now := time.Now()
@@ -179,7 +210,7 @@ func (t *Twitch) prepareNoLock(ctx context.Context) error {
 		if t.broadcasterID != "" {
 			return
 		}
-		t.broadcasterID, err = GetUserID(ctx, t.client, t.config.Config.Channel)
+		t.broadcasterID, err = GetUserID(ctx, t.client, t.config.Channel)
 		if err != nil {
 			logger.Errorf(ctx, "unable to get broadcaster ID: %v", err)
 			return
@@ -188,7 +219,7 @@ func (t *Twitch) prepareNoLock(ctx context.Context) error {
 			ctx,
 			"broadcaster_id: %s (login: %s)",
 			t.broadcasterID,
-			t.config.Config.Channel,
+			t.config.Channel,
 		)
 	})
 
@@ -278,8 +309,26 @@ func truncateStringByByteLength(input string, byteLength int) string {
 	return string(byteSlice[:truncationPoint])
 }
 
+func (t *Twitch) GetStreams(ctx context.Context) ([]streamcontrol.StreamInfo, error) {
+	return []streamcontrol.StreamInfo{{
+		ID:   streamcontrol.DefaultStreamID,
+		Name: t.config.Channel,
+	}}, nil
+}
+
+func (t *Twitch) SetStreamActive(
+	ctx context.Context,
+	streamID streamcontrol.StreamID,
+	isActive bool,
+) error {
+
+	// Twitch starts/ends a stream automatically, nothing to do here
+	return nil
+}
+
 func (t *Twitch) ApplyProfile(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 	profile StreamProfile,
 	customArgs ...any,
 ) error {
@@ -393,8 +442,10 @@ func (t *Twitch) getCategoryID(
 
 func (t *Twitch) SetTitle(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 	title string,
 ) error {
+
 	if err := t.prepare(ctx); err != nil {
 		return fmt.Errorf("unable to get a prepared client: %w", err)
 	}
@@ -405,17 +456,21 @@ func (t *Twitch) SetTitle(
 
 func (t *Twitch) SetDescription(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 	description string,
 ) error {
+
 	// Twitch streams has no description:
 	return nil
 }
 
 func (t *Twitch) InsertAdsCuePoint(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 	ts time.Time,
 	duration time.Duration,
 ) error {
+
 	// Unfortunately, we do not support sending ads cues.
 	// So nothing to do here:
 	return nil
@@ -423,50 +478,17 @@ func (t *Twitch) InsertAdsCuePoint(
 
 func (t *Twitch) Flush(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 ) error {
+
 	// Unfortunately, we do not support sending accumulated changes, and we change things immediately right away.
 	// So nothing to do here:
 	return nil
 }
 
-func (t *Twitch) StartStream(
-	ctx context.Context,
-	title string,
-	description string,
-	profile StreamProfile,
-	customArgs ...any,
-) (_err error) {
-	logger.Debugf(ctx, "StartStream")
-	defer func() { logger.Debugf(ctx, "/StartStream: %v", _err) }()
-
-	if err := t.prepare(ctx); err != nil {
-		return fmt.Errorf("unable to get a prepared client: %w", err)
-	}
-	var result error
-	if err := t.SetTitle(ctx, title); err != nil {
-		result = multierror.Append(result, fmt.Errorf("unable to set title: %w", err))
-	}
-	if err := t.SetDescription(ctx, description); err != nil {
-		result = multierror.Append(result, fmt.Errorf("unable to set description: %w", err))
-	}
-	if err := t.ApplyProfile(ctx, profile, customArgs...); err != nil {
-		result = multierror.Append(
-			result,
-			fmt.Errorf("unable to apply the stream-specific profile: %w", err),
-		)
-	}
-	return multierror.Append(result).ErrorOrNil()
-}
-
-func (t *Twitch) EndStream(
-	ctx context.Context,
-) error {
-	// Twitch ends a stream automatically, nothing to do:
-	return nil
-}
-
 func (t *Twitch) GetStreamStatus(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 ) (*streamcontrol.StreamStatus, error) {
 	logger.Debugf(ctx, "GetStreamStatus")
 	defer func() { logger.Debugf(ctx, "/GetStreamStatus") }()
@@ -503,14 +525,14 @@ func (t *Twitch) GetStreamStatus(
 func (t *Twitch) getTokenIfNeeded(
 	ctx context.Context,
 ) error {
-	switch t.config.Config.AuthType {
+	switch t.config.AuthType {
 	case "user":
 		t.tokenLocker.Do(ctx, func() {
 			if t.client.GetUserAccessToken() == "" {
-				t.client.SetUserAccessToken(t.config.Config.UserAccessToken.Get())
+				t.client.SetUserAccessToken(t.config.UserAccessToken.Get())
 			}
 			if t.client.GetRefreshToken() == "" {
-				t.client.SetRefreshToken(t.config.Config.RefreshToken.Get())
+				t.client.SetRefreshToken(t.config.RefreshToken.Get())
 			}
 		})
 		if t.client.GetUserAccessToken() != "" {
@@ -518,7 +540,7 @@ func (t *Twitch) getTokenIfNeeded(
 		}
 	case "app":
 		t.tokenLocker.Do(ctx, func() {
-			t.client.SetAppAccessToken(t.config.Config.AppAccessToken.Get())
+			t.client.SetAppAccessToken(t.config.AppAccessToken.Get())
 		})
 		if t.client.GetAppAccessToken() != "" {
 			logger.Debugf(ctx, "already have an app access token")
@@ -538,7 +560,7 @@ func (t *Twitch) getNewToken(
 	defer func() { logger.Debugf(ctx, "/getNewToken") }()
 
 	return xsync.DoR1(ctx, &t.tokenLocker, func() error {
-		switch t.config.Config.AuthType {
+		switch t.config.AuthType {
 		case "user":
 			err := t.getNewTokenByUser(ctx)
 			if err != nil {
@@ -552,7 +574,7 @@ func (t *Twitch) getNewToken(
 			}
 			return nil
 		default:
-			return fmt.Errorf("invalid AuthType: <%s>", t.config.Config.AuthType)
+			return fmt.Errorf("invalid AuthType: <%s>", t.config.AuthType)
 		}
 	})
 }
@@ -563,10 +585,10 @@ func (t *Twitch) getNewClientCode(
 	return auth.NewClientCode(
 		ctx,
 		t.clientID,
-		t.config.Config.CustomOAuthHandler,
-		t.config.Config.GetOAuthListenPorts,
+		t.config.CustomOAuthHandler,
+		t.config.GetOAuthListenPorts,
 		func(code string) {
-			t.config.Config.ClientCode.Set(code)
+			t.config.ClientCode.Set(code)
 			err := t.saveCfgFn(t.config)
 			errmon.ObserveErrorCtx(ctx, err)
 		},
@@ -576,14 +598,14 @@ func (t *Twitch) getNewClientCode(
 func (t *Twitch) getNewTokenByUser(
 	ctx context.Context,
 ) error {
-	if t.config.Config.ClientCode.Get() == "" {
+	if t.config.ClientCode.Get() == "" {
 		err := t.getNewClientCode(ctx)
 		if err != nil {
 			return fmt.Errorf("unable to get client code: %w", err)
 		}
 	}
 
-	accessToken, refreshToken, err := auth.NewTokenByUser(ctx, t.client, t.config.Config.ClientCode)
+	accessToken, refreshToken, err := auth.NewTokenByUser(ctx, t.client, t.config.ClientCode)
 	if err != nil {
 		return fmt.Errorf("unable to get an access token: %w", err)
 	}
@@ -591,9 +613,9 @@ func (t *Twitch) getNewTokenByUser(
 	logger.Debugf(ctx, "setting the user access token")
 	t.client.SetUserAccessToken(accessToken.Get())
 	t.client.SetRefreshToken(refreshToken.Get())
-	t.config.Config.ClientCode.Set("")
-	t.config.Config.UserAccessToken = accessToken
-	t.config.Config.RefreshToken = refreshToken
+	t.config.ClientCode.Set("")
+	t.config.UserAccessToken = accessToken
+	t.config.RefreshToken = refreshToken
 	err = t.saveCfgFn(t.config)
 	errmon.ObserveErrorCtx(ctx, err)
 	return nil
@@ -608,7 +630,7 @@ func (t *Twitch) getNewTokenByApp(
 	}
 	logger.Debugf(ctx, "setting the app access token")
 	t.client.SetAppAccessToken(accessToken.Get())
-	t.config.Config.AppAccessToken = accessToken
+	t.config.AppAccessToken = accessToken
 	err = t.saveCfgFn(t.config)
 	errmon.ObserveErrorCtx(ctx, err)
 	return nil
@@ -622,7 +644,12 @@ func (t *Twitch) getClient(
 	defer func() { logger.Debugf(ctx, "/getClient") }()
 
 	if debugUseMockClient {
-		return newClientMock(), nil
+		debugMockClientLocker.Lock()
+		defer debugMockClientLocker.Unlock()
+		if debugMockClient == nil {
+			debugMockClient = newClientMock()
+		}
+		return debugMockClient, nil
 	}
 	options := &helix.Options{
 		ClientID:     t.clientID,
@@ -696,6 +723,7 @@ func (t *Twitch) GetAllCategories(
 
 func (t *Twitch) GetChatMessagesChan(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 ) (<-chan streamcontrol.Event, error) {
 	logger.Debugf(ctx, "GetChatMessagesChan")
 	defer func() { logger.Debugf(ctx, "/GetChatMessagesChan") }()
@@ -730,6 +758,10 @@ func (t *Twitch) GetChatMessagesChan(
 			chIRC <-chan streamcontrol.Event
 		)
 		t.prepareLocker.Do(ctx, func() {
+			if debugUseMockClient {
+				chSub = debugMockClient.MessagesChan()
+				return
+			}
 			if t.chatHandlerSub != nil {
 				chSub = t.chatHandlerSub.MessagesChan()
 			}
@@ -741,7 +773,7 @@ func (t *Twitch) GetChatMessagesChan(
 		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
 		for {
-			if chSub == nil {
+			if chSub == nil && !debugUseMockClient {
 				t.prepareLocker.Do(ctx, func() {
 					if t.chatHandlerSub == nil {
 						logger.Debugf(ctx, "the chat listener is closed, trying to reopen it")
@@ -752,12 +784,14 @@ func (t *Twitch) GetChatMessagesChan(
 					}
 				})
 			}
-			if chSub == nil && chIRC == nil {
+			if chSub == nil && chIRC == nil && !debugUseMockClient {
 				logger.Debugf(ctx, "both channels are closed")
 				return
 			}
 			select {
 			case <-ctx.Done():
+				return
+			case <-t.closeCtx.Done():
 				return
 			case <-ticker.C:
 				continue
@@ -809,7 +843,7 @@ func (t *Twitch) GetChatMessagesChan(
 	return outCh, nil
 }
 
-func (t *Twitch) SendChatMessage(ctx context.Context, message string) (_ret error) {
+func (t *Twitch) SendChatMessage(ctx context.Context, streamID streamcontrol.StreamID, message string) (_ret error) {
 	logger.Debugf(ctx, "SendChatMessage(ctx, '%s')", message)
 	defer func() { logger.Debugf(ctx, "/SendChatMessage(ctx, '%s'): %v", message, _ret) }()
 
@@ -826,6 +860,7 @@ func (t *Twitch) SendChatMessage(ctx context.Context, message string) (_ret erro
 }
 func (t *Twitch) RemoveChatMessage(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 	messageID streamcontrol.EventID,
 ) (_ret error) {
 	logger.Debugf(ctx, "RemoveChatMessage(ctx, '%s')", messageID)
@@ -844,6 +879,7 @@ func (t *Twitch) RemoveChatMessage(
 }
 func (t *Twitch) BanUser(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 	userID streamcontrol.UserID,
 	reason string,
 	deadline time.Time,
@@ -916,6 +952,7 @@ func (t *Twitch) IsChannelStreaming(
 
 func (t *Twitch) RaidTo(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 	idOrLogin streamcontrol.UserID,
 ) (_err error) {
 	logger.Debugf(ctx, "RaidTo(ctx, '%s')", idOrLogin)
@@ -960,6 +997,7 @@ func (t *Twitch) GetUser(idOrLogin string) (*helix.User, error) {
 
 func (t *Twitch) Shoutout(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 	userIDOrLogin streamcontrol.UserID,
 ) (_err error) {
 	logger.Debugf(ctx, "Shoutout(ctx, '%s')", userIDOrLogin)
@@ -984,16 +1022,17 @@ func (t *Twitch) Shoutout(
 	})
 	if err != nil {
 		logger.Errorf(ctx, "unable to get streams info (userID: %v): %w", user.ID, err)
-		return t.sendShoutoutMessageWithoutChanInfo(ctx, *user)
+		return t.sendShoutoutMessageWithoutChanInfo(ctx, streamID, *user)
 	}
 	if len(reply.Data.Streams) == 0 {
-		return t.sendShoutoutMessageWithoutChanInfo(ctx, *user)
+		return t.sendShoutoutMessageWithoutChanInfo(ctx, streamID, *user)
 	}
-	return t.sendShoutoutMessage(ctx, *user, reply.Data.Streams[0])
+	return t.sendShoutoutMessage(ctx, streamID, *user, reply.Data.Streams[0])
 }
 
 func (t *Twitch) sendShoutoutMessageWithoutChanInfo(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 	user helix.User,
 ) (_err error) {
 	logger.Debugf(ctx, "sendShoutoutMessageWithoutChanInfo(ctx, '%s')", spew.Sdump(user))
@@ -1001,7 +1040,7 @@ func (t *Twitch) sendShoutoutMessageWithoutChanInfo(
 		logger.Debugf(ctx, "/sendShoutoutMessageWithoutChanInfo(ctx, '%s'): %v", spew.Sdump(user), _err)
 	}()
 	yearsExists := float64(int(time.Since(user.CreatedAt.Time).Hours()/24/364*10)) / 10
-	err := t.SendChatMessage(ctx, fmt.Sprintf("Shoutout to %s! A great creator (%.1f years on Twitch)! Their self-description: '%s'. Take a look at their channel and click that follow button! https://www.twitch.tv/%s", user.DisplayName, yearsExists, user.Description, user.Login))
+	err := t.SendChatMessage(ctx, streamID, fmt.Sprintf("Shoutout to %s! A great creator (%.1f years on Twitch)! Their self-description: '%s'. Take a look at their channel and click that follow button! https://www.twitch.tv/%s", user.DisplayName, yearsExists, user.Description, user.Login))
 	if err != nil {
 		return fmt.Errorf("unable to send the message (case #0): %w", err)
 	}
@@ -1010,15 +1049,38 @@ func (t *Twitch) sendShoutoutMessageWithoutChanInfo(
 
 func (t *Twitch) sendShoutoutMessage(
 	ctx context.Context,
+	streamID streamcontrol.StreamID,
 	user helix.User,
 	stream helix.Stream,
 ) (_err error) {
 	logger.Debugf(ctx, "sendShoutoutMessage(ctx, '%s')", spew.Sdump(user))
 	defer func() { logger.Debugf(ctx, "/sendShoutoutMessage(ctx, '%s'): %v", spew.Sdump(user), _err) }()
 	yearsExists := float64(int(time.Since(user.CreatedAt.Time).Hours()/24/364*10)) / 10
-	err := t.SendChatMessage(ctx, fmt.Sprintf("Shoutout to %s! A great creator (%.1f years on Twitch)! Their last stream: '%s'. Their self-description: '%s'. Take a look at their channel and click that follow button! https://www.twitch.tv/%s", user.DisplayName, yearsExists, stream.Title, user.Description, user.Login))
+	err := t.SendChatMessage(ctx, streamID, fmt.Sprintf("Shoutout to %s! A great creator (%.1f years on Twitch)! Their last stream: '%s'. Their self-description: '%s'. Take a look at their channel and click that follow button! https://www.twitch.tv/%s", user.DisplayName, yearsExists, stream.Title, user.Description, user.Login))
 	if err != nil {
 		return fmt.Errorf("unable to send the message (case #1): %w", err)
 	}
 	return nil
+}
+
+func (t *Twitch) GetStreamKey(ctx context.Context) (secret.String, error) {
+	if err := t.prepare(ctx); err != nil {
+		return secret.String{}, fmt.Errorf("unable to prepare client: %w", err)
+	}
+
+	reply, err := t.client.GetStreamKey(&helix.StreamKeyParams{
+		BroadcasterID: t.broadcasterID,
+	})
+	if err != nil {
+		return secret.String{}, fmt.Errorf("unable to get stream key: %w", err)
+	}
+	if reply.Error != "" {
+		return secret.String{}, fmt.Errorf("twitch returned error: %s: %s", reply.Error, reply.ErrorMessage)
+	}
+
+	if len(reply.Data.Data) == 0 {
+		return secret.String{}, fmt.Errorf("twitch returned no stream keys")
+	}
+
+	return secret.New(reply.Data.Data[0].StreamKey), nil
 }

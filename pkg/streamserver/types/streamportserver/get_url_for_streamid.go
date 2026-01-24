@@ -50,23 +50,23 @@ func GetPreferredPortServer(
 func GetURLForLocalStreamID(
 	ctx context.Context,
 	streamServer GetPortServerser,
-	streamID streamtypes.StreamID,
+	streamSourceID streamtypes.StreamSourceID,
 	preferenceLessFunc func(*Config, *Config) bool,
 ) (*url.URL, error) {
-	return GetURLForRemoveStreamID(ctx, "127.0.0.1", "::1", streamServer, streamID, preferenceLessFunc)
+	return GetURLForRemoveStreamSourceID(ctx, "127.0.0.1", "::1", streamServer, streamSourceID, preferenceLessFunc)
 }
 
-func GetURLForRemoveStreamID(
+func GetURLForRemoveStreamSourceID(
 	ctx context.Context,
 	streamDAddrV4 string,
 	streamDAddrV6 string,
 	streamServer GetPortServerser,
-	streamID streamtypes.StreamID,
+	streamSourceID streamtypes.StreamSourceID,
 	preferenceLessFunc func(*Config, *Config) bool,
 ) (_ret *url.URL, _err error) {
-	logger.Debugf(ctx, "GetURLForRemoveStreamID(ctx, '%s', '%s', %T, '%s', %p)", streamDAddrV4, streamDAddrV6, streamServer, streamID, preferenceLessFunc)
+	logger.Debugf(ctx, "GetURLForRemoveStreamSourceID(ctx, '%s', '%s', %T, '%s', %p)", streamDAddrV4, streamDAddrV6, streamServer, streamSourceID, preferenceLessFunc)
 	defer func() {
-		logger.Debugf(ctx, "/GetURLForRemoveStreamID(ctx, '%s', '%s', %T, '%s', %p): %v %v", streamDAddrV4, streamDAddrV6, streamServer, streamID, preferenceLessFunc, _ret, _err)
+		logger.Debugf(ctx, "/GetURLForRemoveStreamSourceID(ctx, '%s', '%s', %T, '%s', %p): %v %v", streamDAddrV4, streamDAddrV6, streamServer, streamSourceID, preferenceLessFunc, _ret, _err)
 	}()
 
 	portSrv, err := GetPreferredPortServer(ctx, streamServer, preferenceLessFunc)
@@ -92,11 +92,11 @@ func GetURLForRemoveStreamID(
 	switch portSrv.Type {
 	case streamtypes.ServerTypeSRT:
 		u.RawQuery = fmt.Sprintf("streamid=read:%s&latency=%d",
-			streamID,
+			streamSourceID,
 			500_000,
 		)
 	default:
-		u.Path = string(streamID)
+		u.Path = string(streamSourceID)
 	}
 	return &u, nil
 }

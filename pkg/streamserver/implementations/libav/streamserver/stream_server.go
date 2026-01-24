@@ -33,18 +33,18 @@ func (srv *StreamServer) WithConfig(
 
 func (srv *StreamServer) WaitPublisherChan(
 	ctx context.Context,
-	streamID streamtypes.StreamID,
+	streamSourceID streamtypes.StreamSourceID,
 	waitForNext bool,
 ) (_ <-chan types.Publisher, _err error) {
-	logger.Tracef(ctx, "WaitPublisherChan(ctx, '%s', %t)", streamID, waitForNext)
-	defer func() { logger.Tracef(ctx, "/WaitPublisherChan(ctx, '%s', %t): %v", streamID, waitForNext, _err) }()
+	logger.Tracef(ctx, "WaitPublisherChan(ctx, '%s', %t)", streamSourceID, waitForNext)
+	defer func() { logger.Tracef(ctx, "/WaitPublisherChan(ctx, '%s', %t): %v", streamSourceID, waitForNext, _err) }()
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (srv *StreamServer) ActiveIncomingStreamIDs() (_ret []types.StreamID, _err error) {
+func (srv *StreamServer) ActiveStreamSourceIDs() (_ret []types.StreamSourceID, _err error) {
 	ctx := context.TODO()
-	logger.Tracef(ctx, "ActiveIncomingStreamIDs()")
-	defer func() { logger.Tracef(ctx, "/ActiveIncomingStreamIDs(): %v %v", _ret, _err) }()
+	logger.Tracef(ctx, "ActiveStreamSourceIDs()")
+	defer func() { logger.Tracef(ctx, "/ActiveStreamSourceIDs(): %v %v", _ret, _err) }()
 	return nil, fmt.Errorf("not implemented")
 }
 

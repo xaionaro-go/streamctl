@@ -43,12 +43,7 @@ import (
 	"github.com/xaionaro-go/xsync"
 )
 
-type StreamControllers struct {
-	OBS     *obs.OBS
-	Twitch  *twitch.Twitch
-	Kick    *kick.Kick
-	YouTube *youtube.YouTube
-}
+type Accounts map[streamcontrol.AccountIDFullyQualified]streamcontrol.AbstractAccount
 
 type SaveConfigFunc func(context.Context, config.Config) error
 
@@ -77,14 +72,15 @@ type StreamD struct {
 	GitSyncerMutex  xsync.Mutex
 	GitInitialized  bool
 
-	StreamControllers StreamControllers
+	AccountMap     Accounts
+	ActiveProfiles map[streamcontrol.StreamIDFullyQualified]streamcontrol.ProfileName
 
 	Variables sync.Map
 
 	OAuthListenPortsLocker xsync.Mutex
 	OAuthListenPorts       map[uint16]struct{}
 
-	ControllersLocker xsync.RWMutex
+	AccountsLocker xsync.RWMutex
 
 	StreamServerLocker xsync.RWMutex
 	StreamServer       streamserver.StreamServer
@@ -153,84 +149,85 @@ func New(
 		Options:        Options(options).Aggregate(),
 		ReadyChan:      make(chan struct{}),
 		lastShoutoutAt: map[config.ChatUserID]time.Time{},
-	}
-
-	// TODO: move this to Run()
-	if err := d.ChatMessagesStorage.Load(ctx); err != nil {
-		logger.FromBelt(b).Errorf("unable to read the chat messages: %v", err)
-	}
-
-	// TODO: move this to Run()
-	err = d.readCache(ctx)
-	if err != nil {
-		logger.FromBelt(b).Errorf("unable to read cache: %v", err)
+		AccountMap:     make(Accounts),
+		ActiveProfiles: make(map[streamcontrol.StreamIDFullyQualified]streamcontrol.ProfileName),
 	}
 
 	return d, nil
 }
 
 func (d *StreamD) Run(ctx context.Context) (_ret error) { // TODO: delete the fetchConfig parameter
+	fmt.Println("StreamD.Run: starting")
 	logger.Debugf(ctx, "StreamD.Run()")
 	defer func() { logger.Debugf(ctx, "/StreamD.Run(): %v", _ret) }()
 
-	if !d.StreamServerLocker.ManualTryLock(ctx) {
-		return fmt.Errorf("somebody already locked StreamServerLocker")
+	if err := d.ChatMessagesStorage.Load(ctx); err != nil {
+		logger.Errorf(ctx, "unable to read the chat messages: %v", err)
 	}
-	defer d.StreamServerLocker.ManualUnlock(ctx)
 
-	if !d.ControllersLocker.ManualTryLock(ctx) {
-		return fmt.Errorf("somebody already locked ControllersLocker")
+	err := d.readCache(ctx)
+	if err != nil {
+		logger.Errorf(ctx, "unable to read cache: %v", err)
 	}
-	defer d.ControllersLocker.ManualUnlock(ctx)
 
-	err := d.secretsProviderUpdater(ctx)
+	err = d.secretsProviderUpdater(ctx)
 	if err != nil {
 		d.UI.DisplayError(fmt.Errorf("unable to initialize the secrets updater: %w", err))
 	}
 
+	fmt.Println("StreamD.Run: Initializing streaming backends")
 	d.UI.SetStatus("Initializing streaming backends...")
 	if err := d.EXPERIMENTAL_ReinitStreamControllers(ctx); err != nil {
 		return fmt.Errorf("unable to initialize stream controllers: %w", err)
 	}
 
+	fmt.Println("StreamD.Run: Pre-downloading user data")
 	d.UI.SetStatus("Pre-downloading user data from streaming backends...")
 
 	if err := d.InitCache(ctx); err != nil {
 		d.UI.DisplayError(fmt.Errorf("unable to initialize cache: %w", err))
 	}
 
+	fmt.Println("StreamD.Run: Initializing StreamServer")
 	d.UI.SetStatus("Initializing StreamServer...")
 	if err := d.initStreamServer(ctx); err != nil {
 		d.UI.DisplayError(fmt.Errorf("unable to initialize the stream server: %w", err))
 	}
 
+	fmt.Println("StreamD.Run: Starting the image taker")
 	d.UI.SetStatus("Starting the image taker...")
 	if err := d.initImageTaker(ctx); err != nil {
 		d.UI.DisplayError(fmt.Errorf("unable to initialize the image taker: %w", err))
 	}
 
+	fmt.Println("StreamD.Run: P2P network")
 	d.UI.SetStatus("P2P network...")
 	if err := d.initP2P(ctx); err != nil {
 		d.UI.DisplayError(fmt.Errorf("unable to initialize the P2P network: %w", err))
 	}
 
+	fmt.Println("StreamD.Run: Initializing chat messages storage")
 	d.UI.SetStatus("Initializing chat messages storage...")
 	if err := d.initChatMessagesStorage(ctx); err != nil {
 		d.UI.DisplayError(fmt.Errorf("unable to initialize the chat messages storage: %w", err))
 	}
 
+	fmt.Println("StreamD.Run: OBS restarter")
 	d.UI.SetStatus("OBS restarter...")
 	if err := d.initOBSRestarter(ctx); err != nil {
 		d.UI.DisplayError(fmt.Errorf("unable to initialize the OBS restarter: %w", err))
 	}
 
+	fmt.Println("StreamD.Run: LLMs")
 	d.UI.SetStatus("LLMs...")
 	if err := d.initLLMs(ctx); err != nil {
 		d.UI.DisplayError(fmt.Errorf("unable to initialize the LLMs: %w", err))
 	}
 
+	fmt.Println("StreamD.Run: Initializing UI")
 	d.UI.SetStatus("Initializing UI...")
 	close(d.ReadyChan)
+	fmt.Println("StreamD.Run: Ready")
 	return nil
 }
 
@@ -293,7 +290,7 @@ func (d *StreamD) InitStreamServer(ctx context.Context) (_err error) {
 	logger.Debugf(ctx, "InitStreamServer")
 	defer logger.Debugf(ctx, "/InitStreamServer: %v", _err)
 
-	return xsync.DoA1R1(ctx, &d.ControllersLocker, d.initStreamServer, ctx)
+	return xsync.DoA1R1(ctx, &d.AccountsLocker, d.initStreamServer, ctx)
 }
 
 func (d *StreamD) initStreamServer(ctx context.Context) (_err error) {
@@ -392,36 +389,23 @@ func (d *StreamD) InitCache(ctx context.Context) error {
 	changedCache := false
 
 	var wg sync.WaitGroup
+	var mu sync.Mutex
 
-	wg.Add(1)
-	observability.Go(ctx, func(ctx context.Context) {
-		defer wg.Done()
-		_changedCache := d.initTwitchData(ctx)
-		d.normalizeTwitchData()
-		if _changedCache {
-			changedCache = true
+	for _, handler := range platformBackendHandlers {
+		if handler.InitCache == nil {
+			continue
 		}
-	})
-
-	wg.Add(1)
-	observability.Go(ctx, func(ctx context.Context) {
-		defer wg.Done()
-		_changedCache := d.initKickData(ctx)
-		d.normalizeKickData()
-		if _changedCache {
-			changedCache = true
-		}
-	})
-
-	wg.Add(1)
-	observability.Go(ctx, func(ctx context.Context) {
-		defer wg.Done()
-		_changedCache := d.initYoutubeData(ctx)
-		d.normalizeYoutubeData()
-		if _changedCache {
-			changedCache = true
-		}
-	})
+		handler := handler
+		wg.Add(1)
+		observability.Go(ctx, func(ctx context.Context) {
+			defer wg.Done()
+			if handler.InitCache(ctx, d) {
+				mu.Lock()
+				changedCache = true
+				mu.Unlock()
+			}
+		})
+	}
 
 	wg.Wait()
 	if changedCache {
@@ -435,7 +419,7 @@ func (d *StreamD) InitCache(ctx context.Context) error {
 
 func (d *StreamD) setPlatformConfig(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
+	platID streamcontrol.PlatformID,
 	platCfg *streamcontrol.AbstractPlatformConfig,
 ) error {
 	logger.Debugf(ctx, "setPlatformConfig('%s', '%#+v')", platID, platCfg)
@@ -447,86 +431,65 @@ func (d *StreamD) setPlatformConfig(
 	return d.SaveConfig(ctx)
 }
 
-func (d *StreamD) initTwitchData(ctx context.Context) bool {
-	logger.FromCtx(ctx).Debugf("initializing Twitch data")
-	defer logger.FromCtx(ctx).Debugf("endof initializing Twitch data")
+func (d *StreamD) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context) error {
+	logger.Debugf(ctx, "EXPERIMENTAL_ReinitStreamControllers")
+	defer logger.Debugf(ctx, "/EXPERIMENTAL_ReinitStreamControllers")
 
-	if c := len(d.Cache.Twitch.Categories); c != 0 {
-		logger.FromCtx(ctx).Debugf("already have categories (count: %d)", c)
-		return false
+	for _, handler := range platformBackendHandlers {
+		if handler.InitBackend == nil {
+			continue
+		}
+		if err := handler.InitBackend(ctx, d); err != nil {
+			return err
+		}
 	}
-
-	twitch := d.StreamControllers.Twitch
-	if twitch == nil {
-		logger.FromCtx(ctx).Debugf("twitch controller is not initialized")
-		return false
-	}
-
-	allCategories, err := twitch.GetAllCategories(d.ctxForController(ctx))
-	if err != nil {
-		d.UI.DisplayError(err)
-		return false
-	}
-
-	logger.FromCtx(ctx).Debugf("got categories: %#+v", allCategories)
-
-	func() {
-		d.CacheLock.Do(ctx, func() {
-			d.Cache.Twitch.Categories = allCategories
-		})
-	}()
-
-	err = d.SaveConfig(ctx)
-	errmon.ObserveErrorCtx(ctx, err)
-	return true
+	return nil
 }
 
-func (d *StreamD) normalizeTwitchData() {
-	s := d.Cache.Twitch.Categories
-	sort.Slice(s, func(i, j int) bool {
-		return s[i].Name < s[j].Name
+func (d *StreamD) getControllersByPlatform(
+	platID streamcontrol.PlatformID,
+) map[streamcontrol.AccountID]streamcontrol.AbstractAccount {
+	return xsync.RDoR1(context.TODO(), &d.AccountsLocker, func() map[streamcontrol.AccountID]streamcontrol.AbstractAccount {
+		return d.getControllersByPlatformNoLock(platID)
 	})
 }
 
-func (d *StreamD) initKickData(ctx context.Context) bool {
-	logger.FromCtx(ctx).Debugf("initializing Kick data")
-	defer logger.FromCtx(ctx).Debugf("endof initializing Kick data")
-
-	if c := len(d.Cache.Kick.GetCategories()); c != 0 {
-		logger.FromCtx(ctx).Debugf("already have categories (count: %d)", c)
-		return false
+func (d *StreamD) getControllersByPlatformNoLock(
+	platID streamcontrol.PlatformID,
+) map[streamcontrol.AccountID]streamcontrol.AbstractAccount {
+	result := make(map[streamcontrol.AccountID]streamcontrol.AbstractAccount)
+	for id, ctrl := range d.AccountMap {
+		if id.PlatformID == platID {
+			result[id.AccountID] = ctrl
+		}
 	}
-
-	kick := d.StreamControllers.Kick
-	if kick == nil {
-		logger.FromCtx(ctx).Debugf("twitch controller is not initialized")
-		return false
-	}
-
-	allCategories, err := kick.GetAllCategories(d.ctxForController(ctx))
-	if err != nil {
-		d.UI.DisplayError(err)
-		return false
-	}
-
-	logger.FromCtx(ctx).Debugf("got categories: %#+v", allCategories)
-
-	func() {
-		d.CacheLock.Do(ctx, func() {
-			d.Cache.Kick.SetCategories(allCategories)
-		})
-	}()
-
-	err = d.SaveConfig(ctx)
-	errmon.ObserveErrorCtx(ctx, err)
-	return true
+	return result
 }
 
-func (d *StreamD) normalizeKickData() {
-	s := d.Cache.Kick.GetCategories()
-	sort.Slice(s, func(i, j int) bool {
-		return s[i].Name < s[j].Name
-	})
+func (d *StreamD) StreamControllers(
+	ctx context.Context,
+	platID streamcontrol.PlatformID,
+) (map[streamcontrol.AccountID]streamcontrol.AbstractAccount, error) {
+	return d.getControllersByPlatform(platID), nil
+}
+
+func (d *StreamD) setPlatformAccountConfig(
+	ctx context.Context,
+	platID streamcontrol.PlatformID,
+	accountID streamcontrol.AccountID,
+	cfg *streamcontrol.AbstractPlatformConfig,
+) error {
+	return xsync.DoA1R1(ctx, &d.ConfigLock, func(ctx context.Context) error {
+		platCfg := d.Config.Backends[platID]
+		if platCfg == nil {
+			return fmt.Errorf("platform config for '%s' is not found", platID)
+		}
+		if platCfg.Accounts == nil {
+			platCfg.Accounts = make(map[streamcontrol.AccountID]streamcontrol.RawMessage)
+		}
+		platCfg.Accounts[accountID] = cfg.Accounts[accountID]
+		return d.saveConfig(ctx)
+	}, ctx)
 }
 
 func (d *StreamD) SaveConfig(ctx context.Context) (_err error) {
@@ -621,24 +584,14 @@ func (d *StreamD) onUpdateConfig(
 
 func (d *StreamD) IsBackendEnabled(
 	ctx context.Context,
-	id streamcontrol.PlatformName,
+	id streamcontrol.PlatformID,
 ) (_ret bool, _err error) {
 	logger.Tracef(ctx, "IsBackendEnabled(ctx, '%s')", id)
 	defer func() { logger.Tracef(ctx, "/IsBackendEnabled(ctx, '%s'): %v %v", id, _ret, _err) }()
 
-	return xsync.RDoR2(ctx, &d.ControllersLocker, func() (_ret bool, _err error) {
-		switch id {
-		case obs.ID:
-			return d.StreamControllers.OBS != nil, nil
-		case twitch.ID:
-			return d.StreamControllers.Twitch != nil, nil
-		case kick.ID:
-			return d.StreamControllers.Kick != nil, nil
-		case youtube.ID:
-			return d.StreamControllers.YouTube != nil, nil
-		default:
-			return false, fmt.Errorf("unknown backend ID: '%s'", id)
-		}
+	return xsync.RDoR2(ctx, &d.AccountsLocker, func() (_ret bool, _err error) {
+		_, ctrl := d.getAnyControllerWithIDByPlatform(id)
+		return ctrl != nil, nil
 	})
 }
 
@@ -646,216 +599,29 @@ func (d *StreamD) OBSOLETE_IsGITInitialized(ctx context.Context) (bool, error) {
 	return d.GitStorage != nil, nil
 }
 
-func (d *StreamD) StartStream(
+func (d *StreamD) WaitStreamStartedByStreamSourceID(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
-	title string, description string,
-	profile streamcontrol.AbstractStreamProfile,
-	customArgs ...any,
-) (_err error) {
-	logger.Debugf(ctx, "StartStream(%s)", platID)
-	return xsync.RDoR1(ctx, &d.ControllersLocker, func() error {
-		defer func() { logger.Debugf(ctx, "/StartStream(%s): %v", platID, _err) }()
-		defer publishEvent(ctx, d.EventBus, api.DiffStreams{})
-
-		defer func() {
-			d.StreamStatusCache.InvalidateCache(ctx)
-			if platID == youtube.ID {
-				observability.Go(ctx, func(ctx context.Context) {
-					now := time.Now()
-					time.Sleep(10 * time.Second)
-					for time.Since(now) < 5*time.Minute {
-						d.StreamStatusCache.InvalidateCache(ctx)
-						time.Sleep(20 * time.Second)
-					}
-				})
-			}
-		}()
-		switch platID {
-		case obs.ID:
-			profile, err := streamcontrol.GetStreamProfile[obs.StreamProfile](ctx, profile)
-			if err != nil {
-				return fmt.Errorf("unable to convert the profile into OBS profile: %w", err)
-			}
-			err = d.StreamControllers.OBS.StartStream(
-				d.ctxForController(ctx),
-				title,
-				description,
-				*profile,
-				customArgs...)
-			if err != nil {
-				return fmt.Errorf("unable to start the stream on OBS: %w", err)
-			}
-			return nil
-		case twitch.ID:
-			profile, err := streamcontrol.GetStreamProfile[twitch.StreamProfile](ctx, profile)
-			if err != nil {
-				return fmt.Errorf("unable to convert the profile into Twitch profile: %w", err)
-			}
-			err = d.StreamControllers.Twitch.StartStream(
-				d.ctxForController(ctx),
-				title,
-				description,
-				*profile,
-				customArgs...)
-			if err != nil {
-				return fmt.Errorf("unable to start the stream on Twitch: %w", err)
-			}
-			return nil
-		case kick.ID:
-			profile, err := streamcontrol.GetStreamProfile[kick.StreamProfile](ctx, profile)
-			if err != nil {
-				return fmt.Errorf("unable to convert the profile into Twitch profile: %w", err)
-			}
-			err = d.StreamControllers.Kick.StartStream(
-				d.ctxForController(ctx),
-				title,
-				description,
-				*profile,
-				customArgs...)
-			if err != nil {
-				return fmt.Errorf("unable to start the stream on Kick: %w", err)
-			}
-			return nil
-		case youtube.ID:
-			profile, err := streamcontrol.GetStreamProfile[youtube.StreamProfile](ctx, profile)
-			if err != nil {
-				return fmt.Errorf("unable to convert the profile into YouTube profile: %w", err)
-			}
-			err = d.StreamControllers.YouTube.StartStream(
-				d.ctxForController(ctx),
-				title,
-				description,
-				*profile,
-				customArgs...)
-			if err != nil {
-				return fmt.Errorf("unable to start the stream on YouTube: %w", err)
-			}
-
-			// I don't know why, but if we don't open the livestream control page on YouTube
-			// in the browser, then the stream does not want to start.
-			//
-			// And this bug is exacerbated by the fact that sometimes even if you just created
-			// a stream, YouTube may report that you don't have this stream (some kind of
-			// race condition on their side), so sometimes we need to wait and retry. Right
-			// now we assume that the race condition cannot take more than ~25 seconds.
-			deadline := time.Now().Add(30 * time.Second)
-			for {
-				status, err := d.GetStreamStatus(memoize.SetNoCache(ctx, true), youtube.ID)
-				if err != nil {
-					return fmt.Errorf("unable to get YouTube stream status: %w", err)
-				}
-				data := youtube.GetStreamStatusCustomData(status)
-				bcID := getYTBroadcastID(data)
-				if bcID == "" {
-					err = fmt.Errorf("unable to get the broadcast ID from YouTube")
-					if time.Now().Before(deadline) {
-						delay := time.Second * 5
-						logger.Warnf(ctx, "%v... waiting %v and trying again", err)
-						time.Sleep(delay)
-						continue
-					}
-					return err
-				}
-				url := fmt.Sprintf("https://studio.youtube.com/video/%s/livestreaming", bcID)
-				err = d.UI.OpenBrowser(ctx, url)
-				if err != nil {
-					return fmt.Errorf("unable to open '%s' in browser: %w", url, err)
-				}
-				return nil
-			}
-		default:
-			return fmt.Errorf("unexpected platform ID '%s'", platID)
-		}
-	})
-}
-
-func getYTBroadcastID(d youtube.StreamStatusCustomData) string {
-	for _, bc := range d.ActiveBroadcasts {
-		return bc.Id
-	}
-	for _, bc := range d.UpcomingBroadcasts {
-		return bc.Id
-	}
-	return ""
-}
-
-func (d *StreamD) EndStream(ctx context.Context, platID streamcontrol.PlatformName) error {
-	logger.Debugf(ctx, "EndStream(ctx, '%s')", platID)
-	defer logger.Debugf(ctx, "/EndStream(ctx, '%s')", platID)
-
-	defer publishEvent(ctx, d.EventBus, api.DiffStreams{})
-
-	cfg, err := d.GetConfig(ctx)
-	if err != nil {
-		return fmt.Errorf("unable to get the config: %w", err)
-	}
-
-	return xsync.RDoR1(ctx, &d.ControllersLocker, func() error {
-		defer d.StreamStatusCache.InvalidateCache(ctx)
-
-		streamController, err := d.streamController(ctx, platID)
-		if err != nil {
-			return err
-		}
-
-		if streamController == nil {
-			return fmt.Errorf("'%s' is not initialized", platID)
-		}
-
-		if streamController.IsCapable(ctx, streamcontrol.CapabilityIsChannelStreaming) && streamController.IsCapable(ctx, streamcontrol.CapabilityRaid) {
-			for _, userID := range cfg.Raid.AutoRaidOnStreamEnd {
-				if userID.Platform != platID {
-					continue
-				}
-				isStreaming, err := streamController.IsChannelStreaming(ctx, userID.User)
-				if err != nil {
-					logger.Errorf(ctx, "unable to check if '%s' is streaming: %v", userID.User, err)
-					continue
-				}
-				if !isStreaming {
-					logger.Debugf(ctx, "checking if can raid to %v: user is not streaming", userID.User)
-					continue
-				}
-				err = streamController.RaidTo(ctx, userID.User)
-				if err != nil {
-					logger.Errorf(ctx, "unable to raid to '%s': %v", userID.User, err)
-					continue
-				}
-
-				switch platID {
-				case twitch.ID:
-					logger.Debugf(ctx, "sleeping for 20 seconds, to wait until Raid happens")
-					time.Sleep(20 * time.Second)
-				}
-				break
-			}
-		}
-
-		err = streamController.EndStream(ctx)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	})
+	streamID streamcontrol.StreamIDFullyQualified,
+) error {
+	adapter := newPlatformsControllerAdapter(d)
+	return adapter.WaitStreamStartedByStreamSourceID(ctx, streamID)
 }
 
 func (d *StreamD) GetBackendInfo(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
+	platID streamcontrol.PlatformID,
 	includeData bool,
 ) (_ret *api.BackendInfo, _err error) {
 	logger.Tracef(ctx, "GetBackendInfo(ctx, '%s', %t)", platID, includeData)
 	defer func() { logger.Tracef(ctx, "/GetBackendInfo(ctx, '%s', %t): %v %v", platID, includeData, _ret, _err) }()
 
-	ctrl, err := d.streamController(ctx, platID)
+	_, ctrl, err := d.streamController(ctx, platID)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get stream controller for platform '%s': %w", platID, err)
 	}
 
 	caps := map[streamcontrol.Capability]struct{}{}
-	for cap := streamcontrol.CapabilityUndefined + 1; cap < streamcontrol.EndOfCapability; cap++ {
+	for cap := streamcontrol.UndefinedCapability + 1; cap < streamcontrol.EndOfCapability; cap++ {
 		isCapable := ctrl.IsCapable(ctx, cap)
 		if isCapable {
 			caps[cap] = struct{}{}
@@ -878,27 +644,21 @@ func (d *StreamD) GetBackendInfo(
 }
 
 func (d *StreamD) getBackendData(
-	_ context.Context,
-	platID streamcontrol.PlatformName,
+	ctx context.Context,
+	platID streamcontrol.PlatformID,
 ) (any, error) {
-	switch platID {
-	case obs.ID:
-		return api.BackendDataOBS{}, nil
-	case twitch.ID:
-		return api.BackendDataTwitch{Cache: d.Cache.Twitch}, nil
-	case kick.ID:
-		return api.BackendDataKick{Cache: d.Cache.Kick}, nil
-	case youtube.ID:
-		return api.BackendDataYouTube{Cache: d.Cache.Youtube}, nil
-	default:
+	handler, ok := platformBackendHandlers[platID]
+	if !ok || handler.GetBackendData == nil {
 		return nil, fmt.Errorf("unexpected platform ID '%s'", platID)
 	}
+	return handler.GetBackendData(ctx, d)
 }
 
 func (d *StreamD) tryConnectTwitch(
 	ctx context.Context,
 ) {
-	if d.StreamControllers.Twitch != nil {
+	_, ctrl := d.getAnyControllerWithIDByPlatform(twitch.ID)
+	if ctrl != nil {
 		return
 	}
 
@@ -913,7 +673,8 @@ func (d *StreamD) tryConnectTwitch(
 func (d *StreamD) tryConnectKick(
 	ctx context.Context,
 ) {
-	if d.StreamControllers.Kick != nil {
+	_, ctrl := d.getAnyControllerWithIDByPlatform(kick.ID)
+	if ctrl != nil {
 		return
 	}
 
@@ -928,7 +689,8 @@ func (d *StreamD) tryConnectKick(
 func (d *StreamD) tryConnectYouTube(
 	ctx context.Context,
 ) {
-	if d.StreamControllers.YouTube != nil {
+	_, ctrl := d.getAnyControllerWithIDByPlatform(youtube.ID)
+	if ctrl != nil {
 		return
 	}
 
@@ -942,111 +704,218 @@ func (d *StreamD) tryConnectYouTube(
 
 func (d *StreamD) streamController(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
-) (streamcontrol.AbstractStreamController, error) {
+	platID streamcontrol.PlatformID,
+) (streamcontrol.AccountID, streamcontrol.AbstractAccount, error) {
 	ctx = belt.WithField(ctx, "controller", platID)
-	var result streamcontrol.AbstractStreamController
+	var (
+		accountID streamcontrol.AccountID
+		result    streamcontrol.AbstractAccount
+	)
 	switch platID {
 	case obs.ID:
-		if d.StreamControllers.OBS != nil {
-			result = streamcontrol.ToAbstract(d.StreamControllers.OBS)
-		}
+		accountID, result = d.getAnyControllerWithIDByPlatform(obs.ID)
 	case twitch.ID:
-		if d.StreamControllers.Twitch == nil {
+		accountID, result = d.getAnyControllerWithIDByPlatform(twitch.ID)
+		if result == nil {
 			d.tryConnectTwitch(ctx)
 		}
-		if d.StreamControllers.Twitch != nil {
-			result = streamcontrol.ToAbstract(d.StreamControllers.Twitch)
-		}
+		accountID, result = d.getAnyControllerWithIDByPlatform(twitch.ID)
 	case kick.ID:
-		if d.StreamControllers.Kick == nil {
+		accountID, result = d.getAnyControllerWithIDByPlatform(kick.ID)
+		if result == nil {
 			d.tryConnectKick(ctx)
 		}
-		if d.StreamControllers.Kick != nil {
-			result = streamcontrol.ToAbstract(d.StreamControllers.Kick)
-		}
+		accountID, result = d.getAnyControllerWithIDByPlatform(kick.ID)
 	case youtube.ID:
-		if d.StreamControllers.YouTube == nil {
+		accountID, result = d.getAnyControllerWithIDByPlatform(youtube.ID)
+		if result == nil {
 			d.tryConnectYouTube(ctx)
 		}
-		if d.StreamControllers.YouTube != nil {
-			result = streamcontrol.ToAbstract(d.StreamControllers.YouTube)
+		accountID, result = d.getAnyControllerWithIDByPlatform(youtube.ID)
+	default:
+		return "", nil, fmt.Errorf("unexpected platform ID: '%s'", platID)
+	}
+	if result == nil {
+		return "", nil, fmt.Errorf("controller '%s' is not initialized", platID)
+	}
+	return accountID, result, nil
+}
+
+func (d *StreamD) streamControllers(
+	ctx context.Context,
+	platID streamcontrol.PlatformID,
+) (map[streamcontrol.AccountID]streamcontrol.AbstractAccount, error) {
+	ctx = belt.WithField(ctx, "controller", platID)
+	var controllers map[streamcontrol.AccountID]streamcontrol.AbstractAccount
+	switch platID {
+	case obs.ID:
+		controllers = d.getControllersByPlatformNoLock(obs.ID)
+	case twitch.ID:
+		controllers = d.getControllersByPlatformNoLock(twitch.ID)
+		if len(controllers) == 0 {
+			d.AccountsLocker.URDo(ctx, func() {
+				d.tryConnectTwitch(ctx)
+			})
+			controllers = d.getControllersByPlatformNoLock(twitch.ID)
+		}
+	case kick.ID:
+		controllers = d.getControllersByPlatformNoLock(kick.ID)
+		if len(controllers) == 0 {
+			d.AccountsLocker.URDo(ctx, func() {
+				d.tryConnectKick(ctx)
+			})
+			controllers = d.getControllersByPlatformNoLock(kick.ID)
+		}
+	case youtube.ID:
+		controllers = d.getControllersByPlatformNoLock(youtube.ID)
+		if len(controllers) == 0 {
+			d.AccountsLocker.URDo(ctx, func() {
+				d.tryConnectYouTube(ctx)
+			})
+			controllers = d.getControllersByPlatformNoLock(youtube.ID)
 		}
 	default:
 		return nil, fmt.Errorf("unexpected platform ID: '%s'", platID)
 	}
-	if result == nil {
+	if len(controllers) == 0 {
 		return nil, fmt.Errorf("controller '%s' is not initialized", platID)
 	}
-	return result, nil
+	return controllers, nil
+}
+
+func (d *StreamD) getAnyControllerWithIDByPlatform(
+	platID streamcontrol.PlatformID,
+) (streamcontrol.AccountID, streamcontrol.AbstractAccount) {
+	for id, ctrl := range d.AccountMap {
+		if id.PlatformID == platID {
+			return id.AccountID, ctrl
+		}
+	}
+	return "", nil
 }
 
 func (d *StreamD) GetStreamStatus(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
-) (_ret *streamcontrol.StreamStatus, _err error) {
-	ctx = belt.WithField(ctx, "plat_id", platID)
-	logger.Tracef(ctx, "GetStreamStatus(ctx, '%s')", platID)
-	defer func() { logger.Tracef(ctx, "/GetStreamStatus(ctx, '%s'): %#+v %v", platID, _ret, _err) }()
-	cacheDuration := 5 * time.Second
+	streamID streamcontrol.StreamIDFullyQualified,
+) (*streamcontrol.StreamStatus, error) {
+	platID := streamID.PlatformID
+	var cacheDuration time.Duration
 	switch platID {
 	case obs.ID:
 		cacheDuration = 3 * time.Second
+	case twitch.ID:
+		cacheDuration = 10 * time.Second
 	case youtube.ID:
 		cacheDuration = 5 * time.Minute // because of quota limits by YouTube
 	}
-	return memoize.Memoize(d.StreamStatusCache, d.getStreamStatus, ctx, platID, cacheDuration)
+	return memoize.Memoize(d.StreamStatusCache, d.getStreamStatus, ctx, streamID, cacheDuration)
 }
 
 func (d *StreamD) getStreamStatus(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
+	streamID streamcontrol.StreamIDFullyQualified,
 ) (*streamcontrol.StreamStatus, error) {
-	return xsync.RDoR2(ctx, &d.ControllersLocker, func() (*streamcontrol.StreamStatus, error) {
-		c, err := d.streamController(ctx, platID)
-		if err != nil {
-			return nil, err
+	platID := streamID.PlatformID
+	return xsync.RDoR2(ctx, &d.AccountsLocker, func() (*streamcontrol.StreamStatus, error) {
+		controllers := d.getControllersByPlatformNoLock(platID)
+
+		accountID := streamID.AccountID
+		if accountID == "" {
+			for accID := range controllers {
+				if platCfg := d.Config.Backends[platID]; platCfg != nil {
+					if accCfg, ok := platCfg.Accounts[accID]; ok {
+						if !accCfg.IsEnabled() {
+							continue
+						}
+					}
+				}
+				accountID = accID
+				break
+			}
 		}
 
-		if c == nil {
-			return nil, fmt.Errorf("controller '%s' is not initialized", platID)
+		c, ok := controllers[accountID]
+		if !ok {
+			return nil, fmt.Errorf("controller '%s' (account '%s') is not initialized", platID, accountID)
 		}
 
-		return c.GetStreamStatus(d.ctxForController(ctx))
+		return c.GetStreamStatus(d.ctxForController(ctx), streamID.StreamID)
 	})
 }
 
 func (d *StreamD) SetTitle(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
+	streamID streamcontrol.StreamIDFullyQualified,
 	title string,
-) error {
+) (_err error) {
+	platID := streamID.PlatformID
+	logger.Debugf(ctx, "SetTitle: %s, %s", platID, title)
+	defer logger.Debugf(ctx, "/SetTitle: %s, %s: %v", platID, title, _err)
 	defer publishEvent(ctx, d.EventBus, api.DiffStreams{})
 
-	return xsync.RDoR1(ctx, &d.ControllersLocker, func() error {
-		c, err := d.streamController(ctx, platID)
+	return xsync.RDoR1(ctx, &d.AccountsLocker, func() error {
+		controllers, err := d.streamControllers(d.ctxForController(ctx), platID)
 		if err != nil {
 			return err
 		}
 
-		return c.SetTitle(d.ctxForController(ctx), title)
+		var mErr *multierror.Error
+		for accountID, c := range controllers {
+			if streamID.AccountID != "" && streamID.AccountID != accountID {
+				continue
+			}
+			if platCfg := d.Config.Backends[platID]; platCfg != nil {
+				if accCfg, ok := platCfg.Accounts[accountID]; ok {
+					if !accCfg.IsEnabled() {
+						continue
+					}
+				}
+			}
+
+			err := c.SetTitle(d.ctxForController(ctx), streamID.StreamID, title)
+			if err != nil {
+				mErr = multierror.Append(mErr, fmt.Errorf("unable to set the title for account %s: %w", accountID, err))
+			}
+		}
+		return mErr.ErrorOrNil()
 	})
 }
 
 func (d *StreamD) SetDescription(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
+	streamID streamcontrol.StreamIDFullyQualified,
 	description string,
-) error {
+) (_err error) {
+	platID := streamID.PlatformID
+	logger.Debugf(ctx, "SetDescription: %s, %s", platID, description)
+	defer logger.Debugf(ctx, "/SetDescription: %s, %s: %v", platID, description, _err)
 	defer publishEvent(ctx, d.EventBus, api.DiffStreams{})
 
-	return xsync.RDoR1(ctx, &d.ControllersLocker, func() error {
-		c, err := d.streamController(ctx, platID)
+	return xsync.RDoR1(ctx, &d.AccountsLocker, func() error {
+		controllers, err := d.streamControllers(d.ctxForController(ctx), platID)
 		if err != nil {
 			return err
 		}
 
-		return c.SetDescription(d.ctxForController(ctx), description)
+		var mErr *multierror.Error
+		for accountID, c := range controllers {
+			if streamID.AccountID != "" && streamID.AccountID != accountID {
+				continue
+			}
+			if platCfg := d.Config.Backends[platID]; platCfg != nil {
+				if accCfg, ok := platCfg.Accounts[accountID]; ok {
+					if !accCfg.IsEnabled() {
+						continue
+					}
+				}
+			}
+
+			err := c.SetDescription(d.ctxForController(ctx), streamID.StreamID, description)
+			if err != nil {
+				mErr = multierror.Append(mErr, fmt.Errorf("unable to set the description for account %s: %w", accountID, err))
+			}
+		}
+		return mErr.ErrorOrNil()
 	})
 }
 
@@ -1057,48 +926,229 @@ func (d *StreamD) ctxForController(ctx context.Context) context.Context {
 
 func (d *StreamD) ApplyProfile(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
-	profile streamcontrol.AbstractStreamProfile,
-	customArgs ...any,
-) error {
+	streamID streamcontrol.StreamIDFullyQualified,
+	profile streamcontrol.StreamProfile,
+) (_err error) {
+	platID := streamID.PlatformID
+	logger.Debugf(ctx, "ApplyProfile: %s, %#+v", platID, profile)
+	defer logger.Debugf(ctx, "/ApplyProfile: %s, %#+v: %v", platID, profile, _err)
 	defer publishEvent(ctx, d.EventBus, api.DiffStreams{})
 
-	return xsync.RDoR1(ctx, &d.ControllersLocker, func() error {
-		c, err := d.streamController(d.ctxForController(ctx), platID)
+	var mErr *multierror.Error
+	err := xsync.RDoR1(ctx, &d.AccountsLocker, func() error {
+		controllers, err := d.streamControllers(d.ctxForController(ctx), platID)
 		if err != nil {
 			return err
 		}
 
-		return c.ApplyProfile(d.ctxForController(ctx), profile, customArgs...)
+		for accountID, c := range controllers {
+			if streamID.AccountID != "" && streamID.AccountID != accountID {
+				continue
+			}
+
+			p := profile
+			if platCfg := d.Config.Backends[platID]; platCfg != nil && streamID.StreamID != "" {
+				if accCfg, ok := platCfg.Accounts[accountID]; ok {
+					if !accCfg.IsEnabled() {
+						continue
+					}
+				}
+			}
+
+			err = c.ApplyProfile(d.ctxForController(ctx), streamID.StreamID, p)
+			if err != nil {
+				mErr = multierror.Append(mErr, fmt.Errorf("unable to apply the profile for account %s: %w", accountID, err))
+			}
+		}
+		return nil
 	})
+	if err != nil {
+		mErr = multierror.Append(mErr, err)
+	}
+
+	err = xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
+		if d.StreamServer == nil {
+			return nil
+		}
+		forwards, err := d.StreamServer.ListStreamForwards(ctx)
+		if err != nil {
+			return err
+		}
+		sinks, err := d.StreamServer.ListStreamSinks(ctx)
+		if err != nil {
+			return err
+		}
+		sinkMap := make(map[sstypes.StreamSinkIDFullyQualified]sstypes.StreamSink)
+		for _, sink := range sinks {
+			sinkMap[sink.ID] = sink
+		}
+
+		enabledInProfile := streamcontrol.ToRawMessage(profile).IsEnabled()
+
+		for _, forward := range forwards {
+			sink, ok := sinkMap[forward.StreamSinkID]
+			if !ok || sink.StreamID == nil {
+				continue
+			}
+
+			if sink.StreamID.PlatformID != platID {
+				continue
+			}
+
+			if streamID.AccountID != "" && sink.StreamID.AccountID != streamID.AccountID {
+				continue
+			}
+			if streamID.StreamID != "" && sink.StreamID.StreamID != streamID.StreamID {
+				continue
+			}
+
+			if forward.Enabled != enabledInProfile {
+				_, err := d.StreamServer.UpdateStreamForward(ctx, forward.StreamSourceID, forward.StreamSinkID, enabledInProfile, forward.Encode, forward.Quirks)
+				if err != nil {
+					mErr = multierror.Append(mErr, fmt.Errorf("unable to update forward %s -> %s: %w", forward.StreamSourceID, forward.StreamSinkID, err))
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		mErr = multierror.Append(mErr, err)
+	}
+
+	return mErr.ErrorOrNil()
 }
 
-func (d *StreamD) UpdateStream(
+func (d *StreamD) SetStreamActive(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
-	title string, description string,
-	profile streamcontrol.AbstractStreamProfile,
-	customArgs ...any,
-) error {
-	defer publishEvent(ctx, d.EventBus, api.DiffStreams{})
+	streamID streamcontrol.StreamIDFullyQualified,
+	active bool,
+) (_err error) {
+	platID := streamID.PlatformID
+	logger.Debugf(ctx, "SetStreamActive(%s, %v)", streamID, active)
+	return xsync.RDoR1(ctx, &d.AccountsLocker, func() error {
+		defer func() { logger.Debugf(ctx, "/SetStreamActive(%s, %v): %v", streamID, active, _err) }()
+		defer publishEvent(ctx, d.EventBus, api.DiffStreams{})
 
-	return xsync.RDoR1(ctx, &d.ControllersLocker, func() error {
-		err := d.SetTitle(d.ctxForController(ctx), platID, title)
+		defer func() {
+			d.StreamStatusCache.InvalidateCache(ctx)
+			if active && platID == youtube.ID {
+				observability.Go(ctx, func(ctx context.Context) {
+					now := time.Now()
+					time.Sleep(10 * time.Second)
+					for time.Since(now) < 5*time.Minute {
+						d.StreamStatusCache.InvalidateCache(ctx)
+						time.Sleep(20 * time.Second)
+					}
+				})
+			}
+		}()
+
+		controllers, err := d.streamControllers(ctx, platID)
 		if err != nil {
-			return fmt.Errorf("unable to set the title: %w", err)
+			return err
 		}
 
-		err = d.SetDescription(d.ctxForController(ctx), platID, description)
-		if err != nil {
-			return fmt.Errorf("unable to set the description: %w", err)
-		}
+		var mErr *multierror.Error
+		for accountID, ctrl := range controllers {
+			if streamID.AccountID != "" && streamID.AccountID != accountID {
+				continue
+			}
+			if platCfg := d.Config.Backends[platID]; platCfg != nil {
+				if accCfg, ok := platCfg.Accounts[accountID]; ok {
+					if !accCfg.IsEnabled() {
+						continue
+					}
+				}
+			}
 
-		err = d.ApplyProfile(d.ctxForController(ctx), platID, profile, customArgs...)
-		if err != nil {
-			return fmt.Errorf("unable to apply the profile: %w", err)
-		}
+			if active {
+				err = ctrl.SetStreamActive(
+					d.ctxForController(ctx),
+					streamID.StreamID,
+					true,
+				)
+				if err != nil {
+					mErr = multierror.Append(mErr, fmt.Errorf("unable to start the stream for account %s: %w", accountID, err))
+					continue
+				}
 
-		return nil
+				if platID == youtube.ID {
+					// I don't know why, but if we don't open the livestream control page on YouTube
+					// in the browser, then the stream does not want to start.
+					//
+					// And this bug is exacerbated by the fact that sometimes even if you just created
+					// a stream, YouTube may report that you don't have this stream (some kind of
+					// race condition on their side), so sometimes we need to wait and retry. Right
+					// now we assume that the race condition cannot take more than ~25 seconds.
+					deadline := time.Now().Add(30 * time.Second)
+					for {
+						status, err := ctrl.GetStreamStatus(
+							d.ctxForController(memoize.SetNoCache(ctx, true)),
+							streamID.StreamID,
+						)
+						data := youtube.GetStreamStatusCustomData(status)
+						bcID := getYTBroadcastID(data)
+						if bcID == "" {
+							err = fmt.Errorf("unable to get the broadcast ID from YouTube for account %s", accountID)
+							if time.Now().Before(deadline) {
+								delay := time.Second * 5
+								logger.Warnf(ctx, "%v... waiting %v and trying again", err)
+								time.Sleep(delay)
+								continue
+							}
+							mErr = multierror.Append(mErr, err)
+							break
+						}
+						url := fmt.Sprintf("https://studio.youtube.com/video/%s/livestreaming", bcID)
+						err = d.UI.OpenBrowser(ctx, url)
+						if err != nil {
+							mErr = multierror.Append(mErr, fmt.Errorf("unable to open '%s' in browser for account %s: %w", url, accountID, err))
+						}
+						break
+					}
+				}
+			} else {
+				cfg, err := d.GetConfig(ctx)
+				if err != nil {
+					mErr = multierror.Append(mErr, fmt.Errorf("unable to get the config: %w", err))
+					continue
+				}
+
+				if ctrl.IsCapable(ctx, streamcontrol.CapabilityIsChannelStreaming) && ctrl.IsCapable(ctx, streamcontrol.CapabilityRaid) {
+					for _, userID := range cfg.Raid.AutoRaidOnStreamEnd {
+						if userID.Platform != platID {
+							continue
+						}
+						isStreaming, err := ctrl.IsChannelStreaming(ctx, userID.User)
+						if err != nil {
+							logger.Errorf(ctx, "unable to check if '%s' is streaming for account %s: %v", userID.User, accountID, err)
+							continue
+						}
+						if !isStreaming {
+							logger.Debugf(ctx, "checking if can raid to %v for account %s: user is not streaming", userID.User, accountID)
+							continue
+						}
+						err = ctrl.RaidTo(ctx, streamcontrol.DefaultStreamID, userID.User)
+						if err != nil {
+							logger.Errorf(ctx, "unable to raid to '%s' for account %s: %v", userID.User, accountID, err)
+							continue
+						}
+
+						if handler, ok := platformBackendHandlers[platID]; ok && handler.PostRaidWaitDuration != 0 {
+							logger.Debugf(ctx, "sleeping for %v, to wait until Raid happens", handler.PostRaidWaitDuration)
+							time.Sleep(handler.PostRaidWaitDuration)
+						}
+						break
+					}
+				}
+
+				err = ctrl.SetStreamActive(ctx, streamID.StreamID, false)
+				if err != nil {
+					mErr = multierror.Append(mErr, fmt.Errorf("unable to end the stream for account %s: %w", accountID, err))
+				}
+			}
+		}
+		return mErr.ErrorOrNil()
 	})
 }
 
@@ -1113,7 +1163,7 @@ func (d *StreamD) SubmitOAuthCode(
 
 	err := d.UI.OnSubmittedOAuthCode(
 		ctx,
-		streamcontrol.PlatformName(req.GetPlatID()),
+		streamcontrol.PlatformID(req.GetPlatID()),
 		code,
 	)
 	if err != nil {
@@ -1270,21 +1320,21 @@ func (d *StreamD) StopStreamServer(
 	})
 }
 
-func (d *StreamD) AddIncomingStream(
+func (d *StreamD) AddStreamSource(
 	ctx context.Context,
-	streamID api.StreamID,
+	streamSourceID api.StreamSourceID,
 ) error {
-	logger.Debugf(ctx, "AddIncomingStream")
-	defer logger.Debugf(ctx, "/AddIncomingStream")
-	defer publishEvent(ctx, d.EventBus, api.DiffIncomingStreams{})
+	logger.Debugf(ctx, "AddStreamSource")
+	defer logger.Debugf(ctx, "/AddStreamSource")
+	defer publishEvent(ctx, d.EventBus, api.DiffStreamSources{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		if d.StreamServer == nil {
 			return fmt.Errorf("stream server is not initialized")
 		}
-		err := d.StreamServer.AddIncomingStream(ctx, sstypes.StreamID(streamID))
+		err := d.StreamServer.AddStreamSource(ctx, sstypes.StreamSourceID(streamSourceID))
 		if err != nil {
-			return fmt.Errorf("unable to add an incoming stream: %w", err)
+			return fmt.Errorf("unable to add a stream source: %w", err)
 		}
 
 		err = d.SaveConfig(ctx)
@@ -1296,21 +1346,21 @@ func (d *StreamD) AddIncomingStream(
 	})
 }
 
-func (d *StreamD) RemoveIncomingStream(
+func (d *StreamD) RemoveStreamSource(
 	ctx context.Context,
-	streamID api.StreamID,
+	streamSourceID api.StreamSourceID,
 ) error {
-	logger.Debugf(ctx, "RemoveIncomingStream")
-	defer logger.Debugf(ctx, "/RemoveIncomingStream")
-	defer publishEvent(ctx, d.EventBus, api.DiffIncomingStreams{})
+	logger.Debugf(ctx, "RemoveStreamSource")
+	defer logger.Debugf(ctx, "/RemoveStreamSource")
+	defer publishEvent(ctx, d.EventBus, api.DiffStreamSources{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		if d.StreamServer == nil {
 			return fmt.Errorf("stream server is not initialized")
 		}
-		err := d.StreamServer.RemoveIncomingStream(ctx, sstypes.StreamID(streamID))
+		err := d.StreamServer.RemoveStreamSource(ctx, sstypes.StreamSourceID(streamSourceID))
 		if err != nil {
-			return fmt.Errorf("unable to remove an incoming stream: %w", err)
+			return fmt.Errorf("unable to remove a stream source: %w", err)
 		}
 
 		err = d.SaveConfig(ctx)
@@ -1322,96 +1372,143 @@ func (d *StreamD) RemoveIncomingStream(
 	})
 }
 
-func (d *StreamD) ListIncomingStreams(
+func (d *StreamD) ListStreamSources(
 	ctx context.Context,
-) (_ret []api.IncomingStream, _err error) {
-	logger.Debugf(ctx, "ListIncomingStreams")
-	defer func() { logger.Debugf(ctx, "/ListIncomingStreams: %v", _err) }()
+) (_ret []api.StreamSource, _err error) {
+	logger.Debugf(ctx, "ListStreamSources")
+	defer func() { logger.Debugf(ctx, "/ListStreamSources: %v", _err) }()
 	if d == nil {
 		return nil, fmt.Errorf("StreamD == nil")
 	}
 
-	return xsync.DoA1R2(ctx, &d.StreamServerLocker, d.listIncomingStreamsNoLock, ctx)
+	return xsync.DoA1R2(ctx, &d.StreamServerLocker, d.listStreamSourcesNoLock, ctx)
 }
 
-func (d *StreamD) listIncomingStreamsNoLock(
+func (d *StreamD) listStreamSourcesNoLock(
 	ctx context.Context,
-) (_ret []api.IncomingStream, _err error) {
-	logger.Debugf(ctx, "listIncomingStreamsNoLock")
-	defer func() { logger.Debugf(ctx, "/listIncomingStreamsNoLock: %v", _err) }()
+) (_ret []api.StreamSource, _err error) {
+	logger.Debugf(ctx, "listStreamSourcesNoLock")
+	defer func() { logger.Debugf(ctx, "/listStreamSourcesNoLock: %v", _err) }()
 
 	if d.StreamServer == nil {
 		return nil, fmt.Errorf("stream server is not initialized")
 	}
 
-	activeIncomingStreams, err := d.StreamServer.ActiveIncomingStreamIDs()
+	activeStreamSources, err := d.StreamServer.ActiveStreamSourceIDs()
 	if err != nil {
-		logger.Errorf(ctx, "unable to get the list of active incoming streams: %w", err)
+		logger.Errorf(ctx, "unable to get the list of active stream sources: %w", err)
 	}
-	isActive := map[sstypes.StreamID]struct{}{}
-	for _, streamID := range activeIncomingStreams {
-		isActive[streamID] = struct{}{}
+	isActive := map[sstypes.StreamSourceID]struct{}{}
+	for _, streamSourceID := range activeStreamSources {
+		isActive[streamSourceID] = struct{}{}
 	}
 
-	var result []api.IncomingStream
-	for _, src := range d.StreamServer.ListIncomingStreams(ctx) {
-		_, isActive := isActive[src.StreamID]
-		result = append(result, api.IncomingStream{
-			StreamID: api.StreamID(src.StreamID),
-			IsActive: isActive,
+	var result []api.StreamSource
+	for _, src := range d.StreamServer.ListStreamSources(ctx) {
+		_, isActive := isActive[src.StreamSourceID]
+		result = append(result, api.StreamSource{
+			StreamSourceID: api.StreamSourceID(src.StreamSourceID),
+			IsActive:       isActive,
 		})
 	}
 	return result, nil
 }
 
-func (d *StreamD) ListStreamDestinations(
+func (d *StreamD) ListStreamSinks(
 	ctx context.Context,
-) ([]api.StreamDestination, error) {
-	logger.Debugf(ctx, "ListStreamDestinations")
-	defer logger.Debugf(ctx, "/ListStreamDestinations")
+) ([]api.StreamSink, error) {
+	logger.Debugf(ctx, "ListStreamSinks")
+	defer logger.Debugf(ctx, "/ListStreamSinks")
 
-	return xsync.DoR2(ctx, &d.StreamServerLocker, func() ([]api.StreamDestination, error) {
+	var result []api.StreamSink
+	err := xsync.RDoR1(ctx, &d.StreamServerLocker, func() error {
 		if d.StreamServer == nil {
-			return nil, fmt.Errorf("stream server is not initialized")
+			return fmt.Errorf("stream server is not initialized")
 		}
-		streamDestinations, err := d.StreamServer.ListStreamDestinations(ctx)
+		streamSinks, err := d.StreamServer.ListStreamSinks(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		c := make([]api.StreamDestination, 0, len(streamDestinations))
-		for _, dst := range streamDestinations {
-			c = append(c, api.StreamDestination{
-				ID:        api.DestinationID(dst.ID),
-				URL:       dst.URL,
-				StreamKey: dst.StreamKey.Get(),
+		for _, sink := range streamSinks {
+			result = append(result, api.StreamSink{
+				ID: sink.ID,
+				StreamSinkConfig: sstypes.StreamSinkConfig{
+					URL:            sink.URL,
+					StreamKey:      sink.StreamKey,
+					StreamSourceID: sink.StreamID,
+				},
 			})
 		}
-		return c, nil
+		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	sourceIDs, err := d.GetActiveStreamIDs(ctx)
+	if err == nil {
+		for _, id := range sourceIDs {
+			cfg, err := d.GetStreamSinkConfig(ctx, id)
+			if err != nil {
+				logger.Errorf(ctx, "unable to get stream sink config for %v: %v", id, err)
+				continue
+			}
+			result = append(result, api.StreamSink{
+				ID: sstypes.NewStreamSinkIDFullyQualified(
+					sstypes.StreamSinkTypeExternalPlatform,
+					api.StreamSinkID(id.String()),
+				),
+				StreamSinkConfig: cfg,
+			})
+		}
+	}
+
+	_ = xsync.RDoR1(ctx, &d.StreamServerLocker, func() error {
+		if d.StreamServer == nil {
+			return nil
+		}
+		sources := d.StreamServer.ListStreamSources(ctx)
+		for _, source := range sources {
+			u, err := streamportserver.GetURLForLocalStreamID(ctx, d.StreamServer, source.StreamSourceID, nil)
+			if err != nil {
+				continue
+			}
+			result = append(result, api.StreamSink{
+				ID: sstypes.NewStreamSinkIDFullyQualified(
+					sstypes.StreamSinkTypeLocal,
+					api.StreamSinkID(source.StreamSourceID),
+				),
+				StreamSinkConfig: sstypes.StreamSinkConfig{
+					URL: u.String(),
+				},
+			})
+		}
+		return nil
+	})
+
+	return result, nil
 }
 
-func (d *StreamD) AddStreamDestination(
+func (d *StreamD) AddStreamSink(
 	ctx context.Context,
-	destinationID api.DestinationID,
-	url string,
-	streamKey string,
+	streamSinkID api.StreamSinkIDFullyQualified,
+	sink sstypes.StreamSinkConfig,
 ) error {
-	logger.Debugf(ctx, "AddStreamDestination")
-	defer logger.Debugf(ctx, "/AddStreamDestination")
-	defer publishEvent(ctx, d.EventBus, api.DiffStreamDestinations{})
+	logger.Debugf(ctx, "AddStreamSink")
+	defer logger.Debugf(ctx, "/AddStreamSink")
+	defer publishEvent(ctx, d.EventBus, api.DiffStreamSinks{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		if d.StreamServer == nil {
 			return fmt.Errorf("stream server is not initialized")
 		}
-		err := d.StreamServer.AddStreamDestination(
+		err := d.StreamServer.AddStreamSink(
 			resetContextCancellers(ctx),
-			sstypes.DestinationID(destinationID),
-			url,
-			streamKey,
+			sstypes.StreamSinkIDFullyQualified(streamSinkID),
+			sink,
 		)
 		if err != nil {
-			return fmt.Errorf("unable to add stream destination: %w", err)
+			return fmt.Errorf("unable to add stream sink: %w", err)
 		}
 
 		err = d.SaveConfig(ctx)
@@ -1423,28 +1520,26 @@ func (d *StreamD) AddStreamDestination(
 	})
 }
 
-func (d *StreamD) UpdateStreamDestination(
+func (d *StreamD) UpdateStreamSink(
 	ctx context.Context,
-	destinationID api.DestinationID,
-	url string,
-	streamKey string,
+	streamSinkID api.StreamSinkIDFullyQualified,
+	sink sstypes.StreamSinkConfig,
 ) error {
-	logger.Debugf(ctx, "UpdateStreamDestination")
-	defer logger.Debugf(ctx, "/UpdateStreamDestination")
-	defer publishEvent(ctx, d.EventBus, api.DiffStreamDestinations{})
+	logger.Debugf(ctx, "UpdateStreamSink")
+	defer logger.Debugf(ctx, "/UpdateStreamSink")
+	defer publishEvent(ctx, d.EventBus, api.DiffStreamSinks{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		if d.StreamServer == nil {
 			return fmt.Errorf("stream server is not initialized")
 		}
-		err := d.StreamServer.UpdateStreamDestination(
+		err := d.StreamServer.UpdateStreamSink(
 			resetContextCancellers(ctx),
-			sstypes.DestinationID(destinationID),
-			url,
-			streamKey,
+			sstypes.StreamSinkIDFullyQualified(streamSinkID),
+			sink,
 		)
 		if err != nil {
-			return fmt.Errorf("unable to update stream destination: %w", err)
+			return fmt.Errorf("unable to update stream sink: %w", err)
 		}
 
 		err = d.SaveConfig(ctx)
@@ -1456,21 +1551,21 @@ func (d *StreamD) UpdateStreamDestination(
 	})
 }
 
-func (d *StreamD) RemoveStreamDestination(
+func (d *StreamD) RemoveStreamSink(
 	ctx context.Context,
-	destinationID api.DestinationID,
+	streamSinkID api.StreamSinkIDFullyQualified,
 ) error {
-	logger.Debugf(ctx, "RemoveStreamDestination")
-	defer logger.Debugf(ctx, "/RemoveStreamDestination")
-	defer publishEvent(ctx, d.EventBus, api.DiffStreamDestinations{})
+	logger.Debugf(ctx, "RemoveStreamSink")
+	defer logger.Debugf(ctx, "/RemoveStreamSink")
+	defer publishEvent(ctx, d.EventBus, api.DiffStreamSinks{})
 
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		if d.StreamServer == nil {
 			return fmt.Errorf("stream server is not initialized")
 		}
-		err := d.StreamServer.RemoveStreamDestination(ctx, sstypes.DestinationID(destinationID))
+		err := d.StreamServer.RemoveStreamSink(ctx, sstypes.StreamSinkIDFullyQualified(streamSinkID))
 		if err != nil {
-			return fmt.Errorf("unable to remove stream destination server: %w", err)
+			return fmt.Errorf("unable to remove stream sink: %w", err)
 		}
 
 		err = d.SaveConfig(ctx)
@@ -1492,13 +1587,13 @@ func (d *StreamD) listStreamForwards(
 	}
 	for _, streamFwd := range streamForwards {
 		item := api.StreamForward{
-			Enabled:       streamFwd.Enabled,
-			StreamID:      api.StreamID(streamFwd.StreamID),
-			DestinationID: api.DestinationID(streamFwd.DestinationID),
-			NumBytesWrote: streamFwd.NumBytesWrote,
-			NumBytesRead:  streamFwd.NumBytesRead,
-			Encode:        streamFwd.Encode,
-			Quirks:        streamFwd.Quirks,
+			Enabled:        streamFwd.Enabled,
+			StreamSourceID: api.StreamSourceID(streamFwd.StreamSourceID),
+			StreamSinkID:   api.StreamSinkIDFullyQualified(streamFwd.StreamSinkID),
+			NumBytesWrote:  streamFwd.NumBytesWrote,
+			NumBytesRead:   streamFwd.NumBytesRead,
+			Encode:         streamFwd.Encode,
+			Quirks:         streamFwd.Quirks,
 		}
 		result = append(result, item)
 	}
@@ -1516,8 +1611,8 @@ func (d *StreamD) ListStreamForwards(
 
 func (d *StreamD) AddStreamForward(
 	ctx context.Context,
-	streamID api.StreamID,
-	destinationID api.DestinationID,
+	streamSourceID api.StreamSourceID,
+	streamSinkID api.StreamSinkIDFullyQualified,
 	enabled bool,
 	encode sstypes.EncodeConfig,
 	quirks api.StreamForwardingQuirks,
@@ -1532,8 +1627,8 @@ func (d *StreamD) AddStreamForward(
 		}
 		_, err := d.StreamServer.AddStreamForward(
 			resetContextCancellers(ctx),
-			sstypes.StreamID(streamID),
-			sstypes.DestinationID(destinationID),
+			sstypes.StreamSourceID(streamSourceID),
+			sstypes.StreamSinkIDFullyQualified(streamSinkID),
 			enabled,
 			encode,
 			quirks,
@@ -1553,8 +1648,8 @@ func (d *StreamD) AddStreamForward(
 
 func (d *StreamD) UpdateStreamForward(
 	ctx context.Context,
-	streamID api.StreamID,
-	destinationID api.DestinationID,
+	streamSourceID api.StreamSourceID,
+	streamSinkID api.StreamSinkIDFullyQualified,
 	enabled bool,
 	encode sstypes.EncodeConfig,
 	quirks api.StreamForwardingQuirks,
@@ -1569,8 +1664,8 @@ func (d *StreamD) UpdateStreamForward(
 		}
 		_, err := d.StreamServer.UpdateStreamForward(
 			resetContextCancellers(ctx),
-			sstypes.StreamID(streamID),
-			sstypes.DestinationID(destinationID),
+			sstypes.StreamSourceID(streamSourceID),
+			sstypes.StreamSinkIDFullyQualified(streamSinkID),
 			enabled,
 			encode,
 			quirks,
@@ -1590,8 +1685,8 @@ func (d *StreamD) UpdateStreamForward(
 
 func (d *StreamD) RemoveStreamForward(
 	ctx context.Context,
-	streamID api.StreamID,
-	destinationID api.DestinationID,
+	streamSourceID api.StreamSourceID,
+	streamSinkID api.StreamSinkIDFullyQualified,
 ) error {
 	logger.Debugf(ctx, "RemoveStreamForward")
 	defer logger.Debugf(ctx, "/RemoveStreamForward")
@@ -1602,9 +1697,9 @@ func (d *StreamD) RemoveStreamForward(
 			return fmt.Errorf("stream server is not initialized")
 		}
 		err := d.StreamServer.RemoveStreamForward(
-			ctx,
-			sstypes.StreamID(streamID),
-			sstypes.DestinationID(destinationID),
+			resetContextCancellers(ctx),
+			sstypes.StreamSourceID(streamSourceID),
+			sstypes.StreamSinkIDFullyQualified(streamSinkID),
 		)
 		if err != nil {
 			return fmt.Errorf("unable to remove the stream forwarding: %w", err)
@@ -1625,14 +1720,14 @@ func resetContextCancellers(ctx context.Context) context.Context {
 
 func (d *StreamD) WaitForStreamPublisher(
 	ctx context.Context,
-	streamID api.StreamID,
+	streamSourceID api.StreamSourceID,
 	waitForNext bool,
 ) (<-chan struct{}, error) {
 	return xsync.DoR2(ctx, &d.StreamServerLocker, func() (<-chan struct{}, error) {
 		if d.StreamServer == nil {
 			return nil, fmt.Errorf("stream server is not initialized")
 		}
-		pubCh, err := d.StreamServer.WaitPublisherChan(ctx, streamID, waitForNext)
+		pubCh, err := d.StreamServer.WaitPublisherChan(ctx, sstypes.StreamSourceID(streamSourceID), waitForNext)
 		if err != nil {
 			return nil, err
 		}
@@ -1651,7 +1746,7 @@ func (d *StreamD) WaitForStreamPublisher(
 
 func (d *StreamD) AddStreamPlayer(
 	ctx context.Context,
-	streamID streamtypes.StreamID,
+	streamSourceID streamtypes.StreamSourceID,
 	playerType player.Backend,
 	disabled bool,
 	streamPlaybackConfig sptypes.Config,
@@ -1664,7 +1759,7 @@ func (d *StreamD) AddStreamPlayer(
 		var result *multierror.Error
 		result = multierror.Append(result, d.StreamServer.AddStreamPlayer(
 			ctx,
-			streamID,
+			streamSourceID,
 			playerType,
 			disabled,
 			streamPlaybackConfig,
@@ -1677,7 +1772,7 @@ func (d *StreamD) AddStreamPlayer(
 
 func (d *StreamD) UpdateStreamPlayer(
 	ctx context.Context,
-	streamID streamtypes.StreamID,
+	streamSourceID streamtypes.StreamSourceID,
 	playerType player.Backend,
 	disabled bool,
 	streamPlaybackConfig sptypes.Config,
@@ -1685,7 +1780,7 @@ func (d *StreamD) UpdateStreamPlayer(
 	logger.Debugf(
 		ctx,
 		"UpdateStreamPlayer(ctx, '%s', '%s', %v, %#+v)",
-		streamID,
+		streamSourceID,
 		playerType,
 		disabled,
 		streamPlaybackConfig,
@@ -1694,7 +1789,7 @@ func (d *StreamD) UpdateStreamPlayer(
 		logger.Debugf(
 			ctx,
 			"/UpdateStreamPlayer(ctx, '%s', '%s', %v, %#+v): %v",
-			streamID,
+			streamSourceID,
 			playerType,
 			disabled,
 			streamPlaybackConfig,
@@ -1709,7 +1804,7 @@ func (d *StreamD) UpdateStreamPlayer(
 		var result *multierror.Error
 		result = multierror.Append(result, d.StreamServer.UpdateStreamPlayer(
 			ctx,
-			streamID,
+			streamSourceID,
 			playerType,
 			disabled,
 			streamPlaybackConfig,
@@ -1722,7 +1817,7 @@ func (d *StreamD) UpdateStreamPlayer(
 
 func (d *StreamD) RemoveStreamPlayer(
 	ctx context.Context,
-	streamID streamtypes.StreamID,
+	streamSourceID streamtypes.StreamSourceID,
 ) error {
 	return xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
 		if d.StreamServer == nil {
@@ -1732,7 +1827,7 @@ func (d *StreamD) RemoveStreamPlayer(
 		var result *multierror.Error
 		result = multierror.Append(result, d.StreamServer.RemoveStreamPlayer(
 			ctx,
-			streamID,
+			streamSourceID,
 		))
 		result = multierror.Append(result, d.SaveConfig(ctx))
 		return result.ErrorOrNil()
@@ -1751,7 +1846,7 @@ func (d *StreamD) ListStreamPlayers(
 			return nil, err
 		}
 		sort.Slice(result, func(i, j int) bool {
-			return result[i].StreamID < result[j].StreamID
+			return result[i].StreamSourceID < result[j].StreamSourceID
 		})
 		return result, nil
 	})
@@ -1759,33 +1854,33 @@ func (d *StreamD) ListStreamPlayers(
 
 func (d *StreamD) GetStreamPlayer(
 	ctx context.Context,
-	streamID streamtypes.StreamID,
+	streamSourceID streamtypes.StreamSourceID,
 ) (*api.StreamPlayer, error) {
 	return xsync.DoR2(ctx, &d.StreamServerLocker, func() (*api.StreamPlayer, error) {
 		if d.StreamServer == nil {
 			return nil, fmt.Errorf("stream server is not initialized")
 		}
-		return d.StreamServer.GetStreamPlayer(ctx, streamID)
+		return d.StreamServer.GetStreamPlayer(ctx, streamSourceID)
 	})
 }
 
 func (d *StreamD) getActiveStreamPlayer(
 	ctx context.Context,
-	streamID streamtypes.StreamID,
+	streamSourceID streamtypes.StreamSourceID,
 ) (player.Player, error) {
 	return xsync.DoR2(ctx, &d.StreamServerLocker, func() (player.Player, error) {
 		if d.StreamServer == nil {
 			return nil, fmt.Errorf("stream server is not initialized")
 		}
-		return d.StreamServer.GetActiveStreamPlayer(ctx, streamID)
+		return d.StreamServer.GetActiveStreamPlayer(ctx, streamSourceID)
 	})
 }
 
 func (d *StreamD) StreamPlayerProcessTitle(
 	ctx context.Context,
-	streamID streamtypes.StreamID,
+	streamSourceID streamtypes.StreamSourceID,
 ) (string, error) {
-	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamID)
+	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamSourceID)
 	if err != nil {
 		return "", err
 	}
@@ -1793,10 +1888,10 @@ func (d *StreamD) StreamPlayerProcessTitle(
 }
 func (d *StreamD) StreamPlayerOpenURL(
 	ctx context.Context,
-	streamID streamtypes.StreamID,
+	streamSourceID streamtypes.StreamSourceID,
 	link string,
 ) error {
-	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamID)
+	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamSourceID)
 	if err != nil {
 		return err
 	}
@@ -1804,9 +1899,9 @@ func (d *StreamD) StreamPlayerOpenURL(
 }
 func (d *StreamD) StreamPlayerGetLink(
 	ctx context.Context,
-	streamID streamtypes.StreamID,
+	streamSourceID streamtypes.StreamSourceID,
 ) (string, error) {
-	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamID)
+	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamSourceID)
 	if err != nil {
 		return "", err
 	}
@@ -1814,9 +1909,9 @@ func (d *StreamD) StreamPlayerGetLink(
 }
 func (d *StreamD) StreamPlayerEndChan(
 	ctx context.Context,
-	streamID streamtypes.StreamID,
+	streamSourceID streamtypes.StreamSourceID,
 ) (<-chan struct{}, error) {
-	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamID)
+	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamSourceID)
 	if err != nil {
 		return nil, err
 	}
@@ -1824,9 +1919,9 @@ func (d *StreamD) StreamPlayerEndChan(
 }
 func (d *StreamD) StreamPlayerIsEnded(
 	ctx context.Context,
-	streamID streamtypes.StreamID,
+	streamSourceID streamtypes.StreamSourceID,
 ) (bool, error) {
-	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamID)
+	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamSourceID)
 	if err != nil {
 		return false, err
 	}
@@ -1834,9 +1929,9 @@ func (d *StreamD) StreamPlayerIsEnded(
 }
 func (d *StreamD) StreamPlayerGetPosition(
 	ctx context.Context,
-	streamID streamtypes.StreamID,
+	streamSourceID streamtypes.StreamSourceID,
 ) (time.Duration, error) {
-	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamID)
+	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamSourceID)
 	if err != nil {
 		return 0, err
 	}
@@ -1847,9 +1942,9 @@ func (d *StreamD) StreamPlayerGetPosition(
 }
 func (d *StreamD) StreamPlayerGetLength(
 	ctx context.Context,
-	streamID streamtypes.StreamID,
+	streamSourceID streamtypes.StreamSourceID,
 ) (time.Duration, error) {
-	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamID)
+	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamSourceID)
 	if err != nil {
 		return 0, err
 	}
@@ -1857,10 +1952,10 @@ func (d *StreamD) StreamPlayerGetLength(
 }
 func (d *StreamD) StreamPlayerGetLag(
 	ctx context.Context,
-	streamID streamtypes.StreamID,
+	streamSourceID streamtypes.StreamSourceID,
 ) (time.Duration, time.Time, error) {
 	now := time.Now()
-	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamID)
+	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamSourceID)
 	if err != nil {
 		return 0, now, err
 	}
@@ -1877,10 +1972,10 @@ func (d *StreamD) StreamPlayerGetLag(
 }
 func (d *StreamD) StreamPlayerSetSpeed(
 	ctx context.Context,
-	streamID streamtypes.StreamID,
+	streamSourceID streamtypes.StreamSourceID,
 	speed float64,
 ) error {
-	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamID)
+	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamSourceID)
 	if err != nil {
 		return err
 	}
@@ -1888,10 +1983,10 @@ func (d *StreamD) StreamPlayerSetSpeed(
 }
 func (d *StreamD) StreamPlayerSetPause(
 	ctx context.Context,
-	streamID streamtypes.StreamID,
+	streamSourceID streamtypes.StreamSourceID,
 	pause bool,
 ) error {
-	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamID)
+	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamSourceID)
 	if err != nil {
 		return err
 	}
@@ -1899,9 +1994,9 @@ func (d *StreamD) StreamPlayerSetPause(
 }
 func (d *StreamD) StreamPlayerStop(
 	ctx context.Context,
-	streamID streamtypes.StreamID,
+	streamSourceID streamtypes.StreamSourceID,
 ) error {
-	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamID)
+	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamSourceID)
 	if err != nil {
 		return err
 	}
@@ -1909,9 +2004,9 @@ func (d *StreamD) StreamPlayerStop(
 }
 func (d *StreamD) StreamPlayerClose(
 	ctx context.Context,
-	streamID streamtypes.StreamID,
+	streamSourceID streamtypes.StreamSourceID,
 ) error {
-	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamID)
+	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamSourceID)
 	if err != nil {
 		return err
 	}
@@ -2010,28 +2105,28 @@ func (p *StreamD) addCloseCallback(callback func() error, name string) {
 
 func (p *StreamD) Shoutout(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
+	platID streamcontrol.PlatformID,
 	userID streamcontrol.UserID,
 ) (_err error) {
 	logger.Debugf(ctx, "Shoutout(ctx, '%s', '%s')", platID, userID)
 	defer func() { logger.Debugf(ctx, "/Shoutout(ctx, '%s', '%s'): %v", platID, userID, _err) }()
-	ctrl, err := p.streamController(ctx, platID)
+	_, ctrl, err := p.streamController(ctx, platID)
 	if err != nil {
 		return fmt.Errorf("unable to get a stream controller: %w", err)
 	}
-	return ctrl.Shoutout(ctx, userID)
+	return ctrl.Shoutout(ctx, streamcontrol.DefaultStreamID, userID)
 }
 
 func (p *StreamD) RaidTo(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
+	platID streamcontrol.PlatformID,
 	userID streamcontrol.UserID,
 ) (_err error) {
 	logger.Debugf(ctx, "RaidTo(ctx, '%s', '%s')", platID, userID)
 	defer func() { logger.Debugf(ctx, "/RaidTo(ctx, '%s', '%s'): %v", platID, userID, _err) }()
-	ctrl, err := p.streamController(ctx, platID)
+	_, ctrl, err := p.streamController(ctx, platID)
 	if err != nil {
 		return fmt.Errorf("unable to get a stream controller: %w", err)
 	}
-	return ctrl.RaidTo(ctx, userID)
+	return ctrl.RaidTo(ctx, streamcontrol.DefaultStreamID, userID)
 }

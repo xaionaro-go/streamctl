@@ -56,7 +56,7 @@ func newRaidPage(
 	result := &raidPage{
 		Panel: p,
 	}
-	getUserIDs := func(platID streamcontrol.PlatformName, text string) []config.ChatUserID {
+	getUserIDs := func(platID streamcontrol.PlatformID, text string) []config.ChatUserID {
 		var result []config.ChatUserID
 		for word := range strings.SplitSeq(text, ",") {
 			word = strings.Trim(word, " \n\t\r")
@@ -78,7 +78,7 @@ func newRaidPage(
 	platRadio.SetSelected(string(youtube.ID))
 	nowButton := widget.NewButtonWithIcon("Raid now!", theme.MediaPlayIcon(), func() {
 		dialog.NewConfirm("raid right now?", "Please confirm if you want to raid right now", func(b bool) {
-			err := p.StreamD.RaidTo(ctx, streamcontrol.PlatformName(nowPlatID), streamcontrol.UserID(userEntry.Text))
+			err := p.StreamD.RaidTo(ctx, streamcontrol.PlatformID(nowPlatID), streamcontrol.UserID(userEntry.Text))
 			if err != nil {
 				p.DisplayError(err)
 			}

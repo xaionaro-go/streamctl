@@ -1,5 +1,9 @@
 package streamd
 
+import "errors"
+
+var ErrSkipBackend = errors.New("backend was skipped")
+
 type ErrNoVariable struct{}
 
 var _ error = ErrNoVariable{}

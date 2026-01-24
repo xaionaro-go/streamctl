@@ -20,10 +20,7 @@ import (
 	"github.com/xaionaro-go/observability"
 	videodecoder "github.com/xaionaro-go/player/pkg/player/decoder/libav"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
-	kick "github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick/types"
-	obs "github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs/types"
-	twitch "github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/types"
-	youtube "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
+
 	"github.com/xaionaro-go/streamctl/pkg/streamd/client"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	"github.com/xaionaro-go/xcontext"
@@ -181,37 +178,41 @@ func streamSetup(cmd *cobra.Command, args []string) {
 		title, description, profileName,
 	)
 
-	isEnabled := map[streamcontrol.PlatformName]bool{}
-	for _, platID := range []streamcontrol.PlatformName{
-		twitch.ID, youtube.ID,
-	} {
-		_isEnabled, err := streamD.IsBackendEnabled(ctx, platID)
-		assertNoError(ctx, err)
-		isEnabled[platID] = _isEnabled
-	}
-
 	cfg, err := streamD.GetConfig(ctx)
 	assertNoError(ctx, err)
 
-	if isEnabled[youtube.ID] {
-		err := streamD.StartStream(
-			ctx,
-			youtube.ID,
-			title,
-			description,
-			cfg.Backends[youtube.ID].StreamProfiles[profileName],
-		)
-		assertNoError(ctx, err)
+	mergedProfile := &streamcontrol.StreamProfileBase{
+		Title:       title,
+		Description: description,
+		Streams:     make(map[streamcontrol.StreamIDFullyQualified]any),
 	}
+	for _, platID := range streamcontrol.GetPlatformIDs() {
+		isEnabled, err := streamD.IsBackendEnabled(ctx, platID)
+		assertNoError(ctx, err)
+		if !isEnabled {
+			continue
+		}
 
-	if isEnabled[twitch.ID] {
-		err := streamD.StartStream(
-			ctx,
-			twitch.ID,
-			title,
-			description,
-			cfg.Backends[twitch.ID].StreamProfiles[profileName],
-		)
+		backendCfg, ok := cfg.Backends[platID]
+		if !ok {
+			continue
+		}
+
+		subProfile := backendCfg.StreamProfiles[profileName]
+		if subProfile == nil {
+			logger.Errorf(ctx, "sub-profile '%s' not found for platform '%s'", profileName, platID)
+			continue
+		}
+
+		mergedProfile.Streams[streamcontrol.StreamIDFullyQualified{
+			AccountIDFullyQualified: streamcontrol.AccountIDFullyQualified{
+				PlatformID: platID,
+				AccountID:  "",
+			},
+			StreamID: "",
+		}] = subProfile
+
+		err = streamD.SetStreamActive(ctx, streamcontrol.NewStreamIDFullyQualified(platID, streamcontrol.DefaultAccountID, streamcontrol.DefaultStreamID), true)
 		assertNoError(ctx, err)
 	}
 }
@@ -228,10 +229,8 @@ func streamStatus(cmd *cobra.Command, args []string) {
 	streamD, err := client.New(ctx, remoteAddr)
 	assertNoError(ctx, err)
 
-	result := map[streamcontrol.PlatformName]*streamcontrol.StreamStatus{}
-	for _, platID := range []streamcontrol.PlatformName{
-		obs.ID, twitch.ID, youtube.ID, kick.ID,
-	} {
+	result := map[streamcontrol.PlatformID]*streamcontrol.StreamStatus{}
+	for _, platID := range streamcontrol.GetPlatformIDs() {
 		isEnabled, err := streamD.IsBackendEnabled(ctx, platID)
 		assertNoError(ctx, err)
 
@@ -239,7 +238,7 @@ func streamStatus(cmd *cobra.Command, args []string) {
 			continue
 		}
 
-		status, err := streamD.GetStreamStatus(ctx, platID)
+		status, err := streamD.GetStreamStatus(ctx, streamcontrol.NewStreamIDFullyQualified(platID, streamcontrol.DefaultAccountID, streamcontrol.DefaultStreamID))
 		assertNoError(ctx, err)
 
 		result[platID] = status
@@ -250,10 +249,12 @@ func streamStatus(cmd *cobra.Command, args []string) {
 		assertNoError(ctx, err)
 		fmt.Printf("%s\n", b)
 	} else {
-		for _, platID := range []streamcontrol.PlatformName{
-			obs.ID, twitch.ID, youtube.ID,
-		} {
-			statusJSON, err := json.Marshal(result[platID])
+		for _, platID := range streamcontrol.GetPlatformIDs() {
+			status, ok := result[platID]
+			if !ok {
+				continue
+			}
+			statusJSON, err := json.Marshal(status)
 			assertNoError(ctx, err)
 
 			fmt.Printf("%10s: %s\n", platID, statusJSON)

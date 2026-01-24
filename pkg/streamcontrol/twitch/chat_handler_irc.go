@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -95,7 +96,7 @@ func newChatHandlerIRC(
 					CreatedAt: ev.CreatedAt,
 					Type:      streamcontrol.EventTypeChatMessage,
 					User: streamcontrol.User{
-						ID:   streamcontrol.UserID(ev.Sender.Username),
+						ID:   streamcontrol.UserID(strconv.FormatInt(ev.Sender.ID, 10)),
 						Slug: ev.Sender.Username,
 						Name: ev.Sender.DisplayName,
 					},

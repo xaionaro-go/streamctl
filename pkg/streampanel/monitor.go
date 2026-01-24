@@ -1,3 +1,6 @@
+// Package streampanel provides a Fyne-based graphical user interface for controlling
+// and monitoring live streams. This file implements the monitoring functionality,
+// including real-time stream status display and manual monitor control.
 package streampanel
 
 import (
@@ -6,6 +9,7 @@ import (
 	"net"
 	"net/url"
 	"sort"
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -26,8 +30,8 @@ import (
 )
 
 type monitorKey struct {
-	StreamDAddr string
-	StreamID    api.StreamID
+	StreamDAddr    string
+	StreamSourceID api.StreamSourceID
 }
 
 type activeMonitor struct {
@@ -127,6 +131,9 @@ func getIP(
 	addr string,
 ) (_ret net.IP, _err error) {
 	defer func() { logger.Debugf(ctx, "getIP(ctx, '%s') -> %v %v", addr, _ret, _err) }()
+	if addr == "" {
+		return nil, fmt.Errorf("empty address")
+	}
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, fmt.Errorf("unable to split host:port from '%s': %w", addr, err)
@@ -160,21 +167,23 @@ func (p *monitorPage) init(
 		return fmt.Errorf("unable to get a StreamD: %w", err)
 	}
 
-	inStreams, err := streamD.ListIncomingStreams(ctx)
+	inStreams, err := streamD.ListStreamSources(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to get the list of available streams endpoints: %w", err)
 	}
 
-	m := map[api.StreamID]api.IncomingStream{}
+	m := map[api.StreamSourceID]api.StreamSource{}
 	for _, s := range inStreams {
-		m[s.StreamID] = s
+		m[s.StreamSourceID] = s
 	}
 
 	cfg := ignoreError(p.parent().GetConfig(ctx))
 	streamDAddr := cfg.RemoteStreamDAddr
 
-	if ip := ignoreError(getIP(ctx, streamDAddr)); ip.IsLoopback() || ip.IsUnspecified() {
-		streamDAddr = ""
+	if streamDAddr != "" {
+		if ip := ignoreError(getIP(ctx, streamDAddr)); ip != nil && (ip.IsLoopback() || ip.IsUnspecified()) {
+			streamDAddr = ""
+		}
 	}
 	logger.Debugf(ctx, "streamDAddr: '%v'", streamDAddr)
 	for _, mon := range cfg.Monitors.StreamMonitors {
@@ -184,16 +193,16 @@ func (p *monitorPage) init(
 		if mon.StreamDAddr != streamDAddr {
 			logger.Warnf(ctx,
 				"we have a monitor configured for stream '%s' from another streamd: '%s' != %s",
-				mon.StreamID, mon.StreamDAddr, streamDAddr,
+				mon.StreamSourceID, mon.StreamDAddr, streamDAddr,
 			)
 			continue
 		}
-		if _, ok := m[mon.StreamID]; !ok {
-			logger.Warnf(ctx, "we have a monitor configured for a stream that does not exist: '%s'", mon.StreamID)
+		if _, ok := m[mon.StreamSourceID]; !ok {
+			logger.Warnf(ctx, "we have a monitor configured for a stream that does not exist: '%s'", mon.StreamSourceID)
 			continue
 		}
 
-		p.startMonitor(ctx, mon.StreamDAddr, mon.StreamID, mon.VideoTracks, mon.AudioTracks)
+		p.startMonitor(ctx, mon.StreamDAddr, mon.StreamSourceID, mon.VideoTracks, mon.AudioTracks)
 	}
 	return nil
 }
@@ -223,7 +232,7 @@ func (p *monitorPage) startUpdatingNoLock(
 	observability.Go(ctx, func(ctx context.Context) {
 		defer logger.Debugf(ctx, "startUpdatingNoLock: the handler closed")
 		updateData := func() {
-			inStreams, err := streamD.ListIncomingStreams(ctx)
+			inStreams, err := streamD.ListStreamSources(ctx)
 			if err != nil {
 				p.parent().DisplayError(err)
 				return
@@ -233,7 +242,7 @@ func (p *monitorPage) startUpdatingNoLock(
 		}
 		updateData()
 
-		ch, restartCh, err := autoResubscribe(ctx, streamD.SubscribeToIncomingStreamsChanges)
+		ch, restartCh, err := autoResubscribe(ctx, streamD.SubscribeToStreamSourcesChanges)
 		if err != nil {
 			p.parent().DisplayError(err)
 			return
@@ -247,7 +256,7 @@ func (p *monitorPage) startUpdatingNoLock(
 			if !ok {
 				break
 			}
-			logger.Debugf(ctx, "got event IncomingStreamsChange")
+			logger.Debugf(ctx, "got event StreamSourcesChange")
 			updateData()
 		}
 	})
@@ -270,22 +279,24 @@ func (p *monitorPage) stopUpdatingNoLock(
 
 func (p *monitorPage) displayStreamMonitors(
 	ctx context.Context,
-	inStreams []api.IncomingStream,
+	inStreams []api.StreamSource,
 ) {
 	logger.Debugf(ctx, "displayStreamMonitors")
 	defer func() { logger.Debugf(ctx, "/displayStreamMonitors") }()
 
 	sort.Slice(inStreams, func(i, j int) bool {
-		return inStreams[i].StreamID < inStreams[j].StreamID
+		return inStreams[i].StreamSourceID < inStreams[j].StreamSourceID
 	})
 
 	cfg := ignoreError(p.parent().GetConfig(ctx))
 	streamDAddr := cfg.RemoteStreamDAddr
-	if ip := ignoreError(getIP(ctx, streamDAddr)); ip.IsLoopback() || ip.IsUnspecified() {
-		streamDAddr = ""
+	if streamDAddr != "" {
+		if ip := ignoreError(getIP(ctx, streamDAddr)); ip != nil && (ip.IsLoopback() || ip.IsUnspecified()) {
+			streamDAddr = ""
+		}
 	}
 	logger.Debugf(ctx, "streamDAddr: '%v'", streamDAddr)
-	isEnabled := map[api.StreamID]struct{}{}
+	isEnabled := map[api.StreamSourceID]struct{}{}
 	for _, mon := range cfg.Monitors.StreamMonitors {
 		if !mon.IsEnabled {
 			continue
@@ -293,12 +304,12 @@ func (p *monitorPage) displayStreamMonitors(
 		if mon.StreamDAddr != streamDAddr {
 			continue
 		}
-		isEnabled[mon.StreamID] = struct{}{}
+		isEnabled[mon.StreamSourceID] = struct{}{}
 	}
 
 	var objs []fyne.CanvasObject
 	for idx, stream := range inStreams {
-		_, isEnabled := isEnabled[stream.StreamID]
+		_, isEnabled := isEnabled[stream.StreamSourceID]
 		logger.Tracef(ctx, "monitors[%3d] == %#+v (%t)", idx, stream, isEnabled)
 		c := container.NewHBox()
 		var icon fyne.Resource
@@ -314,56 +325,59 @@ func (p *monitorPage) displayStreamMonitors(
 		}
 		updateIconAndLabel()
 		var updateButton func()
-		startStopButton := widget.NewButtonWithIcon(label, icon, func() {
-			logger.Debugf(ctx, "%s monitor '%s'", label, stream.StreamID)
-			defer logger.Debugf(ctx, "/%s monitor '%s'", label, stream.StreamID)
+		var startStopButton *widget.Button
+		startStopButton = widget.NewButtonWithIcon(label, icon, func() {
+			logger.Debugf(ctx, "%s monitor '%s'", label, stream.StreamSourceID)
+			defer logger.Debugf(ctx, "/%s monitor '%s'", label, stream.StreamSourceID)
 			var err error
 			if isEnabled {
-				err = p.disableMonitor(ctx, streamDAddr, stream.StreamID)
+				err = p.disableMonitor(ctx, streamDAddr, stream.StreamSourceID)
 			} else {
 				err = p.enableMonitor(ctx,
-					streamDAddr, stream.StreamID,
+					streamDAddr, stream.StreamSourceID,
 					[]uint{}, []uint{0, 1, 2, 3, 4, 5, 6, 7},
 				)
 			}
 			if err != nil {
 				p.parent().DisplayError(err)
+				if strings.Contains(err.Error(), "not supported") || strings.Contains(err.Error(), "no active monitor") {
+					isEnabled = !isEnabled
+					updateButton()
+				}
 				return
 			}
 			isEnabled = !isEnabled
 			updateButton()
 		})
 		updateButton = func() {
-			logger.Debugf(ctx, "updateButton")
 			updateIconAndLabel()
 			startStopButton.SetIcon(icon)
 			startStopButton.SetText(label)
 			startStopButton.Refresh()
 		}
-		caption := widget.NewLabel(string(stream.StreamID) + " (audio only)")
+		caption := widget.NewLabel(string(stream.StreamSourceID) + " (audio only)")
 		c.Add(startStopButton)
 		c.Add(caption)
 		objs = append(objs, c)
 	}
-	p.streamsMonitorWidget.Objects = objs
-	p.streamsMonitorWidget.Refresh()
+	p.updateObjects(p.streamsMonitorWidget, objs)
 }
 
 func (p *monitorPage) enableMonitor(
 	ctx context.Context,
 	streamDAddr string,
-	streamID api.StreamID,
+	streamSourceID api.StreamSourceID,
 	videoTrackIDs []uint,
 	audioTrackIDs []uint,
 ) (_err error) {
-	logger.Debugf(ctx, "enableMonitor(ctx, '%s', '%s', %#+v, %#+v)", streamDAddr, streamID, videoTrackIDs, audioTrackIDs)
+	logger.Debugf(ctx, "enableMonitor(ctx, '%s', '%s', %#+v, %#+v)", streamDAddr, streamSourceID, videoTrackIDs, audioTrackIDs)
 	defer func() {
-		logger.Debugf(ctx, "/enableMonitor(ctx, '%s', '%s', %#+v, %#+v): %v", streamDAddr, streamID, videoTrackIDs, audioTrackIDs, _err)
+		logger.Debugf(ctx, "/enableMonitor(ctx, '%s', '%s', %#+v, %#+v): %v", streamDAddr, streamSourceID, videoTrackIDs, audioTrackIDs, _err)
 	}()
 
 	return xsync.DoR1(ctx, &p.monitorsLocker, func() error {
 		return p.enableMonitorNoLock(ctx,
-			streamDAddr, streamID,
+			streamDAddr, streamSourceID,
 			videoTrackIDs, audioTrackIDs,
 		)
 	})
@@ -372,13 +386,13 @@ func (p *monitorPage) enableMonitor(
 func (p *monitorPage) enableMonitorNoLock(
 	ctx context.Context,
 	streamDAddr string,
-	streamID api.StreamID,
+	streamSourceID api.StreamSourceID,
 	videoTrackIDs []uint,
 	audioTrackIDs []uint,
 ) (_err error) {
-	logger.Debugf(ctx, "enableMonitorNoLock(ctx, '%s', '%s', %#+v, %#+v)", streamDAddr, streamID, videoTrackIDs, audioTrackIDs)
+	logger.Debugf(ctx, "enableMonitorNoLock(ctx, '%s', '%s', %#+v, %#+v)", streamDAddr, streamSourceID, videoTrackIDs, audioTrackIDs)
 	defer func() {
-		logger.Debugf(ctx, "/enableMonitorNoLock(ctx, '%s', '%s', %#+v, %#+v): %v", streamDAddr, streamID, videoTrackIDs, audioTrackIDs, _err)
+		logger.Debugf(ctx, "/enableMonitorNoLock(ctx, '%s', '%s', %#+v, %#+v): %v", streamDAddr, streamSourceID, videoTrackIDs, audioTrackIDs, _err)
 	}()
 
 	var err error
@@ -389,7 +403,7 @@ func (p *monitorPage) enableMonitorNoLock(
 			if mon.StreamDAddr != streamDAddr {
 				continue
 			}
-			if mon.StreamID != streamID {
+			if mon.StreamSourceID != streamSourceID {
 				continue
 			}
 			if mon.IsEnabled {
@@ -402,11 +416,11 @@ func (p *monitorPage) enableMonitorNoLock(
 			return
 		}
 		p.Config.Monitors.StreamMonitors = append(p.Config.Monitors.StreamMonitors, config.StreamMonitor{
-			IsEnabled:   true,
-			StreamDAddr: streamDAddr,
-			StreamID:    streamID,
-			VideoTracks: videoTrackIDs,
-			AudioTracks: audioTrackIDs,
+			IsEnabled:      true,
+			StreamDAddr:    streamDAddr,
+			StreamSourceID: streamSourceID,
+			VideoTracks:    videoTrackIDs,
+			AudioTracks:    audioTrackIDs,
 		})
 		err = p.parent().saveConfigNoLock(ctx)
 	})
@@ -418,7 +432,7 @@ func (p *monitorPage) enableMonitorNoLock(
 		err := p.stopMonitorNoLock(
 			ctx,
 			shouldStopFirst.StreamDAddr,
-			shouldStopFirst.StreamID,
+			shouldStopFirst.StreamSourceID,
 		)
 		if err != nil {
 			return fmt.Errorf("unable to stop the previous monitoring: %w", err)
@@ -428,7 +442,7 @@ func (p *monitorPage) enableMonitorNoLock(
 	err = p.startMonitorNoLock(
 		ctx,
 		streamDAddr,
-		streamID,
+		streamSourceID,
 		videoTrackIDs,
 		audioTrackIDs,
 	)
@@ -441,11 +455,11 @@ func (p *monitorPage) enableMonitorNoLock(
 func (p *monitorPage) disableMonitor(
 	ctx context.Context,
 	streamDAddr string,
-	streamID api.StreamID,
+	streamSourceID api.StreamSourceID,
 ) (_err error) {
-	logger.Debugf(ctx, "disableMonitor(ctx, '%s', '%s')", streamDAddr, streamID)
+	logger.Debugf(ctx, "disableMonitor(ctx, '%s', '%s')", streamDAddr, streamSourceID)
 	defer func() {
-		logger.Debugf(ctx, "/disableMonitor(ctx, '%s', '%s'): %v", streamDAddr, streamID, _err)
+		logger.Debugf(ctx, "/disableMonitor(ctx, '%s', '%s'): %v", streamDAddr, streamSourceID, _err)
 	}()
 
 	var err error
@@ -456,7 +470,7 @@ func (p *monitorPage) disableMonitor(
 			if mon.StreamDAddr != streamDAddr {
 				continue
 			}
-			if mon.StreamID != streamID {
+			if mon.StreamSourceID != streamSourceID {
 				continue
 			}
 			if !mon.IsEnabled {
@@ -479,7 +493,7 @@ func (p *monitorPage) disableMonitor(
 	err = p.stopMonitorNoLock(
 		ctx,
 		shouldStop.StreamDAddr,
-		shouldStop.StreamID,
+		shouldStop.StreamSourceID,
 	)
 	if err != nil {
 		return fmt.Errorf("unable to stop the previous monitoring: %w", err)
@@ -525,19 +539,19 @@ func (w streamDAsStreamPlayersServerType) GetPortServers(
 
 func (w streamDAsStreamPlayersServerType) WaitPublisherChan(
 	ctx context.Context,
-	streamID api.StreamID,
+	streamSourceID api.StreamSourceID,
 	waitForNext bool,
 ) (_ret <-chan streamplayer.Publisher, _err error) {
-	logger.Debugf(ctx, "WaitPublisherChan(ctx, '%s', %t)", streamID, waitForNext)
+	logger.Debugf(ctx, "WaitPublisherChan(ctx, '%s', %t)", streamSourceID, waitForNext)
 	defer func() {
-		logger.Debugf(ctx, "/WaitPublisherChan(ctx, '%s', %t): %p %v", streamID, waitForNext, _ret, _err)
+		logger.Debugf(ctx, "/WaitPublisherChan(ctx, '%s', %t): %p %v", streamSourceID, waitForNext, _ret, _err)
 	}()
 	streamD, err := w.GetStreamDer.GetStreamD(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get StreamD: %w", err)
 	}
 
-	ch, err := streamD.WaitForStreamPublisher(ctx, streamID, waitForNext)
+	ch, err := streamD.WaitForStreamPublisher(ctx, streamSourceID, waitForNext)
 	if err != nil {
 		return nil, fmt.Errorf("unable to start waiting for stream publisher: %w", err)
 	}
@@ -565,18 +579,18 @@ func (w streamDAsStreamPlayersServerType) WaitPublisherChan(
 func (p *monitorPage) startMonitor(
 	ctx context.Context,
 	streamDAddr string,
-	streamID api.StreamID,
+	streamSourceID api.StreamSourceID,
 	videoTrackIDs []uint,
 	audioTrackIDs []uint,
 ) (_err error) {
-	logger.Debugf(ctx, "startMonitor(ctx, '%s', '%s', %#+v, %#+v)", streamDAddr, streamID, videoTrackIDs, audioTrackIDs)
+	logger.Debugf(ctx, "startMonitor(ctx, '%s', '%s', %#+v, %#+v)", streamDAddr, streamSourceID, videoTrackIDs, audioTrackIDs)
 	defer func() {
-		logger.Debugf(ctx, "/startMonitor(ctx, '%s', '%s', %#+v, %#+v): %v", streamDAddr, streamID, videoTrackIDs, audioTrackIDs, _err)
+		logger.Debugf(ctx, "/startMonitor(ctx, '%s', '%s', %#+v, %#+v): %v", streamDAddr, streamSourceID, videoTrackIDs, audioTrackIDs, _err)
 	}()
 
 	return xsync.DoR1(ctx, &p.monitorsLocker, func() error {
 		return p.startMonitorNoLock(ctx,
-			streamDAddr, streamID,
+			streamDAddr, streamSourceID,
 			videoTrackIDs, audioTrackIDs,
 		)
 	})
@@ -585,13 +599,13 @@ func (p *monitorPage) startMonitor(
 func (p *monitorPage) startMonitorNoLock(
 	ctx context.Context,
 	streamDAddr string,
-	streamID api.StreamID,
+	streamSourceID api.StreamSourceID,
 	videoTrackIDs []uint,
 	audioTrackIDs []uint,
 ) (_err error) {
-	logger.Debugf(ctx, "startMonitorNoLock(ctx, '%s', '%s', %#+v, %#+v)", streamDAddr, streamID, videoTrackIDs, audioTrackIDs)
+	logger.Debugf(ctx, "startMonitorNoLock(ctx, '%s', '%s', %#+v, %#+v)", streamDAddr, streamSourceID, videoTrackIDs, audioTrackIDs)
 	defer func() {
-		logger.Debugf(ctx, "/startMonitorNoLock(ctx, '%s', '%s', %#+v, %#+v): %v", streamDAddr, streamID, videoTrackIDs, audioTrackIDs, _err)
+		logger.Debugf(ctx, "/startMonitorNoLock(ctx, '%s', '%s', %#+v, %#+v): %v", streamDAddr, streamSourceID, videoTrackIDs, audioTrackIDs, _err)
 	}()
 
 	var mediaURL *url.URL
@@ -599,7 +613,7 @@ func (p *monitorPage) startMonitorNoLock(
 	if streamDAddr == "" {
 		mediaURL, err = streamportserver.GetURLForLocalStreamID(
 			ctx,
-			streamDAsStreamPlayersServer(p.parent()), streamID,
+			streamDAsStreamPlayersServer(p.parent()), streamSourceID,
 			nil,
 		)
 	} else {
@@ -621,10 +635,10 @@ func (p *monitorPage) startMonitorNoLock(
 		} else {
 			streamDAddrV4 = streamDAddr
 		}
-		mediaURL, err = streamportserver.GetURLForRemoveStreamID(
+		mediaURL, err = streamportserver.GetURLForRemoveStreamSourceID(
 			ctx,
 			streamDAddrV4, streamDAddrV6,
-			streamDAsStreamPlayersServer(p.parent()), streamID,
+			streamDAsStreamPlayersServer(p.parent()), streamSourceID,
 			nil,
 		)
 	}
@@ -632,11 +646,14 @@ func (p *monitorPage) startMonitorNoLock(
 	if err != nil {
 		return fmt.Errorf("unable to construct the URL: %w", err)
 	}
+	if mediaURL == nil {
+		return fmt.Errorf("unable to construct the URL: mediaURL is nil")
+	}
 	logger.Debugf(ctx, "URL: %s", mediaURL)
 
 	monitorKey := monitorKey{
-		StreamDAddr: streamDAddr,
-		StreamID:    streamID,
+		StreamDAddr:    streamDAddr,
+		StreamSourceID: streamSourceID,
 	}
 	logger.Debugf(ctx, "monitorKey: %#+v", monitorKey)
 	if _, ok := p.activeMonitors[monitorKey]; ok {
@@ -652,13 +669,13 @@ func (p *monitorPage) startMonitorNoLock(
 		opts = append(opts, streamplayertypes.OptionCustomPlayerOptions{playertypes.OptionHideWindow(true)})
 	}
 
-	if h := p.streamPlayers.Get(streamID); h != nil {
-		return fmt.Errorf("not implemented yet: we currently to do not support using the same streamID on multiple StreamD instances")
+	if h := p.streamPlayers.Get(streamSourceID); h != nil {
+		return fmt.Errorf("not implemented yet: we currently to do not support using the same streamSourceID on multiple StreamD instances")
 	}
 
 	playerHandler, err := p.streamPlayers.Create(
 		xcontext.DetachDone(ctx),
-		streamID,
+		streamSourceID,
 		playertypes.BackendLibAVFyne,
 		opts...,
 	)
@@ -675,18 +692,18 @@ func (p *monitorPage) startMonitorNoLock(
 func (p *monitorPage) stopMonitor(
 	ctx context.Context,
 	streamDAddr string,
-	streamID api.StreamID,
+	streamSourceID api.StreamSourceID,
 	videoTrackIDs []uint,
 	audioTrackIDs []uint,
 ) (_err error) {
-	logger.Debugf(ctx, "stopMonitor(ctx, '%s', '%s')", streamDAddr, streamID, videoTrackIDs, audioTrackIDs)
+	logger.Debugf(ctx, "stopMonitor(ctx, '%s', '%s')", streamDAddr, streamSourceID, videoTrackIDs, audioTrackIDs)
 	defer func() {
-		logger.Debugf(ctx, "/stopMonitor(ctx, '%s', '%s'): %v", streamDAddr, streamID, videoTrackIDs, audioTrackIDs, _err)
+		logger.Debugf(ctx, "/stopMonitor(ctx, '%s', '%s'): %v", streamDAddr, streamSourceID, videoTrackIDs, audioTrackIDs, _err)
 	}()
 
 	return xsync.DoR1(ctx, &p.monitorsLocker, func() error {
 		return p.stopMonitorNoLock(ctx,
-			streamDAddr, streamID,
+			streamDAddr, streamSourceID,
 		)
 	})
 }
@@ -694,16 +711,16 @@ func (p *monitorPage) stopMonitor(
 func (p *monitorPage) stopMonitorNoLock(
 	ctx context.Context,
 	streamDAddr string,
-	streamID api.StreamID,
+	streamSourceID api.StreamSourceID,
 ) (_err error) {
-	logger.Debugf(ctx, "stopMonitorNoLock(ctx, '%s', '%s')", streamDAddr, streamID)
+	logger.Debugf(ctx, "stopMonitorNoLock(ctx, '%s', '%s')", streamDAddr, streamSourceID)
 	defer func() {
-		logger.Debugf(ctx, "/stopMonitorNoLock(ctx, '%s', '%s'): %v", streamDAddr, streamID, _err)
+		logger.Debugf(ctx, "/stopMonitorNoLock(ctx, '%s', '%s'): %v", streamDAddr, streamSourceID, _err)
 	}()
 
 	monitorKey := monitorKey{
-		StreamDAddr: streamDAddr,
-		StreamID:    streamID,
+		StreamDAddr:    streamDAddr,
+		StreamSourceID: streamSourceID,
 	}
 	logger.Debugf(ctx, "monitorKey: %#+v", monitorKey)
 
@@ -711,7 +728,7 @@ func (p *monitorPage) stopMonitorNoLock(
 	if !ok {
 		return fmt.Errorf("there is no active monitor %#+v", monitorKey)
 	}
-	playerStreamID := activeMon.StreamPlayerHandler.StreamID
+	playerStreamID := activeMon.StreamPlayerHandler.StreamSourceID
 	delete(p.activeMonitors, monitorKey)
 
 	err := activeMon.StreamPlayerHandler.Close()

@@ -10,9 +10,9 @@ import (
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
+	"github.com/hashicorp/go-multierror"
 	"github.com/spf13/cobra"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
-	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	"github.com/xaionaro-go/xsync"
@@ -98,8 +98,10 @@ func init() {
 	StreamStart.PersistentFlags().String("title", "", "stream title")
 	StreamStart.PersistentFlags().String("description", "", "stream description")
 	StreamStart.PersistentFlags().String("profile", "", "profile")
+	StreamStart.PersistentFlags().String("stream-id", "", "stream ID")
 	StreamStart.PersistentFlags().
 		StringArray("youtube-templates", nil, "the list of templates used to create streams; if nothing is provided, then a stream won't be created")
+	StreamEnd.PersistentFlags().String("stream-id", "", "stream ID")
 
 	Root.AddCommand(GenerateConfig)
 	Root.AddCommand(SetTitle)
@@ -137,17 +139,13 @@ func expandPath(rawPath string) string {
 	return rawPath
 }
 
-const (
-	idTwitch  = twitch.ID
-	idKick    = kick.ID
-	idYoutube = youtube.ID
-)
+const ()
 
 func newConfig() streamcontrol.Config {
 	cfg := streamcontrol.Config{}
-	twitch.InitConfig(cfg)
-	kick.InitConfig(cfg)
-	youtube.InitConfig(cfg)
+	for _, platID := range streamcontrol.GetPlatformIDs() {
+		streamcontrol.InitializeConfig(cfg, platID)
+	}
 	return cfg
 }
 
@@ -157,14 +155,16 @@ func generateConfig(cmd *cobra.Command, args []string) {
 		logger.Panicf(cmd.Context(), "file '%s' already exists", cfgPath)
 	}
 	cfg := newConfig()
-	cfg[idTwitch].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{
-		"some_profile": twitch.StreamProfile{},
-	}
-	cfg[idKick].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{
-		"some_profile": kick.StreamProfile{},
-	}
-	cfg[idYoutube].StreamProfiles = map[streamcontrol.ProfileName]streamcontrol.AbstractStreamProfile{
-		"some_profile": youtube.StreamProfile{},
+	for _, platID := range streamcontrol.GetPlatformIDs() {
+		cfg[platID].Accounts = map[streamcontrol.AccountID]streamcontrol.RawMessage{
+			streamcontrol.DefaultAccountID: streamcontrol.ToRawMessage(streamcontrol.AccountConfigBase[streamcontrol.RawMessage]{
+				StreamProfiles: map[streamcontrol.StreamID]streamcontrol.StreamProfiles[streamcontrol.RawMessage]{
+					streamcontrol.DefaultStreamID: {
+						"some_profile": streamcontrol.ToRawMessage(streamcontrol.GetEmptyStreamProfile(platID)),
+					},
+				},
+			}),
+		}
 	}
 	err := writeConfigToPath(cmd.Context(), cfgPath, cfg)
 	if err != nil {
@@ -213,41 +213,10 @@ func readConfigFromPath(
 		return fmt.Errorf("unable to unserialize config: %w: <%s>", err, b)
 	}
 
-	if (*cfg)[idTwitch] != nil {
-		err = streamcontrol.ConvertStreamProfiles[twitch.StreamProfile](
-			ctx,
-			(*cfg)[idTwitch].StreamProfiles,
-		)
-		if err != nil {
-			return fmt.Errorf("unable to convert stream profiles of twitch: %w: <%s>", err, b)
+	for _, platID := range streamcontrol.GetPlatformIDs() {
+		if (*cfg)[platID] != nil {
+			logger.Debugf(ctx, "loaded config for %s", platID)
 		}
-		logger.Debugf(ctx, "final stream profiles of twitch: %#+v", (*cfg)[idTwitch].StreamProfiles)
-	}
-
-	if (*cfg)[idKick] != nil {
-		err = streamcontrol.ConvertStreamProfiles[kick.StreamProfile](
-			ctx,
-			(*cfg)[idKick].StreamProfiles,
-		)
-		if err != nil {
-			return fmt.Errorf("unable to convert stream profiles of kick: %w: <%s>", err, b)
-		}
-		logger.Debugf(ctx, "final stream profiles of kick: %#+v", (*cfg)[idKick].StreamProfiles)
-	}
-
-	if (*cfg)[idYoutube] != nil {
-		err = streamcontrol.ConvertStreamProfiles[youtube.StreamProfile](
-			ctx,
-			(*cfg)[idYoutube].StreamProfiles,
-		)
-		if err != nil {
-			return fmt.Errorf("unable to convert stream profiles of youtube: %w: <%s>", err, b)
-		}
-		logger.Debugf(
-			ctx,
-			"final stream profiles of youtube: %#+v",
-			(*cfg)[idYoutube].StreamProfiles,
-		)
 	}
 
 	return nil
@@ -272,121 +241,54 @@ func readConfig(ctx context.Context) streamcontrol.Config {
 
 var saveConfigLock xsync.Mutex
 
-func getTwitchStreamController(
+func getStreamControllers(
 	ctx context.Context,
 	cfg streamcontrol.Config,
-) (*twitch.Twitch, error) {
-	platCfg := streamcontrol.GetPlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile](
-		ctx,
-		cfg,
-		idTwitch,
-	)
-	if platCfg == nil {
-		logger.Infof(ctx, "twitch config was not found")
-		return nil, nil
+) *PlatformController {
+	result := &PlatformController{
+		Accounts: make(map[streamcontrol.AccountID]streamcontrol.AbstractAccount),
 	}
 
-	logger.Debugf(ctx, "twitch config: %#+v", platCfg)
-	return twitch.New(ctx, *platCfg,
-		func(c twitch.Config) error {
-			return xsync.DoR1(ctx, &saveConfigLock, func() error {
-				cfg[idTwitch] = &streamcontrol.AbstractPlatformConfig{
-					Config:         c.Config,
-					StreamProfiles: streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
-				}
-				return saveConfig(ctx, cfg)
+	for platID, platCfg := range cfg {
+		for accountID := range platCfg.Accounts {
+			ctrl, err := streamcontrol.NewAccount(ctx, platID, accountID, cfg, func(updatedCfg streamcontrol.Config) error {
+				return xsync.DoR1(ctx, &saveConfigLock, func() error {
+					return saveConfig(ctx, updatedCfg)
+				})
 			})
-		},
-	)
-}
-
-func getKickStreamController(
-	ctx context.Context,
-	cfg streamcontrol.Config,
-) (*kick.Kick, error) {
-	platCfg := streamcontrol.GetPlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile](
-		ctx,
-		cfg,
-		idKick,
-	)
-	if platCfg == nil {
-		logger.Infof(ctx, "kick config was not found")
-		return nil, nil
+			if err != nil {
+				logger.Panic(ctx, err)
+			}
+			if ctrl != nil {
+				result.Accounts[accountID] = ctrl
+			}
+		}
 	}
 
-	logger.Debugf(ctx, "kick config: %#+v", platCfg)
-	return kick.New(ctx, *platCfg,
-		func(c kick.Config) error {
-			return xsync.DoR1(ctx, &saveConfigLock, func() error {
-				cfg[idKick] = &streamcontrol.AbstractPlatformConfig{
-					Config:         c.Config,
-					StreamProfiles: streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
-				}
-				return saveConfig(ctx, cfg)
-			})
-		},
-	)
+	return result
 }
 
 func getYouTubeStreamController(
 	ctx context.Context,
 	cfg streamcontrol.Config,
 ) (*youtube.YouTube, error) {
-	platCfg := streamcontrol.GetPlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile](
-		ctx,
-		cfg,
-		idYoutube,
-	)
-	if platCfg == nil {
-		logger.Infof(ctx, "youtube config was not found")
+	sc := getStreamControllers(ctx, cfg)
+	var ctrl streamcontrol.AbstractAccount
+	for _, acc := range sc.Accounts {
+		if acc.GetPlatformID() == youtube.ID {
+			ctrl = acc
+			break
+		}
+	}
+	if ctrl == nil {
 		return nil, nil
 	}
-
-	logger.Debugf(ctx, "youtube config: %#+v", platCfg)
-	return youtube.New(ctx, *platCfg,
-		func(c youtube.Config) error {
-			return xsync.DoR1(ctx, &saveConfigLock, func() error {
-				cfg[idYoutube] = &streamcontrol.AbstractPlatformConfig{
-					Config:         c.Config,
-					StreamProfiles: streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
-				}
-				return saveConfig(ctx, cfg)
-			})
-		},
-	)
-}
-
-func getStreamControllers(
-	ctx context.Context,
-	cfg streamcontrol.Config,
-) streamcontrol.StreamControllers {
-	var result streamcontrol.StreamControllers
-
-	twitch, err := getTwitchStreamController(ctx, cfg)
-	if err != nil {
-		logger.Panic(ctx, err)
+	impl := ctrl.GetImplementation()
+	yt, ok := impl.(*youtube.YouTube)
+	if !ok {
+		return nil, fmt.Errorf("expected *youtube.YouTube, but got %T", impl)
 	}
-	if twitch != nil {
-		result = append(result, streamcontrol.ToAbstract(twitch))
-	}
-
-	kick, err := getKickStreamController(ctx, cfg)
-	if err != nil {
-		logger.Panic(ctx, err)
-	}
-	if kick != nil {
-		result = append(result, streamcontrol.ToAbstract(kick))
-	}
-
-	youtube, err := getYouTubeStreamController(ctx, cfg)
-	if err != nil {
-		logger.Panic(ctx, err)
-	}
-	if youtube != nil {
-		result = append(result, streamcontrol.ToAbstract(youtube))
-	}
-
-	return result
+	return yt, nil
 }
 
 func ctxAndCfg(ctx context.Context) (context.Context, streamcontrol.Config) {
@@ -399,18 +301,32 @@ func assertNoError(ctx context.Context, err error) {
 	}
 }
 
+func parseStreamID(s string) streamcontrol.StreamIDFullyQualified {
+	var id streamcontrol.StreamIDFullyQualified
+	if err := id.UnmarshalText([]byte(s)); err != nil {
+		id.StreamID = streamcontrol.StreamID(s)
+	}
+	return id
+}
+
 func setTitle(cmd *cobra.Command, args []string) {
 	ctx, cfg := ctxAndCfg(cmd.Context())
 	streamControllers := getStreamControllers(ctx, cfg)
-	assertNoError(ctx, streamControllers.SetTitle(ctx, args[0]))
-	assertNoError(ctx, streamControllers.Flush(ctx))
+	streamSourceID, err := cmd.Flags().GetString("stream-id")
+	assertNoError(ctx, err)
+	parsedStreamID := parseStreamID(streamSourceID)
+	assertNoError(ctx, streamControllers.SetTitle(ctx, parsedStreamID, args[0]))
+	assertNoError(ctx, streamControllers.Flush(ctx, parsedStreamID))
 }
 
 func setDescription(cmd *cobra.Command, args []string) {
 	ctx, cfg := ctxAndCfg(cmd.Context())
 	streamControllers := getStreamControllers(ctx, cfg)
-	assertNoError(ctx, streamControllers.SetDescription(ctx, args[0]))
-	assertNoError(ctx, streamControllers.Flush(ctx))
+	streamSourceID, err := cmd.Flags().GetString("stream-id")
+	assertNoError(ctx, err)
+	parsedStreamID := parseStreamID(streamSourceID)
+	assertNoError(ctx, streamControllers.SetDescription(ctx, parsedStreamID, args[0]))
+	assertNoError(ctx, streamControllers.Flush(ctx, parsedStreamID))
 }
 
 func streamStart(cmd *cobra.Command, args []string) {
@@ -422,45 +338,89 @@ func streamStart(cmd *cobra.Command, args []string) {
 	assertNoError(ctx, err)
 	profileName, err := cmd.Flags().GetString("profile")
 	assertNoError(ctx, err)
+	streamSourceID, err := cmd.Flags().GetString("stream-id")
+	assertNoError(ctx, err)
 	youtubeTemplateBroadcastIDs, err := cmd.Flags().GetStringArray("youtube-templates")
 	assertNoError(ctx, err)
 	logger.Debugf(
 		ctx,
-		"title == '%s'; description == '%s'; profile == '%s', youtube-templates == %s",
-		title, description, profileName, youtubeTemplateBroadcastIDs,
+		"title == '%s'; description == '%s'; profile == '%s', stream-id == '%s', youtube-templates == %s",
+		title, description, profileName, streamSourceID, youtubeTemplateBroadcastIDs,
 	)
 
-	var profiles []streamcontrol.AbstractStreamProfile
-	for _, platCfg := range cfg {
-		p := platCfg.StreamProfiles[streamcontrol.ProfileName(profileName)]
-		if p == nil {
+	overrides := &streamcontrol.StreamProfileBase{
+		Title:       title,
+		Description: description,
+	}
+	parsedStreamID := parseStreamID(streamSourceID)
+	var errs *multierror.Error
+	for platID, platCfg := range cfg {
+		if parsedStreamID.PlatformID != "" && parsedStreamID.PlatformID != platID {
 			continue
 		}
+		for accountID, accountRaw := range platCfg.Accounts {
+			if parsedStreamID.AccountID != "" && parsedStreamID.AccountID != accountID {
+				continue
+			}
 
-		profiles = append(profiles, p)
+			id := parsedStreamID
+			id.PlatformID = platID
+			id.AccountID = accountID
+			if id.StreamID == "" {
+				id.StreamID = streamcontrol.DefaultStreamID
+			}
+
+			profiles := accountRaw.GetStreamProfiles()
+			sProfs, ok := profiles[id.StreamID]
+			var profile streamcontrol.StreamProfile
+			if ok {
+				p, ok := sProfs[streamcontrol.ProfileName(profileName)]
+				if ok {
+					profile = p
+				} else {
+					profile = overrides
+				}
+			} else {
+				profile = overrides
+			}
+
+			err = streamControllers.StartStream(
+				ctx,
+				id,
+				profile,
+				youtube.FlagBroadcastTemplateIDs(youtubeTemplateBroadcastIDs),
+				&twitchStreamProfileSaver{
+					cfg:         cfg,
+					profileName: profileName,
+					accountID:   accountID,
+					streamID:    id.StreamID,
+				},
+			)
+			if err != nil {
+				errs = multierror.Append(errs, err)
+			}
+		}
 	}
 
-	logger.Debugf(ctx, "profiles == %#+v", profiles)
-	assertNoError(ctx, streamControllers.StartStream(
-		ctx,
-		title, description,
-		profiles,
-		youtube.FlagBroadcastTemplateIDs(youtubeTemplateBroadcastIDs),
-		twitchStreamProfileSaver{cfg: cfg, profileName: profileName},
-	))
-	assertNoError(ctx, streamControllers.Flush(ctx))
+	assertNoError(ctx, errs.ErrorOrNil())
+	assertNoError(ctx, streamControllers.Flush(ctx, parsedStreamID))
 }
 
 func streamEnd(cmd *cobra.Command, args []string) {
 	ctx, cfg := ctxAndCfg(cmd.Context())
 	streamControllers := getStreamControllers(ctx, cfg)
-	assertNoError(ctx, streamControllers.EndStream(ctx))
-	assertNoError(ctx, streamControllers.Flush(ctx))
+	streamSourceID, err := cmd.Flags().GetString("stream-id")
+	assertNoError(ctx, err)
+	parsedStreamID := parseStreamID(streamSourceID)
+	assertNoError(ctx, streamControllers.EndStream(ctx, parsedStreamID))
+	assertNoError(ctx, streamControllers.Flush(ctx, parsedStreamID))
 }
 
 type twitchStreamProfileSaver struct {
 	cfg         streamcontrol.Config
 	profileName string
+	accountID   streamcontrol.AccountID
+	streamID    streamcontrol.StreamID
 }
 
 var _ twitch.SaveProfileHandler = (*twitchStreamProfileSaver)(nil)
@@ -469,7 +429,46 @@ func (h *twitchStreamProfileSaver) SaveProfile(
 	ctx context.Context,
 	streamProfile twitch.StreamProfile,
 ) error {
-	h.cfg[idTwitch].StreamProfiles[streamcontrol.ProfileName(h.profileName)] = streamProfile
+	platCfg := h.cfg[twitch.ID]
+	if platCfg == nil {
+		return fmt.Errorf("no twitch config")
+	}
+	accountRaw, ok := platCfg.Accounts[h.accountID]
+	if !ok {
+		return fmt.Errorf("account %s not found on twitch", h.accountID)
+	}
+
+	var accMap map[string]any
+	err := yaml.Unmarshal(accountRaw, &accMap)
+	if err != nil {
+		return err
+	}
+	if accMap == nil {
+		accMap = make(map[string]any)
+	}
+
+	profilesRaw, ok := accMap["stream_profiles"]
+	var profiles map[streamcontrol.StreamID]map[streamcontrol.ProfileName]any
+	if ok {
+		_ = yaml.Unmarshal(streamcontrol.ToRawMessage(profilesRaw), &profiles)
+	}
+	if profiles == nil {
+		profiles = make(map[streamcontrol.StreamID]map[streamcontrol.ProfileName]any)
+	}
+	sProfs := profiles[h.streamID]
+	if sProfs == nil {
+		sProfs = make(map[streamcontrol.ProfileName]any)
+	}
+	sProfs[streamcontrol.ProfileName(h.profileName)] = streamProfile
+	profiles[h.streamID] = sProfs
+	accMap["stream_profiles"] = profiles
+
+	newRaw, err := yaml.Marshal(accMap)
+	if err != nil {
+		return err
+	}
+	platCfg.Accounts[h.accountID] = newRaw
+
 	return saveConfig(ctx, h.cfg)
 }
 

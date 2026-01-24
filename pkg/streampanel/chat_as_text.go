@@ -12,7 +12,6 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
-	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
@@ -101,9 +100,9 @@ func (ui *chatUIAsText) init(
 		nil,
 		ui.Text,
 	)
-	observability.Go(ctx, func(ctx context.Context) {
+	ui.Panel.app.Driver().DoFromGoroutine(func() {
 		ui.Rebuild(ctx)
-	})
+	}, false)
 	ui.Panel.addChatUI(ctx, ui)
 	return nil
 }
@@ -171,7 +170,9 @@ func (ui *chatUIAsText) Remove(
 	ui.ItemLocker.Do(ctx, func() {
 		delete(ui.ItemsByMessageID, msg.ID)
 	})
-	observability.Go(ctx, func(context.Context) { ui.CanvasObject.Refresh() }) // TODO: remove the observability.Go
+	ui.Panel.app.Driver().DoFromGoroutine(func() {
+		ui.CanvasObject.Refresh()
+	}, false)
 }
 
 func (ui *chatUIAsText) GetTotalHeight(
@@ -197,7 +198,7 @@ func (ui *chatUIAsText) sendMessage(
 	panel := ui.Panel
 	streamD := panel.StreamD
 
-	for _, platID := range []streamcontrol.PlatformName{
+	for _, platID := range []streamcontrol.PlatformID{
 		twitch.ID,
 		kick.ID,
 		youtube.ID,
@@ -354,7 +355,7 @@ func (ui *chatUIAsText) newItem(
 }
 
 func (ui *chatUIAsText) onBanClicked(
-	platID streamcontrol.PlatformName,
+	platID streamcontrol.PlatformID,
 	userID streamcontrol.UserID,
 ) {
 	ui.Panel.chatUserBan(ui.ctx, platID, userID)

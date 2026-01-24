@@ -12,10 +12,20 @@ const ID = types.ID
 
 type Config = types.Config
 type StreamProfile = types.StreamProfile
-type PlatformSpecificConfig = types.PlatformSpecificConfig
+type AccountConfig = types.AccountConfig
 
 func init() {
-	streamctl.RegisterPlatform[PlatformSpecificConfig, StreamProfile](ID)
+	streamcontrol.RegisterPlatform[AccountConfig, StreamProfile, struct{}](
+		ID,
+		0,
+		func(
+			ctx context.Context,
+			cfg AccountConfig,
+			saveCfgFn func(AccountConfig) error,
+		) (streamcontrol.AccountGeneric[StreamProfile], error) {
+			return New(ctx, cfg, saveCfgFn)
+		},
+	)
 }
 
 func InitConfig(cfg streamctl.Config) {
@@ -26,5 +36,5 @@ func GetConfig(
 	ctx context.Context,
 	cfg streamcontrol.Config,
 ) *Config {
-	return streamcontrol.GetPlatformConfig[PlatformSpecificConfig, StreamProfile](ctx, cfg, ID)
+	return streamcontrol.GetPlatformConfig[AccountConfig, StreamProfile](ctx, cfg, ID)
 }

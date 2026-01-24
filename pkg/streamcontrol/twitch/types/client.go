@@ -26,4 +26,5 @@ type Client interface {
 	SendShoutout(params *helix.SendShoutoutParams) (*helix.SendShoutoutResponse, error)
 	CreateEventSubSubscription(payload *helix.EventSubSubscription) (*helix.EventSubSubscriptionsResponse, error)
 	GetUsers(params *helix.UsersParams) (*helix.UsersResponse, error)
+	GetStreamKey(params *helix.StreamKeyParams) (*helix.StreamKeysResponse, error)
 }

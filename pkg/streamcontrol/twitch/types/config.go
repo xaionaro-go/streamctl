@@ -6,9 +6,14 @@ import (
 	streamctl "github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 )
 
-const ID = streamctl.PlatformName("twitch")
+const (
+	ID             = streamctl.PlatformID("twitch")
+	MaxTitleLength = 140
+)
 
-type PlatformSpecificConfig struct {
+type AccountConfig struct {
+	streamctl.AccountConfigBase[StreamProfile] `yaml:",inline"`
+
 	Channel             string
 	ClientID            string
 	ClientSecret        secret.String
@@ -21,20 +26,20 @@ type PlatformSpecificConfig struct {
 	GetOAuthListenPorts func() []uint16 `yaml:"-"`
 }
 
-type Config = streamctl.PlatformConfig[PlatformSpecificConfig, StreamProfile]
+type Config = streamctl.PlatformConfig[AccountConfig, StreamProfile]
 
 func InitConfig(cfg streamctl.Config) {
 	streamctl.InitConfig(cfg, ID, Config{})
 }
 
-func (cfg PlatformSpecificConfig) IsInitialized() bool {
+func (cfg AccountConfig) IsInitialized() bool {
 	return cfg.Channel != "" &&
 		valueOrDefault(cfg.ClientID, buildvars.TwitchClientID) != "" &&
 		valueOrDefault(cfg.ClientSecret.Get(), buildvars.TwitchClientSecret) != ""
 }
 
 type StreamProfile struct {
-	streamctl.StreamProfileBase `yaml:",omitempty,inline,alias"`
+	streamctl.StreamProfileBase `yaml:",inline"`
 
 	Tags         [10]string
 	Language     *string

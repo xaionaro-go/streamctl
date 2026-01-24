@@ -119,7 +119,7 @@ func (d *StreamD) restartImageTakerNoLock(ctx context.Context) (_err error) {
 				logger.Debugf(ctx, "taker of image '%s'", elName)
 				defer logger.Debugf(ctx, "/taker of image '%s'", elName)
 
-				obsServer, obsServerClose, err := d.OBS(ctx)
+				obsServer, obsServerClose, err := d.OBS(ctx, "")
 				if obsServerClose != nil {
 					defer obsServerClose()
 				}

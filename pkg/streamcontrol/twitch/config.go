@@ -12,11 +12,21 @@ const ID = twitch.ID
 
 type Config = twitch.Config
 type StreamProfile = twitch.StreamProfile
-type PlatformSpecificConfig = twitch.PlatformSpecificConfig
+type AccountConfig = twitch.AccountConfig
 type OAuthHandler = twitch.OAuthHandler
 
 func init() {
-	streamctl.RegisterPlatform[PlatformSpecificConfig, StreamProfile](ID)
+	streamctl.RegisterPlatform[AccountConfig, StreamProfile, struct{}](
+		ID,
+		twitch.MaxTitleLength,
+		func(
+			ctx context.Context,
+			cfg AccountConfig,
+			saveCfgFn func(AccountConfig) error,
+		) (streamctl.AccountGeneric[StreamProfile], error) {
+			return New(ctx, cfg, saveCfgFn)
+		},
+	)
 }
 
 func InitConfig(cfg streamctl.Config) {
@@ -27,5 +37,5 @@ func GetConfig(
 	ctx context.Context,
 	cfg streamcontrol.Config,
 ) *Config {
-	return streamcontrol.GetPlatformConfig[PlatformSpecificConfig, StreamProfile](ctx, cfg, ID)
+	return streamcontrol.GetPlatformConfig[AccountConfig, StreamProfile](ctx, cfg, ID)
 }
