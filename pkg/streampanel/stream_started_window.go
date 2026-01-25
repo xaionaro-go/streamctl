@@ -3,6 +3,7 @@ package streampanel
 import (
 	"context"
 	"fmt"
+	"github.com/xaionaro-go/streamctl/pkg/clock"
 	"image/color"
 	"sync"
 	"time"
@@ -114,7 +115,7 @@ func (w *streamStartedWindow) setStreamStatusColorAndText(
 	text string,
 ) {
 	logger.Debugf(ctx, "setStreamStatusColorAndText(dst, %v, '%s')", bgColor, text)
-	dst.LastUpdatedAt = time.Now()
+	dst.LastUpdatedAt = clock.Get().Now()
 
 	background := canvas.NewRectangle(bgColor)
 	textWidget := canvas.NewText(text, color.White)
@@ -139,7 +140,7 @@ func (w *streamStartedWindow) updateStreamStatusLoop(
 	wg.Add(1)
 	observability.Go(ctx, func(ctx context.Context) {
 		defer wg.Done()
-		t := time.NewTicker(time.Second)
+		t := clock.Get().Ticker(time.Second)
 		defer t.Stop()
 		for {
 			select {
@@ -154,7 +155,7 @@ func (w *streamStartedWindow) updateStreamStatusLoop(
 	wg.Add(1)
 	observability.Go(ctx, func(ctx context.Context) {
 		defer wg.Done()
-		t := time.NewTicker(time.Second)
+		t := clock.Get().Ticker(time.Second)
 		defer t.Stop()
 		for {
 			select {

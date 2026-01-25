@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
+	"github.com/xaionaro-go/streamctl/pkg/clock"
 	"github.com/xaionaro-go/streamctl/pkg/colorx"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/xsync"
@@ -37,7 +38,7 @@ func (s *DashboardSourceImageOBSVolume) GetImageFromOBS(
 	})
 
 	if len(volumeMeters) == 0 {
-		return nil, time.Now().Add(time.Second), fmt.Errorf("no data for volume of '%s'", s.Name)
+		return nil, clock.Get().Now().Add(time.Second), fmt.Errorf("no data for volume of '%s'", s.Name)
 	}
 	var volume float64
 	for _, s := range volumeMeters {
@@ -88,7 +89,7 @@ func (s *DashboardSourceImageOBSVolume) GetImageFromOBS(
 		}
 	}
 
-	return img, time.Now().Add(time.Duration(s.UpdateInterval)), nil
+	return img, clock.Get().Now().Add(time.Duration(s.UpdateInterval)), nil
 }
 
 func (*DashboardSourceImageOBSVolume) SourceType() DashboardSourceImageType {

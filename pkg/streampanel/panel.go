@@ -32,6 +32,7 @@ import (
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/autoupdater"
+	"github.com/xaionaro-go/streamctl/pkg/clock"
 	"github.com/xaionaro-go/streamctl/pkg/command"
 	gconsts "github.com/xaionaro-go/streamctl/pkg/consts"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
@@ -495,7 +496,7 @@ func (p *Panel) startOAuthListenerForRemoteStreamD(
 
 					if req == nil || req.AuthURL == "" {
 						logger.Errorf(ctx, "received an empty oauth request")
-						time.Sleep(1 * time.Second)
+						clock.Get().Sleep(1 * time.Second)
 						continue
 					}
 
@@ -754,7 +755,7 @@ func (p *Panel) openBrowser(
 	logger.Debugf(ctx, "openBrowser(ctx, '%s', '%s')", urlString, reason)
 	defer func() { logger.Debugf(ctx, "/openBrowser(ctx, '%s', '%s'): %v", urlString, reason, _err) }()
 	return xsync.DoR1(ctx, &p.lastOpenedBrowserURLLocker, func() error {
-		now := time.Now()
+		now := clock.Get().Now()
 		if now.Sub(p.lastOpenedBrowserURLAt) <= browserDedupTimeout {
 			if p.lastOpenedBrowserURL == urlString {
 				logger.Debugf(ctx, "the URL was already opened recently, skipping")
@@ -1643,7 +1644,7 @@ func (p *Panel) subscribeUpdateControlPage(ctx context.Context) {
 
 	observability.Go(ctx, func(ctx context.Context) {
 		defer logger.Debugf(ctx, "subscribeUpdateControlPage: the handler closed")
-		t := time.NewTicker(time.Second * 5)
+		t := clock.Get().Ticker(time.Second * 5)
 		defer t.Stop()
 		for {
 			ok := true
@@ -1828,7 +1829,7 @@ func (p *Panel) setupStreamNoLock(ctx context.Context) {
 		// And here we wait until the hack with opening the page will complete.
 		observability.Go(ctx, func(ctx context.Context) {
 			waitFor := 15 * time.Second
-			deadline := time.Now().Add(waitFor)
+			deadline := clock.Get().Now().Add(waitFor)
 
 			p.streamMutex.Do(ctx, func() {
 				defer func() {
@@ -1841,11 +1842,11 @@ func (p *Panel) setupStreamNoLock(ctx context.Context) {
 				p.startStopButton.Icon = theme.ViewRefreshIcon()
 				p.startStopButton.Importance = widget.DangerImportance
 
-				t := time.NewTicker(100 * time.Millisecond)
+				t := clock.Get().Ticker(100 * time.Millisecond)
 				defer t.Stop()
 				for {
 					<-t.C
-					timeDiff := time.Until(deadline).Truncate(100 * time.Millisecond)
+					timeDiff := deadline.Sub(clock.Get().Now()).Truncate(100 * time.Millisecond)
 					if timeDiff < 0 {
 						return
 					}
@@ -1860,7 +1861,7 @@ func (p *Panel) startStream(ctx context.Context) {
 	p.streamMutex.ManualLock(ctx)
 	defer func() {
 		observability.Go(ctx, func(ctx context.Context) {
-			time.Sleep(10 * time.Second) // TODO: remove this
+			clock.Get().Sleep(10 * time.Second) // TODO: remove this
 			p.streamMutex.ManualUnlock(ctx)
 		})
 	}()
@@ -1877,7 +1878,7 @@ func (p *Panel) startStream(ctx context.Context) {
 	if p.updateStreamClockHandler != nil {
 		p.updateStreamClockHandler.Stop()
 	}
-	p.updateStreamClockHandler = newUpdateTimerHandler(p.startStopButton, time.Now())
+	p.updateStreamClockHandler = newUpdateTimerHandler(p.startStopButton, clock.Get().Now())
 
 	isEnabled, err := p.StreamD.IsBackendEnabled(ctx, obs.ID)
 	if err != nil {
@@ -2033,7 +2034,7 @@ func (p *Panel) doStopStream(ctx context.Context) {
 			}
 			if accountCfg.SceneAfterStream.Duration > 0 {
 				p.startStopButton.SetText(fmt.Sprintf("Holding the scene: %s", accountCfg.SceneAfterStream.Duration))
-				time.Sleep(accountCfg.SceneAfterStream.Duration)
+				clock.Get().Sleep(accountCfg.SceneAfterStream.Duration)
 			}
 		}
 
@@ -2131,7 +2132,7 @@ func (p *Panel) showWaitStreamDCallWindow(ctx context.Context) {
 				if atomic.AddInt32(&p.waitStreamDCallWindowCounter, -1) != 0 {
 					return
 				}
-				time.Sleep(aggregationDelayBeforeNotificationEnd)
+				clock.Get().Sleep(aggregationDelayBeforeNotificationEnd)
 				// TODO: set "ready" only if we have set "in process" before.
 				p.statusPanelSet("ready")
 				logger.Tracef(ctx, "closed the 'network operation is in progress' notification")
@@ -2141,7 +2142,7 @@ func (p *Panel) showWaitStreamDCallWindow(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(aggregationDelayBeforeNotificationStart):
+		case <-clock.Get().After(aggregationDelayBeforeNotificationStart):
 		}
 
 		p.waitStreamDCallWindowLocker.Do(ctx, func() {
@@ -2160,7 +2161,7 @@ func (p *Panel) showWaitStreamDConnectWindow(ctx context.Context) {
 				if atomic.AddInt32(&p.waitStreamDConnectWindowCounter, -1) != 0 {
 					return
 				}
-				time.Sleep(aggregationDelayBeforeNotificationEnd)
+				clock.Get().Sleep(aggregationDelayBeforeNotificationEnd)
 				p.statusPanelSet("(re-)connected")
 				logger.Debugf(ctx, "closed the 'connecting is in progress' window")
 			})
@@ -2169,7 +2170,7 @@ func (p *Panel) showWaitStreamDConnectWindow(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(aggregationDelayBeforeNotificationStart):
+		case <-clock.Get().After(aggregationDelayBeforeNotificationStart):
 		}
 
 		p.waitStreamDConnectWindowLocker.Do(ctx, func() {

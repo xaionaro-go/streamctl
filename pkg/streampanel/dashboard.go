@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/xaionaro-go/streamctl/pkg/clock"
 	"image/color"
 	"image/draw"
 	"math"
@@ -198,7 +199,7 @@ func (w *dashboardWindow) renderStreamStatus(ctx context.Context) {
 		if !ok {
 			return
 		}
-		now := time.Now()
+		now := clock.Get().Now()
 		appBytesIn := atomic.LoadUint64(&streamDClient.Stats.BytesIn)
 		appBytesOut := atomic.LoadUint64(&streamDClient.Stats.BytesOut)
 		if !w.appStatusData.prevUpdateTS.IsZero() {
@@ -259,7 +260,7 @@ func (w *dashboardWindow) renderStreamStatus(ctx context.Context) {
 						return
 					}
 
-					duration := time.Since(*src.StartedAt)
+					duration := clock.Get().Since(*src.StartedAt)
 
 					viewerCountString := ""
 					if src.ViewersCount != nil {
@@ -376,7 +377,7 @@ func (p *Panel) newDashboardWindow(
 			}
 			w.chat.ScrollToBottom(ctx)
 			observability.Go(ctx, func(ctx context.Context) {
-				time.Sleep(time.Second)
+				clock.Get().Sleep(time.Second)
 				w.chat.ScrollToBottom(ctx)
 			})
 		}
@@ -565,7 +566,7 @@ func (w *dashboardWindow) renderImagesNoLock(
 	totalPoints := width * height
 	onlyDelta := !sizeChanged && float32(changedPoints) < float32(totalPoints)*0.75
 
-	now := time.Now()
+	now := clock.Get().Now()
 	if dashboardFullUpdatesInterval > 0 && now.Sub(w.lastFullUpdateAt) < dashboardFullUpdatesInterval {
 		onlyDelta = false
 		w.lastFullUpdateAt = now
@@ -778,7 +779,7 @@ func (w *dashboardWindow) startUpdatingNoLock(
 	w.stopUpdatingFunc = cancelFunc
 
 	observability.Go(ctx, func(ctx context.Context) {
-		t := time.NewTicker(time.Second)
+		t := clock.Get().Ticker(time.Second)
 		defer t.Stop()
 		oldSize := w.Window.Canvas().Size()
 		for {
@@ -797,7 +798,7 @@ func (w *dashboardWindow) startUpdatingNoLock(
 	})
 
 	observability.Go(ctx, func(ctx context.Context) {
-		t := time.NewTicker(time.Second)
+		t := clock.Get().Ticker(time.Second)
 		defer t.Stop()
 		oldSize := w.chat.ScrollingContainer.Content.MinSize()
 		for {
@@ -817,7 +818,7 @@ func (w *dashboardWindow) startUpdatingNoLock(
 
 	w.renderLocalStatus(ctx)
 	observability.Go(ctx, func(ctx context.Context) {
-		t := time.NewTicker(2 * time.Second)
+		t := clock.Get().Ticker(2 * time.Second)
 		defer t.Stop()
 		for {
 			select {
@@ -842,7 +843,7 @@ func (w *dashboardWindow) startUpdatingNoLock(
 		w.renderStreamStatus(ctx)
 
 		observability.Go(ctx, func(ctx context.Context) {
-			t := time.NewTicker(250 * time.Millisecond)
+			t := clock.Get().Ticker(250 * time.Millisecond)
 			defer t.Stop()
 			for {
 				select {
@@ -856,7 +857,7 @@ func (w *dashboardWindow) startUpdatingNoLock(
 		})
 
 		observability.Go(ctx, func(ctx context.Context) {
-			t := time.NewTicker(2 * time.Second)
+			t := clock.Get().Ticker(2 * time.Second)
 			defer t.Stop()
 			for {
 				select {

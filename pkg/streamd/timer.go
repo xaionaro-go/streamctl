@@ -6,6 +6,7 @@ import (
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/observability"
+	"github.com/xaionaro-go/streamctl/pkg/clock"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/xsync"
 )
@@ -14,7 +15,7 @@ type Timer struct {
 	api.Timer
 	xsync.Mutex
 	StreamD      *StreamD
-	RunningTimer *time.Timer
+	RunningTimer *clock.Timer
 }
 
 func NewTimer(
@@ -59,7 +60,7 @@ func (t *Timer) start(ctx context.Context) {
 		return
 	}
 
-	runningTimer := time.NewTimer(time.Until(t.TriggerAt))
+	runningTimer := clock.Get().Timer(time.Until(t.TriggerAt))
 	t.RunningTimer = runningTimer
 
 	observability.Go(ctx, func(ctx context.Context) {

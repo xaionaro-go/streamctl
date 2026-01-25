@@ -6,6 +6,7 @@ import (
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/observability"
+	"github.com/xaionaro-go/streamctl/pkg/clock"
 )
 
 func autoResubscribe[T any](
@@ -52,7 +53,7 @@ func autoResubscribe[T any](
 					break
 				}
 				logger.Warnf(ctx, "unable to reconnect: %w")
-				time.Sleep(time.Second)
+				clock.Get().Sleep(time.Second)
 			}
 			restartCh <- struct{}{}
 		}

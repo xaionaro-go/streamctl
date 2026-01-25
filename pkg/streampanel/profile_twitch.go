@@ -1,6 +1,10 @@
 package streampanel
 
 import (
+	"github.com/xaionaro-go/streamctl/pkg/clock"
+)
+
+import (
 	"context"
 	"fmt"
 	"net/url"
@@ -186,7 +190,7 @@ func (ui *twitchProfileUI) RenderStream(
 			if cleanTwitchCategoryName(cat.Name) == text {
 				setSelectedTwitchCategory(cat.Name)
 				observability.Go(ctx, func(ctx context.Context) {
-					time.Sleep(100 * time.Millisecond)
+					clock.Get().Sleep(100 * time.Millisecond)
 					twitchCategory.SetText("")
 				})
 				return

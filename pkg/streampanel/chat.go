@@ -4,6 +4,10 @@
 package streampanel
 
 import (
+	"github.com/xaionaro-go/streamctl/pkg/clock"
+)
+
+import (
 	"context"
 	"fmt"
 	"slices"
@@ -71,7 +75,7 @@ func (p *Panel) getChatUIs(ctx context.Context) []chatUIInterface {
 
 func (p *Panel) initChatMessagesHandler(ctx context.Context) error {
 	msgCh, _, err := autoResubscribe(ctx, func(ctx context.Context) (<-chan api.ChatMessage, error) {
-		return p.StreamD.SubscribeToChatMessages(ctx, time.Now().Add(-60*24*time.Hour), uint64(ChatLogSize))
+		return p.StreamD.SubscribeToChatMessages(ctx, clock.Get().Now().Add(-60*24*time.Hour), uint64(ChatLogSize))
 	})
 	if err != nil {
 		return fmt.Errorf("unable to subscribe to chat messages: %w", err)
@@ -131,7 +135,7 @@ func (p *Panel) onReceiveMessage(
 			p.MessagesHistory = p.MessagesHistory[len(p.MessagesHistory)-ChatLogSize:]
 			fullRefresh = true
 		}
-		if time.Since(msg.CreatedAt) > time.Hour {
+		if clock.Get().Since(msg.CreatedAt) > time.Hour {
 			return
 		}
 		notificationsEnabled := xsync.DoR1(ctx, &p.configLocker, func() bool {

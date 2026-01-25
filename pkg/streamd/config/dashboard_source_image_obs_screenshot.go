@@ -13,6 +13,7 @@ import (
 	"github.com/chai2010/webp"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
+	"github.com/xaionaro-go/streamctl/pkg/clock"
 	"github.com/xaionaro-go/streamctl/pkg/imgb64"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 )
@@ -106,7 +107,7 @@ func (s *DashboardSourceImageOBSScreenshot) GetImageBytesFromOBS(
 	}
 	resp, err := obsServer.GetSourceScreenshot(ctx, req)
 	if err != nil {
-		return nil, "", time.Now().
+		return nil, "", clock.Get().Now().
 				Add(time.Second),
 			fmt.Errorf(
 				"unable to get a screenshot of '%s': %w",
@@ -132,7 +133,7 @@ func (s *DashboardSourceImageOBSScreenshot) GetImageBytesFromOBS(
 		s.ImageFormat,
 		len(imgBytes),
 	)
-	return imgBytes, mimeType, time.Now().Add(time.Duration(s.UpdateInterval)), nil
+	return imgBytes, mimeType, clock.Get().Now().Add(time.Duration(s.UpdateInterval)), nil
 }
 
 func (s *DashboardSourceImageOBSScreenshot) GetImageBytes(

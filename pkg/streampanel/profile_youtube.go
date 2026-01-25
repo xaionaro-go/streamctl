@@ -14,6 +14,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
 	"github.com/xaionaro-go/observability"
+	"github.com/xaionaro-go/streamctl/pkg/clock"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
@@ -169,7 +170,7 @@ func (ui *youtubeProfileUI) AfterStartStream(ctx context.Context, p *Panel) erro
 	// And here we wait until the hack with opening the page will complete.
 	observability.Go(ctx, func(ctx context.Context) {
 		waitFor := 15 * time.Second
-		deadline := time.Now().Add(waitFor)
+		deadline := clock.Get().Now().Add(waitFor)
 
 		p.streamMutex.Do(ctx, func() {
 			defer func() {
@@ -182,14 +183,14 @@ func (ui *youtubeProfileUI) AfterStartStream(ctx context.Context, p *Panel) erro
 			p.startStopButton.Icon = theme.ViewRefreshIcon()
 			p.startStopButton.Importance = widget.DangerImportance
 
-			t := time.NewTicker(100 * time.Millisecond)
+			t := clock.Get().Ticker(100 * time.Millisecond)
 			defer t.Stop()
 			for {
 				select {
 				case <-ctx.Done():
 					return
 				case <-t.C:
-					timeDiff := time.Until(deadline).Truncate(100 * time.Millisecond)
+					timeDiff := deadline.Sub(clock.Get().Now()).Truncate(100 * time.Millisecond)
 					if timeDiff < 0 {
 						return
 					}
@@ -316,7 +317,7 @@ func (ui *youtubeProfileUI) RenderStream(
 			if cleanYoutubeRecordingName(bc.Snippet.Title) == text {
 				setSelectedYoutubeBroadcast(bc)
 				observability.Go(ctx, func(ctx context.Context) {
-					time.Sleep(100 * time.Millisecond)
+					clock.Get().Sleep(100 * time.Millisecond)
 					youtubeTemplate.SetText("")
 				})
 				return

@@ -8,6 +8,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/observability"
+	"github.com/xaionaro-go/streamctl/pkg/clock"
 	"github.com/xaionaro-go/streamctl/pkg/command"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/xsync"
@@ -87,7 +88,7 @@ func (r *obsRestarter) loop(
 	logger.Debugf(ctx, "OBS-restarter: loop: %#+v", execCmd)
 	defer logger.Debugf(ctx, "/OBS-restarter: loop: %#+v", execCmd)
 
-	t := time.NewTicker(time.Second)
+	t := clock.Get().Ticker(time.Second)
 	defer t.Stop()
 	for {
 		select {

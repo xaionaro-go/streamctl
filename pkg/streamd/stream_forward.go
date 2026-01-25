@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/xaionaro-go/streamctl/pkg/clock"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
@@ -85,7 +86,7 @@ func (a *platformsControllerAdapter) WaitStreamStartedByStreamSourceID(
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(time.Second):
+		case <-clock.Get().After(time.Second):
 		}
 	}
 }

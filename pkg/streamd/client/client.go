@@ -24,6 +24,7 @@ import (
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/player/pkg/player"
 	"github.com/xaionaro-go/player/pkg/player/protobuf/go/player_grpc"
+	"github.com/xaionaro-go/streamctl/pkg/clock"
 	p2ptypes "github.com/xaionaro-go/streamctl/pkg/p2p/types"
 	"github.com/xaionaro-go/streamctl/pkg/secret"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -242,7 +243,7 @@ func (c *Client) doConnect(
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-time.After(delay):
+		case <-clock.Get().After(delay):
 		}
 		delay = time.Duration(
 			float64(
@@ -2088,7 +2089,7 @@ func (c *Client) StreamPlayerGetLag(
 			c,
 			client.StreamPlayerGetLag,
 			&streamd_grpc.StreamPlayerGetLagRequest{
-				RequestUnixNano: time.Now().UnixNano(),
+				RequestUnixNano: clock.Get().Now().UnixNano(),
 				StreamSourceID:  string(streamSourceID),
 			},
 		)

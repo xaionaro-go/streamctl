@@ -11,6 +11,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/immune-gmbh/attestation-sdk/pkg/objhash"
 	"github.com/xaionaro-go/lockmap"
+	"github.com/xaionaro-go/streamctl/pkg/clock"
 )
 
 type MemoizeData struct {
@@ -82,7 +83,7 @@ func Memoize[REQ any, REPLY any, T func(context.Context, REQ) (REPLY, error)](
 
 	if ok {
 		if v, ok := cachedResult.(cacheItem); ok {
-			now := time.Now()
+			now := clock.Get().Now()
 			cutoffTS := now.Add(-cacheDuration)
 			if cacheDuration > 0 && !v.SavedAt.Before(cutoffTS) {
 				d.CacheMetaLock.Unlock()
@@ -127,7 +128,7 @@ func Memoize[REQ any, REPLY any, T func(context.Context, REQ) (REPLY, error)](
 	}()
 
 	logger.Tracef(ctx, "no cache")
-	ts = time.Now()
+	ts = clock.Get().Now()
 	return fn(ctx, req)
 }
 

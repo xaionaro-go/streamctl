@@ -9,11 +9,13 @@ import (
 	"testing"
 	"time"
 
+	benbjohnsonclock "github.com/benbjohnson/clock"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/stretchr/testify/require"
 	"github.com/xaionaro-go/eventbus"
 	"github.com/xaionaro-go/observability"
+	"github.com/xaionaro-go/streamctl/pkg/clock"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/secret"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -153,6 +155,8 @@ func TestStreamDWaitStreamStarted(t *testing.T) {
 			},
 		},
 	}
+	mockClock := benbjohnsonclock.NewMock()
+	clock.Set(mockClock)
 	d, err := New(cfg, &mockUI{}, nil, belt.New())
 	require.NoError(t, err)
 	d.AddOAuthListenPort(8094)
@@ -173,12 +177,13 @@ func TestStreamDWaitStreamStarted(t *testing.T) {
 		waitDone <- d.WaitStreamStartedByStreamSourceID(ctx, streamID)
 	}()
 	// Simulate stream starting after a short delay
-	time.Sleep(500 * time.Millisecond)
+	mockClock.Add(500 * time.Millisecond)
 	twitch.SetMockIsLive(true)
+	mockClock.Add(time.Second) // Wait for poll
 	select {
 	case err := <-waitDone:
 		require.NoError(t, err)
-	case <-time.After(5 * time.Second):
+	case <-clock.Get().After(5 * time.Second):
 		t.Fatal("timeout waiting for stream to start")
 	}
 }
@@ -624,7 +629,7 @@ func TestStreamDRunArchitecture(t *testing.T) {
 	ctx = observability.WithSecretsProvider(ctx, &observability.SecretsStaticProvider{})
 
 	go func() {
-		time.Sleep(100 * time.Millisecond)
+		clock.Get().Sleep(100 * time.Millisecond)
 		cancel()
 	}()
 
@@ -721,6 +726,8 @@ func TestStreamDChat_StreamD(t *testing.T) {
 		},
 	}
 
+	mockClock := benbjohnsonclock.NewMock()
+	clock.Set(mockClock)
 	d, err := New(cfg, &mockUI{}, nil, belt.New())
 	require.NoError(t, err)
 
@@ -732,7 +739,7 @@ func TestStreamDChat_StreamD(t *testing.T) {
 	require.NoError(t, err)
 
 	// Wait for message to be processed (mocked)
-	ch, err := d.SubscribeToChatMessages(ctx, time.Now().Add(-time.Hour), 10)
+	ch, err := d.SubscribeToChatMessages(ctx, mockClock.Now().Add(-time.Hour), 10)
 	require.NoError(t, err)
 
 	// Send a chat message
@@ -740,11 +747,12 @@ func TestStreamDChat_StreamD(t *testing.T) {
 	require.NoError(t, err)
 
 	// Mock Twitch client automatically adds messages when SendChatMessage is called in mock mode
+	mockClock.Add(time.Second) // Advance one second?
 	select {
 	case msg := <-ch:
 		require.NotNil(t, msg.Message)
 		require.Equal(t, "Hello world!", msg.Message.Content)
-	case <-time.After(5 * time.Second):
+	case <-clock.Get().After(5 * time.Second):
 		t.Fatal("timeout waiting for chat message")
 	}
 }

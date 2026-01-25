@@ -8,6 +8,7 @@ import (
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/observability"
+	"github.com/xaionaro-go/streamctl/pkg/clock"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
@@ -173,7 +174,7 @@ func (d *StreamD) shoutoutIfCan(
 			Platform: platID,
 			User:     userID,
 		}
-		d.lastShoutoutAt[userFullID] = time.Now()
+		d.lastShoutoutAt[userFullID] = clock.Get().Now()
 	}
 	return anySuccess
 }
@@ -260,7 +261,7 @@ func (d *StreamD) SubscribeToChatMessages(
 					break
 				}
 				if debugSendArchiveMessagesAsLive {
-					time.Sleep(5 * time.Second)
+					clock.Get().Sleep(5 * time.Second)
 				}
 			}
 		},

@@ -16,6 +16,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
 	"github.com/xaionaro-go/observability"
+	"github.com/xaionaro-go/streamctl/pkg/clock"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
@@ -79,11 +80,11 @@ func init() {
 		},
 		OnStartedStream: func(ctx context.Context, d *StreamD) {
 			observability.Go(ctx, func(ctx context.Context) {
-				now := time.Now()
-				time.Sleep(10 * time.Second)
+				now := clock.Get().Now()
+				clock.Get().Sleep(10 * time.Second)
 				for time.Since(now) < 5*time.Minute {
 					d.StreamStatusCache.InvalidateCache(ctx)
-					time.Sleep(20 * time.Second)
+					clock.Get().Sleep(20 * time.Second)
 				}
 			})
 		},
@@ -95,7 +96,7 @@ func init() {
 			// a stream, YouTube may report that you don't have this stream (some kind of
 			// race condition on their side), so sometimes we need to wait and retry. Right
 			// now we assume that the race condition cannot take more than ~25 seconds.
-			deadline := time.Now().Add(30 * time.Second)
+			deadline := clock.Get().Now().Add(30 * time.Second)
 			for {
 				status, err := controller.GetStreamStatus(memoize.SetNoCache(ctx, true), streamID)
 				if err != nil {
@@ -105,10 +106,10 @@ func init() {
 				bcID := getYTBroadcastID(data)
 				if bcID == "" {
 					err = fmt.Errorf("unable to get the broadcast ID from YouTube")
-					if time.Now().Before(deadline) {
+					if clock.Get().Now().Before(deadline) {
 						delay := time.Second * 5
 						logger.Warnf(ctx, "%v... waiting %v and trying again", err)
-						time.Sleep(delay)
+						clock.Get().Sleep(delay)
 						continue
 					}
 					return err

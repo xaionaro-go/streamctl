@@ -4,6 +4,10 @@
 package streampanel
 
 import (
+	"github.com/xaionaro-go/streamctl/pkg/clock"
+)
+
+import (
 	"context"
 	"fmt"
 	"math"
@@ -375,7 +379,7 @@ func (p *Panel) displayStreamServers(
 		key := numBytesID{ID: srv.ListenAddr}
 		p.previousNumBytesLocker.Do(ctx, func() {
 			prevNumBytes := p.previousNumBytes[key]
-			now := time.Now()
+			now := clock.Get().Now()
 			bwStr := bwString(
 				srv.NumBytesProducerRead,
 				prevNumBytes[0],
@@ -1641,7 +1645,7 @@ func (p *Panel) displayStreamForwards(
 				DstID          api.StreamSinkIDFullyQualified
 			}
 			key := numBytesID{StreamSourceID: fwd.StreamSourceID, DstID: fwd.StreamSinkID}
-			now := time.Now()
+			now := clock.Get().Now()
 			p.previousNumBytesLocker.Do(ctx, func() {
 				prevNumBytes := p.previousNumBytes[key]
 				bwStr := bwString(
@@ -1705,7 +1709,7 @@ func (p *Panel) streamServersUpdater(
 		logger.Debugf(ctx, "streamServersUpdater")
 		defer logger.Debugf(ctx, "/streamServersUpdater")
 
-		t := time.NewTicker(time.Second)
+		t := clock.Get().Ticker(time.Second)
 		defer t.Stop()
 		for {
 			select {
@@ -1746,7 +1750,7 @@ func (p *Panel) startStreamPlayersUpdater(
 		logger.Debugf(ctx, "streamPlayersUpdater")
 		defer logger.Debugf(ctx, "/streamPlayersUpdater")
 
-		t := time.NewTicker(time.Second)
+		t := clock.Get().Ticker(time.Second)
 		defer t.Stop()
 		for {
 			select {
@@ -1787,7 +1791,7 @@ func (p *Panel) startStreamForwardersUpdater(
 		logger.Debugf(ctx, "streamForwardersUpdater")
 		defer logger.Debugf(ctx, "/streamForwardersUpdater")
 
-		t := time.NewTicker(time.Second)
+		t := clock.Get().Ticker(time.Second)
 		defer t.Stop()
 		for {
 			select {

@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"time"
 
 	"fyne.io/fyne/v2"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/clock"
 	"github.com/xaionaro-go/streamctl/pkg/screenshot"
 	streamd "github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
@@ -136,7 +136,7 @@ func WriteConfigToPath(
 	if err != nil {
 		logger.Errorf(ctx, "unable to create directory '%s'", backupDir)
 	} else {
-		now := time.Now()
+		now := clock.Get().Now()
 		pathBackup := path.Join(
 			backupDir,
 			fmt.Sprintf(

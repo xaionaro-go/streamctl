@@ -13,6 +13,7 @@ import (
 	"github.com/xaionaro-go/obs-grpc-proxy/pkg/obsgrpcproxy"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/observability"
+	"github.com/xaionaro-go/streamctl/pkg/clock"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config/event"
@@ -103,7 +104,7 @@ func (d *StreamD) listenOBSEvents(
 		)
 		if err != nil {
 			logger.Errorf(ctx, "unable to get an OBS client: %v", err)
-			time.Sleep(time.Second)
+			clock.Get().Sleep(time.Second)
 			continue
 		}
 

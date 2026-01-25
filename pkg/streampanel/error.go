@@ -1,6 +1,10 @@
 package streampanel
 
 import (
+	"github.com/xaionaro-go/streamctl/pkg/clock"
+)
+
+import (
 	"context"
 	"fmt"
 	"runtime/debug"
@@ -34,7 +38,7 @@ func (p *Panel) ReportError(err error) {
 	ctx := context.TODO()
 	p.errorReportsLocker.Do(ctx, func() {
 		p.errorReports[err.Error()] = errorReport{
-			LastTimestamp: time.Now(),
+			LastTimestamp: clock.Get().Now(),
 			Error:         err,
 			Stack:         debug.Stack(),
 		}

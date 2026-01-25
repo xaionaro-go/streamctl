@@ -1,10 +1,13 @@
 package streampanel
 
 import (
+	"github.com/xaionaro-go/streamctl/pkg/clock"
+)
+
+import (
 	"context"
 	"fmt"
 	"strconv"
-	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/widget"
@@ -163,7 +166,7 @@ func (ui *obsProfileUI) AfterStopStream(ctx context.Context, p *Panel) error {
 			p.backgroundRenderer.Q <- func() {
 				p.startStopButton.SetText(fmt.Sprintf("Holding the scene: %s", accountCfg.SceneAfterStream.Duration))
 			}
-			time.Sleep(accountCfg.SceneAfterStream.Duration)
+			clock.Get().Sleep(accountCfg.SceneAfterStream.Duration)
 		}
 	}
 

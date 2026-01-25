@@ -4,6 +4,10 @@
 package streampanel
 
 import (
+	"github.com/xaionaro-go/streamctl/pkg/clock"
+)
+
+import (
 	"context"
 	"fmt"
 	"net"
@@ -84,7 +88,7 @@ func (p *Panel) startMonitorPage(
 	p.monitorPageLocker.Do(ctx, func() {
 		if p.monitorPage == nil {
 			observability.Go(ctx, func(ctx context.Context) { // TODO: get rid of this ugliness
-				t := time.NewTicker(100 * time.Millisecond)
+				t := clock.Get().Ticker(100 * time.Millisecond)
 				defer t.Stop()
 				for {
 					select {

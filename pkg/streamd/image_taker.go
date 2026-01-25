@@ -9,6 +9,7 @@ import (
 	"github.com/chai2010/webp"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/observability"
+	"github.com/xaionaro-go/streamctl/pkg/clock"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/consts"
 	"github.com/xaionaro-go/xsync"
@@ -27,14 +28,14 @@ func (d *StreamD) getImageBytes(
 	if getImageByteser, ok := src.(config.GetImageBytes); ok {
 		bytes, _, nextUpdateAt, err := getImageByteser.GetImageBytes(ctx, el, dataProvider)
 		if err != nil {
-			return nil, time.Now().Add(time.Second), fmt.Errorf("unable to get the image from the source using GetImageByteser: %w", err)
+			return nil, clock.Get().Now().Add(time.Second), fmt.Errorf("unable to get the image from the source using GetImageByteser: %w", err)
 		}
 		return bytes, nextUpdateAt, nil
 	}
 
 	img, nextUpdateAt, err := el.Source.GetImage(ctx, el, dataProvider)
 	if err != nil {
-		return nil, time.Now().Add(time.Second), fmt.Errorf("unable to get the image from the source: %w", err)
+		return nil, clock.Get().Now().Add(time.Second), fmt.Errorf("unable to get the image from the source: %w", err)
 	}
 
 	if imgHash, err := newImageHash(img); err == nil {
@@ -56,7 +57,7 @@ func (d *StreamD) getImageBytes(
 		Exact:    false,
 	})
 	if err != nil {
-		return nil, time.Now().Add(time.Second), fmt.Errorf("unable to encode the image: %w", err)
+		return nil, clock.Get().Now().Add(time.Second), fmt.Errorf("unable to encode the image: %w", err)
 	}
 
 	return out.Bytes(), nextUpdateAt, nil
@@ -144,7 +145,7 @@ func (d *StreamD) restartImageTakerNoLock(ctx context.Context) (_err error) {
 						select {
 						case <-ctx.Done():
 							return false
-						case <-time.After(time.Until(nextUpdateAt)):
+						case <-clock.Get().After(time.Until(nextUpdateAt)):
 							return true
 						}
 					}

@@ -10,6 +10,7 @@ import (
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/stretchr/testify/require"
+	"github.com/xaionaro-go/streamctl/pkg/clock"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/secret"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -66,7 +67,7 @@ func TestStreamDIntegrationFull(t *testing.T) {
 						ClientSecret: secret.New("dummy1"),
 						Token: ptr(secret.New(oauth2.Token{
 							AccessToken: "mock-token-1",
-							Expiry:      time.Now().Add(time.Hour),
+							Expiry:      clock.Get().Now().Add(time.Hour),
 						})),
 					}),
 					"acc2": streamcontrol.ToRawMessage(youtube.PlatformSpecificConfig{
@@ -74,7 +75,7 @@ func TestStreamDIntegrationFull(t *testing.T) {
 						ClientSecret: secret.New("dummy2"),
 						Token: ptr(secret.New(oauth2.Token{
 							AccessToken: "mock-token-2",
-							Expiry:      time.Now().Add(time.Hour),
+							Expiry:      clock.Get().Now().Add(time.Hour),
 						})),
 					}),
 				},

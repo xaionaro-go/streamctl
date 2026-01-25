@@ -1,6 +1,10 @@
 package streampanel
 
 import (
+	"github.com/xaionaro-go/streamctl/pkg/clock"
+)
+
+import (
 	"context"
 	"sync"
 	"time"
@@ -26,7 +30,7 @@ func (p *Panel) updateStreamStatus(
 ) {
 	logger.Debugf(ctx, "updateStreamStatus")
 	defer logger.Debugf(ctx, "/updateStreamStatus")
-	ctx, cancelFn := context.WithTimeout(ctx, 30*time.Second)
+	ctx, cancelFn := clock.Get().WithTimeout(ctx, 30*time.Second)
 	defer cancelFn()
 
 	var wg sync.WaitGroup
@@ -114,7 +118,7 @@ func (p *Panel) setStreamStatus(
 			isSignificantlyDifferent = true
 		}
 		if isSignificantlyDifferent {
-			newStatus.LastChangedAt = time.Now()
+			newStatus.LastChangedAt = clock.Get().Now()
 		} else {
 			newStatus.LastChangedAt = oldStatus.LastChangedAt
 		}

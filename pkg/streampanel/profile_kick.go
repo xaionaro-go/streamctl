@@ -1,6 +1,10 @@
 package streampanel
 
 import (
+	"github.com/xaionaro-go/streamctl/pkg/clock"
+)
+
+import (
 	"context"
 	"fmt"
 	"net/url"
@@ -184,7 +188,7 @@ func (ui *kickProfileUI) RenderStream(
 		cat := catN[text]
 		setSelectedKickCategory(uint64(cat.ID))
 		observability.Go(ctx, func(ctx context.Context) {
-			time.Sleep(100 * time.Millisecond)
+			clock.Get().Sleep(100 * time.Millisecond)
 			kickCategory.SetText("")
 		})
 	}

@@ -18,6 +18,7 @@ import (
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	benbjohnsonclock "github.com/benbjohnson/clock"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/nicklaw5/helix/v2"
 	testifyAssert "github.com/stretchr/testify/assert"
@@ -26,6 +27,7 @@ import (
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/player/pkg/player"
+	"github.com/xaionaro-go/streamctl/pkg/clock"
 	"github.com/xaionaro-go/streamctl/pkg/colorx"
 	"github.com/xaionaro-go/streamctl/pkg/imgb64"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
@@ -67,7 +69,7 @@ func TestPanelGUI(t *testing.T) {
 }
 
 func TestPanelDashboardIntegration(t *testing.T) {
-	testApp, p, ctx, cancel := setupTestPanel(t)
+	testApp, p, _, ctx, cancel := setupTestPanel(t)
 	defer testApp.Quit()
 	defer cancel()
 
@@ -153,13 +155,16 @@ func TestPanelTimerIntegration(t *testing.T) {
 	defer testApp.Quit()
 
 	btn := widget.NewButton("...", nil)
-	startedAt := time.Now().Add(-10 * time.Second)
+	mockClock := benbjohnsonclock.NewMock()
+	clock.Set(mockClock)
+	startedAt := mockClock.Now().Add(-10 * time.Second)
 	h := newUpdateTimerHandler(btn, startedAt)
 	require.NotNil(t, h)
 	defer h.cancelFn()
 
 	// Wait for loop to update text
 	require.Eventually(t, func() bool {
+		mockClock.Add(time.Second)
 		return btn.Text != "..."
 	}, 2*time.Second, 100*time.Millisecond)
 
@@ -171,6 +176,8 @@ func TestPanelDashboardBandwidth(t *testing.T) {
 	testApp := test.NewApp()
 	defer testApp.Quit()
 
+	mockClock := benbjohnsonclock.NewMock()
+	clock.Set(mockClock)
 	p := &Panel{
 		app: testApp,
 	}
@@ -193,7 +200,7 @@ func TestPanelDashboardBandwidth(t *testing.T) {
 	w.renderStreamStatus(ctx)
 
 	// Second sample after "time passed"
-	w.appStatusData.prevUpdateTS = time.Now().Add(-1 * time.Second)
+	w.appStatusData.prevUpdateTS = mockClock.Now().Add(-1 * time.Second)
 	atomic.StoreUint64(&cl.Stats.BytesIn, 2000)  // 1000 bytes diff = 8Kb/s
 	atomic.StoreUint64(&cl.Stats.BytesOut, 4000) // 2000 bytes diff = 16Kb/s
 
@@ -650,13 +657,15 @@ func (d *dummyStreamD) StreamPlayerClose(ctx context.Context, id api.StreamSourc
 	return nil
 }
 
-func setupTestPanel(t *testing.T) (fyne.App, *Panel, context.Context, context.CancelFunc) {
+func setupTestPanel(t *testing.T) (fyne.App, *Panel, *benbjohnsonclock.Mock, context.Context, context.CancelFunc) {
 	testApp := test.NewApp()
 	testApp.Settings().SetTheme(theme.DefaultTheme())
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	ctx = observability.WithSecretsProvider(ctx, &observability.SecretsStaticProvider{})
 
 	tmpFile := fmt.Sprintf("/tmp/streamctl-test-%d.yaml", time.Now().UnixNano())
+	mockClock := benbjohnsonclock.NewMock()
+	clock.Set(mockClock)
 	p, err := New(tmpFile, OptionApp{App: testApp})
 	require.NoError(t, err)
 	p.app = testApp
@@ -684,11 +693,11 @@ func setupTestPanel(t *testing.T) (fyne.App, *Panel, context.Context, context.Ca
 	p.Config.RemoteStreamDAddr = "localhost:1234"
 	p.createMainWindow(ctx)
 	p.initMainWindow(ctx, consts.PageControl)
-	return testApp, p, ctx, cancel
+	return testApp, p, mockClock, ctx, cancel
 }
 
 func TestPanelFullFeatureSetIntegration(t *testing.T) {
-	testApp, p, ctx, cancel := setupTestPanel(t)
+	testApp, p, _, ctx, cancel := setupTestPanel(t)
 	defer testApp.Quit()
 	defer cancel()
 
@@ -733,7 +742,7 @@ func TestPanelFullFeatureSetIntegration(t *testing.T) {
 }
 
 func TestPanelRestreamUI(t *testing.T) {
-	testApp, p, ctx, cancel := setupTestPanel(t)
+	testApp, p, _, ctx, cancel := setupTestPanel(t)
 	defer testApp.Quit()
 	defer cancel()
 
@@ -744,7 +753,7 @@ func TestPanelRestreamUI(t *testing.T) {
 }
 
 func TestPanelDashboardStatusRendering(t *testing.T) {
-	testApp, p, ctx, cancel := setupTestPanel(t)
+	testApp, p, _, ctx, cancel := setupTestPanel(t)
 	defer testApp.Quit()
 	defer cancel()
 
@@ -759,7 +768,7 @@ func TestPanelDashboardStatusRendering(t *testing.T) {
 }
 
 func TestPanelThemesAndColors(t *testing.T) {
-	testApp, _, _, cancel := setupTestPanel(t)
+	testApp, _, _, _, cancel := setupTestPanel(t)
 	defer testApp.Quit()
 	defer cancel()
 
@@ -805,7 +814,7 @@ streamd_builtin:
 	ctx = observability.WithSecretsProvider(ctx, &observability.SecretsStaticProvider{})
 
 	// Use Fyne test app
-	testApp, p, ctx, cancel := setupTestPanel(t)
+	testApp, p, mockClock, ctx, cancel := setupTestPanel(t)
 	defer testApp.Quit()
 	defer cancel()
 
@@ -818,7 +827,7 @@ streamd_builtin:
 	require.True(t, p.mainWindow.Content().Visible())
 
 	// Wait a bit to ensure it doesn't crash immediately
-	time.Sleep(500 * time.Millisecond)
+	mockClock.Add(500 * time.Millisecond)
 }
 func TestPanelProfileInteractions(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -1176,8 +1185,10 @@ func TestProfileCoverageV5(t *testing.T) {
 	defer app.Quit()
 	ctx := context.Background()
 
-	setup := func() (*Panel, *dummyStreamDForCoverage) {
+	setup := func() (*Panel, *dummyStreamDForCoverage, *benbjohnsonclock.Mock) {
 		sd := &dummyStreamDForCoverage{}
+		cl := benbjohnsonclock.NewMock()
+		clock.Set(cl)
 		p := &Panel{
 			defaultContext: ctx,
 			app:            app,
@@ -1185,11 +1196,11 @@ func TestProfileCoverageV5(t *testing.T) {
 			configCache:    &streamdconfig.Config{},
 			errorReports:   make(map[string]errorReport),
 		}
-		return p, sd
+		return p, sd, cl
 	}
 
 	t.Run("CountLimitInOnChanged", func(t *testing.T) {
-		p, sd := setup()
+		p, sd, _ := setup()
 
 		// Setup more than 10 items for search result limit coverage
 		var twitchCats []helix.Game
@@ -1246,7 +1257,7 @@ func TestProfileCoverageV5(t *testing.T) {
 	})
 
 	t.Run("SelectionCleanups", func(t *testing.T) {
-		p, sd := setup()
+		p, sd, _ := setup()
 		sd.GetAccountsFn = func(ctx context.Context, platIDs ...streamcontrol.PlatformID) ([]streamcontrol.AccountIDFullyQualified, error) {
 			return []streamcontrol.AccountIDFullyQualified{
 				streamcontrol.NewAccountIDFullyQualified(twitch.ID, streamcontrol.DefaultAccountID),
@@ -1320,7 +1331,7 @@ func TestProfileCoverageV5(t *testing.T) {
 	})
 
 	t.Run("OnSubmittedEmpty", func(t *testing.T) {
-		p, _ := setup()
+		p, _, _ := setup()
 		w := p.profileWindow(ctx, "EmptySub", Profile{}, nil)
 		require.NotNil(t, w)
 		defer w.Close()
@@ -1343,7 +1354,7 @@ func TestProfileCoverageV5(t *testing.T) {
 	})
 
 	t.Run("TemplateTagsDefault", func(t *testing.T) {
-		p, _ := setup()
+		p, _, _ := setup()
 		// We can't easily trigger the default case in switch of a Select because the Select widget limits choices.
 		// However, we can trigger the "unexpected current value" logic by having a profile with an invalid TemplateTags.
 		w := p.profileWindow(ctx, "InvalidTags", Profile{
@@ -1357,7 +1368,7 @@ func TestProfileCoverageV5(t *testing.T) {
 
 	t.Run("SanitizeTagsCoverage", func(t *testing.T) {
 		// Hit sanitizeTags logic with empty tags
-		p, _ := setup()
+		p, _, _ := setup()
 		w := p.profileWindow(ctx, "Sanitize", Profile{
 			ProfileMetadata: streamdconfig.ProfileMetadata{},
 			PerStream: map[streamcontrol.StreamIDFullyQualified]streamcontrol.StreamProfile{
@@ -1379,7 +1390,7 @@ func TestProfileCoverageV5(t *testing.T) {
 	})
 
 	t.Run("RearrangeProfilesExtra", func(t *testing.T) {
-		p, _ := setup()
+		p, _, _ := setup()
 		p.configCache = &streamdconfig.Config{
 			ProfileMetadata: map[streamcontrol.ProfileName]streamdconfig.ProfileMetadata{
 				"p1": {MaxOrder: 10},
@@ -1408,7 +1419,7 @@ func TestProfileCoverageV5(t *testing.T) {
 	})
 
 	t.Run("OnSubmittedExtra", func(t *testing.T) {
-		p, _ := setup()
+		p, _, mockClock := setup()
 		// Submitting valid names to hit the time.Sleep branch
 		sd := p.StreamD.(*dummyStreamDForCoverage)
 		sd.GetBackendInfoFn = func(ctx context.Context, id streamcontrol.PlatformID, full bool) (*api.BackendInfo, error) {
@@ -1437,12 +1448,12 @@ func TestProfileCoverageV5(t *testing.T) {
 		}
 
 		// Wait for goroutines with time.Sleep to execute
-		time.Sleep(200 * time.Millisecond)
+		mockClock.Add(200 * time.Millisecond)
 		w2.Close()
 	})
 
 	t.Run("RefilterKickMatch", func(t *testing.T) {
-		p, _ := setup()
+		p, _, _ := setup()
 		p.configCache = &streamdconfig.Config{
 			Backends: streamcontrol.Config{
 				kick.ID: {
@@ -1466,7 +1477,7 @@ func TestProfileCoverageV5(t *testing.T) {
 	})
 
 	t.Run("RearrangeProfilesExtraGaps", func(t *testing.T) {
-		p, _ := setup()
+		p, _, _ := setup()
 		p.configCache = &streamdconfig.Config{
 			Backends: streamcontrol.Config{
 				twitch.ID: {
@@ -1487,7 +1498,7 @@ func TestProfileCoverageV5(t *testing.T) {
 	})
 
 	t.Run("FinalGaps", func(t *testing.T) {
-		p, sd := setup()
+		p, sd, mockClock := setup()
 		p.profilesListWidget = widget.NewList(
 			func() int { return 0 },
 			func() fyne.CanvasObject { return widget.NewLabel("") },
@@ -1500,7 +1511,7 @@ func TestProfileCoverageV5(t *testing.T) {
 		}
 		p.configCache = &streamdconfig.Config{ProfileMetadata: map[streamcontrol.ProfileName]streamdconfig.ProfileMetadata{"p1": {}}}
 		p.profileDelete(ctx, "p1")
-		time.Sleep(100 * time.Millisecond)
+		mockClock.Add(100 * time.Millisecond)
 
 		// 2. profileCreateOrUpdate: GetStreamDConfig succeeds but rearrange fails because of nil cache later or something
 		// No, rearrangeProfiles doesn't call GetStreamDConfig anymore, it uses p.configCache directly.
@@ -1594,7 +1605,7 @@ func TestProfileCoverageV5(t *testing.T) {
 	})
 
 	t.Run("FinalGapsRefined", func(t *testing.T) {
-		p, sd := setup()
+		p, sd, mockClock := setup()
 		p.profilesListWidget = widget.NewList(
 			func() int { return 0 },
 			func() fyne.CanvasObject { return widget.NewLabel("") },
@@ -1630,7 +1641,7 @@ func TestProfileCoverageV5(t *testing.T) {
 		}
 		p.configCache = &streamdconfig.Config{ProfileMetadata: map[streamcontrol.ProfileName]streamdconfig.ProfileMetadata{"p1": {}}}
 		p.profileDelete(ctx, "p1")
-		time.Sleep(300 * time.Millisecond) // Wait for all platform goroutines
+		mockClock.Add(300 * time.Millisecond) // Wait for all platform goroutines
 	})
 }
 func TestProfileCoverageFinal(t *testing.T) {
@@ -1638,8 +1649,10 @@ func TestProfileCoverageFinal(t *testing.T) {
 	app.Settings().SetTheme(theme.DefaultTheme())
 	defer app.Quit()
 
-	setup := func() (*Panel, *dummyStreamDForCoverage) {
+	setup := func() (*Panel, *dummyStreamDForCoverage, *benbjohnsonclock.Mock) {
 		client := &dummyStreamDForCoverage{}
+		cl := benbjohnsonclock.NewMock()
+		clock.Set(cl)
 		p := &Panel{
 			defaultContext:         context.Background(),
 			app:                    app,
@@ -1695,7 +1708,7 @@ func TestProfileCoverageFinal(t *testing.T) {
 			},
 		}
 		client.Config = p.configCache
-		return p, client
+		return p, client, cl
 	}
 
 	ctx := context.Background()
@@ -1714,7 +1727,7 @@ func TestProfileCoverageFinal(t *testing.T) {
 	})
 
 	t.Run("Panel_Profiles", func(t *testing.T) {
-		p, client := setup()
+		p, client, _ := setup()
 		p.profilesOrder = []streamcontrol.ProfileName{"p1"}
 		p.refilterProfiles(ctx)
 		require.Equal(t, 1, p.profilesListLength())
@@ -1755,11 +1768,11 @@ func TestProfileCoverageFinal(t *testing.T) {
 	})
 
 	t.Run("UI_Interactions", func(t *testing.T) {
-		p, client := setup()
+		p, client, _ := setup()
 		_ = client
 
 		t.Run("CreateOrUpdate_Error", func(t *testing.T) {
-			p, sd := setup()
+			p, sd, _ := setup()
 			sd.SetConfigErr = fmt.Errorf("mock error")
 			err := p.profileCreateOrUpdate(ctx, Profile{Name: "err"})
 			require.Error(t, err)
@@ -1772,7 +1785,7 @@ func TestProfileCoverageFinal(t *testing.T) {
 		})
 
 		t.Run("WindowVariants", func(t *testing.T) {
-			p, sd := setup()
+			p, sd, _ := setup()
 			sd.IsBackendEnabledFn = func(ctx context.Context, id streamcontrol.PlatformID) (bool, error) {
 				return false, nil // Disable all for simple logic tests
 			}
@@ -2187,7 +2200,7 @@ func TestProfileCoverageFinal(t *testing.T) {
 		})
 
 		t.Run("UI_ErrorPaths", func(t *testing.T) {
-			p, sd := setup()
+			p, sd, _ := setup()
 
 			// IsBackendEnabled error
 			sd.IsBackendEnabledFn = func(ctx context.Context, id streamcontrol.PlatformID) (bool, error) {
@@ -2331,7 +2344,7 @@ func TestProfileCoverageFinal(t *testing.T) {
 		})
 
 		t.Run("DataInteractions", func(t *testing.T) {
-			p, sd := setup()
+			p, sd, _ := setup()
 			_ = sd
 
 			// profileCreateOrUpdate GetStreamDConfig error
@@ -2340,7 +2353,7 @@ func TestProfileCoverageFinal(t *testing.T) {
 			require.Error(t, p.profileDelete(ctx, "err"))
 
 			// refilterProfiles with multiple profiles
-			p, sd = setup()
+			p, sd, _ = setup()
 			p.configCache = &streamdconfig.Config{
 				Backends: map[streamcontrol.PlatformID]*streamcontrol.AbstractPlatformConfig{
 					"twitch": {
@@ -2421,7 +2434,7 @@ func TestProfileCoverageFinal(t *testing.T) {
 		})
 
 		t.Run("Platforms_DeepDive", func(t *testing.T) {
-			p, sd := setup()
+			p, sd, mockClock := setup()
 			sd.IsBackendEnabledFn = func(ctx context.Context, id streamcontrol.PlatformID) (bool, error) {
 				return true, nil
 			}
@@ -2437,7 +2450,7 @@ func TestProfileCoverageFinal(t *testing.T) {
 			findEntryByPlaceHolder(w.Content(), "youtube live recording template", &ytEntry)
 			require.NotNil(t, ytEntry)
 			ytEntry.SetText("Temp")
-			time.Sleep(50 * time.Millisecond) // Wait for UI update
+			mockClock.Add(50 * time.Millisecond) // Wait for UI update
 
 			var templButton *widget.Button
 			findButton(w.Content(), "Template1", &templButton)
@@ -2469,7 +2482,7 @@ func TestProfileCoverageFinal(t *testing.T) {
 			findEntryByPlaceHolder(w.Content(), "twitch category", &twitchEntry)
 			require.NotNil(t, twitchEntry)
 			twitchEntry.SetText("Talk")
-			time.Sleep(50 * time.Millisecond)
+			mockClock.Add(50 * time.Millisecond)
 			var catButton *widget.Button
 			findButton(w.Content(), "TalkShow", &catButton)
 			require.NotNil(t, catButton)
@@ -2480,7 +2493,7 @@ func TestProfileCoverageFinal(t *testing.T) {
 			findEntryByPlaceHolder(w.Content(), "kick category", &kickEntry)
 			require.NotNil(t, kickEntry)
 			kickEntry.SetText("Kick")
-			time.Sleep(50 * time.Millisecond)
+			mockClock.Add(50 * time.Millisecond)
 			var kcatButton *widget.Button
 			findButton(w.Content(), "KickCat1", &kcatButton)
 			require.NotNil(t, kcatButton)
@@ -2495,7 +2508,7 @@ func TestProfileCoverageFinal(t *testing.T) {
 		})
 
 		t.Run("EditAndClone", func(t *testing.T) {
-			p, sd := setup()
+			p, sd, _ := setup()
 			sd.IsBackendEnabledFn = func(ctx context.Context, id streamcontrol.PlatformID) (bool, error) {
 				return false, nil
 			}
@@ -2576,7 +2589,7 @@ func TestProfileCoverageFinal(t *testing.T) {
 		})
 
 		t.Run("EditAndClone_Errors", func(t *testing.T) {
-			p, sd := setup()
+			p, sd, _ := setup()
 			sd.IsBackendEnabledFn = func(ctx context.Context, id streamcontrol.PlatformID) (bool, error) {
 				return false, nil
 			}
@@ -2630,7 +2643,7 @@ func TestProfileCoverageFinal(t *testing.T) {
 		})
 
 		t.Run("BackendErrors", func(t *testing.T) {
-			p, sd := setup()
+			p, sd, _ := setup()
 
 			// IsBackendEnabled failure
 			sd.IsBackendEnabledFn = func(ctx context.Context, id streamcontrol.PlatformID) (bool, error) {
@@ -2672,13 +2685,13 @@ func TestProfileCoverageFinal(t *testing.T) {
 			oldIsMobile := isMobile
 			defer func() { isMobile = oldIsMobile }()
 			isMobile = func() bool { return true }
-			p, _ := setup()
+			p, _, _ := setup()
 			p.profileWindow(ctx, "Mobile", Profile{}, nil)
 		})
 	})
 
 	t.Run("EdgeCases", func(t *testing.T) {
-		p, sd := setup()
+		p, sd, _ := setup()
 		ctx := context.Background()
 
 		t.Run("Sorting", func(t *testing.T) {
@@ -3044,7 +3057,7 @@ func traverse(obj fyne.CanvasObject, fn func(fyne.CanvasObject)) {
 	}
 }
 func TestPanelChatCoverage(t *testing.T) {
-	testApp, p, ctx, cancel := setupTestPanel(t)
+	testApp, p, mockClock, ctx, cancel := setupTestPanel(t)
 	defer testApp.Quit()
 	defer cancel()
 
@@ -3061,7 +3074,7 @@ func TestPanelChatCoverage(t *testing.T) {
 			Message: &streamcontrol.Message{
 				Content: "hello world",
 			},
-			CreatedAt: time.Now(),
+			CreatedAt: mockClock.Now(),
 		},
 		Platform: twitch.ID,
 	}
@@ -3092,7 +3105,7 @@ func TestPanelChatCoverage(t *testing.T) {
 }
 
 func TestPanelDashboardCoverage(t *testing.T) {
-	testApp, p, ctx, cancel := setupTestPanel(t)
+	testApp, p, _, ctx, cancel := setupTestPanel(t)
 	defer testApp.Quit()
 	defer cancel()
 
@@ -3110,7 +3123,7 @@ func TestPanelDashboardCoverage(t *testing.T) {
 }
 
 func TestPanelProfileCoverage(t *testing.T) {
-	testApp, p, ctx, cancel := setupTestPanel(t)
+	testApp, p, _, ctx, cancel := setupTestPanel(t)
 	defer testApp.Quit()
 	defer cancel()
 
@@ -3124,7 +3137,7 @@ func TestPanelProfileCoverage(t *testing.T) {
 }
 
 func TestPanelSettingsCoverage(t *testing.T) {
-	testApp, p, ctx, cancel := setupTestPanel(t)
+	testApp, p, _, ctx, cancel := setupTestPanel(t)
 	defer testApp.Quit()
 	defer cancel()
 
@@ -3134,7 +3147,7 @@ func TestPanelSettingsCoverage(t *testing.T) {
 }
 
 func TestPanelRestreamCoverage(t *testing.T) {
-	testApp, p, ctx, cancel := setupTestPanel(t)
+	testApp, p, _, ctx, cancel := setupTestPanel(t)
 	defer testApp.Quit()
 	defer cancel()
 
@@ -3148,7 +3161,7 @@ func TestPanelRestreamCoverage(t *testing.T) {
 }
 
 func TestPanelMonitorCoverage(t *testing.T) {
-	testApp, p, ctx, cancel := setupTestPanel(t)
+	testApp, p, _, ctx, cancel := setupTestPanel(t)
 	defer testApp.Quit()
 	defer cancel()
 
@@ -3164,7 +3177,7 @@ func TestPanelMonitorCoverage(t *testing.T) {
 }
 
 func TestPanelTriggerRulesCoverage(t *testing.T) {
-	testApp, p, ctx, cancel := setupTestPanel(t)
+	testApp, p, _, ctx, cancel := setupTestPanel(t)
 	defer testApp.Quit()
 	defer cancel()
 
@@ -3176,20 +3189,20 @@ func TestPanelTriggerRulesCoverage(t *testing.T) {
 }
 
 func TestPanelTimersCoverage(t *testing.T) {
-	testApp, p, ctx, cancel := setupTestPanel(t)
+	testApp, p, mockClock, ctx, cancel := setupTestPanel(t)
 	defer testApp.Quit()
 	defer cancel()
 
 	ui := NewTimersUI(ctx, p)
 	require.NotNil(t, ui)
 	require.NotPanics(t, func() {
-		ui.kickOff(ctx, time.Now())
+		ui.kickOff(ctx, mockClock.Now())
 		ui.stop(ctx)
 	})
 }
 
 func TestPanelErrorCoverage(t *testing.T) {
-	testApp, p, _, cancel := setupTestPanel(t)
+	testApp, p, _, _, cancel := setupTestPanel(t)
 	defer testApp.Quit()
 	defer cancel()
 
@@ -3202,7 +3215,7 @@ func TestPanelErrorCoverage(t *testing.T) {
 }
 
 func TestPanelExtraCoverage(t *testing.T) {
-	testApp, p, ctx, cancel := setupTestPanel(t)
+	testApp, p, _, ctx, cancel := setupTestPanel(t)
 	defer testApp.Quit()
 	defer cancel()
 
@@ -3225,7 +3238,7 @@ func TestPanelExtraCoverage(t *testing.T) {
 }
 
 func TestPanelProfilesPlatformsCoverage(t *testing.T) {
-	testApp, p, ctx, cancel := setupTestPanel(t)
+	testApp, p, _, ctx, cancel := setupTestPanel(t)
 	defer testApp.Quit()
 	defer cancel()
 
@@ -3256,7 +3269,7 @@ func TestPanelProfilesPlatformsCoverage(t *testing.T) {
 }
 
 func TestPanelRestreamExtCoverage(t *testing.T) {
-	testApp, p, ctx, cancel := setupTestPanel(t)
+	testApp, p, _, ctx, cancel := setupTestPanel(t)
 	defer testApp.Quit()
 	defer cancel()
 
@@ -3294,7 +3307,7 @@ func TestPanelRestreamExtCoverage(t *testing.T) {
 }
 
 func TestPanelMonitorExtCoverage(t *testing.T) {
-	testApp, p, ctx, cancel := setupTestPanel(t)
+	testApp, p, _, ctx, cancel := setupTestPanel(t)
 	defer testApp.Quit()
 	defer cancel()
 
@@ -3306,7 +3319,7 @@ func TestPanelMonitorExtCoverage(t *testing.T) {
 }
 
 func TestPanelShoutoutCoverage(t *testing.T) {
-	testApp, p, ctx, cancel := setupTestPanel(t)
+	testApp, p, _, ctx, cancel := setupTestPanel(t)
 	defer testApp.Quit()
 	defer cancel()
 
@@ -3316,7 +3329,7 @@ func TestPanelShoutoutCoverage(t *testing.T) {
 }
 
 func TestPanelOAuthHandlersCoverage(t *testing.T) {
-	testApp, p, ctx, cancel := setupTestPanel(t)
+	testApp, p, _, ctx, cancel := setupTestPanel(t)
 	defer testApp.Quit()
 	defer cancel()
 
@@ -3341,7 +3354,7 @@ func TestPanelOAuthHandlersCoverage(t *testing.T) {
 }
 
 func TestPanelConfigExtCoverage(t *testing.T) {
-	testApp, p, ctx, cancel := setupTestPanel(t)
+	testApp, p, _, ctx, cancel := setupTestPanel(t)
 	defer testApp.Quit()
 	defer cancel()
 
@@ -3359,7 +3372,7 @@ func TestPanelConfigExtCoverage(t *testing.T) {
 }
 
 func TestPanelLoggingCoverage(t *testing.T) {
-	testApp, p, ctx, cancel := setupTestPanel(t)
+	testApp, p, _, ctx, cancel := setupTestPanel(t)
 	defer testApp.Quit()
 	defer cancel()
 
@@ -3379,7 +3392,7 @@ func (d *dummyAutoUpdater) CheckForUpdates(ctx context.Context) (Update, error) 
 }
 
 func TestPanelUpdateCoverage(t *testing.T) {
-	testApp, p, ctx, cancel := setupTestPanel(t)
+	testApp, p, _, ctx, cancel := setupTestPanel(t)
 	defer testApp.Quit()
 	defer cancel()
 

@@ -14,6 +14,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/observability"
+	"github.com/xaionaro-go/streamctl/pkg/clock"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config/action"
 	"github.com/xaionaro-go/xcontext"
@@ -29,7 +30,7 @@ type timersUI struct {
 	fieldMinutes        *xfyne.NumericalEntry
 	fieldSeconds        *xfyne.NumericalEntry
 	button              *widget.Button
-	timer               *time.Timer
+	timer               *clock.Timer
 	deadline            time.Time
 	timerCancelFunc     context.CancelFunc
 	refresherCancelFunc context.CancelFunc
@@ -86,7 +87,7 @@ func (ui *timersUI) StartRefreshingFromRemote(
 
 		ui.refreshFromRemote(ctx)
 		observability.Go(ctx, func(ctx context.Context) {
-			t := time.NewTicker(time.Second * 5)
+			t := clock.Get().Ticker(time.Second * 5)
 			defer t.Stop()
 			for {
 				select {
@@ -229,7 +230,7 @@ func (ui *timersUI) start(
 		return
 	}
 
-	ui.doStart(ctx, time.Now().Add(duration))
+	ui.doStart(ctx, clock.Get().Now().Add(duration))
 }
 
 func (ui *timersUI) kickOffRemotely(
@@ -305,13 +306,13 @@ func (ui *timersUI) kickOff(
 
 	ui.deadline = deadline
 	ctx, ui.timerCancelFunc = context.WithCancel(ctx)
-	ui.timer = time.NewTimer(time.Until(deadline))
+	ui.timer = clock.Get().Timer(clock.Get().Until(deadline))
 
 	observability.Go(ctx, func(ctx context.Context) {
 		defer func() {
 			ui.doStop(xcontext.DetachDone(ctx))
 		}()
-		ticker := time.NewTicker(time.Second)
+		ticker := clock.Get().Ticker(time.Second)
 		defer ticker.Stop()
 		for {
 			select {
@@ -338,7 +339,7 @@ func (ui *timersUI) UpdateFields(
 func (ui *timersUI) updateFields(
 	ctx context.Context,
 ) {
-	timeLeft := time.Until(ui.deadline) + time.Second/2
+	timeLeft := clock.Get().Until(ui.deadline) + time.Second/2
 	if timeLeft < 0 {
 		timeLeft = 0
 	}

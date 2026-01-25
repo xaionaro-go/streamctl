@@ -20,6 +20,7 @@ import (
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/player/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/chatmessagesstorage"
+	"github.com/xaionaro-go/streamctl/pkg/clock"
 	"github.com/xaionaro-go/streamctl/pkg/p2p"
 	"github.com/xaionaro-go/streamctl/pkg/repository"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -134,24 +135,25 @@ func New(
 	}
 
 	d := &StreamD{
+		Options:             Options(options).Aggregate(),
 		UI:                  ui,
 		SaveConfigFunc:      saveCfgFunc,
 		Config:              cfg,
 		ChatMessagesStorage: chatmessagesstorage.New(cfg.GetChatMessageStorage(ctx)),
 		Cache:               &cache.Cache{},
 		OAuthListenPorts:    map[uint16]struct{}{},
-		StreamStatusCache:   memoize.NewMemoizeData(),
+		StreamStatusCache:   nil,
 		EventBus:            eventbus.New(),
 		OBSState: OBSState{
 			VolumeMeters: map[string][][3]float64{},
 		},
 		Timers:         map[api.TimerID]*Timer{},
-		Options:        Options(options).Aggregate(),
 		ReadyChan:      make(chan struct{}),
 		lastShoutoutAt: map[config.ChatUserID]time.Time{},
 		AccountMap:     make(Accounts),
 		ActiveProfiles: make(map[streamcontrol.StreamIDFullyQualified]streamcontrol.ProfileName),
 	}
+	d.StreamStatusCache = memoize.NewMemoizeData()
 
 	return d, nil
 }
@@ -238,7 +240,7 @@ func (d *StreamD) initChatMessagesStorage(ctx context.Context) (_err error) {
 	observability.Go(ctx, func(ctx context.Context) {
 		logger.Debugf(ctx, "initChatMessagesStorage-refresherLoop")
 		defer logger.Debugf(ctx, "/initChatMessagesStorage-refresherLoop")
-		t := time.NewTicker(5 * time.Second)
+		t := clock.Get().Ticker(5 * time.Second)
 		defer t.Stop()
 		for {
 			select {
@@ -499,6 +501,9 @@ func (d *StreamD) SaveConfig(ctx context.Context) (_err error) {
 }
 
 func (d *StreamD) saveConfig(ctx context.Context) error {
+	if d.SaveConfigFunc == nil {
+		return nil
+	}
 	err := d.SaveConfigFunc(ctx, d.Config)
 	if err != nil {
 		return err
@@ -1033,11 +1038,11 @@ func (d *StreamD) SetStreamActive(
 			d.StreamStatusCache.InvalidateCache(ctx)
 			if active && platID == youtube.ID {
 				observability.Go(ctx, func(ctx context.Context) {
-					now := time.Now()
-					time.Sleep(10 * time.Second)
+					now := clock.Get().Now()
+					clock.Get().Sleep(10 * time.Second)
 					for time.Since(now) < 5*time.Minute {
 						d.StreamStatusCache.InvalidateCache(ctx)
-						time.Sleep(20 * time.Second)
+						clock.Get().Sleep(20 * time.Second)
 					}
 				})
 			}
@@ -1080,7 +1085,7 @@ func (d *StreamD) SetStreamActive(
 					// a stream, YouTube may report that you don't have this stream (some kind of
 					// race condition on their side), so sometimes we need to wait and retry. Right
 					// now we assume that the race condition cannot take more than ~25 seconds.
-					deadline := time.Now().Add(30 * time.Second)
+					deadline := clock.Get().Now().Add(30 * time.Second)
 					for {
 						status, err := ctrl.GetStreamStatus(
 							d.ctxForController(memoize.SetNoCache(ctx, true)),
@@ -1090,10 +1095,10 @@ func (d *StreamD) SetStreamActive(
 						bcID := getYTBroadcastID(data)
 						if bcID == "" {
 							err = fmt.Errorf("unable to get the broadcast ID from YouTube for account %s", accountID)
-							if time.Now().Before(deadline) {
+							if clock.Get().Now().Before(deadline) {
 								delay := time.Second * 5
 								logger.Warnf(ctx, "%v... waiting %v and trying again", err)
-								time.Sleep(delay)
+								clock.Get().Sleep(delay)
 								continue
 							}
 							mErr = multierror.Append(mErr, err)
@@ -1136,7 +1141,7 @@ func (d *StreamD) SetStreamActive(
 
 						if handler, ok := platformBackendHandlers[platID]; ok && handler.PostRaidWaitDuration != 0 {
 							logger.Debugf(ctx, "sleeping for %v, to wait until Raid happens", handler.PostRaidWaitDuration)
-							time.Sleep(handler.PostRaidWaitDuration)
+							clock.Get().Sleep(handler.PostRaidWaitDuration)
 						}
 						break
 					}
@@ -1954,7 +1959,7 @@ func (d *StreamD) StreamPlayerGetLag(
 	ctx context.Context,
 	streamSourceID streamtypes.StreamSourceID,
 ) (time.Duration, time.Time, error) {
-	now := time.Now()
+	now := clock.Get().Now()
 	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamSourceID)
 	if err != nil {
 		return 0, now, err

@@ -289,6 +289,7 @@ require (
 	github.com/anthonynsimon/bild v0.14.0
 	github.com/asticode/go-astiav v0.36.0
 	github.com/bamiaux/rez v0.0.0-20170731184118-29f4463c688b
+	github.com/benbjohnson/clock v1.3.5
 	github.com/bluenviron/gortsplib/v4 v4.12.4-0.20250324174248-61372cfa6800
 	github.com/chai2010/webp v1.1.1
 	github.com/cloudwego/eino v0.3.27

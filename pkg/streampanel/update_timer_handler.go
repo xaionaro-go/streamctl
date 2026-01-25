@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/xaionaro-go/streamctl/pkg/clock"
+
 	"fyne.io/fyne/v2/widget"
 	"github.com/xaionaro-go/observability"
 )
@@ -38,14 +40,14 @@ func (h *updateTimerHandler) GetStartTS() time.Time {
 }
 
 func (h *updateTimerHandler) loop(ctx context.Context) {
-	t := time.NewTicker(time.Second)
+	t := clock.Get().Ticker(time.Second)
 	defer t.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			timePassed := time.Since(h.startTS).Truncate(time.Second)
+			timePassed := clock.Get().Since(h.startTS).Truncate(time.Second)
 			h.startStopButton.Text = timePassed.String()
 			h.startStopButton.Refresh()
 		}
@@ -58,7 +60,7 @@ func (h *updateTimerHandler) Stop() time.Duration {
 	}
 
 	h.cancelFn()
-	return time.Since(h.GetStartTS())
+	return clock.Get().Since(h.GetStartTS())
 }
 
 func (h *updateTimerHandler) Close() error {

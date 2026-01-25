@@ -50,7 +50,9 @@ type OAuthURLHandler struct {
 
 var _ streamd_grpc.StreamDServer = (*GRPCServer)(nil)
 
-func NewGRPCServer(streamd api.StreamD) *GRPCServer {
+func NewGRPCServer(
+	streamd api.StreamD,
+) *GRPCServer {
 	return &GRPCServer{
 		StreamD:          streamd,
 		MemoizeDataValue: memoize.NewMemoizeData(),
