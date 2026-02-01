@@ -121,6 +121,23 @@ func (c *ClientCalcPoints) GetStreams(
 	return c.Client.GetStreams(ctx, parts)
 }
 
+func (c *ClientCalcPoints) InsertStream(
+	ctx context.Context,
+	s *youtube.LiveStream,
+	parts []string,
+) (_ret *youtube.LiveStream, _err error) {
+	defer func() { c.addUsedPointsIfNoError(ctx, 50, _err) }()
+	return c.Client.InsertStream(ctx, s, parts)
+}
+
+func (c *ClientCalcPoints) DeleteStream(
+	ctx context.Context,
+	id string,
+) (_err error) {
+	defer func() { c.addUsedPointsIfNoError(ctx, 50, _err) }()
+	return c.Client.DeleteStream(ctx, id)
+}
+
 func (c *ClientCalcPoints) GetVideos(
 	ctx context.Context,
 	broadcastIDs []string,

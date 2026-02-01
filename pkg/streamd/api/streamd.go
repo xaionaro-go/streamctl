@@ -79,6 +79,15 @@ type StreamD interface {
 		ctx context.Context,
 		accountID ...streamcontrol.AccountIDFullyQualified,
 	) ([]streamcontrol.StreamInfo, error)
+	CreateStream(
+		ctx context.Context,
+		accountID streamcontrol.AccountIDFullyQualified,
+		title string,
+	) (streamcontrol.StreamInfo, error)
+	DeleteStream(
+		ctx context.Context,
+		streamID streamcontrol.StreamIDFullyQualified,
+	) error
 	GetActiveStreamIDs(
 		ctx context.Context,
 	) ([]streamcontrol.StreamIDFullyQualified, error)

@@ -76,7 +76,16 @@ func init() {
 			return changed
 		},
 		GetBackendData: func(ctx context.Context, d *StreamD) (any, error) {
-			return api.BackendDataYouTube{Cache: d.GetYouTubeCache(ctx, "")}, nil
+			controllers := d.getControllersByPlatform(youtube.ID)
+			var broadcasts []*youtube.LiveBroadcast
+			for accountID := range controllers {
+				bc := d.GetYouTubeCache(ctx, accountID).Broadcasts
+				if len(bc) > 0 {
+					broadcasts = bc
+					break
+				}
+			}
+			return api.BackendDataYouTube{Cache: &cache.YouTube{Broadcasts: broadcasts}}, nil
 		},
 		OnStartedStream: func(ctx context.Context, d *StreamD) {
 			observability.Go(ctx, func(ctx context.Context) {

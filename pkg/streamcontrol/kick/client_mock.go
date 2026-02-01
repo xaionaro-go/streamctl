@@ -134,7 +134,10 @@ func (c *clientMock) GetLivestreamV2(ctx context.Context, channelSlug string) (*
 }
 
 func (c *clientMock) GetSubcategoriesV1(ctx context.Context) (*kickcom.CategoriesV1Reply, error) {
-	return &kickcom.CategoriesV1Reply{}, nil
+	return &kickcom.CategoriesV1Reply{
+		{ID: 1, Name: "Mock Category 1"},
+		{ID: 2, Name: "Mock Category 2"},
+	}, nil
 }
 
 func (c *clientMock) SendChatMessage(

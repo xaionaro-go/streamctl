@@ -67,7 +67,7 @@ func StreamSinkIDFullyQualifiedToGRPC(in streamtypes.StreamSinkIDFullyQualified)
 }
 
 func StreamIDFullyQualifiedFromGRPC(in *streamd_grpc.StreamIDFullyQualified) streamcontrol.StreamIDFullyQualified {
-	if in == nil {
+	if in == nil || in.GetPlatformID() == "" || in.GetAccountID() == "" || in.GetStreamID() == "" {
 		return streamcontrol.StreamIDFullyQualified{}
 	}
 	return streamcontrol.NewStreamIDFullyQualified(

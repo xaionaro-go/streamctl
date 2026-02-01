@@ -20,13 +20,13 @@ type OAuth2Token = secret.Any[oauth2.Token]
 type AccountConfig struct {
 	streamcontrol.AccountConfigBase[StreamProfile] `yaml:",inline"`
 
-	ChannelID           string
-	ClientID            string
-	ClientSecret        secret.String
-	Token               *OAuth2Token
-	ActiveStreamIDs     []string
-	CustomOAuthHandler  OAuthHandler    `yaml:"-"`
-	GetOAuthListenPorts func() []uint16 `yaml:"-"`
+	AllowlistedStreamIDs []streamcontrol.StreamID `yaml:"allowlisted_stream_ids,omitempty"`
+	ChannelID            string
+	ClientID             string
+	ClientSecret         secret.String
+	Token                *OAuth2Token
+	CustomOAuthHandler   OAuthHandler    `yaml:"-"`
+	GetOAuthListenPorts  func() []uint16 `yaml:"-"`
 }
 
 type Config = streamctl.PlatformConfig[AccountConfig, StreamProfile]

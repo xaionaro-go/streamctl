@@ -331,6 +331,14 @@ func (obs *OBS) BanUser(
 	return fmt.Errorf("not implemented, yet")
 }
 
+func (obs *OBS) CreateStream(ctx context.Context, title string) (streamcontrol.StreamInfo, error) {
+	return streamcontrol.StreamInfo{}, fmt.Errorf("not implemented")
+}
+
+func (obs *OBS) DeleteStream(ctx context.Context, streamID streamcontrol.StreamID) error {
+	return fmt.Errorf("not implemented")
+}
+
 func (obs *OBS) IsCapable(
 	ctx context.Context,
 	cap streamcontrol.Capability,

@@ -824,6 +824,67 @@ func (c *Client) GetStreams(
 	return result, nil
 }
 
+func (c *Client) CreateStream(
+	ctx context.Context,
+	accountID streamcontrol.AccountIDFullyQualified,
+	title string,
+) (streamcontrol.StreamInfo, error) {
+	reply, err := withStreamDClient(ctx, c, func(
+		ctx context.Context,
+		client streamd_grpc.StreamDClient,
+		conn io.Closer,
+	) (*streamd_grpc.CreateStreamReply, error) {
+		return callWrapper(
+			ctx,
+			c,
+			client.CreateStream,
+			&streamd_grpc.CreateStreamRequest{
+				AccountID: goconv.AccountIDFullyQualifiedToGRPC(accountID),
+				Title:     title,
+			},
+		)
+	})
+	if err != nil {
+		return streamcontrol.StreamInfo{}, fmt.Errorf(
+			"unable to create the stream: %w",
+			err,
+		)
+	}
+
+	return streamcontrol.StreamInfo{
+		ID:   streamcontrol.StreamID(reply.Stream.ID),
+		Name: reply.Stream.Name,
+	}, nil
+}
+
+func (c *Client) DeleteStream(
+	ctx context.Context,
+	streamID streamcontrol.StreamIDFullyQualified,
+) error {
+	_, err := withStreamDClient(ctx, c, func(
+		ctx context.Context,
+		client streamd_grpc.StreamDClient,
+		conn io.Closer,
+	) (*streamd_grpc.DeleteStreamReply, error) {
+		return callWrapper(
+			ctx,
+			c,
+			client.DeleteStream,
+			&streamd_grpc.DeleteStreamRequest{
+				StreamID: goconv.StreamIDFullyQualifiedToGRPC(streamID),
+			},
+		)
+	})
+	if err != nil {
+		return fmt.Errorf(
+			"unable to delete the stream: %w",
+			err,
+		)
+	}
+
+	return nil
+}
+
 func (c *Client) GetActiveStreamIDs(
 	ctx context.Context,
 ) ([]streamcontrol.StreamIDFullyQualified, error) {

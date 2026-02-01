@@ -14,6 +14,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
+	"github.com/xaionaro-go/kickcom"
 	"github.com/xaionaro-go/object"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -73,7 +74,16 @@ func init() {
 			return changed
 		},
 		GetBackendData: func(ctx context.Context, d *StreamD) (any, error) {
-			return api.BackendDataKick{Cache: d.GetKickCache(ctx, "")}, nil
+			controllers := d.getControllersByPlatform(kick.ID)
+			var categories []kickcom.CategoryV1Short
+			for accountID := range controllers {
+				cats := d.GetKickCache(ctx, accountID).GetCategories()
+				if len(cats) > 0 {
+					categories = cats
+					break
+				}
+			}
+			return api.BackendDataKick{Cache: &cache.Kick{Categories: &categories}}, nil
 		},
 		IsPlatformURL: func(u *url.URL) bool {
 			return strings.Contains(u.Hostname(), "global-contribute.live-video.net")
@@ -89,7 +99,7 @@ func (d *StreamD) initKickBackend(ctx context.Context) error {
 	}
 
 	ctx = belt.WithField(ctx, "controller", kick.ID)
-	platCfgConverted := streamcontrol.ConvertPlatformConfig[kick.AccountConfig, kick.StreamProfile](ctx, platCfg)
+	platCfgConverted := streamcontrol.ConvertPlatformConfig[kick.AccountConfig](ctx, platCfg)
 
 	currentControllers := d.getControllersByPlatform(kick.ID)
 	for id, ctrl := range currentControllers {
@@ -163,21 +173,20 @@ func (d *StreamD) initKickData(ctx context.Context) bool {
 
 	anyChanged := false
 	for accountID, c := range kickControllers {
-		if c := len(d.GetKickCache(ctx, accountID).GetCategories()); c != 0 {
-			logger.FromCtx(ctx).Debugf("already have categories for account '%s' (count: %d)", accountID, c)
+		if len(d.GetKickCache(ctx, accountID).GetCategories()) != 0 {
 			continue
 		}
 
-		anyKick := c.GetImplementation().(*kick.Kick)
-		allCategories, err := anyKick.GetAllCategories(d.ctxForController(ctx))
+		accountController := c.GetImplementation().(*kick.Kick)
+		categories, err := accountController.GetAllCategories(d.ctxForController(ctx))
 		if err != nil {
 			d.UI.DisplayError(err)
 			continue
 		}
 
-		logger.FromCtx(ctx).Debugf("got categories for account '%s': %#+v", accountID, allCategories)
+		logger.FromCtx(ctx).Debugf("got categories for account '%s': (count: %d)", accountID, len(categories))
 		d.CacheLock.Do(ctx, func() {
-			d.getKickCache(ctx, accountID).SetCategories(allCategories)
+			d.getKickCache(ctx, accountID).SetCategories(categories)
 		})
 		anyChanged = true
 	}

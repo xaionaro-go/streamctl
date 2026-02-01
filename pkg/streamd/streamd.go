@@ -73,8 +73,7 @@ type StreamD struct {
 	GitSyncerMutex  xsync.Mutex
 	GitInitialized  bool
 
-	AccountMap     Accounts
-	ActiveProfiles map[streamcontrol.StreamIDFullyQualified]streamcontrol.ProfileName
+	AccountMap Accounts
 
 	Variables sync.Map
 
@@ -151,7 +150,6 @@ func New(
 		ReadyChan:      make(chan struct{}),
 		lastShoutoutAt: map[config.ChatUserID]time.Time{},
 		AccountMap:     make(Accounts),
-		ActiveProfiles: make(map[streamcontrol.StreamIDFullyQualified]streamcontrol.ProfileName),
 	}
 	d.StreamStatusCache = memoize.NewMemoizeData()
 
@@ -1057,13 +1055,6 @@ func (d *StreamD) SetStreamActive(
 		for accountID, ctrl := range controllers {
 			if streamID.AccountID != "" && streamID.AccountID != accountID {
 				continue
-			}
-			if platCfg := d.Config.Backends[platID]; platCfg != nil {
-				if accCfg, ok := platCfg.Accounts[accountID]; ok {
-					if !accCfg.IsEnabled() {
-						continue
-					}
-				}
 			}
 
 			if active {

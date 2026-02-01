@@ -1,15 +1,10 @@
 package streampanel
 
 import (
-	"github.com/xaionaro-go/streamctl/pkg/clock"
-)
-
-import (
 	"context"
 	"fmt"
 	"net/url"
 	"strings"
-	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -53,15 +48,11 @@ func (ui *kickProfileUI) GetUserInfoItems(
 		"channel ID (copy&paste it from the browser: https://www.kick.com/<the channel ID is here>)",
 	)
 	channelField.SetText(cfg.Channel)
-	clientIDField := widget.NewEntry()
-	clientIDField.SetPlaceHolder("client ID")
-	clientIDField.SetText(cfg.ClientID)
+	clientIDField := newClientIDField(cfg.ClientID)
 	if clientSecretIsBuiltin {
 		clientIDField.Hide()
 	}
-	clientSecretField := widget.NewEntry()
-	clientSecretField.SetPlaceHolder("client secret")
-	clientSecretField.SetText(cfg.ClientSecret.Get())
+	clientSecretField := newClientSecretField(cfg.ClientSecret.Get())
 	if clientSecretIsBuiltin {
 		clientSecretField.Hide()
 	}
@@ -120,92 +111,60 @@ func (ui *kickProfileUI) RenderStream(
 	catN := map[string]kickcom.CategoryV1Short{}
 	catI := map[uint64]kickcom.CategoryV1Short{}
 	for _, cat := range kickCategories {
-		catN[cleanKickCategoryName(cat.Name)] = cat
+		catN[cleanString(cat.Name)] = cat
 		catI[cat.ID] = cat
 	}
 
-	kickCategory := widget.NewEntry()
-	kickCategory.SetPlaceHolder("kick category")
-
-	selectKickCategoryBox := container.NewHBox()
-	kickCategory.OnChanged = func(text string) {
-		selectKickCategoryBox.RemoveAll()
-		if text == "" {
-			return
+	var initialCategoryName *string
+	if kickProfile.CategoryID != nil {
+		if cat, ok := catI[*kickProfile.CategoryID]; ok {
+			initialCategoryName = &cat.Name
 		}
-		text = cleanKickCategoryName(text)
-		count := 0
-		for _, cat := range kickCategories {
-			if strings.Contains(cleanKickCategoryName(cat.Name), text) {
-				selectedKickCategoryContainer := container.NewHBox()
-				catName := cat.Name
-				tagContainerRemoveButton := widget.NewButtonWithIcon(
-					catName,
-					theme.ContentAddIcon(),
-					func() {
-						kickCategory.OnSubmitted(catName)
-					},
-				)
-				selectedKickCategoryContainer.Add(tagContainerRemoveButton)
-				selectKickCategoryBox.Add(selectedKickCategoryContainer)
-				count++
-				if count > 10 {
-					break
+	}
+
+	searchParams := searchSelectParams{
+		ctx:         ctx,
+		p:           p,
+		placeholder: "kick category",
+		onSearch: func(text string) []searchResult {
+			var results []searchResult
+			count := 0
+			for _, cat := range kickCategories {
+				if strings.Contains(cleanString(cat.Name), text) {
+					results = append(results, searchResult{
+						ID:   fmt.Sprintf("%d", cat.ID),
+						Name: cat.Name,
+					})
+					count++
+					if count > 10 {
+						break
+					}
 				}
 			}
-		}
-		selectKickCategoryBox.Refresh()
-	}
-
-	selectedKickCategoryBox := container.NewHBox()
-
-	setSelectedKickCategory := func(catID uint64) {
-		selectedKickCategoryBox.RemoveAll()
-		selectedKickCategoryContainer := container.NewHBox()
-		tagContainerRemoveButton := widget.NewButtonWithIcon(
-			catI[catID].Name,
-			theme.ContentClearIcon(),
-			func() {
-				selectedKickCategoryBox.Remove(selectedKickCategoryContainer)
-				kickProfile.CategoryID = nil
-			},
-		)
-		selectedKickCategoryContainer.Add(tagContainerRemoveButton)
-		selectedKickCategoryBox.Add(selectedKickCategoryContainer)
-		selectedKickCategoryBox.Refresh()
-		kickProfile.CategoryID = &catID
-	}
-
-	if kickProfile.CategoryID != nil {
-		setSelectedKickCategory(*kickProfile.CategoryID)
-	}
-
-	kickCategory.OnSubmitted = func(text string) {
-		if text == "" {
-			return
-		}
-		text = cleanKickCategoryName(text)
-		cat := catN[text]
-		setSelectedKickCategory(uint64(cat.ID))
-		observability.Go(ctx, func(ctx context.Context) {
-			clock.Get().Sleep(100 * time.Millisecond)
-			kickCategory.SetText("")
-		})
+			return results
+		},
+		onSelected: func(id string, name string) {
+			if id == "" {
+				return
+			}
+			var catID uint64
+			fmt.Sscanf(id, "%d", &catID)
+			kickProfile.CategoryID = &catID
+		},
+		initialName: initialCategoryName,
+		onClear: func() {
+			kickProfile.CategoryID = nil
+		},
+		observabilityG: observability.Go,
 	}
 
 	content := container.NewVBox(
-		selectKickCategoryBox,
-		selectedKickCategoryBox,
-		kickCategory,
+		newSearchSelect(searchParams),
 	)
 
 	return content, func() (any, error) {
 		return kickProfile, nil
 	}
-}
-
-func cleanKickCategoryName(in string) string {
-	return strings.ToLower(strings.Trim(in, " "))
 }
 
 func (ui *kickProfileUI) IsReadyToStart(ctx context.Context, p *Panel) bool {

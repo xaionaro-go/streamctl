@@ -12,6 +12,8 @@ const (
 	CapabilityShoutout
 	CapabilityIsChannelStreaming
 	CapabilityRaid
+	CapabilityCreateStream
+	CapabilityDeleteStream
 	EndOfCapability
 )
 
@@ -31,13 +33,17 @@ func (c Capability) String() string {
 		return "is_channel_streaming"
 	case CapabilityRaid:
 		return "raid"
+	case CapabilityCreateStream:
+		return "create_stream"
+	case CapabilityDeleteStream:
+		return "delete_stream"
 	default:
 		return fmt.Sprintf("unknown_%d", int(c))
 	}
 }
 
 func ParseCapability(s string) Capability {
-	for c := UndefinedCapability; c < EndOfCapability; c++ {
+	for c := range EndOfCapability {
 		if c.String() == s {
 			return c
 		}

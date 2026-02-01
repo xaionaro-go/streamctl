@@ -14,6 +14,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
+	"github.com/nicklaw5/helix/v2"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
@@ -72,7 +73,16 @@ func init() {
 			return changed
 		},
 		GetBackendData: func(ctx context.Context, d *StreamD) (any, error) {
-			return api.BackendDataTwitch{Cache: d.GetTwitchCache(ctx, "")}, nil
+			controllers := d.getControllersByPlatform(twitch.ID)
+			var categories []helix.Game
+			for accountID := range controllers {
+				cats := d.GetTwitchCache(ctx, accountID).Categories
+				if len(cats) > 0 {
+					categories = cats
+					break
+				}
+			}
+			return api.BackendDataTwitch{Cache: &cache.Twitch{Categories: categories}}, nil
 		},
 		IsPlatformURL: func(u *url.URL) bool {
 			return strings.Contains(u.Hostname(), "twitch")

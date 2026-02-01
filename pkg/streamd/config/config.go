@@ -25,6 +25,7 @@ type config struct {
 	ChatMessagesStorage *string `yaml:"chat_messages_storage"`
 	GitRepo             GitRepoConfig
 	Backends            streamcontrol.Config
+	SelectedStreamIDs   []streamcontrol.StreamIDFullyQualified `yaml:"selected_stream_ids,omitempty"`
 	ProfileMetadata     map[streamcontrol.ProfileName]ProfileMetadata
 	StreamServer        streamserver.Config `yaml:"stream_server"`
 	Dashboard           DashboardConfig     `yaml:"monitor"` // TODO: rename to `dashboard`

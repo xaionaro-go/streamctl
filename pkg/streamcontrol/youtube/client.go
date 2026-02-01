@@ -44,6 +44,8 @@ type client interface {
 	InsertBroadcast(context.Context, *youtube.LiveBroadcast, []string) (*youtube.LiveBroadcast, error)
 	DeleteBroadcast(context.Context, string) error
 	GetStreams(ctx context.Context, parts []string) (*youtube.LiveStreamListResponse, error)
+	InsertStream(context.Context, *youtube.LiveStream, []string) (*youtube.LiveStream, error)
+	DeleteStream(context.Context, string) error
 	GetVideos(ctx context.Context, broadcastIDs []string, parts []string) (*youtube.VideoListResponse, error)
 	UpdateVideo(context.Context, *youtube.Video, []string) error
 	InsertCuepoint(context.Context, *youtube.Cuepoint) error
@@ -286,6 +288,27 @@ func (c *clientV3) GetStreams(
 	defer func() { logger.Tracef(ctx, "/GetStreams: %v", _err) }()
 	do := c.Service.LiveStreams.List(parts).Mine(true).MaxResults(20).Context(ctx).Do
 	return wrapRequestR(ctx, c.RequestWrapper, do)
+}
+
+func (c *clientV3) InsertStream(
+	ctx context.Context,
+	s *youtube.LiveStream,
+	parts []string,
+) (_ret *youtube.LiveStream, _err error) {
+	logger.Tracef(ctx, "InsertStream")
+	defer func() { logger.Tracef(ctx, "/InsertStream: %v", _err) }()
+	do := c.Service.LiveStreams.Insert(parts, s).Context(ctx).Do
+	return wrapRequestR(ctx, c.RequestWrapper, do)
+}
+
+func (c *clientV3) DeleteStream(
+	ctx context.Context,
+	id string,
+) (_err error) {
+	logger.Tracef(ctx, "DeleteStream")
+	defer func() { logger.Tracef(ctx, "/DeleteStream: %v", _err) }()
+	do := c.Service.LiveStreams.Delete(id).Context(ctx).Do
+	return wrapRequest(ctx, c.RequestWrapper, do)
 }
 
 func (c *clientV3) InsertCommentThread(

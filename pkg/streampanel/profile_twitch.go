@@ -1,15 +1,10 @@
 package streampanel
 
 import (
-	"github.com/xaionaro-go/streamctl/pkg/clock"
-)
-
-import (
 	"context"
 	"fmt"
 	"net/url"
 	"strings"
-	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -52,15 +47,11 @@ func (ui *twitchProfileUI) GetUserInfoItems(
 	channelField.SetPlaceHolder(
 		"channel ID (copy&paste it from the browser: https://www.twitch.tv/<the channel ID is here>)",
 	)
-	clientIDField := widget.NewEntry()
-	clientIDField.SetText(cfg.ClientID)
-	clientIDField.SetPlaceHolder("client ID")
+	clientIDField := newClientIDField(cfg.ClientID)
 	if clientSecretIsBuiltin {
 		clientIDField.Hide()
 	}
-	clientSecretField := widget.NewEntry()
-	clientSecretField.SetText(cfg.ClientSecret.Get())
-	clientSecretField.SetPlaceHolder("client secret")
+	clientSecretField := newClientSecretField(cfg.ClientSecret.Get())
 	if clientSecretIsBuiltin {
 		clientSecretField.Hide()
 	}
@@ -116,94 +107,60 @@ func (ui *twitchProfileUI) RenderStream(
 		_ = yaml.Unmarshal(streamcontrol.ToRawMessage(streamConfig), &twitchProfile)
 	}
 
-	twitchCategory := widget.NewEntry()
-	twitchCategory.SetPlaceHolder("twitch category")
-
-	selectTwitchCategoryBox := container.NewHBox()
-	twitchCategory.OnChanged = func(text string) {
-		selectTwitchCategoryBox.RemoveAll()
-		if text == "" {
-			return
-		}
-		text = cleanTwitchCategoryName(text)
-		count := 0
-		for _, cat := range dataTwitch.Cache.Categories {
-			if strings.Contains(cleanTwitchCategoryName(cat.Name), text) {
-				selectedTwitchCategoryContainer := container.NewHBox()
-				catName := cat.Name
-				tagContainerRemoveButton := widget.NewButtonWithIcon(
-					catName,
-					theme.ContentAddIcon(),
-					func() {
-						twitchCategory.OnSubmitted(catName)
-					},
-				)
-				selectedTwitchCategoryContainer.Add(tagContainerRemoveButton)
-				selectTwitchCategoryBox.Add(selectedTwitchCategoryContainer)
-				count++
-				if count > 10 {
-					break
-				}
-			}
-		}
-		selectTwitchCategoryBox.Refresh()
-	}
-
-	selectedTwitchCategoryBox := container.NewHBox()
-
-	setSelectedTwitchCategory := func(catName string) {
-		selectedTwitchCategoryBox.RemoveAll()
-		selectedTwitchCategoryContainer := container.NewHBox()
-		tagContainerRemoveButton := widget.NewButtonWithIcon(
-			catName,
-			theme.ContentClearIcon(),
-			func() {
-				selectedTwitchCategoryBox.Remove(selectedTwitchCategoryContainer)
-				twitchProfile.CategoryName = nil
-			},
-		)
-		selectedTwitchCategoryContainer.Add(tagContainerRemoveButton)
-		selectedTwitchCategoryBox.Add(selectedTwitchCategoryContainer)
-		selectedTwitchCategoryBox.Refresh()
-		twitchProfile.CategoryName = &catName
-	}
-
+	var initialCategoryName *string
 	if twitchProfile.CategoryName != nil {
-		setSelectedTwitchCategory(*twitchProfile.CategoryName)
+		initialCategoryName = twitchProfile.CategoryName
 	}
 	if twitchProfile.CategoryID != nil {
 		catID := *twitchProfile.CategoryID
 		for _, cat := range dataTwitch.Cache.Categories {
 			if cat.ID == catID {
-				setSelectedTwitchCategory(cat.Name)
+				initialCategoryName = &cat.Name
 				break
 			}
 		}
 	}
 
-	twitchCategory.OnSubmitted = func(text string) {
-		if text == "" {
-			return
-		}
-		text = cleanTwitchCategoryName(text)
-		for _, cat := range dataTwitch.Cache.Categories {
-			if cleanTwitchCategoryName(cat.Name) == text {
-				setSelectedTwitchCategory(cat.Name)
-				observability.Go(ctx, func(ctx context.Context) {
-					clock.Get().Sleep(100 * time.Millisecond)
-					twitchCategory.SetText("")
-				})
-				return
+	params := searchSelectParams{
+		ctx:         ctx,
+		p:           p,
+		placeholder: "twitch category",
+		onSearch: func(text string) []searchResult {
+			var results []searchResult
+			count := 0
+			for _, cat := range dataTwitch.Cache.Categories {
+				if strings.Contains(cleanString(cat.Name), text) {
+					results = append(results, searchResult{
+						ID:   cat.ID,
+						Name: cat.Name,
+					})
+					count++
+					if count > 10 {
+						break
+					}
+				}
 			}
-		}
+			return results
+		},
+		onSelected: func(id string, name string) {
+			catName := name
+			twitchProfile.CategoryName = &catName
+			if id != "" {
+				twitchProfile.CategoryID = &id
+			}
+		},
+		initialName: initialCategoryName,
+		onClear: func() {
+			twitchProfile.CategoryName = nil
+			twitchProfile.CategoryID = nil
+		},
+		observabilityG: observability.Go,
 	}
 
 	twitchTagsEditor := newTagsEditor(twitchProfile.Tags[:], 10, 0)
 
 	content := container.NewVBox(
-		selectTwitchCategoryBox,
-		selectedTwitchCategoryBox,
-		twitchCategory,
+		newSearchSelect(params),
 		widget.NewLabel("Tags:"),
 		twitchTagsEditor.CanvasObject,
 	)
@@ -221,9 +178,6 @@ func (ui *twitchProfileUI) RenderStream(
 		}
 		return twitchProfile, nil
 	}
-}
-func cleanTwitchCategoryName(in string) string {
-	return strings.ToLower(strings.Trim(in, " "))
 }
 
 func (ui *twitchProfileUI) IsReadyToStart(ctx context.Context, p *Panel) bool {

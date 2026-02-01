@@ -527,6 +527,40 @@ func (grpc *GRPCServer) GetStreams(
 	}, nil
 }
 
+func (grpc *GRPCServer) CreateStream(
+	ctx context.Context,
+	req *streamd_grpc.CreateStreamRequest,
+) (*streamd_grpc.CreateStreamReply, error) {
+	stream, err := grpc.StreamD.CreateStream(
+		ctx,
+		goconv.AccountIDFullyQualifiedFromGRPC(req.GetAccountID()),
+		req.GetTitle(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.CreateStreamReply{
+		Stream: &streamd_grpc.StreamInfo{
+			ID:   string(stream.ID),
+			Name: stream.Name,
+		},
+	}, nil
+}
+
+func (grpc *GRPCServer) DeleteStream(
+	ctx context.Context,
+	req *streamd_grpc.DeleteStreamRequest,
+) (*streamd_grpc.DeleteStreamReply, error) {
+	err := grpc.StreamD.DeleteStream(
+		ctx,
+		goconv.StreamIDFullyQualifiedFromGRPC(req.GetStreamID()),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.DeleteStreamReply{}, nil
+}
+
 func (grpc *GRPCServer) GetPlatforms(
 	ctx context.Context,
 	req *streamd_grpc.GetPlatformsRequest,

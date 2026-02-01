@@ -942,6 +942,14 @@ func (k *Kick) IsCapable(
 	return false
 }
 
+func (k *Kick) CreateStream(ctx context.Context, title string) (streamcontrol.StreamInfo, error) {
+	return streamcontrol.StreamInfo{}, fmt.Errorf("not implemented")
+}
+
+func (k *Kick) DeleteStream(ctx context.Context, streamID streamcontrol.StreamID) error {
+	return fmt.Errorf("not implemented")
+}
+
 func (k *Kick) IsChannelStreaming(
 	ctx context.Context,
 	chanID streamcontrol.UserID,
@@ -1081,4 +1089,20 @@ func (k *Kick) sendShoutoutMessage(
 	}
 
 	return nil
+}
+
+func GetStreamStatusCustomData(s *streamcontrol.StreamStatus) CustomData {
+	if s == nil {
+		return CustomData{}
+	}
+	switch data := s.CustomData.(type) {
+	case CustomData:
+		return data
+	case *CustomData:
+		if data == nil {
+			return CustomData{}
+		}
+		return *data
+	}
+	return CustomData{}
 }

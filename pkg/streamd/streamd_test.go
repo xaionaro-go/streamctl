@@ -94,6 +94,32 @@ func TestStreamDConfigRoundTrip(t *testing.T) {
 	require.Equal(t, false, gotCfg2.Backends[twitch.ID].IsEnabled())
 }
 
+func TestStreamDGetStreamSinkConfig_Kick_NotImplemented(t *testing.T) {
+	kick.SetDebugUseMockClient(true)
+	cfg := config.Config{
+		Backends: streamcontrol.Config{
+			kick.ID: &streamcontrol.AbstractPlatformConfig{
+				Accounts: map[streamcontrol.AccountID]streamcontrol.RawMessage{
+					"default": streamcontrol.RawMessage(`{"enable":true, "channel": "test", "user_access_token": "fake"}`),
+				},
+			},
+		},
+	}
+	d, err := New(cfg, &mockUI{}, nil, belt.New())
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(observability.WithSecretsProvider(context.Background(), &observability.SecretsStaticProvider{}))
+	defer cancel()
+
+	err = d.Run(ctx)
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool {
+		_, err = d.GetStreamSinkConfig(ctx, streamcontrol.NewStreamIDFullyQualified(kick.ID, "default", "default"))
+		return err == nil
+	}, 5*time.Second, 100*time.Millisecond)
+}
+
 func TestStreamDStreamControlMocked(t *testing.T) {
 	twitch.SetDebugUseMockClient(true)
 	cfg := config.Config{
@@ -341,7 +367,11 @@ func (m *mockController) StreamProfileType() reflect.Type {
 }
 
 func (m *mockController) GetStreams(ctx context.Context) ([]streamcontrol.StreamInfo, error) {
-	return nil, nil
+	return []streamcontrol.StreamInfo{
+		{
+			ID: streamcontrol.DefaultStreamID,
+		},
+	}, nil
 }
 func (m *mockController) InsertAdsCuePoint(ctx context.Context, streamSourceID streamcontrol.StreamID, ts time.Time, duration time.Duration) error {
 	return nil
@@ -373,10 +403,12 @@ func (m *mockController) RaidTo(ctx context.Context, streamID streamcontrol.Stre
 
 func TestStreamDGetActiveAccountIDsInheritance(t *testing.T) {
 	acc1ID := streamcontrol.AccountID("acc1")
-	streamID1 := streamcontrol.NewStreamIDFullyQualified(youtube.ID, acc1ID, streamcontrol.DefaultStreamID)
+	// streamID1 := streamcontrol.NewStreamIDFullyQualified(youtube.ID, acc1ID, streamcontrol.DefaultStreamID)
 	d := &StreamD{
-		ActiveProfiles: make(map[streamcontrol.StreamIDFullyQualified]streamcontrol.ProfileName),
 		Config: config.Config{
+			SelectedStreamIDs: []streamcontrol.StreamIDFullyQualified{
+				streamcontrol.NewStreamIDFullyQualified(youtube.ID, acc1ID, streamcontrol.DefaultStreamID),
+			},
 			Backends: streamcontrol.Config{
 				youtube.ID: &streamcontrol.AbstractPlatformConfig{
 					Accounts: map[streamcontrol.AccountID]streamcontrol.RawMessage{
@@ -407,12 +439,55 @@ func TestStreamDGetActiveAccountIDsInheritance(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Child should inherit AccountIDs from parent
-	d.ActiveProfiles[streamID1] = "child"
 	ids, err := d.GetActiveStreamIDs(ctx)
 	require.NoError(t, err)
 	require.Len(t, ids, 1)
 	require.Equal(t, streamcontrol.AccountID("acc1"), ids[0].AccountID)
+}
+
+func TestStreamDGetActiveStreamIDsFiltering(t *testing.T) {
+	acc1ID := streamcontrol.AccountID("acc1")
+	acc2ID := streamcontrol.AccountID("acc2")
+	stream1 := streamcontrol.NewStreamIDFullyQualified(youtube.ID, acc1ID, streamcontrol.DefaultStreamID)
+	stream2 := streamcontrol.NewStreamIDFullyQualified(youtube.ID, acc2ID, streamcontrol.DefaultStreamID)
+
+	d := &StreamD{
+		Config: config.Config{
+			SelectedStreamIDs: []streamcontrol.StreamIDFullyQualified{stream1},
+			Backends: streamcontrol.Config{
+				youtube.ID: &streamcontrol.AbstractPlatformConfig{
+					Accounts: map[streamcontrol.AccountID]streamcontrol.RawMessage{
+						acc1ID: streamcontrol.ToRawMessage(youtube.AccountConfig{}),
+						acc2ID: streamcontrol.ToRawMessage(youtube.AccountConfig{}),
+					},
+				},
+			},
+		},
+		AccountMap: Accounts{
+			streamcontrol.NewAccountIDFullyQualified(youtube.ID, "acc1"): streamcontrol.ToAbstractAccount(&mockController{}),
+			streamcontrol.NewAccountIDFullyQualified(youtube.ID, "acc2"): streamcontrol.ToAbstractAccount(&mockController{}),
+		},
+		EventBus: eventbus.New(),
+	}
+
+	ctx := context.Background()
+
+	ids, err := d.GetActiveStreamIDs(ctx)
+	require.NoError(t, err)
+	require.Len(t, ids, 1)
+	require.Equal(t, stream1, ids[0])
+
+	// Now select both
+	d.Config.SelectedStreamIDs = []streamcontrol.StreamIDFullyQualified{stream1, stream2}
+	ids, err = d.GetActiveStreamIDs(ctx)
+	require.NoError(t, err)
+	require.Len(t, ids, 2)
+
+	// Now select none
+	d.Config.SelectedStreamIDs = nil
+	ids, err = d.GetActiveStreamIDs(ctx)
+	require.NoError(t, err)
+	require.Len(t, ids, 0)
 }
 
 func TestStreamDApplyProfileDeactivation(t *testing.T) {
@@ -455,7 +530,6 @@ func TestStreamDApplyProfileDeactivation(t *testing.T) {
 	onlyAcc1Profile := youtube.StreamProfile{}
 	allProfile := youtube.StreamProfile{}
 	d := &StreamD{
-		ActiveProfiles: make(map[streamcontrol.StreamIDFullyQualified]streamcontrol.ProfileName),
 		Config: config.Config{
 			Backends: streamcontrol.Config{
 				youtube.ID: &streamcontrol.AbstractPlatformConfig{
@@ -496,7 +570,6 @@ func TestStreamDApplyProfileDeactivation(t *testing.T) {
 	ctx := context.Background()
 
 	// Applying "only-acc1" should disable acc2
-	d.ActiveProfiles[streamcontrol.NewStreamIDFullyQualified(youtube.ID, "acc1", streamcontrol.DefaultStreamID)] = "only-acc1"
 	err := d.ApplyProfile(ctx, streamcontrol.NewStreamIDFullyQualified(youtube.ID, "acc1", streamcontrol.DefaultStreamID), streamcontrol.ToRawMessage(map[string]any{"enable": true}))
 	require.NoError(t, err)
 	err = d.ApplyProfile(ctx, streamcontrol.NewStreamIDFullyQualified(youtube.ID, "acc2", streamcontrol.DefaultStreamID), streamcontrol.ToRawMessage(map[string]any{"enable": false}))
@@ -507,7 +580,6 @@ func TestStreamDApplyProfileDeactivation(t *testing.T) {
 	require.False(t, forwards[1].Enabled, "acc2 should be disabled")
 
 	// Applying "all" should re-enable acc2
-	d.ActiveProfiles[streamcontrol.NewStreamIDFullyQualified(youtube.ID, "acc2", streamcontrol.DefaultStreamID)] = "all"
 	err = d.ApplyProfile(ctx, streamcontrol.NewStreamIDFullyQualified(youtube.ID, "acc2", streamcontrol.DefaultStreamID), streamcontrol.ToRawMessage(map[string]any{"enable": true}))
 	require.NoError(t, err)
 
@@ -519,6 +591,9 @@ func TestStreamDListStreamSinksDynamic(t *testing.T) {
 	twitch.SetDebugUseMockClient(true)
 
 	cfg := config.Config{
+		SelectedStreamIDs: []streamcontrol.StreamIDFullyQualified{
+			streamcontrol.NewStreamIDFullyQualified(twitch.ID, "test", streamcontrol.DefaultStreamID),
+		},
 		Backends: streamcontrol.Config{
 			twitch.ID: &streamcontrol.AbstractPlatformConfig{
 				Accounts: map[streamcontrol.AccountID]streamcontrol.RawMessage{
@@ -562,6 +637,9 @@ func TestStreamDGetActiveStreamIDsBasic(t *testing.T) {
 	twitch.SetDebugUseMockClient(true)
 
 	cfg := config.Config{
+		SelectedStreamIDs: []streamcontrol.StreamIDFullyQualified{
+			streamcontrol.NewStreamIDFullyQualified(twitch.ID, "test", streamcontrol.DefaultStreamID),
+		},
 		Backends: streamcontrol.Config{
 			twitch.ID: &streamcontrol.AbstractPlatformConfig{
 				Accounts: map[streamcontrol.AccountID]streamcontrol.RawMessage{

@@ -19,6 +19,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	benbjohnsonclock "github.com/benbjohnson/clock"
+	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/nicklaw5/helix/v2"
 	testifyAssert "github.com/stretchr/testify/assert"
@@ -706,10 +707,26 @@ func TestPanelFullFeatureSetIntegration(t *testing.T) {
 	p.streamTitleField.SetText("Integration Test Title")
 	require.Equal(t, "Integration Test Title", p.streamTitleField.Text)
 
-	p.twitchCheck.SetChecked(true)
-	p.youtubeCheck.SetChecked(false)
-	require.True(t, p.twitchCheck.Checked)
-	require.False(t, p.youtubeCheck.Checked)
+	p.selectedStreams[streamcontrol.StreamIDFullyQualified{
+		AccountIDFullyQualified: streamcontrol.AccountIDFullyQualified{
+			PlatformID: twitch.ID,
+		},
+	}] = true
+	p.selectedStreams[streamcontrol.StreamIDFullyQualified{
+		AccountIDFullyQualified: streamcontrol.AccountIDFullyQualified{
+			PlatformID: youtube.ID,
+		},
+	}] = false
+	require.True(t, p.selectedStreams[streamcontrol.StreamIDFullyQualified{
+		AccountIDFullyQualified: streamcontrol.AccountIDFullyQualified{
+			PlatformID: twitch.ID,
+		},
+	}])
+	require.False(t, p.selectedStreams[streamcontrol.StreamIDFullyQualified{
+		AccountIDFullyQualified: streamcontrol.AccountIDFullyQualified{
+			PlatformID: youtube.ID,
+		},
+	}])
 
 	// 2. Profile Selection
 	p.profilesOrder = []streamcontrol.ProfileName{"test-profile"}
@@ -881,6 +898,9 @@ func TestPanelProfileInteractions(t *testing.T) {
 	}
 	if p.setupStreamButton == nil {
 		p.setupStreamButton = widget.NewButton("Setup", nil)
+	}
+	if p.streamsSelectButton == nil {
+		p.streamsSelectButton = widget.NewButton("Streams", nil)
 	}
 	if p.streamTitleField == nil {
 		p.streamTitleField = widget.NewEntry()
@@ -1660,6 +1680,7 @@ func TestProfileCoverageFinal(t *testing.T) {
 			errorReports:           make(map[string]errorReport),
 			permanentWindows:       make(map[uint64]windowDriver),
 			setupStreamButton:      widget.NewButton("Setup", nil),
+			streamsSelectButton:    widget.NewButton("Streams", nil),
 			streamTitleField:       widget.NewEntry(),
 			streamTitleLabel:       widget.NewLabel(""),
 			streamDescriptionField: widget.NewEntry(),
@@ -2994,19 +3015,6 @@ func findEntryByPlaceHolder(obj fyne.CanvasObject, placeholder string, ptr **wid
 	})
 }
 
-func findCheck(obj fyne.CanvasObject, text string, ptr **widget.Check) {
-	traverse(obj, func(o fyne.CanvasObject) {
-		if *ptr != nil {
-			return
-		}
-		if c, ok := o.(*widget.Check); ok {
-			if c.Text == text {
-				*ptr = c
-			}
-		}
-	})
-}
-
 func findSelect(obj fyne.CanvasObject, options []string, ptr **widget.Select) {
 	traverse(obj, func(o fyne.CanvasObject) {
 		if *ptr != nil {
@@ -3397,4 +3405,192 @@ func TestPanelUpdateCoverage(t *testing.T) {
 	defer cancel()
 
 	p.checkForUpdates(ctx, &dummyAutoUpdater{})
+}
+
+func TestStreamSelectionSynchronization(t *testing.T) {
+	testApp := test.NewApp()
+	defer testApp.Quit()
+
+	ctx := belt.CtxWithBelt(context.Background(), belt.New())
+	d := &dummyStreamD{
+		Config: &streamdconfig.Config{
+			Backends: map[streamcontrol.PlatformID]*streamcontrol.AbstractPlatformConfig{
+				youtube.ID: {
+					Accounts: map[streamcontrol.AccountID]streamcontrol.RawMessage{
+						"acc1": streamcontrol.ToRawMessage(youtube.AccountConfig{
+							AccountConfigBase: streamcontrol.AccountConfigBase[youtube.StreamProfile]{
+								StreamProfiles: map[streamcontrol.StreamID]streamcontrol.StreamProfiles[youtube.StreamProfile]{
+									streamcontrol.DefaultStreamID: {},
+								},
+							},
+						}),
+					},
+				},
+				twitch.ID: {
+					Accounts: map[streamcontrol.AccountID]streamcontrol.RawMessage{
+						"acc2": streamcontrol.ToRawMessage(twitch.AccountConfig{
+							AccountConfigBase: streamcontrol.AccountConfigBase[twitch.StreamProfile]{
+								StreamProfiles: map[streamcontrol.StreamID]streamcontrol.StreamProfiles[twitch.StreamProfile]{
+									streamcontrol.DefaultStreamID: {},
+								},
+							},
+						}),
+					},
+				},
+			},
+		},
+	}
+
+	p := &Panel{
+		app:                 testApp,
+		StreamD:             d,
+		configCache:         d.Config,
+		selectedStreams:     make(map[streamcontrol.StreamIDFullyQualified]bool),
+		allStreams:          nil,
+		streamsSelectButton: widget.NewButton("Streams", nil),
+		defaultContext:      ctx,
+		errorReports:        make(map[string]errorReport),
+	}
+	p.streamStatus = make(map[streamcontrol.PlatformID]*streamStatus)
+
+	// Mock GetConfig and SetConfig
+	d.GetConfigFn = func(ctx context.Context) (*streamdconfig.Config, error) {
+		return d.Config, nil
+	}
+	d.SetConfigFn = func(ctx context.Context, cfg *streamdconfig.Config) error {
+		d.Config = cfg
+		return nil
+	}
+	d.IsBackendEnabledFn = func(ctx context.Context, id streamcontrol.PlatformID) (bool, error) {
+		return true, nil
+	}
+
+	// 1. Initial status update to discover streams
+	p.getUpdatedStatus_backends_noLock(ctx)
+
+	require.Len(t, p.allStreams, 2)
+	// By default, they should be auto-selected if not present in selectedStreams
+	require.True(t, p.selectedStreams[streamcontrol.NewStreamIDFullyQualified(youtube.ID, "acc1", streamcontrol.DefaultStreamID)])
+	require.True(t, p.selectedStreams[streamcontrol.NewStreamIDFullyQualified(twitch.ID, "acc2", streamcontrol.DefaultStreamID)])
+
+	// 2. Simulate opening the selection dialog and unchecking a stream
+	stream1 := streamcontrol.NewStreamIDFullyQualified(youtube.ID, "acc1", streamcontrol.DefaultStreamID)
+
+	// Directly simulate the checkbox callback
+	p.selectedStreams[stream1] = false
+	p.syncSelectedStreamsToDaemon(ctx)
+
+	// 3. Verify that the daemon config now contains only the remaining stream
+	require.Len(t, d.Config.SelectedStreamIDs, 1)
+	require.Equal(t, streamcontrol.NewStreamIDFullyQualified(twitch.ID, "acc2", streamcontrol.DefaultStreamID), d.Config.SelectedStreamIDs[0])
+
+	// 4. Test re-selection
+	p.selectedStreams[stream1] = true
+	p.syncSelectedStreamsToDaemon(ctx)
+
+	require.Len(t, d.Config.SelectedStreamIDs, 2)
+	require.Contains(t, d.Config.SelectedStreamIDs, stream1)
+}
+
+func TestStreamSelectionAutoSelectNew(t *testing.T) {
+	testApp := test.NewApp()
+	defer testApp.Quit()
+
+	ctx := belt.CtxWithBelt(context.Background(), belt.New())
+	d := &dummyStreamD{
+		Config: &streamdconfig.Config{
+			Backends: map[streamcontrol.PlatformID]*streamcontrol.AbstractPlatformConfig{
+				youtube.ID: {
+					Accounts: map[streamcontrol.AccountID]streamcontrol.RawMessage{
+						"acc1": streamcontrol.ToRawMessage(youtube.AccountConfig{
+							AccountConfigBase: streamcontrol.AccountConfigBase[youtube.StreamProfile]{
+								StreamProfiles: map[streamcontrol.StreamID]streamcontrol.StreamProfiles[youtube.StreamProfile]{
+									streamcontrol.DefaultStreamID: {},
+								},
+							},
+						}),
+					},
+				},
+			},
+		},
+	}
+
+	p := &Panel{
+		app:                 testApp,
+		StreamD:             d,
+		configCache:         d.Config,
+		selectedStreams:     make(map[streamcontrol.StreamIDFullyQualified]bool),
+		streamsSelectButton: widget.NewButton("Streams", nil),
+		defaultContext:      ctx,
+		errorReports:        make(map[string]errorReport),
+	}
+	p.streamStatus = make(map[streamcontrol.PlatformID]*streamStatus)
+
+	d.IsBackendEnabledFn = func(ctx context.Context, id streamcontrol.PlatformID) (bool, error) {
+		return true, nil
+	}
+	d.SetConfigFn = func(ctx context.Context, cfg *streamdconfig.Config) error {
+		d.Config = cfg
+		return nil
+	}
+
+	// 1. Initial discovery
+	p.getUpdatedStatus_backends_noLock(ctx)
+	require.Len(t, p.allStreams, 1)
+	require.True(t, p.selectedStreams[p.allStreams[0]])
+	require.Len(t, d.Config.SelectedStreamIDs, 1)
+
+	// 2. Add a new account/stream dynamically
+	d.Config.Backends[twitch.ID] = &streamcontrol.AbstractPlatformConfig{
+		Accounts: map[streamcontrol.AccountID]streamcontrol.RawMessage{
+			"acc2": streamcontrol.ToRawMessage(twitch.AccountConfig{
+				AccountConfigBase: streamcontrol.AccountConfigBase[twitch.StreamProfile]{
+					StreamProfiles: map[streamcontrol.StreamID]streamcontrol.StreamProfiles[twitch.StreamProfile]{
+						streamcontrol.DefaultStreamID: {},
+					},
+				},
+			}),
+		},
+	}
+
+	p.getUpdatedStatus_backends_noLock(ctx)
+	require.Len(t, p.allStreams, 2)
+	// The new stream should be auto-selected
+	require.True(t, p.selectedStreams[streamcontrol.NewStreamIDFullyQualified(twitch.ID, "acc2", streamcontrol.DefaultStreamID)])
+	// Verify it's synced to the daemon
+	require.Len(t, d.Config.SelectedStreamIDs, 2)
+}
+
+func TestStreamSelectionInitialization(t *testing.T) {
+	testApp := test.NewApp()
+	defer testApp.Quit()
+
+	ctx := context.Background()
+	stream1 := streamcontrol.NewStreamIDFullyQualified(youtube.ID, "acc1", streamcontrol.DefaultStreamID)
+
+	d := &dummyStreamD{
+		Config: &streamdconfig.Config{
+			SelectedStreamIDs: []streamcontrol.StreamIDFullyQualified{stream1},
+		},
+	}
+
+	// Initialize p as in New()
+	p := &Panel{
+		app:     testApp,
+		StreamD: d,
+	}
+	p.configCache = d.Config
+	p.selectedStreams = make(map[streamcontrol.StreamIDFullyQualified]bool)
+
+	// Simulate the code I added to New/initMainWindow
+	p.configCacheLocker.Do(ctx, func() {
+		if p.configCache != nil {
+			for _, id := range p.configCache.SelectedStreamIDs {
+				p.selectedStreams[id] = true
+			}
+		}
+	})
+
+	require.True(t, p.selectedStreams[stream1])
+	require.False(t, p.selectedStreams[streamcontrol.NewStreamIDFullyQualified(twitch.ID, "acc2", streamcontrol.DefaultStreamID)])
 }

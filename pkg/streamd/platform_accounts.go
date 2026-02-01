@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/goccy/go-yaml"
 	"github.com/xaionaro-go/streamctl/pkg/secret"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	sstypes "github.com/xaionaro-go/streamctl/pkg/streamserver/types"
@@ -75,57 +75,65 @@ func (d *StreamD) GetStreams(
 	})
 }
 
+func (d *StreamD) CreateStream(
+	ctx context.Context,
+	accountID streamcontrol.AccountIDFullyQualified,
+	title string,
+) (streamcontrol.StreamInfo, error) {
+	return xsync.RDoR2(ctx, &d.AccountsLocker, func() (streamcontrol.StreamInfo, error) {
+		controllers := d.getControllersByPlatformNoLock(accountID.PlatformID)
+		c, ok := controllers[accountID.AccountID]
+		if !ok {
+			return streamcontrol.StreamInfo{}, fmt.Errorf("account not found")
+		}
+		return c.CreateStream(ctx, title)
+	})
+}
+
+func (d *StreamD) DeleteStream(
+	ctx context.Context,
+	streamID streamcontrol.StreamIDFullyQualified,
+) error {
+	return xsync.RDoR1(ctx, &d.AccountsLocker, func() error {
+		controllers := d.getControllersByPlatformNoLock(streamID.PlatformID)
+		c, ok := controllers[streamID.AccountID]
+		if !ok {
+			return fmt.Errorf("account not found")
+		}
+		return c.DeleteStream(ctx, streamID.StreamID)
+	})
+}
+
 func (d *StreamD) GetActiveStreamIDs(
 	ctx context.Context,
 ) ([]streamcontrol.StreamIDFullyQualified, error) {
+
 	return xsync.RDoR2(ctx, &d.AccountsLocker, func() ([]streamcontrol.StreamIDFullyQualified, error) {
 		var result []streamcontrol.StreamIDFullyQualified
-		for streamID := range d.ActiveProfiles {
-			result = append(result, streamID)
+
+		selectedStreamIDs := make(map[streamcontrol.StreamIDFullyQualified]struct{})
+		for _, id := range d.Config.SelectedStreamIDs {
+			selectedStreamIDs[id] = struct{}{}
 		}
 
-		if len(result) == 0 {
-			for platID := range d.Config.Backends {
-				platCfg := d.Config.Backends[platID]
-				var activeStreamIDs map[streamcontrol.AccountID]map[streamcontrol.StreamID]struct{}
-				if platID == youtube.ID {
-					activeStreamIDs = make(map[streamcontrol.AccountID]map[streamcontrol.StreamID]struct{})
-					for accountID, accountRaw := range platCfg.Accounts {
-						var accountCfg youtube.AccountConfig
-						if err := yaml.Unmarshal(accountRaw, &accountCfg); err != nil {
-							continue
-						}
-						if len(accountCfg.ActiveStreamIDs) == 0 {
-							continue
-						}
-						m := make(map[streamcontrol.StreamID]struct{})
-						for _, streamID := range accountCfg.ActiveStreamIDs {
-							m[streamcontrol.StreamID(streamID)] = struct{}{}
-						}
-						activeStreamIDs[accountID] = m
-					}
+		for platID, platCfg := range d.Config.Backends {
+			controllers := d.getControllersByPlatformNoLock(platID)
+			for accountID, c := range controllers {
+				if _, ok := platCfg.Accounts[accountID]; !ok {
+					continue
 				}
 
-				controllers := d.getControllersByPlatformNoLock(platID)
-				for accountID, c := range controllers {
-					streams, err := c.GetStreams(ctx)
-					if err != nil {
+				streams, err := c.GetStreams(ctx)
+				if err != nil {
+					continue
+				}
+
+				for _, stream := range streams {
+					id := streamcontrol.NewStreamIDFullyQualified(platID, accountID, stream.ID)
+					if _, ok := selectedStreamIDs[id]; !ok {
 						continue
 					}
-					for _, stream := range streams {
-						if activeStreamIDs != nil {
-							if m, ok := activeStreamIDs[accountID]; ok {
-								if _, ok := m[stream.ID]; !ok {
-									continue
-								}
-							}
-						}
-						result = append(result, streamcontrol.NewStreamIDFullyQualified(
-							platID,
-							accountID,
-							stream.ID,
-						))
-					}
+					result = append(result, id)
 				}
 			}
 		}
@@ -183,6 +191,12 @@ func (d *StreamD) GetStreamSinkConfig(
 			return sstypes.StreamSinkConfig{
 				URL:       "rtmp://live.twitch.tv/app/",
 				StreamKey: streamKey,
+			}, nil
+		case kick.ID:
+			data := kick.GetStreamStatusCustomData(status)
+			return sstypes.StreamSinkConfig{
+				URL:       data.URL,
+				StreamKey: data.Key,
 			}, nil
 		}
 

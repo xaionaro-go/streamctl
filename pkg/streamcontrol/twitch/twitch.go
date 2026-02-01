@@ -928,6 +928,14 @@ func (t *Twitch) IsCapable(
 	return false
 }
 
+func (t *Twitch) CreateStream(ctx context.Context, title string) (streamcontrol.StreamInfo, error) {
+	return streamcontrol.StreamInfo{}, fmt.Errorf("not implemented")
+}
+
+func (t *Twitch) DeleteStream(ctx context.Context, streamID streamcontrol.StreamID) error {
+	return fmt.Errorf("not implemented")
+}
+
 func (t *Twitch) IsChannelStreaming(
 	ctx context.Context,
 	chanID streamcontrol.UserID,

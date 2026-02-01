@@ -31,6 +31,8 @@ const (
 	StreamD_SetStreamActive_FullMethodName                      = "/streamd.StreamD/SetStreamActive"
 	StreamD_GetStreamStatus_FullMethodName                      = "/streamd.StreamD/GetStreamStatus"
 	StreamD_GetStreams_FullMethodName                           = "/streamd.StreamD/GetStreams"
+	StreamD_CreateStream_FullMethodName                         = "/streamd.StreamD/CreateStream"
+	StreamD_DeleteStream_FullMethodName                         = "/streamd.StreamD/DeleteStream"
 	StreamD_GetAccounts_FullMethodName                          = "/streamd.StreamD/GetAccounts"
 	StreamD_IsBackendEnabled_FullMethodName                     = "/streamd.StreamD/IsBackendEnabled"
 	StreamD_GetBackendInfo_FullMethodName                       = "/streamd.StreamD/GetBackendInfo"
@@ -122,6 +124,8 @@ type StreamDClient interface {
 	SetStreamActive(ctx context.Context, in *SetStreamActiveRequest, opts ...grpc.CallOption) (*SetStreamActiveReply, error)
 	GetStreamStatus(ctx context.Context, in *GetStreamStatusRequest, opts ...grpc.CallOption) (*GetStreamStatusReply, error)
 	GetStreams(ctx context.Context, in *GetStreamsRequest, opts ...grpc.CallOption) (*GetStreamsReply, error)
+	CreateStream(ctx context.Context, in *CreateStreamRequest, opts ...grpc.CallOption) (*CreateStreamReply, error)
+	DeleteStream(ctx context.Context, in *DeleteStreamRequest, opts ...grpc.CallOption) (*DeleteStreamReply, error)
 	GetAccounts(ctx context.Context, in *GetAccountsRequest, opts ...grpc.CallOption) (*GetAccountsReply, error)
 	IsBackendEnabled(ctx context.Context, in *IsBackendEnabledRequest, opts ...grpc.CallOption) (*IsBackendEnabledReply, error)
 	GetBackendInfo(ctx context.Context, in *GetBackendInfoRequest, opts ...grpc.CallOption) (*GetBackendInfoReply, error)
@@ -342,6 +346,26 @@ func (c *streamDClient) GetStreams(ctx context.Context, in *GetStreamsRequest, o
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetStreamsReply)
 	err := c.cc.Invoke(ctx, StreamD_GetStreams_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) CreateStream(ctx context.Context, in *CreateStreamRequest, opts ...grpc.CallOption) (*CreateStreamReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateStreamReply)
+	err := c.cc.Invoke(ctx, StreamD_CreateStream_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *streamDClient) DeleteStream(ctx context.Context, in *DeleteStreamRequest, opts ...grpc.CallOption) (*DeleteStreamReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteStreamReply)
+	err := c.cc.Invoke(ctx, StreamD_DeleteStream_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1347,6 +1371,8 @@ type StreamDServer interface {
 	SetStreamActive(context.Context, *SetStreamActiveRequest) (*SetStreamActiveReply, error)
 	GetStreamStatus(context.Context, *GetStreamStatusRequest) (*GetStreamStatusReply, error)
 	GetStreams(context.Context, *GetStreamsRequest) (*GetStreamsReply, error)
+	CreateStream(context.Context, *CreateStreamRequest) (*CreateStreamReply, error)
+	DeleteStream(context.Context, *DeleteStreamRequest) (*DeleteStreamReply, error)
 	GetAccounts(context.Context, *GetAccountsRequest) (*GetAccountsReply, error)
 	IsBackendEnabled(context.Context, *IsBackendEnabledRequest) (*IsBackendEnabledReply, error)
 	GetBackendInfo(context.Context, *GetBackendInfoRequest) (*GetBackendInfoReply, error)
@@ -1462,6 +1488,12 @@ func (UnimplementedStreamDServer) GetStreamStatus(context.Context, *GetStreamSta
 }
 func (UnimplementedStreamDServer) GetStreams(context.Context, *GetStreamsRequest) (*GetStreamsReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetStreams not implemented")
+}
+func (UnimplementedStreamDServer) CreateStream(context.Context, *CreateStreamRequest) (*CreateStreamReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateStream not implemented")
+}
+func (UnimplementedStreamDServer) DeleteStream(context.Context, *DeleteStreamRequest) (*DeleteStreamReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteStream not implemented")
 }
 func (UnimplementedStreamDServer) GetAccounts(context.Context, *GetAccountsRequest) (*GetAccountsReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetAccounts not implemented")
@@ -1910,6 +1942,42 @@ func _StreamD_GetStreams_Handler(srv interface{}, ctx context.Context, dec func(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StreamDServer).GetStreams(ctx, req.(*GetStreamsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_CreateStream_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateStreamRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).CreateStream(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: StreamD_CreateStream_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).CreateStream(ctx, req.(*CreateStreamRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StreamD_DeleteStream_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteStreamRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StreamDServer).DeleteStream(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: StreamD_DeleteStream_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StreamDServer).DeleteStream(ctx, req.(*DeleteStreamRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3311,6 +3379,14 @@ var StreamD_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetStreams",
 			Handler:    _StreamD_GetStreams_Handler,
+		},
+		{
+			MethodName: "CreateStream",
+			Handler:    _StreamD_CreateStream_Handler,
+		},
+		{
+			MethodName: "DeleteStream",
+			Handler:    _StreamD_DeleteStream_Handler,
 		},
 		{
 			MethodName: "GetAccounts",

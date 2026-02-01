@@ -27,6 +27,9 @@ type AccountCommons interface {
 	Shoutout(ctx context.Context, streamID StreamID, chanID UserID) error
 	RaidTo(ctx context.Context, streamID StreamID, chanID UserID) error
 
+	CreateStream(ctx context.Context, title string) (StreamInfo, error)
+	DeleteStream(ctx context.Context, streamID StreamID) error
+
 	IsCapable(context.Context, Capability) bool
 	IsChannelStreaming(ctx context.Context, chanID UserID) (bool, error)
 }

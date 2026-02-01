@@ -68,6 +68,10 @@ func (yt *YouTube) String() string {
 	return "youtube"
 }
 
+func (yt *YouTube) GetAllowlistedStreamIDs(ctx context.Context) ([]streamcontrol.StreamID, error) {
+	return yt.Config.AllowlistedStreamIDs, nil
+}
+
 func (yt *YouTube) GetPlatformID() streamcontrol.PlatformID {
 	return "youtube"
 }
@@ -1408,6 +1412,38 @@ func (yt *YouTube) GetStreams(
 	return ret, nil
 }
 
+func (yt *YouTube) CreateStream(
+	ctx context.Context,
+	title string,
+) (streamcontrol.StreamInfo, error) {
+	logger.Debugf(ctx, "CreateStream('%s')", title)
+	resp, err := yt.YouTubeClient.InsertStream(ctx, &youtube.LiveStream{
+		Snippet: &youtube.LiveStreamSnippet{
+			Title: title,
+		},
+		Cdn: &youtube.CdnSettings{
+			FrameRate:     "variable",
+			IngestionType: "rtmp",
+			Resolution:    "variable",
+		},
+	}, []string{"snippet", "cdn"})
+	if err != nil {
+		return streamcontrol.StreamInfo{}, err
+	}
+	return streamcontrol.StreamInfo{
+		ID:   streamcontrol.StreamID(resp.Id),
+		Name: resp.Snippet.Title,
+	}, nil
+}
+
+func (yt *YouTube) DeleteStream(
+	ctx context.Context,
+	streamID streamcontrol.StreamID,
+) error {
+	logger.Debugf(ctx, "DeleteStream('%s')", streamID)
+	return yt.YouTubeClient.DeleteStream(ctx, string(streamID))
+}
+
 func (yt *YouTube) ListStreams(
 	ctx context.Context,
 ) (_ret []*youtube.LiveStream, _err error) {
@@ -1664,6 +1700,10 @@ func (yt *YouTube) IsCapable(
 		return true
 	case streamcontrol.CapabilityRaid:
 		return false
+	case streamcontrol.CapabilityCreateStream:
+		return true
+	case streamcontrol.CapabilityDeleteStream:
+		return true
 	}
 	return false
 }

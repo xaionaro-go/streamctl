@@ -456,13 +456,8 @@ func (p *Panel) profileDelete(ctx context.Context, profileName streamcontrol.Pro
 	return nil
 }
 
-func (p Profile) GetPlatformProfile(platID streamcontrol.PlatformID) streamcontrol.StreamProfile {
-	for sID, prof := range p.PerStream {
-		if sID.PlatformID == platID {
-			return prof
-		}
-	}
-	return nil
+func (p Profile) GetStreamProfile(sID streamcontrol.StreamIDFullyQualified) streamcontrol.StreamProfile {
+	return p.PerStream[sID]
 }
 
 func getProfile(cfg *streamdconfig.Config, profileName streamcontrol.ProfileName) Profile {
@@ -702,6 +697,13 @@ func (p *Panel) onProfilesListSelect(
 	p.streamTitleLabel.SetText(profile.DefaultStreamTitle)
 	p.streamDescriptionField.SetText(profile.DefaultStreamDescription)
 	p.streamDescriptionLabel.SetText(profile.DefaultStreamDescription)
+
+	p.selectedStreams = make(map[streamcontrol.StreamIDFullyQualified]bool)
+	for streamID := range profile.PerStream {
+		p.selectedStreams[streamID] = true
+	}
+	p.updateStreamsSelectButtonLabel()
+	p.syncSelectedStreamsToDaemon(ctx)
 }
 
 func (p *Panel) onProfilesListUnselect(

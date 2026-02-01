@@ -239,6 +239,30 @@ func (c *clientMock) GetStreams(
 	}, nil
 }
 
+func (c *clientMock) InsertStream(
+	ctx context.Context,
+	s *youtube.LiveStream,
+	parts []string,
+) (_ret *youtube.LiveStream, _err error) {
+	c.locker.Lock()
+	defer c.locker.Unlock()
+	if s.Id == "" {
+		s.Id = fmt.Sprintf("stream-%d", len(c.streams)+1)
+	}
+	c.streams[s.Id] = s
+	return s, nil
+}
+
+func (c *clientMock) DeleteStream(
+	ctx context.Context,
+	id string,
+) (_err error) {
+	c.locker.Lock()
+	defer c.locker.Unlock()
+	delete(c.streams, id)
+	return nil
+}
+
 func (c *clientMock) GetVideos(
 	ctx context.Context,
 	broadcastIDs []string,

@@ -44,12 +44,8 @@ func (ui *youtubeProfileUI) GetUserInfoItems(
 		}
 	}
 
-	clientIDField := widget.NewEntry()
-	clientIDField.SetPlaceHolder("client ID")
-	clientIDField.SetText(cfg.ClientID)
-	clientSecretField := widget.NewEntry()
-	clientSecretField.SetPlaceHolder("client secret")
-	clientSecretField.SetText(cfg.ClientSecret.Get())
+	clientIDField := newClientIDField(cfg.ClientID)
+	clientSecretField := newClientSecretField(cfg.ClientSecret.Get())
 	instructionText := widget.NewRichText(
 		&widget.TextSegment{Text: "Go to\n", Style: widget.RichTextStyle{Inline: true}},
 		&widget.HyperlinkSegment{
@@ -71,50 +67,10 @@ func (ui *youtubeProfileUI) GetUserInfoItems(
 	)
 	instructionText.Wrapping = fyne.TextWrapWord
 
-	activeStreamsContainer := container.NewVBox()
-	var saveStreams func()
-	if accountID != "" {
-		activeStreamsContainer.Add(widget.NewLabel("Active streams:"))
-		loadingLabel := widget.NewLabel("Loading streams...")
-		activeStreamsContainer.Add(loadingLabel)
-
-		go func() {
-			ctx, cancel := context.WithTimeout(p.defaultContext, 10*time.Second)
-			defer cancel()
-
-			streams, err := p.StreamD.GetStreams(ctx, streamcontrol.NewAccountIDFullyQualified(platID, accountID))
-			p.app.Driver().DoFromGoroutine(func() {
-				activeStreamsContainer.Remove(loadingLabel)
-				if err != nil {
-					activeStreamsContainer.Add(widget.NewLabel(fmt.Sprintf("Error loading streams: %v", err)))
-					return
-				}
-
-				selectedStreamIDs := make(map[string]bool)
-				for _, id := range cfg.ActiveStreamIDs {
-					selectedStreamIDs[id] = true
-				}
-
-				for _, stream := range streams {
-					stream := stream
-					check := widget.NewCheck(stream.Name, func(b bool) {
-						selectedStreamIDs[string(stream.ID)] = b
-					})
-					check.SetChecked(selectedStreamIDs[string(stream.ID)])
-					activeStreamsContainer.Add(check)
-				}
-				saveStreams = func() {
-					cfg.ActiveStreamIDs = nil
-					for id, selected := range selectedStreamIDs {
-						if selected {
-							cfg.ActiveStreamIDs = append(cfg.ActiveStreamIDs, id)
-						}
-					}
-				}
-				activeStreamsContainer.Refresh()
-			}, true)
-		}()
-	}
+	var allowlistedStreamIDs []streamcontrol.StreamID
+	activeStreamsContainer := p.NewStreamManagementUI(ctx, platID, accountID, cfg.AllowlistedStreamIDs, func(newList []streamcontrol.StreamID) {
+		allowlistedStreamIDs = newList
+	})
 
 	items := []fyne.CanvasObject{
 		widget.NewLabel("YouTube client ID:"),
@@ -128,17 +84,13 @@ func (ui *youtubeProfileUI) GetUserInfoItems(
 	saveFunc := func() ([]byte, error) {
 		cfg.ClientID = clientIDField.Text
 		cfg.ClientSecret.Set(clientSecretField.Text)
-		if saveStreams != nil {
-			saveStreams()
+		if allowlistedStreamIDs != nil {
+			cfg.AllowlistedStreamIDs = allowlistedStreamIDs
 		}
 		return yaml.Marshal(cfg)
 	}
 
 	return items, saveFunc, nil
-}
-
-func cleanYoutubeRecordingName(in string) string {
-	return strings.ToLower(strings.Trim(in, " "))
 }
 
 func (ui *youtubeProfileUI) Placement() platformProfilePlacement {
@@ -246,83 +198,45 @@ func (ui *youtubeProfileUI) RenderStream(
 		"When enabled, it adds the number of the stream to the stream's title.\n\nFor example 'Watching presidential debate' -> 'Watching presidential debate [#52]'.",
 	)
 
-	youtubeTemplate := widget.NewEntry()
-	youtubeTemplate.SetPlaceHolder("youtube live recording template")
-
-	selectYoutubeTemplateBox := container.NewHBox()
-	youtubeTemplate.OnChanged = func(text string) {
-		selectYoutubeTemplateBox.RemoveAll()
-		if text == "" {
-			return
-		}
-		text = cleanYoutubeRecordingName(text)
-		count := 0
-		for _, bc := range dataYouTube.Cache.Broadcasts {
-			if strings.Contains(cleanYoutubeRecordingName(bc.Snippet.Title), text) {
-				selectedYoutubeRecordingsContainer := container.NewHBox()
-				recName := bc.Snippet.Title
-				tagContainerRemoveButton := widget.NewButtonWithIcon(
-					recName,
-					theme.ContentAddIcon(),
-					func() {
-						youtubeTemplate.OnSubmitted(recName)
-					},
-				)
-				selectedYoutubeRecordingsContainer.Add(tagContainerRemoveButton)
-				selectYoutubeTemplateBox.Add(selectedYoutubeRecordingsContainer)
-				count++
-				if count > 10 {
-					break
-				}
-			}
-		}
-		selectYoutubeTemplateBox.Refresh()
-	}
-
-	selectedYoutubeBroadcastBox := container.NewHBox()
-
-	setSelectedYoutubeBroadcast := func(bc *youtube.LiveBroadcast) {
-		selectedYoutubeBroadcastBox.RemoveAll()
-		selectedYoutubeBroadcastContainer := container.NewHBox()
-		recName := bc.Snippet.Title
-		tagContainerRemoveButton := widget.NewButtonWithIcon(
-			recName,
-			theme.ContentClearIcon(),
-			func() {
-				selectedYoutubeBroadcastBox.Remove(selectedYoutubeBroadcastContainer)
-				youtubeProfile.TemplateBroadcastIDs = youtubeProfile.TemplateBroadcastIDs[:0]
-			},
-		)
-		selectedYoutubeBroadcastContainer.Add(tagContainerRemoveButton)
-		selectedYoutubeBroadcastBox.Add(selectedYoutubeBroadcastContainer)
-		selectedYoutubeBroadcastBox.Refresh()
-		youtubeProfile.TemplateBroadcastIDs = []string{bc.Id}
-	}
-
+	var initialBroadcastName *string
 	for _, bcID := range youtubeProfile.TemplateBroadcastIDs {
 		for _, bc := range dataYouTube.Cache.Broadcasts {
 			if bc.Id != bcID {
 				continue
 			}
-			setSelectedYoutubeBroadcast(bc)
+			initialBroadcastName = &bc.Snippet.Title
 		}
 	}
 
-	youtubeTemplate.OnSubmitted = func(text string) {
-		if text == "" {
-			return
-		}
-		text = cleanYoutubeRecordingName(text)
-		for _, bc := range dataYouTube.Cache.Broadcasts {
-			if cleanYoutubeRecordingName(bc.Snippet.Title) == text {
-				setSelectedYoutubeBroadcast(bc)
-				observability.Go(ctx, func(ctx context.Context) {
-					clock.Get().Sleep(100 * time.Millisecond)
-					youtubeTemplate.SetText("")
-				})
-				return
+	searchParams := searchSelectParams{
+		ctx:         ctx,
+		p:           p,
+		placeholder: "youtube live recording template",
+		onSearch: func(text string) []searchResult {
+			var results []searchResult
+			count := 0
+			for _, bc := range dataYouTube.Cache.Broadcasts {
+				if strings.Contains(cleanString(bc.Snippet.Title), text) {
+					results = append(results, searchResult{
+						ID:   bc.Id,
+						Name: bc.Snippet.Title,
+					})
+					count++
+					if count > 10 {
+						break
+					}
+				}
 			}
-		}
+			return results
+		},
+		onSelected: func(id string, name string) {
+			youtubeProfile.TemplateBroadcastIDs = []string{id}
+		},
+		initialName: initialBroadcastName,
+		onClear: func() {
+			youtubeProfile.TemplateBroadcastIDs = youtubeProfile.TemplateBroadcastIDs[:0]
+		},
+		observabilityG: observability.Go,
 	}
 
 	templateTagsLabel := widget.NewLabel("Template tags:")
@@ -366,9 +280,7 @@ func (ui *youtubeProfileUI) RenderStream(
 
 	content := container.NewVBox(
 		container.NewHBox(autoNumerateCheck, autoNumerateHint),
-		selectYoutubeTemplateBox,
-		selectedYoutubeBroadcastBox,
-		youtubeTemplate,
+		newSearchSelect(searchParams),
 		container.NewHBox(templateTagsLabel, templateTags, templateTagsHint),
 		widget.NewLabel("Tags:"),
 		youtubeTagsEditor.CanvasObject,
