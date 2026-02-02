@@ -17,10 +17,10 @@ import (
 
 type StreamServer struct {
 	xsync.Mutex
-	Config             *types.Config
-	StreamHandler      *streams.StreamHandler
-	ServerHandlers     []types.PortServer
-	StreamSinks []types.StreamSink
+	Config         *types.Config
+	StreamHandler  *streams.StreamHandler
+	ServerHandlers []types.PortServer
+	StreamSinks    []types.StreamSink
 }
 
 var _ streamforward.StreamServer = (*StreamServer)(nil)
@@ -286,11 +286,11 @@ func (s *StreamServer) removeStreamSource(
 }
 
 type StreamForward struct {
-	StreamSourceID      types.StreamSourceID
-	StreamSinkID types.StreamSinkID
-	Enabled       bool
-	NumBytesWrote uint64
-	NumBytesRead  uint64
+	StreamSourceID types.StreamSourceID
+	StreamSinkID   types.StreamSinkID
+	Enabled        bool
+	NumBytesWrote  uint64
+	NumBytesRead   uint64
 }
 
 func (s *StreamServer) AddStreamForward(
@@ -385,14 +385,14 @@ func (s *StreamServer) ListStreamForwards(
 
 		type fwdID struct {
 			StreamSourceID types.StreamSourceID
-			DestID   types.StreamSinkID
+			DestID         types.StreamSinkID
 		}
 		m := map[fwdID]*StreamForward{}
 		for idx := range activeStreamForwards {
 			fwd := &activeStreamForwards[idx]
 			m[fwdID{
 				StreamSourceID: fwd.StreamSourceID,
-				DestID:   fwd.StreamSinkID,
+				DestID:         fwd.StreamSinkID,
 			}] = fwd
 		}
 
@@ -400,13 +400,13 @@ func (s *StreamServer) ListStreamForwards(
 		for streamSourceID, stream := range s.Config.Streams {
 			for dstID, cfg := range stream.Forwardings {
 				item := StreamForward{
-					StreamSourceID:      streamSourceID,
-					StreamSinkID: dstID,
-					Enabled:       !cfg.Disabled,
+					StreamSourceID: streamSourceID,
+					StreamSinkID:   dstID,
+					Enabled:        !cfg.Disabled,
 				}
 				if activeFwd, ok := m[fwdID{
 					StreamSourceID: streamSourceID,
-					DestID:   dstID,
+					DestID:         dstID,
 				}]; ok {
 					item.NumBytesWrote = activeFwd.NumBytesWrote
 					item.NumBytesRead = activeFwd.NumBytesRead
@@ -439,11 +439,11 @@ func (s *StreamServer) listStreamForwards(
 				)
 			}
 			result = append(result, StreamForward{
-				StreamSourceID:      streamIDSrc,
-				StreamSinkID: streamDst.ID,
-				Enabled:       true,
-				NumBytesWrote: fwd.TrafficCounter.NumBytesWrote(),
-				NumBytesRead:  fwd.TrafficCounter.NumBytesRead(),
+				StreamSourceID: streamIDSrc,
+				StreamSinkID:   streamDst.ID,
+				Enabled:        true,
+				NumBytesWrote:  fwd.TrafficCounter.NumBytesWrote(),
+				NumBytesRead:   fwd.TrafficCounter.NumBytesRead(),
 			})
 		}
 	}

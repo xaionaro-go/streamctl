@@ -18,6 +18,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
 	"github.com/hashicorp/go-multierror"
+	"github.com/xaionaro-go/chatwebhook/pkg/grpc/protobuf/go/chatwebhook_grpc"
 	"github.com/xaionaro-go/grpcproxy/grpchttpproxy"
 	"github.com/xaionaro-go/grpcproxy/protobuf/go/proxy_grpc"
 	"github.com/xaionaro-go/obs-grpc-proxy/pkg/obsgrpcproxy"
@@ -65,6 +66,47 @@ type Client struct {
 type OBSInstanceID = streamtypes.OBSInstanceID
 
 var _ api.StreamD = (*Client)(nil)
+
+func (c *Client) InjectPlatformEvent(
+	ctx context.Context,
+	platID streamcontrol.PlatformID,
+	isLive bool,
+	isPermanent bool,
+	user streamcontrol.User,
+	message string,
+) error {
+	_, err := withStreamDClient(ctx, c, func(
+		ctx context.Context,
+		client streamd_grpc.StreamDClient,
+		conn io.Closer,
+	) (*streamd_grpc.InjectPlatformEventReply, error) {
+		return callWrapper(
+			ctx,
+			c,
+			client.InjectPlatformEvent,
+			&streamd_grpc.InjectPlatformEventRequest{
+				PlatID:       string(platID),
+				IsLive:       isLive,
+				IsPersistent: isPermanent,
+				Message: &chatwebhook_grpc.Event{
+					Id:                string(user.ID),
+					CreatedAtUNIXNano: uint64(clock.Get().Now().UnixNano()),
+					EventType:         chatwebhook_grpc.PlatformEventType_platformEventTypeChatMessage,
+					User: &chatwebhook_grpc.User{
+						Id:   string(user.ID),
+						Slug: user.Slug,
+						Name: user.Name,
+					},
+					Message: &chatwebhook_grpc.Message{
+						Content:    message,
+						FormatType: chatwebhook_grpc.TextFormatType_TEXT_FORMAT_TYPE_PLAIN,
+					},
+				},
+			},
+		)
+	})
+	return err
+}
 
 func New(
 	ctx context.Context,

@@ -3,6 +3,7 @@ package streamd
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"strings"
 	"time"
 
@@ -199,6 +200,56 @@ func (d *StreamD) RemoveChatMessage(
 	if err := d.ChatMessagesStorage.RemoveMessage(ctx, msgID); err != nil {
 		logger.Errorf(ctx, "unable to remove the message from the chat messages storage: %v", err)
 	}
+
+	return nil
+}
+
+// InjectPlatformEvent forcefully injects a fake chat message into the system for debugging purposes.
+// The message will be added to the chat storage and published on the EventBus but won't be
+// forwarded to external platform controllers.
+func (d *StreamD) InjectPlatformEvent(
+	ctx context.Context,
+	platID streamcontrol.PlatformID,
+	isLive bool,
+	isPersistent bool,
+	user streamcontrol.User,
+	message string,
+) (_err error) {
+	logger.Debugf(ctx, "InjectPlatformEvent(ctx, '%s', %#+v, '%s')", platID, user, message)
+	defer func() {
+		logger.Debugf(ctx, "/InjectPlatformEvent(ctx, '%s', %#+v, '%s'): %v", platID, user, message, _err)
+	}()
+
+	msg := api.ChatMessage{
+		Event: streamcontrol.Event{
+			ID: streamcontrol.EventID(fmt.Sprintf("injected-%d-%d",
+				clock.Get().Now().UnixNano(),
+				rand.Uint64(),
+			)),
+			CreatedAt: clock.Get().Now(),
+			Type:      streamcontrol.EventTypeChatMessage,
+			User:      user,
+			Message: &streamcontrol.Message{
+				Content: message,
+				Format:  streamcontrol.TextFormatTypePlain,
+			},
+		},
+		IsLive:   isLive,
+		Platform: platID,
+	}
+
+	if isPersistent {
+		logger.Debug(ctx, "storing injected message to storage")
+		if err := d.ChatMessagesStorage.AddMessage(ctx, msg); err != nil {
+			logger.Errorf(ctx, "unable to add injected message to storage: %v", err)
+		}
+	}
+
+	// publish via EventBus so subscribers receive it
+	publishEvent(ctx, d.EventBus, msg)
+
+	// Try shoutout side-effects if configured
+	d.shoutoutIfNeeded(ctx, msg)
 
 	return nil
 }

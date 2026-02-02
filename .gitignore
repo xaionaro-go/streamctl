@@ -17,6 +17,7 @@ priv
 /.github/instructions/test_plan.md
 *.test
 /streamctl
+/streamd
 /go.work*
 /*.txt
 /*.log

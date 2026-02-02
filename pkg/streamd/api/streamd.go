@@ -306,6 +306,17 @@ type StreamD interface {
 		platID streamcontrol.PlatformID,
 		message string,
 	) error
+	// InjectPlatformEvent forcefully injects a fake platform event into the system for debugging purposes.
+	// The message will be added to the chat storage and published on the EventBus but will not be
+	// forwarded to external platform controllers.
+	InjectPlatformEvent(
+		ctx context.Context,
+		platID streamcontrol.PlatformID,
+		isLive bool,
+		isPersistent bool,
+		user streamcontrol.User,
+		message string,
+	) error
 	RemoveChatMessage(
 		ctx context.Context,
 		platID streamcontrol.PlatformID,

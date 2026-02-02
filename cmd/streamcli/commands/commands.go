@@ -113,14 +113,20 @@ var (
 		Run:  configGet,
 	}
 
-	Chat = &cobra.Command{
+	PlatformEvents = &cobra.Command{
 		Use: "chat",
 	}
 
-	ChatListen = &cobra.Command{
+	PlatformEventsListen = &cobra.Command{
 		Use:  "listen",
 		Args: cobra.ExactArgs(0),
 		Run:  chatListen,
+	}
+
+	PlatformEventsInject = &cobra.Command{
+		Use:  "inject",
+		Args: cobra.ExactArgs(3),
+		Run:  platformEventsInject,
 	}
 
 	LoggerLevel = logger.LevelWarning
@@ -140,8 +146,11 @@ func init() {
 	Root.AddCommand(Config)
 	Config.AddCommand(ConfigGet)
 
-	Root.AddCommand(Chat)
-	Chat.AddCommand(ChatListen)
+	Root.AddCommand(PlatformEvents)
+	PlatformEvents.AddCommand(PlatformEventsListen)
+	PlatformEvents.AddCommand(PlatformEventsInject)
+	PlatformEventsInject.Flags().Bool("is-live", true, "mark event as live")
+	PlatformEventsInject.Flags().Bool("is-persistent", false, "mark event as persistent")
 
 	Root.PersistentFlags().Var(&LoggerLevel, "log-level", "")
 	Root.PersistentFlags().String("remote-addr", "localhost:3594", "the path to the config file")
@@ -392,4 +401,32 @@ func chatListen(cmd *cobra.Command, args []string) {
 	for ev := range ch {
 		spew.Dump(ev)
 	}
+}
+
+func platformEventsInject(cmd *cobra.Command, args []string) {
+	ctx := cmd.Context()
+
+	remoteAddr, err := cmd.Flags().GetString("remote-addr")
+	assertNoError(ctx, err)
+	streamD, err := client.New(ctx, remoteAddr)
+	assertNoError(ctx, err)
+
+	// args: <platform-id> <user> <message>
+	platID := streamcontrol.PlatformID(args[0])
+	userName := args[1]
+	message := args[2]
+
+	isLive, err := cmd.Flags().GetBool("is-live")
+	assertNoError(ctx, err)
+	isPersistent, err := cmd.Flags().GetBool("is-persistent")
+	assertNoError(ctx, err)
+
+	user := streamcontrol.User{
+		ID:   streamcontrol.UserID(userName),
+		Slug: userName,
+		Name: userName,
+	}
+
+	err = streamD.InjectPlatformEvent(ctx, platID, isLive, isPersistent, user, message)
+	assertNoError(ctx, err)
 }

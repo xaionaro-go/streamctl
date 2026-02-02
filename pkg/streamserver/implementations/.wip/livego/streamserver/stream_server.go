@@ -27,7 +27,7 @@ type StreamServer struct {
 	Config                  *types.Config
 	ServerHandlers          []types.PortServer
 	StreamIDs               map[types.StreamSourceID]struct{}
-	StreamSinks      []types.StreamSink
+	StreamSinks             []types.StreamSink
 	ActiveStreamForwardings map[types.StreamSinkID]*ActiveStreamForwarding
 }
 
@@ -298,9 +298,9 @@ func (s *StreamServer) listStreamSources(
 		result = append(
 			result,
 			types.StreamSource{
-				StreamSourceID:      streamSourceID,
-				NumBytesWrote: 0, // TODO: fill the value
-				NumBytesRead:  0, // TODO: fill the value
+				StreamSourceID: streamSourceID,
+				NumBytesWrote:  0, // TODO: fill the value
+				NumBytesRead:   0, // TODO: fill the value
 			},
 		)
 	}
@@ -423,8 +423,8 @@ func buildStreamForward(
 	actFwd *ActiveStreamForwarding,
 ) *types.StreamForward[*ActiveStreamForwarding] {
 	return &types.StreamForward[*ActiveStreamForwarding]{
-		StreamSourceID:         streamSourceID,
-		StreamSinkID:    streamSinkID,
+		StreamSourceID:   streamSourceID,
+		StreamSinkID:     streamSinkID,
 		Enabled:          !cfg.Disabled,
 		Quirks:           cfg.Quirks,
 		ActiveForwarding: actFwd,
@@ -486,14 +486,14 @@ func (s *StreamServer) ListStreamForwards(
 
 		type fwdID struct {
 			StreamSourceID types.StreamSourceID
-			DestID   types.StreamSinkID
+			DestID         types.StreamSinkID
 		}
 		m := map[fwdID]*StreamForward{}
 		for idx := range activeStreamForwards {
 			fwd := &activeStreamForwards[idx]
 			m[fwdID{
 				StreamSourceID: fwd.StreamSourceID,
-				DestID:   fwd.StreamSinkID,
+				DestID:         fwd.StreamSinkID,
 			}] = fwd
 		}
 
@@ -501,13 +501,13 @@ func (s *StreamServer) ListStreamForwards(
 		for streamSourceID, stream := range s.Config.Streams {
 			for dstID, cfg := range stream.Forwardings {
 				item := StreamForward{
-					StreamSourceID:      streamSourceID,
-					StreamSinkID: dstID,
-					Enabled:       !cfg.Disabled,
+					StreamSourceID: streamSourceID,
+					StreamSinkID:   dstID,
+					Enabled:        !cfg.Disabled,
 				}
 				if activeFwd, ok := m[fwdID{
 					StreamSourceID: streamSourceID,
-					DestID:   dstID,
+					DestID:         dstID,
 				}]; ok {
 					item.NumBytesWrote = activeFwd.NumBytesWrote
 					item.NumBytesRead = activeFwd.NumBytesRead
@@ -526,11 +526,11 @@ func (s *StreamServer) listStreamForwards(
 	var result []StreamForward
 	for _, fwd := range s.ActiveStreamForwardings {
 		result = append(result, StreamForward{
-			StreamSourceID:      fwd.StreamSourceID,
-			StreamSinkID: fwd.StreamSinkID,
-			Enabled:       true,
-			NumBytesWrote: 0,
-			NumBytesRead:  0,
+			StreamSourceID: fwd.StreamSourceID,
+			StreamSinkID:   fwd.StreamSinkID,
+			Enabled:        true,
+			NumBytesWrote:  0,
+			NumBytesRead:   0,
 		})
 	}
 	return result, nil
