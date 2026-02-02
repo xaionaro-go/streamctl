@@ -168,62 +168,7 @@ func assertNoError(ctx context.Context, err error) {
 }
 
 func streamSetup(cmd *cobra.Command, args []string) {
-	ctx := cmd.Context()
-
-	remoteAddr, err := cmd.Flags().GetString("remote-addr")
-	assertNoError(ctx, err)
-	streamD, err := client.New(ctx, remoteAddr)
-	assertNoError(ctx, err)
-	title, err := cmd.Flags().GetString("title")
-	assertNoError(ctx, err)
-	description, err := cmd.Flags().GetString("description")
-	assertNoError(ctx, err)
-	_profileName, err := cmd.Flags().GetString("profile")
-	assertNoError(ctx, err)
-	profileName := streamcontrol.ProfileName(_profileName)
-	logger.Debugf(
-		ctx,
-		"title == '%s'; description == '%s'; profile == '%s'",
-		title, description, profileName,
-	)
-
-	cfg, err := streamD.GetConfig(ctx)
-	assertNoError(ctx, err)
-
-	mergedProfile := &streamcontrol.StreamProfileBase{
-		Title:       title,
-		Description: description,
-		Streams:     make(map[streamcontrol.StreamIDFullyQualified]any),
-	}
-	for _, platID := range streamcontrol.GetPlatformIDs() {
-		isEnabled, err := streamD.IsBackendEnabled(ctx, platID)
-		assertNoError(ctx, err)
-		if !isEnabled {
-			continue
-		}
-
-		backendCfg, ok := cfg.Backends[platID]
-		if !ok {
-			continue
-		}
-
-		subProfile := backendCfg.StreamProfiles[profileName]
-		if subProfile == nil {
-			logger.Errorf(ctx, "sub-profile '%s' not found for platform '%s'", profileName, platID)
-			continue
-		}
-
-		mergedProfile.Streams[streamcontrol.StreamIDFullyQualified{
-			AccountIDFullyQualified: streamcontrol.AccountIDFullyQualified{
-				PlatformID: platID,
-				AccountID:  "",
-			},
-			StreamID: "",
-		}] = subProfile
-
-		err = streamD.SetStreamActive(ctx, streamcontrol.NewStreamIDFullyQualified(platID, streamcontrol.DefaultAccountID, streamcontrol.DefaultStreamID), true)
-		assertNoError(ctx, err)
-	}
+	panic("not implemented")
 }
 
 func streamStatus(cmd *cobra.Command, args []string) {
