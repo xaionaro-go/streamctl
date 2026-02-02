@@ -114,7 +114,7 @@ var (
 	}
 
 	PlatformEvents = &cobra.Command{
-		Use: "chat",
+		Use: "platform_events",
 	}
 
 	PlatformEventsListen = &cobra.Command{
