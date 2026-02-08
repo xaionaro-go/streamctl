@@ -1,3 +1,4 @@
+// Package commands defines all the cobra commands for the streamcli application.
 package commands
 
 import (
@@ -22,6 +23,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 
 	"github.com/xaionaro-go/streamctl/pkg/streamd/client"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	"github.com/xaionaro-go/xcontext"
 	"github.com/xaionaro-go/xsync"
@@ -113,6 +115,12 @@ var (
 		Run:  configGet,
 	}
 
+	Ping = &cobra.Command{
+		Use:  "ping",
+		Args: cobra.ExactArgs(0),
+		Run:  ping,
+	}
+
 	PlatformEvents = &cobra.Command{
 		Use: "platform_events",
 	}
@@ -120,7 +128,7 @@ var (
 	PlatformEventsListen = &cobra.Command{
 		Use:  "listen",
 		Args: cobra.ExactArgs(0),
-		Run:  chatListen,
+		Run:  platformEventsListen,
 	}
 
 	PlatformEventsInject = &cobra.Command{
@@ -146,6 +154,8 @@ func init() {
 	Root.AddCommand(Config)
 	Config.AddCommand(ConfigGet)
 
+	Root.AddCommand(Ping)
+
 	Root.AddCommand(PlatformEvents)
 	PlatformEvents.AddCommand(PlatformEventsListen)
 	PlatformEvents.AddCommand(PlatformEventsInject)
@@ -155,6 +165,10 @@ func init() {
 	Root.PersistentFlags().Var(&LoggerLevel, "log-level", "")
 	Root.PersistentFlags().String("remote-addr", "localhost:3594", "the path to the config file")
 	Root.PersistentFlags().String("go-net-pprof-addr", "", "address to listen to for net/pprof requests")
+
+	Ping.PersistentFlags().String("payload", "", "payload to request in reply")
+	Ping.PersistentFlags().String("payload-to-ignore", "", "payload to ignore on server")
+	Ping.PersistentFlags().Int32("extra-payload-size", 0, "extra payload size to add to reply")
 
 	StreamSetup.PersistentFlags().String("title", "", "stream title")
 	StreamSetup.PersistentFlags().String("description", "", "stream description")
@@ -286,7 +300,6 @@ func variablesSetImageFromURL(cmd *cobra.Command, args []string) {
 
 	var wg sync.WaitGroup
 	for idx, url := range args[2:] {
-		idx, url := idx, url
 		wg.Add(1)
 		observability.Go(ctx, func(ctx context.Context) {
 			defer wg.Done()
@@ -330,7 +343,32 @@ func configGet(cmd *cobra.Command, args []string) {
 	cfg.WriteTo(os.Stdout)
 }
 
-func chatListen(cmd *cobra.Command, args []string) {
+func ping(cmd *cobra.Command, args []string) {
+	ctx := cmd.Context()
+
+	remoteAddr, err := cmd.Flags().GetString("remote-addr")
+	assertNoError(ctx, err)
+	streamD, err := client.New(ctx, remoteAddr)
+	assertNoError(ctx, err)
+
+	payload, err := cmd.Flags().GetString("payload")
+	assertNoError(ctx, err)
+	payloadToIgnore, err := cmd.Flags().GetString("payload-to-ignore")
+	assertNoError(ctx, err)
+	extraPayloadSize, err := cmd.Flags().GetInt32("extra-payload-size")
+	assertNoError(ctx, err)
+
+	err = streamD.Ping(ctx, func(ctx context.Context, req *streamd_grpc.PingRequest) {
+		req.PayloadToReturn = payload
+		req.PayloadToIgnore = payloadToIgnore
+		req.RequestExtraPayloadSize = extraPayloadSize
+	})
+	assertNoError(ctx, err)
+
+	fmt.Println("pong")
+}
+
+func platformEventsListen(cmd *cobra.Command, args []string) {
 	ctx := cmd.Context()
 
 	remoteAddr, err := cmd.Flags().GetString("remote-addr")

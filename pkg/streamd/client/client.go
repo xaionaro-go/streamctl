@@ -1,3 +1,4 @@
+// Package client provides a client implementation for the streamd gRPC service.
 package client
 
 import (
@@ -239,12 +240,7 @@ func (c *Client) doConnect(
 	ctx context.Context,
 	opts ...grpc.DialOption,
 ) (*grpc.ClientConn, error) {
-	logger.Tracef(
-		ctx,
-		"doConnect(ctx, %#+v): Config: %#+v",
-		opts,
-		c.Config,
-	)
+	logger.Tracef(ctx, "doConnect(ctx, %#+v): Config: %#+v", opts, c.Config)
 	delay := c.Config.Retry.InitialInterval
 	for {
 		select {
@@ -252,49 +248,28 @@ func (c *Client) doConnect(
 			return nil, ctx.Err()
 		default:
 		}
-		logger.Debugf(
-			ctx,
-			"trying to (re-)connect to %s",
-			c.Target,
-		)
+		logger.Debugf(ctx, "trying to (re-)connect to %s", c.Target)
 
-		dialCtx, cancelFn := context.WithTimeout(
-			ctx,
-			time.Second,
-		)
-		conn, err := grpc.DialContext(
-			dialCtx,
+		conn, err := grpc.NewClient(
 			c.Target,
 			opts...)
-		cancelFn()
 		if err == nil {
-			logger.Debugf(
-				ctx,
-				"successfully (re-)connected to %s",
-				c.Target,
-			)
+			logger.Debugf(ctx, "successfully (re-)connected to %s", c.Target)
 			return conn, nil
 		}
-		logger.Debugf(
-			ctx,
+		logger.Debugf(ctx,
 			"(re-)connection failed to %s: %v; sleeping %v before the next try",
-			c.Target,
-			err,
-			delay,
+			c.Target, err, delay,
 		)
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case <-clock.Get().After(delay):
 		}
-		delay = time.Duration(
-			float64(
-				delay,
-			) * c.Config.Retry.IntervalMultiplier,
+		delay = min(
+			time.Duration(float64(delay)*c.Config.Retry.IntervalMultiplier),
+			c.Config.Retry.MaximalInterval,
 		)
-		if delay > c.Config.Retry.MaximalInterval {
-			delay = c.Config.Retry.MaximalInterval
-		}
 	}
 }
 
@@ -320,10 +295,7 @@ func (c *Client) grpcNewClient(
 ) (streamd_grpc.StreamDClient, obs_grpc.OBSClient, *grpc.ClientConn, error) {
 	conn, err := c.connect(ctx)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf(
-			"unable to initialize a gRPC client: %w",
-			err,
-		)
+		return nil, nil, nil, fmt.Errorf("unable to initialize a gRPC client: %w", err)
 	}
 
 	streamDClient := streamd_grpc.NewStreamDClient(conn)
@@ -404,7 +376,7 @@ func unwrapStreamDChan[E any, R any, S receiver[R]](
 	fn func(ctx context.Context, client streamd_grpc.StreamDClient) (S, error),
 	parse func(ctx context.Context, event *R) E,
 ) (<-chan E, error) {
-	return xgrpc.UnwrapChan[E, R, S, streamd_grpc.StreamDClient, *Client](ctx, c, fn, parse)
+	return xgrpc.UnwrapChan(ctx, c, fn, parse)
 }
 
 func (c *Client) ProcessError(
@@ -1087,7 +1059,6 @@ func (c *Client) GetVariable(
 			},
 		)
 	})
-
 	if err != nil {
 		return nil, fmt.Errorf(
 			"unable to get the variable '%s' value: %w",
@@ -1482,7 +1453,7 @@ func (c *Client) ListStreamSinks(
 			),
 			StreamSinkConfig: sstypes.StreamSinkConfig{
 				URL:       dst.GetConfig().GetUrl(),
-				StreamKey: secret.New[string](dst.GetConfig().GetStreamKey()),
+				StreamKey: secret.New(dst.GetConfig().GetStreamKey()),
 				StreamSourceID: goconv.StreamIDFullyQualifiedFromGRPC(
 					dst.GetConfig().GetStreamSourceID(),
 				).Ptr(),
@@ -1516,7 +1487,7 @@ func (c *Client) GetStreamSinkConfig(
 
 	return sstypes.StreamSinkConfig{
 		URL:            reply.GetConfig().GetUrl(),
-		StreamKey:      secret.New[string](reply.GetConfig().GetStreamKey()),
+		StreamKey:      secret.New(reply.GetConfig().GetStreamKey()),
 		StreamSourceID: goconv.StreamIDFullyQualifiedFromGRPC(reply.GetConfig().GetStreamSourceID()).Ptr(),
 	}, nil
 }
@@ -2703,6 +2674,7 @@ func (c *Client) UpdateTriggerRule(
 	}
 	return nil
 }
+
 func (c *Client) RemoveTriggerRule(
 	ctx context.Context,
 	ruleID api.TriggerRuleID,
@@ -2842,6 +2814,7 @@ func (c *Client) RemoveChatMessage(
 	}
 	return nil
 }
+
 func (c *Client) BanUser(
 	ctx context.Context,
 	platID streamcontrol.PlatformID,
