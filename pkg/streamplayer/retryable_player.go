@@ -33,7 +33,7 @@ func retryA1R2[A0 any, R0 any](
 		if err == nil {
 			return res, nil
 		}
-		logger.Tracef(ctx, "player: attempt %d failed: %v", i+1, err)
+		logger.Debugf(ctx, "player: attempt %d failed: %v", i+1, err)
 		lastErr = err
 	}
 	var zero R0
@@ -52,7 +52,7 @@ func retryA2R1[A0 any, A1 any](
 		if err == nil {
 			return nil
 		}
-		logger.Errorf(ctx, "player: attempt %d failed: %v", i+1, err)
+		logger.Debugf(ctx, "player: attempt %d failed: %v", i+1, err)
 		lastErr = err
 	}
 	return lastErr
@@ -72,7 +72,7 @@ func retryA4R1[A0 any, A1 any, A2 any, A3 any](
 		if err == nil {
 			return nil
 		}
-		logger.Errorf(ctx, "player: attempt %d failed: %v", i+1, err)
+		logger.Debugf(ctx, "player: attempt %d failed: %v", i+1, err)
 		lastErr = err
 	}
 	return lastErr
@@ -89,7 +89,7 @@ func retryA1R1[A0 any](
 		if err == nil {
 			return nil
 		}
-		logger.Errorf(ctx, "player: attempt %d failed: %v", i+1, err)
+		logger.Debugf(ctx, "player: attempt %d failed: %v", i+1, err)
 		lastErr = err
 	}
 	return lastErr
@@ -118,6 +118,7 @@ func (p *RetryablePlayer) IsEnded(ctx context.Context) (bool, error) {
 func (p *RetryablePlayer) GetPosition(ctx context.Context) (time.Duration, error) {
 	return retryA1R2(ctx, p.Player.GetPosition, ctx)
 }
+
 func (p *RetryablePlayer) GetAudioPosition(ctx context.Context) (time.Duration, error) {
 	return retryA1R2(ctx, p.Player.GetAudioPosition, ctx)
 }

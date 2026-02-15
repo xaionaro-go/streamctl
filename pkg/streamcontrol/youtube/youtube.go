@@ -1,3 +1,4 @@
+// Package youtube provides YouTube Live streaming integration.
 package youtube
 
 import (
@@ -1475,9 +1476,7 @@ func (yt *YouTube) ListBroadcasts(
 	var pageToken string
 	for receivedCount := uint(0); receivedCount < limit; {
 		maxResults := uint(limit - receivedCount)
-		if maxResults > 50 {
-			maxResults = 50
-		}
+		maxResults = min(maxResults, 50)
 
 		resp, err := yt.listBroadcastsPage(ctx, maxResults, pageToken)
 		if err != nil {

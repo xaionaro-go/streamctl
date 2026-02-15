@@ -33,7 +33,7 @@ replace github.com/scorfly/gokick => github.com/xaionaro-go/gokick v0.0.0-202511
 
 replace github.com/Danny-Dasilva/CycleTLS => github.com/xaionaro-go/CycleTLS v0.0.0-20250923213111-aed0022ae7b5
 
-replace github.com/dexterlb/mpvipc => github.com/xaionaro-go/mpvipc v0.0.0-20251019230357-e0f534e5dde4
+replace github.com/dexterlb/mpvipc => github.com/xaionaro-go/mpvipc v0.0.0-20260215165911-70fd13382f02
 
 replace github.com/RomainMichau/cloudscraper_go => github.com/xaionaro-go/cloudscraper v0.0.0-20251019213127-d3687042cb55
 
