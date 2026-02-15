@@ -1,3 +1,4 @@
+// Package llm provides LLM integration for the streamctl application.
 package llm
 
 import (

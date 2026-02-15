@@ -24,3 +24,11 @@ type ErrNoStreamControllerForProfile struct {
 func (e ErrNoStreamControllerForProfile) Error() string {
 	return fmt.Sprintf("no StreamController found for profile %T", e.StreamProfile)
 }
+
+type ErrStreamIDEmpty struct{}
+
+var _ error = ErrStreamIDEmpty{}
+
+func (e ErrStreamIDEmpty) Error() string {
+	return "stream ID is empty"
+}

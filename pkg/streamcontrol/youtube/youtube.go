@@ -59,8 +59,10 @@ type YouTube struct {
 }
 
 type plannedStream struct {
-	Profile    StreamProfile
-	CustomArgs []any
+	Title       string
+	Description string
+	Profile     StreamProfile
+	CustomArgs  []any
 }
 
 var _ streamcontrol.AccountGeneric[StreamProfile] = (*YouTube)(nil)
@@ -85,9 +87,7 @@ func SetDebugUseMockClient(v bool) {
 	debugUseMockClient = v
 }
 
-var (
-	debugUseMockClient = false
-)
+var debugUseMockClient = false
 
 type chatListener = ChatListenerOBSOLETE
 
@@ -510,7 +510,7 @@ func (yt *YouTube) ApplyProfile(
 				broadcast.Id,
 			)
 		}
-		setProfile(broadcast, profile)
+		broadcastSetProfile(broadcast, profile)
 		return nil
 	}, "snippet")
 }
@@ -526,7 +526,7 @@ func (yt *YouTube) SetTitle(
 			planned = &plannedStream{}
 			yt.plannedStreams[streamID] = planned
 		}
-		planned.Profile.Title = title
+		planned.Title = title
 	})
 	return yt.updateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
 		if !yt.isMatchingStreamID(broadcast, streamID) {
@@ -538,7 +538,7 @@ func (yt *YouTube) SetTitle(
 				broadcast.Id,
 			)
 		}
-		setTitle(broadcast, title)
+		broadcasSetTitle(broadcast, title)
 		return nil
 	}, "snippet")
 }
@@ -554,7 +554,7 @@ func (yt *YouTube) SetDescription(
 			planned = &plannedStream{}
 			yt.plannedStreams[streamID] = planned
 		}
-		planned.Profile.Description = description
+		planned.Description = description
 	})
 	return yt.updateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
 		if !yt.isMatchingStreamID(broadcast, streamID) {
@@ -566,7 +566,7 @@ func (yt *YouTube) SetDescription(
 				broadcast.Id,
 			)
 		}
-		setDescription(broadcast, description)
+		broadcastSetDescription(broadcast, description)
 		return nil
 	}, "snippet")
 }
@@ -701,7 +701,9 @@ func (yt *YouTube) startStream(
 	ctx context.Context,
 	streamID streamcontrol.StreamID,
 ) (_err error) {
-	// TODO: split this function!
+	if streamID == "" {
+		return streamcontrol.ErrStreamIDEmpty{}
+	}
 
 	planned, ok := xsync.DoR2(ctx, &yt.plannedStreamsLocker, func() (*plannedStream, bool) {
 		p, ok := yt.plannedStreams[streamID]
@@ -720,21 +722,16 @@ func (yt *YouTube) startStream(
 	logger.Debugf(ctx, "YouTube.startStream")
 	defer func() { logger.Debugf(ctx, "/YouTube.startStream: %v", _err) }()
 
-	title, _ := profile.GetTitle()
-	description, _ := profile.GetDescription()
-
-	var templateBroadcastIDs []string
-	for _, templateBroadcastIDCandidate := range customArgs {
-		_templateBroadcastIDs, ok := templateBroadcastIDCandidate.(FlagBroadcastTemplateIDs)
-		if ok {
-			templateBroadcastIDs = _templateBroadcastIDs
-			break
-		}
+	templateBroadcastIDs, err := yt.extractTemplateBroadcastIDs(customArgs, profile)
+	if err != nil {
+		return err
 	}
 
 	logger.Debugf(ctx, "profile == %#+v", profile)
+	if planned.Title == "" {
+		return fmt.Errorf("profile title is empty, but it should be non-empty when starting a stream")
+	}
 
-	templateBroadcastIDs = append(templateBroadcastIDs, profile.TemplateBroadcastIDs...)
 	logger.Debugf(
 		ctx,
 		"templateBroadcastIDs == %v; customArgs == %v",
@@ -745,12 +742,49 @@ func (yt *YouTube) startStream(
 		return fmt.Errorf("no template stream is selected")
 	}
 
+	err = yt.cleanupUpcomingBroadcasts(ctx, templateBroadcastIDs)
+	if err != nil {
+		logger.Error(ctx, "unable to delete other upcoming streams: %v", err)
+	}
+
+	broadcasts, videos, err := yt.fetchTemplateData(ctx, templateBroadcastIDs)
+	if err != nil {
+		return err
+	}
+
+	playlistIDMap, err := yt.fetchPlaylistData(ctx, templateBroadcastIDs)
+	if err != nil {
+		return err
+	}
+
+	highestStreamNum, err := yt.calculateHighestStreamNum(ctx, profile)
+	if err != nil {
+		return err
+	}
+
+	return yt.createBroadcasts(ctx, streamID, planned, profile, broadcasts, videos, playlistIDMap, highestStreamNum)
+}
+
+func (yt *YouTube) extractTemplateBroadcastIDs(customArgs []any, profile StreamProfile) ([]string, error) {
+	var templateBroadcastIDs []string
+	for _, templateBroadcastIDCandidate := range customArgs {
+		_templateBroadcastIDs, ok := templateBroadcastIDCandidate.(FlagBroadcastTemplateIDs)
+		if ok {
+			templateBroadcastIDs = _templateBroadcastIDs
+			break
+		}
+	}
+	templateBroadcastIDs = append(templateBroadcastIDs, profile.TemplateBroadcastIDs...)
+	return templateBroadcastIDs, nil
+}
+
+func (yt *YouTube) cleanupUpcomingBroadcasts(ctx context.Context, templateBroadcastIDs []string) error {
 	templateBroadcastIDMap := map[string]struct{}{}
 	for _, broadcastID := range templateBroadcastIDs {
 		templateBroadcastIDMap[broadcastID] = struct{}{}
 	}
 
-	err := yt.IterateUpcomingBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
+	return yt.IterateUpcomingBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
 		if _, ok := templateBroadcastIDMap[broadcast.Id]; ok {
 			return nil
 		}
@@ -759,53 +793,49 @@ func (yt *YouTube) startStream(
 		logger.Debugf(ctx, "YouTube.LiveBroadcasts result: %v", err)
 		return err
 	})
+}
+
+func (yt *YouTube) fetchTemplateData(ctx context.Context, templateBroadcastIDs []string) ([]*youtube.LiveBroadcast, []*youtube.Video, error) {
+	logger.Debugf(ctx, "getting broadcast info of %v", templateBroadcastIDs)
+
+	response, err := yt.YouTubeClient.GetBroadcasts(ctx, BroadcastTypeAll, templateBroadcastIDs, liveBroadcastParts, "")
+	logger.Debugf(ctx, "YouTube.LiveBroadcasts result: %v", err)
 	if err != nil {
-		logger.Error(ctx, "unable to delete other upcoming streams: %v", err)
+		return nil, nil, fmt.Errorf("unable to get the list of active broadcasts: %w", err)
 	}
-
-	var broadcasts []*youtube.LiveBroadcast
-	var videos []*youtube.Video
-	{
-		logger.Debugf(ctx, "getting broadcast info of %v", templateBroadcastIDs)
-
-		response, err := yt.YouTubeClient.GetBroadcasts(ctx, BroadcastTypeAll, templateBroadcastIDs, liveBroadcastParts, "")
-		logger.Debugf(ctx, "YouTube.LiveBroadcasts result: %v", err)
-		if err != nil {
-			return fmt.Errorf("unable to get the list of active broadcasts: %w", err)
-		}
-		if len(response.Items) != len(templateBroadcastIDs) {
-			return fmt.Errorf(
-				"expected %d broadcasts, but found %d",
-				len(templateBroadcastIDs),
-				len(response.Items),
-			)
-		}
-		broadcasts = append(broadcasts, response.Items...)
+	if len(response.Items) != len(templateBroadcastIDs) {
+		return nil, nil, fmt.Errorf(
+			"expected %d broadcasts, but found %d",
+			len(templateBroadcastIDs),
+			len(response.Items),
+		)
 	}
+	broadcasts := response.Items
 
-	{
-		logger.Debugf(ctx, "getting video info of %v", templateBroadcastIDs)
+	logger.Debugf(ctx, "getting video info of %v", templateBroadcastIDs)
 
-		response, err := yt.YouTubeClient.GetVideos(ctx, templateBroadcastIDs, videoParts)
-
-		logger.Debugf(ctx, "YouTube.Video result: %v", err)
-		if err != nil {
-			return fmt.Errorf("unable to get the list of active broadcasts: %w", err)
-		}
-		if len(response.Items) != len(templateBroadcastIDs) {
-			return fmt.Errorf(
-				"expected %d videos, but found %d",
-				len(templateBroadcastIDs),
-				len(response.Items),
-			)
-		}
-		videos = append(videos, response.Items...)
+	videoResponse, err := yt.YouTubeClient.GetVideos(ctx, templateBroadcastIDs, videoParts)
+	logger.Debugf(ctx, "YouTube.Video result: %v", err)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to get the list of active broadcasts: %w", err)
 	}
+	if len(videoResponse.Items) != len(templateBroadcastIDs) {
+		return nil, nil, fmt.Errorf(
+			"expected %d videos, but found %d",
+			len(templateBroadcastIDs),
+			len(videoResponse.Items),
+		)
+	}
+	videos := videoResponse.Items
 
+	return broadcasts, videos, nil
+}
+
+func (yt *YouTube) fetchPlaylistData(ctx context.Context, templateBroadcastIDs []string) (map[string]map[string]struct{}, error) {
 	playlistsResponse, err := yt.YouTubeClient.GetPlaylists(ctx, playlistParts)
 	logger.Debugf(ctx, "YouTube.Playlists result: %v", err)
 	if err != nil {
-		return fmt.Errorf("unable to get the list of playlists: %w", err)
+		return nil, fmt.Errorf("unable to get the list of playlists: %w", err)
 	}
 
 	playlistIDMap := map[string]map[string]struct{}{}
@@ -816,7 +846,7 @@ func (yt *YouTube) startStream(
 			playlistItemsResponse, err := yt.YouTubeClient.GetPlaylistItems(ctx, playlist.Id, templateBroadcastID, playlistItemParts)
 			logger.Debugf(ctx, "YouTube.PlaylistItems result: %v", err)
 			if err != nil {
-				return fmt.Errorf("unable to get the list of playlist items: %w", err)
+				return nil, fmt.Errorf("unable to get the list of playlist items: %w", err)
 			}
 
 			m := playlistIDMap[templateBroadcastID]
@@ -838,33 +868,52 @@ func (yt *YouTube) startStream(
 		)
 	}
 
-	var highestStreamNum uint64
-	if profile.AutoNumerate {
-		resp, err := yt.YouTubeClient.GetBroadcasts(ctx, BroadcastTypeAll, nil, liveBroadcastParts, "")
-		logger.Debugf(ctx, "YouTube.LiveBroadcasts result: %v", err)
-		if err != nil {
-			return fmt.Errorf(
-				"unable to request previous streams to figure out the next stream number for auto-numeration: %w",
-				err,
-			)
-		}
+	return playlistIDMap, nil
+}
 
-		for _, b := range resp.Items {
-			matches := streamNumInTitleRegex.FindStringSubmatch(b.Snippet.Title)
-			if len(matches) < 2 {
-				continue
-			}
-			match := matches[1]
-			streamNum, err := strconv.ParseUint(match, 10, 64)
-			if err != nil {
-				return fmt.Errorf("unable to parse '%s' as uint: %w", match, err)
-			}
-			if streamNum > highestStreamNum {
-				highestStreamNum = streamNum
-			}
+func (yt *YouTube) calculateHighestStreamNum(ctx context.Context, profile StreamProfile) (uint64, error) {
+	var highestStreamNum uint64
+	if !profile.AutoNumerate {
+		return highestStreamNum, nil
+	}
+
+	resp, err := yt.YouTubeClient.GetBroadcasts(ctx, BroadcastTypeAll, nil, liveBroadcastParts, "")
+	logger.Debugf(ctx, "YouTube.LiveBroadcasts result: %v", err)
+	if err != nil {
+		return 0, fmt.Errorf(
+			"unable to request previous streams to figure out the next stream number for auto-numeration: %w",
+			err,
+		)
+	}
+
+	for _, b := range resp.Items {
+		matches := streamNumInTitleRegex.FindStringSubmatch(b.Snippet.Title)
+		if len(matches) < 2 {
+			continue
+		}
+		match := matches[1]
+		streamNum, err := strconv.ParseUint(match, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("unable to parse '%s' as uint: %w", match, err)
+		}
+		if streamNum > highestStreamNum {
+			highestStreamNum = streamNum
 		}
 	}
 
+	return highestStreamNum, nil
+}
+
+func (yt *YouTube) createBroadcasts(
+	ctx context.Context,
+	streamID streamcontrol.StreamID,
+	planned *plannedStream,
+	profile StreamProfile,
+	broadcasts []*youtube.LiveBroadcast,
+	videos []*youtube.Video,
+	playlistIDMap map[string]map[string]struct{},
+	highestStreamNum uint64,
+) error {
 	return xsync.DoR1(ctx, &yt.currentLiveBroadcastsLocker, func() error {
 		yt.currentLiveBroadcasts = yt.currentLiveBroadcasts[:0]
 		for idx, broadcast := range broadcasts {
@@ -879,182 +928,25 @@ func (yt *YouTube) startStream(
 					broadcast.Id,
 				)
 			}
-			now := time.Now().UTC()
-			broadcast.Id = ""
-			broadcast.Etag = ""
-			broadcast.ContentDetails.EnableAutoStop = false
-			broadcast.ContentDetails.BoundStreamLastUpdateTimeMs = ""
-			if streamID != "" {
-				broadcast.ContentDetails.BoundStreamId = string(streamID)
-			} else {
-				broadcast.ContentDetails.BoundStreamId = ""
-			}
-			broadcast.ContentDetails.MonitorStream = nil
-			broadcast.ContentDetails.ForceSendFields = []string{"EnableAutoStop"}
-			broadcast.Snippet.ScheduledStartTime = now.Format("2006-01-02T15:04:05") + ".00Z"
-			broadcast.Snippet.ScheduledEndTime = now.Add(time.Hour*12).
-				Format("2006-01-02T15:04:05") +
-				".00Z"
-			broadcast.Snippet.LiveChatId = ""
-			broadcast.Status.SelfDeclaredMadeForKids = broadcast.Status.MadeForKids
-			broadcast.Status.ForceSendFields = []string{"SelfDeclaredMadeForKids"}
 
-			title := title
-			if profile.AutoNumerate {
-				title += fmt.Sprintf(" [#%d]", highestStreamNum+1)
-			}
-			setTitle(broadcast, title)
-			setDescription(broadcast, description)
-			setProfile(broadcast, profile)
-
-			b, err := yaml.Marshal(broadcast)
-			if err == nil {
-				logger.Debugf(ctx, "creating broadcast %s", b)
-			} else {
-				logger.Debugf(ctx, "creating broadcast %#+v", broadcast)
-			}
-
-			newBroadcast, err := yt.YouTubeClient.InsertBroadcast(ctx, broadcast,
-				[]string{"snippet", "contentDetails", "monetizationDetails", "status"},
-			)
-			logger.Debugf(ctx, "YouTube.LiveBroadcasts result: %v", err)
+			err := yt.createSingleBroadcast(ctx, streamID, planned, profile, broadcast, video, templateBroadcastID, highestStreamNum)
 			if err != nil {
-				if strings.Contains(err.Error(), "invalidScheduledStartTime") {
-					logger.Debugf(
-						ctx,
-						"it seems the local system clock is off, trying to fix the schedule time",
-					)
-
-					now, err = timeapiio.Now()
-					if err != nil {
-						logger.Errorf(ctx, "unable to get the actual time: %v", err)
-						// guessing:
-						// may be the error happened because of the know winter/summer time issue
-						// on Windows?
-						now = time.Now().Add(time.Hour)
-					}
-					broadcast.Snippet.ScheduledStartTime = now.Format("2006-01-02T15:04:05") + ".00Z"
-					broadcast.Snippet.ScheduledEndTime = now.Add(time.Hour*12).
-						Format("2006-01-02T15:04:05") +
-						".00Z"
-					newBroadcast, err = yt.YouTubeClient.InsertBroadcast(ctx, broadcast,
-						[]string{"snippet", "contentDetails", "monetizationDetails", "status"},
-					)
-					logger.Debugf(ctx, "YouTube.LiveBroadcasts result: %v", err)
-					if err != nil {
-						err = fmt.Errorf("%w; is the system clock OK?", err)
-					}
-				}
-				if err != nil {
-					return fmt.Errorf("unable to create a broadcast: %w", err)
-				}
+				return err
 			}
 
-			video.Id = newBroadcast.Id
-			video.Snippet.Title = broadcast.Snippet.Title
-			video.Snippet.Description = broadcast.Snippet.Description
-			video.Snippet.PublishedAt = ""
-			video.Status.PublishAt = ""
-			switch profile.TemplateTags {
-			case UndefinedTemplateTags, TemplateTagsIgnore:
-				video.Snippet.Tags = profile.Tags
-			case TemplateTagsUseAsPrimary:
-				video.Snippet.Tags = append(video.Snippet.Tags, profile.Tags...)
-			case TemplateTagsUseAsAdditional:
-				templateTags := video.Snippet.Tags
-				video.Snippet.Tags = video.Snippet.Tags[:0]
-				video.Snippet.Tags = append(video.Snippet.Tags, profile.Tags...)
-				video.Snippet.Tags = append(video.Snippet.Tags, templateTags...)
-			default:
-				logger.Errorf(
-					ctx,
-					"unexpected value of the 'TemplateTags' setting: '%v'",
-					profile.TemplateTags,
-				)
-				video.Snippet.Tags = profile.Tags
-			}
-			video.Snippet.Tags = deduplicate(video.Snippet.Tags)
-			tagsTruncated := TruncateTags(video.Snippet.Tags)
-			if len(tagsTruncated) != len(video.Snippet.Tags) {
-				logger.Infof(
-					ctx,
-					"YouTube tags were truncated, the amount was reduced from %d to %d to satisfy the 500 characters limit",
-					len(video.Snippet.Tags),
-					len(tagsTruncated),
-				)
-				video.Snippet.Tags = tagsTruncated
-			}
-			b, err = yaml.Marshal(video)
-			if err == nil {
-				logger.Debugf(ctx, "updating video data to %s", b)
-			} else {
-				logger.Debugf(ctx, "updating video data to %#+v", broadcast)
-			}
-			err = yt.YouTubeClient.UpdateVideo(ctx, video, videoParts)
-			logger.Debugf(ctx, "YouTube.Update result: %v", err)
+			err = yt.updateVideo(ctx, video, profile)
 			if err != nil {
-				videoJSON, _ := json.Marshal(video)
-				return fmt.Errorf("unable to update video data (%s: %s): %w", strings.Join(videoParts, "+"), videoJSON, err)
+				return err
 			}
 
-			playlistIDs := make([]string, 0, len(playlistIDMap[templateBroadcastID]))
-			for playlistID := range playlistIDMap[templateBroadcastID] {
-				playlistIDs = append(playlistIDs, playlistID)
-			}
-			sort.Strings(playlistIDs)
-			for _, playlistID := range playlistIDs {
-				newPlaylistItem := &youtube.PlaylistItem{
-					Snippet: &youtube.PlaylistItemSnippet{
-						PlaylistId: playlistID,
-						ResourceId: &youtube.ResourceId{
-							Kind:    "youtube#video",
-							VideoId: video.Id,
-						},
-					},
-				}
-				b, err := yaml.Marshal(newPlaylistItem)
-				if err == nil {
-					logger.Debugf(ctx, "adding the video to playlist %s", b)
-				} else {
-					logger.Debugf(ctx, "adding the video to playlist %#+v", newPlaylistItem)
-				}
-
-				err = yt.YouTubeClient.InsertPlaylistItem(ctx, newPlaylistItem, playlistItemParts)
-				logger.Debugf(ctx, "YouTube.PlaylistItems result: %v", err)
-				if err != nil {
-					return fmt.Errorf("unable to add video to playlist %#+v: %w", playlistID, err)
-				}
-			}
-
-			if copyThumbnail && broadcast.Snippet.Thumbnails.Standard.Url != "" {
-				logger.Debugf(ctx, "downloading the thumbnail")
-				resp, err := http.Get(broadcast.Snippet.Thumbnails.Standard.Url)
-				if err != nil {
-					return fmt.Errorf(
-						"unable to download the thumbnail from the template video: %w",
-						err,
-					)
-				}
-				logger.Debugf(ctx, "reading the thumbnail")
-				thumbnail, err := io.ReadAll(resp.Body)
-				resp.Body.Close()
-				if err != nil {
-					return fmt.Errorf(
-						"unable to read the thumbnail from the response from the template video: %w",
-						err,
-					)
-				}
-				logger.Debugf(ctx, "setting the thumbnail")
-				err = yt.YouTubeClient.SetThumbnail(ctx, newBroadcast.Id, bytes.NewReader(thumbnail))
-				logger.Debugf(ctx, "YouTube.Thumbnails result: %v", err)
-				if err != nil {
-					return fmt.Errorf("unable to set the thumbnail: %w", err)
-				}
-			}
-			yt.currentLiveBroadcasts = append(yt.currentLiveBroadcasts, newBroadcast)
-			err = yt.startChatListener(ctx, newBroadcast)
+			err = yt.addToPlaylists(ctx, video.Id, templateBroadcastID, playlistIDMap)
 			if err != nil {
-				logger.Errorf(ctx, "unable to start a chat listener for video '%s': %v", newBroadcast.Id, err)
+				return err
+			}
+
+			err = yt.copyThumbnailIfNeeded(ctx, broadcast, video.Id)
+			if err != nil {
+				return err
 			}
 		}
 
@@ -1062,15 +954,212 @@ func (yt *YouTube) startStream(
 	})
 }
 
-func setTitle(broadcast *youtube.LiveBroadcast, title string) {
+func (yt *YouTube) createSingleBroadcast(
+	ctx context.Context,
+	streamID streamcontrol.StreamID,
+	planned *plannedStream,
+	profile StreamProfile,
+	broadcast *youtube.LiveBroadcast,
+	video *youtube.Video,
+	templateBroadcastID string,
+	highestStreamNum uint64,
+) error {
+	now := time.Now().UTC()
+	broadcast.Id = ""
+	broadcast.Etag = ""
+	broadcast.ContentDetails.EnableAutoStop = false
+	broadcast.ContentDetails.BoundStreamLastUpdateTimeMs = ""
+	broadcast.ContentDetails.BoundStreamId = string(streamID)
+	broadcast.ContentDetails.MonitorStream = nil
+	broadcast.ContentDetails.ForceSendFields = []string{"EnableAutoStop"}
+	broadcast.Snippet.ScheduledStartTime = now.Format("2006-01-02T15:04:05") + ".00Z"
+	broadcast.Snippet.ScheduledEndTime = now.Add(time.Hour*12).
+		Format("2006-01-02T15:04:05") +
+		".00Z"
+	broadcast.Snippet.LiveChatId = ""
+	broadcast.Status.SelfDeclaredMadeForKids = broadcast.Status.MadeForKids
+	broadcast.Status.ForceSendFields = []string{"SelfDeclaredMadeForKids"}
+
+	title := planned.Title
+	if profile.AutoNumerate {
+		title += fmt.Sprintf(" [#%d]", highestStreamNum+1)
+	}
+	broadcasSetTitle(broadcast, title)
+	broadcastSetDescription(broadcast, planned.Description)
+	broadcastSetProfile(broadcast, profile)
+
+	b, err := yaml.Marshal(broadcast)
+	if err == nil {
+		logger.Debugf(ctx, "creating broadcast %s", b)
+	} else {
+		logger.Debugf(ctx, "creating broadcast %#+v", broadcast)
+	}
+
+	newBroadcast, err := yt.YouTubeClient.InsertBroadcast(ctx, broadcast,
+		[]string{"snippet", "contentDetails", "monetizationDetails", "status"},
+	)
+	logger.Debugf(ctx, "YouTube.LiveBroadcasts result: %v", err)
+	if err != nil {
+		if strings.Contains(err.Error(), "invalidScheduledStartTime") {
+			logger.Debugf(
+				ctx,
+				"it seems the local system clock is off, trying to fix the schedule time",
+			)
+
+			now, err = timeapiio.Now()
+			if err != nil {
+				logger.Errorf(ctx, "unable to get the actual time: %v", err)
+				now = time.Now().Add(time.Hour)
+			}
+			broadcast.Snippet.ScheduledStartTime = now.Format("2006-01-02T15:04:05") + ".00Z"
+			broadcast.Snippet.ScheduledEndTime = now.Add(time.Hour*12).
+				Format("2006-01-02T15:04:05") +
+				".00Z"
+			newBroadcast, err = yt.YouTubeClient.InsertBroadcast(ctx, broadcast,
+				[]string{"snippet", "contentDetails", "monetizationDetails", "status"},
+			)
+			logger.Debugf(ctx, "YouTube.LiveBroadcasts result: %v", err)
+			if err != nil {
+				err = fmt.Errorf("%w; is the system clock OK?", err)
+			}
+		}
+		if err != nil {
+			return fmt.Errorf("unable to create a broadcast: %w", err)
+		}
+	}
+
+	video.Id = newBroadcast.Id
+	video.Snippet.Title = broadcast.Snippet.Title
+	video.Snippet.Description = broadcast.Snippet.Description
+	video.Snippet.PublishedAt = ""
+	video.Status.PublishAt = ""
+
+	yt.currentLiveBroadcasts = append(yt.currentLiveBroadcasts, newBroadcast)
+	err = yt.startChatListener(ctx, newBroadcast)
+	if err != nil {
+		logger.Errorf(ctx, "unable to start a chat listener for video '%s': %v", newBroadcast.Id, err)
+	}
+
+	return nil
+}
+
+func (yt *YouTube) updateVideo(ctx context.Context, video *youtube.Video, profile StreamProfile) error {
+	switch profile.TemplateTags {
+	case UndefinedTemplateTags, TemplateTagsIgnore:
+		video.Snippet.Tags = profile.Tags
+	case TemplateTagsUseAsPrimary:
+		video.Snippet.Tags = append(video.Snippet.Tags, profile.Tags...)
+	case TemplateTagsUseAsAdditional:
+		templateTags := video.Snippet.Tags
+		video.Snippet.Tags = video.Snippet.Tags[:0]
+		video.Snippet.Tags = append(video.Snippet.Tags, profile.Tags...)
+		video.Snippet.Tags = append(video.Snippet.Tags, templateTags...)
+	default:
+		logger.Errorf(
+			ctx,
+			"unexpected value of the 'TemplateTags' setting: '%v'",
+			profile.TemplateTags,
+		)
+		video.Snippet.Tags = profile.Tags
+	}
+	video.Snippet.Tags = deduplicate(video.Snippet.Tags)
+	tagsTruncated := TruncateTags(video.Snippet.Tags)
+	if len(tagsTruncated) != len(video.Snippet.Tags) {
+		logger.Infof(
+			ctx,
+			"YouTube tags were truncated, the amount was reduced from %d to %d to satisfy the 500 characters limit",
+			len(video.Snippet.Tags),
+			len(tagsTruncated),
+		)
+		video.Snippet.Tags = tagsTruncated
+	}
+	b, err := yaml.Marshal(video)
+	if err == nil {
+		logger.Debugf(ctx, "updating video data to %s", b)
+	} else {
+		logger.Debugf(ctx, "updating video data to %#+v", video)
+	}
+	err = yt.YouTubeClient.UpdateVideo(ctx, video, videoParts)
+	logger.Debugf(ctx, "YouTube.Update result: %v", err)
+	if err != nil {
+		videoJSON, _ := json.Marshal(video)
+		return fmt.Errorf("unable to update video data (%s: %s): %w", strings.Join(videoParts, "+"), videoJSON, err)
+	}
+	return nil
+}
+
+func (yt *YouTube) addToPlaylists(ctx context.Context, videoID string, templateBroadcastID string, playlistIDMap map[string]map[string]struct{}) error {
+	playlistIDs := make([]string, 0, len(playlistIDMap[templateBroadcastID]))
+	for playlistID := range playlistIDMap[templateBroadcastID] {
+		playlistIDs = append(playlistIDs, playlistID)
+	}
+	sort.Strings(playlistIDs)
+	for _, playlistID := range playlistIDs {
+		newPlaylistItem := &youtube.PlaylistItem{
+			Snippet: &youtube.PlaylistItemSnippet{
+				PlaylistId: playlistID,
+				ResourceId: &youtube.ResourceId{
+					Kind:    "youtube#video",
+					VideoId: videoID,
+				},
+			},
+		}
+		b, err := yaml.Marshal(newPlaylistItem)
+		if err == nil {
+			logger.Debugf(ctx, "adding the video to playlist %s", b)
+		} else {
+			logger.Debugf(ctx, "adding the video to playlist %#+v", newPlaylistItem)
+		}
+
+		err = yt.YouTubeClient.InsertPlaylistItem(ctx, newPlaylistItem, playlistItemParts)
+		logger.Debugf(ctx, "YouTube.PlaylistItems result: %v", err)
+		if err != nil {
+			return fmt.Errorf("unable to add video to playlist %#+v: %w", playlistID, err)
+		}
+	}
+	return nil
+}
+
+func (yt *YouTube) copyThumbnailIfNeeded(ctx context.Context, broadcast *youtube.LiveBroadcast, videoID string) error {
+	if !copyThumbnail || broadcast.Snippet.Thumbnails.Standard.Url == "" {
+		return nil
+	}
+
+	logger.Debugf(ctx, "downloading the thumbnail")
+	resp, err := http.Get(broadcast.Snippet.Thumbnails.Standard.Url)
+	if err != nil {
+		return fmt.Errorf(
+			"unable to download the thumbnail from the template video: %w",
+			err,
+		)
+	}
+	logger.Debugf(ctx, "reading the thumbnail")
+	thumbnail, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return fmt.Errorf(
+			"unable to read the thumbnail from the response from the template video: %w",
+			err,
+		)
+	}
+	logger.Debugf(ctx, "setting the thumbnail")
+	err = yt.YouTubeClient.SetThumbnail(ctx, videoID, bytes.NewReader(thumbnail))
+	logger.Debugf(ctx, "YouTube.Thumbnails result: %v", err)
+	if err != nil {
+		return fmt.Errorf("unable to set the thumbnail: %w", err)
+	}
+	return nil
+}
+
+func broadcasSetTitle(broadcast *youtube.LiveBroadcast, title string) {
 	broadcast.Snippet.Title = title
 }
 
-func setDescription(broadcast *youtube.LiveBroadcast, description string) {
+func broadcastSetDescription(broadcast *youtube.LiveBroadcast, description string) {
 	broadcast.Snippet.Description = description
 }
 
-func setProfile(broadcast *youtube.LiveBroadcast, profile StreamProfile) {
+func broadcastSetProfile(broadcast *youtube.LiveBroadcast, profile StreamProfile) {
 	// Don't know how to set the tags :(
 }
 
@@ -1243,8 +1332,10 @@ func (yt *YouTube) endStream(
 	}, "contentDetails")
 }
 
-const timeLayout = "2006-01-02T15:04:05-0700"
-const timeLayoutFallback = time.RFC3339
+const (
+	timeLayout         = "2006-01-02T15:04:05-0700"
+	timeLayoutFallback = time.RFC3339
+)
 
 func ParseTimestamp(s string) (time.Time, error) {
 	ts, err0 := time.Parse(timeLayout, s)
@@ -1672,6 +1763,7 @@ func (yt *YouTube) RemoveChatMessage(
 
 	return nil
 }
+
 func (yt *YouTube) BanUser(
 	ctx context.Context,
 	streamID streamcontrol.StreamID,

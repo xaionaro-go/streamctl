@@ -1,3 +1,4 @@
+// Package streamcontrol provides types and interfaces for stream profile management.
 package streamcontrol
 
 type StreamProfileBase struct {
@@ -18,10 +19,6 @@ func (profile StreamProfileBase) GetOrder() int {
 	return profile.Order
 }
 
-func (profile *StreamProfileBase) SetOrder(v int) {
-	profile.Order = v
-}
-
 func (profile StreamProfileBase) GetTitle() (string, bool) {
 	if profile.Title == "" {
 		return "", false
@@ -34,4 +31,8 @@ func (profile StreamProfileBase) GetDescription() (string, bool) {
 		return "", false
 	}
 	return profile.Description, true
+}
+
+func (profile *StreamProfileBase) SetOrder(v int) {
+	profile.Order = v
 }
