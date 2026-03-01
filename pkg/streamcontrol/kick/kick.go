@@ -195,8 +195,8 @@ func (k *Kick) keepAliveLoop(
 	t := time.NewTicker(time.Minute)
 	defer t.Stop()
 	for {
-		if k.Channel == nil { // TODO: fix non-atomicity
-			logger.Warnf(ctx, "channel info is not set, yet")
+		if err := k.prepare(ctx); err != nil {
+			logger.Warnf(ctx, "channel info is not set yet: %v", err)
 			time.Sleep(time.Second)
 			continue
 		}
