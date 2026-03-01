@@ -50,6 +50,7 @@ type YouTube struct {
 	currentLiveBroadcastsLocker xsync.Mutex
 	currentLiveBroadcasts       []*youtube.LiveBroadcast
 
+	tokenSource oauth2.TokenSource
 	chatListeners map[string]*chatListener
 
 	messagesOutChan chan streamcontrol.Event
@@ -89,7 +90,7 @@ func SetDebugUseMockClient(v bool) {
 
 var debugUseMockClient = false
 
-type chatListener = ChatListenerOBSOLETE
+type chatListener = ChatListenerStream
 
 func New(
 	ctx context.Context,
@@ -256,6 +257,7 @@ func (yt *YouTube) initNoLock(ctx context.Context) (_err error) {
 	}
 
 	yt.YouTubeClient = NewYouTubeClientCalcPoints(youtubeClient) // TODO: make this atomic
+	yt.tokenSource = tokenSource
 	return nil
 }
 
@@ -1176,12 +1178,10 @@ func (yt *YouTube) startChatListener(
 	logger.Debugf(ctx, "startChatListener(ctx, '%s':'%s')", videoID, chatID)
 	defer func() { logger.Debugf(ctx, "/startChatListener(ctx, '%s':'%s'): %v", videoID, chatID, _err) }()
 
-	_chatListener, err := NewChatListenerOBSOLETE(ctx, videoID, func(
-		ctx context.Context,
-		_chatListener *chatListener,
-	) {
-		yt.deleteChatListener(ctx, _chatListener)
+	tokenSource := xsync.DoR1(ctx, &yt.locker, func() oauth2.TokenSource {
+		return yt.tokenSource
 	})
+	_chatListener, err := NewChatListenerStream(ctx, videoID, chatID, tokenSource)
 	if err != nil {
 		return fmt.Errorf("unable to initialize the chat listener instance: %w", err)
 	}

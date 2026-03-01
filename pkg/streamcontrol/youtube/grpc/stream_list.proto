@@ -1,0 +1,82 @@
+syntax = "proto3";
+package youtube.v3;
+option go_package = "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/grpc/ytgrpc;ytgrpc";
+
+service V3DataLiveChatMessageService {
+  rpc StreamList(LiveChatMessageListRequest)
+      returns (stream LiveChatMessageListResponse) {}
+}
+
+message LiveChatMessageListRequest {
+  string live_chat_id = 1;
+  repeated string part = 2;
+  uint32 max_results = 3;
+  string page_token = 4;
+  uint32 profile_image_size = 5;
+  string hl = 6;
+}
+
+message LiveChatMessageListResponse {
+  string kind = 1;
+  string etag = 2;
+  string next_page_token = 3;
+  PageInfo page_info = 4;
+  repeated LiveChatMessage items = 5;
+  string offline_at = 6;
+  LiveChatMessage active_poll_item = 7;
+}
+
+message PageInfo {
+  int32 total_results = 1;
+  int32 results_per_page = 2;
+}
+
+message LiveChatMessage {
+  string kind = 1;
+  string etag = 2;
+  string id = 3;
+  LiveChatMessageSnippet snippet = 4;
+  LiveChatMessageAuthorDetails author_details = 5;
+}
+
+message LiveChatMessageSnippet {
+  string type = 1;
+  string live_chat_id = 2;
+  string author_channel_id = 3;
+  string published_at = 4;
+  bool has_display_content = 5;
+  string display_message = 6;
+  LiveChatTextMessageDetails text_message_details = 7;
+  LiveChatSuperChatDetails super_chat_details = 8;
+  LiveChatSuperStickerDetails super_sticker_details = 9;
+}
+
+message LiveChatTextMessageDetails {
+  string message_text = 1;
+}
+
+message LiveChatSuperChatDetails {
+  int64 amount_micros = 1;
+  string currency = 2;
+  string amount_display_string = 3;
+  string user_comment = 4;
+  int32 tier = 5;
+}
+
+message LiveChatSuperStickerDetails {
+  int64 amount_micros = 1;
+  string currency = 2;
+  string amount_display_string = 3;
+  int32 tier = 4;
+}
+
+message LiveChatMessageAuthorDetails {
+  string channel_id = 1;
+  string channel_url = 2;
+  string display_name = 3;
+  string profile_image_url = 4;
+  bool is_verified = 5;
+  bool is_chat_owner = 6;
+  bool is_chat_sponsor = 7;
+  bool is_chat_moderator = 8;
+}

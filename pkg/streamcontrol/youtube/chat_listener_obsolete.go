@@ -72,7 +72,7 @@ type ChatListenerOBSOLETE struct {
 func NewChatListenerOBSOLETE(
 	ctx context.Context,
 	videoID string,
-	onClose func(context.Context, *chatListener),
+	onClose func(context.Context, *ChatListenerOBSOLETE),
 ) (*ChatListenerOBSOLETE, error) {
 	if videoID == "" {
 		return nil, fmt.Errorf("video ID is empty")
