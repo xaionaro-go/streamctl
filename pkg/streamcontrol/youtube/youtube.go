@@ -809,10 +809,14 @@ func (yt *YouTube) fetchTemplateData(ctx context.Context, templateBroadcastIDs [
 		return nil, nil, fmt.Errorf("unable to get the list of active broadcasts: %w", err)
 	}
 	if len(response.Items) != len(templateBroadcastIDs) {
+		foundIDs := make([]string, 0, len(response.Items))
+		for _, item := range response.Items {
+			foundIDs = append(foundIDs, item.Id)
+		}
 		return nil, nil, fmt.Errorf(
-			"expected %d broadcasts, but found %d",
-			len(templateBroadcastIDs),
-			len(response.Items),
+			"expected %d broadcasts (requested: %v), but found %d (found: %v); the template broadcast(s) may have been deleted from YouTube",
+			len(templateBroadcastIDs), templateBroadcastIDs,
+			len(response.Items), foundIDs,
 		)
 	}
 	broadcasts := response.Items
@@ -825,10 +829,14 @@ func (yt *YouTube) fetchTemplateData(ctx context.Context, templateBroadcastIDs [
 		return nil, nil, fmt.Errorf("unable to get the list of active broadcasts: %w", err)
 	}
 	if len(videoResponse.Items) != len(templateBroadcastIDs) {
+		foundIDs := make([]string, 0, len(videoResponse.Items))
+		for _, item := range videoResponse.Items {
+			foundIDs = append(foundIDs, item.Id)
+		}
 		return nil, nil, fmt.Errorf(
-			"expected %d videos, but found %d",
-			len(templateBroadcastIDs),
-			len(videoResponse.Items),
+			"expected %d videos (requested: %v), but found %d (found: %v); the template video(s) may have been deleted from YouTube",
+			len(templateBroadcastIDs), templateBroadcastIDs,
+			len(videoResponse.Items), foundIDs,
 		)
 	}
 	videos := videoResponse.Items

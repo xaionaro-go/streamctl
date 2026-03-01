@@ -191,6 +191,11 @@ type Panel struct {
 	lastOpenedBrowserURLLocker xsync.Mutex
 
 	backgroundRenderer *backgroundRenderer
+
+	broadcastIDCache struct {
+		ids       map[string]bool
+		updatedAt time.Time
+	}
 }
 
 func New(

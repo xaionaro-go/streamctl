@@ -94,6 +94,19 @@ func TestSetupStreamSequence(t *testing.T) {
 	require.NoError(t, err, "SetStreamActive should succeed when Title was set before ApplyProfile")
 }
 
+// TestFetchTemplateDataMissingBroadcast verifies that fetchTemplateData
+// returns a descriptive error including the requested and found IDs when
+// a template broadcast does not exist.
+func TestFetchTemplateDataMissingBroadcast(t *testing.T) {
+	yt := newTestYouTube(t)
+	ctx := context.Background()
+
+	_, _, err := yt.fetchTemplateData(ctx, []string{"nonexistent-broadcast-id"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "nonexistent-broadcast-id")
+	require.Contains(t, err.Error(), "may have been deleted from YouTube")
+}
+
 // TestApplyProfileAloneStoresProfile verifies that calling ApplyProfile
 // without a prior SetTitle creates a new planned entry with the profile
 // (but Title remains empty, so startStream would fail).

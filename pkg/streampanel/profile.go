@@ -6,6 +6,7 @@ import (
 	"maps"
 	"sort"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -20,6 +21,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	streamdconfig "github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/xsync"
 )
@@ -650,6 +652,24 @@ func (p *Panel) refilterProfiles(ctx context.Context) {
 	}
 }
 
+func (p *Panel) getValidBroadcastIDs(ctx context.Context) map[string]bool {
+	if p.broadcastIDCache.ids != nil && time.Since(p.broadcastIDCache.updatedAt) < 10*time.Minute {
+		return p.broadcastIDCache.ids
+	}
+	ids := map[string]bool{}
+	backendInfo, err := p.StreamD.GetBackendInfo(ctx, youtube.ID, true)
+	if err == nil && backendInfo.Data != nil {
+		if dataYT, ok := backendInfo.Data.(api.BackendDataYouTube); ok && dataYT.Cache != nil {
+			for _, bc := range dataYT.Cache.Broadcasts {
+				ids[bc.Id] = true
+			}
+		}
+	}
+	p.broadcastIDCache.ids = ids
+	p.broadcastIDCache.updatedAt = time.Now()
+	return ids
+}
+
 func (p *Panel) profilesListLength() int {
 	return len(p.profilesOrderFiltered)
 }
@@ -671,7 +691,27 @@ func (p *Panel) profilesListItemUpdate(
 		profile = getProfile(p.configCache, profileName)
 	})
 
-	w.SetText(string(profile.Name))
+	label := string(profile.Name)
+	validIDs := p.getValidBroadcastIDs(ctx)
+	if len(validIDs) > 0 {
+		for sID, sProf := range profile.PerStream {
+			if sID.PlatformID != youtube.ID {
+				continue
+			}
+			var ytProf youtube.StreamProfile
+			if err := yaml.Unmarshal(streamcontrol.ToRawMessage(sProf), &ytProf); err != nil {
+				continue
+			}
+			for _, bcID := range ytProf.TemplateBroadcastIDs {
+				if !validIDs[bcID] {
+					label += " [!]"
+					goto done
+				}
+			}
+		}
+	}
+done:
+	w.SetText(label)
 }
 
 func ptrCopy[T any](v T) *T {

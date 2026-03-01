@@ -199,12 +199,18 @@ func (ui *youtubeProfileUI) RenderStream(
 	)
 
 	var initialBroadcastName *string
+	var missingBroadcastIDs []string
 	for _, bcID := range youtubeProfile.TemplateBroadcastIDs {
+		found := false
 		for _, bc := range dataYouTube.Cache.Broadcasts {
-			if bc.Id != bcID {
-				continue
+			if bc.Id == bcID {
+				initialBroadcastName = &bc.Snippet.Title
+				found = true
+				break
 			}
-			initialBroadcastName = &bc.Snippet.Title
+		}
+		if !found {
+			missingBroadcastIDs = append(missingBroadcastIDs, bcID)
 		}
 	}
 
@@ -285,6 +291,14 @@ func (ui *youtubeProfileUI) RenderStream(
 		widget.NewLabel("Tags:"),
 		youtubeTagsEditor.CanvasObject,
 	)
+
+	if len(missingBroadcastIDs) > 0 {
+		warningLabel := widget.NewLabel(
+			fmt.Sprintf("WARNING: template broadcast not found: %v", missingBroadcastIDs),
+		)
+		warningLabel.Importance = widget.DangerImportance
+		content.Add(warningLabel)
+	}
 
 	return content, func() (any, error) {
 		youtubeProfile.Tags = youtubeTagsEditor.GetTags()
