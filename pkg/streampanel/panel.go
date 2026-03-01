@@ -2082,7 +2082,9 @@ func (p *Panel) doStopStream(ctx context.Context) {
 
 func (p *Panel) onSetupStreamButton(ctx context.Context) {
 	ctx = xcontext.DetachDone(ctx)
-	p.setupStream(ctx)
+	observability.Go(ctx, func(ctx context.Context) {
+		p.setupStream(ctx)
+	})
 }
 
 func (p *Panel) onStartStopButton(ctx context.Context) {
@@ -2099,7 +2101,9 @@ func (p *Panel) onStartStopButton(ctx context.Context) {
 			"Are you sure you want to end the stream?",
 			func(b bool) {
 				if b {
-					p.stopStream(ctx)
+					observability.Go(ctx, func(ctx context.Context) {
+						p.stopStream(ctx)
+					})
 				}
 			},
 			p.mainWindow,
@@ -2111,7 +2115,9 @@ func (p *Panel) onStartStopButton(ctx context.Context) {
 			"Are you ready to start the stream?",
 			func(b bool) {
 				if b {
-					p.startStream(ctx)
+					observability.Go(ctx, func(ctx context.Context) {
+						p.startStream(ctx)
+					})
 				}
 			},
 			p.mainWindow,
