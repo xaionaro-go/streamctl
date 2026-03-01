@@ -839,6 +839,11 @@ func (d *StreamD) getStreamStatus(
 			}
 		}
 
+		if accountID == "" {
+			logger.Debugf(ctx, "no initialized controller found for platform '%s'; reporting as inactive", platID)
+			return &streamcontrol.StreamStatus{IsActive: false}, nil
+		}
+
 		c, ok := controllers[accountID]
 		if !ok {
 			return nil, fmt.Errorf("controller '%s' (account '%s') is not initialized", platID, accountID)
