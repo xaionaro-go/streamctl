@@ -721,15 +721,14 @@ func (p *Panel) profilesListItemUpdate(
 
 	if len(missingIDs) > 0 {
 		if p.mainWindow != nil {
-			hint := NewHintWidget(
-				p.mainWindow,
+			hint := newHoverHintLabel(
+				p.mainWindow.Canvas(),
+				"\u26a0\ufe0f",
 				fmt.Sprintf("Template broadcast(s) not found on YouTube: %v\nThe broadcast may have been deleted.", missingIDs),
 			)
-			hint.SetText("\u26a0\ufe0f")
 			c.Add(hint)
 		} else {
-			warnLabel := widget.NewLabel("\u26a0\ufe0f")
-			c.Add(warnLabel)
+			c.Add(widget.NewLabel("\u26a0\ufe0f"))
 		}
 	}
 }
