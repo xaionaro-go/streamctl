@@ -86,6 +86,7 @@ type StreamD struct {
 	StreamServer       streamserver.StreamServer
 
 	StreamStatusCache *memoize.MemoizeData
+	StreamsCache      *memoize.MemoizeData
 	OBSState          OBSState
 
 	EventBus *eventbus.EventBus
@@ -152,6 +153,7 @@ func New(
 		AccountMap:     make(Accounts),
 	}
 	d.StreamStatusCache = memoize.NewMemoizeData()
+	d.StreamsCache = memoize.NewMemoizeData()
 
 	return d, nil
 }

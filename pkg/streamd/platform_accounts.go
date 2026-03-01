@@ -3,12 +3,14 @@ package streamd
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/xaionaro-go/streamctl/pkg/secret"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/memoize"
 	sstypes "github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/xsync"
 )
@@ -45,6 +47,17 @@ func (d *StreamD) GetAccounts(
 	return result, nil
 }
 
+func (d *StreamD) getStreamsCacheDuration(
+	platID streamcontrol.PlatformID,
+) time.Duration {
+	switch platID {
+	case youtube.ID:
+		return 30 * time.Minute
+	default:
+		return 0
+	}
+}
+
 func (d *StreamD) GetStreams(
 	ctx context.Context,
 	accountIDs ...streamcontrol.AccountIDFullyQualified,
@@ -57,21 +70,35 @@ func (d *StreamD) GetStreams(
 		}
 	}
 
-	return xsync.RDoR2(ctx, &d.AccountsLocker, func() ([]streamcontrol.StreamInfo, error) {
-		var result []streamcontrol.StreamInfo
-		for _, accountID := range accountIDs {
-			controllers := d.getControllersByPlatformNoLock(accountID.PlatformID)
-			c, ok := controllers[accountID.AccountID]
-			if !ok {
-				continue
-			}
-			streams, err := c.GetStreams(ctx)
-			if err != nil {
-				continue
-			}
-			result = append(result, streams...)
+	var result []streamcontrol.StreamInfo
+	for _, accountID := range accountIDs {
+		cacheDuration := d.getStreamsCacheDuration(accountID.PlatformID)
+		streams, err := memoize.Memoize(
+			d.StreamsCache,
+			d.getStreamsForAccount,
+			ctx,
+			accountID,
+			cacheDuration,
+		)
+		if err != nil {
+			continue
 		}
-		return result, nil
+		result = append(result, streams...)
+	}
+	return result, nil
+}
+
+func (d *StreamD) getStreamsForAccount(
+	ctx context.Context,
+	accountID streamcontrol.AccountIDFullyQualified,
+) ([]streamcontrol.StreamInfo, error) {
+	return xsync.RDoR2(ctx, &d.AccountsLocker, func() ([]streamcontrol.StreamInfo, error) {
+		controllers := d.getControllersByPlatformNoLock(accountID.PlatformID)
+		c, ok := controllers[accountID.AccountID]
+		if !ok {
+			return nil, nil
+		}
+		return c.GetStreams(ctx)
 	})
 }
 
@@ -80,7 +107,7 @@ func (d *StreamD) CreateStream(
 	accountID streamcontrol.AccountIDFullyQualified,
 	title string,
 ) (streamcontrol.StreamInfo, error) {
-	return xsync.RDoR2(ctx, &d.AccountsLocker, func() (streamcontrol.StreamInfo, error) {
+	result, err := xsync.RDoR2(ctx, &d.AccountsLocker, func() (streamcontrol.StreamInfo, error) {
 		controllers := d.getControllersByPlatformNoLock(accountID.PlatformID)
 		c, ok := controllers[accountID.AccountID]
 		if !ok {
@@ -88,13 +115,17 @@ func (d *StreamD) CreateStream(
 		}
 		return c.CreateStream(ctx, title)
 	})
+	if err == nil {
+		d.StreamsCache.InvalidateCache(ctx)
+	}
+	return result, err
 }
 
 func (d *StreamD) DeleteStream(
 	ctx context.Context,
 	streamID streamcontrol.StreamIDFullyQualified,
 ) error {
-	return xsync.RDoR1(ctx, &d.AccountsLocker, func() error {
+	err := xsync.RDoR1(ctx, &d.AccountsLocker, func() error {
 		controllers := d.getControllersByPlatformNoLock(streamID.PlatformID)
 		c, ok := controllers[streamID.AccountID]
 		if !ok {
@@ -102,44 +133,49 @@ func (d *StreamD) DeleteStream(
 		}
 		return c.DeleteStream(ctx, streamID.StreamID)
 	})
+	if err == nil {
+		d.StreamsCache.InvalidateCache(ctx)
+	}
+	return err
 }
 
 func (d *StreamD) GetActiveStreamIDs(
 	ctx context.Context,
 ) ([]streamcontrol.StreamIDFullyQualified, error) {
+	accountIDs, err := d.GetAccounts(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-	return xsync.RDoR2(ctx, &d.AccountsLocker, func() ([]streamcontrol.StreamIDFullyQualified, error) {
-		var result []streamcontrol.StreamIDFullyQualified
+	selectedStreamIDs := make(map[streamcontrol.StreamIDFullyQualified]struct{})
+	for _, id := range d.Config.SelectedStreamIDs {
+		selectedStreamIDs[id] = struct{}{}
+	}
 
-		selectedStreamIDs := make(map[streamcontrol.StreamIDFullyQualified]struct{})
-		for _, id := range d.Config.SelectedStreamIDs {
-			selectedStreamIDs[id] = struct{}{}
+	var result []streamcontrol.StreamIDFullyQualified
+	for _, accountID := range accountIDs {
+		cacheDuration := d.getStreamsCacheDuration(accountID.PlatformID)
+		streams, err := memoize.Memoize(
+			d.StreamsCache,
+			d.getStreamsForAccount,
+			ctx,
+			accountID,
+			cacheDuration,
+		)
+		if err != nil {
+			continue
 		}
 
-		for platID, platCfg := range d.Config.Backends {
-			controllers := d.getControllersByPlatformNoLock(platID)
-			for accountID, c := range controllers {
-				if _, ok := platCfg.Accounts[accountID]; !ok {
-					continue
-				}
-
-				streams, err := c.GetStreams(ctx)
-				if err != nil {
-					continue
-				}
-
-				for _, stream := range streams {
-					id := streamcontrol.NewStreamIDFullyQualified(platID, accountID, stream.ID)
-					if _, ok := selectedStreamIDs[id]; !ok {
-						continue
-					}
-					result = append(result, id)
-				}
+		for _, stream := range streams {
+			id := streamcontrol.NewStreamIDFullyQualified(accountID.PlatformID, accountID.AccountID, stream.ID)
+			if _, ok := selectedStreamIDs[id]; !ok {
+				continue
 			}
+			result = append(result, id)
 		}
+	}
 
-		return result, nil
-	})
+	return result, nil
 }
 
 func (d *StreamD) GetStreamSinkConfig(

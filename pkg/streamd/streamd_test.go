@@ -25,6 +25,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	streamdconsts "github.com/xaionaro-go/streamctl/pkg/streamd/consts"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/memoize"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/ui"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/streamforward"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
@@ -434,7 +435,8 @@ func TestStreamDGetActiveAccountIDsInheritance(t *testing.T) {
 			streamcontrol.NewAccountIDFullyQualified(youtube.ID, "acc1"): streamcontrol.ToAbstractAccount(&mockController{}),
 			streamcontrol.NewAccountIDFullyQualified(youtube.ID, "acc2"): streamcontrol.ToAbstractAccount(&mockController{}),
 		},
-		EventBus: eventbus.New(),
+		StreamsCache: memoize.NewMemoizeData(),
+		EventBus:     eventbus.New(),
 	}
 
 	ctx := context.Background()
@@ -467,7 +469,8 @@ func TestStreamDGetActiveStreamIDsFiltering(t *testing.T) {
 			streamcontrol.NewAccountIDFullyQualified(youtube.ID, "acc1"): streamcontrol.ToAbstractAccount(&mockController{}),
 			streamcontrol.NewAccountIDFullyQualified(youtube.ID, "acc2"): streamcontrol.ToAbstractAccount(&mockController{}),
 		},
-		EventBus: eventbus.New(),
+		StreamsCache: memoize.NewMemoizeData(),
+		EventBus:     eventbus.New(),
 	}
 
 	ctx := context.Background()

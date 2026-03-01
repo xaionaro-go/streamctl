@@ -178,7 +178,7 @@ func (c *ClientCalcPoints) GetPlaylistItems(
 	videoID string,
 	parts []string,
 ) (_ret *youtube.PlaylistItemListResponse, _err error) {
-	defer func() { c.addUsedPointsIfNoError(ctx, 50, _err) }()
+	defer func() { c.addUsedPointsIfNoError(ctx, 1, _err) }()
 	return c.Client.GetPlaylistItems(ctx, playlistID, videoID, parts)
 }
 
@@ -242,6 +242,6 @@ func (c *ClientCalcPoints) Search(
 	eventType EventType,
 	parts []string,
 ) (_ret *youtube.SearchListResponse, _err error) {
-	defer func() { c.addUsedPointsIfNoError(ctx, 1, _err) }()
+	defer func() { c.addUsedPointsIfNoError(ctx, 100, _err) }()
 	return c.Client.Search(ctx, chanID, eventType, parts)
 }
