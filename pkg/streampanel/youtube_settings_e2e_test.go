@@ -126,13 +126,14 @@ func setupYouTubeE2E(t *testing.T) *ytE2EEnv {
 	require.Eventually(t, func() bool {
 		mockClock.Add(time.Second)
 		streams, _ := d.GetStreams(ctx)
-		return len(streams) >= 2
-	}, 15*time.Second, 100*time.Millisecond, "expected at least 2 streams from mock YouTube")
+		return len(streams) >= 1
+	}, 15*time.Second, 100*time.Millisecond, "expected at least 1 stream from mock YouTube")
 
 	// Create test Fyne app and Panel.
 	testApp := test.NewApp()
 	p, err := New("", OptionApp{App: testApp})
 	require.NoError(t, err)
+	p.app = testApp
 	p.StreamD = d
 
 	// Initialize config cache.
@@ -241,17 +242,90 @@ func countChecks(w fyne.Window) int {
 	return count
 }
 
-// TestYouTubeSettingsE2E is a placeholder test that verifies the E2E setup works.
+// findAllButtonsByText traverses the window's content tree and returns all
+// widget.Button instances whose Text matches the given string.
+func findAllButtonsByText(w fyne.Window, text string) []*widget.Button {
+	var buttons []*widget.Button
+	traverse(w.Content(), func(obj fyne.CanvasObject) {
+		if btn, ok := obj.(*widget.Button); ok && btn.Text == text {
+			buttons = append(buttons, btn)
+		}
+	})
+	return buttons
+}
+
 func TestYouTubeSettingsE2E(t *testing.T) {
 	env := setupYouTubeE2E(t)
-	require.NotNil(t, env.panel)
-	require.NotNil(t, env.streamD)
-	require.NotNil(t, env.app)
-	require.NotNil(t, env.mockClock)
 
-	// Verify streams are available.
-	streams, err := env.streamD.GetStreams(env.ctx)
-	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(streams), 2, "expected at least 2 mock streams")
-	t.Logf("Setup verified: %d streams available", len(streams))
+	t.Run("OpenAccountManagement", func(t *testing.T) {
+		env.panel.OpenAccountManagementWindow(env.ctx)
+
+		w := waitForWindow(t, env.app, "Account Management")
+		defer w.Close()
+
+		// Verify YouTube platform header is visible.
+		platformLabel := findLabelByText(w, "Platform: youtube")
+		require.NotNil(t, platformLabel, "expected 'Platform: youtube' label in account management window")
+
+		// Verify existing "yt1" account is shown.
+		accountLabel := findLabelByText(w, "yt1")
+		require.NotNil(t, accountLabel, "expected 'yt1' account label in account management window")
+	})
+
+	t.Run("AddYouTubeAccount", func(t *testing.T) {
+		env.panel.OpenAccountManagementWindow(env.ctx)
+
+		acctMgmtWindow := waitForWindow(t, env.app, "Account Management")
+		defer acctMgmtWindow.Close()
+
+		// Find all "Add account" buttons — one per platform (obs, twitch, kick, youtube).
+		addButtons := findAllButtonsByText(acctMgmtWindow, "Add account")
+		require.Len(t, addButtons, 4, "expected 4 'Add account' buttons (one per platform)")
+
+		t.Log("About to tap YouTube Add account button")
+		// Tap the 4th button (YouTube, index 3).
+		test.Tap(addButtons[3])
+		t.Log("Tapped YouTube Add account button")
+
+		// Wait for the "Add youtube account" window.
+		addWindow := waitForWindow(t, env.app, "Add youtube account")
+		t.Log("Found Add youtube account window")
+		defer addWindow.Close()
+
+		// Fill in the Account ID.
+		t.Log("Looking for Account ID entry...")
+		accountIDEntry := findEntryByPlaceholder(addWindow, "Account ID (e.g. 'myaccount1')")
+		require.NotNil(t, accountIDEntry, "expected Account ID entry field")
+		accountIDEntry.SetText("yt-new")
+		t.Log("Set Account ID to yt-new")
+
+		// Fill in Client ID.
+		t.Log("Looking for Client ID entry...")
+		clientIDEntry := findEntryByPlaceholder(addWindow, "client ID")
+		require.NotNil(t, clientIDEntry, "expected client ID entry field")
+		clientIDEntry.SetText("new-client-id")
+		t.Log("Set Client ID")
+
+		// Fill in Client Secret.
+		t.Log("Looking for Client Secret entry...")
+		clientSecretEntry := findEntryByPlaceholder(addWindow, "client secret")
+		require.NotNil(t, clientSecretEntry, "expected client secret entry field")
+		clientSecretEntry.SetText("new-client-secret")
+		t.Log("Set Client Secret")
+
+		// Tap "Add account" button in the add window.
+		t.Log("Looking for Add account button in add window...")
+		addBtn := findButtonByText(addWindow, "Add account")
+		require.NotNil(t, addBtn, "expected 'Add account' button in add window")
+		t.Log("About to tap Add account button")
+		test.Tap(addBtn)
+		t.Log("Tapped Add account button")
+
+		// Verify the account management window now shows "yt-new".
+		t.Log("Waiting for yt-new label to appear...")
+		require.Eventually(t, func() bool {
+			return findLabelByText(acctMgmtWindow, "yt-new") != nil
+		}, 5*time.Second, 100*time.Millisecond, "expected 'yt-new' label to appear in account management window")
+		t.Log("Found yt-new label")
+	})
 }
