@@ -711,7 +711,7 @@ func (c *Client) GetStreamStatus(
 
 	var customData any
 	customDataType := streamcontrol.GetStreamStatusCustomDataType(id.PlatformID)
-	if customDataType != nil {
+	if customDataType != nil && streamStatus.GetCustomData() != "" {
 		d := reflect.New(customDataType).Interface()
 		err := json.Unmarshal([]byte(streamStatus.GetCustomData()), d)
 		if err != nil {
