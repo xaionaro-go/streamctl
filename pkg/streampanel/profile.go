@@ -675,7 +675,8 @@ func (p *Panel) profilesListLength() int {
 }
 
 func (p *Panel) profilesListItemCreate() fyne.CanvasObject {
-	return widget.NewLabel("")
+	nameLabel := widget.NewLabel("")
+	return container.NewHBox(nameLabel)
 }
 
 func (p *Panel) profilesListItemUpdate(
@@ -683,7 +684,8 @@ func (p *Panel) profilesListItemUpdate(
 	obj fyne.CanvasObject,
 ) {
 	ctx := context.TODO()
-	w := obj.(*widget.Label)
+	c := obj.(*fyne.Container)
+	nameLabel := c.Objects[0].(*widget.Label)
 
 	profileName := streamcontrol.ProfileName(p.profilesOrderFiltered[itemID])
 	var profile Profile
@@ -691,7 +693,14 @@ func (p *Panel) profilesListItemUpdate(
 		profile = getProfile(p.configCache, profileName)
 	})
 
-	label := string(profile.Name)
+	nameLabel.SetText(string(profile.Name))
+
+	// Remove any previous warning widget.
+	if len(c.Objects) > 1 {
+		c.Objects = c.Objects[:1]
+	}
+
+	var missingIDs []string
 	validIDs := p.getValidBroadcastIDs(ctx)
 	if len(validIDs) > 0 {
 		for sID, sProf := range profile.PerStream {
@@ -704,14 +713,25 @@ func (p *Panel) profilesListItemUpdate(
 			}
 			for _, bcID := range ytProf.TemplateBroadcastIDs {
 				if !validIDs[bcID] {
-					label += " [!]"
-					goto done
+					missingIDs = append(missingIDs, bcID)
 				}
 			}
 		}
 	}
-done:
-	w.SetText(label)
+
+	if len(missingIDs) > 0 {
+		if p.mainWindow != nil {
+			hint := NewHintWidget(
+				p.mainWindow,
+				fmt.Sprintf("Template broadcast(s) not found on YouTube: %v\nThe broadcast may have been deleted.", missingIDs),
+			)
+			hint.SetText("\u26a0\ufe0f")
+			c.Add(hint)
+		} else {
+			warnLabel := widget.NewLabel("\u26a0\ufe0f")
+			c.Add(warnLabel)
+		}
+	}
 }
 
 func ptrCopy[T any](v T) *T {
