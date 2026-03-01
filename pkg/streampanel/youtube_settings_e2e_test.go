@@ -247,6 +247,50 @@ func findAllButtonsByText(w fyne.Window, text string) []*widget.Button {
 	return buttons
 }
 
+// findButtonInRowWithLabel traverses the window's content tree looking for an HBox
+// container that contains both a widget.Label with the given labelText and a
+// widget.Button with the given buttonText. Returns the matching button or nil.
+func findButtonInRowWithLabel(w fyne.Window, labelText, buttonText string) *widget.Button {
+	var found *widget.Button
+	traverse(w.Content(), func(obj fyne.CanvasObject) {
+		if found != nil {
+			return
+		}
+		cont, ok := obj.(*fyne.Container)
+		if !ok {
+			return
+		}
+		// Check if this container has both the target label and target button.
+		var hasLabel bool
+		var btn *widget.Button
+		for _, child := range cont.Objects {
+			if lbl, ok := child.(*widget.Label); ok && lbl.Text == labelText {
+				hasLabel = true
+			}
+			if b, ok := child.(*widget.Button); ok && b.Text == buttonText {
+				btn = b
+			}
+		}
+		if hasLabel && btn != nil {
+			found = btn
+		}
+	})
+	return found
+}
+
+// waitForWindowClosed polls until no window with the given title exists.
+func waitForWindowClosed(t *testing.T, app fyne.App, title string) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		for _, w := range app.Driver().AllWindows() {
+			if w.Title() == title {
+				return false
+			}
+		}
+		return true
+	}, 10*time.Second, 100*time.Millisecond, "window %q still open", title)
+}
+
 func TestYouTubeSettingsE2E(t *testing.T) {
 	env := setupYouTubeE2E(t)
 
@@ -307,6 +351,87 @@ func TestYouTubeSettingsE2E(t *testing.T) {
 		}, 5*time.Second, 100*time.Millisecond, "expected 'yt-new' label to appear in account management window")
 
 		// Close windows explicitly (tapping "Add account" already closes addWindow).
+		acctMgmtWindow.Close()
+	})
+
+	t.Run("EditYouTubeAccount", func(t *testing.T) {
+		env.panel.OpenAccountManagementWindow(env.ctx)
+
+		acctMgmtWindow := waitForWindow(t, env.app, "Account Management")
+
+		// Find and tap the "Edit" button in the same row as "yt1".
+		editBtn := findButtonInRowWithLabel(acctMgmtWindow, "yt1", "Edit")
+		require.NotNil(t, editBtn, "expected 'Edit' button in the same row as 'yt1'")
+		test.Tap(editBtn)
+
+		// Wait for the edit window.
+		editWindowTitle := "Edit youtube account: yt1"
+		editWindow := waitForWindow(t, env.app, editWindowTitle)
+
+		// Find the Client ID entry and change its text.
+		clientIDEntry := findEntryByPlaceholder(editWindow, "client ID")
+		require.NotNil(t, clientIDEntry, "expected client ID entry field in edit window")
+		clientIDEntry.SetText("updated-client-id")
+
+		// Tap "Save".
+		saveBtn := findButtonByText(editWindow, "Save")
+		require.NotNil(t, saveBtn, "expected 'Save' button in edit window")
+		test.Tap(saveBtn)
+
+		// Verify edit window closes.
+		waitForWindowClosed(t, env.app, editWindowTitle)
+
+		// Close account management window.
+		acctMgmtWindow.Close()
+	})
+
+	t.Run("DeleteYouTubeAccount", func(t *testing.T) {
+		env.panel.OpenAccountManagementWindow(env.ctx)
+
+		acctMgmtWindow := waitForWindow(t, env.app, "Account Management")
+
+		// First, add a temporary account to delete.
+		addButtons := findAllButtonsByText(acctMgmtWindow, "Add account")
+		require.Len(t, addButtons, 4, "expected 4 'Add account' buttons (one per platform)")
+
+		// Tap the 4th button (YouTube, index 3).
+		test.Tap(addButtons[3])
+
+		addWindow := waitForWindow(t, env.app, "Add youtube account")
+
+		// Fill in temp account details.
+		accountIDEntry := findEntryByPlaceholder(addWindow, "Account ID (e.g. 'myaccount1')")
+		require.NotNil(t, accountIDEntry, "expected Account ID entry field")
+		accountIDEntry.SetText("yt-temp")
+
+		clientIDEntry := findEntryByPlaceholder(addWindow, "client ID")
+		require.NotNil(t, clientIDEntry, "expected client ID entry field")
+		clientIDEntry.SetText("temp-id")
+
+		clientSecretEntry := findEntryByPlaceholder(addWindow, "client secret")
+		require.NotNil(t, clientSecretEntry, "expected client secret entry field")
+		clientSecretEntry.SetText("temp-secret")
+
+		addBtn := findButtonByText(addWindow, "Add account")
+		require.NotNil(t, addBtn, "expected 'Add account' button in add window")
+		test.Tap(addBtn)
+
+		// Verify "yt-temp" appears.
+		require.Eventually(t, func() bool {
+			return findLabelByText(acctMgmtWindow, "yt-temp") != nil
+		}, 5*time.Second, 100*time.Millisecond, "expected 'yt-temp' label to appear")
+
+		// Find and tap the "Delete" button for "yt-temp".
+		deleteBtn := findButtonInRowWithLabel(acctMgmtWindow, "yt-temp", "Delete")
+		require.NotNil(t, deleteBtn, "expected 'Delete' button in the same row as 'yt-temp'")
+		test.Tap(deleteBtn)
+
+		// Verify "yt-temp" is no longer in the list.
+		require.Eventually(t, func() bool {
+			return findLabelByText(acctMgmtWindow, "yt-temp") == nil
+		}, 5*time.Second, 100*time.Millisecond, "expected 'yt-temp' label to disappear after delete")
+
+		// Close account management window.
 		acctMgmtWindow.Close()
 	})
 }
