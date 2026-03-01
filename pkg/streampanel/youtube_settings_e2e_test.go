@@ -1,0 +1,257 @@
+package streampanel
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/widget"
+	benbjohnsonclock "github.com/benbjohnson/clock"
+	"github.com/facebookincubator/go-belt"
+	"github.com/stretchr/testify/require"
+	"github.com/xaionaro-go/observability"
+	"github.com/xaionaro-go/streamctl/pkg/clock"
+	"github.com/xaionaro-go/streamctl/pkg/secret"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
+	"github.com/xaionaro-go/streamctl/pkg/streamd"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
+	"golang.org/x/oauth2"
+)
+
+// ytE2EEnv holds the shared test environment for YouTube settings E2E tests.
+type ytE2EEnv struct {
+	t         *testing.T
+	ctx       context.Context
+	cancel    context.CancelFunc
+	app       fyne.App
+	panel     *Panel
+	streamD   *streamd.StreamD
+	mockClock *benbjohnsonclock.Mock
+}
+
+// setupYouTubeE2E creates a shared test environment with a real StreamD instance
+// using mock clients, a test Fyne app, and a configured Panel.
+func setupYouTubeE2E(t *testing.T) *ytE2EEnv {
+	t.Helper()
+
+	// Enable mock clients for all platforms.
+	youtube.SetDebugUseMockClient(true)
+	twitch.SetDebugUseMockClient(true)
+	kick.SetDebugUseMockClient(true)
+	obs.SetDebugUseMockClient(true)
+	t.Cleanup(func() {
+		youtube.SetDebugUseMockClient(false)
+		twitch.SetDebugUseMockClient(false)
+		kick.SetDebugUseMockClient(false)
+		obs.SetDebugUseMockClient(false)
+	})
+
+	// Set up a mock clock.
+	mockClock := benbjohnsonclock.NewMock()
+	clock.Set(mockClock)
+
+	// Build config with one YouTube account and minimal platform accounts.
+	expiry := mockClock.Now().Add(24 * time.Hour)
+	ytToken := secret.New(oauth2.Token{AccessToken: "dummy", Expiry: expiry})
+
+	cfg := config.Config{
+		Backends: make(map[streamcontrol.PlatformID]*streamcontrol.AbstractPlatformConfig),
+	}
+
+	cfg.Backends[youtube.ID] = &streamcontrol.AbstractPlatformConfig{
+		Accounts: map[streamcontrol.AccountID]streamcontrol.RawMessage{
+			"yt1": streamcontrol.ToRawMessage(youtube.AccountConfig{
+				ClientID:     "test-client-id",
+				ClientSecret: secret.New("test-client-secret"),
+				Token:        &ytToken,
+			}),
+		},
+	}
+
+	cfg.Backends[twitch.ID] = &streamcontrol.AbstractPlatformConfig{
+		Accounts: map[streamcontrol.AccountID]streamcontrol.RawMessage{
+			"tw1": streamcontrol.ToRawMessage(twitch.AccountConfig{
+				ClientID:     "tw-id",
+				ClientSecret: secret.New("tw-secret"),
+				Channel:      "twchan",
+				AuthType:     "user",
+			}),
+		},
+	}
+
+	cfg.Backends[kick.ID] = &streamcontrol.AbstractPlatformConfig{
+		Accounts: map[streamcontrol.AccountID]streamcontrol.RawMessage{
+			"ki1": streamcontrol.ToRawMessage(kick.AccountConfig{
+				Channel:      "kickchan",
+				ClientID:     "ki-id",
+				ClientSecret: secret.New("ki-secret"),
+			}),
+		},
+	}
+
+	cfg.Backends[obs.ID] = &streamcontrol.AbstractPlatformConfig{
+		Accounts: map[streamcontrol.AccountID]streamcontrol.RawMessage{
+			"obs1": streamcontrol.ToRawMessage(obs.AccountConfig{Host: "localhost", Port: 4455}),
+		},
+	}
+
+	// Initialize StreamD.
+	ctx, cancel := context.WithCancel(context.Background())
+	ctx = observability.WithSecretsProvider(ctx, &observability.SecretsStaticProvider{})
+	b := belt.New()
+
+	d, err := streamd.New(cfg, &mockUI{}, func(ctx context.Context, cfg config.Config) error {
+		return nil
+	}, b)
+	require.NoError(t, err)
+
+	d.AddOAuthListenPort(8091)
+	d.AddOAuthListenPort(8092)
+
+	// Run StreamD in background.
+	go func() {
+		runErr := d.Run(ctx)
+		if runErr != nil && runErr != context.Canceled {
+			t.Errorf("StreamD.Run returned error: %v", runErr)
+		}
+	}()
+
+	// Wait for mock streams to become available.
+	require.Eventually(t, func() bool {
+		mockClock.Add(time.Second)
+		streams, _ := d.GetStreams(ctx)
+		return len(streams) >= 2
+	}, 15*time.Second, 100*time.Millisecond, "expected at least 2 streams from mock YouTube")
+
+	// Create test Fyne app and Panel.
+	testApp := test.NewApp()
+	p, err := New("", OptionApp{App: testApp})
+	require.NoError(t, err)
+	p.StreamD = d
+
+	// Initialize config cache.
+	cachedCfg, err := d.GetConfig(ctx)
+	require.NoError(t, err)
+	p.configCacheLocker.Do(ctx, func() {
+		p.configCache = cachedCfg
+	})
+
+	t.Cleanup(func() {
+		cancel()
+		testApp.Quit()
+	})
+
+	return &ytE2EEnv{
+		t:         t,
+		ctx:       ctx,
+		cancel:    cancel,
+		app:       testApp,
+		panel:     p,
+		streamD:   d,
+		mockClock: mockClock,
+	}
+}
+
+// findButtonByText traverses the window's content tree and returns the first
+// widget.Button whose Text matches the given string.
+func findButtonByText(w fyne.Window, text string) *widget.Button {
+	var found *widget.Button
+	traverse(w.Content(), func(obj fyne.CanvasObject) {
+		if btn, ok := obj.(*widget.Button); ok && btn.Text == text {
+			if found == nil {
+				found = btn
+			}
+		}
+	})
+	return found
+}
+
+// findEntryByPlaceholder traverses the window's content tree and returns the first
+// widget.Entry whose PlaceHolder matches the given string.
+func findEntryByPlaceholder(w fyne.Window, placeholder string) *widget.Entry {
+	var found *widget.Entry
+	traverse(w.Content(), func(obj fyne.CanvasObject) {
+		if entry, ok := obj.(*widget.Entry); ok && entry.PlaceHolder == placeholder {
+			if found == nil {
+				found = entry
+			}
+		}
+	})
+	return found
+}
+
+// findCheckByLabel traverses the window's content tree and returns the first
+// widget.Check whose Text matches the given label.
+func findCheckByLabel(w fyne.Window, label string) *widget.Check {
+	var found *widget.Check
+	traverse(w.Content(), func(obj fyne.CanvasObject) {
+		if chk, ok := obj.(*widget.Check); ok && chk.Text == label {
+			if found == nil {
+				found = chk
+			}
+		}
+	})
+	return found
+}
+
+// findLabelByText traverses the window's content tree and returns the first
+// widget.Label whose Text matches the given string.
+func findLabelByText(w fyne.Window, text string) *widget.Label {
+	var found *widget.Label
+	traverse(w.Content(), func(obj fyne.CanvasObject) {
+		if lbl, ok := obj.(*widget.Label); ok && lbl.Text == text {
+			if found == nil {
+				found = lbl
+			}
+		}
+	})
+	return found
+}
+
+// waitForWindow polls until a window with the given title appears in the app.
+func waitForWindow(t *testing.T, app fyne.App, title string) fyne.Window {
+	t.Helper()
+	var found fyne.Window
+	require.Eventually(t, func() bool {
+		for _, w := range app.Driver().AllWindows() {
+			if w.Title() == title {
+				found = w
+				return true
+			}
+		}
+		return false
+	}, 10*time.Second, 100*time.Millisecond, "window %q not found", title)
+	return found
+}
+
+// countChecks counts the number of widget.Check instances in the window's content tree.
+func countChecks(w fyne.Window) int {
+	count := 0
+	traverse(w.Content(), func(obj fyne.CanvasObject) {
+		if _, ok := obj.(*widget.Check); ok {
+			count++
+		}
+	})
+	return count
+}
+
+// TestYouTubeSettingsE2E is a placeholder test that verifies the E2E setup works.
+func TestYouTubeSettingsE2E(t *testing.T) {
+	env := setupYouTubeE2E(t)
+	require.NotNil(t, env.panel)
+	require.NotNil(t, env.streamD)
+	require.NotNil(t, env.app)
+	require.NotNil(t, env.mockClock)
+
+	// Verify streams are available.
+	streams, err := env.streamD.GetStreams(env.ctx)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(streams), 2, "expected at least 2 mock streams")
+	t.Logf("Setup verified: %d streams available", len(streams))
+}
