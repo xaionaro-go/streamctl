@@ -4190,8 +4190,8 @@ github.com/xaionaro-go/CycleTLS v0.0.0-20250923213111-aed0022ae7b5 h1:uJZoPvUCOV
 github.com/xaionaro-go/CycleTLS v0.0.0-20250923213111-aed0022ae7b5/go.mod h1:t3eZQmVI9kJUelyMthvd4kEkLxGAJucvmLCIb2pi2+A=
 github.com/xaionaro-go/androidetc v0.0.0-20250824193302-b7ecebb3b825 h1:4f2P9/JASUXx2GWhQ6wyGlwOtr+nIfM6PUq9wTHqHmM=
 github.com/xaionaro-go/androidetc v0.0.0-20250824193302-b7ecebb3b825/go.mod h1:IvRt8Hto32EGtBEf7A94HVxiYEt7hGXLWabjdnUYmAE=
-github.com/xaionaro-go/astiav v0.0.0-20260124160203-67afd1e3e67e h1:xjAn+cpZF8H66gY7lGnM1LYJ1QKdnv05HTfjvm9P8s4=
-github.com/xaionaro-go/astiav v0.0.0-20260124160203-67afd1e3e67e/go.mod h1:txVrlvD3ErCtyacQ6WBMarn9+oD1V8vk33dWmVCGQhM=
+github.com/xaionaro-go/astiav v0.0.0-20260301205541-c20ea06c4df3 h1:eH2v+wTdiM5SSMN+/f/6eSJLQuThho+3vto22Y3kedE=
+github.com/xaionaro-go/astiav v0.0.0-20260301205541-c20ea06c4df3/go.mod h1:rMGLNK3tTdIkyxmRUR+OIQnhqqmrpg0Z+StM5cRAXKA=
 github.com/xaionaro-go/audio v0.0.0-20260202195702-429dcb87c05c h1:FwgHDsrvufOkycvjxky29I42PXNbp023MQHt8kzRzJg=
 github.com/xaionaro-go/audio v0.0.0-20260202195702-429dcb87c05c/go.mod h1:cE5JNx0p+CIDsjHKqrn+qsYllDE1fR8uaxmilWy5ngw=
 github.com/xaionaro-go/avcommon v0.0.0-20250823173020-6a2bb1e1f59d h1:++uR850Cqo5qXGTfAq60p2sIfq7oSYK0x0KoKL8B9Ts=

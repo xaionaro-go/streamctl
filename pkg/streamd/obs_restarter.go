@@ -35,6 +35,9 @@ func (d *StreamD) initOBSRestarter(
 func (d *StreamD) updateOBSRestarterConfig(
 	ctx context.Context,
 ) error {
+	if d.obsRestarter == nil {
+		return nil
+	}
 	return d.obsRestarter.updateConfig(ctx)
 }
 
