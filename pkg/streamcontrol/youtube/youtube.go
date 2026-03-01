@@ -497,10 +497,13 @@ func (yt *YouTube) ApplyProfile(
 	customArgs ...any,
 ) error {
 	yt.plannedStreamsLocker.Do(ctx, func() {
-		yt.plannedStreams[streamID] = &plannedStream{
-			Profile:    profile,
-			CustomArgs: customArgs,
+		planned, ok := yt.plannedStreams[streamID]
+		if !ok {
+			planned = &plannedStream{}
+			yt.plannedStreams[streamID] = planned
 		}
+		planned.Profile = profile
+		planned.CustomArgs = customArgs
 	})
 	return yt.updateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
 		if !yt.isMatchingStreamID(broadcast, streamID) {
