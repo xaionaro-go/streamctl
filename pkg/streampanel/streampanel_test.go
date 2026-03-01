@@ -265,6 +265,7 @@ type dummyStreamD struct {
 	SubscribeToStreamPlayersChangesFn func(ctx context.Context) (<-chan api.DiffStreamPlayers, error)
 
 	SetStreamDConfigFn func(ctx context.Context, name streamcontrol.ProfileName, platID streamcontrol.PlatformID, profile streamcontrol.AbstractStreamProfile) error
+	SetStreamActiveFn  func(ctx context.Context, streamID streamcontrol.StreamIDFullyQualified, active bool) error
 }
 
 func (d *dummyStreamD) Run(ctx context.Context) error {
@@ -322,6 +323,9 @@ func (d *dummyStreamD) GetStreams(ctx context.Context, accountIDs ...streamcontr
 	return nil, nil
 }
 func (d *dummyStreamD) SetStreamActive(ctx context.Context, streamID streamcontrol.StreamIDFullyQualified, active bool) error {
+	if d.SetStreamActiveFn != nil {
+		return d.SetStreamActiveFn(ctx, streamID, active)
+	}
 	return nil
 }
 func (d *dummyStreamD) SetTitle(ctx context.Context, streamID streamcontrol.StreamIDFullyQualified, title string) error {
@@ -3593,4 +3597,80 @@ func TestStreamSelectionInitialization(t *testing.T) {
 
 	require.True(t, p.selectedStreams[stream1])
 	require.False(t, p.selectedStreams[streamcontrol.NewStreamIDFullyQualified(twitch.ID, "acc2", streamcontrol.DefaultStreamID)])
+}
+
+func TestSetupStreamDoesNotStartOBS(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	obsStream := streamcontrol.NewStreamIDFullyQualified(obs.ID, streamcontrol.DefaultAccountID, streamcontrol.DefaultStreamID)
+	twitchStream := streamcontrol.NewStreamIDFullyQualified(twitch.ID, streamcontrol.DefaultAccountID, streamcontrol.DefaultStreamID)
+
+	var setStreamActiveCalls []streamcontrol.StreamIDFullyQualified
+	sd := &dummyStreamD{
+		SetStreamActiveFn: func(ctx context.Context, streamID streamcontrol.StreamIDFullyQualified, active bool) error {
+			setStreamActiveCalls = append(setStreamActiveCalls, streamID)
+			return nil
+		},
+		Config: &streamdconfig.Config{
+			Backends: map[streamcontrol.PlatformID]*streamcontrol.AbstractPlatformConfig{
+				obs.ID: {
+					Accounts: map[streamcontrol.AccountID]streamcontrol.RawMessage{
+						streamcontrol.DefaultAccountID: streamcontrol.ToRawMessage(streamcontrol.AccountConfigBase[streamcontrol.RawMessage]{
+							StreamProfiles: map[streamcontrol.StreamID]streamcontrol.StreamProfiles[streamcontrol.RawMessage]{
+								streamcontrol.DefaultStreamID: {},
+							},
+						}),
+					},
+				},
+				twitch.ID: {
+					Accounts: map[streamcontrol.AccountID]streamcontrol.RawMessage{
+						streamcontrol.DefaultAccountID: streamcontrol.ToRawMessage(streamcontrol.AccountConfigBase[streamcontrol.RawMessage]{
+							StreamProfiles: map[streamcontrol.StreamID]streamcontrol.StreamProfiles[streamcontrol.RawMessage]{
+								streamcontrol.DefaultStreamID: {},
+							},
+						}),
+					},
+				},
+			},
+			ProfileMetadata: map[streamcontrol.ProfileName]streamdconfig.ProfileMetadata{
+				"testprofile": {},
+			},
+		},
+	}
+
+	profileName := streamcontrol.ProfileName("testprofile")
+	p := &Panel{
+		defaultContext:         context.Background(),
+		app:                    app,
+		StreamD:                sd,
+		errorReports:           make(map[string]errorReport),
+		permanentWindows:       make(map[uint64]windowDriver),
+		setupStreamButton:      widget.NewButton("Setup", nil),
+		startStopButton:        widget.NewButton("Start", nil),
+		streamsSelectButton:    widget.NewButton("Streams", nil),
+		streamTitleField:       widget.NewEntry(),
+		streamDescriptionField: widget.NewEntry(),
+		profilesListWidget:     widget.NewList(func() int { return 0 }, func() fyne.CanvasObject { return widget.NewLabel("") }, func(i widget.ListItemID, o fyne.CanvasObject) {}),
+		configCache:            sd.Config,
+		selectedProfileName:    &profileName,
+		allStreams:             []streamcontrol.StreamIDFullyQualified{obsStream, twitchStream},
+		selectedStreams: map[streamcontrol.StreamIDFullyQualified]bool{
+			obsStream:    true,
+			twitchStream: true,
+		},
+	}
+	p.streamTitleField.SetText("Test Title")
+
+	ctx := context.Background()
+	p.setupStream(ctx)
+
+	// SetStreamActive should be called for Twitch but NOT for OBS
+	for _, id := range setStreamActiveCalls {
+		require.NotEqual(t, obs.ID, id.PlatformID,
+			"setupStream must not call SetStreamActive for OBS; OBS streaming should only start from startStream()")
+	}
+	require.True(t, slices.ContainsFunc(setStreamActiveCalls, func(id streamcontrol.StreamIDFullyQualified) bool {
+		return id.PlatformID == twitch.ID
+	}), "setupStream should call SetStreamActive for non-OBS platforms like Twitch")
 }
