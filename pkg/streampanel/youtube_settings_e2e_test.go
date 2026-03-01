@@ -134,6 +134,7 @@ func setupYouTubeE2E(t *testing.T) *ytE2EEnv {
 	require.NoError(t, err)
 	p.app = testApp
 	p.StreamD = d
+	p.defaultContext = ctx
 
 	// Initialize config cache.
 	cachedCfg, err := d.GetConfig(ctx)
@@ -432,6 +433,177 @@ func TestYouTubeSettingsE2E(t *testing.T) {
 		}, 5*time.Second, 100*time.Millisecond, "expected 'yt-temp' label to disappear after delete")
 
 		// Close account management window.
+		acctMgmtWindow.Close()
+	})
+
+	t.Run("StreamList", func(t *testing.T) {
+		env.panel.OpenAccountManagementWindow(env.ctx)
+
+		acctMgmtWindow := waitForWindow(t, env.app, "Account Management")
+
+		// Find and tap the "Edit" button in the same row as "yt1".
+		editBtn := findButtonInRowWithLabel(acctMgmtWindow, "yt1", "Edit")
+		require.NotNil(t, editBtn, "expected 'Edit' button in the same row as 'yt1'")
+		test.Tap(editBtn)
+
+		// Wait for the edit window.
+		editWin := waitForWindow(t, env.app, "Edit youtube account: yt1")
+
+		// Wait for streams to load asynchronously.
+		var stream1Check *widget.Check
+		require.Eventually(t, func() bool {
+			stream1Check = findCheckByLabel(editWin, "Stream 1")
+			return stream1Check != nil
+		}, 10*time.Second, 100*time.Millisecond, "expected 'Stream 1' checkbox to appear")
+
+		var stream2Check *widget.Check
+		require.Eventually(t, func() bool {
+			stream2Check = findCheckByLabel(editWin, "Stream 2")
+			return stream2Check != nil
+		}, 10*time.Second, 100*time.Millisecond, "expected 'Stream 2' checkbox to appear")
+
+		// Verify both checkboxes exist.
+		require.NotNil(t, stream1Check, "'Stream 1' checkbox must exist")
+		require.NotNil(t, stream2Check, "'Stream 2' checkbox must exist")
+
+		// Close windows.
+		editWin.Close()
+		acctMgmtWindow.Close()
+	})
+
+	t.Run("CreateStream", func(t *testing.T) {
+		env.panel.OpenAccountManagementWindow(env.ctx)
+
+		acctMgmtWindow := waitForWindow(t, env.app, "Account Management")
+
+		// Find and tap the "Edit" button in the same row as "yt1".
+		editBtn := findButtonInRowWithLabel(acctMgmtWindow, "yt1", "Edit")
+		require.NotNil(t, editBtn, "expected 'Edit' button in the same row as 'yt1'")
+		test.Tap(editBtn)
+
+		// Wait for the edit window.
+		editWin := waitForWindow(t, env.app, "Edit youtube account: yt1")
+
+		// Wait for streams to load.
+		require.Eventually(t, func() bool {
+			return findCheckByLabel(editWin, "Stream 1") != nil
+		}, 10*time.Second, 100*time.Millisecond, "expected 'Stream 1' checkbox to appear")
+
+		// Find and tap "Create Stream" button.
+		createBtn := findButtonByText(editWin, "Create Stream")
+		require.NotNil(t, createBtn, "expected 'Create Stream' button")
+		test.Tap(createBtn)
+
+		// The "Create Stream" button opens a ModalPopUp on the canvas overlay.
+		var titleEntry *widget.Entry
+		require.Eventually(t, func() bool {
+			overlayObj := editWin.Canvas().Overlays().Top()
+			if overlayObj == nil {
+				return false
+			}
+			// The overlay is a *widget.PopUp with a Content field.
+			if popup, ok := overlayObj.(*widget.PopUp); ok {
+				traverse(popup.Content, func(obj fyne.CanvasObject) {
+					if entry, ok := obj.(*widget.Entry); ok && entry.PlaceHolder == "Stream title" {
+						titleEntry = entry
+					}
+				})
+			}
+			return titleEntry != nil
+		}, 10*time.Second, 100*time.Millisecond, "expected 'Stream title' entry in overlay")
+
+		// Type the new stream title.
+		titleEntry.SetText("Test Stream 3")
+
+		// Find and tap "Create" button in the overlay.
+		var createConfirmBtn *widget.Button
+		overlayObj := editWin.Canvas().Overlays().Top()
+		if popup, ok := overlayObj.(*widget.PopUp); ok {
+			traverse(popup.Content, func(obj fyne.CanvasObject) {
+				if btn, ok := obj.(*widget.Button); ok && btn.Text == "Create" {
+					createConfirmBtn = btn
+				}
+			})
+		}
+		require.NotNil(t, createConfirmBtn, "expected 'Create' button in overlay")
+		test.Tap(createConfirmBtn)
+
+		// Wait for the stream list to refresh — "Test Stream 3" should appear.
+		require.Eventually(t, func() bool {
+			return findCheckByLabel(editWin, "Test Stream 3") != nil
+		}, 10*time.Second, 100*time.Millisecond, "expected 'Test Stream 3' checkbox to appear after creation")
+
+		// Close windows.
+		editWin.Close()
+		acctMgmtWindow.Close()
+	})
+
+	t.Run("DeleteStream", func(t *testing.T) {
+		env.panel.OpenAccountManagementWindow(env.ctx)
+
+		acctMgmtWindow := waitForWindow(t, env.app, "Account Management")
+
+		// Find and tap the "Edit" button in the same row as "yt1".
+		editBtn := findButtonInRowWithLabel(acctMgmtWindow, "yt1", "Edit")
+		require.NotNil(t, editBtn, "expected 'Edit' button in the same row as 'yt1'")
+		test.Tap(editBtn)
+
+		// Wait for the edit window.
+		editWin := waitForWindow(t, env.app, "Edit youtube account: yt1")
+
+		// Wait for streams to load.
+		require.Eventually(t, func() bool {
+			return findCheckByLabel(editWin, "Stream 1") != nil
+		}, 10*time.Second, 100*time.Millisecond, "expected 'Stream 1' checkbox to appear")
+
+		// Count streams before deletion.
+		streamsBefore, err := env.streamD.GetStreams(env.ctx)
+		require.NoError(t, err)
+		countBefore := len(streamsBefore)
+
+		// Find a delete button. Each stream row is: HBox(check, spacer, deleteButton)
+		// The delete button has empty text and DeleteIcon.
+		var deleteBtn *widget.Button
+		traverse(editWin.Content(), func(obj fyne.CanvasObject) {
+			if deleteBtn != nil {
+				return
+			}
+			if btn, ok := obj.(*widget.Button); ok && btn.Text == "" && btn.Icon != nil {
+				deleteBtn = btn
+			}
+		})
+		require.NotNil(t, deleteBtn, "expected a delete button (empty text, icon) in stream list")
+		test.Tap(deleteBtn)
+
+		// A confirmation modal popup appears. Find "Delete" button in overlay.
+		var confirmDeleteBtn *widget.Button
+		require.Eventually(t, func() bool {
+			overlayObj := editWin.Canvas().Overlays().Top()
+			if overlayObj == nil {
+				return false
+			}
+			if popup, ok := overlayObj.(*widget.PopUp); ok {
+				traverse(popup.Content, func(obj fyne.CanvasObject) {
+					if btn, ok := obj.(*widget.Button); ok && btn.Text == "Delete" {
+						confirmDeleteBtn = btn
+					}
+				})
+			}
+			return confirmDeleteBtn != nil
+		}, 10*time.Second, 100*time.Millisecond, "expected 'Delete' button in confirmation overlay")
+		test.Tap(confirmDeleteBtn)
+
+		// Wait for stream count to decrease.
+		require.Eventually(t, func() bool {
+			streams, err := env.streamD.GetStreams(env.ctx)
+			if err != nil {
+				return false
+			}
+			return len(streams) < countBefore
+		}, 10*time.Second, 100*time.Millisecond, "expected stream count to decrease after deletion")
+
+		// Close windows.
+		editWin.Close()
 		acctMgmtWindow.Close()
 	})
 }
