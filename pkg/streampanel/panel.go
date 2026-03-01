@@ -1892,6 +1892,11 @@ func (p *Panel) setupStreamNoLock(ctx context.Context) {
 			p.StreamD.SetTitle(ctx, streamID, p.streamTitleField.Text)
 			p.StreamD.SetDescription(ctx, streamID, p.streamDescriptionField.Text)
 			p.StreamD.ApplyProfile(ctx, streamID, profile.GetStreamProfile(streamID))
+			if streamID.PlatformID == obs.ID {
+				// OBS setup only applies profile settings (e.g. recording flag);
+				// actual streaming is started by startStream().
+				continue
+			}
 			err := p.StreamD.SetStreamActive(ctx, streamID, true)
 			if err != nil {
 				p.DisplayError(fmt.Errorf("unable to setup the stream on %s: %w", streamID.PlatformID, err))
