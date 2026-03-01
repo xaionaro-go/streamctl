@@ -1939,28 +1939,18 @@ func (p *Panel) startStream(ctx context.Context) {
 		return
 	}
 
-	profile := p.getSelectedProfile()
-	var wg sync.WaitGroup
-	for streamID, selected := range p.selectedStreams {
-		if !selected {
-			continue
-		}
-		streamID := streamID // capture
-		wg.Add(1)
-		observability.Go(ctx, func(ctx context.Context) {
-			defer wg.Done()
-			p.StreamD.SetTitle(ctx, streamID, p.streamTitleField.Text)
-			p.StreamD.SetDescription(ctx, streamID, p.streamDescriptionField.Text)
-			p.StreamD.ApplyProfile(ctx, streamID, profile.GetStreamProfile(streamID))
-			err := p.StreamD.SetStreamActive(ctx, streamID, true)
-			if err != nil {
-				p.backgroundRenderer.Q <- func() {
-					p.DisplayError(fmt.Errorf("unable to start the stream on %v: %w", streamID, err))
-				}
-			}
-		})
+	obsStreamID := streamcontrol.StreamIDFullyQualified{
+		AccountIDFullyQualified: streamcontrol.AccountIDFullyQualified{
+			PlatformID: obs.ID,
+		},
 	}
-	wg.Wait()
+	profile := p.getSelectedProfile()
+	p.StreamD.ApplyProfile(ctx, obsStreamID, profile.GetStreamProfile(obsStreamID))
+	err = p.StreamD.SetStreamActive(ctx, obsStreamID, true)
+	if err != nil {
+		p.DisplayError(fmt.Errorf("unable to start OBS streaming: %w", err))
+		return
+	}
 
 	p.startStopButton.Refresh()
 	p.afterStreamStart(ctx)
