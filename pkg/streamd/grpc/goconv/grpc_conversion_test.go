@@ -35,4 +35,16 @@ func TestStreamIDFullyQualifiedFromGRPC(t *testing.T) {
 		res := StreamIDFullyQualifiedFromGRPC(in)
 		require.Equal(t, streamcontrol.StreamIDFullyQualified{}, res)
 	})
+
+	t.Run("empty_account_and_stream_id", func(t *testing.T) {
+		in := &streamd_grpc.StreamIDFullyQualified{
+			PlatformID: "obs",
+			AccountID:  "",
+			StreamID:   "",
+		}
+		res := StreamIDFullyQualifiedFromGRPC(in)
+		require.Equal(t, streamcontrol.PlatformID("obs"), res.PlatformID)
+		require.Equal(t, streamcontrol.AccountID(""), res.AccountID)
+		require.Equal(t, streamcontrol.StreamID(""), res.StreamID)
+	})
 }
