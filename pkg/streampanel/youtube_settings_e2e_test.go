@@ -28,7 +28,6 @@ import (
 type ytE2EEnv struct {
 	t         *testing.T
 	ctx       context.Context
-	cancel    context.CancelFunc
 	app       fyne.App
 	panel     *Panel
 	streamD   *streamd.StreamD
@@ -102,7 +101,7 @@ func setupYouTubeE2E(t *testing.T) *ytE2EEnv {
 	}
 
 	// Initialize StreamD.
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx := t.Context()
 	ctx = observability.WithSecretsProvider(ctx, &observability.SecretsStaticProvider{})
 	b := belt.New()
 
@@ -143,15 +142,9 @@ func setupYouTubeE2E(t *testing.T) *ytE2EEnv {
 		p.configCache = cachedCfg
 	})
 
-	t.Cleanup(func() {
-		cancel()
-		testApp.Quit()
-	})
-
 	return &ytE2EEnv{
 		t:         t,
 		ctx:       ctx,
-		cancel:    cancel,
 		app:       testApp,
 		panel:     p,
 		streamD:   d,
@@ -261,7 +254,6 @@ func TestYouTubeSettingsE2E(t *testing.T) {
 		env.panel.OpenAccountManagementWindow(env.ctx)
 
 		w := waitForWindow(t, env.app, "Account Management")
-		defer w.Close()
 
 		// Verify YouTube platform header is visible.
 		platformLabel := findLabelByText(w, "Platform: youtube")
@@ -270,62 +262,51 @@ func TestYouTubeSettingsE2E(t *testing.T) {
 		// Verify existing "yt1" account is shown.
 		accountLabel := findLabelByText(w, "yt1")
 		require.NotNil(t, accountLabel, "expected 'yt1' account label in account management window")
+
+		w.Close()
 	})
 
 	t.Run("AddYouTubeAccount", func(t *testing.T) {
 		env.panel.OpenAccountManagementWindow(env.ctx)
 
 		acctMgmtWindow := waitForWindow(t, env.app, "Account Management")
-		defer acctMgmtWindow.Close()
 
 		// Find all "Add account" buttons — one per platform (obs, twitch, kick, youtube).
 		addButtons := findAllButtonsByText(acctMgmtWindow, "Add account")
 		require.Len(t, addButtons, 4, "expected 4 'Add account' buttons (one per platform)")
 
-		t.Log("About to tap YouTube Add account button")
 		// Tap the 4th button (YouTube, index 3).
 		test.Tap(addButtons[3])
-		t.Log("Tapped YouTube Add account button")
 
 		// Wait for the "Add youtube account" window.
 		addWindow := waitForWindow(t, env.app, "Add youtube account")
-		t.Log("Found Add youtube account window")
-		defer addWindow.Close()
 
 		// Fill in the Account ID.
-		t.Log("Looking for Account ID entry...")
 		accountIDEntry := findEntryByPlaceholder(addWindow, "Account ID (e.g. 'myaccount1')")
 		require.NotNil(t, accountIDEntry, "expected Account ID entry field")
 		accountIDEntry.SetText("yt-new")
-		t.Log("Set Account ID to yt-new")
 
 		// Fill in Client ID.
-		t.Log("Looking for Client ID entry...")
 		clientIDEntry := findEntryByPlaceholder(addWindow, "client ID")
 		require.NotNil(t, clientIDEntry, "expected client ID entry field")
 		clientIDEntry.SetText("new-client-id")
-		t.Log("Set Client ID")
 
 		// Fill in Client Secret.
-		t.Log("Looking for Client Secret entry...")
 		clientSecretEntry := findEntryByPlaceholder(addWindow, "client secret")
 		require.NotNil(t, clientSecretEntry, "expected client secret entry field")
 		clientSecretEntry.SetText("new-client-secret")
-		t.Log("Set Client Secret")
 
 		// Tap "Add account" button in the add window.
-		t.Log("Looking for Add account button in add window...")
 		addBtn := findButtonByText(addWindow, "Add account")
 		require.NotNil(t, addBtn, "expected 'Add account' button in add window")
-		t.Log("About to tap Add account button")
 		test.Tap(addBtn)
-		t.Log("Tapped Add account button")
 
 		// Verify the account management window now shows "yt-new".
-		t.Log("Waiting for yt-new label to appear...")
 		require.Eventually(t, func() bool {
 			return findLabelByText(acctMgmtWindow, "yt-new") != nil
 		}, 5*time.Second, 100*time.Millisecond, "expected 'yt-new' label to appear in account management window")
-		t.Log("Found yt-new label")
+
+		// Close windows explicitly (tapping "Add account" already closes addWindow).
+		acctMgmtWindow.Close()
 	})
 }
