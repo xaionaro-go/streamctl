@@ -10,6 +10,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 	benbjohnsonclock "github.com/benbjohnson/clock"
 	"github.com/facebookincubator/go-belt"
+	"github.com/goccy/go-yaml"
 	"github.com/stretchr/testify/require"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/clock"
@@ -154,6 +155,17 @@ func setupYouTubeE2E(t *testing.T) *ytE2EEnv {
 	p.app = testApp
 	p.StreamD = d
 	p.defaultContext = ctx
+
+	// Keep a sentinel window alive for the duration of the test suite.
+	// Background goroutines spawned by stream management UI (via
+	// observability.Go) may outlive their source window. The Fyne test
+	// driver's CanvasForObject panics when AllWindows() is empty
+	// (index out of range [-1]). A permanent sentinel window prevents
+	// this by ensuring AllWindows() is never empty.
+	sentinel := testApp.NewWindow("sentinel")
+	sentinel.Resize(fyne.NewSize(1, 1))
+	sentinel.Show()
+	t.Cleanup(func() { sentinel.Close() })
 
 	// Initialize config cache.
 	cachedCfg, err := d.GetConfig(ctx)
@@ -314,11 +326,15 @@ func findOverlayPopUp(app fyne.App) *widget.PopUp {
 	return nil
 }
 
-// closeAllWindows safely closes all open windows. Since Close() modifies the
-// internal windows slice, we snapshot the list first and close in reverse order.
+// closeAllWindows safely closes all open windows except the sentinel.
+// Since Close() modifies the internal windows slice, we snapshot the list
+// first and close in reverse order.
 func closeAllWindows(app fyne.App) {
 	windows := append([]fyne.Window{}, app.Driver().AllWindows()...)
 	for i := len(windows) - 1; i >= 0; i-- {
+		if windows[i].Title() == "sentinel" {
+			continue
+		}
 		windows[i].Close()
 	}
 }
@@ -604,6 +620,185 @@ func TestYouTubeSettingsE2E(t *testing.T) {
 		// Close remaining windows (the popup handler may have already closed one).
 		// Close in reverse order to avoid index issues as Close modifies the slice.
 		closeAllWindows(env.app)
+	})
+
+	t.Run("ToggleAllowlist", func(t *testing.T) {
+		env.panel.OpenAccountManagementWindow(env.ctx)
+
+		acctMgmtWindow := waitForWindow(t, env.app, "Account Management")
+
+		// Find and tap the "Edit" button in the same row as "yt1".
+		editBtn := findButtonInRowWithLabel(acctMgmtWindow, "yt1", "Edit")
+		require.NotNil(t, editBtn, "expected 'Edit' button in the same row as 'yt1'")
+		test.Tap(editBtn)
+
+		// Wait for the edit window.
+		editWin := waitForWindow(t, env.app, "Edit youtube account: yt1")
+
+		// Wait for streams to load and find a stream checkbox.
+		var streamCheck *widget.Check
+		var streamName string
+		env.eventuallyWithClock(t, func() bool {
+			// Find any stream checkbox (the exact streams available depend on
+			// earlier test ordering, so we pick the first one we see).
+			traverse(editWin.Content(), func(obj fyne.CanvasObject) {
+				if streamCheck != nil {
+					return
+				}
+				if chk, ok := obj.(*widget.Check); ok && chk.Text != "" && chk.Text != "Auto-numerate" {
+					streamCheck = chk
+					streamName = chk.Text
+				}
+			})
+			return streamCheck != nil
+		}, 15*time.Second, 100*time.Millisecond, "expected at least one stream checkbox to appear")
+
+		// Toggle the checkbox on.
+		require.False(t, streamCheck.Checked, "stream checkbox should initially be unchecked")
+		test.Tap(streamCheck)
+		require.True(t, streamCheck.Checked, "stream checkbox should now be checked")
+
+		// Tap "Save" to persist the edit (updates in-memory config).
+		saveBtn := findButtonByText(editWin, "Save")
+		require.NotNil(t, saveBtn, "expected 'Save' button in edit window")
+		test.Tap(saveBtn)
+
+		// Wait for edit window to close.
+		waitForWindowClosed(t, env.app, "Edit youtube account: yt1")
+
+		// Tap "Save and Close" on the Account Management window to persist
+		// the config to the StreamD backend.
+		saveAndCloseBtn := findButtonByText(acctMgmtWindow, "Save and Close")
+		require.NotNil(t, saveAndCloseBtn, "expected 'Save and Close' button")
+		test.Tap(saveAndCloseBtn)
+
+		// Wait for Account Management window to close.
+		waitForWindowClosed(t, env.app, "Account Management")
+
+		// Verify AllowlistedStreamIDs in the persisted config.
+		cfg, err := env.streamD.GetConfig(env.ctx)
+		require.NoError(t, err)
+
+		ytPlatCfg := cfg.Backends[youtube.ID]
+		require.NotNil(t, ytPlatCfg, "expected youtube platform config")
+		ytAccRaw, ok := ytPlatCfg.Accounts["yt1"]
+		require.True(t, ok, "expected 'yt1' account in config")
+
+		var ytAccCfg youtube.AccountConfig
+		err = yaml.Unmarshal(ytAccRaw, &ytAccCfg)
+		require.NoError(t, err)
+
+		// Verify that the allowlist is non-empty (we checked exactly one
+		// stream). The allowlist stores stream IDs (e.g. "stream-1"), not
+		// display names, so we verify the count rather than matching by name.
+		require.NotEmpty(t, ytAccCfg.AllowlistedStreamIDs,
+			"expected AllowlistedStreamIDs to contain at least one stream after checking %q", streamName)
+	})
+
+	t.Run("SaveAndClose", func(t *testing.T) {
+		// Get the config before to compare later.
+		cfgBefore, err := env.streamD.GetConfig(env.ctx)
+		require.NoError(t, err)
+
+		env.panel.OpenAccountManagementWindow(env.ctx)
+
+		acctMgmtWindow := waitForWindow(t, env.app, "Account Management")
+
+		// Tap "Save and Close".
+		saveAndCloseBtn := findButtonByText(acctMgmtWindow, "Save and Close")
+		require.NotNil(t, saveAndCloseBtn, "expected 'Save and Close' button")
+		test.Tap(saveAndCloseBtn)
+
+		// Verify the window closes.
+		waitForWindowClosed(t, env.app, "Account Management")
+
+		// Verify config is still persisted (it should at least match what
+		// was there before, since we didn't make changes).
+		cfgAfter, err := env.streamD.GetConfig(env.ctx)
+		require.NoError(t, err)
+		require.NotNil(t, cfgAfter)
+		require.NotNil(t, cfgAfter.Backends[youtube.ID], "youtube config should still exist after Save and Close")
+
+		// Verify the yt1 account still exists.
+		_, ok := cfgAfter.Backends[youtube.ID].Accounts["yt1"]
+		require.True(t, ok, "expected 'yt1' account to still exist after Save and Close")
+
+		// Verify that the allowlist from the ToggleAllowlist test persisted.
+		ytAccRawBefore := cfgBefore.Backends[youtube.ID].Accounts["yt1"]
+		ytAccRawAfter := cfgAfter.Backends[youtube.ID].Accounts["yt1"]
+		var ytCfgBefore, ytCfgAfter youtube.AccountConfig
+		require.NoError(t, yaml.Unmarshal(ytAccRawBefore, &ytCfgBefore))
+		require.NoError(t, yaml.Unmarshal(ytAccRawAfter, &ytCfgAfter))
+		require.Equal(t, ytCfgBefore.AllowlistedStreamIDs, ytCfgAfter.AllowlistedStreamIDs,
+			"AllowlistedStreamIDs should be preserved through Save and Close")
+	})
+
+	t.Run("Search", func(t *testing.T) {
+		env.panel.OpenAccountManagementWindow(env.ctx)
+
+		acctMgmtWindow := waitForWindow(t, env.app, "Account Management")
+
+		// Find and tap the "Edit" button in the same row as "yt1".
+		editBtn := findButtonInRowWithLabel(acctMgmtWindow, "yt1", "Edit")
+		require.NotNil(t, editBtn, "expected 'Edit' button in the same row as 'yt1'")
+		test.Tap(editBtn)
+
+		// Wait for the edit window.
+		editWin := waitForWindow(t, env.app, "Edit youtube account: yt1")
+
+		// Wait for streams to load. Collect all stream check labels.
+		var allStreamNames []string
+		env.eventuallyWithClock(t, func() bool {
+			allStreamNames = nil
+			traverse(editWin.Content(), func(obj fyne.CanvasObject) {
+				if chk, ok := obj.(*widget.Check); ok && chk.Text != "" && chk.Text != "Auto-numerate" {
+					allStreamNames = append(allStreamNames, chk.Text)
+				}
+			})
+			return len(allStreamNames) >= 2
+		}, 15*time.Second, 100*time.Millisecond, "expected at least 2 stream checkboxes")
+
+		// Find the search entry and type a filter.
+		searchEntry := findEntryByPlaceholder(editWin, "Search streams...")
+		require.NotNil(t, searchEntry, "expected 'Search streams...' entry")
+
+		// Use the first character that distinguishes the streams. The mock
+		// streams have names like "Stream 1", "Stream 2", "Test Stream 3".
+		// Typing "1" should match only "Stream 1".
+		searchEntry.SetText("1")
+
+		// Wait for the filtered results. The OnChanged handler triggers
+		// refreshStreams which spawns a goroutine.
+		var filteredNames []string
+		env.eventuallyWithClock(t, func() bool {
+			filteredNames = nil
+			traverse(editWin.Content(), func(obj fyne.CanvasObject) {
+				if chk, ok := obj.(*widget.Check); ok && chk.Text != "" && chk.Text != "Auto-numerate" {
+					filteredNames = append(filteredNames, chk.Text)
+				}
+			})
+			return len(filteredNames) < len(allStreamNames)
+		}, 15*time.Second, 100*time.Millisecond, "expected search filter to reduce visible streams")
+
+		// Verify filtered results all contain "1".
+		for _, name := range filteredNames {
+			require.Contains(t, name, "1", "filtered stream %q should contain '1'", name)
+		}
+
+		// Clear search and verify all streams reappear.
+		searchEntry.SetText("")
+		env.eventuallyWithClock(t, func() bool {
+			var names []string
+			traverse(editWin.Content(), func(obj fyne.CanvasObject) {
+				if chk, ok := obj.(*widget.Check); ok && chk.Text != "" && chk.Text != "Auto-numerate" {
+					names = append(names, chk.Text)
+				}
+			})
+			return len(names) >= len(allStreamNames)
+		}, 15*time.Second, 100*time.Millisecond, "expected all streams to reappear after clearing search")
+
+		editWin.Close()
+		acctMgmtWindow.Close()
 	})
 
 	t.Run("DeleteStream", func(t *testing.T) {
