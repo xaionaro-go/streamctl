@@ -3040,11 +3040,13 @@ func (c *Client) GetYouTubeInfo(
 
 	info := &yttypes.YouTubeInfo{}
 
+	info.QuotaUsage = &yttypes.QuotaUsage{}
 	if qu := resp.GetQuotaUsage(); qu != nil {
-		info.QuotaUsage = yttypes.QuotaUsage{
-			UsedPoints: qu.UsedPoints,
-			DailyLimit: qu.DailyLimit,
-			ResetTime:  time.Unix(qu.ResetTimeUnix, 0),
+		info.QuotaUsage.UsedPoints.Store(qu.UsedPoints)
+		info.QuotaUsage.DailyLimit = qu.DailyLimit
+		info.QuotaUsage.ResetTime = time.Unix(qu.ResetTimeUnix, 0)
+		for k, v := range qu.PerOperationUsage {
+			info.QuotaUsage.PerOperationUsage.Store(k, v)
 		}
 		if qu.GoogleReportedUsage != nil {
 			info.QuotaUsage.GoogleReportedUsage = qu.GoogleReportedUsage

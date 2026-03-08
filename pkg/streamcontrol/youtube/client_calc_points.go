@@ -11,6 +11,7 @@ import (
 	_ "time/tzdata"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/xsync"
 	"google.golang.org/api/youtube/v3"
 )
 
@@ -29,8 +30,9 @@ func init() {
 // See also: https://developers.google.com/youtube/v3/determine_quota_cost
 type ClientCalcPoints struct {
 	Client          client
-	UsedPoints      atomic.Uint64
-	CheckMutex      sync.Mutex
+	UsedPoints     atomic.Uint64
+	UsedPointsByOp xsync.Map[string, uint64]
+	CheckMutex     sync.Mutex
 	PreviousCheckAt time.Time
 }
 
@@ -48,6 +50,7 @@ func getQuotaCutoffDate(t time.Time) string {
 
 func (c *ClientCalcPoints) addUsedPointsIfNoError(
 	ctx context.Context,
+	operationName string,
 	points uint,
 	err error,
 ) {
@@ -55,6 +58,7 @@ func (c *ClientCalcPoints) addUsedPointsIfNoError(
 		return
 	}
 	v := c.UsedPoints.Add(uint64(points))
+
 	now := time.Now()
 	curDate := getQuotaCutoffDate(now)
 	if v > 5000 {
@@ -69,14 +73,21 @@ func (c *ClientCalcPoints) addUsedPointsIfNoError(
 	if curDate != prevDate {
 		logger.Infof(ctx, "new quota day in YouTube: '%s' != '%s'", curDate, prevDate)
 		c.UsedPoints.Store(0)
+		c.UsedPointsByOp.Range(func(key string, _ uint64) bool {
+			c.UsedPointsByOp.Delete(key)
+			return true
+		})
 	}
+	prev, _ := c.UsedPointsByOp.Load(operationName)
+	c.UsedPointsByOp.Store(operationName, prev+uint64(points))
 }
 
 func (c *ClientCalcPoints) ReportQuotaConsumption(
 	ctx context.Context,
+	operationName string,
 	points uint,
 ) {
-	c.addUsedPointsIfNoError(ctx, points, nil)
+	c.addUsedPointsIfNoError(ctx, operationName, points, nil)
 }
 
 func (c *ClientCalcPoints) UsedQuotaPoints() uint64 {
@@ -84,7 +95,7 @@ func (c *ClientCalcPoints) UsedQuotaPoints() uint64 {
 }
 
 func (c *ClientCalcPoints) Ping(ctx context.Context) (_err error) {
-	defer func() { c.addUsedPointsIfNoError(ctx, 1, _err) }()
+	defer func() { c.addUsedPointsIfNoError(ctx, "Ping", 1, _err) }()
 	return c.Client.Ping(ctx)
 }
 
@@ -95,7 +106,7 @@ func (c *ClientCalcPoints) GetBroadcasts(
 	parts []string,
 	pageToken string,
 ) (_ret *youtube.LiveBroadcastListResponse, _err error) {
-	defer func() { c.addUsedPointsIfNoError(ctx, 1, _err) }()
+	defer func() { c.addUsedPointsIfNoError(ctx, "GetBroadcasts", 1, _err) }()
 	return c.Client.GetBroadcasts(ctx, t, ids, parts, pageToken)
 }
 
@@ -104,7 +115,7 @@ func (c *ClientCalcPoints) UpdateBroadcast(
 	broadcast *youtube.LiveBroadcast,
 	parts []string,
 ) (_err error) {
-	defer func() { c.addUsedPointsIfNoError(ctx, 50, _err) }()
+	defer func() { c.addUsedPointsIfNoError(ctx, "UpdateBroadcast", 50, _err) }()
 	return c.Client.UpdateBroadcast(ctx, broadcast, parts)
 }
 
@@ -113,7 +124,7 @@ func (c *ClientCalcPoints) InsertBroadcast(
 	broadcast *youtube.LiveBroadcast,
 	parts []string,
 ) (_ret *youtube.LiveBroadcast, _err error) {
-	defer func() { c.addUsedPointsIfNoError(ctx, 50, _err) }()
+	defer func() { c.addUsedPointsIfNoError(ctx, "InsertBroadcast", 50, _err) }()
 	return c.Client.InsertBroadcast(ctx, broadcast, parts)
 }
 
@@ -121,7 +132,7 @@ func (c *ClientCalcPoints) DeleteBroadcast(
 	ctx context.Context,
 	broadcastID string,
 ) (_err error) {
-	defer func() { c.addUsedPointsIfNoError(ctx, 50, _err) }()
+	defer func() { c.addUsedPointsIfNoError(ctx, "DeleteBroadcast", 50, _err) }()
 	return c.Client.DeleteBroadcast(ctx, broadcastID)
 }
 
@@ -129,7 +140,7 @@ func (c *ClientCalcPoints) GetStreams(
 	ctx context.Context,
 	parts []string,
 ) (_ret *youtube.LiveStreamListResponse, _err error) {
-	defer func() { c.addUsedPointsIfNoError(ctx, 1, _err) }()
+	defer func() { c.addUsedPointsIfNoError(ctx, "GetStreams", 1, _err) }()
 	return c.Client.GetStreams(ctx, parts)
 }
 
@@ -138,7 +149,7 @@ func (c *ClientCalcPoints) InsertStream(
 	s *youtube.LiveStream,
 	parts []string,
 ) (_ret *youtube.LiveStream, _err error) {
-	defer func() { c.addUsedPointsIfNoError(ctx, 50, _err) }()
+	defer func() { c.addUsedPointsIfNoError(ctx, "InsertStream", 50, _err) }()
 	return c.Client.InsertStream(ctx, s, parts)
 }
 
@@ -146,7 +157,7 @@ func (c *ClientCalcPoints) DeleteStream(
 	ctx context.Context,
 	id string,
 ) (_err error) {
-	defer func() { c.addUsedPointsIfNoError(ctx, 50, _err) }()
+	defer func() { c.addUsedPointsIfNoError(ctx, "DeleteStream", 50, _err) }()
 	return c.Client.DeleteStream(ctx, id)
 }
 
@@ -155,7 +166,7 @@ func (c *ClientCalcPoints) GetVideos(
 	broadcastIDs []string,
 	parts []string,
 ) (_ret *youtube.VideoListResponse, _err error) {
-	defer func() { c.addUsedPointsIfNoError(ctx, 1, _err) }()
+	defer func() { c.addUsedPointsIfNoError(ctx, "GetVideos", 1, _err) }()
 	return c.Client.GetVideos(ctx, broadcastIDs, parts)
 }
 
@@ -164,7 +175,7 @@ func (c *ClientCalcPoints) UpdateVideo(
 	video *youtube.Video,
 	parts []string,
 ) (_err error) {
-	defer func() { c.addUsedPointsIfNoError(ctx, 50, _err) }()
+	defer func() { c.addUsedPointsIfNoError(ctx, "UpdateVideo", 50, _err) }()
 	return c.Client.UpdateVideo(ctx, video, parts)
 }
 
@@ -172,7 +183,7 @@ func (c *ClientCalcPoints) InsertCuepoint(
 	ctx context.Context,
 	cuepoint *youtube.Cuepoint,
 ) (_err error) {
-	defer func() { c.addUsedPointsIfNoError(ctx, 50, _err) }()
+	defer func() { c.addUsedPointsIfNoError(ctx, "InsertCuepoint", 50, _err) }()
 	return c.Client.InsertCuepoint(ctx, cuepoint)
 }
 
@@ -180,7 +191,7 @@ func (c *ClientCalcPoints) GetPlaylists(
 	ctx context.Context,
 	playlistParts []string,
 ) (_ret *youtube.PlaylistListResponse, _err error) {
-	defer func() { c.addUsedPointsIfNoError(ctx, 1, _err) }()
+	defer func() { c.addUsedPointsIfNoError(ctx, "GetPlaylists", 1, _err) }()
 	return c.Client.GetPlaylists(ctx, playlistParts)
 }
 
@@ -190,7 +201,7 @@ func (c *ClientCalcPoints) GetPlaylistItems(
 	videoID string,
 	parts []string,
 ) (_ret *youtube.PlaylistItemListResponse, _err error) {
-	defer func() { c.addUsedPointsIfNoError(ctx, 1, _err) }()
+	defer func() { c.addUsedPointsIfNoError(ctx, "GetPlaylistItems", 1, _err) }()
 	return c.Client.GetPlaylistItems(ctx, playlistID, videoID, parts)
 }
 
@@ -199,7 +210,7 @@ func (c *ClientCalcPoints) InsertPlaylistItem(
 	item *youtube.PlaylistItem,
 	parts []string,
 ) (_err error) {
-	defer func() { c.addUsedPointsIfNoError(ctx, 50, _err) }()
+	defer func() { c.addUsedPointsIfNoError(ctx, "InsertPlaylistItem", 50, _err) }()
 	return c.Client.InsertPlaylistItem(ctx, item, parts)
 }
 
@@ -208,7 +219,7 @@ func (c *ClientCalcPoints) SetThumbnail(
 	broadcastID string,
 	thumbnail io.Reader,
 ) (_err error) {
-	defer func() { c.addUsedPointsIfNoError(ctx, 50, _err) }()
+	defer func() { c.addUsedPointsIfNoError(ctx, "SetThumbnail", 50, _err) }()
 	return c.Client.SetThumbnail(ctx, broadcastID, thumbnail)
 }
 
@@ -217,7 +228,7 @@ func (c *ClientCalcPoints) InsertCommentThread(
 	t *youtube.CommentThread,
 	parts []string,
 ) (_err error) {
-	defer func() { c.addUsedPointsIfNoError(ctx, 50, _err) }()
+	defer func() { c.addUsedPointsIfNoError(ctx, "InsertCommentThread", 50, _err) }()
 	return c.Client.InsertCommentThread(ctx, t, parts)
 }
 
@@ -226,7 +237,7 @@ func (c *ClientCalcPoints) ListChatMessages(
 	chatID string,
 	parts []string,
 ) (_ret *youtube.LiveChatMessageListResponse, _err error) {
-	defer func() { c.addUsedPointsIfNoError(ctx, 1, _err) }()
+	defer func() { c.addUsedPointsIfNoError(ctx, "ListChatMessages", 1, _err) }()
 	return c.Client.ListChatMessages(ctx, chatID, parts)
 }
 
@@ -234,7 +245,7 @@ func (c *ClientCalcPoints) DeleteChatMessage(
 	ctx context.Context,
 	messageID string,
 ) (_err error) {
-	defer func() { c.addUsedPointsIfNoError(ctx, 50, _err) }()
+	defer func() { c.addUsedPointsIfNoError(ctx, "DeleteChatMessage", 50, _err) }()
 	return c.Client.DeleteChatMessage(ctx, messageID)
 }
 
@@ -244,7 +255,7 @@ func (c *ClientCalcPoints) GetLiveChatMessages(
 	pageToken string,
 	parts []string,
 ) (_ret *youtube.LiveChatMessageListResponse, _err error) {
-	defer func() { c.addUsedPointsIfNoError(ctx, 1, _err) }()
+	defer func() { c.addUsedPointsIfNoError(ctx, "GetLiveChatMessages", 1, _err) }()
 	return c.Client.GetLiveChatMessages(ctx, chatID, pageToken, parts)
 }
 
@@ -254,6 +265,6 @@ func (c *ClientCalcPoints) Search(
 	eventType EventType,
 	parts []string,
 ) (_ret *youtube.SearchListResponse, _err error) {
-	defer func() { c.addUsedPointsIfNoError(ctx, 100, _err) }()
+	defer func() { c.addUsedPointsIfNoError(ctx, "Search", 100, _err) }()
 	return c.Client.Search(ctx, chanID, eventType, parts)
 }

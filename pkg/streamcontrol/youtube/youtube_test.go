@@ -153,7 +153,7 @@ func TestGetInfoReturnsQuotaAndListeners(t *testing.T) {
 
 	// Verify baseline: fresh YouTube instance should have zero quota, no listeners, no broadcasts.
 	info := yt.GetInfo(ctx)
-	assert.Equal(t, uint64(0), info.QuotaUsage.UsedPoints)
+	assert.Equal(t, uint64(0), info.QuotaUsage.UsedPoints.Load())
 	assert.Equal(t, uint64(yttypes.YouTubeDailyQuotaLimit), info.QuotaUsage.DailyLimit)
 	assert.False(t, info.QuotaUsage.ResetTime.IsZero())
 	assert.Empty(t, info.ChatListeners)
@@ -162,7 +162,7 @@ func TestGetInfoReturnsQuotaAndListeners(t *testing.T) {
 	// Simulate some quota usage.
 	yt.YouTubeClient.UsedPoints.Store(42)
 	info = yt.GetInfo(ctx)
-	assert.Equal(t, uint64(42), info.QuotaUsage.UsedPoints)
+	assert.Equal(t, uint64(42), info.QuotaUsage.UsedPoints.Load())
 
 	// Simulate active broadcasts.
 	yt.currentLiveBroadcasts = []*youtube.LiveBroadcast{

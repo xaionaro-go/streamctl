@@ -1,7 +1,10 @@
 package youtube
 
 import (
+	"sync/atomic"
 	"time"
+
+	"github.com/xaionaro-go/xsync"
 )
 
 const (
@@ -9,16 +12,17 @@ const (
 )
 
 type YouTubeInfo struct {
-	QuotaUsage         QuotaUsage
+	QuotaUsage         *QuotaUsage
 	ChatListeners      []ChatListenerInfo
 	ActiveBroadcasts   []BroadcastSummary
 	UpcomingBroadcasts []BroadcastSummary
 }
 
 type QuotaUsage struct {
-	UsedPoints uint64
-	DailyLimit uint64
-	ResetTime  time.Time
+	UsedPoints        atomic.Uint64
+	PerOperationUsage xsync.Map[string, uint64]
+	DailyLimit        uint64
+	ResetTime         time.Time
 
 	GoogleReportedUsage *uint64
 	GoogleReportedLimit *uint64

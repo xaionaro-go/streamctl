@@ -1924,11 +1924,18 @@ func (yt *YouTube) GetInfo(
 	logger.Debugf(ctx, "GetInfo")
 	defer logger.Debugf(ctx, "/GetInfo")
 
-	var info YouTubeInfo
+	info := YouTubeInfo{
+		QuotaUsage: &QuotaUsage{},
+	}
 
 	if yt.YouTubeClient != nil {
-		info.QuotaUsage.UsedPoints = yt.YouTubeClient.UsedPoints.Load()
+		info.QuotaUsage.UsedPoints.Store(yt.YouTubeClient.UsedPoints.Load())
 		info.QuotaUsage.DailyLimit = yttypes.YouTubeDailyQuotaLimit
+
+		yt.YouTubeClient.UsedPointsByOp.Range(func(key string, value uint64) bool {
+			info.QuotaUsage.PerOperationUsage.Store(key, value)
+			return true
+		})
 
 		now := time.Now()
 		tomorrowLA := now.In(tzLosAngeles).Truncate(24 * time.Hour).Add(24 * time.Hour)

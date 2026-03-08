@@ -3,6 +3,7 @@ package streampanel
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -18,10 +19,11 @@ type youTubeInfoPage struct {
 	Panel     *Panel
 	container *fyne.Container
 
-	quotaLabel       *widget.Label
-	quotaBar         *widget.ProgressBar
-	quotaResetLabel  *widget.Label
-	googleQuotaLabel *widget.Label
+	quotaLabel        *widget.Label
+	quotaBar          *widget.ProgressBar
+	quotaResetLabel   *widget.Label
+	googleQuotaLabel  *widget.Label
+	quotaBreakdownBox *fyne.Container
 
 	activeBroadcastsBox   *fyne.Container
 	upcomingBroadcastsBox *fyne.Container
@@ -42,6 +44,7 @@ func newYouTubeInfoPage(
 	page.quotaBar = widget.NewProgressBar()
 	page.quotaResetLabel = widget.NewLabel("")
 	page.googleQuotaLabel = widget.NewLabel("")
+	page.quotaBreakdownBox = container.NewVBox()
 
 	page.activeBroadcastsBox = container.NewVBox()
 	page.upcomingBroadcastsBox = container.NewVBox()
@@ -62,6 +65,7 @@ func newYouTubeInfoPage(
 			page.quotaBar,
 			page.quotaResetLabel,
 			page.googleQuotaLabel,
+			page.quotaBreakdownBox,
 			widget.NewSeparator(),
 			widget.NewRichTextFromMarkdown("## Active Broadcasts"),
 			page.activeBroadcastsBox,
@@ -89,14 +93,15 @@ func (page *youTubeInfoPage) refresh(ctx context.Context) {
 	}
 
 	// Quota
+	usedPoints := info.QuotaUsage.UsedPoints.Load()
 	page.quotaLabel.SetText(fmt.Sprintf(
 		"Used: %d / %d points",
-		info.QuotaUsage.UsedPoints,
+		usedPoints,
 		info.QuotaUsage.DailyLimit,
 	))
 	if info.QuotaUsage.DailyLimit > 0 {
 		page.quotaBar.SetValue(
-			float64(info.QuotaUsage.UsedPoints) / float64(info.QuotaUsage.DailyLimit),
+			float64(usedPoints) / float64(info.QuotaUsage.DailyLimit),
 		)
 	}
 	if !info.QuotaUsage.ResetTime.IsZero() {
@@ -120,6 +125,28 @@ func (page *youTubeInfoPage) refresh(ctx context.Context) {
 		page.googleQuotaLabel.Show()
 	} else {
 		page.googleQuotaLabel.Hide()
+	}
+
+	// Per-operation breakdown
+	page.quotaBreakdownBox.RemoveAll()
+	type opEntry struct {
+		Name   string
+		Points uint64
+	}
+	var ops []opEntry
+	info.QuotaUsage.PerOperationUsage.Range(func(key string, value uint64) bool {
+		ops = append(ops, opEntry{Name: key, Points: value})
+		return true
+	})
+	if len(ops) > 0 {
+		sort.Slice(ops, func(i, j int) bool {
+			return ops[i].Points > ops[j].Points
+		})
+		for _, op := range ops {
+			page.quotaBreakdownBox.Add(widget.NewLabel(
+				fmt.Sprintf("  %s: %d pts", op.Name, op.Points),
+			))
+		}
 	}
 
 	// Active broadcasts

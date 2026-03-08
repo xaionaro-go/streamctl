@@ -31,7 +31,7 @@ const (
 )
 
 type QuotaTracker interface {
-	ReportQuotaConsumption(ctx context.Context, points uint)
+	ReportQuotaConsumption(ctx context.Context, operationName string, points uint)
 	UsedQuotaPoints() uint64
 }
 
@@ -212,7 +212,7 @@ func (l *ChatListener) streamMessages(
 	logger.Infof(ctx, "gRPC stream opened successfully for liveChatId=%q", l.liveChatID)
 
 	if l.quotaTracker != nil {
-		l.quotaTracker.ReportQuotaConsumption(ctx, 1)
+		l.quotaTracker.ReportQuotaConsumption(ctx, "StreamList", 1)
 	}
 
 	streamStartedAt := time.Now()
