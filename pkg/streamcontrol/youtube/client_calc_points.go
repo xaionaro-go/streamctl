@@ -72,6 +72,17 @@ func (c *ClientCalcPoints) addUsedPointsIfNoError(
 	}
 }
 
+func (c *ClientCalcPoints) ReportQuotaConsumption(
+	ctx context.Context,
+	points uint,
+) {
+	c.addUsedPointsIfNoError(ctx, points, nil)
+}
+
+func (c *ClientCalcPoints) UsedQuotaPoints() uint64 {
+	return c.UsedPoints.Load()
+}
+
 func (c *ClientCalcPoints) Ping(ctx context.Context) (_err error) {
 	defer func() { c.addUsedPointsIfNoError(ctx, 1, _err) }()
 	return c.Client.Ping(ctx)
