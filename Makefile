@@ -29,7 +29,7 @@ endif
 GOPATH?=$(shell go env GOPATH)
 
 WINDOWS_CGO_FLAGS?=-I$(PWD)/3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/sdk/include
-WINDOWS_EXTLINKER_FLAGS?=-L$(PWD)/3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/sdk/lib -L$(PWD)/3rdparty/amd64/windows/ffmpeg-n7.0-21-gfb8f0ea7b3-win64-gpl-shared-7.0/lib
+WINDOWS_EXTLINKER_FLAGS?=-L$(PWD)/3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/sdk/lib -L$(PWD)/3rdparty/amd64/windows/ffmpeg-n7.1.3-43-g5a1f107b4c-win64-gpl-shared-7.1/lib
 WINDOWS_PKG_CONFIG_PATH?=$(PWD)/3rdparty/amd64/windows/vlc-$(WINDOWS_VLC_VERSION)/sdk/lib/pkgconfig
 
 GIT_COMMIT?=$(shell git rev-list -1 HEAD)
@@ -74,7 +74,7 @@ $(GOPATH)/bin/pkg-config-wrapper:
 3rdparty/amd64/windows/ready:
 	mkdir -p 3rdparty/amd64/windows
 	sh -c 'cd 3rdparty/amd64/windows && wget https://get.videolan.org/vlc/$(WINDOWS_VLC_VERSION)/win64/vlc-$(WINDOWS_VLC_VERSION)-win64.7z && 7z -y x vlc-$(WINDOWS_VLC_VERSION)-win64.7z && rm -f vlc-$(WINDOWS_VLC_VERSION)-win64.7z'
-	sh -c 'cd 3rdparty/amd64/windows && wget https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2024-04-30-12-51/ffmpeg-n7.0-21-gfb8f0ea7b3-win64-gpl-shared-7.0.zip && unzip -o ffmpeg-n7.0-21-gfb8f0ea7b3-win64-gpl-shared-7.0.zip && rm -f ffmpeg-n7.0-21-gfb8f0ea7b3-win64-gpl-shared-7.0.zip'
+	sh -c 'cd 3rdparty/amd64/windows && wget https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-03-08-13-02/ffmpeg-n7.1.3-43-g5a1f107b4c-win64-gpl-shared-7.1.zip && unzip -o ffmpeg-n7.1.3-43-g5a1f107b4c-win64-gpl-shared-7.1.zip && rm -f ffmpeg-n7.1.3-43-g5a1f107b4c-win64-gpl-shared-7.1.zip'
 	mkdir 3rdparty/amd64/windows/mpv
 	sh -c 'cd 3rdparty/amd64/windows/mpv && wget https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20260307/mpv-x86_64-20260307-git-f9190e5.7z && 7z -y x mpv-x86_64-20260307-git-f9190e5.7z && rm -f mpv-x86_64-20260307-git-f9190e5.7z'
 	touch 3rdparty/amd64/windows/ready
