@@ -25,7 +25,8 @@ func init() {
 	}
 }
 
-// see also: https://developers.google.com/youtube/v3/determine_quota_cost
+// ClientCalcPoints wraps a client with YouTube API quota tracking.
+// See also: https://developers.google.com/youtube/v3/determine_quota_cost
 type ClientCalcPoints struct {
 	Client          client
 	UsedPoints      atomic.Uint64
@@ -152,7 +153,7 @@ func (c *ClientCalcPoints) UpdateVideo(
 	video *youtube.Video,
 	parts []string,
 ) (_err error) {
-	defer func() { c.addUsedPointsIfNoError(ctx, 1, _err) }()
+	defer func() { c.addUsedPointsIfNoError(ctx, 50, _err) }()
 	return c.Client.UpdateVideo(ctx, video, parts)
 }
 
@@ -222,7 +223,7 @@ func (c *ClientCalcPoints) DeleteChatMessage(
 	ctx context.Context,
 	messageID string,
 ) (_err error) {
-	defer func() { c.addUsedPointsIfNoError(ctx, 1, _err) }()
+	defer func() { c.addUsedPointsIfNoError(ctx, 50, _err) }()
 	return c.Client.DeleteChatMessage(ctx, messageID)
 }
 

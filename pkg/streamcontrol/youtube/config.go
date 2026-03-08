@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
-	streamctl "github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	youtube "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
 )
 
@@ -34,7 +33,7 @@ func init() {
 	)
 }
 
-func InitConfig(cfg streamctl.Config) {
+func InitConfig(cfg streamcontrol.Config) {
 	youtube.InitConfig(cfg)
 }
 

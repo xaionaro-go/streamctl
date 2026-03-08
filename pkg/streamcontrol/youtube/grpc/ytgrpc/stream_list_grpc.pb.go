@@ -19,7 +19,7 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	V3DataLiveChatMessageService_StreamList_FullMethodName = "/youtube.v3.V3DataLiveChatMessageService/StreamList"
+	V3DataLiveChatMessageService_StreamList_FullMethodName = "/youtube.api.v3.V3DataLiveChatMessageService/StreamList"
 )
 
 // V3DataLiveChatMessageServiceClient is the client API for V3DataLiveChatMessageService service.
@@ -111,7 +111,7 @@ type V3DataLiveChatMessageService_StreamListServer = grpc.ServerStreamingServer[
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var V3DataLiveChatMessageService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "youtube.v3.V3DataLiveChatMessageService",
+	ServiceName: "youtube.api.v3.V3DataLiveChatMessageService",
 	HandlerType: (*V3DataLiveChatMessageServiceServer)(nil),
 	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{

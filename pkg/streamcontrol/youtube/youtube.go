@@ -26,6 +26,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/secret"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	yttypes "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
 	"github.com/xaionaro-go/timeapiio"
 	"github.com/xaionaro-go/xcontext"
 	"github.com/xaionaro-go/xsync"
@@ -50,13 +51,15 @@ type YouTube struct {
 	currentLiveBroadcastsLocker xsync.Mutex
 	currentLiveBroadcasts       []*youtube.LiveBroadcast
 
-	tokenSource oauth2.TokenSource
+	tokenSource   oauth2.TokenSource
 	chatListeners map[string]*chatListener
 
 	messagesOutChan chan streamcontrol.Event
 
 	plannedStreamsLocker xsync.Mutex
 	plannedStreams       map[streamcontrol.StreamID]*plannedStream
+
+	googleQuotaCache googleQuotaCache
 }
 
 type plannedStream struct {
@@ -90,7 +93,14 @@ func SetDebugUseMockClient(v bool) {
 
 var debugUseMockClient = false
 
-type chatListener = ChatListenerStream
+type chatListener = ChatListener
+
+type (
+	YouTubeInfo      = yttypes.YouTubeInfo
+	QuotaUsage       = yttypes.QuotaUsage
+	ChatListenerInfo = yttypes.ChatListenerInfo
+	BroadcastSummary = yttypes.BroadcastSummary
+)
 
 func New(
 	ctx context.Context,
@@ -123,6 +133,12 @@ func New(
 		return nil, fmt.Errorf("initialization failed: %w", err)
 	}
 
+	if cfg.QuotaUsedPoints > 0 && cfg.QuotaUsedDate == getQuotaCutoffDate(time.Now()) {
+		yt.YouTubeClient.UsedPoints.Store(cfg.QuotaUsedPoints)
+		yt.YouTubeClient.PreviousCheckAt = time.Now()
+		logger.Infof(ctx, "loaded persisted quota: %d points for %s", cfg.QuotaUsedPoints, cfg.QuotaUsedDate)
+	}
+
 	err = yt.YouTubeClient.Ping(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("connection verification failed: %w", err)
@@ -144,6 +160,8 @@ func New(
 						errmon.ObserveErrorCtx(ctx, err)
 					}
 				}
+
+				yt.persistQuota(ctx)
 			}
 		}
 	})
@@ -183,6 +201,26 @@ func (yt *YouTube) checkTokenNoLock(ctx context.Context) (_err error) {
 		err = yt.SaveConfigFunc(yt.Config)
 		logger.Debugf(ctx, "saved the new token token; %v", err)
 		return err
+	}
+}
+
+func (yt *YouTube) persistQuota(ctx context.Context) {
+	if yt.YouTubeClient == nil {
+		return
+	}
+
+	points := yt.YouTubeClient.UsedPoints.Load()
+	date := getQuotaCutoffDate(time.Now())
+
+	if yt.Config.QuotaUsedPoints == points && yt.Config.QuotaUsedDate == date {
+		return
+	}
+
+	yt.Config.QuotaUsedPoints = points
+	yt.Config.QuotaUsedDate = date
+
+	if err := yt.SaveConfigFunc(yt.Config); err != nil {
+		logger.Warnf(ctx, "unable to persist quota: %v", err)
 	}
 }
 
@@ -262,15 +300,20 @@ func (yt *YouTube) initNoLock(ctx context.Context) (_err error) {
 }
 
 func getAuthCfgBase(cfg AccountConfig) *oauth2.Config {
+	scopes := []string{
+		"https://www.googleapis.com/auth/youtube.force-ssl",
+		"https://www.googleapis.com/auth/youtube.upload",
+		"https://www.googleapis.com/auth/youtube",
+	}
+	if cfg.GCPProjectID != "" {
+		scopes = append(scopes, "https://www.googleapis.com/auth/monitoring.read")
+	}
+
 	return &oauth2.Config{
 		ClientID:     cfg.ClientID,
 		ClientSecret: cfg.ClientSecret.Get(),
 		Endpoint:     google.Endpoint,
-		Scopes: []string{
-			"https://www.googleapis.com/auth/youtube.force-ssl",
-			"https://www.googleapis.com/auth/youtube.upload",
-			"https://www.googleapis.com/auth/youtube",
-		},
+		Scopes:       scopes,
 	}
 }
 
@@ -974,7 +1017,7 @@ func (yt *YouTube) createSingleBroadcast(
 	profile StreamProfile,
 	broadcast *youtube.LiveBroadcast,
 	video *youtube.Video,
-	templateBroadcastID string,
+	_ string, // templateBroadcastID
 	highestStreamNum uint64,
 ) error {
 	now := time.Now().UTC()
@@ -1192,7 +1235,9 @@ func (yt *YouTube) startChatListener(
 	tokenSource := xsync.DoR1(ctx, &yt.locker, func() oauth2.TokenSource {
 		return yt.tokenSource
 	})
-	_chatListener, err := NewChatListenerStream(ctx, videoID, chatID, tokenSource)
+	_chatListener, err := NewChatListener(ctx, videoID, chatID, tokenSource, func(ctx context.Context, points uint) {
+		yt.YouTubeClient.addUsedPointsIfNoError(ctx, points, nil)
+	})
 	if err != nil {
 		return fmt.Errorf("unable to initialize the chat listener instance: %w", err)
 	}
@@ -1414,21 +1459,16 @@ func (yt *YouTube) GetStreamStatus(
 			}
 		}
 	}
+	for _, broadcast := range activeBroadcasts {
+		if yt.getChatListener(ctx, broadcast) != nil {
+			continue
+		}
+		err = yt.startChatListener(ctx, broadcast)
+		if err != nil {
+			logger.Errorf(ctx, "unable to start a chat listener for video '%s': %v", broadcast.Id, err)
+		}
+	}
 	yt.currentLiveBroadcastsLocker.Do(ctx, func() {
-		ids := map[string]struct{}{}
-		for _, broadcast := range yt.currentLiveBroadcasts {
-			ids[broadcast.Id] = struct{}{}
-		}
-
-		for _, newBroadcast := range activeBroadcasts {
-			if _, ok := ids[newBroadcast.Id]; ok {
-				continue
-			}
-			err = yt.startChatListener(ctx, newBroadcast)
-			if err != nil {
-				logger.Errorf(ctx, "unable to start a chat listener for video '%s': %v", newBroadcast.Id, err)
-			}
-		}
 		yt.currentLiveBroadcasts = activeBroadcasts
 	})
 
@@ -1866,4 +1906,83 @@ func (yt *YouTube) shoutoutWithoutSearch(
 		return fmt.Errorf("unable to send the message (case #1): %w", err)
 	}
 	return nil
+}
+
+func (yt *YouTube) TemplateBroadcastIDSet() map[string]struct{} {
+	ids := map[string]struct{}{}
+	for _, profiles := range yt.Config.StreamProfiles {
+		for _, profile := range profiles {
+			for _, bcID := range profile.TemplateBroadcastIDs {
+				ids[bcID] = struct{}{}
+			}
+		}
+	}
+	return ids
+}
+
+func (yt *YouTube) GetInfo(
+	ctx context.Context,
+) YouTubeInfo {
+	logger.Debugf(ctx, "GetInfo")
+	defer logger.Debugf(ctx, "/GetInfo")
+
+	var info YouTubeInfo
+
+	if yt.YouTubeClient != nil {
+		info.QuotaUsage.UsedPoints = yt.YouTubeClient.UsedPoints.Load()
+		info.QuotaUsage.DailyLimit = yttypes.YouTubeDailyQuotaLimit
+
+		now := time.Now()
+		tomorrowLA := now.In(tzLosAngeles).Truncate(24 * time.Hour).Add(24 * time.Hour)
+		info.QuotaUsage.ResetTime = tomorrowLA.UTC()
+	}
+
+	if yt.Config.GCPProjectID != "" && yt.tokenSource != nil {
+		if yt.googleQuotaCache.isExpired() {
+			usage, limit, err := fetchGoogleQuota(ctx, yt.Config.GCPProjectID, yt.tokenSource)
+			if err != nil {
+				logger.Warnf(ctx, "unable to fetch Google quota: %v", err)
+			} else {
+				yt.googleQuotaCache.set(usage, limit, time.Now())
+			}
+		}
+		if usage, limit, fetchedAt, ok := yt.googleQuotaCache.get(); ok {
+			info.QuotaUsage.GoogleReportedUsage = &usage
+			info.QuotaUsage.GoogleReportedLimit = &limit
+			info.QuotaUsage.GoogleReportedAt = &fetchedAt
+
+			info.QuotaUsage.DailyLimit = limit
+		}
+	}
+
+	yt.locker.Do(ctx, func() {
+		for videoID, listener := range yt.chatListeners {
+			info.ChatListeners = append(info.ChatListeners, ChatListenerInfo{
+				VideoID:  videoID,
+				ChatID:   listener.liveChatID,
+				IsActive: true,
+			})
+		}
+	})
+
+	yt.currentLiveBroadcastsLocker.Do(ctx, func() {
+		for _, bc := range yt.currentLiveBroadcasts {
+			summary := BroadcastSummary{
+				ID:     bc.Id,
+				Title:  bc.Snippet.Title,
+				Status: "active",
+			}
+			if bc.Snippet.ActualStartTime != "" {
+				if t, err := ParseTimestamp(bc.Snippet.ActualStartTime); err == nil {
+					summary.ActualStart = t
+				}
+			}
+			if bc.Statistics != nil {
+				summary.ViewerCount = bc.Statistics.ConcurrentViewers
+			}
+			info.ActiveBroadcasts = append(info.ActiveBroadcasts, summary)
+		}
+	})
+
+	return info
 }

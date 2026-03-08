@@ -1,3 +1,4 @@
+// Package goconv provides conversions between gRPC protobuf types and Go domain types.
 package goconv
 
 import (

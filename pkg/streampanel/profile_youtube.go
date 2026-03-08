@@ -46,6 +46,9 @@ func (ui *youtubeProfileUI) GetUserInfoItems(
 
 	clientIDField := newClientIDField(cfg.ClientID)
 	clientSecretField := newClientSecretField(cfg.ClientSecret.Get())
+	gcpProjectIDField := widget.NewEntry()
+	gcpProjectIDField.SetPlaceHolder("GCP project ID (optional, for quota monitoring)")
+	gcpProjectIDField.SetText(cfg.GCPProjectID)
 	instructionText := widget.NewRichText(
 		&widget.TextSegment{Text: "Go to\n", Style: widget.RichTextStyle{Inline: true}},
 		&widget.HyperlinkSegment{
@@ -77,6 +80,8 @@ func (ui *youtubeProfileUI) GetUserInfoItems(
 		clientIDField,
 		widget.NewLabel("YouTube client secret:"),
 		clientSecretField,
+		widget.NewLabel("GCP Project ID:"),
+		gcpProjectIDField,
 		instructionText,
 		activeStreamsContainer,
 	}
@@ -84,6 +89,7 @@ func (ui *youtubeProfileUI) GetUserInfoItems(
 	saveFunc := func() ([]byte, error) {
 		cfg.ClientID = clientIDField.Text
 		cfg.ClientSecret.Set(clientSecretField.Text)
+		cfg.GCPProjectID = gcpProjectIDField.Text
 		if allowlistedStreamIDs != nil {
 			cfg.AllowlistedStreamIDs = allowlistedStreamIDs
 		}

@@ -11,6 +11,7 @@ import (
 	"github.com/xaionaro-go/player/pkg/player"
 	p2ptypes "github.com/xaionaro-go/streamctl/pkg/p2p/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	yttypes "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/cache"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config/action"
@@ -353,6 +354,8 @@ type StreamD interface {
 	) (net.Conn, error)
 
 	LLMGenerate(ctx context.Context, prompt string) (string, error)
+
+	GetYouTubeInfo(ctx context.Context) (*yttypes.YouTubeInfo, error)
 }
 
 type StreamPlayer = sstypes.StreamPlayer

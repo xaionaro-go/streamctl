@@ -331,7 +331,7 @@ func (p *Panel) openSettingsWindowNoLock(
 		}
 	}
 
-	chatGPTAPIKeyEntry := widget.NewEntry()
+	chatGPTAPIKeyEntry := widget.NewPasswordEntry()
 	chatGPTAPIKeyEntry.OnSubmitted = func(s string) {
 		if streamDCfg.LLM.Endpoints == nil {
 			streamDCfg.LLM.Endpoints = make(streamdconfig.LLMEndpoints)

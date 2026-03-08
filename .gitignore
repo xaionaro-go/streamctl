@@ -21,3 +21,4 @@ priv
 /go.work*
 /*.txt
 /*.log
+/docs

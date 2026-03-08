@@ -30,4 +30,5 @@ const (
 	PageMonitor      = Page("Monitor (local)")
 	PageShoutout     = Page("Shoutout")
 	PageRaid         = Page("Raid")
+	PageYouTube      = Page("YouTube")
 )

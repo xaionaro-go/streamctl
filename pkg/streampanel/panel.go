@@ -1471,6 +1471,7 @@ func (p *Panel) initMainWindow(
 
 	shoutoutPage := newShoutoutPage(ctx, p)
 	raidPage := newRaidPage(ctx, p)
+	youTubeInfoPage := newYouTubeInfoPage(ctx, p)
 
 	var cancelPage context.CancelFunc
 	setPage := func(page consts.Page) {
@@ -1496,6 +1497,7 @@ func (p *Panel) initMainWindow(
 			monitorPage.Hide()
 			shoutoutPage.Hide()
 			raidPage.Hide()
+			youTubeInfoPage.Hide()
 			profileControl.Show()
 			controlPage.Show()
 		case consts.PageMoreControl:
@@ -1509,6 +1511,7 @@ func (p *Panel) initMainWindow(
 			monitorPage.Hide()
 			shoutoutPage.Hide()
 			raidPage.Hide()
+			youTubeInfoPage.Hide()
 			moreControlPage.Show()
 			timersUI.StartRefreshingFromRemote(ctx)
 		case consts.PageChat:
@@ -1522,6 +1525,7 @@ func (p *Panel) initMainWindow(
 			monitorPage.Hide()
 			shoutoutPage.Hide()
 			raidPage.Hide()
+			youTubeInfoPage.Hide()
 			chatPage.Show()
 		case consts.PageDashboard:
 			profileControl.Hide()
@@ -1536,6 +1540,7 @@ func (p *Panel) initMainWindow(
 			monitorPage.Hide()
 			shoutoutPage.Hide()
 			raidPage.Hide()
+			youTubeInfoPage.Hide()
 			dashboardPage.Show()
 			p.focusDashboardWindow(ctx)
 		case consts.PageOBS:
@@ -1550,6 +1555,7 @@ func (p *Panel) initMainWindow(
 			monitorPage.Hide()
 			shoutoutPage.Hide()
 			raidPage.Hide()
+			youTubeInfoPage.Hide()
 			obsPage.Show()
 		case consts.PageRestream:
 			controlPage.Hide()
@@ -1563,6 +1569,7 @@ func (p *Panel) initMainWindow(
 			monitorPage.Hide()
 			shoutoutPage.Hide()
 			raidPage.Hide()
+			youTubeInfoPage.Hide()
 			restreamPage.Show()
 			p.startRestreamPage(pageCtx)
 		case consts.PageSelectServer:
@@ -1577,6 +1584,7 @@ func (p *Panel) initMainWindow(
 			monitorPage.Hide()
 			shoutoutPage.Hide()
 			raidPage.Hide()
+			youTubeInfoPage.Hide()
 			selectServerPage.Show()
 		case consts.PageMonitor:
 			profileControl.Hide()
@@ -1590,6 +1598,7 @@ func (p *Panel) initMainWindow(
 			selectServerPage.Hide()
 			shoutoutPage.Hide()
 			raidPage.Hide()
+			youTubeInfoPage.Hide()
 			monitorPage.Show()
 			p.startMonitorPage(pageCtx)
 		case consts.PageShoutout:
@@ -1604,6 +1613,7 @@ func (p *Panel) initMainWindow(
 			monitorPage.Hide()
 			profileControl.Hide()
 			raidPage.Hide()
+			youTubeInfoPage.Hide()
 			shoutoutPage.Show()
 		case consts.PageRaid:
 			obsPage.Hide()
@@ -1617,7 +1627,23 @@ func (p *Panel) initMainWindow(
 			monitorPage.Hide()
 			profileControl.Hide()
 			shoutoutPage.Hide()
+			youTubeInfoPage.Hide()
 			raidPage.Show()
+		case consts.PageYouTube:
+			obsPage.Hide()
+			restreamPage.Hide()
+			controlPage.Hide()
+			moreControlPage.Hide()
+			chatPage.Hide()
+			dashboardPage.Hide()
+			selectServerPage.Hide()
+			timersUI.StopRefreshingFromRemote(ctx)
+			monitorPage.Hide()
+			profileControl.Hide()
+			shoutoutPage.Hide()
+			raidPage.Hide()
+			youTubeInfoPage.Show()
+			youTubeInfoPage.StartRefresh(pageCtx)
 		}
 	}
 
@@ -1632,6 +1658,7 @@ func (p *Panel) initMainWindow(
 			string(consts.PageMonitor),
 			string(consts.PageShoutout),
 			string(consts.PageRaid),
+			string(consts.PageYouTube),
 		},
 		func(page string) {
 			setPage(consts.Page(page))
@@ -1666,6 +1693,7 @@ func (p *Panel) initMainWindow(
 			monitorPage,
 			shoutoutPage.CanvasObject(),
 			raidPage.CanvasObject(),
+			youTubeInfoPage.CanvasObject(),
 		),
 	))
 

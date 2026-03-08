@@ -28,6 +28,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
+	yttypes "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/cache"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
@@ -2132,4 +2133,56 @@ func (p *StreamD) RaidTo(
 		return fmt.Errorf("unable to get a stream controller: %w", err)
 	}
 	return ctrl.RaidTo(ctx, streamcontrol.DefaultStreamID, userID)
+}
+
+func (d *StreamD) GetYouTubeInfo(
+	ctx context.Context,
+) (_ret *yttypes.YouTubeInfo, _err error) {
+	logger.Debugf(ctx, "GetYouTubeInfo")
+	defer func() { logger.Debugf(ctx, "/GetYouTubeInfo: %v", _err) }()
+
+	_, ctrl, err := d.streamController(ctx, youtube.ID)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get YouTube controller: %w", err)
+	}
+
+	yt, ok := ctrl.GetImplementation().(*youtube.YouTube)
+	if !ok {
+		return nil, fmt.Errorf("unexpected YouTube controller type: %T", ctrl.GetImplementation())
+	}
+
+	info := yt.GetInfo(ctx)
+
+	templateBroadcastIDs := yt.TemplateBroadcastIDSet()
+
+	status, err := d.GetStreamStatus(ctx, streamcontrol.StreamIDFullyQualified{
+		AccountIDFullyQualified: streamcontrol.AccountIDFullyQualified{
+			PlatformID: youtube.ID,
+		},
+	})
+	if err == nil && status != nil {
+		data := youtube.GetStreamStatusCustomData(status)
+		for _, bc := range data.UpcomingBroadcasts {
+			if _, isTemplate := templateBroadcastIDs[bc.Id]; isTemplate {
+				continue
+			}
+			summary := yttypes.BroadcastSummary{
+				ID:     bc.Id,
+				Title:  bc.Snippet.Title,
+				Status: "upcoming",
+			}
+			if bc.Snippet.ScheduledStartTime != "" {
+				if t, err := youtube.ParseTimestamp(bc.Snippet.ScheduledStartTime); err == nil {
+					summary.ScheduledStart = t
+				}
+			}
+			info.UpcomingBroadcasts = append(info.UpcomingBroadcasts, summary)
+		}
+
+		if status.ViewersCount != nil && len(info.ActiveBroadcasts) == 1 {
+			info.ActiveBroadcasts[0].ViewerCount = uint64(*status.ViewersCount)
+		}
+	}
+
+	return &info, nil
 }

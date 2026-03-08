@@ -30,6 +30,7 @@ import (
 	p2ptypes "github.com/xaionaro-go/streamctl/pkg/p2p/types"
 	"github.com/xaionaro-go/streamctl/pkg/secret"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	yttypes "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	streamdconfig "github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config/event"
@@ -3016,4 +3017,73 @@ func (c *Client) LLMGenerate(
 	}
 
 	return resp.GetResponse(), nil
+}
+
+func (c *Client) GetYouTubeInfo(
+	ctx context.Context,
+) (*yttypes.YouTubeInfo, error) {
+	resp, err := withStreamDClient(ctx, c, func(
+		ctx context.Context,
+		client streamd_grpc.StreamDClient,
+		conn io.Closer,
+	) (*streamd_grpc.GetYouTubeInfoReply, error) {
+		return callWrapper(
+			ctx,
+			c,
+			client.GetYouTubeInfo,
+			&streamd_grpc.GetYouTubeInfoRequest{},
+		)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("unable to get YouTube info: %w", err)
+	}
+
+	info := &yttypes.YouTubeInfo{}
+
+	if qu := resp.GetQuotaUsage(); qu != nil {
+		info.QuotaUsage = yttypes.QuotaUsage{
+			UsedPoints: qu.UsedPoints,
+			DailyLimit: qu.DailyLimit,
+			ResetTime:  time.Unix(qu.ResetTimeUnix, 0),
+		}
+		if qu.GoogleReportedUsage != nil {
+			info.QuotaUsage.GoogleReportedUsage = qu.GoogleReportedUsage
+		}
+		if qu.GoogleReportedLimit != nil {
+			info.QuotaUsage.GoogleReportedLimit = qu.GoogleReportedLimit
+		}
+		if qu.GoogleReportedAtUnix != nil {
+			t := time.Unix(*qu.GoogleReportedAtUnix, 0)
+			info.QuotaUsage.GoogleReportedAt = &t
+		}
+	}
+
+	for _, cl := range resp.GetChatListeners() {
+		info.ChatListeners = append(info.ChatListeners, yttypes.ChatListenerInfo{
+			VideoID:  cl.VideoId,
+			ChatID:   cl.ChatId,
+			IsActive: cl.IsActive,
+		})
+	}
+
+	for _, bc := range resp.GetActiveBroadcasts() {
+		info.ActiveBroadcasts = append(info.ActiveBroadcasts, yttypes.BroadcastSummary{
+			ID:          bc.Id,
+			Title:       bc.Title,
+			Status:      bc.Status,
+			ActualStart: time.Unix(bc.ActualStartUnix, 0),
+			ViewerCount: bc.ViewerCount,
+		})
+	}
+
+	for _, bc := range resp.GetUpcomingBroadcasts() {
+		info.UpcomingBroadcasts = append(info.UpcomingBroadcasts, yttypes.BroadcastSummary{
+			ID:             bc.Id,
+			Title:          bc.Title,
+			Status:         bc.Status,
+			ScheduledStart: time.Unix(bc.ScheduledStartUnix, 0),
+		})
+	}
+
+	return info, nil
 }

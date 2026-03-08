@@ -2152,3 +2152,60 @@ func (grpc *GRPCServer) LLMGenerate(
 		Response: response,
 	}, nil
 }
+
+func (grpc *GRPCServer) GetYouTubeInfo(
+	ctx context.Context,
+	req *streamd_grpc.GetYouTubeInfoRequest,
+) (*streamd_grpc.GetYouTubeInfoReply, error) {
+	info, err := grpc.StreamD.GetYouTubeInfo(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get YouTube info: %w", err)
+	}
+
+	reply := &streamd_grpc.GetYouTubeInfoReply{}
+
+	reply.QuotaUsage = &streamd_grpc.YouTubeQuotaUsage{
+		UsedPoints:    info.QuotaUsage.UsedPoints,
+		DailyLimit:    info.QuotaUsage.DailyLimit,
+		ResetTimeUnix: info.QuotaUsage.ResetTime.Unix(),
+	}
+	if info.QuotaUsage.GoogleReportedUsage != nil {
+		reply.QuotaUsage.GoogleReportedUsage = info.QuotaUsage.GoogleReportedUsage
+	}
+	if info.QuotaUsage.GoogleReportedLimit != nil {
+		reply.QuotaUsage.GoogleReportedLimit = info.QuotaUsage.GoogleReportedLimit
+	}
+	if info.QuotaUsage.GoogleReportedAt != nil {
+		unix := info.QuotaUsage.GoogleReportedAt.Unix()
+		reply.QuotaUsage.GoogleReportedAtUnix = &unix
+	}
+
+	for _, cl := range info.ChatListeners {
+		reply.ChatListeners = append(reply.ChatListeners, &streamd_grpc.YouTubeChatListenerInfo{
+			VideoId:  cl.VideoID,
+			ChatId:   cl.ChatID,
+			IsActive: cl.IsActive,
+		})
+	}
+
+	for _, bc := range info.ActiveBroadcasts {
+		reply.ActiveBroadcasts = append(reply.ActiveBroadcasts, &streamd_grpc.YouTubeBroadcastSummary{
+			Id:              bc.ID,
+			Title:           bc.Title,
+			Status:          bc.Status,
+			ActualStartUnix: bc.ActualStart.Unix(),
+			ViewerCount:     bc.ViewerCount,
+		})
+	}
+
+	for _, bc := range info.UpcomingBroadcasts {
+		reply.UpcomingBroadcasts = append(reply.UpcomingBroadcasts, &streamd_grpc.YouTubeBroadcastSummary{
+			Id:                 bc.ID,
+			Title:              bc.Title,
+			Status:             bc.Status,
+			ScheduledStartUnix: bc.ScheduledStart.Unix(),
+		})
+	}
+
+	return reply, nil
+}

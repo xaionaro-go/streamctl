@@ -109,6 +109,8 @@ service StreamD {
   rpc GetPeerIDs(GetPeerIDsRequest) returns (GetPeerIDsReply) {}
 
   rpc LLMGenerate(LLMGenerateRequest) returns (LLMGenerateReply) {}
+
+  rpc GetYouTubeInfo(GetYouTubeInfoRequest) returns (GetYouTubeInfoReply) {}
 }
 
 message PingRequest {
@@ -932,4 +934,33 @@ message GetStreamSinkConfigRequest {
 
 message GetStreamSinkConfigReply {
   StreamSinkConfig config = 1;
+}
+
+message GetYouTubeInfoRequest {}
+message GetYouTubeInfoReply {
+  YouTubeQuotaUsage quota_usage = 1;
+  repeated YouTubeChatListenerInfo chat_listeners = 2;
+  repeated YouTubeBroadcastSummary active_broadcasts = 3;
+  repeated YouTubeBroadcastSummary upcoming_broadcasts = 4;
+}
+message YouTubeQuotaUsage {
+  uint64 used_points = 1;
+  uint64 daily_limit = 2;
+  int64 reset_time_unix = 3;
+  optional uint64 google_reported_usage = 4;
+  optional uint64 google_reported_limit = 5;
+  optional int64 google_reported_at_unix = 6;
+}
+message YouTubeChatListenerInfo {
+  string video_id = 1;
+  string chat_id = 2;
+  bool is_active = 3;
+}
+message YouTubeBroadcastSummary {
+  string id = 1;
+  string title = 2;
+  string status = 3;
+  int64 scheduled_start_unix = 4;
+  int64 actual_start_unix = 5;
+  uint64 viewer_count = 6;
 }

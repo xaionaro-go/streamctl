@@ -280,6 +280,7 @@ require (
 )
 
 require (
+	cloud.google.com/go/monitoring v1.24.3
 	fyne.io/fyne/v2 v2.7.2
 	github.com/AgustinSRG/go-child-process-manager v1.0.1
 	github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802
@@ -373,6 +374,9 @@ require (
 	github.com/xaionaro-go/rpn v0.0.0-20250818130635-1419b5218722 // indirect
 	github.com/xaionaro-go/tcp v0.0.0-20260103194940-f10157ebd88d // indirect
 	github.com/xaionaro-go/typing v0.0.0-20221123235249-2229101d38ba // indirect
+	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.61.0 // indirect
+	google.golang.org/genproto v0.0.0-20251202230838-ff82c1b0f217 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	tailscale.com v1.86.5 // indirect
 )
 
