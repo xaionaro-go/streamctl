@@ -5,8 +5,8 @@ import (
 )
 
 type ChatUserID struct {
-	Platform streamcontrol.PlatformName `yaml:"platform"`
-	User     streamcontrol.UserID       `yaml:"user"`
+	Platform streamcontrol.PlatformID `yaml:"platform"`
+	User     streamcontrol.UserID     `yaml:"user"`
 }
 
 func (c ChatUserID) String() string {

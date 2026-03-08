@@ -15,7 +15,7 @@ import (
 
 func StreamServerTypeGo2GRPC(t api.StreamServerType) (streamd_grpc.StreamServerType, error) {
 	switch t {
-	case streamtypes.ServerTypeUndefined:
+	case streamtypes.UndefinedServerType:
 		return streamd_grpc.StreamServerType_Undefined, nil
 	case streamtypes.ServerTypeRTMP:
 		return streamd_grpc.StreamServerType_RTMP, nil
@@ -30,7 +30,7 @@ func StreamServerTypeGo2GRPC(t api.StreamServerType) (streamd_grpc.StreamServerT
 func StreamServerTypeGRPC2Go(t streamd_grpc.StreamServerType) (api.StreamServerType, error) {
 	switch t {
 	case streamd_grpc.StreamServerType_Undefined:
-		return streamtypes.ServerTypeUndefined, nil
+		return streamtypes.UndefinedServerType, nil
 	case streamd_grpc.StreamServerType_RTMP:
 		return streamtypes.ServerTypeRTMP, nil
 	case streamd_grpc.StreamServerType_RTSP:
@@ -38,7 +38,7 @@ func StreamServerTypeGRPC2Go(t streamd_grpc.StreamServerType) (api.StreamServerT
 	case streamd_grpc.StreamServerType_SRT:
 		return streamtypes.ServerTypeSRT, nil
 	}
-	return streamtypes.ServerTypeUndefined, fmt.Errorf("unexpected value: %v", t)
+	return streamtypes.UndefinedServerType, fmt.Errorf("unexpected value: %v", t)
 }
 
 func StreamServerConfigGo2GRPC(

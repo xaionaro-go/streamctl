@@ -15,7 +15,7 @@ import (
 type DashboardSourceImageType string
 
 const (
-	DashboardSourceImageTypeUndefined        = DashboardSourceImageType("")
+	UndefinedDashboardSourceImageType        = DashboardSourceImageType("")
 	DashboardSourceImageTypeDummy            = DashboardSourceImageType("dummy")
 	DashboardSourceImageTypeStreamScreenshot = DashboardSourceImageType("stream_screenshot")
 	DashboardSourceImageTypeOBSScreenshot    = DashboardSourceImageType("obs_screenshot")
@@ -40,7 +40,7 @@ func (mst DashboardSourceImageType) New() SourceImage {
 type ImageFormat string
 
 const (
-	ImageFormatUndefined = ImageFormat("")
+	UndefinedImageFormat = ImageFormat("")
 	ImageFormatPNG       = ImageFormat("png")
 	ImageFormatJPEG      = ImageFormat("jpeg")
 	ImageFormatWebP      = ImageFormat("webp")
@@ -79,7 +79,7 @@ var _ SourceImage = (*DashboardSourceImageDummy)(nil)
 type ImageDataProvider interface {
 	GetOBSServer(context.Context) (obs_grpc.OBSServer, error)
 	GetOBSState(context.Context) (*streamtypes.OBSState, error)
-	GetCurrentStreamFrame(context.Context, streamtypes.StreamID) ([]byte, recoder.VideoCodec, error)
+	GetCurrentStreamFrame(context.Context, streamtypes.StreamSourceID) ([]byte, recoder.VideoCodec, error)
 }
 
 type SourceImage interface {

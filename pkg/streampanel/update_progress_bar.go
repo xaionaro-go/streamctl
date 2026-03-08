@@ -2,6 +2,7 @@ package streampanel
 
 import (
 	"context"
+	"github.com/xaionaro-go/streamctl/pkg/clock"
 	"sync"
 	"time"
 
@@ -48,7 +49,7 @@ func (u *UpdateProgressBar) SetProgress(progress float64) {
 	if progress >= 1.0 {
 		u.CloseOnce.Do(func() {
 			u.Label.SetText("Finished, restarting the application...")
-			time.Sleep(time.Second)
+			clock.Get().Sleep(time.Second)
 			u.Window.Close()
 		})
 	}

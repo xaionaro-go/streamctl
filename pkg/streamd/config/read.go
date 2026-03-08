@@ -2,7 +2,6 @@ package config
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"io"
 	"runtime/debug"
@@ -12,10 +11,6 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
-	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
-	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
-	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
-	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 )
 
 var _ io.Reader = (*Config)(nil)
@@ -70,46 +65,6 @@ func (cfg *Config) UnmarshalYAML(b []byte) (_err error) {
 	}
 	if cfg.Dashboard.Elements == nil {
 		cfg.Dashboard.Elements = make(map[string]DashboardElementConfig)
-	}
-
-	if cfg.Backends[obs.ID] != nil {
-		err = streamcontrol.ConvertStreamProfiles[obs.StreamProfile](
-			context.Background(),
-			cfg.Backends[obs.ID].StreamProfiles,
-		)
-		if err != nil {
-			return fmt.Errorf("unable to convert stream profiles of OBS: %w", err)
-		}
-	}
-
-	if cfg.Backends[twitch.ID] != nil {
-		err = streamcontrol.ConvertStreamProfiles[twitch.StreamProfile](
-			context.Background(),
-			cfg.Backends[twitch.ID].StreamProfiles,
-		)
-		if err != nil {
-			return fmt.Errorf("unable to convert stream profiles of twitch: %w", err)
-		}
-	}
-
-	if cfg.Backends[kick.ID] != nil {
-		err = streamcontrol.ConvertStreamProfiles[kick.StreamProfile](
-			context.Background(),
-			cfg.Backends[kick.ID].StreamProfiles,
-		)
-		if err != nil {
-			return fmt.Errorf("unable to convert stream profiles of kick: %w", err)
-		}
-	}
-
-	if cfg.Backends[youtube.ID] != nil {
-		err = streamcontrol.ConvertStreamProfiles[youtube.StreamProfile](
-			context.Background(),
-			cfg.Backends[youtube.ID].StreamProfiles,
-		)
-		if err != nil {
-			return fmt.Errorf("unable to convert stream profiles of youtube: %w", err)
-		}
 	}
 
 	return nil

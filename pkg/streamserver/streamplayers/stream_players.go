@@ -107,7 +107,7 @@ func (s *StreamPlayers) SetupStreamPlayers(
 ) (_err error) {
 	defer func() { logger.Debugf(ctx, "setupStreamPlayers result: %v", _err) }()
 	return xsync.DoR1(ctx, &s.Mutex, func() error {
-		var streamCfg map[types.StreamID]*types.StreamConfig
+		var streamCfg map[types.StreamSourceID]*types.StreamConfig
 		s.WithConfig(ctx, func(ctx context.Context, cfg *types.Config) {
 			streamCfg = copyMapUnref(cfg.Streams)
 		})
@@ -118,22 +118,22 @@ func (s *StreamPlayers) SetupStreamPlayers(
 func setupStreamPlayers(
 	ctx context.Context,
 	s *StreamPlayers,
-	streamCfg map[types.StreamID]*types.StreamConfig,
+	streamCfg map[types.StreamSourceID]*types.StreamConfig,
 	opts ...SetupOption,
 ) error {
 	setupCfg := SetupOptions(opts).Config()
 
-	var streamIDsToDelete []types.StreamID
+	var streamIDsToDelete []types.StreamSourceID
 
-	curPlayers := map[types.StreamID]*streamplayer.StreamPlayerHandler{}
+	curPlayers := map[types.StreamSourceID]*streamplayer.StreamPlayerHandler{}
 	s.StreamPlayers.StreamPlayersLocker.Do(ctx, func() {
 		for _, player := range s.StreamPlayers.StreamPlayers {
-			streamCfg, ok := streamCfg[types.StreamID(player.StreamID)]
+			streamCfg, ok := streamCfg[types.StreamSourceID(player.StreamSourceID)]
 			if !ok || streamCfg.Player == nil || streamCfg.Player.Disabled {
-				streamIDsToDelete = append(streamIDsToDelete, player.StreamID)
+				streamIDsToDelete = append(streamIDsToDelete, player.StreamSourceID)
 				continue
 			}
-			curPlayers[player.StreamID] = player
+			curPlayers[player.StreamSourceID] = player
 		}
 	})
 
@@ -141,24 +141,24 @@ func setupStreamPlayers(
 
 	logger.Debugf(ctx, "streamIDsToDelete == %#+v", streamIDsToDelete)
 
-	for _, streamID := range streamIDsToDelete {
-		err := s.StreamPlayers.Remove(ctx, streamID)
+	for _, streamSourceID := range streamIDsToDelete {
+		err := s.StreamPlayers.Remove(ctx, streamSourceID)
 		if err != nil {
-			err = fmt.Errorf("unable to remove stream '%s': %w", streamID, err)
+			err = fmt.Errorf("unable to remove stream '%s': %w", streamSourceID, err)
 			logger.Warnf(ctx, "%s", err)
 			result = multierror.Append(result, err)
 		} else {
-			logger.Infof(ctx, "stopped the player for stream '%s'", streamID)
+			logger.Infof(ctx, "stopped the player for stream '%s'", streamSourceID)
 		}
 	}
 
-	for streamID, streamCfg := range streamCfg {
+	for streamSourceID, streamCfg := range streamCfg {
 		playerCfg := streamCfg.Player
 		if playerCfg == nil || playerCfg.Disabled {
 			continue
 		}
 
-		if _, ok := curPlayers[streamID]; ok {
+		if _, ok := curPlayers[streamSourceID]; ok {
 			continue
 		}
 
@@ -168,7 +168,7 @@ func setupStreamPlayers(
 		}
 		ssOpts = append(ssOpts, sptypes.OptionGetRestartChanFunc(func() <-chan struct{} {
 			logger.Debugf(ctx, "started to wait for a publisher (for a restart)")
-			pubCh, err := s.WaitPublisherChan(ctx, streamID, true)
+			pubCh, err := s.WaitPublisherChan(ctx, streamSourceID, true)
 			if err != nil {
 				logger.Errorf(ctx, "unable to get a WaitPublisherChan: %v", err)
 				return nil
@@ -188,17 +188,17 @@ func setupStreamPlayers(
 		}))
 		_, err := s.StreamPlayers.Create(
 			xcontext.DetachDone(ctx),
-			streamID,
+			streamSourceID,
 			playerCfg.Player,
 			ssOpts...,
 		)
 		if err != nil {
-			err = fmt.Errorf("unable to create a stream player for stream '%s': %w", streamID, err)
+			err = fmt.Errorf("unable to create a stream player for stream '%s': %w", streamSourceID, err)
 			logger.Warnf(ctx, "%s", err)
 			result = multierror.Append(result, err)
 			continue
 		} else {
-			logger.Infof(ctx, "started a player for stream '%s'", streamID)
+			logger.Infof(ctx, "started a player for stream '%s'", streamSourceID)
 		}
 	}
 
@@ -207,25 +207,25 @@ func setupStreamPlayers(
 
 func (s *StreamPlayers) GetStreamPlayer(
 	ctx context.Context,
-	streamID types.StreamID,
+	streamSourceID types.StreamSourceID,
 ) (*types.StreamPlayer, error) {
 	var (
 		streamCfg *types.StreamConfig
 		ok        bool
 	)
 	s.WithConfig(ctx, func(ctx context.Context, cfg *types.Config) {
-		streamCfg, ok = cfg.Streams[streamID]
+		streamCfg, ok = cfg.Streams[streamSourceID]
 		streamCfg = copyAndPtr(streamCfg)
 	})
 	if !ok {
-		return nil, fmt.Errorf("no stream '%s'", streamID)
+		return nil, fmt.Errorf("no stream '%s'", streamSourceID)
 	}
 	playerCfg := streamCfg.Player
 	if playerCfg == nil {
-		return nil, fmt.Errorf("no stream player defined for '%s'", streamID)
+		return nil, fmt.Errorf("no stream player defined for '%s'", streamSourceID)
 	}
 	return &api.StreamPlayer{
-		StreamID:             streamID,
+		StreamSourceID:       streamSourceID,
 		PlayerType:           playerCfg.Player,
 		Disabled:             playerCfg.Disabled,
 		StreamPlaybackConfig: playerCfg.StreamPlayback,
@@ -258,21 +258,21 @@ func (s *StreamPlayers) ListStreamPlayers(
 			err = fmt.Errorf("s.Config.Streams == nil")
 			return
 		}
-		for streamID, streamCfg := range cfg.Streams {
+		for streamSourceID, streamCfg := range cfg.Streams {
 			playerCfg := streamCfg.Player
 			if playerCfg == nil {
 				continue
 			}
 
 			result = append(result, api.StreamPlayer{
-				StreamID:             streamID,
+				StreamSourceID:       streamSourceID,
 				PlayerType:           playerCfg.Player,
 				Disabled:             playerCfg.Disabled,
 				StreamPlaybackConfig: playerCfg.StreamPlayback,
 			})
 		}
 		sort.Slice(result, func(i, j int) bool {
-			return result[i].StreamID < result[j].StreamID
+			return result[i].StreamSourceID < result[j].StreamSourceID
 		})
 	})
 	return result, err
@@ -280,7 +280,7 @@ func (s *StreamPlayers) ListStreamPlayers(
 
 func (s *StreamPlayers) AddStreamPlayer(
 	ctx context.Context,
-	streamID types.StreamID,
+	streamSourceID types.StreamSourceID,
 	playerType player.Backend,
 	disabled bool,
 	streamPlaybackConfig sptypes.Config,
@@ -288,7 +288,7 @@ func (s *StreamPlayers) AddStreamPlayer(
 ) error {
 	return s.setStreamPlayer(
 		ctx,
-		streamID,
+		streamSourceID,
 		playerType,
 		disabled,
 		streamPlaybackConfig,
@@ -298,25 +298,25 @@ func (s *StreamPlayers) AddStreamPlayer(
 
 func (s *StreamPlayers) GetActiveStreamPlayer(
 	ctx context.Context,
-	streamID types.StreamID,
+	streamSourceID types.StreamSourceID,
 ) (player.Player, error) {
-	p := s.StreamPlayers.Get(streamID)
+	p := s.StreamPlayers.Get(streamSourceID)
 	if p == nil {
-		return nil, fmt.Errorf("there is no player setup for '%s'", streamID)
+		return nil, fmt.Errorf("there is no player setup for '%s'", streamSourceID)
 	}
 	return p.Player, nil
 }
 
 func (s *StreamPlayers) RemoveStreamPlayer(
 	ctx context.Context,
-	streamID types.StreamID,
+	streamSourceID types.StreamSourceID,
 ) error {
 	var err error
 	s.WithConfig(ctx, func(ctx context.Context, cfg *types.Config) {
-		if _, ok := cfg.Streams[streamID]; !ok {
+		if _, ok := cfg.Streams[streamSourceID]; !ok {
 			return
 		}
-		cfg.Streams[streamID].Player = nil
+		cfg.Streams[streamSourceID].Player = nil
 
 		err = setupStreamPlayers(ctx, s, copyMapUnref(cfg.Streams))
 	})
@@ -325,7 +325,7 @@ func (s *StreamPlayers) RemoveStreamPlayer(
 
 func (s *StreamPlayers) UpdateStreamPlayer(
 	ctx context.Context,
-	streamID types.StreamID,
+	streamSourceID types.StreamSourceID,
 	playerType player.Backend,
 	disabled bool,
 	streamPlaybackConfig sptypes.Config,
@@ -333,7 +333,7 @@ func (s *StreamPlayers) UpdateStreamPlayer(
 ) error {
 	return s.setStreamPlayer(
 		ctx,
-		streamID,
+		streamSourceID,
 		playerType,
 		disabled,
 		streamPlaybackConfig,
@@ -343,7 +343,7 @@ func (s *StreamPlayers) UpdateStreamPlayer(
 
 func (s *StreamPlayers) setStreamPlayer(
 	ctx context.Context,
-	streamID streamtypes.StreamID,
+	streamSourceID streamtypes.StreamSourceID,
 	playerType player.Backend,
 	disabled bool,
 	streamPlaybackConfig sptypes.Config,
@@ -355,7 +355,7 @@ func (s *StreamPlayers) setStreamPlayer(
 
 	var err error
 	s.WithConfig(ctx, func(ctx context.Context, cfg *types.Config) {
-		cfg.Streams[streamID].Player = &types.PlayerConfig{
+		cfg.Streams[streamSourceID].Player = &types.PlayerConfig{
 			Player:         playerType,
 			Disabled:       disabled,
 			StreamPlayback: streamPlaybackConfig,
@@ -369,7 +369,7 @@ func (s *StreamPlayers) setStreamPlayer(
 			)
 		}
 
-		var streamCfg map[types.StreamID]*types.StreamConfig
+		var streamCfg map[types.StreamSourceID]*types.StreamConfig
 		s.WithConfig(ctx, func(ctx context.Context, cfg *types.Config) {
 			streamCfg = copyMapUnref(cfg.Streams)
 		})

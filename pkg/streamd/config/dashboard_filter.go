@@ -11,7 +11,7 @@ import (
 type DashboardFilterType string
 
 const (
-	DashboardFilterTypeUndefined = DashboardFilterType("")
+	UndefinedDashboardFilterType = DashboardFilterType("")
 	DashboardFilterTypeColor     = DashboardFilterType("color")
 )
 

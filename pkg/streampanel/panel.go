@@ -1,3 +1,6 @@
+// Package streampanel provides a Fyne-based graphical user interface for controlling
+// and monitoring live streams through the streamd daemon. This file contains the
+// main Panel struct and its initialization logic.
 package streampanel
 
 import (
@@ -6,9 +9,9 @@ import (
 	_ "embed"
 	"fmt"
 	"image"
-	"net/url"
 	"os/exec"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -30,7 +33,7 @@ import (
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/autoupdater"
-	"github.com/xaionaro-go/streamctl/pkg/buildvars"
+	"github.com/xaionaro-go/streamctl/pkg/clock"
 	"github.com/xaionaro-go/streamctl/pkg/command"
 	gconsts "github.com/xaionaro-go/streamctl/pkg/consts"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
@@ -63,7 +66,7 @@ type Panel struct {
 
 	OnInternallySubmittedOAuthCode func(
 		ctx context.Context,
-		platID streamcontrol.PlatformName,
+		platID streamcontrol.PlatformID,
 		code string,
 	) error
 
@@ -100,14 +103,14 @@ type Panel struct {
 		prevBytesIn  uint64
 		prevBytesOut uint64
 	}
-	streamStatus       map[streamcontrol.PlatformName]*streamStatus
+	streamStatus       map[streamcontrol.PlatformID]*streamStatus
 	streamStatusLocker xsync.Mutex
 
 	filterValue string
 
-	youtubeCheck *widget.Check
-	twitchCheck  *widget.Check
-	kickCheck    *widget.Check
+	streamsSelectButton *widget.Button
+	allStreams          []streamcontrol.StreamIDFullyQualified
+	selectedStreams     map[streamcontrol.StreamIDFullyQualified]bool
 
 	configPath        string
 	configCacheLocker xsync.Mutex
@@ -133,7 +136,7 @@ type Panel struct {
 
 	streamServersWidget *fyne.Container
 	streamsWidget       *fyne.Container
-	destinationsWidget  *fyne.Container
+	sinksWidget         *fyne.Container
 	restreamsWidget     *fyne.Container
 	playersWidget       *fyne.Container
 
@@ -170,8 +173,11 @@ type Panel struct {
 	monitorPage       *monitorPage
 	monitorPageLocker xsync.Mutex
 
+	restreamPageInitialized bool
+	restreamPageLocker      xsync.Mutex
+
 	capabilitiesCacheLocker sync.Mutex
-	capabilitiesCache       map[streamcontrol.PlatformName]map[streamcontrol.Capability]struct{}
+	capabilitiesCache       map[streamcontrol.PlatformID]map[streamcontrol.Capability]struct{}
 
 	MessagesHistoryLocker xsync.Gorex
 	MessagesHistory       []api.ChatMessage
@@ -185,6 +191,11 @@ type Panel struct {
 	lastOpenedBrowserURLLocker xsync.Mutex
 
 	backgroundRenderer *backgroundRenderer
+
+	broadcastIDCache struct {
+		ids       map[string]bool
+		updatedAt time.Time
+	}
 }
 
 func New(
@@ -208,7 +219,7 @@ func New(
 		Screenshoter:        screenshoter.New(),
 		imageLastDownloaded: map[consts.ImageID][]byte{},
 		imageLastParsed:     map[consts.ImageID]image.Image{},
-		streamStatus:        map[streamcontrol.PlatformName]*streamStatus{},
+		streamStatus:        map[streamcontrol.PlatformID]*streamStatus{},
 		previousNumBytes:    map[any][4]uint64{},
 		previousNumBytesTS:  map[any]time.Time{},
 		errorReports:        map[string]errorReport{},
@@ -216,7 +227,7 @@ func New(
 			PanicOnDeadlock: ptr(false),
 		},
 		permanentWindows:  map[uint64]windowDriver{},
-		capabilitiesCache: make(map[streamcontrol.PlatformName]map[streamcontrol.Capability]struct{}),
+		capabilitiesCache: make(map[streamcontrol.PlatformID]map[streamcontrol.Capability]struct{}),
 	}
 	return p, nil
 }
@@ -263,7 +274,11 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) (_err error) {
 		return fmt.Errorf("unable to initialize stream controller: %w", err)
 	}
 
-	p.app = fyneapp.New()
+	if p.Config.App != nil {
+		p.app = p.Config.App
+	} else {
+		p.app = fyneapp.New()
+	}
 	p.app.Settings().SetTheme(theme.DarkTheme())
 	p.app.Driver().SetDisableScreenBlanking(true)
 	logger.Tracef(ctx, "SetDisableScreenBlanking(true)")
@@ -284,20 +299,18 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) (_err error) {
 	loadingWindowText.Wrapping = fyne.TextWrapWord
 	loadingWindow.SetContent(loadingWindowText)
 	p.setStatusFunc = func(msg string) {
-		loadingWindowText.ParseMarkdown(fmt.Sprintf("# %s", msg))
+		p.app.Driver().DoFromGoroutine(func() {
+			loadingWindowText.ParseMarkdown(fmt.Sprintf("# %s", msg))
+		}, true)
 	}
 
 	closeLoadingWindow := func() {
 		logger.Tracef(ctx, "closing the loading window")
-		loadingWindow.Hide()
-		observability.Go(ctx, func(ctx context.Context) {
-			time.Sleep(10 * time.Millisecond)
+		p.app.Driver().DoFromGoroutine(func() {
 			loadingWindow.Hide()
-			time.Sleep(100 * time.Millisecond)
-			loadingWindow.Hide()
-			time.Sleep(time.Second)
-			loadingWindow.Close()
-		})
+		}, true)
+		// We don't call Close() here because it might cause races in some drivers
+		// and Hide() is enough for the loading window anyway.
 	}
 
 	observability.Go(ctx, func(ctx context.Context) {
@@ -316,18 +329,19 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) (_err error) {
 			closeLoadingWindow()
 			p.setStatusFunc = nil
 		} else {
-			defer loadingWindow.Close()
+			defer p.app.Driver().DoFromGoroutine(func() { loadingWindow.Close() }, true)
 			// TODO: delete this hardcoding of the port
 			defer closeLoadingWindow()
-			streamD := p.StreamD.(*streamd.StreamD)
-			streamD.AddOAuthListenPort(cfg.OAuth.ListenPorts.Twitch)
-			streamD.AddOAuthListenPort(cfg.OAuth.ListenPorts.Kick)
-			observability.Go(ctx, func(ctx context.Context) {
-				<-ctx.Done()
-				streamD.RemoveOAuthListenPort(cfg.OAuth.ListenPorts.Twitch)
-				streamD.RemoveOAuthListenPort(cfg.OAuth.ListenPorts.Kick)
-			})
-			logger.Tracef(ctx, "started oauth listener for the local streamd")
+			if streamD, ok := p.StreamD.(*streamd.StreamD); ok {
+				streamD.AddOAuthListenPort(cfg.OAuth.ListenPorts.Twitch)
+				streamD.AddOAuthListenPort(cfg.OAuth.ListenPorts.Kick)
+				observability.Go(ctx, func(ctx context.Context) {
+					<-ctx.Done()
+					streamD.RemoveOAuthListenPort(cfg.OAuth.ListenPorts.Twitch)
+					streamD.RemoveOAuthListenPort(cfg.OAuth.ListenPorts.Kick)
+				})
+				logger.Tracef(ctx, "started oauth listener for the local streamd")
+			}
 		}
 
 		streamDRunErr := p.StreamD.Run(ctx)
@@ -345,7 +359,9 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) (_err error) {
 			p.DisplayError(fmt.Errorf("unable to initialize the streamd config: %w", err))
 		}
 
-		p.initMainWindow(ctx, initCfg.StartingPage)
+		p.app.Driver().DoFromGoroutine(func() {
+			p.initMainWindow(ctx, initCfg.StartingPage)
+		}, true)
 		if streamDRunErr != nil {
 			p.DisplayError(
 				fmt.Errorf("unable to initialize the streaming controllers: %w", streamDRunErr),
@@ -353,14 +369,18 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) (_err error) {
 		}
 
 		logger.Tracef(ctx, "p.rearrangeProfiles")
-		if err := p.rearrangeProfiles(ctx); err != nil {
-			err = fmt.Errorf("unable to arrange the profiles: %w", err)
-			p.DisplayError(err)
-		}
+		p.app.Driver().DoFromGoroutine(func() {
+			if err := p.rearrangeProfiles(ctx); err != nil {
+				err = fmt.Errorf("unable to arrange the profiles: %w", err)
+				p.DisplayError(err)
+			}
+		}, true)
 
-		if err := p.initMonitorPage(ctx); err != nil {
-			p.DisplayError(fmt.Errorf("unable to initialize the active monitors: %w", err))
-		}
+		p.app.Driver().DoFromGoroutine(func() {
+			if err := p.initMonitorPage(ctx); err != nil {
+				p.DisplayError(fmt.Errorf("unable to initialize the active monitors: %w", err))
+			}
+		}, true)
 
 		if initCfg.AutoUpdater != nil {
 			observability.Go(ctx, func(ctx context.Context) {
@@ -373,7 +393,9 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) (_err error) {
 			p.DisplayError(err)
 		}
 
-		p.initFyneHacks(ctx)
+		p.app.Driver().DoFromGoroutine(func() {
+			p.initFyneHacks(ctx)
+		}, true)
 	})
 
 	p.app.Run()
@@ -400,11 +422,8 @@ func (p *Panel) initStreamDConfig(
 		cfg.Backends = make(streamcontrol.Config)
 	}
 
-	configHasChanged := false
-
-	// TODO: move the 'git' configuration here as well.
-
-	for _, platName := range []streamcontrol.PlatformName{
+	isAnyUninitialized := false
+	for _, platName := range []streamcontrol.PlatformID{
 		twitch.ID,
 		kick.ID,
 		obs.ID,
@@ -414,98 +433,19 @@ func (p *Panel) initStreamDConfig(
 			continue
 		}
 		platCfg := cfg.Backends[platName]
-		if platCfg != nil && platCfg.Enable != nil && !*platCfg.Enable {
+		if platCfg != nil && len(platCfg.Accounts) > 0 && !platCfg.IsEnabled() {
 			logger.Debugf(ctx, "platform '%s' is explicitly disabled", platName)
 			continue
 		}
 		logger.Debugf(ctx, "'%s' is not initialized: %#+v, fixing", platName, platCfg)
-		configHasChanged = true
-
-		err := p.inputUserInfo(ctx, cfg, platName)
-		if err != nil {
-			p.DisplayError(fmt.Errorf("unable to input config for '%s': %w", platName, err))
-			continue
-		}
+		isAnyUninitialized = true
+		break
 	}
 
-	if configHasChanged {
-		err := p.SetStreamDConfig(ctx, cfg)
-		if err != nil {
-			return fmt.Errorf("unable to set the new config: %w", err)
-		}
-
-		err = p.StreamD.SaveConfig(ctx)
-		if err != nil {
-			return fmt.Errorf("unable to save the new config: %w", err)
-		}
-
-		err = p.StreamD.EXPERIMENTAL_ReinitStreamControllers(ctx)
-		if err != nil {
-			return fmt.Errorf("unable to reinit the stream controllers: %w", err)
-		}
+	if isAnyUninitialized {
+		p.OpenAccountManagementWindow(ctx)
 	}
 
-	return nil
-}
-
-func (p *Panel) inputUserInfo(
-	ctx context.Context,
-	cfg *streamdconfig.Config,
-	platName streamcontrol.PlatformName,
-) error {
-	if cfg.Backends[platName] == nil {
-		switch platName {
-		case youtube.ID:
-			youtube.InitConfig(cfg.Backends)
-		case twitch.ID:
-			twitch.InitConfig(cfg.Backends)
-		case kick.ID:
-			kick.InitConfig(cfg.Backends)
-		case obs.ID:
-			obs.InitConfig(cfg.Backends)
-		}
-	}
-	platCfg := cfg.Backends[platName]
-
-	var status BackendStatusCode
-	switch platName {
-	case youtube.ID:
-		platCfg := streamcontrol.ConvertPlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile](
-			ctx,
-			platCfg,
-		)
-		status = p.InputYouTubeUserInfo(ctx, platCfg)
-		cfg.Backends[platName] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
-	case twitch.ID:
-		platCfg := streamcontrol.ConvertPlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile](
-			ctx,
-			platCfg,
-		)
-		status = p.InputTwitchUserInfo(ctx, platCfg)
-		cfg.Backends[platName] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
-	case kick.ID:
-		platCfg := streamcontrol.ConvertPlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile](
-			ctx,
-			platCfg,
-		)
-		status = p.InputKickUserInfo(ctx, platCfg)
-		cfg.Backends[platName] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
-	case obs.ID:
-		platCfg := streamcontrol.ConvertPlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile](
-			ctx,
-			platCfg,
-		)
-		status = p.InputOBSConnectInfo(ctx, platCfg)
-		cfg.Backends[platName] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
-	}
-
-	switch status {
-	case BackendStatusCodeReady:
-		cfg.Backends[platName].Enable = ptr(true)
-	case BackendStatusCodeNotNow:
-	case BackendStatusCodeDisable:
-		cfg.Backends[platName].Enable = ptr(false)
-	}
 	return nil
 }
 
@@ -562,7 +502,7 @@ func (p *Panel) startOAuthListenerForRemoteStreamD(
 
 					if req == nil || req.AuthURL == "" {
 						logger.Errorf(ctx, "received an empty oauth request")
-						time.Sleep(1 * time.Second)
+						clock.Get().Sleep(1 * time.Second)
 						continue
 					}
 
@@ -739,7 +679,7 @@ func removeNonDigits(input string) string {
 
 func (p *Panel) OnSubmittedOAuthCode(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
+	platID streamcontrol.PlatformID,
 	code string,
 ) error {
 	logger.Debugf(ctx, "OnSubmittedOAuthCode(ctx, '%s', '%s')", platID, code)
@@ -752,7 +692,7 @@ func (p *Panel) OAuthHandlerTwitch(
 ) error {
 	logger.Infof(ctx, "OAuthHandlerTwitch: %#+v", arg)
 	defer logger.Infof(ctx, "/OAuthHandlerTwitch")
-	return p.oauthHandler(ctx, twitch.ID, arg)
+	return p.OAuthHandler(ctx, twitch.ID, arg)
 }
 
 func (p *Panel) OAuthHandlerKick(
@@ -761,7 +701,7 @@ func (p *Panel) OAuthHandlerKick(
 ) error {
 	logger.Infof(ctx, "OAuthHandlerKick: %#+v", arg)
 	defer logger.Infof(ctx, "/OAuthHandlerKick")
-	return p.oauthHandler(ctx, kick.ID, arg)
+	return p.OAuthHandler(ctx, kick.ID, arg)
 }
 
 func (p *Panel) OAuthHandlerYouTube(
@@ -770,16 +710,16 @@ func (p *Panel) OAuthHandlerYouTube(
 ) error {
 	logger.Infof(ctx, "OAuthHandlerYouTube: %#+v", arg)
 	defer logger.Infof(ctx, "/OAuthHandlerYouTube")
-	return p.oauthHandler(ctx, youtube.ID, arg)
+	return p.OAuthHandler(ctx, youtube.ID, arg)
 }
 
-func (p *Panel) oauthHandler(
+func (p *Panel) OAuthHandler(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
+	platID streamcontrol.PlatformID,
 	arg oauthhandler.OAuthHandlerArgument,
 ) error {
-	logger.Debugf(ctx, "oauthHandler(ctx, '%s', %#+v)", platID, arg)
-	defer logger.Debugf(ctx, "/oauthHandler(ctx, '%s', %#+v)", platID, arg)
+	logger.Debugf(ctx, "OAuthHandler(ctx, '%s', %#+v)", platID, arg)
+	defer logger.Debugf(ctx, "/OAuthHandler(ctx, '%s', %#+v)", platID, arg)
 
 	ctx, cancelFn := context.WithCancel(ctx)
 	defer cancelFn()
@@ -821,7 +761,7 @@ func (p *Panel) openBrowser(
 	logger.Debugf(ctx, "openBrowser(ctx, '%s', '%s')", urlString, reason)
 	defer func() { logger.Debugf(ctx, "/openBrowser(ctx, '%s', '%s'): %v", urlString, reason, _err) }()
 	return xsync.DoR1(ctx, &p.lastOpenedBrowserURLLocker, func() error {
-		now := time.Now()
+		now := clock.Get().Now()
 		if now.Sub(p.lastOpenedBrowserURLAt) <= browserDedupTimeout {
 			if p.lastOpenedBrowserURL == urlString {
 				logger.Debugf(ctx, "the URL was already opened recently, skipping")
@@ -836,257 +776,6 @@ func (p *Panel) openBrowser(
 		p.lastOpenedBrowserURLAt = now
 		return nil
 	})
-}
-
-var twitchAppsCreateLink = must(url.Parse("https://dev.twitch.tv/console/apps/create"))
-
-func (p *Panel) InputTwitchUserInfo(
-	ctx context.Context,
-	cfg *streamcontrol.PlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile],
-) BackendStatusCode {
-	w := p.app.NewWindow(gconsts.AppName + ": Input Twitch user info")
-	resizeWindow(w, fyne.NewSize(600, 200))
-
-	clientSecretIsBuiltin := buildvars.TwitchClientID != "" && buildvars.TwitchClientSecret != ""
-
-	channelField := widget.NewEntry()
-	channelField.SetPlaceHolder(
-		"channel ID (copy&paste it from the browser: https://www.twitch.tv/<the channel ID is here>)",
-	)
-	clientIDField := widget.NewEntry()
-	clientIDField.SetPlaceHolder("client ID")
-	if clientSecretIsBuiltin {
-		clientIDField.Hide()
-	}
-	clientSecretField := widget.NewEntry()
-	clientSecretField.SetPlaceHolder("client secret")
-	if clientSecretIsBuiltin {
-		clientSecretField.Hide()
-	}
-	instructionText := widget.NewRichText(
-		&widget.TextSegment{Text: "Go to\n", Style: widget.RichTextStyle{Inline: true}},
-		&widget.HyperlinkSegment{Text: twitchAppsCreateLink.String(), URL: twitchAppsCreateLink},
-		&widget.TextSegment{
-			Text:  `,` + "\n" + `create an application (enter "http://localhost:8091/" as the "OAuth Redirect URLs" value), then click "Manage" then "New Secret", and copy&paste client ID and client secret.`,
-			Style: widget.RichTextStyle{Inline: true},
-		},
-	)
-	instructionText.Wrapping = fyne.TextWrapWord
-
-	waitCh := make(chan struct{})
-
-	disable := false
-	disableButton := widget.NewButtonWithIcon("Disable", theme.ConfirmIcon(), func() {
-		disable = true
-		close(waitCh)
-	})
-
-	notNow := false
-	notNowButton := widget.NewButtonWithIcon("Not now", theme.ConfirmIcon(), func() {
-		notNow = true
-		close(waitCh)
-	})
-
-	okButton := widget.NewButtonWithIcon("OK", theme.ConfirmIcon(), func() {
-		close(waitCh)
-	})
-
-	w.SetContent(container.NewBorder(
-		widget.NewRichTextWithText("Enter Twitch user info:"),
-		container.NewHBox(disableButton, notNowButton, okButton),
-		nil,
-		nil,
-		container.NewVBox(
-			channelField,
-			clientIDField,
-			clientSecretField,
-			instructionText,
-		),
-	))
-	w.Show()
-	<-waitCh
-	w.Hide()
-
-	if disable {
-		return BackendStatusCodeDisable
-	}
-	if notNow {
-		return BackendStatusCodeNotNow
-	}
-
-	cfg.Config.AuthType = "user"
-	channelWords := strings.Split(channelField.Text, "/")
-	cfg.Config.Channel = channelWords[len(channelWords)-1]
-	cfg.Config.ClientID = clientIDField.Text
-	cfg.Config.ClientSecret.Set(clientSecretField.Text)
-
-	return BackendStatusCodeReady
-}
-
-var kickAppsCreateLink = must(url.Parse("https://kick.com/settings/developer?action=create"))
-
-func (p *Panel) InputKickUserInfo(
-	ctx context.Context,
-	cfg *streamcontrol.PlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile],
-) BackendStatusCode {
-	w := p.app.NewWindow(gconsts.AppName + ": Input Kick user info")
-	resizeWindow(w, fyne.NewSize(600, 200))
-
-	clientSecretIsBuiltin := buildvars.KickClientID != "" && buildvars.KickClientSecret != ""
-
-	channelField := widget.NewEntry()
-	channelField.SetPlaceHolder(
-		"channel ID (copy&paste it from the browser: https://www.kick.com/<the channel ID is here>)",
-	)
-	clientIDField := widget.NewEntry()
-	clientIDField.SetPlaceHolder("client ID")
-	if clientSecretIsBuiltin {
-		clientIDField.Hide()
-	}
-	clientSecretField := widget.NewEntry()
-	clientSecretField.SetPlaceHolder("client secret")
-	if clientSecretIsBuiltin {
-		clientSecretField.Hide()
-	}
-	instructionText := widget.NewRichText(
-		&widget.TextSegment{Text: "Go to\n", Style: widget.RichTextStyle{Inline: true}},
-		&widget.HyperlinkSegment{Text: kickAppsCreateLink.String(), URL: kickAppsCreateLink},
-		&widget.TextSegment{
-			Text:  `,` + "\n" + `click "Create new", enter app name and description, enter "http://localhost:8092/" as the RedirectURL, allow all permissions, click "Create App" and copy&paste client ID and client secret.`,
-			Style: widget.RichTextStyle{Inline: true},
-		},
-	)
-	instructionText.Wrapping = fyne.TextWrapWord
-
-	waitCh := make(chan struct{})
-
-	disable := false
-	disableButton := widget.NewButtonWithIcon("Disable", theme.ConfirmIcon(), func() {
-		disable = true
-		close(waitCh)
-	})
-
-	notNow := false
-	notNowButton := widget.NewButtonWithIcon("Not now", theme.ConfirmIcon(), func() {
-		notNow = true
-		close(waitCh)
-	})
-
-	okButton := widget.NewButtonWithIcon("OK", theme.ConfirmIcon(), func() {
-		close(waitCh)
-	})
-
-	w.SetContent(container.NewBorder(
-		widget.NewRichTextWithText("Enter Kick user info:"),
-		container.NewHBox(disableButton, notNowButton, okButton),
-		nil,
-		nil,
-		container.NewVBox(
-			channelField,
-			clientIDField,
-			clientSecretField,
-			instructionText,
-		),
-	))
-	w.Show()
-	<-waitCh
-	w.Hide()
-
-	if disable {
-		return BackendStatusCodeDisable
-	}
-	if notNow {
-		return BackendStatusCodeNotNow
-	}
-
-	channelWords := strings.Split(channelField.Text, "/")
-	cfg.Config.Channel = channelWords[len(channelWords)-1]
-	cfg.Config.ClientID = clientIDField.Text
-	cfg.Config.ClientSecret.Set(clientSecretField.Text)
-
-	return BackendStatusCodeReady
-}
-
-var youtubeCredentialsCreateLink, _ = url.Parse(
-	"https://console.cloud.google.com/apis/credentials/oauthclient",
-)
-
-func (p *Panel) InputYouTubeUserInfo(
-	ctx context.Context,
-	cfg *streamcontrol.PlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile],
-) BackendStatusCode {
-	w := p.app.NewWindow(gconsts.AppName + ": Input YouTube user info")
-	resizeWindow(w, fyne.NewSize(600, 200))
-
-	clientIDField := widget.NewEntry()
-	clientIDField.SetPlaceHolder("client ID")
-	clientSecretField := widget.NewEntry()
-	clientSecretField.SetPlaceHolder("client secret")
-	instructionText := widget.NewRichText(
-		&widget.TextSegment{Text: "Go to\n", Style: widget.RichTextStyle{Inline: true}},
-		&widget.HyperlinkSegment{
-			Text: youtubeCredentialsCreateLink.String(),
-			URL:  youtubeCredentialsCreateLink,
-		},
-		&widget.TextSegment{
-			Text:  `,` + "\n" + `configure "consent screen" (note: you may add yourself into Test Users to avoid problems further on, and don't forget to add "YouTube Data API v3" scopes) and go back to` + "\n",
-			Style: widget.RichTextStyle{Inline: true},
-		},
-		&widget.HyperlinkSegment{
-			Text: youtubeCredentialsCreateLink.String(),
-			URL:  youtubeCredentialsCreateLink,
-		},
-		&widget.TextSegment{
-			Text:  `,` + "\n" + `choose "Desktop app", confirm and copy&paste client ID and client secret.`,
-			Style: widget.RichTextStyle{Inline: true},
-		},
-	)
-	instructionText.Wrapping = fyne.TextWrapWord
-
-	waitCh := make(chan struct{})
-
-	disable := false
-	disableButton := widget.NewButtonWithIcon("Disable", theme.ConfirmIcon(), func() {
-		disable = true
-		close(waitCh)
-	})
-
-	notNow := false
-	notNowButton := widget.NewButtonWithIcon("Not now", theme.ConfirmIcon(), func() {
-		notNow = true
-		close(waitCh)
-	})
-
-	okButton := widget.NewButtonWithIcon("OK", theme.ConfirmIcon(), func() {
-		close(waitCh)
-	})
-
-	w.SetContent(container.NewBorder(
-		widget.NewRichTextWithText("Enter YouTube user info:"),
-		container.NewHBox(disableButton, notNowButton, okButton),
-		nil,
-		nil,
-		container.NewVBox(
-			clientIDField,
-			clientSecretField,
-			instructionText,
-		),
-	))
-	w.Show()
-	<-waitCh
-	w.Hide()
-
-	if disable {
-		return BackendStatusCodeDisable
-	}
-	if notNow {
-		return BackendStatusCodeNotNow
-	}
-
-	cfg.Config.ClientID = clientIDField.Text
-	cfg.Config.ClientSecret.Set(clientSecretField.Text)
-
-	return BackendStatusCodeReady
 }
 
 func containTagSubstringCI(tags []string, s string) bool {
@@ -1160,8 +849,8 @@ func (p *Panel) getUpdatedStatus_backends(ctx context.Context) {
 func (p *Panel) getUpdatedStatus_backends_noLock(ctx context.Context) {
 	logger.Tracef(ctx, "getUpdatedStatus_backends_noLock")
 	defer logger.Tracef(ctx, "/getUpdatedStatus_backends_noLock")
-	backendEnabled := map[streamcontrol.PlatformName]bool{}
-	for _, backendID := range []streamcontrol.PlatformName{
+	backendEnabled := map[streamcontrol.PlatformID]bool{}
+	for _, backendID := range []streamcontrol.PlatformID{
 		obs.ID,
 		twitch.ID,
 		kick.ID,
@@ -1175,19 +864,60 @@ func (p *Panel) getUpdatedStatus_backends_noLock(ctx context.Context) {
 		}
 		backendEnabled[backendID] = isEnabled
 	}
-	if backendEnabled[twitch.ID] {
-		p.twitchCheck.Enable()
+
+	var allStreams []streamcontrol.StreamIDFullyQualified
+	for _, backendID := range []streamcontrol.PlatformID{
+		obs.ID,
+		twitch.ID,
+		kick.ID,
+		youtube.ID,
+	} {
+		if !backendEnabled[backendID] {
+			continue
+		}
+		accounts, err := p.StreamD.GetAccounts(ctx, backendID)
+		if err != nil {
+			p.ReportError(fmt.Errorf("unable to get accounts for platform '%s': %w", backendID, err))
+			continue
+		}
+		for _, accountID := range accounts {
+			streams, err := p.StreamD.GetStreams(ctx, accountID)
+			if err != nil {
+				p.ReportError(fmt.Errorf("unable to get streams for account '%s': %w", accountID, err))
+				continue
+			}
+			for _, stream := range streams {
+				allStreams = append(allStreams, streamcontrol.StreamIDFullyQualified{
+					AccountIDFullyQualified: accountID,
+					StreamID:                stream.ID,
+				})
+			}
+		}
 	}
-	if backendEnabled[kick.ID] {
-		p.kickCheck.Enable()
+
+	profile := p.getSelectedProfile()
+	if p.selectedProfileName != nil {
+		p.allStreams = nil
+		for streamID := range profile.PerStream {
+			p.allStreams = append(p.allStreams, streamID)
+			if _, ok := p.selectedStreams[streamID]; !ok {
+				p.selectedStreams[streamID] = true
+			}
+		}
+	} else {
+		p.allStreams = allStreams
+		for _, streamID := range allStreams {
+			if _, ok := p.selectedStreams[streamID]; !ok {
+				p.selectedStreams[streamID] = true
+			}
+		}
 	}
-	if backendEnabled[youtube.ID] {
-		p.youtubeCheck.Enable()
-	}
+	p.updateStreamsSelectButtonLabel()
+	p.syncSelectedStreamsToDaemon(ctx)
 
 	if backendEnabled[obs.ID] {
 		observability.Call(ctx, func(ctx context.Context) {
-			obsServer, obsServerClose, err := p.StreamD.OBS(ctx)
+			obsServer, obsServerClose, err := p.StreamD.OBS(ctx, "")
 			if obsServerClose != nil {
 				defer obsServerClose()
 			}
@@ -1238,9 +968,13 @@ func (p *Panel) getUpdatedStatus_startStopStreamButton_noLock(ctx context.Contex
 
 	obsIsEnabled, _ := p.StreamD.IsBackendEnabled(ctx, obs.ID)
 	if obsIsEnabled {
-		obsStreamStatus, err := p.StreamD.GetStreamStatus(ctx, obs.ID)
+		obsStreamStatus, err := p.StreamD.GetStreamStatus(ctx, streamcontrol.NewStreamIDFullyQualified(obs.ID, streamcontrol.DefaultAccountID, streamcontrol.DefaultStreamID))
 		if err != nil {
-			logger.Error(ctx, fmt.Errorf("unable to get stream status from OBS: %v", err))
+			if strings.Contains(err.Error(), "not initialized") {
+				logger.Tracef(ctx, "unable to get stream status from OBS (not initialized): %v", err)
+			} else {
+				logger.Errorf(ctx, "unable to get stream status from OBS: %v", err)
+			}
 			return
 		}
 		logger.Tracef(ctx, "obsStreamStatus == %#+v", obsStreamStatus)
@@ -1276,16 +1010,20 @@ func (p *Panel) getUpdatedStatus_startStopStreamButton_noLock(ctx context.Contex
 		return
 	}
 
-	if !ytIsEnabled || !p.youtubeCheck.Checked {
+	if !ytIsEnabled || !p.isAnySelected(youtube.ID) {
 		if obsIsEnabled {
 			p.startStopButton.Enable()
 		}
 		return
 	}
 
-	ytStreamStatus, err := p.StreamD.GetStreamStatus(ctx, youtube.ID)
+	ytStreamStatus, err := p.StreamD.GetStreamStatus(ctx, streamcontrol.NewStreamIDFullyQualified(youtube.ID, streamcontrol.DefaultAccountID, streamcontrol.DefaultStreamID))
 	if err != nil {
-		logger.Error(ctx, fmt.Errorf("unable to get stream status from YouTube: %v", err))
+		if strings.Contains(err.Error(), "not initialized") {
+			logger.Tracef(ctx, "unable to get stream status from YouTube (not initialized): %v", err)
+		} else {
+			logger.Errorf(ctx, "unable to get stream status from YouTube: %v", err)
+		}
 		return
 	}
 	logger.Tracef(ctx, "ytStreamStatus == %#+v", ytStreamStatus)
@@ -1539,17 +1277,17 @@ func (p *Panel) initMainWindow(
 		streamDescriptionButton.Hide()
 	}
 
-	p.twitchCheck = widget.NewCheck("Twitch", nil)
-	p.twitchCheck.SetChecked(true)
-	p.twitchCheck.Disable()
-
-	p.kickCheck = widget.NewCheck("Kick", nil)
-	p.kickCheck.SetChecked(true)
-	p.kickCheck.Disable()
-
-	p.youtubeCheck = widget.NewCheck("YouTube", nil)
-	p.youtubeCheck.SetChecked(true)
-	p.youtubeCheck.Disable()
+	p.selectedStreams = make(map[streamcontrol.StreamIDFullyQualified]bool)
+	p.configCacheLocker.Do(ctx, func() {
+		if p.configCache != nil {
+			for _, id := range p.configCache.SelectedStreamIDs {
+				p.selectedStreams[id] = true
+			}
+		}
+	})
+	p.streamsSelectButton = widget.NewButton("Select streams", func() {
+		p.openStreamsSelect(ctx)
+	})
 
 	regenerateTitleButton := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
 		p.generateNewTitle(ctx)
@@ -1584,7 +1322,7 @@ func (p *Panel) initMainWindow(
 		container.NewBorder(
 			nil,
 			nil,
-			container.NewHBox(p.twitchCheck, p.kickCheck, p.youtubeCheck, p.setupStreamButton),
+			container.NewHBox(p.streamsSelectButton, p.setupStreamButton),
 			nil,
 			p.startStopButton,
 		),
@@ -1629,9 +1367,9 @@ func (p *Panel) initMainWindow(
 	addStreamButton := widget.NewButtonWithIcon("Add stream", theme.ContentAddIcon(), func() {
 		p.openAddStreamWindow(ctx)
 	})
-	p.destinationsWidget = container.NewVBox()
-	addDestination := widget.NewButtonWithIcon("Add destination", theme.ContentAddIcon(), func() {
-		p.openAddDestinationWindow(ctx)
+	p.sinksWidget = container.NewVBox()
+	addSink := widget.NewButtonWithIcon("Add sink", theme.ContentAddIcon(), func() {
+		p.openAddSinkWindow(ctx)
 	})
 	p.restreamsWidget = container.NewVBox()
 	addRestream := widget.NewButtonWithIcon("Add restream", theme.ContentAddIcon(), func() {
@@ -1660,9 +1398,9 @@ func (p *Panel) initMainWindow(
 			widget.NewLabel("Streams:"),
 			p.streamsWidget,
 			addStreamButton,
-			widget.NewLabel("Destinations:"),
-			p.destinationsWidget,
-			addDestination,
+			widget.NewLabel("Sinks:"),
+			p.sinksWidget,
+			addSink,
 			widget.NewLabel("Resteams:"),
 			p.restreamsWidget,
 			addRestream,
@@ -1717,13 +1455,10 @@ func (p *Panel) initMainWindow(
 	}
 
 	p.dashboardShowHideButton = widget.NewButtonWithIcon("Open", theme.ComputerIcon(), func() {
-		p.dashboardLocker.Do(ctx, func() {
-			if p.dashboardWindow == nil {
-				observability.Go(ctx, func(ctx context.Context) { p.focusDashboardWindow(ctx) })
-			} else {
-				p.dashboardWindow.Window.Close()
-			}
-		})
+		err := p.toggleDashboardWindow(ctx)
+		if err != nil {
+			p.DisplayError(err)
+		}
 	})
 	dashboardPage := container.NewBorder(
 		p.dashboardShowHideButton,
@@ -1736,6 +1471,7 @@ func (p *Panel) initMainWindow(
 
 	shoutoutPage := newShoutoutPage(ctx, p)
 	raidPage := newRaidPage(ctx, p)
+	youTubeInfoPage := newYouTubeInfoPage(ctx, p)
 
 	var cancelPage context.CancelFunc
 	setPage := func(page consts.Page) {
@@ -1761,6 +1497,7 @@ func (p *Panel) initMainWindow(
 			monitorPage.Hide()
 			shoutoutPage.Hide()
 			raidPage.Hide()
+			youTubeInfoPage.Hide()
 			profileControl.Show()
 			controlPage.Show()
 		case consts.PageMoreControl:
@@ -1774,6 +1511,7 @@ func (p *Panel) initMainWindow(
 			monitorPage.Hide()
 			shoutoutPage.Hide()
 			raidPage.Hide()
+			youTubeInfoPage.Hide()
 			moreControlPage.Show()
 			timersUI.StartRefreshingFromRemote(ctx)
 		case consts.PageChat:
@@ -1787,6 +1525,7 @@ func (p *Panel) initMainWindow(
 			monitorPage.Hide()
 			shoutoutPage.Hide()
 			raidPage.Hide()
+			youTubeInfoPage.Hide()
 			chatPage.Show()
 		case consts.PageDashboard:
 			profileControl.Hide()
@@ -1801,6 +1540,7 @@ func (p *Panel) initMainWindow(
 			monitorPage.Hide()
 			shoutoutPage.Hide()
 			raidPage.Hide()
+			youTubeInfoPage.Hide()
 			dashboardPage.Show()
 			p.focusDashboardWindow(ctx)
 		case consts.PageOBS:
@@ -1815,6 +1555,7 @@ func (p *Panel) initMainWindow(
 			monitorPage.Hide()
 			shoutoutPage.Hide()
 			raidPage.Hide()
+			youTubeInfoPage.Hide()
 			obsPage.Show()
 		case consts.PageRestream:
 			controlPage.Hide()
@@ -1828,6 +1569,7 @@ func (p *Panel) initMainWindow(
 			monitorPage.Hide()
 			shoutoutPage.Hide()
 			raidPage.Hide()
+			youTubeInfoPage.Hide()
 			restreamPage.Show()
 			p.startRestreamPage(pageCtx)
 		case consts.PageSelectServer:
@@ -1842,6 +1584,7 @@ func (p *Panel) initMainWindow(
 			monitorPage.Hide()
 			shoutoutPage.Hide()
 			raidPage.Hide()
+			youTubeInfoPage.Hide()
 			selectServerPage.Show()
 		case consts.PageMonitor:
 			profileControl.Hide()
@@ -1855,6 +1598,7 @@ func (p *Panel) initMainWindow(
 			selectServerPage.Hide()
 			shoutoutPage.Hide()
 			raidPage.Hide()
+			youTubeInfoPage.Hide()
 			monitorPage.Show()
 			p.startMonitorPage(pageCtx)
 		case consts.PageShoutout:
@@ -1869,6 +1613,7 @@ func (p *Panel) initMainWindow(
 			monitorPage.Hide()
 			profileControl.Hide()
 			raidPage.Hide()
+			youTubeInfoPage.Hide()
 			shoutoutPage.Show()
 		case consts.PageRaid:
 			obsPage.Hide()
@@ -1882,7 +1627,23 @@ func (p *Panel) initMainWindow(
 			monitorPage.Hide()
 			profileControl.Hide()
 			shoutoutPage.Hide()
+			youTubeInfoPage.Hide()
 			raidPage.Show()
+		case consts.PageYouTube:
+			obsPage.Hide()
+			restreamPage.Hide()
+			controlPage.Hide()
+			moreControlPage.Hide()
+			chatPage.Hide()
+			dashboardPage.Hide()
+			selectServerPage.Hide()
+			timersUI.StopRefreshingFromRemote(ctx)
+			monitorPage.Hide()
+			profileControl.Hide()
+			shoutoutPage.Hide()
+			raidPage.Hide()
+			youTubeInfoPage.Show()
+			youTubeInfoPage.StartRefresh(pageCtx)
 		}
 	}
 
@@ -1897,6 +1658,7 @@ func (p *Panel) initMainWindow(
 			string(consts.PageMonitor),
 			string(consts.PageShoutout),
 			string(consts.PageRaid),
+			string(consts.PageYouTube),
 		},
 		func(page string) {
 			setPage(consts.Page(page))
@@ -1931,6 +1693,7 @@ func (p *Panel) initMainWindow(
 			monitorPage,
 			shoutoutPage.CanvasObject(),
 			raidPage.CanvasObject(),
+			youTubeInfoPage.CanvasObject(),
 		),
 	))
 
@@ -1964,7 +1727,7 @@ func (p *Panel) subscribeUpdateControlPage(ctx context.Context) {
 
 	observability.Go(ctx, func(ctx context.Context) {
 		defer logger.Debugf(ctx, "subscribeUpdateControlPage: the handler closed")
-		t := time.NewTicker(time.Second * 5)
+		t := clock.Get().Ticker(time.Second * 5)
 		defer t.Stop()
 		for {
 			ok := true
@@ -2032,9 +1795,9 @@ func (p *Panel) execCommand(
 
 func (p *Panel) streamIsRunning(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
+	streamID streamcontrol.StreamIDFullyQualified,
 ) bool {
-	streamStatus, err := p.StreamD.GetStreamStatus(ctx, platID)
+	streamStatus, err := p.StreamD.GetStreamStatus(ctx, streamID)
 	if err != nil {
 		p.DisplayError(err)
 		return false
@@ -2055,8 +1818,8 @@ func (p *Panel) setupStreamNoLock(ctx context.Context) {
 		return
 	}
 
-	backendEnabled := map[streamcontrol.PlatformName]bool{}
-	for _, backendID := range []streamcontrol.PlatformName{
+	backendEnabled := map[streamcontrol.PlatformID]bool{}
+	for _, backendID := range []streamcontrol.PlatformID{
 		obs.ID,
 		twitch.ID,
 		kick.ID,
@@ -2073,7 +1836,11 @@ func (p *Panel) setupStreamNoLock(ctx context.Context) {
 	}
 
 	if backendEnabled[obs.ID] {
-		obsIsActive := p.streamIsRunning(ctx, obs.ID)
+		obsIsActive := p.streamIsRunning(ctx, streamcontrol.StreamIDFullyQualified{
+			AccountIDFullyQualified: streamcontrol.AccountIDFullyQualified{
+				PlatformID: obs.ID,
+			},
+		})
 		if !obsIsActive {
 			p.startStopButton.Disable()
 			defer p.startStopButton.Enable()
@@ -2082,92 +1849,92 @@ func (p *Panel) setupStreamNoLock(ctx context.Context) {
 
 	profile := p.getSelectedProfile()
 
-	if p.twitchCheck.Checked && backendEnabled[twitch.ID] {
-		err := p.StreamD.StartStream(
-			ctx,
-			twitch.ID,
-			p.streamTitleField.Text,
-			p.streamDescriptionField.Text,
-			profile.PerPlatform[twitch.ID],
-		)
-		if err != nil {
-			p.DisplayError(fmt.Errorf("unable to setup the stream on Twitch: %w", err))
-		}
-	}
-
-	if p.kickCheck.Checked && backendEnabled[kick.ID] {
-		err := p.StreamD.StartStream(
-			ctx,
-			kick.ID,
-			p.streamTitleField.Text,
-			p.streamDescriptionField.Text,
-			profile.PerPlatform[kick.ID],
-		)
-		if err != nil {
-			p.DisplayError(fmt.Errorf("unable to setup the stream on Kick: %w", err))
-		}
-	}
-
-	if p.youtubeCheck.Checked && backendEnabled[youtube.ID] {
-		if p.streamIsRunning(ctx, youtube.ID) {
-			logger.Debugf(ctx, "updating the stream info at YouTube")
-			err := p.StreamD.UpdateStream(
-				ctx,
-				youtube.ID,
-				p.streamTitleField.Text,
-				p.streamDescriptionField.Text,
-				profile.PerPlatform[youtube.ID],
-			)
-			logger.Infof(ctx, "updated the stream info at YouTube")
+	for _, streamID := range p.allStreams {
+		selected := p.selectedStreams[streamID]
+		if !selected {
+			logger.Debugf(ctx, "stream %s is not selected, making sure it is inactive", streamID)
+			err := p.StreamD.SetStreamActive(ctx, streamID, false)
 			if err != nil {
-				p.DisplayError(fmt.Errorf("unable to start the stream on YouTube: %w", err))
+				p.DisplayError(fmt.Errorf("unable to stop the stream %s: %w", streamID, err))
 			}
-		} else {
-			logger.Debugf(ctx, "creating the stream at YouTube")
-			err := p.StreamD.StartStream(
-				ctx,
-				youtube.ID,
-				p.streamTitleField.Text,
-				p.streamDescriptionField.Text,
-				profile.PerPlatform[youtube.ID],
-			)
-			logger.Infof(ctx, "created the stream at YouTube")
-			if err != nil {
-				p.DisplayError(fmt.Errorf("unable to start the stream on YouTube: %w", err))
-			}
+			continue
+		}
+		if !backendEnabled[streamID.PlatformID] {
+			continue
 		}
 
-		// I don't know why, but if we don't open the livestream control page on YouTube
-		// in the browser, then the stream does not want to start.
-		//
-		// And here we wait until the hack with opening the page will complete.
-		observability.Go(ctx, func(ctx context.Context) {
-			waitFor := 15 * time.Second
-			deadline := time.Now().Add(waitFor)
-
-			p.streamMutex.Do(ctx, func() {
-				defer func() {
-					p.startStopButton.SetText(startStreamString())
-					p.startStopButton.Icon = theme.MediaRecordIcon()
-					p.startStopButton.Importance = widget.SuccessImportance
-					p.startStopButton.Enable()
-				}()
-				p.startStopButton.Disable()
-				p.startStopButton.Icon = theme.ViewRefreshIcon()
-				p.startStopButton.Importance = widget.DangerImportance
-
-				t := time.NewTicker(100 * time.Millisecond)
-				defer t.Stop()
-				for {
-					<-t.C
-					timeDiff := time.Until(deadline).Truncate(100 * time.Millisecond)
-					if timeDiff < 0 {
-						return
-					}
-					p.startStopButton.SetText(fmt.Sprintf("%.1fs", timeDiff.Seconds()))
+		switch streamID.PlatformID {
+		case youtube.ID:
+			if p.streamIsRunning(ctx, streamID) {
+				logger.Debugf(ctx, "updating the stream info at YouTube")
+				p.StreamD.SetTitle(ctx, streamID, p.streamTitleField.Text)
+				p.StreamD.SetDescription(ctx, streamID, p.streamDescriptionField.Text)
+				err := p.StreamD.ApplyProfile(ctx, streamID, profile.GetStreamProfile(streamID))
+				logger.Infof(ctx, "updated the stream info at YouTube")
+				if err != nil {
+					p.DisplayError(fmt.Errorf("unable to start the stream on YouTube: %w", err))
 				}
+			} else {
+				logger.Debugf(ctx, "creating the stream at YouTube")
+				p.StreamD.SetTitle(ctx, streamID, p.streamTitleField.Text)
+				p.StreamD.SetDescription(ctx, streamID, p.streamDescriptionField.Text)
+				p.StreamD.ApplyProfile(ctx, streamID, profile.GetStreamProfile(streamID))
+				err := p.StreamD.SetStreamActive(ctx, streamID, true)
+				logger.Infof(ctx, "created the stream at YouTube")
+				if err != nil {
+					p.DisplayError(fmt.Errorf("unable to start the stream on YouTube: %w", err))
+				}
+			}
+
+			// I don't know why, but if we don't open the livestream control page on YouTube
+			// in the browser, then the stream does not want to start.
+			//
+			// And here we wait until the hack with opening the page will complete.
+			observability.Go(ctx, func(ctx context.Context) {
+				waitFor := 15 * time.Second
+				deadline := clock.Get().Now().Add(waitFor)
+
+				p.streamMutex.Do(ctx, func() {
+					defer func() {
+						p.startStopButton.SetText(startStreamString())
+						p.startStopButton.Icon = theme.MediaRecordIcon()
+						p.startStopButton.Importance = widget.SuccessImportance
+						p.startStopButton.Enable()
+					}()
+					p.startStopButton.Disable()
+					p.startStopButton.Icon = theme.ViewRefreshIcon()
+					p.startStopButton.Importance = widget.DangerImportance
+
+					t := clock.Get().Ticker(100 * time.Millisecond)
+					defer t.Stop()
+					for {
+						select {
+						case <-ctx.Done():
+							return
+						case <-t.C:
+						}
+						timeDiff := deadline.Sub(clock.Get().Now()).Truncate(100 * time.Millisecond)
+						if timeDiff < 0 {
+							return
+						}
+						p.startStopButton.SetText(fmt.Sprintf("%.1fs", timeDiff.Seconds()))
+					}
+				})
 			})
-		})
+		default:
+			p.StreamD.SetTitle(ctx, streamID, p.streamTitleField.Text)
+			p.StreamD.SetDescription(ctx, streamID, p.streamDescriptionField.Text)
+			p.StreamD.ApplyProfile(ctx, streamID, profile.GetStreamProfile(streamID))
+			if streamID.PlatformID == obs.ID {
+				// OBS setup only applies profile settings (e.g. recording flag);
+				// actual streaming is started by startStream().
+				continue
+			}
+			err := p.StreamD.SetStreamActive(ctx, streamID, true)
+			if err != nil {
+				p.DisplayError(fmt.Errorf("unable to setup the stream on %s: %w", streamID.PlatformID, err))
+			}
+		}
 	}
 }
 
@@ -2175,7 +1942,7 @@ func (p *Panel) startStream(ctx context.Context) {
 	p.streamMutex.ManualLock(ctx)
 	defer func() {
 		observability.Go(ctx, func(ctx context.Context) {
-			time.Sleep(10 * time.Second) // TODO: remove this
+			clock.Get().Sleep(10 * time.Second) // TODO: remove this
 			p.streamMutex.ManualUnlock(ctx)
 		})
 	}()
@@ -2192,7 +1959,7 @@ func (p *Panel) startStream(ctx context.Context) {
 	if p.updateStreamClockHandler != nil {
 		p.updateStreamClockHandler.Stop()
 	}
-	p.updateStreamClockHandler = newUpdateTimerHandler(p.startStopButton, time.Now())
+	p.updateStreamClockHandler = newUpdateTimerHandler(p.startStopButton, clock.Get().Now())
 
 	isEnabled, err := p.StreamD.IsBackendEnabled(ctx, obs.ID)
 	if err != nil {
@@ -2205,16 +1972,17 @@ func (p *Panel) startStream(ctx context.Context) {
 		return
 	}
 
+	obsStreamID := streamcontrol.StreamIDFullyQualified{
+		AccountIDFullyQualified: streamcontrol.AccountIDFullyQualified{
+			PlatformID: obs.ID,
+		},
+	}
 	profile := p.getSelectedProfile()
-	err = p.StreamD.StartStream(
-		ctx,
-		obs.ID,
-		p.streamTitleField.Text,
-		p.streamDescriptionField.Text,
-		profile.PerPlatform[obs.ID],
-	)
+	p.StreamD.ApplyProfile(ctx, obsStreamID, profile.GetStreamProfile(obsStreamID))
+	err = p.StreamD.SetStreamActive(ctx, obsStreamID, true)
 	if err != nil {
-		p.DisplayError(fmt.Errorf("unable to start the stream on YouTube: %w", err))
+		p.DisplayError(fmt.Errorf("unable to start OBS streaming: %w", err))
+		return
 	}
 
 	p.startStopButton.Refresh()
@@ -2230,7 +1998,9 @@ func (p *Panel) afterStreamStart(ctx context.Context) {
 		p.execCommand(ctx, onStreamStart, nil)
 	}
 
-	observability.Go(ctx, func(ctx context.Context) { p.openStreamStartedWindow(ctx) })
+	p.app.Driver().DoFromGoroutine(func() {
+		p.openStreamStartedWindow(ctx)
+	}, false)
 }
 
 func (p *Panel) stopStream(ctx context.Context) {
@@ -2247,8 +2017,8 @@ func (p *Panel) stopStream(ctx context.Context) {
 	})
 }
 func (p *Panel) doStopStream(ctx context.Context) {
-	backendEnabled := map[streamcontrol.PlatformName]bool{}
-	for _, backendID := range []streamcontrol.PlatformName{
+	backendEnabled := map[streamcontrol.PlatformID]bool{}
+	for _, backendID := range []streamcontrol.PlatformID{
 		obs.ID,
 		youtube.ID,
 		twitch.ID,
@@ -2278,40 +2048,14 @@ func (p *Panel) doStopStream(ctx context.Context) {
 
 	var wg sync.WaitGroup
 
-	if p.youtubeCheck.Checked && backendEnabled[youtube.ID] {
+	for _, streamID := range p.allStreams {
 		wg.Add(1)
 		observability.Go(ctx, func(ctx context.Context) {
 			defer wg.Done()
-			err := p.StreamD.EndStream(ctx, youtube.ID)
+			err := p.StreamD.SetStreamActive(ctx, streamID, false)
 			if err != nil {
 				p.backgroundRenderer.Q <- func() {
-					p.DisplayError(fmt.Errorf("unable to stop the stream on YouTube: %w", err))
-				}
-			}
-		})
-	}
-
-	if p.twitchCheck.Checked && backendEnabled[twitch.ID] {
-		wg.Add(1)
-		observability.Go(ctx, func(ctx context.Context) {
-			defer wg.Done()
-			err := p.StreamD.EndStream(ctx, twitch.ID)
-			if err != nil {
-				p.backgroundRenderer.Q <- func() {
-					p.DisplayError(fmt.Errorf("unable to stop the stream on Twitch: %w", err))
-				}
-			}
-		})
-	}
-
-	if p.kickCheck.Checked && backendEnabled[kick.ID] {
-		wg.Add(1)
-		observability.Go(ctx, func(ctx context.Context) {
-			defer wg.Done()
-			err := p.StreamD.EndStream(ctx, kick.ID)
-			if err != nil {
-				p.backgroundRenderer.Q <- func() {
-					p.DisplayError(fmt.Errorf("unable to stop the stream on Kick: %w", err))
+					p.DisplayError(fmt.Errorf("unable to stop the stream on %s: %w", streamID.PlatformID, err))
 				}
 			}
 		})
@@ -2321,35 +2065,30 @@ func (p *Panel) doStopStream(ctx context.Context) {
 
 	if backendEnabled[obs.ID] {
 		if streamDCfg != nil {
-			obsCfg := streamcontrol.GetPlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile](ctx, streamDCfg.Backends, obs.ID)
-			if obsCfg.Config.SceneAfterStream.Name != "" {
+			obsCfg := streamcontrol.GetPlatformConfig[obs.AccountConfig, obs.StreamProfile](ctx, streamDCfg.Backends, obs.ID)
+			accountCfg := obsCfg.Accounts[""]
+			if accountCfg.SceneAfterStream.Name != "" {
 				p.startStopButton.SetText("Switching the scene")
-				err := p.obsSetScene(ctx, obsCfg.Config.SceneAfterStream.Name)
+				err := p.obsSetScene(ctx, accountCfg.SceneAfterStream.Name)
 				if err != nil {
 					p.DisplayError(fmt.Errorf("unable to change the OBS scene: %w", err))
 				}
 			}
-			if obsCfg.Config.SceneAfterStream.Duration > 0 {
-				p.startStopButton.SetText(fmt.Sprintf("Holding the scene: %s", obsCfg.Config.SceneAfterStream.Duration))
-				time.Sleep(obsCfg.Config.SceneAfterStream.Duration)
+			if accountCfg.SceneAfterStream.Duration > 0 {
+				p.startStopButton.SetText(fmt.Sprintf("Holding the scene: %s", accountCfg.SceneAfterStream.Duration))
+				clock.Get().Sleep(accountCfg.SceneAfterStream.Duration)
 			}
 		}
 
 		p.startStopButton.SetText("Stopping OBS...")
-		err := p.StreamD.EndStream(ctx, obs.ID)
+		err := p.StreamD.SetStreamActive(ctx, streamcontrol.StreamIDFullyQualified{
+			AccountIDFullyQualified: streamcontrol.AccountIDFullyQualified{
+				PlatformID: obs.ID,
+			},
+		}, false)
 		if err != nil {
 			p.DisplayError(fmt.Errorf("unable to stop the stream on OBS: %w", err))
 		}
-	}
-
-	if backendEnabled[twitch.ID] {
-		p.twitchCheck.Enable()
-	}
-	if backendEnabled[kick.ID] {
-		p.kickCheck.Enable()
-	}
-	if backendEnabled[youtube.ID] {
-		p.youtubeCheck.Enable()
 	}
 
 	p.backgroundRenderer.Q <- func() { p.startStopButton.SetText("OnStopStream command...") }
@@ -2371,7 +2110,9 @@ func (p *Panel) doStopStream(ctx context.Context) {
 
 func (p *Panel) onSetupStreamButton(ctx context.Context) {
 	ctx = xcontext.DetachDone(ctx)
-	p.setupStream(ctx)
+	observability.Go(ctx, func(ctx context.Context) {
+		p.setupStream(ctx)
+	})
 }
 
 func (p *Panel) onStartStopButton(ctx context.Context) {
@@ -2388,7 +2129,9 @@ func (p *Panel) onStartStopButton(ctx context.Context) {
 			"Are you sure you want to end the stream?",
 			func(b bool) {
 				if b {
-					p.stopStream(ctx)
+					observability.Go(ctx, func(ctx context.Context) {
+						p.stopStream(ctx)
+					})
 				}
 			},
 			p.mainWindow,
@@ -2400,25 +2143,15 @@ func (p *Panel) onStartStopButton(ctx context.Context) {
 			"Are you ready to start the stream?",
 			func(b bool) {
 				if b {
-					p.startStream(ctx)
+					observability.Go(ctx, func(ctx context.Context) {
+						p.startStream(ctx)
+					})
 				}
 			},
 			p.mainWindow,
 		)
 		w.Show()
 	}
-}
-
-func cleanTwitchCategoryName(in string) string {
-	return strings.ToLower(strings.Trim(in, " "))
-}
-
-func cleanKickCategoryName(in string) string {
-	return strings.ToLower(strings.Trim(in, " "))
-}
-
-func cleanYoutubeRecordingName(in string) string {
-	return strings.ToLower(strings.Trim(in, " "))
 }
 
 func ptr[T any](in T) *T {
@@ -2437,7 +2170,7 @@ func (p *Panel) showWaitStreamDCallWindow(ctx context.Context) {
 				if atomic.AddInt32(&p.waitStreamDCallWindowCounter, -1) != 0 {
 					return
 				}
-				time.Sleep(aggregationDelayBeforeNotificationEnd)
+				clock.Get().Sleep(aggregationDelayBeforeNotificationEnd)
 				// TODO: set "ready" only if we have set "in process" before.
 				p.statusPanelSet("ready")
 				logger.Tracef(ctx, "closed the 'network operation is in progress' notification")
@@ -2447,7 +2180,7 @@ func (p *Panel) showWaitStreamDCallWindow(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(aggregationDelayBeforeNotificationStart):
+		case <-clock.Get().After(aggregationDelayBeforeNotificationStart):
 		}
 
 		p.waitStreamDCallWindowLocker.Do(ctx, func() {
@@ -2466,7 +2199,7 @@ func (p *Panel) showWaitStreamDConnectWindow(ctx context.Context) {
 				if atomic.AddInt32(&p.waitStreamDConnectWindowCounter, -1) != 0 {
 					return
 				}
-				time.Sleep(aggregationDelayBeforeNotificationEnd)
+				clock.Get().Sleep(aggregationDelayBeforeNotificationEnd)
 				p.statusPanelSet("(re-)connected")
 				logger.Debugf(ctx, "closed the 'connecting is in progress' window")
 			})
@@ -2475,7 +2208,7 @@ func (p *Panel) showWaitStreamDConnectWindow(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(aggregationDelayBeforeNotificationStart):
+		case <-clock.Get().After(aggregationDelayBeforeNotificationStart):
 		}
 
 		p.waitStreamDConnectWindowLocker.Do(ctx, func() {
@@ -2495,13 +2228,18 @@ func (p *Panel) Close() (_err error) {
 	// TODO: remove observability.Go, Quit should be executed synchronously,
 	// but there is a bug in fyne and it hangs
 	observability.Go(context.TODO(), func(ctx context.Context) {
-		p.app.Quit()
+		p.app.Driver().DoFromGoroutine(func() {
+			p.app.Quit()
+		}, false)
 	})
 	return err.ErrorOrNil()
 }
 
 func (p *Panel) GetStreamDConfig(ctx context.Context) (*streamdconfig.Config, error) {
 	return xsync.DoR2(ctx, &p.configCacheLocker, func() (*streamdconfig.Config, error) {
+		if p.configCache == nil {
+			return nil, fmt.Errorf("config cache is nil")
+		}
 		var r streamdconfig.Config
 		var b bytes.Buffer
 		_, err := p.configCache.WriteTo(&b)
@@ -2595,4 +2333,88 @@ func (p *Panel) localConfigCacheUpdater(ctx context.Context) (_err error) {
 	})
 
 	return nil
+}
+
+func (p *Panel) updateObjects(container *fyne.Container, objects []fyne.CanvasObject) {
+	if p.app == nil {
+		container.Objects = objects
+		container.Refresh()
+		return
+	}
+	p.app.Driver().DoFromGoroutine(func() {
+		container.Objects = objects
+		container.Refresh()
+	}, true)
+}
+
+func (p *Panel) updateStreamsSelectButtonLabel() {
+	count := 0
+	for _, selected := range p.selectedStreams {
+		if selected {
+			count++
+		}
+	}
+	p.streamsSelectButton.SetText(fmt.Sprintf("Streams (%d)", count))
+}
+
+func (p *Panel) syncSelectedStreamsToDaemon(ctx context.Context) {
+	var selected []streamcontrol.StreamIDFullyQualified
+	for id, selected_ := range p.selectedStreams {
+		if selected_ {
+			selected = append(selected, id)
+		}
+	}
+	slices.SortFunc(selected, func(a, b streamcontrol.StreamIDFullyQualified) int {
+		return strings.Compare(a.String(), b.String())
+	})
+
+	p.configCacheLocker.Do(ctx, func() {
+		if p.configCache == nil {
+			return
+		}
+
+		oldSelected := make([]streamcontrol.StreamIDFullyQualified, len(p.configCache.SelectedStreamIDs))
+		copy(oldSelected, p.configCache.SelectedStreamIDs)
+		slices.SortFunc(oldSelected, func(a, b streamcontrol.StreamIDFullyQualified) int {
+			return strings.Compare(a.String(), b.String())
+		})
+
+		if slices.Equal(selected, oldSelected) {
+			return
+		}
+
+		p.configCache.SelectedStreamIDs = selected
+		if err := p.StreamD.SetConfig(ctx, p.configCache); err != nil {
+			logger.Errorf(ctx, "unable to sync selected streams to daemon: %v", err)
+		}
+	})
+}
+
+func (p *Panel) openStreamsSelect(ctx context.Context) {
+	var items []fyne.CanvasObject
+	for _, streamID := range p.allStreams {
+		streamID := streamID // capture
+		check := widget.NewCheck(fmt.Sprintf("%s:%s:%s", streamID.PlatformID, streamID.AccountID, streamID.StreamID), func(checked bool) {
+			p.selectedStreams[streamID] = checked
+			p.updateStreamsSelectButtonLabel()
+			p.syncSelectedStreamsToDaemon(ctx)
+		})
+		check.SetChecked(p.selectedStreams[streamID])
+		items = append(items, check)
+	}
+
+	content := container.NewVBox(items...)
+	scroll := container.NewVScroll(content)
+	scroll.SetMinSize(fyne.NewSize(300, 400))
+
+	dialog.ShowCustom("Select streams", "Close", scroll, p.mainWindow)
+}
+
+func (p *Panel) isAnySelected(platID streamcontrol.PlatformID) bool {
+	for streamID, selected := range p.selectedStreams {
+		if selected && streamID.PlatformID == platID {
+			return true
+		}
+	}
+	return false
 }

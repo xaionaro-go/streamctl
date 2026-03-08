@@ -8,6 +8,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
 	"github.com/xaionaro-go/observability"
+	"github.com/xaionaro-go/streamctl/pkg/clock"
 	"github.com/xaionaro-go/streamctl/pkg/command"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
 	"github.com/xaionaro-go/xsync"
@@ -34,6 +35,9 @@ func (d *StreamD) initOBSRestarter(
 func (d *StreamD) updateOBSRestarterConfig(
 	ctx context.Context,
 ) error {
+	if d.obsRestarter == nil {
+		return nil
+	}
 	return d.obsRestarter.updateConfig(ctx)
 }
 
@@ -59,16 +63,17 @@ func (r *obsRestarter) updateConfigNoLock(
 
 	obsCfg := obs.GetConfig(ctx, cfg.Backends)
 	if obsCfg == nil {
-		return fmt.Errorf("OBS config is not set")
-	}
-
-	if !obsCfg.Config.RestartOnUnavailable.Enable {
 		return nil
 	}
 
-	execCmd, err := command.Expand(ctx, obsCfg.Config.RestartOnUnavailable.ExecCommand, nil)
+	accountCfg := obsCfg.Accounts[""]
+	if !accountCfg.RestartOnUnavailable.Enable {
+		return nil
+	}
+
+	execCmd, err := command.Expand(ctx, accountCfg.RestartOnUnavailable.ExecCommand, nil)
 	if err != nil {
-		return fmt.Errorf("unable to expand the command '%s': %w", obsCfg.Config.RestartOnUnavailable.ExecCommand, err)
+		return fmt.Errorf("unable to expand the command '%s': %w", accountCfg.RestartOnUnavailable.ExecCommand, err)
 	}
 
 	ctx, cancelFn := context.WithCancel(ctx)
@@ -86,7 +91,7 @@ func (r *obsRestarter) loop(
 	logger.Debugf(ctx, "OBS-restarter: loop: %#+v", execCmd)
 	defer logger.Debugf(ctx, "/OBS-restarter: loop: %#+v", execCmd)
 
-	t := time.NewTicker(time.Second)
+	t := clock.Get().Ticker(time.Second)
 	defer t.Stop()
 	for {
 		select {
@@ -105,7 +110,7 @@ func (r *obsRestarter) checkOBSAndRestartIfNeeded(
 	ctx context.Context,
 	execCmd []string,
 ) {
-	obsServer, closeFn, err := r.streamD.OBS(ctx)
+	obsServer, closeFn, err := r.streamD.OBS(ctx, "")
 	if closeFn != nil {
 		defer closeFn()
 	}

@@ -11,7 +11,6 @@ import (
 	"github.com/xaionaro-go/eventbus"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/expression"
-	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config/action"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config/event"
@@ -82,12 +81,35 @@ func (d *StreamD) doAction(
 	switch a := a.(type) {
 	case *action.Noop:
 		return nil
-	case *action.StartStream:
-		return d.StartStream(ctx, a.PlatID, a.Title, a.Description, a.Profile, a.CustomArgs...)
-	case *action.StartStreamByProfileName:
-		return d.doActionStartStreamByProfileName(ctx, a)
-	case *action.EndStream:
-		return d.EndStream(ctx, a.PlatID)
+	case *action.SetStreamActive:
+		return d.SetStreamActive(ctx, a.StreamID, a.IsActive)
+	case *action.SetTitle:
+		return d.SetTitle(ctx, a.StreamID, a.Title)
+	case *action.SetDescription:
+		return d.SetDescription(ctx, a.StreamID, a.Description)
+	case *action.ApplyProfile:
+		cfg, err := d.GetConfig(ctx)
+		if err != nil {
+			return err
+		}
+		platCfg := cfg.Backends[a.StreamID.PlatformID]
+		if platCfg == nil {
+			return fmt.Errorf("platform %s not found in config", a.StreamID.PlatformID)
+		}
+		profileRaw, ok := platCfg.Accounts[a.StreamID.AccountID]
+		if !ok {
+			return fmt.Errorf("account %s not found for platform %s", a.StreamID.AccountID, a.StreamID.PlatformID)
+		}
+		profilesByStream := profileRaw.GetStreamProfiles()
+		sProfs, ok := profilesByStream[a.StreamID.StreamID]
+		if !ok {
+			return fmt.Errorf("stream %s not found for account %s on platform %s", a.StreamID.StreamID, a.StreamID.AccountID, a.StreamID.PlatformID)
+		}
+		profile, ok := sProfs[a.Profile]
+		if !ok {
+			return fmt.Errorf("profile %s not found for stream %s of account %s on platform %s", a.Profile, a.StreamID.StreamID, a.StreamID.AccountID, a.StreamID.PlatformID)
+		}
+		return d.ApplyProfile(ctx, a.StreamID, profile)
 	case *action.OBSItemShowHide:
 		value, err := expression.Eval[bool](a.ValueExpression, exprCtx)
 		if err != nil {
@@ -104,32 +126,6 @@ func (d *StreamD) doAction(
 	default:
 		return fmt.Errorf("unknown action type: %T", a)
 	}
-}
-
-func (d *StreamD) doActionStartStreamByProfileName(
-	ctx context.Context,
-	a *action.StartStreamByProfileName,
-) error {
-	cfg, err := d.GetConfig(ctx)
-	if err != nil {
-		return fmt.Errorf("unable to get the config: %w", err)
-	}
-	metadata := cfg.ProfileMetadata[streamcontrol.ProfileName(a.ProfileName)]
-	profile, ok := cfg.Backends[a.PlatID].GetStreamProfile(streamcontrol.ProfileName(a.ProfileName))
-	if !ok {
-		return fmt.Errorf("unable to get the profile for '%s'", a.ProfileName)
-	}
-
-	title := metadata.DefaultStreamTitle
-	if a.Title != nil {
-		title = *a.Title
-	}
-	description := metadata.DefaultStreamDescription
-	if a.Description != nil {
-		description = *a.Description
-	}
-
-	return d.StartStream(ctx, a.PlatID, title, description, profile)
 }
 
 func eventSubToChan[T any](
@@ -174,6 +170,9 @@ func eventSubToChanUsingTopic[T, E any](
 	}
 
 	sub := eventbus.SubscribeWithCustomTopic[T, E](ctx, eventBus, topic, opts...)
+	if sub == nil {
+		return nil, fmt.Errorf("unable to subscribe to topic %v", topic)
+	}
 	return sub.EventChan(), nil
 }
 
@@ -201,16 +200,16 @@ func (d *StreamD) SubscribeToStreamServersChanges(
 	return eventSubToChan[api.DiffStreamServers](ctx, d.EventBus, 1000, nil)
 }
 
-func (d *StreamD) SubscribeToStreamDestinationsChanges(
+func (d *StreamD) SubscribeToStreamSinksChanges(
 	ctx context.Context,
-) (<-chan api.DiffStreamDestinations, error) {
-	return eventSubToChan[api.DiffStreamDestinations](ctx, d.EventBus, 1000, nil)
+) (<-chan api.DiffStreamSinks, error) {
+	return eventSubToChan[api.DiffStreamSinks](ctx, d.EventBus, 1000, nil)
 }
 
-func (d *StreamD) SubscribeToIncomingStreamsChanges(
+func (d *StreamD) SubscribeToStreamSourcesChanges(
 	ctx context.Context,
-) (<-chan api.DiffIncomingStreams, error) {
-	return eventSubToChan[api.DiffIncomingStreams](ctx, d.EventBus, 1000, nil)
+) (<-chan api.DiffStreamSources, error) {
+	return eventSubToChan[api.DiffStreamSources](ctx, d.EventBus, 1000, nil)
 }
 
 func (d *StreamD) SubscribeToStreamForwardsChanges(
@@ -227,7 +226,7 @@ func (d *StreamD) SubscribeToStreamPlayersChanges(
 
 func (d *StreamD) notifyStreamPlayerStart(
 	ctx context.Context,
-	streamID streamtypes.StreamID,
+	streamSourceID streamtypes.StreamSourceID,
 ) {
 	logger.Debugf(ctx, "notifyStreamPlayerStart")
 	defer logger.Debugf(ctx, "/notifyStreamPlayerStart")

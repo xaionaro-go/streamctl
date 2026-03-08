@@ -56,7 +56,7 @@ func newShoutoutPage(
 	result := &shoutoutPage{
 		Panel: p,
 	}
-	getUserIDs := func(platID streamcontrol.PlatformName, text string) []config.ChatUserID {
+	getUserIDs := func(platID streamcontrol.PlatformID, text string) []config.ChatUserID {
 		var result []config.ChatUserID
 		for word := range strings.SplitSeq(text, ",") {
 			word = strings.Trim(word, " \n\t\r")
@@ -79,7 +79,7 @@ func newShoutoutPage(
 	platRadio.SetSelected(string(youtube.ID))
 	nowButton := widget.NewButtonWithIcon("Shoutout now!", theme.MediaPlayIcon(), func() {
 		dialog.NewConfirm("shoutout right now?", "Please confirm if you want to throw a shoutout right now", func(b bool) {
-			err := p.StreamD.Shoutout(ctx, streamcontrol.PlatformName(nowPlatID), streamcontrol.UserID(userEntry.Text))
+			err := p.StreamD.Shoutout(ctx, streamcontrol.PlatformID(nowPlatID), streamcontrol.UserID(userEntry.Text))
 			if err != nil {
 				p.DisplayError(err)
 			}

@@ -120,7 +120,7 @@ func runStreamd(
 			errmon.ObserveErrorCtx(ctx, err)
 			return err
 		},
-		func(listenPort uint16, platID streamcontrol.PlatformName, authURL string) bool {
+		func(listenPort uint16, platID streamcontrol.PlatformID, authURL string) bool {
 			logger.Debugf(ctx, "streamd.UI.OpenOAuthURL(%d, %s, '%s')", listenPort, platID, authURL)
 			defer logger.Debugf(
 				ctx,
@@ -278,7 +278,7 @@ func initGRPCServers(
 		logger.Panicf(ctx, "streamD is nil")
 	}
 
-	obsGRPC, obsGRPCClose, err := streamD.OBS(ctx)
+	obsGRPC, obsGRPCClose, err := streamD.OBS(ctx, "")
 	observability.Go(ctx, func(ctx context.Context) {
 		<-ctx.Done()
 		listener.Close()

@@ -13,14 +13,17 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/observability"
 	recoder "github.com/xaionaro-go/recoder"
+	"github.com/xaionaro-go/streamctl/pkg/secret"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
+	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/xsync"
 )
 
 type StreamForward struct {
-	StreamID         types.StreamID
-	DestinationID    types.DestinationID
+	StreamSourceID   types.StreamSourceID
+	StreamSinkID     types.StreamSinkIDFullyQualified
 	Enabled          bool
 	Encode           types.EncodeConfig
 	Quirks           types.ForwardingQuirks
@@ -31,9 +34,10 @@ type StreamForward struct {
 
 type ActiveStreamForwarding struct {
 	*StreamForwards
-	StreamID              types.StreamID
-	DestinationURL        *url.URL
-	DestinationStreamKey  string
+	StreamSourceID        types.StreamSourceID
+	StreamSinkID          types.StreamSinkIDFullyQualified
+	StreamSinkURL         *url.URL
+	StreamSinkStreamKey   secret.String
 	ReadCount             atomic.Uint64
 	WriteCount            atomic.Uint64
 	Encode                types.EncodeConfig
@@ -47,26 +51,63 @@ type ActiveStreamForwarding struct {
 	recodingCancelFunc context.CancelFunc
 }
 
+type ActiveStreamForwardingOption interface {
+	apply(*ActiveStreamForwarding)
+}
+
 func (fwds *StreamForwards) NewActiveStreamForward(
 	ctx context.Context,
-	streamID types.StreamID,
-	urlString string,
-	streamKey string,
+	streamSourceID types.StreamSourceID,
+	streamSinkID types.StreamSinkIDFullyQualified,
 	encode types.EncodeConfig,
+	quirks types.ForwardingQuirks,
 	pauseFunc func(ctx context.Context, fwd *ActiveStreamForwarding),
-	opts ...Option,
-) (_ret *ActiveStreamForwarding, _err error) {
-	logger.Debugf(
-		ctx,
-		"NewActiveStreamForward(ctx, '%s', '%s', relayService, pauseFunc)",
-		streamID,
-		urlString,
+	opts ...ActiveStreamForwardingOption,
+) (_ret *StreamForward, _err error) {
+	var (
+		urlString string
+		streamKey secret.String
 	)
+
+	sink, err := fwds.findStreamSinkByID(ctx, streamSinkID)
+	if err != nil {
+		return nil, err
+	}
+
+	if sink.StreamID != nil {
+		cfg, err := fwds.PlatformsController.GetStreamSinkConfig(ctx, *sink.StreamID)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get config for dynamic sink '%s': %w", streamSinkID, err)
+		}
+		urlString = cfg.URL
+		streamKey = cfg.StreamKey
+	} else if sink.URL == "" && streamSinkID.Type == types.StreamSinkTypeLocal {
+		streamSourceID := types.StreamSourceID(streamSinkID.ID)
+		srvs, err := fwds.GetPortServers(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get port servers: %w", err)
+		}
+		for _, srv := range srvs {
+			if srv.Type == streamtypes.ServerTypeRTMP {
+				urlString = fmt.Sprintf("rtmp://localhost%s/local/%s", srv.ListenAddr, streamSourceID)
+				break
+			}
+		}
+		if urlString == "" {
+			return nil, fmt.Errorf("local RTMP server not found")
+		}
+	} else {
+		urlString = sink.URL
+		streamKey = sink.StreamKey
+	}
+
+	logger.Debugf(ctx, "NewActiveStreamForward(ctx, '%s', '%s', '%s', %#+v)", streamSourceID, streamSinkID, urlString, encode)
 	defer func() {
 		logger.Debugf(
 			ctx,
-			"/NewActiveStreamForward(ctx, '%s', '%s', relayService, pauseFunc): %#+v %v",
-			streamID,
+			"/NewActiveStreamForward(ctx, '%s', '%s', '%s', %#+v): %v %v",
+			streamSourceID,
+			streamSinkID,
 			urlString,
 			_ret,
 			_err,
@@ -80,9 +121,10 @@ func (fwds *StreamForwards) NewActiveStreamForward(
 	fwd := &ActiveStreamForwarding{
 		RecoderFactoryFactory: fwds.RecoderFactory,
 		StreamForwards:        fwds,
-		StreamID:              streamID,
-		DestinationURL:        urlParsed,
-		DestinationStreamKey:  streamKey,
+		StreamSourceID:        streamSourceID,
+		StreamSinkID:          streamSinkID,
+		StreamSinkURL:         urlParsed,
+		StreamSinkStreamKey:   streamKey,
 		PauseFunc:             pauseFunc,
 		Encode:                encode,
 	}
@@ -92,7 +134,14 @@ func (fwds *StreamForwards) NewActiveStreamForward(
 	if err := fwd.Start(ctx); err != nil {
 		return nil, fmt.Errorf("unable to start the forwarder: %w", err)
 	}
-	return fwd, nil
+	return &StreamForward{
+		StreamSourceID:   streamSourceID,
+		StreamSinkID:     streamSinkID,
+		Enabled:          true,
+		Encode:           encode,
+		Quirks:           quirks,
+		ActiveForwarding: fwd,
+	}, nil
 }
 
 func (fwd *ActiveStreamForwarding) Start(ctx context.Context) (_err error) {
@@ -142,8 +191,8 @@ func (fwd *ActiveStreamForwarding) WaitForPublisher(
 		default:
 		}
 
-		logger.Debugf(ctx, "wait for stream '%s'", fwd.StreamID)
-		publisherChan, err := fwd.StreamServer.WaitPublisherChan(ctx, fwd.StreamID, false)
+		logger.Debugf(ctx, "wait for stream '%s'", fwd.StreamSourceID)
+		publisherChan, err := fwd.StreamServer.WaitPublisherChan(ctx, fwd.StreamSourceID, false)
 		if err != nil {
 			return nil, fmt.Errorf("unable to get a channel to wait for a publisher: %w", err)
 		}
@@ -192,18 +241,48 @@ func (fwd *ActiveStreamForwarding) waitForPublisherAndStart(
 		}
 	})
 
-	logger.Debugf(ctx, "DestinationStreamingLocker.Lock(ctx, '%s')", fwd.DestinationURL)
-	destinationUnlocker := fwd.StreamForwards.DestinationStreamingLocker.Lock(
+	var sinkStreamID *streamcontrol.StreamIDFullyQualified
+	fwd.WithConfig(ctx, func(ctx context.Context, cfg *types.Config) {
+		if fwd.StreamSinkID.Type == types.StreamSinkTypeCustom {
+			sink := cfg.StaticSinks[fwd.StreamSinkID.ID]
+			if sink != nil {
+				sinkStreamID = sink.StreamSourceID
+			}
+		}
+	})
+
+	if sinkStreamID != nil {
+		observability.Go(ctx, func(ctx context.Context) {
+			defer cancelFn()
+			t := time.NewTicker(time.Second)
+			defer t.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.C:
+				}
+				started, err := fwd.PlatformsController.CheckStreamStartedByStreamSourceID(ctx, *sinkStreamID)
+				if err == nil && !started {
+					logger.Infof(ctx, "sink stream %v stopped, stopping forwarding", *sinkStreamID)
+					return
+				}
+			}
+		})
+	}
+
+	logger.Debugf(ctx, "StreamSinkStreamingLocker.Lock(ctx, '%s')", fwd.StreamSinkURL)
+	sinkUnlocker := fwd.StreamForwards.StreamSinkStreamingLocker.Lock(
 		ctx,
-		fwd.DestinationURL,
+		fwd.StreamSinkURL,
 	)
 	defer func() {
-		if destinationUnlocker != nil { // if ctx was cancelled before we locked then the unlocker is nil
-			destinationUnlocker.Unlock()
+		if sinkUnlocker != nil { // if ctx was cancelled before we locked then the unlocker is nil
+			sinkUnlocker.Unlock()
 		}
-		logger.Debugf(ctx, "DestinationStreamingLocker.Unlock(ctx, '%s')", fwd.DestinationURL)
+		logger.Debugf(ctx, "StreamSinkStreamingLocker.Unlock(ctx, '%s')", fwd.StreamSinkURL)
 	}()
-	logger.Debugf(ctx, "/DestinationStreamingLocker.Lock(ctx, '%s')", fwd.DestinationURL)
+	logger.Debugf(ctx, "/StreamSinkStreamingLocker.Lock(ctx, '%s')", fwd.StreamSinkURL)
 
 	select {
 	case <-ctx.Done():
@@ -363,10 +442,10 @@ func (fwd *ActiveStreamForwarding) openInputFor(
 	factoryInstance recoder.Factory,
 	publisher types.Publisher,
 ) (recoder.Input, error) {
-	preferredScheme := fwd.DestinationURL.Scheme
+	preferredScheme := fwd.StreamSinkURL.Scheme
 	inputURL, err := streamportserver.GetURLForLocalStreamID(
 		ctx,
-		fwd.StreamServer, fwd.StreamID,
+		fwd.StreamServer, fwd.StreamSourceID,
 		func(a, b *streamportserver.Config) bool {
 			logger.Debugf(ctx, "preferred: '%s', a: '%s', b: '%s'", preferredScheme, a.Type, b.Type)
 			switch {
@@ -402,14 +481,14 @@ func (fwd *ActiveStreamForwarding) openOutputFor(
 ) (recoder.Output, error) {
 	output, err := factoryInstance.NewOutputFromURL(
 		ctx,
-		fwd.DestinationURL.String(),
-		fwd.DestinationStreamKey,
+		fwd.StreamSinkURL.String(),
+		fwd.StreamSinkStreamKey.Get(),
 		recoder.OutputConfig{},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("unable to open '%s' as the output: %w", fwd.DestinationURL, err)
+		return nil, fmt.Errorf("unable to open '%s' as the output: %w", fwd.StreamSinkURL, err)
 	}
-	logger.Debugf(ctx, "opened '%s' as the output", fwd.DestinationURL)
+	logger.Debugf(ctx, "opened '%s' as the output", fwd.StreamSinkURL)
 
 	return output, nil
 }
@@ -485,5 +564,5 @@ func (fwd *ActiveStreamForwarding) String() string {
 	if fwd == nil {
 		return "null"
 	}
-	return fmt.Sprintf("%s->%s", fwd.StreamID, fwd.DestinationURL)
+	return fmt.Sprintf("%s->%s", fwd.StreamSourceID, fwd.StreamSinkURL)
 }

@@ -1,6 +1,7 @@
 package streampanel
 
 import (
+	"fyne.io/fyne/v2"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/config"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 )
@@ -42,6 +43,14 @@ type OptionOAuthListenPortYouTube uint16
 
 func (o OptionOAuthListenPortYouTube) Apply(cfg *Config) {
 	cfg.OAuth.ListenPorts.YouTube = uint16(o)
+}
+
+type OptionApp struct {
+	App fyne.App
+}
+
+func (o OptionApp) Apply(cfg *Config) {
+	cfg.App = o.App
 }
 
 type loopConfig struct {

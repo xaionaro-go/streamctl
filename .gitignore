@@ -14,3 +14,11 @@ priv
 .cache
 .ccache
 /.github/copilot-instructions.md
+/.github/instructions/test_plan.md
+*.test
+/streamctl
+/streamd
+/go.work*
+/*.txt
+/*.log
+/docs

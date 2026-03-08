@@ -3,6 +3,7 @@ package streampanel
 import (
 	"context"
 	"fmt"
+	"github.com/xaionaro-go/streamctl/pkg/clock"
 	"image/color"
 	"sync"
 	"time"
@@ -33,7 +34,7 @@ type streamStartedWindowStreamStatus struct {
 
 type streamStartedWindow struct {
 	*Panel
-	streamStatus map[streamcontrol.PlatformName]*streamStartedWindowStreamStatus
+	streamStatus map[streamcontrol.PlatformID]*streamStartedWindowStreamStatus
 }
 
 func (p *Panel) openStreamStartedWindow(
@@ -41,9 +42,9 @@ func (p *Panel) openStreamStartedWindow(
 ) {
 	w := &streamStartedWindow{
 		Panel:        p,
-		streamStatus: make(map[streamcontrol.PlatformName]*streamStartedWindowStreamStatus),
+		streamStatus: make(map[streamcontrol.PlatformID]*streamStartedWindowStreamStatus),
 	}
-	for _, platID := range []streamcontrol.PlatformName{
+	for _, platID := range []streamcontrol.PlatformID{
 		obs.ID,
 		twitch.ID,
 		kick.ID,
@@ -68,7 +69,7 @@ var (
 
 func (w *streamStartedWindow) setStreamStatus(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
+	platID streamcontrol.PlatformID,
 	src *streamStatus,
 ) {
 	logger.Debugf(ctx, "setStreamStatus(ctx, '%s', src)", platID)
@@ -114,7 +115,7 @@ func (w *streamStartedWindow) setStreamStatusColorAndText(
 	text string,
 ) {
 	logger.Debugf(ctx, "setStreamStatusColorAndText(dst, %v, '%s')", bgColor, text)
-	dst.LastUpdatedAt = time.Now()
+	dst.LastUpdatedAt = clock.Get().Now()
 
 	background := canvas.NewRectangle(bgColor)
 	textWidget := canvas.NewText(text, color.White)
@@ -139,7 +140,7 @@ func (w *streamStartedWindow) updateStreamStatusLoop(
 	wg.Add(1)
 	observability.Go(ctx, func(ctx context.Context) {
 		defer wg.Done()
-		t := time.NewTicker(time.Second)
+		t := clock.Get().Ticker(time.Second)
 		defer t.Stop()
 		for {
 			select {
@@ -154,7 +155,7 @@ func (w *streamStartedWindow) updateStreamStatusLoop(
 	wg.Add(1)
 	observability.Go(ctx, func(ctx context.Context) {
 		defer wg.Done()
-		t := time.NewTicker(time.Second)
+		t := clock.Get().Ticker(time.Second)
 		defer t.Stop()
 		for {
 			select {
@@ -184,7 +185,7 @@ func (w *streamStartedWindow) renderStreamStatus(
 func (w *streamStartedWindow) open(
 	ctx context.Context,
 ) {
-	obsServer, obsServerClose, err := w.StreamD.OBS(ctx)
+	obsServer, obsServerClose, err := w.StreamD.OBS(ctx, "")
 	if obsServerClose != nil {
 		defer obsServerClose()
 	}
@@ -219,7 +220,7 @@ func (w *streamStartedWindow) open(
 		for _, scene := range sceneListResp.Scenes {
 			sceneButtons.Add(widget.NewButton(scene.GetSceneName(), func() {
 				switchScene := func() {
-					obsServer, obsServerClose, err := w.StreamD.OBS(ctx)
+					obsServer, obsServerClose, err := w.StreamD.OBS(ctx, "")
 					if obsServerClose != nil {
 						defer obsServerClose()
 					}

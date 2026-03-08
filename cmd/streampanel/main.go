@@ -71,10 +71,18 @@ func runPanel(
 	logger.Debugf(ctx, "runPanel: %#+v", flags)
 	defer logger.Debugf(ctx, "/runPanel")
 
-	opts := []streampanel.Option{
-		streampanel.OptionOAuthListenPortTwitch(flags.OAuthListenPortTwitch),
-		streampanel.OptionOAuthListenPortKick(flags.OAuthListenPortKick),
-		streampanel.OptionOAuthListenPortYouTube(flags.OAuthListenPortYouTube),
+	opts := []streampanel.Option{}
+	for provider, port := range flags.OAuthListenPorts {
+		switch provider {
+		case "twitch":
+			opts = append(opts, streampanel.OptionOAuthListenPortTwitch(port))
+		case "kick":
+			opts = append(opts, streampanel.OptionOAuthListenPortKick(port))
+		case "youtube":
+			opts = append(opts, streampanel.OptionOAuthListenPortYouTube(port))
+		default:
+			panic(fmt.Errorf("unexpected provider '%s'", provider))
+		}
 	}
 	if flags.RemoteAddr != "" {
 		opts = append(opts, streampanel.OptionRemoteStreamDAddr(flags.RemoteAddr))
@@ -115,7 +123,7 @@ func runPanel(
 		// to erase an oauth request answered locally from "UnansweredOAuthRequests" in the GRPC server:
 		panel.OnInternallySubmittedOAuthCode = func(
 			ctx context.Context,
-			platID streamcontrol.PlatformName,
+			platID streamcontrol.PlatformID,
 			code string,
 		) error {
 			_, err := streamdGRPC.SubmitOAuthCode(ctx, &streamd_grpc.SubmitOAuthCodeRequest{

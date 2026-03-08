@@ -14,7 +14,7 @@ import (
 
 type StreamServer interface {
 	streamplayer.StreamServer
-	types.ActiveIncomingStreamIDser
+	types.ActiveStreamSourceIDsProvider
 
 	Init(
 		ctx context.Context,
@@ -32,42 +32,40 @@ type StreamServer interface {
 		server streamportserver.Server,
 	) error
 
-	AddIncomingStream(
+	AddStreamSource(
 		ctx context.Context,
-		streamID types.StreamID,
+		streamSourceID types.StreamSourceID,
 	) error
-	ListIncomingStreams(
+	ListStreamSources(
 		ctx context.Context,
-	) []types.IncomingStream
-	RemoveIncomingStream(
+	) []types.StreamSource
+	RemoveStreamSource(
 		ctx context.Context,
-		streamID types.StreamID,
+		streamSourceID types.StreamSourceID,
 	) error
 
-	ListStreamDestinations(
+	ListStreamSinks(
 		ctx context.Context,
-	) ([]types.StreamDestination, error)
-	AddStreamDestination(
+	) ([]types.StreamSink, error)
+	AddStreamSink(
 		ctx context.Context,
-		destinationID types.DestinationID,
-		url string,
-		streamKey string,
+		streamSinkID types.StreamSinkIDFullyQualified,
+		sink types.StreamSinkConfig,
 	) error
-	UpdateStreamDestination(
+	UpdateStreamSink(
 		ctx context.Context,
-		destinationID types.DestinationID,
-		url string,
-		streamKey string,
+		streamSinkID types.StreamSinkIDFullyQualified,
+		sink types.StreamSinkConfig,
 	) error
-	RemoveStreamDestination(
+	RemoveStreamSink(
 		ctx context.Context,
-		destinationID types.DestinationID,
+		streamSinkID types.StreamSinkIDFullyQualified,
 	) error
 
 	AddStreamForward(
 		ctx context.Context,
-		streamID types.StreamID,
-		destinationID types.DestinationID,
+		streamSourceID types.StreamSourceID,
+		streamSinkID types.StreamSinkIDFullyQualified,
 		enabled bool,
 		encode types.EncodeConfig,
 		quirks types.ForwardingQuirks,
@@ -77,21 +75,21 @@ type StreamServer interface {
 	) ([]streamforward.StreamForward, error)
 	UpdateStreamForward(
 		ctx context.Context,
-		streamID types.StreamID,
-		destinationID types.DestinationID,
+		streamSourceID types.StreamSourceID,
+		streamSinkID types.StreamSinkIDFullyQualified,
 		enabled bool,
 		encode types.EncodeConfig,
 		quirks types.ForwardingQuirks,
 	) (*streamforward.StreamForward, error)
 	RemoveStreamForward(
 		ctx context.Context,
-		streamID types.StreamID,
-		dstID types.DestinationID,
+		streamSourceID types.StreamSourceID,
+		streamSinkID types.StreamSinkIDFullyQualified,
 	) error
 
 	AddStreamPlayer(
 		ctx context.Context,
-		streamID types.StreamID,
+		streamSourceID types.StreamSourceID,
 		playerType player.Backend,
 		disabled bool,
 		streamPlaybackConfig sptypes.Config,
@@ -99,7 +97,7 @@ type StreamServer interface {
 	) error
 	UpdateStreamPlayer(
 		ctx context.Context,
-		streamID types.StreamID,
+		streamSourceID types.StreamSourceID,
 		playerType player.Backend,
 		disabled bool,
 		streamPlaybackConfig sptypes.Config,
@@ -107,18 +105,18 @@ type StreamServer interface {
 	) error
 	RemoveStreamPlayer(
 		ctx context.Context,
-		streamID types.StreamID,
+		streamSourceID types.StreamSourceID,
 	) error
 	ListStreamPlayers(
 		ctx context.Context,
 	) ([]types.StreamPlayer, error)
 	GetStreamPlayer(
 		ctx context.Context,
-		streamID types.StreamID,
+		streamSourceID types.StreamSourceID,
 	) (*types.StreamPlayer, error)
 	GetActiveStreamPlayer(
 		ctx context.Context,
-		streamID types.StreamID,
+		streamSourceID types.StreamSourceID,
 	) (player.Player, error)
 
 	ListServers(ctx context.Context) []streamportserver.Server

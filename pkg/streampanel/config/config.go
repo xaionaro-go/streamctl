@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"time"
 
+	"fyne.io/fyne/v2"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/clock"
 	"github.com/xaionaro-go/streamctl/pkg/screenshot"
 	streamd "github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
@@ -54,11 +55,11 @@ type DashboardConfig struct {
 }
 
 type StreamMonitor struct {
-	IsEnabled   bool                 `yaml:"is_enabled"`
-	StreamDAddr string               `yaml:"streamd_addr"`
-	StreamID    streamtypes.StreamID `yaml:"stream_id"`
-	VideoTracks []uint               `yaml:"tracks_video,omitempty"`
-	AudioTracks []uint               `yaml:"tracks_audio,omitempty"`
+	IsEnabled      bool                       `yaml:"is_enabled"`
+	StreamDAddr    string                     `yaml:"streamd_addr"`
+	StreamSourceID streamtypes.StreamSourceID `yaml:"stream_source_id"`
+	VideoTracks    []uint                     `yaml:"tracks_video,omitempty"`
+	AudioTracks    []uint                     `yaml:"tracks_audio,omitempty"`
 }
 
 type MonitorsConfig struct {
@@ -66,6 +67,7 @@ type MonitorsConfig struct {
 }
 
 type Config struct {
+	App               fyne.App         `yaml:"-"`
 	RemoteStreamDAddr string           `yaml:"streamd_remote"`
 	BuiltinStreamD    streamd.Config   `yaml:"streamd_builtin"`
 	Screenshot        ScreenshotConfig `yaml:"screenshot"`
@@ -134,7 +136,7 @@ func WriteConfigToPath(
 	if err != nil {
 		logger.Errorf(ctx, "unable to create directory '%s'", backupDir)
 	} else {
-		now := time.Now()
+		now := clock.Get().Now()
 		pathBackup := path.Join(
 			backupDir,
 			fmt.Sprintf(

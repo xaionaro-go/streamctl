@@ -4,20 +4,13 @@ import (
 	"context"
 	"fmt"
 	"strings"
-
-	"github.com/facebookincubator/go-belt/tool/logger"
 )
 
 func (p *Panel) generateNewTitle(
 	ctx context.Context,
 ) {
-	profile := p.getSelectedProfile()
-
-	tagsString := strings.Join(profile.TopicTags, ", ")
-	logger.Debugf(ctx, "tags == %s", tagsString)
-
 	// the prompt is developed by noguri
-	t, err := p.generateAlternativeTextFor(ctx, fmt.Sprintf(`Based on my keywords, generate one short YouTube single-line title for a stream.
+	t, err := p.generateAlternativeTextFor(ctx, `Based on my keywords, generate one short YouTube single-line title for a stream.
 
 Start with a red dot emoji (🔴).
 
@@ -27,9 +20,7 @@ Use not loud / not overhyped language.
 
 Make it sound viral and inviting but still relaxed.
 
-Always include the word "Stream" or "Live" naturally in the title.
-
-My keywords: %s`, tagsString))
+Always include the word "Stream" or "Live" naturally in the title.`)
 	if err != nil {
 		p.DisplayError(err)
 		return

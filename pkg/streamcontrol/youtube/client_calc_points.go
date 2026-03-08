@@ -25,7 +25,8 @@ func init() {
 	}
 }
 
-// see also: https://developers.google.com/youtube/v3/determine_quota_cost
+// ClientCalcPoints wraps a client with YouTube API quota tracking.
+// See also: https://developers.google.com/youtube/v3/determine_quota_cost
 type ClientCalcPoints struct {
 	Client          client
 	UsedPoints      atomic.Uint64
@@ -121,6 +122,23 @@ func (c *ClientCalcPoints) GetStreams(
 	return c.Client.GetStreams(ctx, parts)
 }
 
+func (c *ClientCalcPoints) InsertStream(
+	ctx context.Context,
+	s *youtube.LiveStream,
+	parts []string,
+) (_ret *youtube.LiveStream, _err error) {
+	defer func() { c.addUsedPointsIfNoError(ctx, 50, _err) }()
+	return c.Client.InsertStream(ctx, s, parts)
+}
+
+func (c *ClientCalcPoints) DeleteStream(
+	ctx context.Context,
+	id string,
+) (_err error) {
+	defer func() { c.addUsedPointsIfNoError(ctx, 50, _err) }()
+	return c.Client.DeleteStream(ctx, id)
+}
+
 func (c *ClientCalcPoints) GetVideos(
 	ctx context.Context,
 	broadcastIDs []string,
@@ -135,7 +153,7 @@ func (c *ClientCalcPoints) UpdateVideo(
 	video *youtube.Video,
 	parts []string,
 ) (_err error) {
-	defer func() { c.addUsedPointsIfNoError(ctx, 1, _err) }()
+	defer func() { c.addUsedPointsIfNoError(ctx, 50, _err) }()
 	return c.Client.UpdateVideo(ctx, video, parts)
 }
 
@@ -161,7 +179,7 @@ func (c *ClientCalcPoints) GetPlaylistItems(
 	videoID string,
 	parts []string,
 ) (_ret *youtube.PlaylistItemListResponse, _err error) {
-	defer func() { c.addUsedPointsIfNoError(ctx, 50, _err) }()
+	defer func() { c.addUsedPointsIfNoError(ctx, 1, _err) }()
 	return c.Client.GetPlaylistItems(ctx, playlistID, videoID, parts)
 }
 
@@ -205,7 +223,7 @@ func (c *ClientCalcPoints) DeleteChatMessage(
 	ctx context.Context,
 	messageID string,
 ) (_err error) {
-	defer func() { c.addUsedPointsIfNoError(ctx, 1, _err) }()
+	defer func() { c.addUsedPointsIfNoError(ctx, 50, _err) }()
 	return c.Client.DeleteChatMessage(ctx, messageID)
 }
 
@@ -225,6 +243,6 @@ func (c *ClientCalcPoints) Search(
 	eventType EventType,
 	parts []string,
 ) (_ret *youtube.SearchListResponse, _err error) {
-	defer func() { c.addUsedPointsIfNoError(ctx, 1, _err) }()
+	defer func() { c.addUsedPointsIfNoError(ctx, 100, _err) }()
 	return c.Client.Search(ctx, chanID, eventType, parts)
 }

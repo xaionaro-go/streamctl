@@ -16,30 +16,25 @@ func ActionGRPC2Go(
 	switch a := actionGRPC.ActionOneof.(type) {
 	case *streamd_grpc.Action_NoopRequest:
 		result = &action.Noop{}
-	case *streamd_grpc.Action_StartStreamRequest:
-		platID := streamcontrol.PlatformName(a.StartStreamRequest.PlatID)
-		profile, err := ProfileGRPC2Go(platID, a.StartStreamRequest.GetProfile())
-		if err != nil {
-			return nil, err
+	case *streamd_grpc.Action_SetStreamActiveRequest:
+		result = &action.SetStreamActive{
+			StreamID: StreamIDFullyQualifiedFromGRPC(a.SetStreamActiveRequest.Id),
+			IsActive: a.SetStreamActiveRequest.IsActive,
 		}
-		result = &action.StartStream{
-			PlatID:      platID,
-			Title:       a.StartStreamRequest.Title,
-			Description: a.StartStreamRequest.Description,
-			Profile:     profile,
-			CustomArgs:  nil,
+	case *streamd_grpc.Action_SetTitleRequest:
+		result = &action.SetTitle{
+			StreamID: StreamIDFullyQualifiedFromGRPC(a.SetTitleRequest.Id),
+			Title:    a.SetTitleRequest.Title,
 		}
-	case *streamd_grpc.Action_StartStreamByProfileNameRequest:
-		platID := streamcontrol.PlatformName(a.StartStreamByProfileNameRequest.PlatID)
-		result = &action.StartStreamByProfileName{
-			PlatID:      platID,
-			Title:       a.StartStreamByProfileNameRequest.Title,
-			Description: a.StartStreamByProfileNameRequest.Description,
-			ProfileName: a.StartStreamByProfileNameRequest.ProfileName,
+	case *streamd_grpc.Action_SetDescriptionRequest:
+		result = &action.SetDescription{
+			StreamID:    StreamIDFullyQualifiedFromGRPC(a.SetDescriptionRequest.Id),
+			Description: a.SetDescriptionRequest.Description,
 		}
-	case *streamd_grpc.Action_EndStreamRequest:
-		result = &action.EndStream{
-			PlatID: streamcontrol.PlatformName(a.EndStreamRequest.PlatID),
+	case *streamd_grpc.Action_ApplyProfileRequest:
+		result = &action.ApplyProfile{
+			StreamID: StreamIDFullyQualifiedFromGRPC(a.ApplyProfileRequest.Id),
+			Profile:  streamcontrol.ProfileName(a.ApplyProfileRequest.Profile),
 		}
 	case *streamd_grpc.Action_ObsAction:
 		switch o := a.ObsAction.OBSActionOneOf.(type) {
@@ -71,32 +66,32 @@ func ActionGo2GRPC(
 	switch a := input.(type) {
 	case *action.Noop:
 		result.ActionOneof = &streamd_grpc.Action_NoopRequest{}
-	case *action.StartStream:
-		profileString, err := ProfileGo2GRPC(a.Profile)
-		if err != nil {
-			return nil, fmt.Errorf("unable to serialize the profile: %w", err)
-		}
-		result.ActionOneof = &streamd_grpc.Action_StartStreamRequest{
-			StartStreamRequest: &streamd_grpc.StartStreamRequest{
-				PlatID:      string(a.PlatID),
-				Title:       a.Title,
-				Description: a.Description,
-				Profile:     profileString,
+	case *action.SetStreamActive:
+		result.ActionOneof = &streamd_grpc.Action_SetStreamActiveRequest{
+			SetStreamActiveRequest: &streamd_grpc.SetStreamActiveRequest{
+				Id:       StreamIDFullyQualifiedToGRPC(a.StreamID),
+				IsActive: a.IsActive,
 			},
 		}
-	case *action.StartStreamByProfileName:
-		result.ActionOneof = &streamd_grpc.Action_StartStreamByProfileNameRequest{
-			StartStreamByProfileNameRequest: &streamd_grpc.StartStreamByProfileNameRequest{
-				PlatID:      string(a.PlatID),
-				Title:       a.Title,
-				Description: a.Description,
-				ProfileName: a.ProfileName,
+	case *action.SetTitle:
+		result.ActionOneof = &streamd_grpc.Action_SetTitleRequest{
+			SetTitleRequest: &streamd_grpc.SetTitleRequest{
+				Id:    StreamIDFullyQualifiedToGRPC(a.StreamID),
+				Title: a.Title,
 			},
 		}
-	case *action.EndStream:
-		result.ActionOneof = &streamd_grpc.Action_EndStreamRequest{
-			EndStreamRequest: &streamd_grpc.EndStreamRequest{
-				PlatID: string(a.PlatID),
+	case *action.SetDescription:
+		result.ActionOneof = &streamd_grpc.Action_SetDescriptionRequest{
+			SetDescriptionRequest: &streamd_grpc.SetDescriptionRequest{
+				Id:          StreamIDFullyQualifiedToGRPC(a.StreamID),
+				Description: a.Description,
+			},
+		}
+	case *action.ApplyProfile:
+		result.ActionOneof = &streamd_grpc.Action_ApplyProfileRequest{
+			ApplyProfileRequest: &streamd_grpc.ApplyProfileRequest{
+				Id:      StreamIDFullyQualifiedToGRPC(a.StreamID),
+				Profile: string(a.Profile),
 			},
 		}
 	case *action.OBSItemShowHide:
@@ -124,7 +119,7 @@ func ActionGo2GRPC(
 			},
 		}
 	default:
-		return nil, fmt.Errorf("unknown action type: %T", a)
+		return nil, fmt.Errorf("unexpected action type: %T", a)
 	}
 	return &result, nil
 }

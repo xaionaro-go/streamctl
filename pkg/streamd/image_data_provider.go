@@ -15,7 +15,7 @@ type imageDataProvider struct {
 	StreamD                *StreamD
 	OBSServer              obs_grpc.OBSServer
 	StreamImageTakerLocker xsync.Mutex
-	StreamImageTakes       map[streamtypes.StreamID]*streamImageTaker
+	StreamImageTakes       map[streamtypes.StreamSourceID]*streamImageTaker
 }
 
 var _ config.ImageDataProvider = (*imageDataProvider)(nil)
@@ -44,13 +44,13 @@ func (p *imageDataProvider) GetOBSState(
 
 func (p *imageDataProvider) GetCurrentStreamFrame(
 	ctx context.Context,
-	streamID streamtypes.StreamID,
+	streamSourceID streamtypes.StreamSourceID,
 ) ([]byte, recoder.VideoCodec, error) {
 	return xsync.DoR3(ctx, &p.StreamImageTakerLocker, func() ([]byte, recoder.VideoCodec, error) {
-		streamImageTaker := p.StreamImageTakes[streamID]
+		streamImageTaker := p.StreamImageTakes[streamSourceID]
 		if streamImageTaker == nil || !streamImageTaker.Keepalive() {
 			var err error
-			streamImageTaker, err = p.newStreamImageTaker(ctx, streamID)
+			streamImageTaker, err = p.newStreamImageTaker(ctx, streamSourceID)
 			if err != nil {
 				return nil, 0, fmt.Errorf("unable to initialize a stream image taker: %w", err)
 			}

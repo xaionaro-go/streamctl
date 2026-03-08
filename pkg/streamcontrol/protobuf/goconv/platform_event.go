@@ -93,6 +93,6 @@ func TextFormatTypeGRPC2Go(
 	case streamcontrol_grpc.TextFormatType_TEXT_FORMAT_TYPE_HTML:
 		return streamcontrol.TextFormatTypeHTML
 	default:
-		return streamcontrol.TextFormatTypeUndefined
+		return streamcontrol.UndefinedTextFormatType
 	}
 }

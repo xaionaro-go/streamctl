@@ -55,6 +55,7 @@ func ytWatchURL(videoID string) *url.URL {
 	return result
 }
 
+// ChatListenerOBSOLETE is a chat listener that scrapes YouTube's internal API.
 // TODO: delete this handler after explaining to YouTube the application and
 // getting a quota for normal ChatListener.
 type ChatListenerOBSOLETE struct {
@@ -72,7 +73,7 @@ type ChatListenerOBSOLETE struct {
 func NewChatListenerOBSOLETE(
 	ctx context.Context,
 	videoID string,
-	onClose func(context.Context, *chatListener),
+	onClose func(context.Context, *ChatListenerOBSOLETE),
 ) (*ChatListenerOBSOLETE, error) {
 	if videoID == "" {
 		return nil, fmt.Errorf("video ID is empty")
@@ -114,7 +115,7 @@ func NewChatListenerOBSOLETE(
 
 const chatFetchRetryInterval = time.Second
 
-func (l *ChatListenerOBSOLETE) listenLoop(ctx context.Context) (_err error) {
+func (h *ChatListenerOBSOLETE) listenLoop(ctx context.Context) (_err error) {
 	logger.Debugf(ctx, "listenLoop")
 	defer func() { logger.Debugf(ctx, "/listenLoop: %v", _err) }()
 	for {
@@ -123,7 +124,7 @@ func (l *ChatListenerOBSOLETE) listenLoop(ctx context.Context) (_err error) {
 			return ctx.Err()
 		default:
 		}
-		msgs, newContinuation, _, err := ytchat.FetchContinuationChat(l.continuationCode, l.clientConfig)
+		msgs, newContinuation, _, err := ytchat.FetchContinuationChat(h.continuationCode, h.clientConfig)
 		switch err {
 		case nil:
 		case ytchat.ErrLiveStreamOver:
@@ -132,19 +133,19 @@ func (l *ChatListenerOBSOLETE) listenLoop(ctx context.Context) (_err error) {
 			logger.Errorf(
 				ctx,
 				"unable to get a continuation for %v: %v; retrying in %v",
-				l.videoID,
+				h.videoID,
 				err,
 				chatFetchRetryInterval,
 			)
 			time.Sleep(chatFetchRetryInterval)
 			continue
 		}
-		l.continuationCode = newContinuation
+		h.continuationCode = newContinuation
 
 		for _, msg := range msgs {
-			text, format := l.normalizeMessage(ctx, msg.Message)
-			userID := l.getUserID(ctx, sanitizeAuthorID(msg.AuthorID))
-			l.messagesOutChan <- streamcontrol.Event{
+			text, format := h.normalizeMessage(ctx, msg.Message)
+			userID := h.getUserID(ctx, sanitizeAuthorID(msg.AuthorID))
+			h.messagesOutChan <- streamcontrol.Event{
 				// TODO: find a way to extract the message ID,
 				//       in the mean while we we use a soft key for that:
 				ID:        streamcontrol.EventID(fmt.Sprintf("%s/%s", msg.AuthorName, msg.Message)),

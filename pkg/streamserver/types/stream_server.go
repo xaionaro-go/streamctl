@@ -8,8 +8,8 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 )
 
-type ActiveIncomingStreamIDser interface {
-	ActiveIncomingStreamIDs() ([]StreamID, error)
+type ActiveStreamSourceIDsProvider interface {
+	ActiveStreamSourceIDs() ([]StreamSourceID, error)
 }
 
 type Publisher = streamplayer.Publisher
@@ -45,19 +45,19 @@ type Sub interface {
 	ClosedChan() <-chan struct{}
 }
 
-func StreamID2LocalAppName(
-	streamID StreamID,
+func StreamSourceID2LocalAppName(
+	streamSourceID StreamSourceID,
 ) AppKey {
-	streamIDParts := strings.Split(string(streamID), "/")
-	localAppName := string(streamID)
+	streamIDParts := strings.Split(string(streamSourceID), "/")
+	localAppName := string(streamSourceID)
 	if len(streamIDParts) == 2 {
 		localAppName = streamIDParts[1]
 	}
 	return AppKey(localAppName)
 }
 
-type IncomingStream struct {
-	StreamID StreamID
+type StreamSource struct {
+	StreamSourceID StreamSourceID
 
 	NumBytesWrote uint64
 	NumBytesRead  uint64

@@ -47,18 +47,15 @@ func main() {
 	}
 	user := flag.Arg(0)
 
-	cfg := twitch.Config{
-		Enable: new(bool),
-		Config: twitch.PlatformSpecificConfig{
-			Channel:  *channelID,
-			ClientID: *clientID,
-			GetOAuthListenPorts: func() []uint16 {
-				return []uint16{8092}
-			},
+	accountCfg := twitch.AccountConfig{
+		Channel:  *channelID,
+		ClientID: *clientID,
+		GetOAuthListenPorts: func() []uint16 {
+			return []uint16{8092}
 		},
 	}
-	cfg.Config.ClientSecret.Set(*clientSecret)
-	c, err := twitch.New(ctx, cfg, func(c twitch.Config) error {
+	accountCfg.ClientSecret.Set(*clientSecret)
+	c, err := twitch.New(ctx, accountCfg, func(c twitch.AccountConfig) error {
 		return nil
 	})
 	if err != nil {

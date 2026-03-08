@@ -9,38 +9,18 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
-	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
-	obs "github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs/types"
-	twitch "github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/types"
-	youtube "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/ui"
 	"github.com/xaionaro-go/xsync"
 )
 
 type UI struct {
-	OpenBrowserFn         func(context.Context, string) error
-	OAuthURLOpenFn        func(listenPort uint16, platID streamcontrol.PlatformName, authURL string) bool
-	Belt                  *belt.Belt
-	RestartFn             func(context.Context, string)
-	CodeChMap             map[streamcontrol.PlatformName]chan string
-	CodeChMapLocker       xsync.Mutex
-	SetLoggingLevelFn     func(context.Context, logger.Level)
-	InputTwitchUserInfoFn func(
-		ctx context.Context,
-		cfg *streamcontrol.PlatformConfig[twitch.PlatformSpecificConfig, twitch.StreamProfile],
-	) (bool, error)
-	InputKickUserInfoFn func(
-		ctx context.Context,
-		cfg *streamcontrol.PlatformConfig[kick.PlatformSpecificConfig, kick.StreamProfile],
-	) (bool, error)
-	InputYouTubeUserInfoFn func(
-		ctx context.Context,
-		cfg *streamcontrol.PlatformConfig[youtube.PlatformSpecificConfig, youtube.StreamProfile],
-	) (bool, error)
-	InputOBSConnectInfoFn func(
-		ctx context.Context,
-		cfg *streamcontrol.PlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile],
-	) (bool, error)
+	OpenBrowserFn     func(context.Context, string) error
+	OAuthURLOpenFn    func(listenPort uint16, platID streamcontrol.PlatformID, authURL string) bool
+	Belt              *belt.Belt
+	RestartFn         func(context.Context, string)
+	CodeChMap         map[streamcontrol.PlatformID]chan string
+	CodeChMapLocker   xsync.Mutex
+	SetLoggingLevelFn func(context.Context, logger.Level)
 }
 
 var _ ui.UI = (*UI)(nil)
@@ -48,7 +28,7 @@ var _ ui.UI = (*UI)(nil)
 func NewUI(
 	ctx context.Context,
 	openBrowserFn func(context.Context, string) error,
-	oauthURLOpener func(listenPort uint16, platID streamcontrol.PlatformName, authURL string) bool,
+	oauthURLOpener func(listenPort uint16, platID streamcontrol.PlatformID, authURL string) bool,
 	restartFn func(context.Context, string),
 	setLoggingLevel func(context.Context, logger.Level),
 ) *UI {
@@ -57,7 +37,7 @@ func NewUI(
 		OAuthURLOpenFn:    oauthURLOpener,
 		Belt:              belt.CtxBelt(ctx),
 		RestartFn:         restartFn,
-		CodeChMap:         map[streamcontrol.PlatformName]chan string{},
+		CodeChMap:         map[streamcontrol.PlatformID]chan string{},
 		CodeChMapLocker:   xsync.RWMutex{},
 		SetLoggingLevelFn: setLoggingLevel,
 	}
@@ -93,7 +73,7 @@ func (*UI) InputGitUserData(
 
 func (ui *UI) newOAuthCodeReceiver(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
+	platID streamcontrol.PlatformID,
 ) (<-chan string, context.CancelFunc) {
 	return xsync.DoR2(ctx, &ui.CodeChMapLocker, func() (<-chan string, context.CancelFunc) {
 		return ui.newOAuthCodeReceiverNoLock(ctx, platID)
@@ -102,7 +82,7 @@ func (ui *UI) newOAuthCodeReceiver(
 
 func (ui *UI) newOAuthCodeReceiverNoLock(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
+	platID streamcontrol.PlatformID,
 ) (<-chan string, context.CancelFunc) {
 	if oldCh, ok := ui.CodeChMap[platID]; ok {
 		return oldCh, nil
@@ -120,7 +100,7 @@ func (ui *UI) newOAuthCodeReceiverNoLock(
 
 func (ui *UI) getOAuthCodeReceiver(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
+	platID streamcontrol.PlatformID,
 ) chan<- string {
 	return xsync.DoR1(ctx, &ui.CodeChMapLocker, func() chan<- string {
 		return ui.CodeChMap[platID]
@@ -129,7 +109,7 @@ func (ui *UI) getOAuthCodeReceiver(
 
 func (ui *UI) oauth2Handler(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
+	platID streamcontrol.PlatformID,
 	arg oauthhandler.OAuthHandlerArgument,
 ) error {
 	logger.Debugf(ctx, "oauth2Handler(ctx, '%s', %#+v)", platID, arg)
@@ -186,7 +166,7 @@ func (ui *UI) oauth2Handler(
 
 func (ui *UI) OnSubmittedOAuthCode(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
+	platID streamcontrol.PlatformID,
 	code string,
 ) error {
 	if code == "" {
@@ -203,23 +183,10 @@ func (ui *UI) OnSubmittedOAuthCode(
 	return nil
 }
 
-func (ui *UI) OAuthHandlerTwitch(
+func (ui *UI) OAuthHandler(
 	ctx context.Context,
+	platID streamcontrol.PlatformID,
 	arg oauthhandler.OAuthHandlerArgument,
 ) error {
-	return ui.oauth2Handler(ctx, twitch.ID, arg)
-}
-
-func (ui *UI) OAuthHandlerKick(
-	ctx context.Context,
-	arg oauthhandler.OAuthHandlerArgument,
-) error {
-	return ui.oauth2Handler(ctx, kick.ID, arg)
-}
-
-func (ui *UI) OAuthHandlerYouTube(
-	ctx context.Context,
-	arg oauthhandler.OAuthHandlerArgument,
-) error {
-	return ui.oauth2Handler(ctx, youtube.ID, arg)
+	return ui.oauth2Handler(ctx, platID, arg)
 }

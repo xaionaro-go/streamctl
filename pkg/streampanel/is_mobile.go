@@ -4,6 +4,6 @@ import (
 	"fyne.io/fyne/v2"
 )
 
-func isMobile() bool {
+var isMobile = func() bool {
 	return fyne.CurrentDevice().IsMobile()
 }

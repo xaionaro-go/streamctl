@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/xaionaro-go/streamctl/pkg/clock"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/widget"
@@ -60,7 +62,7 @@ func (w *HintWidget) mouseIn(ev *desktop.MouseEvent) {
 	w.Hint.Move(pos)
 	w.Hint.Show()
 
-	recheckerTicker := time.NewTicker(100 * time.Millisecond)
+	recheckerTicker := clock.Get().Ticker(100 * time.Millisecond)
 	ctx, cancelFn := context.WithCancel(context.Background())
 	if w.RecheckerCancelFn != nil {
 		panic("should not have happened")

@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/v2"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/observability"
+	"github.com/xaionaro-go/streamctl/pkg/clock"
 )
 
 func (p *Panel) initFyneHacks(ctx context.Context) {
@@ -19,7 +20,7 @@ func (p *Panel) initWindowsHealthChecker(ctx context.Context) {
 		logger.Debugf(ctx, "initWindowsHealthChecker")
 		defer logger.Debugf(ctx, "/initWindowsHealthChecker")
 
-		t := time.NewTicker(7 * time.Second / 3)
+		t := clock.Get().Ticker(7 * time.Second / 3)
 		defer t.Stop()
 
 		for {
@@ -111,7 +112,7 @@ func fyneTryLoop(ctx context.Context, fn func()) {
 			return
 		}
 		logger.Debugf(ctx, "got error: %v", err)
-		time.Sleep(time.Millisecond * 100)
+		clock.Get().Sleep(time.Millisecond * 100)
 	}
 	panic(r)
 }

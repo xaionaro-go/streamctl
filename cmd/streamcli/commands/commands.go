@@ -1,3 +1,4 @@
+// Package commands defines all the cobra commands for the streamcli application.
 package commands
 
 import (
@@ -20,11 +21,9 @@ import (
 	"github.com/xaionaro-go/observability"
 	videodecoder "github.com/xaionaro-go/player/pkg/player/decoder/libav"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
-	kick "github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick/types"
-	obs "github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs/types"
-	twitch "github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/types"
-	youtube "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
+
 	"github.com/xaionaro-go/streamctl/pkg/streamd/client"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel/consts"
 	"github.com/xaionaro-go/xcontext"
 	"github.com/xaionaro-go/xsync"
@@ -116,14 +115,26 @@ var (
 		Run:  configGet,
 	}
 
-	Chat = &cobra.Command{
-		Use: "chat",
+	Ping = &cobra.Command{
+		Use:  "ping",
+		Args: cobra.ExactArgs(0),
+		Run:  ping,
 	}
 
-	ChatListen = &cobra.Command{
+	PlatformEvents = &cobra.Command{
+		Use: "platform_events",
+	}
+
+	PlatformEventsListen = &cobra.Command{
 		Use:  "listen",
 		Args: cobra.ExactArgs(0),
-		Run:  chatListen,
+		Run:  platformEventsListen,
+	}
+
+	PlatformEventsInject = &cobra.Command{
+		Use:  "inject",
+		Args: cobra.ExactArgs(3),
+		Run:  platformEventsInject,
 	}
 
 	LoggerLevel = logger.LevelWarning
@@ -143,12 +154,21 @@ func init() {
 	Root.AddCommand(Config)
 	Config.AddCommand(ConfigGet)
 
-	Root.AddCommand(Chat)
-	Chat.AddCommand(ChatListen)
+	Root.AddCommand(Ping)
+
+	Root.AddCommand(PlatformEvents)
+	PlatformEvents.AddCommand(PlatformEventsListen)
+	PlatformEvents.AddCommand(PlatformEventsInject)
+	PlatformEventsInject.Flags().Bool("is-live", true, "mark event as live")
+	PlatformEventsInject.Flags().Bool("is-persistent", false, "mark event as persistent")
 
 	Root.PersistentFlags().Var(&LoggerLevel, "log-level", "")
 	Root.PersistentFlags().String("remote-addr", "localhost:3594", "the path to the config file")
 	Root.PersistentFlags().String("go-net-pprof-addr", "", "address to listen to for net/pprof requests")
+
+	Ping.PersistentFlags().String("payload", "", "payload to request in reply")
+	Ping.PersistentFlags().String("payload-to-ignore", "", "payload to ignore on server")
+	Ping.PersistentFlags().Int32("extra-payload-size", 0, "extra payload size to add to reply")
 
 	StreamSetup.PersistentFlags().String("title", "", "stream title")
 	StreamSetup.PersistentFlags().String("description", "", "stream description")
@@ -162,58 +182,7 @@ func assertNoError(ctx context.Context, err error) {
 }
 
 func streamSetup(cmd *cobra.Command, args []string) {
-	ctx := cmd.Context()
-
-	remoteAddr, err := cmd.Flags().GetString("remote-addr")
-	assertNoError(ctx, err)
-	streamD, err := client.New(ctx, remoteAddr)
-	assertNoError(ctx, err)
-	title, err := cmd.Flags().GetString("title")
-	assertNoError(ctx, err)
-	description, err := cmd.Flags().GetString("description")
-	assertNoError(ctx, err)
-	_profileName, err := cmd.Flags().GetString("profile")
-	assertNoError(ctx, err)
-	profileName := streamcontrol.ProfileName(_profileName)
-	logger.Debugf(
-		ctx,
-		"title == '%s'; description == '%s'; profile == '%s'",
-		title, description, profileName,
-	)
-
-	isEnabled := map[streamcontrol.PlatformName]bool{}
-	for _, platID := range []streamcontrol.PlatformName{
-		twitch.ID, youtube.ID,
-	} {
-		_isEnabled, err := streamD.IsBackendEnabled(ctx, platID)
-		assertNoError(ctx, err)
-		isEnabled[platID] = _isEnabled
-	}
-
-	cfg, err := streamD.GetConfig(ctx)
-	assertNoError(ctx, err)
-
-	if isEnabled[youtube.ID] {
-		err := streamD.StartStream(
-			ctx,
-			youtube.ID,
-			title,
-			description,
-			cfg.Backends[youtube.ID].StreamProfiles[profileName],
-		)
-		assertNoError(ctx, err)
-	}
-
-	if isEnabled[twitch.ID] {
-		err := streamD.StartStream(
-			ctx,
-			twitch.ID,
-			title,
-			description,
-			cfg.Backends[twitch.ID].StreamProfiles[profileName],
-		)
-		assertNoError(ctx, err)
-	}
+	panic("not implemented")
 }
 
 func streamStatus(cmd *cobra.Command, args []string) {
@@ -228,10 +197,8 @@ func streamStatus(cmd *cobra.Command, args []string) {
 	streamD, err := client.New(ctx, remoteAddr)
 	assertNoError(ctx, err)
 
-	result := map[streamcontrol.PlatformName]*streamcontrol.StreamStatus{}
-	for _, platID := range []streamcontrol.PlatformName{
-		obs.ID, twitch.ID, youtube.ID, kick.ID,
-	} {
+	result := map[streamcontrol.PlatformID]*streamcontrol.StreamStatus{}
+	for _, platID := range streamcontrol.GetPlatformIDs() {
 		isEnabled, err := streamD.IsBackendEnabled(ctx, platID)
 		assertNoError(ctx, err)
 
@@ -239,7 +206,7 @@ func streamStatus(cmd *cobra.Command, args []string) {
 			continue
 		}
 
-		status, err := streamD.GetStreamStatus(ctx, platID)
+		status, err := streamD.GetStreamStatus(ctx, streamcontrol.NewStreamIDFullyQualified(platID, streamcontrol.DefaultAccountID, streamcontrol.DefaultStreamID))
 		assertNoError(ctx, err)
 
 		result[platID] = status
@@ -250,10 +217,12 @@ func streamStatus(cmd *cobra.Command, args []string) {
 		assertNoError(ctx, err)
 		fmt.Printf("%s\n", b)
 	} else {
-		for _, platID := range []streamcontrol.PlatformName{
-			obs.ID, twitch.ID, youtube.ID,
-		} {
-			statusJSON, err := json.Marshal(result[platID])
+		for _, platID := range streamcontrol.GetPlatformIDs() {
+			status, ok := result[platID]
+			if !ok {
+				continue
+			}
+			statusJSON, err := json.Marshal(status)
 			assertNoError(ctx, err)
 
 			fmt.Printf("%10s: %s\n", platID, statusJSON)
@@ -331,7 +300,6 @@ func variablesSetImageFromURL(cmd *cobra.Command, args []string) {
 
 	var wg sync.WaitGroup
 	for idx, url := range args[2:] {
-		idx, url := idx, url
 		wg.Add(1)
 		observability.Go(ctx, func(ctx context.Context) {
 			defer wg.Done()
@@ -375,7 +343,32 @@ func configGet(cmd *cobra.Command, args []string) {
 	cfg.WriteTo(os.Stdout)
 }
 
-func chatListen(cmd *cobra.Command, args []string) {
+func ping(cmd *cobra.Command, args []string) {
+	ctx := cmd.Context()
+
+	remoteAddr, err := cmd.Flags().GetString("remote-addr")
+	assertNoError(ctx, err)
+	streamD, err := client.New(ctx, remoteAddr)
+	assertNoError(ctx, err)
+
+	payload, err := cmd.Flags().GetString("payload")
+	assertNoError(ctx, err)
+	payloadToIgnore, err := cmd.Flags().GetString("payload-to-ignore")
+	assertNoError(ctx, err)
+	extraPayloadSize, err := cmd.Flags().GetInt32("extra-payload-size")
+	assertNoError(ctx, err)
+
+	err = streamD.Ping(ctx, func(ctx context.Context, req *streamd_grpc.PingRequest) {
+		req.PayloadToReturn = payload
+		req.PayloadToIgnore = payloadToIgnore
+		req.RequestExtraPayloadSize = extraPayloadSize
+	})
+	assertNoError(ctx, err)
+
+	fmt.Println("pong")
+}
+
+func platformEventsListen(cmd *cobra.Command, args []string) {
 	ctx := cmd.Context()
 
 	remoteAddr, err := cmd.Flags().GetString("remote-addr")
@@ -391,4 +384,32 @@ func chatListen(cmd *cobra.Command, args []string) {
 	for ev := range ch {
 		spew.Dump(ev)
 	}
+}
+
+func platformEventsInject(cmd *cobra.Command, args []string) {
+	ctx := cmd.Context()
+
+	remoteAddr, err := cmd.Flags().GetString("remote-addr")
+	assertNoError(ctx, err)
+	streamD, err := client.New(ctx, remoteAddr)
+	assertNoError(ctx, err)
+
+	// args: <platform-id> <user> <message>
+	platID := streamcontrol.PlatformID(args[0])
+	userName := args[1]
+	message := args[2]
+
+	isLive, err := cmd.Flags().GetBool("is-live")
+	assertNoError(ctx, err)
+	isPersistent, err := cmd.Flags().GetBool("is-persistent")
+	assertNoError(ctx, err)
+
+	user := streamcontrol.User{
+		ID:   streamcontrol.UserID(userName),
+		Slug: userName,
+		Name: userName,
+	}
+
+	err = streamD.InjectPlatformEvent(ctx, platID, isLive, isPersistent, user, message)
+	assertNoError(ctx, err)
 }

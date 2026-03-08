@@ -15,6 +15,10 @@ import (
 func (d *StreamD) initP2P(
 	ctx context.Context,
 ) error {
+	fmt.Printf("initP2P: Enable=%v\n", d.Config.P2PNetwork.Enable)
+	if !d.Config.P2PNetwork.Enable {
+		return nil
+	}
 	if d.Config.P2PNetwork.IsZero() {
 		d.Config.P2PNetwork = config.GetRandomP2PConfig()
 		if err := d.saveConfig(ctx); err != nil {

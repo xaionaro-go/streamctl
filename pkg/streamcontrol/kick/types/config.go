@@ -10,11 +10,16 @@ import (
 	streamctl "github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 )
 
-const ID = streamctl.PlatformName("kick")
+const (
+	ID             = streamctl.PlatformID("kick")
+	MaxTitleLength = 100
+)
 
 type OAuthHandler func(context.Context, oauthhandler.OAuthHandlerArgument) error
 
-type PlatformSpecificConfig struct {
+type AccountConfig struct {
+	streamctl.AccountConfigBase[StreamProfile] `yaml:",inline"`
+
 	Channel      string        `yaml:"channel"`
 	ClientID     string        `yaml:"client_id"`
 	ClientSecret secret.String `yaml:"client_secret"`
@@ -27,20 +32,20 @@ type PlatformSpecificConfig struct {
 	GetOAuthListenPorts func() []uint16 `yaml:"-"`
 }
 
-type Config = streamctl.PlatformConfig[PlatformSpecificConfig, StreamProfile]
+type Config = streamctl.PlatformConfig[AccountConfig, StreamProfile]
 
 func InitConfig(cfg streamctl.Config) {
 	streamctl.InitConfig(cfg, ID, Config{})
 }
 
-func (cfg PlatformSpecificConfig) IsInitialized() bool {
+func (cfg AccountConfig) IsInitialized() bool {
 	return cfg.Channel != "" &&
 		valueOrDefault(cfg.ClientID, buildvars.KickClientID) != "" &&
 		valueOrDefault(cfg.ClientSecret.Get(), buildvars.KickClientSecret) != ""
 }
 
 type StreamProfile struct {
-	streamctl.StreamProfileBase `yaml:",omitempty,inline,alias"`
+	streamctl.StreamProfileBase `yaml:",inline"`
 
 	CategoryID *uint64
 }

@@ -1,4 +1,11 @@
+// Package streampanel provides a Fyne-based graphical user interface for controlling
+// and monitoring live streams. This file implements the chat-related functionality,
+// including unified chat view and specific platform chat handlers.
 package streampanel
+
+import (
+	"github.com/xaionaro-go/streamctl/pkg/clock"
+)
 
 import (
 	"context"
@@ -68,7 +75,7 @@ func (p *Panel) getChatUIs(ctx context.Context) []chatUIInterface {
 
 func (p *Panel) initChatMessagesHandler(ctx context.Context) error {
 	msgCh, _, err := autoResubscribe(ctx, func(ctx context.Context) (<-chan api.ChatMessage, error) {
-		return p.StreamD.SubscribeToChatMessages(ctx, time.Now().Add(-60*24*time.Hour), uint64(ChatLogSize))
+		return p.StreamD.SubscribeToChatMessages(ctx, clock.Get().Now().Add(-60*24*time.Hour), uint64(ChatLogSize))
 	})
 	if err != nil {
 		return fmt.Errorf("unable to subscribe to chat messages: %w", err)
@@ -128,7 +135,7 @@ func (p *Panel) onReceiveMessage(
 			p.MessagesHistory = p.MessagesHistory[len(p.MessagesHistory)-ChatLogSize:]
 			fullRefresh = true
 		}
-		if time.Since(msg.CreatedAt) > time.Hour {
+		if clock.Get().Since(msg.CreatedAt) > time.Hour {
 			return
 		}
 		notificationsEnabled := xsync.DoR1(ctx, &p.configLocker, func() bool {
@@ -186,7 +193,7 @@ func (p *Panel) onReceiveMessage(
 
 func (p *Panel) getPlatformCapabilities(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
+	platID streamcontrol.PlatformID,
 ) (_ret map[streamcontrol.Capability]struct{}, _err error) {
 	logger.Tracef(ctx, "getPlatformCapabilities(ctx, '%s')", platID)
 	defer func() { logger.Tracef(ctx, "/getPlatformCapabilities(ctx, '%s'): %#+v, %v", platID, _ret, _err) }()
@@ -212,7 +219,7 @@ func (p *Panel) getPlatformCapabilities(
 }
 func (p *Panel) chatUserBan(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
+	platID streamcontrol.PlatformID,
 	userID streamcontrol.UserID,
 ) error {
 	// TODO: add controls for the reason and deadline
@@ -247,7 +254,7 @@ func (p *Panel) onRemoveChatMessageClicked(
 
 func (p *Panel) chatMessageRemove(
 	ctx context.Context,
-	platID streamcontrol.PlatformName,
+	platID streamcontrol.PlatformID,
 	msgID streamcontrol.EventID,
 ) error {
 	return p.StreamD.RemoveChatMessage(ctx, platID, msgID)

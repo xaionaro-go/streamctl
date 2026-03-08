@@ -144,7 +144,7 @@ func initGRPCServers(
 		return nil, nil, nil, fmt.Errorf("streamD is nil")
 	}
 
-	obsGRPC, obsGRPCClose, err := streamD.OBS(ctx)
+	obsGRPC, obsGRPCClose, err := streamD.OBS(ctx, "")
 	observability.Go(ctx, func(ctx context.Context) {
 		<-ctx.Done()
 		if obsGRPCClose != nil {

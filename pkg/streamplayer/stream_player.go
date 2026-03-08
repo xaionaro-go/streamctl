@@ -42,7 +42,7 @@ type Publisher interface {
 type WaitPublisherChaner interface {
 	WaitPublisherChan(
 		ctx context.Context,
-		streamID streamtypes.StreamID,
+		streamSourceID streamtypes.StreamSourceID,
 		waitForNext bool,
 	) (<-chan Publisher, error)
 }
@@ -54,7 +54,7 @@ type StreamServer interface {
 
 type StreamPlayers struct {
 	StreamPlayersLocker xsync.RWMutex
-	StreamPlayers       map[streamtypes.StreamID]*StreamPlayerHandler
+	StreamPlayers       map[streamtypes.StreamSourceID]*StreamPlayerHandler
 
 	StreamServer   StreamServer
 	PlayerManager  PlayerManager
@@ -77,7 +77,7 @@ func New(
 	defaultOptions ...Option,
 ) *StreamPlayers {
 	return &StreamPlayers{
-		StreamPlayers:  map[streamtypes.StreamID]*StreamPlayerHandler{},
+		StreamPlayers:  map[streamtypes.StreamSourceID]*StreamPlayerHandler{},
 		StreamServer:   streamServer,
 		PlayerManager:  playerManager,
 		DefaultOptions: defaultOptions,
@@ -85,11 +85,11 @@ func New(
 }
 
 type StreamPlayer struct {
-	PlayerLocker xsync.Mutex
-	Player       player.Player
-	StreamID     streamtypes.StreamID
-	Backend      player.Backend
-	Config       Config
+	PlayerLocker   xsync.Mutex
+	Player         player.Player
+	StreamSourceID streamtypes.StreamSourceID
+	Backend        player.Backend
+	Config         Config
 
 	WantSpeedAverage         *indicator.MAMA[float64]
 	CurrentJitterBufDuration time.Duration
@@ -109,13 +109,13 @@ type StreamPlayerHandler struct {
 
 func (sp *StreamPlayers) Create(
 	ctx context.Context,
-	streamID streamtypes.StreamID,
+	streamSourceID streamtypes.StreamSourceID,
 	backend player.Backend,
 	opts ...Option,
 ) (_ret *StreamPlayerHandler, _err error) {
-	logger.Debugf(ctx, "StreamPlayers.Create(ctx, '%s', %#+v)", streamID, opts)
+	logger.Debugf(ctx, "StreamPlayers.Create(ctx, '%s', %#+v)", streamSourceID, opts)
 	defer func() {
-		logger.Debugf(ctx, "/StreamPlayers.Create(ctx, '%s', %#+v): (%#+v, %v)", streamID, opts, _ret, _err)
+		logger.Debugf(ctx, "/StreamPlayers.Create(ctx, '%s', %#+v): (%#+v, %v)", streamSourceID, opts, _ret, _err)
 	}()
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -129,7 +129,7 @@ func (sp *StreamPlayers) Create(
 		StreamPlayer: StreamPlayer{
 			Backend:          backend,
 			Config:           resultingOpts.Config(ctx),
-			StreamID:         streamID,
+			StreamSourceID:   streamSourceID,
 			WantSpeedAverage: indicator.NewMAMA[float64](10, 0.3, 0.05),
 		},
 	}
@@ -155,42 +155,42 @@ func (sp *StreamPlayers) Create(
 	}
 
 	return xsync.DoR2(ctx, &sp.StreamPlayersLocker, func() (*StreamPlayerHandler, error) {
-		sp.StreamPlayers[streamID] = p
+		sp.StreamPlayers[streamSourceID] = p
 		return p, nil
 	})
 }
 
 func (sp *StreamPlayers) Remove(
 	ctx context.Context,
-	streamID streamtypes.StreamID,
+	streamSourceID streamtypes.StreamSourceID,
 ) error {
-	logger.Debugf(ctx, "StreamPlayers.Remove(ctx, '%s')", streamID)
-	defer logger.Debugf(ctx, "/StreamPlayers.Remove(ctx, '%s')", streamID)
+	logger.Debugf(ctx, "StreamPlayers.Remove(ctx, '%s')", streamSourceID)
+	defer logger.Debugf(ctx, "/StreamPlayers.Remove(ctx, '%s')", streamSourceID)
 	return xsync.DoR1(ctx, &sp.StreamPlayersLocker, func() error {
-		p, ok := sp.StreamPlayers[streamID]
+		p, ok := sp.StreamPlayers[streamSourceID]
 		if !ok {
 			return nil
 		}
 		errmon.ObserveErrorCtx(ctx, p.Close())
-		delete(sp.StreamPlayers, streamID)
+		delete(sp.StreamPlayers, streamSourceID)
 		return nil
 	})
 }
 
-func (sp *StreamPlayers) Get(streamID streamtypes.StreamID) *StreamPlayerHandler {
+func (sp *StreamPlayers) Get(streamSourceID streamtypes.StreamSourceID) *StreamPlayerHandler {
 	ctx := context.TODO()
 	return xsync.DoR1(ctx, &sp.StreamPlayersLocker, func() *StreamPlayerHandler {
-		return sp.StreamPlayers[streamID]
+		return sp.StreamPlayers[streamSourceID]
 	})
 }
 
-func (sp *StreamPlayers) GetAll() map[streamtypes.StreamID]*StreamPlayerHandler {
+func (sp *StreamPlayers) GetAll() map[streamtypes.StreamSourceID]*StreamPlayerHandler {
 	ctx := context.TODO()
 	return xsync.DoR1(
 		ctx,
 		&sp.StreamPlayersLocker,
-		func() map[streamtypes.StreamID]*StreamPlayerHandler {
-			r := map[streamtypes.StreamID]*StreamPlayerHandler{}
+		func() map[streamtypes.StreamSourceID]*StreamPlayerHandler {
+			r := map[streamtypes.StreamSourceID]*StreamPlayerHandler{}
 			for k, v := range sp.StreamPlayers {
 				r[k] = v
 			}
@@ -203,20 +203,20 @@ const (
 	processTitlePrefix = "streampanel-player-"
 )
 
-func StreamID2Title(streamID streamtypes.StreamID) string {
-	return fmt.Sprintf("%s%s", processTitlePrefix, streamID)
+func StreamID2Title(streamSourceID streamtypes.StreamSourceID) string {
+	return fmt.Sprintf("%s%s", processTitlePrefix, streamSourceID)
 }
 
-func Title2StreamID(title string) streamtypes.StreamID {
+func Title2StreamID(title string) streamtypes.StreamSourceID {
 	if !strings.HasPrefix(title, processTitlePrefix) {
 		return ""
 	}
-	return streamtypes.StreamID(title[len(processTitlePrefix):])
+	return streamtypes.StreamSourceID(title[len(processTitlePrefix):])
 }
 
 func (p *StreamPlayerHandler) startU(ctx context.Context) error {
-	logger.Debugf(ctx, "StreamPlayers.startU(ctx): '%s'", p.StreamID)
-	defer logger.Debugf(ctx, "/StreamPlayers.startU(ctx): '%s'", p.StreamID)
+	logger.Debugf(ctx, "StreamPlayers.startU(ctx): '%s'", p.StreamSourceID)
+	defer logger.Debugf(ctx, "/StreamPlayers.startU(ctx): '%s'", p.StreamSourceID)
 
 	instanceCtx, cancelFn := context.WithCancel(ctx)
 
@@ -228,7 +228,7 @@ func (p *StreamPlayerHandler) startU(ctx context.Context) error {
 	playerType := p.Backend
 	player, err := p.Parent.PlayerManager.NewPlayer(
 		instanceCtx,
-		StreamID2Title(p.StreamID),
+		StreamID2Title(p.StreamSourceID),
 		playerType,
 		opts...,
 	)
@@ -250,8 +250,8 @@ func (p *StreamPlayerHandler) startU(ctx context.Context) error {
 }
 
 func (p *StreamPlayerHandler) stopU(ctx context.Context) error {
-	logger.Debugf(ctx, "StreamPlayers.stopU(ctx): '%s'", p.StreamID)
-	defer logger.Debugf(ctx, "/StreamPlayers.stopU(ctx): '%s'", p.StreamID)
+	logger.Debugf(ctx, "StreamPlayers.stopU(ctx): '%s'", p.StreamSourceID)
+	defer logger.Debugf(ctx, "/StreamPlayers.stopU(ctx): '%s'", p.StreamSourceID)
 	defer func() {
 		p.Player = nil
 	}()
@@ -269,8 +269,8 @@ func (p *StreamPlayerHandler) stopU(ctx context.Context) error {
 }
 
 func (p *StreamPlayerHandler) restartU(ctx context.Context) error {
-	logger.Debugf(ctx, "StreamPlayers.restartU(ctx): '%s'", p.StreamID)
-	defer logger.Debugf(ctx, "/StreamPlayers.restartU(ctx): '%s'", p.StreamID)
+	logger.Debugf(ctx, "StreamPlayers.restartU(ctx): '%s'", p.StreamSourceID)
+	defer logger.Debugf(ctx, "/StreamPlayers.restartU(ctx): '%s'", p.StreamSourceID)
 
 	if err := p.stopU(ctx); err != nil {
 		logger.Errorf(ctx, "unable to stop the stream player: %v", err)
@@ -313,7 +313,7 @@ func (p *StreamPlayerHandler) GetProtocol(
 		)
 		if err != nil {
 			logger.Tracef(ctx, "unable to get the port server: %v", err)
-			return streamtypes.ServerTypeUndefined
+			return streamtypes.UndefinedServerType
 		}
 		return portSrv.Type
 	}
@@ -321,13 +321,13 @@ func (p *StreamPlayerHandler) GetProtocol(
 	u, err := p.getOverriddenURL(ctx)
 	if err != nil {
 		logger.Tracef(ctx, "unable to get the overridden URL: %v", err)
-		return streamtypes.ServerTypeUndefined
+		return streamtypes.UndefinedServerType
 	}
 
 	switch u.Scheme {
 	case "":
 		logger.Tracef(ctx, "no network scheme")
-		return streamtypes.ServerTypeUndefined
+		return streamtypes.UndefinedServerType
 	case "rtmp", "rtmps", "rtmpt", "rtmpe":
 		return streamtypes.ServerTypeRTMP
 	case "rtsp":
@@ -336,7 +336,7 @@ func (p *StreamPlayerHandler) GetProtocol(
 		return streamtypes.ServerTypeSRT
 	}
 	logger.Warnf(ctx, "unknown/unexpected protocol scheme: '%s'", u.Scheme)
-	return streamtypes.ServerTypeUndefined
+	return streamtypes.UndefinedServerType
 }
 
 func (p *StreamPlayerHandler) getOverriddenURL(context.Context) (*url.URL, error) {
@@ -346,7 +346,7 @@ func (p *StreamPlayerHandler) getOverriddenURL(context.Context) (*url.URL, error
 func (p *StreamPlayerHandler) getInternalURL(ctx context.Context) (*url.URL, error) {
 	return streamportserver.GetURLForLocalStreamID(
 		ctx,
-		p.Parent.StreamServer, p.StreamID,
+		p.Parent.StreamServer, p.StreamSourceID,
 		portServerPreferenceFunc,
 	)
 }
@@ -522,7 +522,7 @@ func (p *StreamPlayerHandler) notifyStart(ctx context.Context) {
 				}
 			}()
 
-			f(ctx, p.StreamID)
+			f(ctx, p.StreamSourceID)
 		}(f)
 	}
 }
@@ -533,8 +533,8 @@ func (p *StreamPlayerHandler) controllerLoop(
 ) {
 	defer cancelPlayerInstance() // this is not necessary, but exists, just in case to reduce risks of a bad cleanup
 
-	logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop", p.StreamID)
-	defer logger.Debugf(ctx, "/StreamPlayer[%s].controllerLoop", p.StreamID)
+	logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop", p.StreamSourceID)
+	defer logger.Debugf(ctx, "/StreamPlayer[%s].controllerLoop", p.StreamSourceID)
 
 	instanceCtx, cancelFn := context.WithCancel(ctx)
 
@@ -553,7 +553,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 				err := p.restartU(ctx)
 				errmon.ObserveErrorCtx(ctx, err)
 				if err != nil {
-					err := p.Parent.Remove(ctx, p.StreamID)
+					err := p.Parent.Remove(ctx, p.StreamSourceID)
 					errmon.ObserveErrorCtx(ctx, err)
 				}
 			})
@@ -574,11 +574,11 @@ func (p *StreamPlayerHandler) controllerLoop(
 				defer waitPublisherCancel()
 
 				var err error
-				ch, err = p.Parent.StreamServer.WaitPublisherChan(waitPublisherCtx, p.StreamID, false)
-				logger.Debugf(ctx, "got a waiter from WaitPublisherChan for '%s'; %v", p.StreamID, err)
+				ch, err = p.Parent.StreamServer.WaitPublisherChan(waitPublisherCtx, p.StreamSourceID, false)
+				logger.Debugf(ctx, "got a waiter from WaitPublisherChan for '%s'; %v", p.StreamSourceID, err)
 				errmon.ObserveErrorCtx(ctx, err)
 
-				logger.Debugf(ctx, "waiting for stream '%s'", p.StreamID)
+				logger.Debugf(ctx, "waiting for stream '%s'", p.StreamSourceID)
 				select {
 				case <-instanceCtx.Done():
 					logger.Debugf(ctx, "the instance was cancelled")
@@ -697,11 +697,11 @@ func (p *StreamPlayerHandler) controllerLoop(
 					return nil
 				})
 				if err != nil {
-					logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: unable to get the current position: %v", p.StreamID, err)
+					logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: unable to get the current position: %v", p.StreamSourceID, err)
 					time.Sleep(100 * time.Millisecond)
 					continue
 				}
-				logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: pos == %v", p.StreamID, pos)
+				logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: pos == %v", p.StreamSourceID, pos)
 				var l time.Duration
 				err = p.withPlayer(ctx, func(ctx context.Context, player player.Player) error {
 					var err error
@@ -711,14 +711,14 @@ func (p *StreamPlayerHandler) controllerLoop(
 					}
 					return nil
 				})
-				logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: length == %v", p.StreamID, l)
+				logger.Tracef(ctx, "StreamPlayer[%s].controllerLoop: length == %v", p.StreamSourceID, l)
 				if l < 0 {
-					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: negative length, restarting", p.StreamID)
+					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: negative length, restarting", p.StreamSourceID)
 					restart()
 					return false
 				}
 				if l > 48*time.Hour {
-					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: the length is more than 48 hours: %v (we expect only like a second, not 2 days)", l, p.StreamID)
+					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: the length is more than 48 hours: %v (we expect only like a second, not 2 days)", l, p.StreamSourceID)
 					if triedToFixBadLengthViaReopen {
 						logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: already tried reopening the stream, did not help, so restarting")
 						restart()
@@ -744,7 +744,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 				time.Sleep(100 * time.Millisecond)
 			}
 
-			logger.Errorf(ctx, "StreamPlayer[%s].controllerLoop: timed out on waiting until the player would start up; restarting", p.StreamID)
+			logger.Errorf(ctx, "StreamPlayer[%s].controllerLoop: timed out on waiting until the player would start up; restarting", p.StreamSourceID)
 			restart()
 			return false
 		}() {
@@ -806,7 +806,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 		getRestartChan = fn()
 	}
 
-	logger.Debugf(ctx, "finished waiting for a publisher at '%s'", p.StreamID)
+	logger.Debugf(ctx, "finished waiting for a publisher at '%s'", p.StreamSourceID)
 
 	traceLogLevel := logger.LevelTrace
 	jitterBufDurationIncrease := time.Duration(0)
@@ -820,7 +820,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 		)
 		logger.Debugf(ctx,
 			"StreamPlayer[%s].controllerLoop: increased jitter buffer duration to %v (increased by %v)",
-			p.StreamID,
+			p.StreamSourceID,
 			p.CurrentJitterBufDuration,
 			inc,
 		)
@@ -828,7 +828,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 	commitJitterBufferIncrease := func() {
 		logger.Logf(ctx, traceLogLevel,
 			"StreamPlayer[%s].controllerLoop: committing jitter buffer increase of %v",
-			p.StreamID,
+			p.StreamSourceID,
 			jitterBufDurationIncrease,
 		)
 		increaseJitterBufferBy(jitterBufDurationIncrease)
@@ -879,10 +879,10 @@ func (p *StreamPlayerHandler) controllerLoop(
 			if err != nil {
 				logger.Errorf(ctx,
 					"StreamPlayer[%s].controllerLoop: unable to get the current position: %v",
-					p.StreamID, err,
+					p.StreamSourceID, err,
 				)
 				if now.Sub(posUpdatedAt) > p.Config.ReadTimeout {
-					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: now == %v, posUpdatedAt == %v, pos == %v; readTimeout == %v, restarting (cannot even get a position)", p.StreamID, now, posUpdatedAt, pos, p.Config.ReadTimeout)
+					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: now == %v, posUpdatedAt == %v, pos == %v; readTimeout == %v, restarting (cannot even get a position)", p.StreamSourceID, now, posUpdatedAt, pos, p.Config.ReadTimeout)
 					restart()
 					return nil
 				}
@@ -903,7 +903,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 				default:
 					logger.Errorf(ctx,
 						"StreamPlayer[%s].controllerLoop: unable to get the current cache duration: %v",
-						p.StreamID, err,
+						p.StreamSourceID, err,
 					)
 					if prevLength != 0 {
 						logger.Debugf(ctx,
@@ -921,7 +921,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 				if err != nil {
 					logger.Errorf(ctx,
 						"StreamPlayer[%s].controllerLoop: unable to get the current length: %v",
-						p.StreamID, err,
+						p.StreamSourceID, err,
 					)
 					if prevLength != 0 {
 						logger.Debugf(ctx,
@@ -939,7 +939,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 
 			logger.Logf(ctx, traceLogLevel,
 				"StreamPlayer[%s].controllerLoop: now == %v, posUpdatedAt == %v, len == %v; pos == %v; jitterBuf == %v; readTimeout == %v",
-				p.StreamID, now, posUpdatedAt, l, pos, p.CurrentJitterBufDuration, p.Config.ReadTimeout,
+				p.StreamSourceID, now, posUpdatedAt, l, pos, p.CurrentJitterBufDuration, p.Config.ReadTimeout,
 			)
 
 			if pos < -p.Config.ReadTimeout {
@@ -962,7 +962,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 				stalling = true
 				noMovementDuration := now.Sub(posUpdatedAt)
 				if noMovementDuration > p.Config.ReadTimeout {
-					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: now == %v, posUpdatedAt == %v, len == %v; pos == %v; readTimeout == %v, restarting", p.StreamID, now, posUpdatedAt, l, pos, p.Config.ReadTimeout)
+					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: now == %v, posUpdatedAt == %v, len == %v; pos == %v; readTimeout == %v, restarting", p.StreamSourceID, now, posUpdatedAt, l, pos, p.Config.ReadTimeout)
 					jitterBufDurationIncrease = 0 // we are not sure why this happened, so not raising the latency without a good reason
 					restart()
 					return nil
@@ -970,7 +970,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 				minExtraBuf := noMovementDuration
 				if minExtraBuf > jitterBufDurationIncrease {
 					jitterBufDurationIncrease = minExtraBuf
-					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: no movement duration == %v, setting the jitterBufDurationIncrease to %v", p.StreamID, noMovementDuration, minExtraBuf)
+					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: no movement duration == %v, setting the jitterBufDurationIncrease to %v", p.StreamSourceID, noMovementDuration, minExtraBuf)
 				}
 			}
 
@@ -986,7 +986,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 				)
 				logger.Logf(ctx, traceLogLevel,
 					"StreamPlayer[%s].controllerLoop: decreasing the jitter buffer duration: factor:%v (halftime: %v, interval: %v); new duration: %v",
-					p.StreamID,
+					p.StreamSourceID,
 					jitterBufFactor,
 					p.Config.JitterBufDecayHalftime,
 					playerCheckInterval,
@@ -995,7 +995,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 			}
 
 			lag := l - pos
-			logger.Logf(ctx, traceLogLevel, "StreamPlayer[%s].controllerLoop: speed == %v; lag == %v; protocol == %v; jitterBuf == %v", p.StreamID, curSpeed, lag, protocol, p.CurrentJitterBufDuration)
+			logger.Logf(ctx, traceLogLevel, "StreamPlayer[%s].controllerLoop: speed == %v; lag == %v; protocol == %v; jitterBuf == %v", p.StreamSourceID, curSpeed, lag, protocol, p.CurrentJitterBufDuration)
 
 			// [ lag < jitBuf ]
 			if enableSlowDown && protocol == streamtypes.ServerTypeRTMP && lag < p.CurrentJitterBufDuration {
@@ -1008,7 +1008,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 						commitIncreaseNowDuration := jitterBufDurationIncrease - jitterBufDurationIncreaseNew
 						logger.Logf(ctx, traceLogLevel,
 							"StreamPlayer[%s].controllerLoop: increasing the jitter buffer by %v (%v - %v)",
-							p.StreamID,
+							p.StreamSourceID,
 							commitIncreaseNowDuration,
 							jitterBufDurationIncrease, jitterBufDurationIncreaseNew,
 						)
@@ -1026,14 +1026,14 @@ func (p *StreamPlayerHandler) controllerLoop(
 				if math.Abs(wantSpeed-curSpeed) < p.Config.MinSpeedDifference {
 					logger.Logf(ctx, traceLogLevel,
 						"StreamPlayer[%s].controllerLoop: want to slow down to %f, but the difference is too small vs current speed %f",
-						p.StreamID, setSpeed, curSpeed,
+						p.StreamSourceID, setSpeed, curSpeed,
 					)
 					return nil
 				}
 				curSpeed = setSpeed
 				logger.Debugf(ctx,
 					"StreamPlayer[%s].controllerLoop: slowing down to %f",
-					p.StreamID, curSpeed,
+					p.StreamSourceID, curSpeed,
 				)
 				err := player.SetSpeed(ctx, curSpeed)
 				if err != nil {
@@ -1057,7 +1057,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 			setSpeed := p.WantSpeedAverage.Update(wantSpeed)
 			logger.Logf(ctx, traceLogLevel,
 				"StreamPlayer[%s].controllerLoop: optimal speed %f (wantSpeed == %f)",
-				p.StreamID, setSpeed, wantSpeed,
+				p.StreamSourceID, setSpeed, wantSpeed,
 			)
 			setSpeed = float64(uint(setSpeed*200)) / 200 // to avoid flickering (for example between 1.0001 and 1.0000)
 
@@ -1083,7 +1083,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 			logger.Debugf(
 				ctx,
 				"StreamPlayer[%s].controllerLoop: setting the speed to %v: lag: %v - %v == %v",
-				p.StreamID, setSpeed, l, pos, lag,
+				p.StreamSourceID, setSpeed, l, pos, lag,
 			)
 			err = player.SetSpeed(ctx, setSpeed)
 			if err != nil {
