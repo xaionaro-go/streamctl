@@ -322,7 +322,7 @@ require (
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
 	github.com/xaionaro-go/audio v0.0.0-20260202195702-429dcb87c05c
-	github.com/xaionaro-go/avpipeline v0.0.0-20260304135024-b69c7bd27962
+	github.com/xaionaro-go/avpipeline v0.0.0-20260308191537-b01cb7c551bf
 	github.com/xaionaro-go/buildvars v0.0.0-20250111161425-ed39f98139d0
 	github.com/xaionaro-go/datacounter v1.0.4
 	github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42

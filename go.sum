@@ -4211,8 +4211,8 @@ github.com/xaionaro-go/avcommon v0.0.0-20250823173020-6a2bb1e1f59d h1:++uR850Cqo
 github.com/xaionaro-go/avcommon v0.0.0-20250823173020-6a2bb1e1f59d/go.mod h1:kjLo1LasgdDJqbTGD5bbEM+D6RiZSbf5ZT8yiPFF1BA=
 github.com/xaionaro-go/avmediacodec v0.0.0-20250505012527-c819676502d8 h1:FZn9+TN3uHhohfpanWkR9lFNHApizznZbML6XjvEgTU=
 github.com/xaionaro-go/avmediacodec v0.0.0-20250505012527-c819676502d8/go.mod h1:2W2Kp/HJFXcFBppQ4YytgDy/ydFL3hGc23xSB1U/Luc=
-github.com/xaionaro-go/avpipeline v0.0.0-20260304135024-b69c7bd27962 h1:8iGurRFMOq31TyJjnDowf3sc9AuA/NFTWnizBMVHk2g=
-github.com/xaionaro-go/avpipeline v0.0.0-20260304135024-b69c7bd27962/go.mod h1:Yy/0hjM/o772+cLJKHU8y1RseLgHULQ8jYLbso4bYjA=
+github.com/xaionaro-go/avpipeline v0.0.0-20260308191537-b01cb7c551bf h1:6G5Ltj1JIVY+qjPT20UVr0RIYBe0uvpbGk3pNNy/kx8=
+github.com/xaionaro-go/avpipeline v0.0.0-20260308191537-b01cb7c551bf/go.mod h1:Yy/0hjM/o772+cLJKHU8y1RseLgHULQ8jYLbso4bYjA=
 github.com/xaionaro-go/buildvars v0.0.0-20250111161425-ed39f98139d0 h1:wwtHB1EZ7TlNavGKzAgCf598zWRfZCSpi1HTKDbjbwg=
 github.com/xaionaro-go/buildvars v0.0.0-20250111161425-ed39f98139d0/go.mod h1:mveFsRVHwcz4VBh+PozKgX2fXNRo/BQSiJil9VnxNII=
 github.com/xaionaro-go/chatwebhook v0.0.0-20260104185322-4dc28c63093a h1:ujEUYEAsgK11t/KJGNYZRW9f+LdXcz7EXvZGdFkFPMM=
