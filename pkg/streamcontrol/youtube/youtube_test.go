@@ -224,6 +224,32 @@ func TestQuotaPersistenceLoad(t *testing.T) {
 	assert.Equal(t, uint64(501), yt.YouTubeClient.UsedPoints.Load())
 }
 
+func TestQuotaPersistenceLoadPerOp(t *testing.T) {
+	cfg := newTestAccountConfig()
+	cfg.QuotaUsedPoints = 200
+	cfg.QuotaUsedDate = getQuotaCutoffDate(time.Now())
+	cfg.QuotaUsedByOp = map[string]uint64{
+		"GetBroadcasts": 3,
+		"Search":        100,
+		"UpdateVideo":   97,
+	}
+
+	yt := newTestYouTubeWithConfig(t, cfg, func(AccountConfig) error { return nil })
+
+	// Per-op data should be restored.
+	getBc, ok := yt.YouTubeClient.UsedPointsByOp.Load("GetBroadcasts")
+	assert.True(t, ok)
+	assert.Equal(t, uint64(3), getBc)
+
+	search, ok := yt.YouTubeClient.UsedPointsByOp.Load("Search")
+	assert.True(t, ok)
+	assert.Equal(t, uint64(100), search)
+
+	updVid, ok := yt.YouTubeClient.UsedPointsByOp.Load("UpdateVideo")
+	assert.True(t, ok)
+	assert.Equal(t, uint64(97), updVid)
+}
+
 func TestQuotaPersistenceLoadStaleDate(t *testing.T) {
 	cfg := newTestAccountConfig()
 	cfg.QuotaUsedPoints = 500
@@ -269,4 +295,16 @@ func TestPersistQuotaSavesOnChange(t *testing.T) {
 	yt.persistQuota(ctx)
 	assert.Equal(t, 2, saveCount)
 	assert.Equal(t, uint64(100), savedCfg.QuotaUsedPoints)
+
+	// Verify per-op breakdown is persisted.
+	yt.YouTubeClient.UsedPointsByOp.Store("GetBroadcasts", 5)
+	yt.YouTubeClient.UsedPointsByOp.Store("Search", 95)
+	yt.YouTubeClient.UsedPoints.Store(200)
+	yt.persistQuota(ctx)
+	assert.Equal(t, 3, saveCount)
+	assert.Equal(t, map[string]uint64{
+		"GetBroadcasts": 5,
+		"Ping":          1,
+		"Search":        95,
+	}, savedCfg.QuotaUsedByOp)
 }

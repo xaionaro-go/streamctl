@@ -135,6 +135,9 @@ func New(
 
 	if cfg.QuotaUsedPoints > 0 && cfg.QuotaUsedDate == getQuotaCutoffDate(time.Now()) {
 		yt.YouTubeClient.UsedPoints.Store(cfg.QuotaUsedPoints)
+		for op, pts := range cfg.QuotaUsedByOp {
+			yt.YouTubeClient.UsedPointsByOp.Store(op, pts)
+		}
 		yt.YouTubeClient.PreviousCheckAt = time.Now()
 		logger.Infof(ctx, "loaded persisted quota: %d points for %s", cfg.QuotaUsedPoints, cfg.QuotaUsedDate)
 	}
@@ -212,11 +215,18 @@ func (yt *YouTube) persistQuota(ctx context.Context) {
 	points := yt.YouTubeClient.UsedPoints.Load()
 	date := getQuotaCutoffDate(time.Now())
 
+	byOp := map[string]uint64{}
+	yt.YouTubeClient.UsedPointsByOp.Range(func(key string, value uint64) bool {
+		byOp[key] = value
+		return true
+	})
+
 	if yt.Config.QuotaUsedPoints == points && yt.Config.QuotaUsedDate == date {
 		return
 	}
 
 	yt.Config.QuotaUsedPoints = points
+	yt.Config.QuotaUsedByOp = byOp
 	yt.Config.QuotaUsedDate = date
 
 	if err := yt.SaveConfigFunc(yt.Config); err != nil {
