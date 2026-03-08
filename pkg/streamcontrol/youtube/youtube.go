@@ -1235,9 +1235,7 @@ func (yt *YouTube) startChatListener(
 	tokenSource := xsync.DoR1(ctx, &yt.locker, func() oauth2.TokenSource {
 		return yt.tokenSource
 	})
-	_chatListener, err := NewChatListener(ctx, videoID, chatID, tokenSource, func(ctx context.Context, points uint) {
-		yt.YouTubeClient.addUsedPointsIfNoError(ctx, points, nil)
-	})
+	_chatListener, err := NewChatListener(ctx, videoID, chatID, tokenSource, yt.YouTubeClient)
 	if err != nil {
 		return fmt.Errorf("unable to initialize the chat listener instance: %w", err)
 	}

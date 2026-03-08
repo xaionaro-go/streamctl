@@ -4269,8 +4269,8 @@ github.com/xaionaro-go/proxy v0.0.0-20250525144747-579f5a891c15 h1:Qqoy9MDWq2Yh6
 github.com/xaionaro-go/proxy v0.0.0-20250525144747-579f5a891c15/go.mod h1:6kxHtLmOImv/zwXSvaI1CW9Q8Pw+m5b891ZoejMKHPA=
 github.com/xaionaro-go/pulse v0.0.0-20241023202712-7151fa00d4bb h1:9iHPI27CYbmJDhzEuCABQthE/DGVNvT60ybWvv3BV8w=
 github.com/xaionaro-go/pulse v0.0.0-20241023202712-7151fa00d4bb/go.mod h1:cpYspI6YljhkUf1WLXLLDmeaaPFc3CnGLjDZf9dZ4no=
-github.com/xaionaro-go/recoder v0.0.0-20260105202633-b87c41c9f646 h1:hIKYuJORvrai6aSUfrm9VimdHOBXPeMJkbO3muXSw74=
-github.com/xaionaro-go/recoder v0.0.0-20260105202633-b87c41c9f646/go.mod h1:ntJhEvWW85okKD4L1ZYqTFn7LoVoM7M8LQ9NzSiMzog=
+github.com/xaionaro-go/recoder v0.0.0-20260308185441-242f079aa5da h1:RAOPwu0jIdAa1+DcfzVR7AydNScxNxcyAMqseSfO/5Y=
+github.com/xaionaro-go/recoder v0.0.0-20260308185441-242f079aa5da/go.mod h1:MxbcrwL7DE5tC1MgZ3GBjkWRUj3KyW6X4wYUl7SsIKE=
 github.com/xaionaro-go/rpn v0.0.0-20250818130635-1419b5218722 h1:/vM4t4pLV3ksaOxiRhqbhLkdjsdjCWqqtvvttfNrUjY=
 github.com/xaionaro-go/rpn v0.0.0-20250818130635-1419b5218722/go.mod h1:v0s9YvLb4Wy7lAdsNL584t5QEPz/U2pzNWgq4B3Sdlg=
 github.com/xaionaro-go/secret v0.0.0-20250111141743-ced12e1082c2 h1:QHpTWfyfmz65cE0MtFXe9fScdi+X0VIYR2wgolSYEUk=
@@ -4300,8 +4300,6 @@ github.com/xaionaro-go/xpath v0.0.0-20250111145115-55f5728f643f h1:ofxY1akRlVdJ/
 github.com/xaionaro-go/xpath v0.0.0-20250111145115-55f5728f643f/go.mod h1:f0DVcqddOy1RALOgXJHwpQnkp1u1yeBX/+A2+Bf4EGc=
 github.com/xaionaro-go/xsync v0.0.0-20260103200624-2cd14b984747 h1:jzmxq5gnbby7en3Rz3QoUgEVNpFQr9EWBo0XXgrcKok=
 github.com/xaionaro-go/xsync v0.0.0-20260103200624-2cd14b984747/go.mod h1:FCpywNAl4a4hgzE8j7Z+TpdhBQi5WHxnI35jOrFpoQw=
-github.com/xaionaro-go/youtube-live-chat-downloader/v2 v2.0.0-20251025201126-e815a074fd2c h1:ycVt/n/TMGQM26QEUELOlHQjTq7M2k9wFr4T2/3OoRY=
-github.com/xaionaro-go/youtube-live-chat-downloader/v2 v2.0.0-20251025201126-e815a074fd2c/go.mod h1:skCvdVw1Gf9sVvlsPlE2xieWVQD8e+4GdGz/V9oSLVg=
 github.com/xaionaro-go/zerolog2belt v0.0.0-20241103164018-a3bc1ea487e5 h1:jAy7VLg8y8XE1R8jBte4PRDJzOaAE+sUfmttfB9ZcAY=
 github.com/xaionaro-go/zerolog2belt v0.0.0-20241103164018-a3bc1ea487e5/go.mod h1:KJuX7yl27vU+KV6CpsWOe5ZMY4zSg70hvEhwoYdr17w=
 github.com/xanzy/ssh-agent v0.3.3 h1:+/15pJfg/RsTxqYcX6fHqOXZwwMP+2VyYWJeWM2qQFM=

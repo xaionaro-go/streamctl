@@ -17,6 +17,18 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+type testQuotaTracker struct {
+	consumed atomic.Uint64
+}
+
+func (t *testQuotaTracker) ReportQuotaConsumption(_ context.Context, points uint) {
+	t.consumed.Add(uint64(points))
+}
+
+func (t *testQuotaTracker) UsedQuotaPoints() uint64 {
+	return t.consumed.Load()
+}
+
 type mockTokenSource struct{}
 
 func (m *mockTokenSource) Token() (*oauth2.Token, error) {
@@ -261,9 +273,9 @@ func TestChatListenerConvertGiftMembershipReceived(t *testing.T) {
 			Type: ytgrpc.LiveChatMessageSnippet_GIFT_MEMBERSHIP_RECEIVED_EVENT,
 			DisplayedContent: &ytgrpc.LiveChatMessageSnippet_GiftMembershipReceivedDetails{
 				GiftMembershipReceivedDetails: &ytgrpc.LiveChatGiftMembershipReceivedDetails{
-					MemberLevelName:                       "Gold",
-					GifterChannelId:                        "UCgifter",
-					AssociatedMembershipGiftingMessageId:   "msg-gift",
+					MemberLevelName:                      "Gold",
+					GifterChannelId:                      "UCgifter",
+					AssociatedMembershipGiftingMessageId: "msg-gift",
 				},
 			},
 		},
@@ -454,8 +466,8 @@ func TestChatListenerConvertSponsorOnlyMode(t *testing.T) {
 	ctx := context.Background()
 
 	for _, tc := range []struct {
-		name     string
-		msgType  ytgrpc.LiveChatMessageSnippet_Type
+		name    string
+		msgType ytgrpc.LiveChatMessageSnippet_Type
 	}{
 		{"started", ytgrpc.LiveChatMessageSnippet_SPONSOR_ONLY_MODE_STARTED_EVENT},
 		{"ended", ytgrpc.LiveChatMessageSnippet_SPONSOR_ONLY_MODE_ENDED_EVENT},
@@ -589,12 +601,10 @@ func TestChatListenerQuotaTracking(t *testing.T) {
 
 	client := ytgrpc.NewV3DataLiveChatMessageServiceClient(conn)
 
-	var quotaPoints atomic.Uint64
+	qt := &testQuotaTracker{}
 	listener := &ChatListener{
-		liveChatID: "test-chat-id",
-		onQuotaConsumption: func(_ context.Context, points uint) {
-			quotaPoints.Add(uint64(points))
-		},
+		liveChatID:      "test-chat-id",
+		quotaTracker:    qt,
 		messagesOutChan: make(chan streamcontrol.Event, 100),
 	}
 
@@ -602,9 +612,49 @@ func TestChatListenerQuotaTracking(t *testing.T) {
 	err = listener.streamMessages(ctx, client, &pageToken)
 	require.NoError(t, err)
 
-	assert.Equal(t, uint64(1), quotaPoints.Load(),
+	assert.Equal(t, uint64(1), qt.UsedQuotaPoints(),
 		"each StreamList RPC should report 1 quota point (matching api/request_count)")
 	assert.Equal(t, fmt.Sprintf("token-%d", responseCount-1), pageToken)
 	assert.Equal(t, responseCount, len(listener.messagesOutChan),
 		"all messages should be delivered to the output channel")
+}
+
+func TestQuotaThrottleRemaining(t *testing.T) {
+	t.Run("nil_tracker_returns_zero", func(t *testing.T) {
+		l := &ChatListener{}
+		assert.Equal(t, time.Duration(0), l.quotaThrottleRemaining(time.Now()))
+	})
+
+	t.Run("below_threshold_returns_zero", func(t *testing.T) {
+		qt := &testQuotaTracker{}
+		qt.consumed.Store(highQuotaUsageThreshold - 1)
+		l := &ChatListener{quotaTracker: qt}
+		assert.Equal(t, time.Duration(0), l.quotaThrottleRemaining(time.Now()))
+	})
+
+	t.Run("at_threshold_just_started_returns_full_delay", func(t *testing.T) {
+		qt := &testQuotaTracker{}
+		qt.consumed.Store(highQuotaUsageThreshold)
+		l := &ChatListener{quotaTracker: qt}
+		remaining := l.quotaThrottleRemaining(time.Now())
+		assert.InDelta(t, highQuotaReconnectDelay.Seconds(), remaining.Seconds(), 1)
+	})
+
+	t.Run("at_threshold_partial_elapsed_returns_remainder", func(t *testing.T) {
+		qt := &testQuotaTracker{}
+		qt.consumed.Store(highQuotaUsageThreshold)
+		l := &ChatListener{quotaTracker: qt}
+		startedAt := time.Now().Add(-10 * time.Second)
+		remaining := l.quotaThrottleRemaining(startedAt)
+		expected := highQuotaReconnectDelay - 10*time.Second
+		assert.InDelta(t, expected.Seconds(), remaining.Seconds(), 1)
+	})
+
+	t.Run("at_threshold_fully_elapsed_returns_zero", func(t *testing.T) {
+		qt := &testQuotaTracker{}
+		qt.consumed.Store(highQuotaUsageThreshold)
+		l := &ChatListener{quotaTracker: qt}
+		startedAt := time.Now().Add(-highQuotaReconnectDelay - time.Second)
+		assert.Equal(t, time.Duration(0), l.quotaThrottleRemaining(startedAt))
+	})
 }

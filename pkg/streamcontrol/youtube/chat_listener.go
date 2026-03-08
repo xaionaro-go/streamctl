@@ -25,16 +25,24 @@ const (
 	youtubeGRPCHost      = "youtube.googleapis.com:443"
 	streamReconnectDelay = 5 * time.Second
 	maxReconnectDelay    = 60 * time.Second
+
+	highQuotaReconnectDelay = 60 * time.Second
+	highQuotaUsageThreshold = 5000
 )
 
+type QuotaTracker interface {
+	ReportQuotaConsumption(ctx context.Context, points uint)
+	UsedQuotaPoints() uint64
+}
+
 type ChatListener struct {
-	videoID            string
-	liveChatID         string
-	tokenSource        oauth2.TokenSource
-	onQuotaConsumption func(ctx context.Context, points uint)
-	wg                 sync.WaitGroup
-	cancelFunc         context.CancelFunc
-	messagesOutChan    chan streamcontrol.Event
+	videoID         string
+	liveChatID      string
+	tokenSource     oauth2.TokenSource
+	quotaTracker    QuotaTracker
+	wg              sync.WaitGroup
+	cancelFunc      context.CancelFunc
+	messagesOutChan chan streamcontrol.Event
 }
 
 type ChatClient interface {
@@ -46,7 +54,7 @@ func NewChatListener(
 	videoID string,
 	liveChatID string,
 	tokenSource oauth2.TokenSource,
-	onQuotaConsumption func(ctx context.Context, points uint),
+	quotaTracker QuotaTracker,
 ) (*ChatListener, error) {
 	if videoID == "" {
 		return nil, fmt.Errorf("video ID is empty")
@@ -58,12 +66,12 @@ func NewChatListener(
 
 	ctx, cancelFunc := context.WithCancel(ctx)
 	l := &ChatListener{
-		videoID:            videoID,
-		liveChatID:         liveChatID,
-		tokenSource:        tokenSource,
-		onQuotaConsumption: onQuotaConsumption,
-		cancelFunc:         cancelFunc,
-		messagesOutChan:    make(chan streamcontrol.Event, 100),
+		videoID:         videoID,
+		liveChatID:      liveChatID,
+		tokenSource:     tokenSource,
+		quotaTracker:    quotaTracker,
+		cancelFunc:      cancelFunc,
+		messagesOutChan: make(chan streamcontrol.Event, 100),
 	}
 	l.wg.Add(1)
 	observability.Go(ctx, func(ctx context.Context) {
@@ -103,6 +111,7 @@ func (l *ChatListener) listenLoop(ctx context.Context) (_err error) {
 
 	var pageToken string
 	reconnectDelay := streamReconnectDelay
+	var lastStreamStartedAt time.Time
 
 	for {
 		select {
@@ -111,6 +120,18 @@ func (l *ChatListener) listenLoop(ctx context.Context) (_err error) {
 		default:
 		}
 
+		if !lastStreamStartedAt.IsZero() {
+			if remaining := l.quotaThrottleRemaining(lastStreamStartedAt); remaining > 0 {
+				logger.Infof(ctx, "quota >= %d, waiting %v before reconnecting", highQuotaUsageThreshold, remaining)
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(remaining):
+				}
+			}
+		}
+
+		lastStreamStartedAt = time.Now()
 		err := l.streamMessages(ctx, client, &pageToken)
 		if err == nil {
 			reconnectDelay = streamReconnectDelay
@@ -141,6 +162,8 @@ func (l *ChatListener) listenLoop(ctx context.Context) (_err error) {
 			logger.Errorf(ctx, "gRPC stream died: %v, reconnecting in %v", err, reconnectDelay)
 		}
 
+		reconnectDelay = max(reconnectDelay, l.quotaThrottleRemaining(lastStreamStartedAt))
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -149,6 +172,22 @@ func (l *ChatListener) listenLoop(ctx context.Context) (_err error) {
 
 		reconnectDelay = min(reconnectDelay*2, maxReconnectDelay)
 	}
+}
+
+func (l *ChatListener) quotaThrottleRemaining(lastStreamStartedAt time.Time) time.Duration {
+	if l.quotaTracker == nil {
+		return 0
+	}
+	if l.quotaTracker.UsedQuotaPoints() < highQuotaUsageThreshold {
+		return 0
+	}
+
+	elapsed := time.Since(lastStreamStartedAt)
+	remaining := highQuotaReconnectDelay - elapsed
+	if remaining <= 0 {
+		return 0
+	}
+	return remaining
 }
 
 func (l *ChatListener) streamMessages(
@@ -172,8 +211,8 @@ func (l *ChatListener) streamMessages(
 	}
 	logger.Infof(ctx, "gRPC stream opened successfully for liveChatId=%q", l.liveChatID)
 
-	if l.onQuotaConsumption != nil {
-		l.onQuotaConsumption(ctx, 1)
+	if l.quotaTracker != nil {
+		l.quotaTracker.ReportQuotaConsumption(ctx, 1)
 	}
 
 	streamStartedAt := time.Now()
