@@ -242,8 +242,8 @@ require (
 	github.com/xaionaro-go/avcommon v0.0.0-20250823173020-6a2bb1e1f59d // indirect
 	github.com/xaionaro-go/avmediacodec v0.0.0-20250505012527-c819676502d8 // indirect
 	github.com/xaionaro-go/gorex v0.0.0-20241010205749-bcd59d639c4d // indirect
-	github.com/xaionaro-go/libsrt v0.0.0-20250505013920-61d894a3b7e9 // indirect
-	github.com/xaionaro-go/ndk v0.0.0-20250420195304-361bb98583bf // indirect
+	github.com/xaionaro-go/libsrt v0.0.0-20251231191024-483a9dd27df8 // indirect
+	github.com/xaionaro-go/ndk v0.0.0-20251109211112-251265903264 // indirect
 	github.com/xaionaro-go/proxy v0.0.0-20250525144747-579f5a891c15 // indirect
 	github.com/xaionaro-go/spinlock v0.0.0-20200518175509-30e6d1ce68a1 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
@@ -276,7 +276,7 @@ require (
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	h12.io/socks v1.0.3 // indirect
-	lukechampine.com/blake3 v1.4.0 // indirect
+	lukechampine.com/blake3 v1.4.1 // indirect
 )
 
 require (
@@ -323,7 +323,7 @@ require (
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
 	github.com/xaionaro-go/audio v0.0.0-20260202195702-429dcb87c05c
-	github.com/xaionaro-go/avpipeline v0.0.0-20260105202319-a696ac2167b6
+	github.com/xaionaro-go/avpipeline v0.0.0-20260304135024-b69c7bd27962
 	github.com/xaionaro-go/buildvars v0.0.0-20250111161425-ed39f98139d0
 	github.com/xaionaro-go/datacounter v1.0.4
 	github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42
@@ -360,6 +360,7 @@ require (
 
 require (
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
+	github.com/brettbuddin/fourier v0.1.1 // indirect
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/ebitengine/gomobile v0.0.0-20250923094054-ea854a63cce1 // indirect
 	github.com/ebitengine/hideconsole v1.0.0 // indirect
@@ -370,11 +371,13 @@ require (
 	github.com/hack-pad/safejs v0.1.0 // indirect
 	github.com/hajimehoshi/ebiten/v2 v2.9.4 // indirect
 	github.com/mattn/go-pointer v0.0.1 // indirect
+	github.com/mjibson/go-dsp v0.0.0-20180508042940-11479a337f12 // indirect
 	github.com/samber/lo v1.52.0 // indirect
 	github.com/xaionaro-go/rpn v0.0.0-20250818130635-1419b5218722 // indirect
 	github.com/xaionaro-go/tcp v0.0.0-20260103194940-f10157ebd88d // indirect
 	github.com/xaionaro-go/typing v0.0.0-20221123235249-2229101d38ba // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.61.0 // indirect
+	go.uber.org/atomic v1.11.0 // indirect
 	google.golang.org/genproto v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	tailscale.com v1.86.5 // indirect
