@@ -31,7 +31,7 @@ const (
 )
 
 type QuotaTracker interface {
-	ReportQuotaConsumption(ctx context.Context, points uint)
+	ReportQuotaConsumption(ctx context.Context, operationName string, points uint)
 	UsedQuotaPoints() uint64
 }
 
@@ -209,10 +209,10 @@ func (l *ChatListener) streamMessages(
 	if err != nil {
 		return fmt.Errorf("unable to open StreamList: %w", err)
 	}
-	logger.Infof(ctx, "gRPC stream opened successfully for liveChatId=%q", l.liveChatID)
+	logger.Debugf(ctx, "gRPC stream opened successfully for liveChatId=%q", l.liveChatID)
 
 	if l.quotaTracker != nil {
-		l.quotaTracker.ReportQuotaConsumption(ctx, 1)
+		l.quotaTracker.ReportQuotaConsumption(ctx, "StreamList", 1)
 	}
 
 	streamStartedAt := time.Now()
@@ -222,7 +222,7 @@ func (l *ChatListener) streamMessages(
 		if err != nil {
 			streamDuration := time.Since(streamStartedAt)
 			if errors.Is(err, io.EOF) {
-				logger.Warnf(ctx, "stream ended (EOF) after %d Recv calls in %v", recvCount, streamDuration)
+				logger.Debugf(ctx, "stream ended (EOF) after %d Recv calls in %v", recvCount, streamDuration)
 				return nil
 			}
 			return fmt.Errorf("stream failed after %d Recv calls in %v: %w", recvCount, streamDuration, err)

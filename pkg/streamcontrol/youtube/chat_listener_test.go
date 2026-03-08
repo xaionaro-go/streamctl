@@ -21,7 +21,7 @@ type testQuotaTracker struct {
 	consumed atomic.Uint64
 }
 
-func (t *testQuotaTracker) ReportQuotaConsumption(_ context.Context, points uint) {
+func (t *testQuotaTracker) ReportQuotaConsumption(_ context.Context, _ string, points uint) {
 	t.consumed.Add(uint64(points))
 }
 

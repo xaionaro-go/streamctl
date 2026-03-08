@@ -140,3 +140,27 @@ func TestQuotaCostSearch(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(100), c.UsedPoints.Load(), "Search should cost 100 points")
 }
+
+func TestPerOperationQuotaTracking(t *testing.T) {
+	c := newTestClientCalcPoints(&mockClient{})
+	ctx := context.Background()
+
+	_, _ = c.GetBroadcasts(ctx, BroadcastTypeAll, nil, []string{"snippet"}, "")
+	_, _ = c.GetBroadcasts(ctx, BroadcastTypeAll, nil, []string{"snippet"}, "")
+	_ = c.UpdateVideo(ctx, &youtube.Video{}, []string{"snippet"})
+	_, _ = c.Search(ctx, "chan-1", EventTypeLive, []string{"snippet"})
+
+	getBc, ok := c.UsedPointsByOp.Load("GetBroadcasts")
+	assert.True(t, ok)
+	assert.Equal(t, uint64(2), getBc)
+
+	updVid, ok := c.UsedPointsByOp.Load("UpdateVideo")
+	assert.True(t, ok)
+	assert.Equal(t, uint64(50), updVid)
+
+	search, ok := c.UsedPointsByOp.Load("Search")
+	assert.True(t, ok)
+	assert.Equal(t, uint64(100), search)
+
+	assert.Equal(t, uint64(152), c.UsedPoints.Load())
+}

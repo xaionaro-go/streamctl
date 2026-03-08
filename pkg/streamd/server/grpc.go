@@ -2165,10 +2165,20 @@ func (grpc *GRPCServer) GetYouTubeInfo(
 	reply := &streamd_grpc.GetYouTubeInfoReply{}
 
 	reply.QuotaUsage = &streamd_grpc.YouTubeQuotaUsage{
-		UsedPoints:    info.QuotaUsage.UsedPoints,
+		UsedPoints:    info.QuotaUsage.UsedPoints.Load(),
 		DailyLimit:    info.QuotaUsage.DailyLimit,
 		ResetTimeUnix: info.QuotaUsage.ResetTime.Unix(),
 	}
+
+	perOp := map[string]uint64{}
+	info.QuotaUsage.PerOperationUsage.Range(func(key string, value uint64) bool {
+		perOp[key] = value
+		return true
+	})
+	if len(perOp) > 0 {
+		reply.QuotaUsage.PerOperationUsage = perOp
+	}
+
 	if info.QuotaUsage.GoogleReportedUsage != nil {
 		reply.QuotaUsage.GoogleReportedUsage = info.QuotaUsage.GoogleReportedUsage
 	}
