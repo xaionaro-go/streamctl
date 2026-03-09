@@ -211,8 +211,11 @@ func (l *ChatListener) streamMessages(
 	}
 	logger.Debugf(ctx, "gRPC stream opened successfully for liveChatId=%q", l.liveChatID)
 
+	// StreamList quota cost is not documented by Google (Live Streaming API
+	// operations are absent from the quota calculator). Set to 5 as a
+	// provisional estimate; needs further empirical calibration.
 	if l.quotaTracker != nil {
-		l.quotaTracker.ReportQuotaConsumption(ctx, "StreamList", 1)
+		l.quotaTracker.ReportQuotaConsumption(ctx, "StreamList", 5)
 	}
 
 	streamStartedAt := time.Now()

@@ -133,13 +133,15 @@ func New(
 		return nil, fmt.Errorf("initialization failed: %w", err)
 	}
 
-	if cfg.QuotaUsedPoints > 0 && cfg.QuotaUsedDate == getQuotaCutoffDate(time.Now()) {
-		yt.YouTubeClient.UsedPoints.Store(cfg.QuotaUsedPoints)
+	if len(cfg.QuotaUsedByOp) > 0 && cfg.QuotaUsedDate == getQuotaCutoffDate(time.Now()) {
+		var total uint64
 		for op, pts := range cfg.QuotaUsedByOp {
 			yt.YouTubeClient.UsedPointsByOp.Store(op, pts)
+			total += pts
 		}
+		yt.YouTubeClient.UsedPoints.Store(total)
 		yt.YouTubeClient.PreviousCheckAt = time.Now()
-		logger.Infof(ctx, "loaded persisted quota: %d points for %s", cfg.QuotaUsedPoints, cfg.QuotaUsedDate)
+		logger.Infof(ctx, "loaded persisted quota: %d points for %s", total, cfg.QuotaUsedDate)
 	}
 
 	err = yt.YouTubeClient.Ping(ctx)
@@ -212,26 +214,34 @@ func (yt *YouTube) persistQuota(ctx context.Context) {
 		return
 	}
 
-	points := yt.YouTubeClient.UsedPoints.Load()
 	date := getQuotaCutoffDate(time.Now())
 
 	byOp := map[string]uint64{}
+	var total uint64
 	yt.YouTubeClient.UsedPointsByOp.Range(func(key string, value uint64) bool {
 		byOp[key] = value
+		total += value
 		return true
 	})
 
-	if yt.Config.QuotaUsedPoints == points && yt.Config.QuotaUsedDate == date {
+	if sumQuotaByOp(yt.Config.QuotaUsedByOp) == total && yt.Config.QuotaUsedDate == date {
 		return
 	}
 
-	yt.Config.QuotaUsedPoints = points
 	yt.Config.QuotaUsedByOp = byOp
 	yt.Config.QuotaUsedDate = date
 
 	if err := yt.SaveConfigFunc(yt.Config); err != nil {
 		logger.Warnf(ctx, "unable to persist quota: %v", err)
 	}
+}
+
+func sumQuotaByOp(m map[string]uint64) uint64 {
+	var total uint64
+	for _, v := range m {
+		total += v
+	}
+	return total
 }
 
 func (yt *YouTube) getNewToken(ctx context.Context) (_ret *oauth2.Token, _err error) {
@@ -1454,7 +1464,7 @@ func (yt *YouTube) GetStreamStatus(
 		return nil, fmt.Errorf("unable to get active broadcasts info: %w", err)
 	}
 	if len(requestStatsVideoIDs) > 0 {
-		videos, err := yt.YouTubeClient.Client.GetVideos(ctx, requestStatsVideoIDs, videoParts)
+		videos, err := yt.YouTubeClient.GetVideos(ctx, requestStatsVideoIDs, videoParts)
 		if err != nil {
 			logger.Errorf(ctx, "unable to get info for videos %v: %v", requestStatsVideoIDs, err)
 		} else {

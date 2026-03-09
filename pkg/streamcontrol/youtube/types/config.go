@@ -26,7 +26,6 @@ type AccountConfig struct {
 	ClientSecret         secret.String
 	Token                *OAuth2Token
 	GCPProjectID         string          `yaml:"GCPProjectID,omitempty"`
-	QuotaUsedPoints      uint64            `yaml:"quota_used_points,omitempty"`
 	QuotaUsedByOp        map[string]uint64 `yaml:"quota_used_by_op,omitempty"`
 	QuotaUsedDate        string            `yaml:"quota_used_date,omitempty"`
 	CustomOAuthHandler   OAuthHandler    `yaml:"-"`

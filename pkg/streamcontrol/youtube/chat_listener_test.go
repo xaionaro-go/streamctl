@@ -612,8 +612,8 @@ func TestChatListenerQuotaTracking(t *testing.T) {
 	err = listener.streamMessages(ctx, client, &pageToken)
 	require.NoError(t, err)
 
-	assert.Equal(t, uint64(1), qt.UsedQuotaPoints(),
-		"each StreamList RPC should report 1 quota point (matching api/request_count)")
+	assert.Equal(t, uint64(5), qt.UsedQuotaPoints(),
+		"StreamList quota is charged per gRPC stream open (provisional estimate: 5 units)")
 	assert.Equal(t, fmt.Sprintf("token-%d", responseCount-1), pageToken)
 	assert.Equal(t, responseCount, len(listener.messagesOutChan),
 		"all messages should be delivered to the output channel")
