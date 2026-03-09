@@ -26,14 +26,49 @@ func init() {
 	}
 }
 
+// quotaCostByOp maps operation names to their per-request quota cost.
+// See also: https://developers.google.com/youtube/v3/determine_quota_cost
+var quotaCostByOp = map[string]uint{
+	"Ping":                1,
+	"GetBroadcasts":       1,
+	"UpdateBroadcast":     50,
+	"InsertBroadcast":     50,
+	"DeleteBroadcast":     50,
+	"GetStreams":           1,
+	"InsertStream":        50,
+	"DeleteStream":        50,
+	"GetVideos":           1,
+	"UpdateVideo":         50,
+	"InsertCuepoint":      50,
+	"GetPlaylists":        1,
+	"GetPlaylistItems":    1,
+	"InsertPlaylistItem":  50,
+	"SetThumbnail":        50,
+	"InsertCommentThread": 50,
+	"ListChatMessages":    1,
+	"DeleteChatMessage":   50,
+	"GetLiveChatMessages": 1,
+	"Search":              100,
+	"StreamList":          5,
+}
+
+// QuotaCostForOp returns the per-request quota cost for the given operation.
+// Returns 1 for unknown operations.
+func QuotaCostForOp(opName string) uint {
+	if cost, ok := quotaCostByOp[opName]; ok {
+		return cost
+	}
+	return 1
+}
+
 // ClientCalcPoints wraps a client with YouTube API quota tracking.
 // See also: https://developers.google.com/youtube/v3/determine_quota_cost
 type ClientCalcPoints struct {
-	Client          client
-	UsedPoints     atomic.Uint64
-	UsedPointsByOp xsync.Map[string, uint64]
-	CheckMutex     sync.Mutex
-	PreviousCheckAt time.Time
+	Client           client
+	UsedPoints       atomic.Uint64
+	RequestCountByOp xsync.Map[string, uint64]
+	CheckMutex       sync.Mutex
+	PreviousCheckAt  time.Time
 }
 
 var _ client = (*ClientCalcPoints)(nil)
@@ -73,13 +108,13 @@ func (c *ClientCalcPoints) addUsedPointsIfNoError(
 	if curDate != prevDate {
 		logger.Infof(ctx, "new quota day in YouTube: '%s' != '%s'", curDate, prevDate)
 		c.UsedPoints.Store(0)
-		c.UsedPointsByOp.Range(func(key string, _ uint64) bool {
-			c.UsedPointsByOp.Delete(key)
+		c.RequestCountByOp.Range(func(key string, _ uint64) bool {
+			c.RequestCountByOp.Delete(key)
 			return true
 		})
 	}
-	prev, _ := c.UsedPointsByOp.Load(operationName)
-	c.UsedPointsByOp.Store(operationName, prev+uint64(points))
+	prev, _ := c.RequestCountByOp.Load(operationName)
+	c.RequestCountByOp.Store(operationName, prev+1)
 }
 
 func (c *ClientCalcPoints) ReportQuotaConsumption(

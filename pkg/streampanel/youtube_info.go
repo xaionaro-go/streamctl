@@ -130,12 +130,18 @@ func (page *youTubeInfoPage) refresh(ctx context.Context) {
 	// Per-operation breakdown
 	page.quotaBreakdownBox.RemoveAll()
 	type opEntry struct {
-		Name   string
-		Points uint64
+		Name     string
+		Requests uint64
+		Points   uint64
 	}
 	var ops []opEntry
+	requestCounts := map[string]uint64{}
+	info.QuotaUsage.PerOperationRequestCount.Range(func(key string, value uint64) bool {
+		requestCounts[key] = value
+		return true
+	})
 	info.QuotaUsage.PerOperationUsage.Range(func(key string, value uint64) bool {
-		ops = append(ops, opEntry{Name: key, Points: value})
+		ops = append(ops, opEntry{Name: key, Requests: requestCounts[key], Points: value})
 		return true
 	})
 	if len(ops) > 0 {
@@ -144,7 +150,7 @@ func (page *youTubeInfoPage) refresh(ctx context.Context) {
 		})
 		for _, op := range ops {
 			page.quotaBreakdownBox.Add(widget.NewLabel(
-				fmt.Sprintf("  %s: %d pts", op.Name, op.Points),
+				fmt.Sprintf("  %s: %d reqs = %d pts", op.Name, op.Requests, op.Points),
 			))
 		}
 	}

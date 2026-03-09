@@ -2179,6 +2179,15 @@ func (grpc *GRPCServer) GetYouTubeInfo(
 		reply.QuotaUsage.PerOperationUsage = perOp
 	}
 
+	perOpCount := map[string]uint64{}
+	info.QuotaUsage.PerOperationRequestCount.Range(func(key string, value uint64) bool {
+		perOpCount[key] = value
+		return true
+	})
+	if len(perOpCount) > 0 {
+		reply.QuotaUsage.PerOperationRequestCount = perOpCount
+	}
+
 	if info.QuotaUsage.GoogleReportedUsage != nil {
 		reply.QuotaUsage.GoogleReportedUsage = info.QuotaUsage.GoogleReportedUsage
 	}

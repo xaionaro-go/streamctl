@@ -160,8 +160,8 @@ func TestGetInfoReturnsQuotaAndListeners(t *testing.T) {
 	assert.Empty(t, info.ActiveBroadcasts)
 
 	// Simulate some quota usage via per-op tracking.
-	yt.YouTubeClient.UsedPointsByOp.Store("GetBroadcasts", 42)
-	yt.YouTubeClient.UsedPoints.Store(42)
+	yt.YouTubeClient.RequestCountByOp.Store("GetBroadcasts", 42)
+	yt.YouTubeClient.UsedPoints.Store(42) // GetBroadcasts cost=1, so 42 reqs = 42 pts
 	info = yt.GetInfo(ctx)
 	assert.Equal(t, uint64(42), info.QuotaUsage.UsedPoints.Load())
 
@@ -216,51 +216,51 @@ func TestTemplateBroadcastIDSet(t *testing.T) {
 
 func TestQuotaPersistenceLoad(t *testing.T) {
 	cfg := newTestAccountConfig()
-	cfg.QuotaUsedByOp = map[string]uint64{
-		"GetBroadcasts": 200,
-		"Search":        300,
+	cfg.QuotaRequestCountByOp = map[string]uint64{
+		"GetBroadcasts": 5, // 5 reqs × 1 pt = 5 pts
+		"Search":        3, // 3 reqs × 100 pts = 300 pts
 	}
 	cfg.QuotaUsedDate = getQuotaCutoffDate(time.Now())
 
 	yt := newTestYouTubeWithConfig(t, cfg, func(AccountConfig) error { return nil })
 
-	// 500 loaded from per-op map + 1 from Ping during New()
-	assert.Equal(t, uint64(501), yt.YouTubeClient.UsedPoints.Load())
+	// 305 loaded from per-op map + 1 from Ping during New()
+	assert.Equal(t, uint64(306), yt.YouTubeClient.UsedPoints.Load())
 }
 
 func TestQuotaPersistenceLoadPerOp(t *testing.T) {
 	cfg := newTestAccountConfig()
 	cfg.QuotaUsedDate = getQuotaCutoffDate(time.Now())
-	cfg.QuotaUsedByOp = map[string]uint64{
-		"GetBroadcasts": 3,
-		"Search":        100,
-		"UpdateVideo":   97,
+	cfg.QuotaRequestCountByOp = map[string]uint64{
+		"GetBroadcasts": 3, // 3 reqs × 1 pt = 3 pts
+		"Search":        2, // 2 reqs × 100 pts = 200 pts
+		"UpdateVideo":   4, // 4 reqs × 50 pts = 200 pts
 	}
 
 	yt := newTestYouTubeWithConfig(t, cfg, func(AccountConfig) error { return nil })
 
-	// Per-op data should be restored.
-	getBc, ok := yt.YouTubeClient.UsedPointsByOp.Load("GetBroadcasts")
+	// Per-op request counts should be restored.
+	getBc, ok := yt.YouTubeClient.RequestCountByOp.Load("GetBroadcasts")
 	assert.True(t, ok)
 	assert.Equal(t, uint64(3), getBc)
 
-	search, ok := yt.YouTubeClient.UsedPointsByOp.Load("Search")
+	search, ok := yt.YouTubeClient.RequestCountByOp.Load("Search")
 	assert.True(t, ok)
-	assert.Equal(t, uint64(100), search)
+	assert.Equal(t, uint64(2), search)
 
-	updVid, ok := yt.YouTubeClient.UsedPointsByOp.Load("UpdateVideo")
+	updVid, ok := yt.YouTubeClient.RequestCountByOp.Load("UpdateVideo")
 	assert.True(t, ok)
-	assert.Equal(t, uint64(97), updVid)
+	assert.Equal(t, uint64(4), updVid)
 
-	// Total should be derived from per-op sum + 1 from Ping during New()
-	assert.Equal(t, uint64(201), yt.YouTubeClient.UsedPoints.Load())
+	// Total: 3×1 + 2×100 + 4×50 = 403 + 1 from Ping during New()
+	assert.Equal(t, uint64(404), yt.YouTubeClient.UsedPoints.Load())
 }
 
 func TestQuotaPersistenceLoadStaleDate(t *testing.T) {
 	cfg := newTestAccountConfig()
-	cfg.QuotaUsedByOp = map[string]uint64{
-		"GetBroadcasts": 200,
-		"Search":        300,
+	cfg.QuotaRequestCountByOp = map[string]uint64{
+		"GetBroadcasts": 5,
+		"Search":        3,
 	}
 	cfg.QuotaUsedDate = "2020-01-01"
 
@@ -285,25 +285,25 @@ func TestPersistQuotaSavesOnChange(t *testing.T) {
 	yt := newTestYouTubeWithConfig(t, cfg, saveFn)
 	ctx := context.Background()
 
-	// After New(), Ping added 1 point. First explicit persist should save.
+	// After New(), Ping added 1 request count. First explicit persist should save.
 	saveCount = 0
 	yt.persistQuota(ctx)
 	assert.Equal(t, 1, saveCount)
-	assert.Equal(t, map[string]uint64{"Ping": 1}, savedCfg.QuotaUsedByOp)
+	assert.Equal(t, map[string]uint64{"Ping": 1}, savedCfg.QuotaRequestCountByOp)
 	assert.Equal(t, getQuotaCutoffDate(time.Now()), savedCfg.QuotaUsedDate)
 
 	// Second persist with same value should not save again.
 	yt.persistQuota(ctx)
 	assert.Equal(t, 1, saveCount, "persistQuota should skip save when values unchanged")
 
-	// Add more per-op usage; persist should save again.
-	yt.YouTubeClient.UsedPointsByOp.Store("GetBroadcasts", 5)
-	yt.YouTubeClient.UsedPointsByOp.Store("Search", 95)
+	// Add more per-op request counts; persist should save again.
+	yt.YouTubeClient.RequestCountByOp.Store("GetBroadcasts", 5)
+	yt.YouTubeClient.RequestCountByOp.Store("Search", 2)
 	yt.persistQuota(ctx)
 	assert.Equal(t, 2, saveCount)
 	assert.Equal(t, map[string]uint64{
 		"GetBroadcasts": 5,
 		"Ping":          1,
-		"Search":        95,
-	}, savedCfg.QuotaUsedByOp)
+		"Search":        2,
+	}, savedCfg.QuotaRequestCountByOp)
 }

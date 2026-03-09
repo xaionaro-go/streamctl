@@ -133,15 +133,15 @@ func New(
 		return nil, fmt.Errorf("initialization failed: %w", err)
 	}
 
-	if len(cfg.QuotaUsedByOp) > 0 && cfg.QuotaUsedDate == getQuotaCutoffDate(time.Now()) {
-		var total uint64
-		for op, pts := range cfg.QuotaUsedByOp {
-			yt.YouTubeClient.UsedPointsByOp.Store(op, pts)
-			total += pts
+	if len(cfg.QuotaRequestCountByOp) > 0 && cfg.QuotaUsedDate == getQuotaCutoffDate(time.Now()) {
+		var totalPoints uint64
+		for op, count := range cfg.QuotaRequestCountByOp {
+			yt.YouTubeClient.RequestCountByOp.Store(op, count)
+			totalPoints += count * uint64(QuotaCostForOp(op))
 		}
-		yt.YouTubeClient.UsedPoints.Store(total)
+		yt.YouTubeClient.UsedPoints.Store(totalPoints)
 		yt.YouTubeClient.PreviousCheckAt = time.Now()
-		logger.Infof(ctx, "loaded persisted quota: %d points for %s", total, cfg.QuotaUsedDate)
+		logger.Infof(ctx, "loaded persisted quota: %d points from %d operations for %s", totalPoints, len(cfg.QuotaRequestCountByOp), cfg.QuotaUsedDate)
 	}
 
 	err = yt.YouTubeClient.Ping(ctx)
@@ -217,18 +217,18 @@ func (yt *YouTube) persistQuota(ctx context.Context) {
 	date := getQuotaCutoffDate(time.Now())
 
 	byOp := map[string]uint64{}
-	var total uint64
-	yt.YouTubeClient.UsedPointsByOp.Range(func(key string, value uint64) bool {
+	var totalCount uint64
+	yt.YouTubeClient.RequestCountByOp.Range(func(key string, value uint64) bool {
 		byOp[key] = value
-		total += value
+		totalCount += value
 		return true
 	})
 
-	if sumQuotaByOp(yt.Config.QuotaUsedByOp) == total && yt.Config.QuotaUsedDate == date {
+	if sumMapValues(yt.Config.QuotaRequestCountByOp) == totalCount && yt.Config.QuotaUsedDate == date {
 		return
 	}
 
-	yt.Config.QuotaUsedByOp = byOp
+	yt.Config.QuotaRequestCountByOp = byOp
 	yt.Config.QuotaUsedDate = date
 
 	if err := yt.SaveConfigFunc(yt.Config); err != nil {
@@ -236,7 +236,7 @@ func (yt *YouTube) persistQuota(ctx context.Context) {
 	}
 }
 
-func sumQuotaByOp(m map[string]uint64) uint64 {
+func sumMapValues(m map[string]uint64) uint64 {
 	var total uint64
 	for _, v := range m {
 		total += v
@@ -1952,8 +1952,9 @@ func (yt *YouTube) GetInfo(
 		info.QuotaUsage.UsedPoints.Store(yt.YouTubeClient.UsedPoints.Load())
 		info.QuotaUsage.DailyLimit = yttypes.YouTubeDailyQuotaLimit
 
-		yt.YouTubeClient.UsedPointsByOp.Range(func(key string, value uint64) bool {
-			info.QuotaUsage.PerOperationUsage.Store(key, value)
+		yt.YouTubeClient.RequestCountByOp.Range(func(key string, count uint64) bool {
+			info.QuotaUsage.PerOperationRequestCount.Store(key, count)
+			info.QuotaUsage.PerOperationUsage.Store(key, count*uint64(QuotaCostForOp(key)))
 			return true
 		})
 

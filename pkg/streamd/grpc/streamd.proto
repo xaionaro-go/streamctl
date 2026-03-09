@@ -951,6 +951,7 @@ message YouTubeQuotaUsage {
   optional uint64 google_reported_limit = 5;
   optional int64 google_reported_at_unix = 6;
   map<string, uint64> per_operation_usage = 7;
+  map<string, uint64> per_operation_request_count = 8;
 }
 message YouTubeChatListenerInfo {
   string video_id = 1;

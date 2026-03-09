@@ -150,17 +150,19 @@ func TestPerOperationQuotaTracking(t *testing.T) {
 	_ = c.UpdateVideo(ctx, &youtube.Video{}, []string{"snippet"})
 	_, _ = c.Search(ctx, "chan-1", EventTypeLive, []string{"snippet"})
 
-	getBc, ok := c.UsedPointsByOp.Load("GetBroadcasts")
+	// RequestCountByOp stores request counts (not points).
+	getBc, ok := c.RequestCountByOp.Load("GetBroadcasts")
 	assert.True(t, ok)
 	assert.Equal(t, uint64(2), getBc)
 
-	updVid, ok := c.UsedPointsByOp.Load("UpdateVideo")
+	updVid, ok := c.RequestCountByOp.Load("UpdateVideo")
 	assert.True(t, ok)
-	assert.Equal(t, uint64(50), updVid)
+	assert.Equal(t, uint64(1), updVid)
 
-	search, ok := c.UsedPointsByOp.Load("Search")
+	search, ok := c.RequestCountByOp.Load("Search")
 	assert.True(t, ok)
-	assert.Equal(t, uint64(100), search)
+	assert.Equal(t, uint64(1), search)
 
+	// UsedPoints still tracks total points consumed.
 	assert.Equal(t, uint64(152), c.UsedPoints.Load())
 }

@@ -3048,6 +3048,9 @@ func (c *Client) GetYouTubeInfo(
 		for k, v := range qu.PerOperationUsage {
 			info.QuotaUsage.PerOperationUsage.Store(k, v)
 		}
+		for k, v := range qu.PerOperationRequestCount {
+			info.QuotaUsage.PerOperationRequestCount.Store(k, v)
+		}
 		if qu.GoogleReportedUsage != nil {
 			info.QuotaUsage.GoogleReportedUsage = qu.GoogleReportedUsage
 		}

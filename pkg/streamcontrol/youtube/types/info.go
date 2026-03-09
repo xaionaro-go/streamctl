@@ -19,10 +19,11 @@ type YouTubeInfo struct {
 }
 
 type QuotaUsage struct {
-	UsedPoints        atomic.Uint64
-	PerOperationUsage xsync.Map[string, uint64]
-	DailyLimit        uint64
-	ResetTime         time.Time
+	UsedPoints              atomic.Uint64
+	PerOperationUsage        xsync.Map[string, uint64]
+	PerOperationRequestCount xsync.Map[string, uint64]
+	DailyLimit               uint64
+	ResetTime                time.Time
 
 	GoogleReportedUsage *uint64
 	GoogleReportedLimit *uint64
