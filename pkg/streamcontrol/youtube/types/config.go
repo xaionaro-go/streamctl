@@ -28,6 +28,7 @@ type AccountConfig struct {
 	GCPProjectID         string          `yaml:"GCPProjectID,omitempty"`
 	QuotaRequestCountByOp map[string]uint64 `yaml:"quota_request_count_by_op,omitempty"`
 	QuotaUsedDate         string            `yaml:"quota_used_date,omitempty"`
+	ChatGRPCHost         string          `yaml:"chat_grpc_host,omitempty"`
 	CustomOAuthHandler   OAuthHandler    `yaml:"-"`
 	GetOAuthListenPorts  func() []uint16 `yaml:"-"`
 }

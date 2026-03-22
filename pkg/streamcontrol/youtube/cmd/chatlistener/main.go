@@ -28,6 +28,7 @@ func main() {
 	tokenFile := pflag.String("token-file", "", "path to OAuth2 token JSON file")
 	clientID := pflag.String("client-id", "", "OAuth2 client ID")
 	clientSecret := pflag.String("client-secret", "", "OAuth2 client secret")
+	grpcHost := pflag.String("grpc-host", "", "gRPC server address (default: youtube.googleapis.com:443)")
 	pflag.Parse()
 
 	if pflag.NArg() != 2 {
@@ -61,7 +62,7 @@ func main() {
 	}
 	tokenSource := cfg.TokenSource(ctx, &token)
 
-	h, err := youtube.NewChatListener(ctx, videoID, liveChatID, tokenSource, nil)
+	h, err := youtube.NewChatListener(ctx, videoID, liveChatID, tokenSource, nil, *grpcHost)
 	assertNoError(err)
 
 	fmt.Println("started")

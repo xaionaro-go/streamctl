@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	youtubeGRPCHost      = "youtube.googleapis.com:443"
+	defaultGRPCHost      = "youtube.googleapis.com:443"
 	streamReconnectDelay = 5 * time.Second
 	maxReconnectDelay    = 60 * time.Second
 
@@ -36,6 +36,7 @@ type QuotaTracker interface {
 }
 
 type ChatListener struct {
+	grpcHost        string
 	videoID         string
 	liveChatID      string
 	tokenSource     oauth2.TokenSource
@@ -55,6 +56,7 @@ func NewChatListener(
 	liveChatID string,
 	tokenSource oauth2.TokenSource,
 	quotaTracker QuotaTracker,
+	grpcHost string,
 ) (*ChatListener, error) {
 	if videoID == "" {
 		return nil, fmt.Errorf("video ID is empty")
@@ -64,8 +66,13 @@ func NewChatListener(
 	}
 	logger.Infof(ctx, "creating a new ChatListener for videoID=%q, liveChatID=%q", videoID, liveChatID)
 
+	if grpcHost == "" {
+		grpcHost = defaultGRPCHost
+	}
+
 	ctx, cancelFunc := context.WithCancel(ctx)
 	l := &ChatListener{
+		grpcHost:        grpcHost,
 		videoID:         videoID,
 		liveChatID:      liveChatID,
 		tokenSource:     tokenSource,
@@ -94,7 +101,7 @@ func (l *ChatListener) listenLoop(ctx context.Context) (_err error) {
 	defer func() { logger.Debugf(ctx, "/listenLoop (gRPC streaming): %v", _err) }()
 
 	conn, err := grpc.NewClient(
-		youtubeGRPCHost,
+		l.grpcHost,
 		grpc.WithTransportCredentials(credentials.NewTLS(nil)),
 		grpc.WithPerRPCCredentials(&grpcoauth.TokenSource{TokenSource: l.tokenSource}),
 	)

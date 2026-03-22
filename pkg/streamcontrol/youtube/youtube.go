@@ -1252,10 +1252,10 @@ func (yt *YouTube) startChatListener(
 	logger.Debugf(ctx, "startChatListener(ctx, '%s':'%s')", videoID, chatID)
 	defer func() { logger.Debugf(ctx, "/startChatListener(ctx, '%s':'%s'): %v", videoID, chatID, _err) }()
 
-	tokenSource := xsync.DoR1(ctx, &yt.locker, func() oauth2.TokenSource {
-		return yt.tokenSource
+	tokenSource, chatGRPCHost := xsync.DoR2(ctx, &yt.locker, func() (oauth2.TokenSource, string) {
+		return yt.tokenSource, yt.Config.ChatGRPCHost
 	})
-	_chatListener, err := NewChatListener(ctx, videoID, chatID, tokenSource, yt.YouTubeClient)
+	_chatListener, err := NewChatListener(ctx, videoID, chatID, tokenSource, yt.YouTubeClient, chatGRPCHost)
 	if err != nil {
 		return fmt.Errorf("unable to initialize the chat listener instance: %w", err)
 	}
