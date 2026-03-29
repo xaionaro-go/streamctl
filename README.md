@@ -57,7 +57,7 @@ Available Commands:
   stream-start
 
 Flags:
-      --config-path string   the path to the config file (default "~/.streamctl.yaml")
+      --config-path string   the path to the config file (default "~/.config/wingout/streamctl.yaml")
   -h, --help                 help for /tmp/go-build2502186757/b001/exe/streamctl
       --log-level Level       (default warning)
 

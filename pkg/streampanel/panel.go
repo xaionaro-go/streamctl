@@ -359,9 +359,12 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) (_err error) {
 			p.DisplayError(fmt.Errorf("unable to initialize the streamd config: %w", err))
 		}
 
-		p.app.Driver().DoFromGoroutine(func() {
-			p.initMainWindow(ctx, initCfg.StartingPage)
-		}, true)
+		// Run initialization from the background goroutine instead of
+		// dispatching to the GL thread. These functions make gRPC calls
+		// that can block for a long time (e.g. waiting for OAuth), and
+		// running them on the GL thread freezes the entire UI — preventing
+		// interaction with dialogs such as the browser selection window.
+		p.initMainWindow(ctx, initCfg.StartingPage)
 		if streamDRunErr != nil {
 			p.DisplayError(
 				fmt.Errorf("unable to initialize the streaming controllers: %w", streamDRunErr),
@@ -369,18 +372,14 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) (_err error) {
 		}
 
 		logger.Tracef(ctx, "p.rearrangeProfiles")
-		p.app.Driver().DoFromGoroutine(func() {
-			if err := p.rearrangeProfiles(ctx); err != nil {
-				err = fmt.Errorf("unable to arrange the profiles: %w", err)
-				p.DisplayError(err)
-			}
-		}, true)
+		if err := p.rearrangeProfiles(ctx); err != nil {
+			err = fmt.Errorf("unable to arrange the profiles: %w", err)
+			p.DisplayError(err)
+		}
 
-		p.app.Driver().DoFromGoroutine(func() {
-			if err := p.initMonitorPage(ctx); err != nil {
-				p.DisplayError(fmt.Errorf("unable to initialize the active monitors: %w", err))
-			}
-		}, true)
+		if err := p.initMonitorPage(ctx); err != nil {
+			p.DisplayError(fmt.Errorf("unable to initialize the active monitors: %w", err))
+		}
 
 		if initCfg.AutoUpdater != nil {
 			observability.Go(ctx, func(ctx context.Context) {
@@ -393,9 +392,7 @@ func (p *Panel) Loop(ctx context.Context, opts ...LoopOption) (_err error) {
 			p.DisplayError(err)
 		}
 
-		p.app.Driver().DoFromGoroutine(func() {
-			p.initFyneHacks(ctx)
-		}, true)
+		p.initFyneHacks(ctx)
 	})
 
 	p.app.Run()

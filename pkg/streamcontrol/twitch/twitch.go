@@ -34,8 +34,9 @@ type Twitch struct {
 	lazyInitOnce   sync.Once
 	saveCfgFn      func(AccountConfig) error
 	tokenLocker    xsync.Mutex
-	prepareLocker  xsync.Mutex
-	clientID       string
+	prepareLocker          xsync.Mutex
+	chatListenerRetryAt   time.Time
+	clientID              string
 	clientSecret   secret.String
 }
 
@@ -232,6 +233,11 @@ func (t *Twitch) prepareChatListenerNoLock(ctx context.Context) {
 		return
 	}
 
+	if now := time.Now(); now.Before(t.chatListenerRetryAt) {
+		logger.Debugf(ctx, "skipping chat listener reconnect until %v", t.chatListenerRetryAt)
+		return
+	}
+
 	var err error
 	t.chatHandlerSub, err = NewChatHandlerSub(
 		t.closeCtx, t.client, t.broadcasterID,
@@ -242,7 +248,8 @@ func (t *Twitch) prepareChatListenerNoLock(ctx context.Context) {
 		},
 	)
 	if err != nil {
-		logger.Errorf(ctx, "unable to initialize websockets based chat listener: %v", err)
+		t.chatListenerRetryAt = time.Now().Add(30 * time.Second)
+		logger.Errorf(ctx, "unable to initialize websockets based chat listener (will retry after %v): %v", t.chatListenerRetryAt, err)
 	}
 }
 
@@ -724,9 +731,14 @@ func (t *Twitch) GetAllCategories(
 func (t *Twitch) GetChatMessagesChan(
 	ctx context.Context,
 	streamID streamcontrol.StreamID,
-) (<-chan streamcontrol.Event, error) {
+) (_ret <-chan streamcontrol.Event, _err error) {
 	logger.Debugf(ctx, "GetChatMessagesChan")
-	defer func() { logger.Debugf(ctx, "/GetChatMessagesChan") }()
+	defer func() { logger.Debugf(ctx, "/GetChatMessagesChan: %v", _err) }()
+
+	switch {
+	case streamID != streamcontrol.DefaultStreamID:
+		return t.getChatMessagesChanByChannel(ctx, string(streamID))
+	}
 
 	if err := t.prepare(ctx); err != nil {
 		logger.Errorf(ctx, "unable to prepare the client: %v", err)
@@ -1091,4 +1103,46 @@ func (t *Twitch) GetStreamKey(ctx context.Context) (secret.String, error) {
 	}
 
 	return secret.New(reply.Data.Data[0].StreamKey), nil
+}
+
+func (t *Twitch) getChatMessagesChanByChannel(
+	ctx context.Context,
+	channel string,
+) (_ret <-chan streamcontrol.Event, _err error) {
+	logger.Debugf(ctx, "getChatMessagesChanByChannel")
+	defer func() { logger.Debugf(ctx, "/getChatMessagesChanByChannel: %v", _err) }()
+
+	handler, err := NewChatHandlerIRC(ctx, channel)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create IRC chat handler for channel '%s': %w", channel, err)
+	}
+
+	outCh := make(chan streamcontrol.Event, 100)
+	observability.Go(ctx, func(ctx context.Context) {
+		defer close(outCh)
+		defer func() {
+			if err := handler.Close(ctx); err != nil {
+				logger.Warnf(ctx, "unable to close IRC chat handler: %v", err)
+			}
+		}()
+
+		inCh := handler.MessagesChan()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case msg, ok := <-inCh:
+				if !ok {
+					return
+				}
+				select {
+				case outCh <- msg:
+				default:
+					logger.Errorf(ctx, "chat messages queue overflow, dropping a message")
+				}
+			}
+		}
+	})
+
+	return outCh, nil
 }

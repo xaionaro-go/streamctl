@@ -75,7 +75,7 @@ func (p *Panel) getChatUIs(ctx context.Context) []chatUIInterface {
 
 func (p *Panel) initChatMessagesHandler(ctx context.Context) error {
 	msgCh, _, err := autoResubscribe(ctx, func(ctx context.Context) (<-chan api.ChatMessage, error) {
-		return p.StreamD.SubscribeToChatMessages(ctx, clock.Get().Now().Add(-60*24*time.Hour), uint64(ChatLogSize))
+		return p.StreamD.SubscribeToChatMessages(ctx, clock.Get().Now().Add(-60*24*time.Hour), uint64(ChatLogSize), nil)
 	})
 	if err != nil {
 		return fmt.Errorf("unable to subscribe to chat messages: %w", err)

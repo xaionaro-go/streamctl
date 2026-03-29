@@ -289,6 +289,17 @@ func (grpc *GRPCServer) GetStreamD() api.StreamD {
 	if grpc.StreamD == nil {
 		panic("grpc.StreamD == nil")
 	}
+	return grpc.StreamD
+}
+
+// WaitStreamDReady blocks until the StreamD instance has finished
+// initialization (all backends loaded, cache populated, etc.).
+// Use this only in handlers that truly require full readiness;
+// most handlers work fine with a partially-initialized StreamD.
+func (grpc *GRPCServer) WaitStreamDReady() api.StreamD {
+	if grpc.StreamD == nil {
+		panic("grpc.StreamD == nil")
+	}
 	streamD, ok := grpc.StreamD.(*streamd.StreamD)
 	if !ok {
 		return grpc.StreamD
@@ -2015,7 +2026,7 @@ func (grpc *GRPCServer) SubscribeToChatMessages(
 	)
 	return wrapChan(
 		func(ctx context.Context) (<-chan api.ChatMessage, error) {
-			return grpc.StreamD.SubscribeToChatMessages(ctx, since, limit)
+			return grpc.StreamD.SubscribeToChatMessages(ctx, since, limit, (*streamcontrol.StreamID)(req.StreamID))
 		},
 		srv,
 		goconv.ChatMessageGo2GRPC,
@@ -2102,6 +2113,59 @@ func (grpc *GRPCServer) RaidTo(
 		return nil, err
 	}
 	return &streamd_grpc.RaidToReply{}, nil
+}
+
+func (grpc *GRPCServer) ResolvePlatformURL(
+	ctx context.Context,
+	req *streamd_grpc.ResolvePlatformURLRequest,
+) (*streamd_grpc.ResolvePlatformURLReply, error) {
+	platID, streamID, err := grpc.StreamD.ResolvePlatformURL(ctx, req.GetUrl())
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.ResolvePlatformURLReply{
+		PlatID:   string(platID),
+		StreamID: string(streamID),
+	}, nil
+}
+
+func (grpc *GRPCServer) ListenChatOfStream(
+	req *streamd_grpc.ListenChatOfStreamRequest,
+	srv streamd_grpc.StreamD_ListenChatOfStreamServer,
+) error {
+	return wrapChan(
+		func(ctx context.Context) (<-chan api.ChatMessage, error) {
+			return grpc.StreamD.ListenChatOfStream(
+				ctx,
+				streamcontrol.PlatformID(req.GetPlatID()),
+				streamcontrol.StreamID(req.GetStreamID()),
+			)
+		},
+		srv,
+		goconv.ChatMessageGo2GRPC,
+	)
+}
+
+func (grpc *GRPCServer) PurgeChatMessages(
+	ctx context.Context,
+	req *streamd_grpc.PurgeChatMessagesRequest,
+) (*streamd_grpc.PurgeChatMessagesReply, error) {
+	var platID *streamcontrol.PlatformID
+	if req.PlatID != nil {
+		p := streamcontrol.PlatformID(*req.PlatID)
+		platID = &p
+	}
+	var streamID *streamcontrol.StreamID
+	if req.StreamID != nil {
+		streamID = (*streamcontrol.StreamID)(req.StreamID)
+	}
+	count, err := grpc.StreamD.PurgeChatMessages(ctx, platID, streamID)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.PurgeChatMessagesReply{
+		RemovedCount: count,
+	}, nil
 }
 
 /*func (grpc *GRPCServer) ProxyConnect(

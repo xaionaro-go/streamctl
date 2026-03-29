@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -35,6 +36,8 @@ import (
 	uiiface "github.com/xaionaro-go/streamctl/pkg/streamd/ui"
 	"github.com/xaionaro-go/xpath"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
 )
 
 const forceNetPProfOnAndroid = true
@@ -54,7 +57,7 @@ func main() {
 	)
 	configPath := pflag.String(
 		"config-path",
-		"/etc/streamd/streamd.yaml",
+		"/etc/wingout/streamd.yaml",
 		"the path to the config file",
 	)
 	netPprofAddr := pflag.String(
@@ -234,9 +237,25 @@ func main() {
 				return nil
 			}),
 		}
+		notInitializedToUnavailable := func(err error) error {
+			if err != nil && errors.Is(err, streamd.ErrStreamServerNotInitialized) {
+				return grpcstatus.Error(codes.Unavailable, err.Error())
+			}
+			return err
+		}
+
 		grpcServer := grpc.NewServer(
 			grpc.ChainUnaryInterceptor(
 				grpc_recovery.UnaryServerInterceptor(opts...),
+				func(
+					ctx context.Context,
+					req any,
+					_ *grpc.UnaryServerInfo,
+					handler grpc.UnaryHandler,
+				) (any, error) {
+					resp, err := handler(ctx, req)
+					return resp, notInitializedToUnavailable(err)
+				},
 			),
 			grpc.ChainStreamInterceptor(
 				grpc_recovery.StreamServerInterceptor(opts...),

@@ -11,9 +11,10 @@ func ChatMessageGo2GRPC(
 	event api.ChatMessage,
 ) streamd_grpc.ChatMessage {
 	return streamd_grpc.ChatMessage{
-		PlatID:  string(event.Platform),
-		IsLive:  event.IsLive,
-		Content: goconv.EventGo2GRPC(event.Event),
+		PlatID:   string(event.Platform),
+		IsLive:   event.IsLive,
+		Content:  goconv.EventGo2GRPC(event.Event),
+		StreamID: string(event.StreamID),
 	}
 }
 
@@ -24,5 +25,6 @@ func PlatformEventGRPC2Go(
 		Platform: streamcontrol.PlatformID(event.GetPlatID()),
 		IsLive:   event.GetIsLive(),
 		Event:    goconv.EventGRPC2Go(event.GetContent()),
+		StreamID: streamcontrol.StreamID(event.GetStreamID()),
 	}
 }

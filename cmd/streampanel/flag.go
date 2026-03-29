@@ -76,7 +76,7 @@ func parseFlags() Flags {
 		"",
 		"the address (for example 127.0.0.1:3594) of streamd to connect to, instead of running the stream controllers locally",
 	)
-	configPath := pflag.String("config-path", "~/.streampanel.yaml", "the path to the config file")
+	configPath := pflag.String("config-path", "~/.config/wingout/streampanel.yaml", "the path to the config file")
 	netPprofAddrMain := pflag.String(
 		"go-net-pprof-addr-main",
 		"",

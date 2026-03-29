@@ -2763,6 +2763,7 @@ func (c *Client) SubscribeToChatMessages(
 	ctx context.Context,
 	since time.Time,
 	limit uint64,
+	streamID *streamcontrol.StreamID,
 ) (<-chan api.ChatMessage, error) {
 	return unwrapStreamDChan(
 		ctx,
@@ -2778,6 +2779,7 @@ func (c *Client) SubscribeToChatMessages(
 				&streamd_grpc.SubscribeToChatMessagesRequest{
 					SinceUNIXNano: uint64(since.UnixNano()),
 					Limit:         limit,
+					StreamID:      (*string)(streamID),
 				},
 			)
 		},
@@ -2926,6 +2928,92 @@ func (c *Client) RaidTo(
 		return fmt.Errorf("unable to query: %w", err)
 	}
 	return nil
+}
+
+func (c *Client) ResolvePlatformURL(
+	ctx context.Context,
+	rawURL string,
+) (streamcontrol.PlatformID, streamcontrol.StreamID, error) {
+	reply, err := withStreamDClient(ctx, c, func(
+		ctx context.Context,
+		client streamd_grpc.StreamDClient,
+		conn io.Closer,
+	) (*streamd_grpc.ResolvePlatformURLReply, error) {
+		return callWrapper(
+			ctx,
+			c,
+			client.ResolvePlatformURL,
+			&streamd_grpc.ResolvePlatformURLRequest{
+				Url: rawURL,
+			},
+		)
+	})
+	if err != nil {
+		return "", "", fmt.Errorf("unable to query: %w", err)
+	}
+	return streamcontrol.PlatformID(reply.GetPlatID()), streamcontrol.StreamID(reply.GetStreamID()), nil
+}
+
+func (c *Client) ListenChatOfStream(
+	ctx context.Context,
+	platID streamcontrol.PlatformID,
+	streamID streamcontrol.StreamID,
+) (<-chan api.ChatMessage, error) {
+	return unwrapStreamDChan(
+		ctx,
+		c,
+		func(
+			ctx context.Context,
+			client streamd_grpc.StreamDClient,
+		) (streamd_grpc.StreamD_ListenChatOfStreamClient, error) {
+			return callWrapper(
+				ctx,
+				c,
+				client.ListenChatOfStream,
+				&streamd_grpc.ListenChatOfStreamRequest{
+					PlatID:   string(platID),
+					StreamID: string(streamID),
+				},
+			)
+		},
+		func(
+			ctx context.Context,
+			event *streamd_grpc.ChatMessage,
+		) api.ChatMessage {
+			return goconv.PlatformEventGRPC2Go(event)
+		},
+	)
+}
+
+func (c *Client) PurgeChatMessages(
+	ctx context.Context,
+	platID *streamcontrol.PlatformID,
+	streamID *streamcontrol.StreamID,
+) (uint64, error) {
+	req := &streamd_grpc.PurgeChatMessagesRequest{}
+	if platID != nil {
+		s := string(*platID)
+		req.PlatID = &s
+	}
+	if streamID != nil {
+		req.StreamID = (*string)(streamID)
+	}
+	reply, err := withStreamDClient(ctx, c, func(
+		ctx context.Context,
+		client streamd_grpc.StreamDClient,
+		conn io.Closer,
+	) (*streamd_grpc.PurgeChatMessagesReply, error) {
+		return callWrapper(
+			ctx,
+			c,
+			client.PurgeChatMessages,
+			req,
+		)
+	})
+	if err != nil {
+		return 0, fmt.Errorf("unable to query: %w", err)
+	}
+	return reply.GetRemovedCount(), nil
 }
 
 func (c *Client) DialContext(

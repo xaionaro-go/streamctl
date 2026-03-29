@@ -4,10 +4,8 @@ package streamd
 
 import (
 	"context"
-	"net/url"
 	"reflect"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/facebookincubator/go-belt"
@@ -83,9 +81,6 @@ func init() {
 				}
 			}
 			return api.BackendDataTwitch{Cache: &cache.Twitch{Categories: categories}}, nil
-		},
-		IsPlatformURL: func(u *url.URL) bool {
-			return strings.Contains(u.Hostname(), "twitch")
 		},
 		StreamStatusCacheDuration: 5 * time.Second,
 		PostRaidWaitDuration:      20 * time.Second,

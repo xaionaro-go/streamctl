@@ -25,6 +25,7 @@ type ChatMessageStorage interface {
 	Load(ctx context.Context) error
 	Store(ctx context.Context) error
 	GetMessagesSince(context.Context, time.Time, uint) ([]api.ChatMessage, error)
+	PurgeMessages(ctx context.Context, platID *streamcontrol.PlatformID, streamID *streamcontrol.StreamID) (uint64, error)
 }
 
 func (d *StreamD) startListeningForChatMessages(
@@ -42,7 +43,7 @@ func (d *StreamD) startListeningForChatMessages(
 			return
 		}
 
-		d.processChatMessages(ctx, platID, accountID, ch)
+		d.processChatMessages(ctx, platID, accountID, "", ch)
 	})
 }
 
@@ -50,6 +51,7 @@ func (d *StreamD) processChatMessages(
 	ctx context.Context,
 	platID streamcontrol.PlatformID,
 	accountID streamcontrol.AccountID,
+	streamID streamcontrol.StreamID,
 	ch <-chan streamcontrol.Event,
 ) {
 	for {
@@ -67,6 +69,7 @@ func (d *StreamD) processChatMessages(
 					Event:    ev,
 					IsLive:   true,
 					Platform: platID,
+					StreamID: streamID,
 				}
 				logger.Tracef(ctx, "received chat message: %#+v", msg)
 				defer logger.Tracef(ctx, "finished processing the chat message")
@@ -74,7 +77,9 @@ func (d *StreamD) processChatMessages(
 					logger.Errorf(ctx, "unable to add the message %#+v to the chat messages storage: %v", msg, err)
 				}
 				publishEvent(ctx, d.EventBus, msg)
-				d.shoutoutIfNeeded(ctx, msg)
+				if streamID == "" {
+					d.shoutoutIfNeeded(ctx, msg)
+				}
 			}()
 		}
 	}
@@ -280,11 +285,12 @@ func (d *StreamD) SubscribeToChatMessages(
 	ctx context.Context,
 	since time.Time,
 	limit uint64,
+	streamID *streamcontrol.StreamID,
 ) (_ret <-chan api.ChatMessage, _err error) {
-	logger.Tracef(ctx, "SubscribeToChatMessages(ctx, %v, %v)", since, limit)
-	defer func() { logger.Tracef(ctx, "/SubscribeToChatMessages(ctx, %v, %v): %p %v", since, limit, _ret, _err) }()
+	logger.Tracef(ctx, "SubscribeToChatMessages(ctx, %v, %v, %v)", since, limit, streamID)
+	defer func() { logger.Tracef(ctx, "/SubscribeToChatMessages(ctx, %v, %v, %v): %p %v", since, limit, streamID, _ret, _err) }()
 
-	return eventSubToChan(
+	ch, err := eventSubToChan(
 		ctx, d.EventBus, 1000,
 		func(ctx context.Context, outCh chan api.ChatMessage) {
 			logger.Tracef(ctx, "backfilling the channel")
@@ -295,6 +301,9 @@ func (d *StreamD) SubscribeToChatMessages(
 				return
 			}
 			for _, msg := range msgs {
+				if streamID != nil && msg.StreamID != *streamID {
+					continue
+				}
 				msg.IsLive = false
 				if debugSendArchiveMessagesAsLive {
 					msg.IsLive = true
@@ -317,6 +326,29 @@ func (d *StreamD) SubscribeToChatMessages(
 			}
 		},
 	)
+	if err != nil {
+		return nil, err
+	}
+
+	if streamID == nil {
+		return ch, nil
+	}
+
+	filteredCh := make(chan api.ChatMessage, 1000)
+	observability.Go(ctx, func(ctx context.Context) {
+		defer close(filteredCh)
+		for msg := range ch {
+			if msg.StreamID != *streamID {
+				continue
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case filteredCh <- msg:
+			}
+		}
+	})
+	return filteredCh, nil
 }
 
 func (d *StreamD) SendChatMessage(

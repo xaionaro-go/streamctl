@@ -47,7 +47,7 @@ func NewConfig() Config {
 	return Config{
 		Backends:        cfg,
 		ProfileMetadata: map[streamcontrol.ProfileName]ProfileMetadata{},
-		CachePath:       ptr("~/.streamd.cache"),
+		CachePath:       ptr("~/.config/wingout/streamd.cache"),
 		Dashboard: DashboardConfig{
 			Elements: map[string]DashboardElementConfig{},
 		},

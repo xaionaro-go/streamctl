@@ -137,6 +137,24 @@ var (
 		Run:  platformEventsInject,
 	}
 
+	Chat = &cobra.Command{
+		Use: "chat",
+	}
+
+	ChatListen = &cobra.Command{
+		Use:   "listen <url>",
+		Short: "Listen to chat of a stream by URL",
+		Args:  cobra.ExactArgs(1),
+		Run:   chatListen,
+	}
+
+	ChatPurge = &cobra.Command{
+		Use:   "purge",
+		Short: "Purge chat messages from local storage",
+		Args:  cobra.ExactArgs(0),
+		Run:   chatPurge,
+	}
+
 	LoggerLevel = logger.LevelWarning
 )
 
@@ -161,6 +179,12 @@ func init() {
 	PlatformEvents.AddCommand(PlatformEventsInject)
 	PlatformEventsInject.Flags().Bool("is-live", true, "mark event as live")
 	PlatformEventsInject.Flags().Bool("is-persistent", false, "mark event as persistent")
+
+	Root.AddCommand(Chat)
+	Chat.AddCommand(ChatListen)
+	Chat.AddCommand(ChatPurge)
+	ChatPurge.Flags().String("platform", "", "filter by platform ID")
+	ChatPurge.Flags().String("stream-id", "", "filter by stream ID")
 
 	Root.PersistentFlags().Var(&LoggerLevel, "log-level", "")
 	Root.PersistentFlags().String("remote-addr", "localhost:3594", "the path to the config file")
@@ -377,13 +401,59 @@ func platformEventsListen(cmd *cobra.Command, args []string) {
 	assertNoError(ctx, err)
 
 	fmt.Println("subscribing...")
-	ch, err := streamD.SubscribeToChatMessages(ctx, time.Now().Add(-time.Hour*24*3), 1000)
+	ch, err := streamD.SubscribeToChatMessages(ctx, time.Now().Add(-time.Hour*24*3), 1000, nil)
 	assertNoError(ctx, err)
 
 	fmt.Println("started listening...")
 	for ev := range ch {
 		spew.Dump(ev)
 	}
+}
+
+func chatListen(cmd *cobra.Command, args []string) {
+	ctx := cmd.Context()
+	rawURL := args[0]
+
+	remoteAddr, err := cmd.Flags().GetString("remote-addr")
+	assertNoError(ctx, err)
+	streamD, err := client.New(ctx, remoteAddr)
+	assertNoError(ctx, err)
+
+	platID, streamID, err := streamD.ResolvePlatformURL(ctx, rawURL)
+	assertNoError(ctx, err)
+	fmt.Printf("resolved: platform=%s streamID=%s\n", platID, streamID)
+
+	fmt.Println("listening...")
+	ch, err := streamD.ListenChatOfStream(ctx, platID, streamID)
+	assertNoError(ctx, err)
+
+	for ev := range ch {
+		spew.Dump(ev)
+	}
+}
+
+func chatPurge(cmd *cobra.Command, args []string) {
+	ctx := cmd.Context()
+
+	remoteAddr, err := cmd.Flags().GetString("remote-addr")
+	assertNoError(ctx, err)
+	streamD, err := client.New(ctx, remoteAddr)
+	assertNoError(ctx, err)
+
+	var platID *streamcontrol.PlatformID
+	if s, _ := cmd.Flags().GetString("platform"); s != "" {
+		p := streamcontrol.PlatformID(s)
+		platID = &p
+	}
+	var streamID *streamcontrol.StreamID
+	if s, _ := cmd.Flags().GetString("stream-id"); s != "" {
+		id := streamcontrol.StreamID(s)
+		streamID = &id
+	}
+
+	count, err := streamD.PurgeChatMessages(ctx, platID, streamID)
+	assertNoError(ctx, err)
+	fmt.Printf("purged %d messages\n", count)
 }
 
 func platformEventsInject(cmd *cobra.Command, args []string) {

@@ -49,7 +49,7 @@ func TestStreamDChat(t *testing.T) {
 	require.NoError(t, err)
 
 	// Wait for message to be processed (mocked)
-	ch, err := d.SubscribeToChatMessages(ctx, clock.Get().Now().Add(-time.Hour), 10)
+	ch, err := d.SubscribeToChatMessages(ctx, clock.Get().Now().Add(-time.Hour), 10, nil)
 	require.NoError(t, err)
 
 	// Send a chat message

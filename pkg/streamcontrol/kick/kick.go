@@ -16,8 +16,11 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/google/uuid"
 	"github.com/scorfly/gokick"
+	chatwebhookkick "github.com/xaionaro-go/chatwebhook/pkg/chatwebhook/kickcom"
+	chatwebhookclient "github.com/xaionaro-go/chatwebhook/pkg/grpc/client"
 	"github.com/xaionaro-go/kickcom"
 	"github.com/xaionaro-go/observability"
+	scgoconv "github.com/xaionaro-go/streamctl/pkg/streamcontrol/protobuf/goconv"
 	"github.com/xaionaro-go/streamctl/pkg/oauthhandler"
 	"github.com/xaionaro-go/streamctl/pkg/secret"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -61,9 +64,9 @@ type Kick struct {
 	Channel                *kickcom.ChannelV1
 	Client                 Client
 	ClientOBSOLETE         ClientOBSOLETE
-	ChatHandler            ChatHandlerAbstract
-	ChatHandlerInitStarted bool
-	ChatHandlerLocker      xsync.CtxLocker
+	ChatHandler      ChatHandlerAbstract
+	ChatHandlerReady chan struct{}
+	ChatHandlerLocker xsync.CtxLocker
 	CurrentConfig          AccountConfig
 	CurrentConfigLocker    xsync.Mutex
 	SaveCfgFn              func(AccountConfig) error
@@ -580,25 +583,25 @@ func (k *Kick) GetAllCategories(
 
 func (k *Kick) tryGetChatHandler(
 	ctx context.Context,
-) (ChatHandlerAbstract, error) {
-	return xsync.DoR2(ctx, &k.ChatHandlerLocker, func() (ChatHandlerAbstract, error) {
+) (ChatHandlerAbstract, <-chan struct{}) {
+	return xsync.DoR2(ctx, &k.ChatHandlerLocker, func() (ChatHandlerAbstract, <-chan struct{}) {
 		if k.ChatHandler != nil {
 			return k.ChatHandler, nil
 		}
 		k.startInitChatHandlerNoLock(ctx)
-		return nil, fmt.Errorf("chat handler is being initialized")
+		return nil, k.ChatHandlerReady
 	})
 }
 
 func (k *Kick) startInitChatHandlerNoLock(
 	ctx context.Context,
 ) {
-	if k.ChatHandlerInitStarted {
+	if k.ChatHandlerReady != nil {
 		return
 	}
-	k.ChatHandlerInitStarted = true
+	k.ChatHandlerReady = make(chan struct{})
 	go func() {
-		defer func() { k.ChatHandlerInitStarted = false }()
+		defer close(k.ChatHandlerReady)
 		err := k.initChatHandlerNoLock(ctx)
 		if err != nil {
 			logger.Errorf(ctx, "unable to initialize chat handler: %v", err)
@@ -610,15 +613,23 @@ func (k *Kick) getChatHandler(
 	ctx context.Context,
 ) ChatHandlerAbstract {
 	for {
-		chatHandler, err := k.tryGetChatHandler(ctx)
-		if err != nil {
-			logger.Errorf(ctx, "unable to get chat handler: %v", err)
-			time.Sleep(time.Second)
-			continue
-		}
+		chatHandler, ready := k.tryGetChatHandler(ctx)
 		if chatHandler != nil {
 			return chatHandler
 		}
+
+		if ready != nil {
+			logger.Debugf(ctx, "chat handler is being initialized, waiting")
+			select {
+			case <-ready:
+				continue
+			case <-k.CloseCtx.Done():
+				return nil
+			case <-ctx.Done():
+				return nil
+			}
+		}
+
 		logger.Warnf(ctx, "unable to get chat handler")
 		select {
 		case <-k.CloseCtx.Done():
@@ -632,9 +643,14 @@ func (k *Kick) getChatHandler(
 func (k *Kick) GetChatMessagesChan(
 	ctx context.Context,
 	streamID streamcontrol.StreamID,
-) (<-chan streamcontrol.Event, error) {
+) (_ret <-chan streamcontrol.Event, _err error) {
 	logger.Debugf(ctx, "GetChatMessagesChan")
-	defer func() { logger.Debugf(ctx, "/GetChatMessagesChan") }()
+	defer func() { logger.Debugf(ctx, "/GetChatMessagesChan: %v", _err) }()
+
+	switch {
+	case streamID != streamcontrol.DefaultStreamID:
+		return k.getChatMessagesChanByChannel(ctx, string(streamID))
+	}
 
 	if err := k.prepare(ctx); err != nil {
 		return nil, fmt.Errorf("unable to get a prepared client: %w", err)
@@ -711,6 +727,7 @@ func (k *Kick) resetChatHandler(ctx context.Context) {
 		} else {
 			logger.Debugf(ctx, "chat handler does not require resetting")
 		}
+		k.ChatHandlerReady = nil
 	})
 }
 
@@ -1089,6 +1106,52 @@ func (k *Kick) sendShoutoutMessage(
 	}
 
 	return nil
+}
+
+func (k *Kick) getChatMessagesChanByChannel(
+	ctx context.Context,
+	channel string,
+) (_ret <-chan streamcontrol.Event, _err error) {
+	logger.Debugf(ctx, "getChatMessagesChanByChannel")
+	defer func() { logger.Debugf(ctx, "/getChatMessagesChanByChannel: %v", _err) }()
+
+	client, err := chatwebhookclient.New(ctx, chatwebhookclient.DefaultServerAddress)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create chatwebhook client: %w", err)
+	}
+
+	inCh, err := client.GetMessagesChan(ctx, chatwebhookkick.ID, "")
+	if err != nil {
+		return nil, fmt.Errorf("unable to subscribe to kick chat messages: %w", err)
+	}
+
+	outCh := make(chan streamcontrol.Event, 100)
+	observability.Go(ctx, func(ctx context.Context) {
+		defer close(outCh)
+		logger.Debugf(ctx, "kick: started forwarding chat messages for channel '%s'", channel)
+		defer logger.Debugf(ctx, "kick: stopped forwarding chat messages for channel '%s'", channel)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case ev, ok := <-inCh:
+				if !ok {
+					return
+				}
+				msg := scgoconv.EventGRPC2Go(ev)
+				if msg.TargetChannel == nil || msg.TargetChannel.Slug != channel {
+					continue
+				}
+				select {
+				case outCh <- msg:
+				default:
+					logger.Errorf(ctx, "chat messages queue overflow, dropping a message")
+				}
+			}
+		}
+	})
+
+	return outCh, nil
 }
 
 func GetStreamStatusCustomData(s *streamcontrol.StreamStatus) CustomData {

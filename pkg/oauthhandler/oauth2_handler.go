@@ -72,12 +72,14 @@ func NewCodeReceiver(
 	srv := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			code := r.FormValue("code")
-			codeCh <- code
 			w.Header().Set("Content-Type", "text/plain")
 			if code == "" {
+				// Ignore requests without a code parameter (e.g. favicon
+				// requests from the browser after the OAuth redirect).
 				fmt.Fprintf(w, "No code received :(\r\n\r\nYou can close this browser window.")
 				return
 			}
+			codeCh <- code
 			fmt.Fprintf(
 				w,
 				"Received code: %v\r\n\r\nYou can now safely close this browser window.",

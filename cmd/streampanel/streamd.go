@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -33,6 +34,8 @@ import (
 	"github.com/xaionaro-go/xpath"
 	"github.com/xaionaro-go/xsync"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
 )
 
 func init() {
@@ -297,9 +300,25 @@ func initGRPCServers(
 			return nil
 		}),
 	}
+	notInitializedToUnavailable := func(err error) error {
+		if err != nil && errors.Is(err, streamd.ErrStreamServerNotInitialized) {
+			return grpcstatus.Error(codes.Unavailable, err.Error())
+		}
+		return err
+	}
+
 	grpcServer := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
 			grpc_recovery.UnaryServerInterceptor(opts...),
+			func(
+				ctx context.Context,
+				req any,
+				_ *grpc.UnaryServerInfo,
+				handler grpc.UnaryHandler,
+			) (any, error) {
+				resp, err := handler(ctx, req)
+				return resp, notInitializedToUnavailable(err)
+			},
 		),
 		grpc.ChainStreamInterceptor(
 			grpc_recovery.StreamServerInterceptor(opts...),

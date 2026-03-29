@@ -541,7 +541,7 @@ func (d *dummyStreamD) RemoveTimer(ctx context.Context, id api.TimerID) error {
 	return nil
 }
 
-func (d *dummyStreamD) SubscribeToChatMessages(ctx context.Context, since time.Time, limit uint64) (<-chan api.ChatMessage, error) {
+func (d *dummyStreamD) SubscribeToChatMessages(ctx context.Context, since time.Time, limit uint64, streamID *streamcontrol.StreamID) (<-chan api.ChatMessage, error) {
 	return make(chan api.ChatMessage), nil
 }
 

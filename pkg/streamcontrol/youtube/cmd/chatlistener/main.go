@@ -62,7 +62,7 @@ func main() {
 	}
 	tokenSource := cfg.TokenSource(ctx, &token)
 
-	h, err := youtube.NewChatListener(ctx, videoID, liveChatID, tokenSource, nil, *grpcHost)
+	h, err := youtube.NewChatListener(ctx, videoID, liveChatID, tokenSource, nil, *grpcHost, false)
 	assertNoError(err)
 
 	fmt.Println("started")

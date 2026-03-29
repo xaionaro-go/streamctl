@@ -94,7 +94,7 @@ var (
 
 func init() {
 	Root.PersistentFlags().Var(&LoggerLevel, "log-level", "")
-	Root.PersistentFlags().String("config-path", "~/.streamctl.yaml", "the path to the config file")
+	Root.PersistentFlags().String("config-path", "~/.config/wingout/streamctl.yaml", "the path to the config file")
 	StreamStart.PersistentFlags().String("title", "", "stream title")
 	StreamStart.PersistentFlags().String("description", "", "stream description")
 	StreamStart.PersistentFlags().String("profile", "", "profile")

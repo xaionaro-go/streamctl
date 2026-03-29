@@ -29,6 +29,7 @@ type AccountConfig struct {
 	QuotaRequestCountByOp map[string]uint64 `yaml:"quota_request_count_by_op,omitempty"`
 	QuotaUsedDate         string            `yaml:"quota_used_date,omitempty"`
 	ChatGRPCHost         string          `yaml:"chat_grpc_host,omitempty"`
+	ChatGRPCInsecure     bool            `yaml:"chat_grpc_insecure,omitempty"`
 	CustomOAuthHandler   OAuthHandler    `yaml:"-"`
 	GetOAuthListenPorts  func() []uint16 `yaml:"-"`
 }

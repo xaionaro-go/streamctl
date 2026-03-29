@@ -301,6 +301,7 @@ type StreamD interface {
 		ctx context.Context,
 		since time.Time,
 		limit uint64,
+		streamID *streamcontrol.StreamID,
 	) (<-chan ChatMessage, error)
 	SendChatMessage(
 		ctx context.Context,
@@ -323,6 +324,20 @@ type StreamD interface {
 		platID streamcontrol.PlatformID,
 		msgID streamcontrol.EventID,
 	) error
+	ResolvePlatformURL(
+		ctx context.Context,
+		rawURL string,
+	) (streamcontrol.PlatformID, streamcontrol.StreamID, error)
+	ListenChatOfStream(
+		ctx context.Context,
+		platID streamcontrol.PlatformID,
+		streamID streamcontrol.StreamID,
+	) (<-chan ChatMessage, error)
+	PurgeChatMessages(
+		ctx context.Context,
+		platID *streamcontrol.PlatformID,
+		streamID *streamcontrol.StreamID,
+	) (uint64, error)
 	BanUser(
 		ctx context.Context,
 		platID streamcontrol.PlatformID,
@@ -440,6 +455,7 @@ type TriggerRules = config.TriggerRules
 type ChatMessage struct {
 	streamcontrol.Event
 	Platform streamcontrol.PlatformID
+	StreamID streamcontrol.StreamID
 	IsLive   bool
 }
 

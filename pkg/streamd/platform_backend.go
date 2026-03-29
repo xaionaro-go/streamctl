@@ -2,7 +2,6 @@ package streamd
 
 import (
 	"context"
-	"net/url"
 	"time"
 
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -14,8 +13,7 @@ type platformBackendHandler struct {
 	GetBackendData            func(ctx context.Context, d *StreamD) (any, error)
 	OnStartedStream           func(ctx context.Context, d *StreamD)
 	OnStartedStreamController func(ctx context.Context, d *StreamD, accountID streamcontrol.AccountID, streamID streamcontrol.StreamID, controller streamcontrol.AbstractAccount) error
-	IsPlatformURL             func(u *url.URL) bool
-	CheckStreamStarted        func(ctx context.Context, s *streamcontrol.StreamStatus) (bool, error)
+	CheckStreamStarted func(ctx context.Context, s *streamcontrol.StreamStatus) (bool, error)
 	StreamStatusCacheDuration time.Duration
 	PostRaidWaitDuration      time.Duration
 }

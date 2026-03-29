@@ -8,16 +8,16 @@ import (
 
 	"github.com/xaionaro-go/streamctl/pkg/clock"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
-	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
+	"github.com/xaionaro-go/xsync"
 )
 
 type platformsControllerAdapter struct {
-	StreamD api.StreamD
+	StreamD *StreamD
 }
 
 func newPlatformsControllerAdapter(
-	streamD api.StreamD,
+	streamD *StreamD,
 ) *platformsControllerAdapter {
 	return &platformsControllerAdapter{
 		StreamD: streamD,
@@ -28,14 +28,18 @@ func (a *platformsControllerAdapter) CheckStreamStartedByURL(
 	ctx context.Context,
 	sinkURL *url.URL,
 ) (bool, error) {
-	for platID, handler := range platformBackendHandlers {
-		if handler.IsPlatformURL == nil {
-			continue
+	platID, ok := xsync.DoR2(ctx, &a.StreamD.AccountsLocker, func() (streamcontrol.PlatformID, bool) {
+		for _, account := range a.StreamD.AccountMap {
+			if account.IsPlatformURL(sinkURL) {
+				return account.GetPlatformID(), true
+			}
 		}
-		if handler.IsPlatformURL(sinkURL) {
-			return a.CheckStreamStartedByPlatformID(ctx, platID)
-		}
+		return "", false
+	})
+	if ok {
+		return a.CheckStreamStartedByPlatformID(ctx, platID)
 	}
+
 	return false, fmt.Errorf(
 		"do not know how to check if the stream started for '%s'",
 		sinkURL.String(),

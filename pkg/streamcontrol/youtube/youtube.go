@@ -1252,10 +1252,10 @@ func (yt *YouTube) startChatListener(
 	logger.Debugf(ctx, "startChatListener(ctx, '%s':'%s')", videoID, chatID)
 	defer func() { logger.Debugf(ctx, "/startChatListener(ctx, '%s':'%s'): %v", videoID, chatID, _err) }()
 
-	tokenSource, chatGRPCHost := xsync.DoR2(ctx, &yt.locker, func() (oauth2.TokenSource, string) {
-		return yt.tokenSource, yt.Config.ChatGRPCHost
+	tokenSource, chatGRPCHost, chatGRPCInsecure := xsync.DoR3(ctx, &yt.locker, func() (oauth2.TokenSource, string, bool) {
+		return yt.tokenSource, yt.Config.ChatGRPCHost, yt.Config.ChatGRPCInsecure
 	})
-	_chatListener, err := NewChatListener(ctx, videoID, chatID, tokenSource, yt.YouTubeClient, chatGRPCHost)
+	_chatListener, err := NewChatListener(ctx, videoID, chatID, tokenSource, yt.YouTubeClient, chatGRPCHost, chatGRPCInsecure)
 	if err != nil {
 		return fmt.Errorf("unable to initialize the chat listener instance: %w", err)
 	}
@@ -1729,26 +1729,105 @@ func (yt *YouTube) fixError(ctx context.Context, err error, counterPtr *int) boo
 func (yt *YouTube) GetChatMessagesChan(
 	ctx context.Context,
 	streamID streamcontrol.StreamID,
-) (<-chan streamcontrol.Event, error) {
+) (_ret <-chan streamcontrol.Event, _err error) {
 	logger.Debugf(ctx, "GetChatMessagesChan")
-	defer logger.Debugf(ctx, "/GetChatMessagesChan")
+	defer func() { logger.Debugf(ctx, "/GetChatMessagesChan: %v", _err) }()
 
-	outCh := make(chan streamcontrol.Event)
+	switch {
+	case streamID != streamcontrol.DefaultStreamID:
+		return yt.getChatMessagesChanByVideoID(ctx, string(streamID))
+	default:
+		outCh := make(chan streamcontrol.Event)
+		observability.Go(ctx, func(ctx context.Context) {
+			defer func() {
+				logger.Debugf(ctx, "closing the messages channel")
+				close(outCh)
+			}()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case ev, ok := <-yt.messagesOutChan:
+					if !ok {
+						logger.Debugf(ctx, "the input channel is closed")
+						return
+					}
+					outCh <- ev
+				}
+			}
+		})
+
+		return outCh, nil
+	}
+}
+
+func (yt *YouTube) getChatMessagesChanByVideoID(
+	ctx context.Context,
+	videoID string,
+) (_ret <-chan streamcontrol.Event, _err error) {
+	logger.Debugf(ctx, "getChatMessagesChanByVideoID")
+	defer func() { logger.Debugf(ctx, "/getChatMessagesChanByVideoID: %v", _err) }()
+
+	videoResp, err := yt.YouTubeClient.GetVideos(
+		ctx,
+		[]string{videoID},
+		[]string{"liveStreamingDetails"},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get video '%s': %w", videoID, err)
+	}
+
+	if len(videoResp.Items) == 0 {
+		return nil, fmt.Errorf("video '%s' not found", videoID)
+	}
+
+	video := videoResp.Items[0]
+	if video.LiveStreamingDetails == nil || video.LiveStreamingDetails.ActiveLiveChatId == "" {
+		return nil, fmt.Errorf("video '%s' is not live or has no active chat", videoID)
+	}
+
+	liveChatID := video.LiveStreamingDetails.ActiveLiveChatId
+
+	tokenSource, chatGRPCHost, chatGRPCInsecure := xsync.DoR3(ctx, &yt.locker, func() (oauth2.TokenSource, string, bool) {
+		return yt.tokenSource, yt.Config.ChatGRPCHost, yt.Config.ChatGRPCInsecure
+	})
+
+	listener, err := NewChatListener(
+		ctx,
+		videoID,
+		liveChatID,
+		tokenSource,
+		yt.YouTubeClient,
+		chatGRPCHost,
+		chatGRPCInsecure,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create chat listener for video '%s': %w", videoID, err)
+	}
+
+	outCh := make(chan streamcontrol.Event, 100)
 	observability.Go(ctx, func(ctx context.Context) {
+		defer close(outCh)
 		defer func() {
-			logger.Debugf(ctx, "closing the messages channel")
-			close(outCh)
+			if err := listener.Close(ctx); err != nil {
+				logger.Warnf(ctx, "unable to close chat listener: %v", err)
+			}
 		}()
+
+		inCh := listener.MessagesChan()
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case ev, ok := <-yt.messagesOutChan:
+			case msg, ok := <-inCh:
 				if !ok {
-					logger.Debugf(ctx, "the input channel is closed")
 					return
 				}
-				outCh <- ev
+				select {
+				case outCh <- msg:
+				default:
+					logger.Errorf(ctx, "chat messages queue overflow, dropping a message")
+				}
 			}
 		}
 	})

@@ -17,6 +17,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	grpcoauth "google.golang.org/grpc/credentials/oauth"
 	"google.golang.org/grpc/status"
 )
@@ -37,6 +38,7 @@ type QuotaTracker interface {
 
 type ChatListener struct {
 	grpcHost        string
+	grpcInsecure    bool
 	videoID         string
 	liveChatID      string
 	tokenSource     oauth2.TokenSource
@@ -57,6 +59,7 @@ func NewChatListener(
 	tokenSource oauth2.TokenSource,
 	quotaTracker QuotaTracker,
 	grpcHost string,
+	grpcInsecure bool,
 ) (*ChatListener, error) {
 	if videoID == "" {
 		return nil, fmt.Errorf("video ID is empty")
@@ -73,6 +76,7 @@ func NewChatListener(
 	ctx, cancelFunc := context.WithCancel(ctx)
 	l := &ChatListener{
 		grpcHost:        grpcHost,
+		grpcInsecure:    grpcInsecure,
 		videoID:         videoID,
 		liveChatID:      liveChatID,
 		tokenSource:     tokenSource,
@@ -100,11 +104,17 @@ func (l *ChatListener) listenLoop(ctx context.Context) (_err error) {
 	logger.Debugf(ctx, "listenLoop (gRPC streaming)")
 	defer func() { logger.Debugf(ctx, "/listenLoop (gRPC streaming): %v", _err) }()
 
-	conn, err := grpc.NewClient(
-		l.grpcHost,
-		grpc.WithTransportCredentials(credentials.NewTLS(nil)),
-		grpc.WithPerRPCCredentials(&grpcoauth.TokenSource{TokenSource: l.tokenSource}),
-	)
+	var dialOpts []grpc.DialOption
+	switch {
+	case l.grpcInsecure:
+		dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	default:
+		dialOpts = append(dialOpts,
+			grpc.WithTransportCredentials(credentials.NewTLS(nil)),
+			grpc.WithPerRPCCredentials(&grpcoauth.TokenSource{TokenSource: l.tokenSource}),
+		)
+	}
+	conn, err := grpc.NewClient(l.grpcHost, dialOpts...)
 	if err != nil {
 		return fmt.Errorf("unable to create gRPC client: %w", err)
 	}

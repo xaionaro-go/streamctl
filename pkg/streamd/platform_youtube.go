@@ -5,10 +5,8 @@ package streamd
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"reflect"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/facebookincubator/go-belt"
@@ -131,9 +129,6 @@ func init() {
 				break
 			}
 			return nil
-		},
-		IsPlatformURL: func(u *url.URL) bool {
-			return strings.Contains(u.Hostname(), "youtube")
 		},
 		CheckStreamStarted: func(ctx context.Context, s *streamcontrol.StreamStatus) (bool, error) {
 			data := youtube.GetStreamStatusCustomData(s)

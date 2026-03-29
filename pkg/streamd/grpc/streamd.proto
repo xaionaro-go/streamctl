@@ -106,6 +106,10 @@ service StreamD {
   rpc Shoutout(ShoutoutRequest) returns (ShoutoutReply) {}
   rpc RaidTo(RaidToRequest) returns (RaidToReply) {}
 
+  rpc ResolvePlatformURL(ResolvePlatformURLRequest) returns (ResolvePlatformURLReply) {}
+  rpc ListenChatOfStream(ListenChatOfStreamRequest) returns (stream ChatMessage) {}
+  rpc PurgeChatMessages(PurgeChatMessagesRequest) returns (PurgeChatMessagesReply) {}
+
   rpc GetPeerIDs(GetPeerIDsRequest) returns (GetPeerIDsReply) {}
 
   rpc LLMGenerate(LLMGenerateRequest) returns (LLMGenerateReply) {}
@@ -851,6 +855,7 @@ message SubmitEventReply {}
 message SubscribeToChatMessagesRequest {
   uint64 sinceUNIXNano = 1;
   uint64 limit = 2;
+  optional string streamID = 3;
 }
 
 // TODO: rename to PlatformEvent
@@ -858,6 +863,7 @@ message ChatMessage {
   string platID = 1;
   bool isLive = 2;
   chatwebhook.Event content = 3;
+  string streamID = 4;
 }
 
 enum TextFormatType {
@@ -965,4 +971,25 @@ message YouTubeBroadcastSummary {
   int64 scheduled_start_unix = 4;
   int64 actual_start_unix = 5;
   uint64 viewer_count = 6;
+}
+
+message ResolvePlatformURLRequest {
+  string url = 1;
+}
+message ResolvePlatformURLReply {
+  string platID = 1;
+  string streamID = 2;
+}
+
+message ListenChatOfStreamRequest {
+  string platID = 1;
+  string streamID = 2;
+}
+
+message PurgeChatMessagesRequest {
+  optional string platID = 1;
+  optional string streamID = 2;
+}
+message PurgeChatMessagesReply {
+  uint64 removedCount = 1;
 }

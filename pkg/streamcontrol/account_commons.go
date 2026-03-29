@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"time"
 )
 
@@ -32,4 +33,7 @@ type AccountCommons interface {
 
 	IsCapable(context.Context, Capability) bool
 	IsChannelStreaming(ctx context.Context, chanID UserID) (bool, error)
+	IsPlatformURL(u *url.URL) bool
+	IsChannelURL(u *url.URL) bool
+	ExtractStreamID(u *url.URL) (StreamID, error)
 }

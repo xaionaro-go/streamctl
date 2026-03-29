@@ -53,7 +53,7 @@ func (p *Panel) addPermanentWindow(
 ) {
 	drv, ok := window.(windowDriver)
 	if !ok {
-		logger.Warnf(ctx, "window does not implement the expected interface `windowDriver`: %T", window)
+		logger.Debugf(ctx, "window does not implement the expected interface `windowDriver`: %T", window)
 		return
 	}
 

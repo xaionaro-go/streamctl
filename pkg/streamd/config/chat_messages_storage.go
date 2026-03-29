@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	DefaultChatMessagesPath = "~/.streampanel.chat-messages"
+	DefaultChatMessagesPath = "~/.config/wingout/chat-messages"
 )
 
 func (cfg *Config) GetChatMessageStorage(
@@ -21,7 +21,7 @@ func (cfg *Config) GetChatMessageStorage(
 	path, err := xpath.Expand(DefaultChatMessagesPath)
 	if err != nil {
 		logger.Errorf(ctx, "unable to expand '%s': %w", DefaultChatMessagesPath, err)
-		return ".streampanel.chat-messages"
+		return ".config/wingout/chat-messages"
 	}
 
 	return path

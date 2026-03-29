@@ -4,10 +4,8 @@ package streamd
 
 import (
 	"context"
-	"net/url"
 	"reflect"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/facebookincubator/go-belt"
@@ -84,9 +82,6 @@ func init() {
 				}
 			}
 			return api.BackendDataKick{Cache: &cache.Kick{Categories: &categories}}, nil
-		},
-		IsPlatformURL: func(u *url.URL) bool {
-			return strings.Contains(u.Hostname(), "global-contribute.live-video.net")
 		},
 		StreamStatusCacheDuration: 5 * time.Second,
 	})
