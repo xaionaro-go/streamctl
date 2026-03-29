@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/player/pkg/player/protobuf/go/player_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	scgoconv "github.com/xaionaro-go/streamctl/pkg/streamcontrol/protobuf/goconv"
 	"github.com/xaionaro-go/streamctl/pkg/streamd"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
@@ -1954,6 +1955,22 @@ func (grpc *GRPCServer) SendChatMessage(
 		return nil, err
 	}
 	return &streamd_grpc.SendChatMessageReply{}, nil
+}
+
+func (grpc *GRPCServer) InjectChatMessage(
+	ctx context.Context,
+	req *streamd_grpc.InjectChatMessageRequest,
+) (*streamd_grpc.InjectChatMessageReply, error) {
+	ev := scgoconv.EventGRPC2Go(req.GetEvent())
+	err := grpc.StreamD.InjectChatMessage(
+		ctx,
+		streamcontrol.PlatformName(req.GetPlatID()),
+		ev,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.InjectChatMessageReply{}, nil
 }
 
 func (grpc *GRPCServer) RemoveChatMessage(

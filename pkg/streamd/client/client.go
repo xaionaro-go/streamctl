@@ -25,6 +25,7 @@ import (
 	"github.com/xaionaro-go/player/pkg/player/protobuf/go/player_grpc"
 	p2ptypes "github.com/xaionaro-go/streamctl/pkg/p2p/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	scgoconv "github.com/xaionaro-go/streamctl/pkg/streamcontrol/protobuf/goconv"
 	youtube "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	streamdconfig "github.com/xaionaro-go/streamctl/pkg/streamd/config"
@@ -2642,6 +2643,32 @@ func (c *Client) SendChatMessage(
 			&streamd_grpc.SendChatMessageRequest{
 				PlatID:  string(platID),
 				Message: message,
+			},
+		)
+	})
+	if err != nil {
+		return fmt.Errorf("unable to query: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) InjectChatMessage(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	ev streamcontrol.Event,
+) error {
+	_, err := withStreamDClient(ctx, c, func(
+		ctx context.Context,
+		client streamd_grpc.StreamDClient,
+		conn io.Closer,
+	) (*streamd_grpc.InjectChatMessageReply, error) {
+		return callWrapper(
+			ctx,
+			c,
+			client.InjectChatMessage,
+			&streamd_grpc.InjectChatMessageRequest{
+				PlatID: string(platID),
+				Event:  scgoconv.EventGo2GRPC(ev),
 			},
 		)
 	})

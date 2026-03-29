@@ -16,6 +16,7 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"github.com/xaionaro-go/observability"
 	videodecoder "github.com/xaionaro-go/player/pkg/player/decoder/libav"
@@ -126,6 +127,12 @@ var (
 		Run:  chatListen,
 	}
 
+	ChatInject = &cobra.Command{
+		Use:  "inject",
+		Args: cobra.ExactArgs(0),
+		Run:  chatInject,
+	}
+
 	LoggerLevel = logger.LevelWarning
 )
 
@@ -145,6 +152,7 @@ func init() {
 
 	Root.AddCommand(Chat)
 	Chat.AddCommand(ChatListen)
+	Chat.AddCommand(ChatInject)
 
 	Root.PersistentFlags().Var(&LoggerLevel, "log-level", "")
 	Root.PersistentFlags().String("remote-addr", "localhost:3594", "the path to the config file")
@@ -154,7 +162,14 @@ func init() {
 	StreamSetup.PersistentFlags().String("description", "", "stream description")
 	StreamSetup.PersistentFlags().String("profile", "", "profile")
 	StreamStatus.PersistentFlags().Bool("json", false, "use JSON output format")
+
+	ChatInject.PersistentFlags().String("platform", "", "platform name (e.g. youtube, twitch, kick)")
+	ChatInject.PersistentFlags().String("user-name", "", "display name of the user")
+	ChatInject.PersistentFlags().String("message", "", "chat message content")
+	_ = ChatInject.MarkPersistentFlagRequired("platform")
+	_ = ChatInject.MarkPersistentFlagRequired("message")
 }
+
 func assertNoError(ctx context.Context, err error) {
 	if err != nil {
 		logger.Panic(ctx, err)
@@ -391,4 +406,40 @@ func chatListen(cmd *cobra.Command, args []string) {
 	for ev := range ch {
 		spew.Dump(ev)
 	}
+}
+
+func chatInject(cmd *cobra.Command, args []string) {
+	ctx := cmd.Context()
+
+	remoteAddr, err := cmd.Flags().GetString("remote-addr")
+	assertNoError(ctx, err)
+
+	platform, err := cmd.Flags().GetString("platform")
+	assertNoError(ctx, err)
+
+	userName, err := cmd.Flags().GetString("user-name")
+	assertNoError(ctx, err)
+
+	message, err := cmd.Flags().GetString("message")
+	assertNoError(ctx, err)
+
+	streamD, err := client.New(ctx, remoteAddr)
+	assertNoError(ctx, err)
+
+	ev := streamcontrol.Event{
+		ID:        streamcontrol.EventID(uuid.NewString()),
+		CreatedAt: time.Now(),
+		Type:      streamcontrol.EventTypeChatMessage,
+		User: streamcontrol.User{
+			Name: userName,
+		},
+		Message: &streamcontrol.Message{
+			Content: message,
+		},
+	}
+
+	err = streamD.InjectChatMessage(ctx, streamcontrol.PlatformName(platform), ev)
+	assertNoError(ctx, err)
+
+	fmt.Println("message injected")
 }

@@ -89,6 +89,7 @@ service StreamD {
 
     rpc SubscribeToChatMessages(SubscribeToChatMessagesRequest) returns (stream ChatMessage) {}
     rpc SendChatMessage(SendChatMessageRequest) returns (SendChatMessageReply) {}
+    rpc InjectChatMessage(InjectChatMessageRequest) returns (InjectChatMessageReply) {}
     rpc RemoveChatMessage(RemoveChatMessageRequest) returns (RemoveChatMessageReply) {}
     rpc BanUser(BanUserRequest) returns (BanUserReply) {}
 
@@ -795,6 +796,12 @@ message SendChatMessageRequest {
     string message = 2;
 }
 message SendChatMessageReply {}
+
+message InjectChatMessageRequest {
+    string platID = 1;
+    chatwebhook.Event event = 2;
+}
+message InjectChatMessageReply {}
 
 message RemoveChatMessageRequest {
     string platID = 1;

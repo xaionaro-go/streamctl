@@ -287,6 +287,11 @@ type StreamD interface {
 		platID streamcontrol.PlatformName,
 		message string,
 	) error
+	InjectChatMessage(
+		ctx context.Context,
+		platID streamcontrol.PlatformName,
+		ev streamcontrol.Event,
+	) error
 	RemoveChatMessage(
 		ctx context.Context,
 		platID streamcontrol.PlatformName,

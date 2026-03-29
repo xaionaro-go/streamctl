@@ -55,18 +55,46 @@ func (d *StreamD) startListeningForChatMessages(
 						IsLive:   true,
 						Platform: platName,
 					}
-					logger.Tracef(ctx, "received chat message: %#+v", msg)
-					defer logger.Tracef(ctx, "finished processing the chat message")
-					if err := d.ChatMessagesStorage.AddMessage(ctx, msg); err != nil {
-						logger.Errorf(ctx, "unable to add the message %#+v to the chat messages storage: %v", msg, err)
+					if err := d.processChatMessage(ctx, msg); err != nil {
+						logger.Errorf(ctx, "unable to process the chat message %#+v: %v", msg, err)
 					}
-					publishEvent(ctx, d.EventBus, msg)
-					d.shoutoutIfNeeded(ctx, msg)
 				}()
 			}
 		}
 	})
 	return nil
+}
+
+func (d *StreamD) processChatMessage(
+	ctx context.Context,
+	msg api.ChatMessage,
+) error {
+	logger.Tracef(ctx, "processChatMessage")
+	defer logger.Tracef(ctx, "/processChatMessage")
+
+	if err := d.ChatMessagesStorage.AddMessage(ctx, msg); err != nil {
+		logger.Errorf(ctx, "unable to add the message to the chat messages storage: %v", err)
+	}
+
+	publishEvent(ctx, d.EventBus, msg)
+	d.shoutoutIfNeeded(ctx, msg)
+	return nil
+}
+
+func (d *StreamD) InjectChatMessage(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	ev streamcontrol.Event,
+) (_err error) {
+	logger.Debugf(ctx, "InjectChatMessage")
+	defer func() { logger.Debugf(ctx, "/InjectChatMessage: %v", _err) }()
+
+	msg := api.ChatMessage{
+		Event:    ev,
+		IsLive:   true,
+		Platform: platID,
+	}
+	return d.processChatMessage(ctx, msg)
 }
 
 func (d *StreamD) shoutoutIfNeeded(
