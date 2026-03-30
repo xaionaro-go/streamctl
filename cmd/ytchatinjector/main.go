@@ -22,6 +22,17 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+// Config holds all runtime configuration for the chat bridge.
+type Config struct {
+	YTProxyAddr   string
+	StreamdAddr   string
+	Video         string
+	Channel       string
+	Hl            string
+	UseRawMessage bool
+	Translator    *Translator
+}
+
 const (
 	platformIDYouTube = "youtube"
 	reconnectDelay    = 5 * time.Second
@@ -34,6 +45,9 @@ func main() {
 	channel := pflag.String("channel", "", "channel URL, @handle, or channel ID to monitor for live streams")
 	hl := pflag.String("hl", "", "language for YouTube system messages (e.g. en, de, ja)")
 	useRawMessage := pflag.Bool("raw-message", false, "use TextMessageDetails instead of DisplayMessage")
+	translateTo := pflag.String("translate-to", "", "translate messages to this language using LLM (e.g. en, ru, ja)")
+	ollamaURL := pflag.String("ollama-url", "http://192.168.0.171:11434", "Ollama API URL")
+	ollamaModel := pflag.String("ollama-model", ollamaDefaultModel, "Ollama model for translation")
 	var logLevel logger.Level
 	pflag.Var(&logLevel, "log-level", "log level")
 	pflag.Parse()
@@ -52,7 +66,23 @@ func main() {
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 	defer cancel()
 
-	if err := run(ctx, *ytProxyAddr, *streamdAddr, *video, *channel, *hl, *useRawMessage); err != nil {
+	cfg := Config{
+		YTProxyAddr:   *ytProxyAddr,
+		StreamdAddr:   *streamdAddr,
+		Video:         *video,
+		Channel:       *channel,
+		Hl:            *hl,
+		UseRawMessage: *useRawMessage,
+	}
+	if *translateTo != "" {
+		cfg.Translator = &Translator{
+			OllamaURL:  *ollamaURL,
+			Model:      *ollamaModel,
+			TargetLang: *translateTo,
+		}
+	}
+
+	if err := run(ctx, cfg); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return
 		}
@@ -63,60 +93,55 @@ func main() {
 
 func run(
 	ctx context.Context,
-	ytProxyAddr string,
-	streamdAddr string,
-	video string,
-	channel string,
-	hl string,
-	useRawMessage bool,
+	cfg Config,
 ) (_err error) {
 	logger.Tracef(ctx, "run")
 	defer func() { logger.Tracef(ctx, "/run: %v", _err) }()
 
 	switch {
-	case ytProxyAddr == "":
+	case cfg.YTProxyAddr == "":
 		return fmt.Errorf("--yt-proxy-addr is required")
-	case streamdAddr == "":
+	case cfg.StreamdAddr == "":
 		return fmt.Errorf("--streamd-addr is required")
-	case video == "" && channel == "":
+	case cfg.Video == "" && cfg.Channel == "":
 		return fmt.Errorf("either --video or --channel is required")
-	case video != "" && channel != "":
+	case cfg.Video != "" && cfg.Channel != "":
 		return fmt.Errorf("--video and --channel are mutually exclusive")
 	}
 
-	ytConn, err := grpc.NewClient(ytProxyAddr,
+	ytConn, err := grpc.NewClient(cfg.YTProxyAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
-		return fmt.Errorf("connect to youtubeapiproxy at %s: %w", ytProxyAddr, err)
+		return fmt.Errorf("connect to youtubeapiproxy at %s: %w", cfg.YTProxyAddr, err)
 	}
 	defer ytConn.Close()
 
-	sdCreds := detectTransportCredentials(ctx, streamdAddr)
-	sdConn, err := grpc.NewClient(streamdAddr,
+	sdCreds := detectTransportCredentials(ctx, cfg.StreamdAddr)
+	sdConn, err := grpc.NewClient(cfg.StreamdAddr,
 		grpc.WithTransportCredentials(sdCreds),
 	)
 	if err != nil {
-		return fmt.Errorf("connect to streamd at %s: %w", streamdAddr, err)
+		return fmt.Errorf("connect to streamd at %s: %w", cfg.StreamdAddr, err)
 	}
 	defer sdConn.Close()
 
 	ytClient := ytgrpc.NewV3DataLiveChatMessageServiceClient(ytConn)
 	sdClient := streamd_grpc.NewStreamDClient(sdConn)
 
-	if channel != "" {
-		return monitorChannel(ctx, ytConn, channel, func(ctx context.Context, liveChatID string) error {
-			return bridgeLoop(ctx, ytClient, sdClient, liveChatID, hl, useRawMessage)
+	if cfg.Channel != "" {
+		return monitorChannel(ctx, ytConn, cfg.Channel, func(ctx context.Context, liveChatID string) error {
+			return bridgeLoop(ctx, ytClient, sdClient, liveChatID, cfg)
 		})
 	}
 
-	liveChatID, err := resolveLiveChatID(ctx, ytConn, video)
+	liveChatID, err := resolveLiveChatID(ctx, ytConn, cfg.Video)
 	if err != nil {
-		return fmt.Errorf("resolve live chat ID for %q: %w", video, err)
+		return fmt.Errorf("resolve live chat ID for %q: %w", cfg.Video, err)
 	}
 	logger.Infof(ctx, "resolved live chat ID: %s", liveChatID)
 
-	return bridgeLoop(ctx, ytClient, sdClient, liveChatID, hl, useRawMessage)
+	return bridgeLoop(ctx, ytClient, sdClient, liveChatID, cfg)
 }
 
 // resolveLiveChatID determines the liveChatId from the user-provided target.
@@ -157,8 +182,7 @@ func bridgeLoop(
 	ytClient ytgrpc.V3DataLiveChatMessageServiceClient,
 	sdClient streamd_grpc.StreamDClient,
 	liveChatID string,
-	hl string,
-	useRawMessage bool,
+	cfg Config,
 ) (_err error) {
 	logger.Tracef(ctx, "bridgeLoop")
 	defer func() { logger.Tracef(ctx, "/bridgeLoop: %v", _err) }()
@@ -166,7 +190,7 @@ func bridgeLoop(
 	var nextPageToken string
 
 	for {
-		err := streamOnce(ctx, ytClient, sdClient, liveChatID, hl, useRawMessage, &nextPageToken)
+		err := streamOnce(ctx, ytClient, sdClient, liveChatID, cfg, &nextPageToken)
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -189,8 +213,7 @@ func streamOnce(
 	ytClient ytgrpc.V3DataLiveChatMessageServiceClient,
 	sdClient streamd_grpc.StreamDClient,
 	liveChatID string,
-	hl string,
-	useRawMessage bool,
+	cfg Config,
 	nextPageToken *string,
 ) (_err error) {
 	logger.Tracef(ctx, "streamOnce")
@@ -198,7 +221,7 @@ func streamOnce(
 
 	req := &ytgrpc.LiveChatMessageListRequest{
 		LiveChatId: liveChatID,
-		Hl:         hl,
+		Hl:         cfg.Hl,
 		Part:       []string{"snippet", "authorDetails"},
 		PageToken:  *nextPageToken,
 	}
@@ -219,7 +242,7 @@ func streamOnce(
 		}
 
 		for _, msg := range resp.GetItems() {
-			if err := injectMessage(ctx, sdClient, msg, useRawMessage); err != nil {
+			if err := injectMessage(ctx, sdClient, msg, cfg); err != nil {
 				logger.Errorf(ctx, "unable to inject message %s: %v", msg.GetId(), err)
 			}
 		}
@@ -230,11 +253,25 @@ func injectMessage(
 	ctx context.Context,
 	sdClient streamd_grpc.StreamDClient,
 	msg *ytgrpc.LiveChatMessage,
-	useRawMessage bool,
+	cfg Config,
 ) error {
-	ev, err := convertLiveChatMessage(msg, useRawMessage)
+	ev, err := convertLiveChatMessage(msg, cfg.UseRawMessage)
 	if err != nil {
 		return fmt.Errorf("unable to convert message: %w", err)
+	}
+
+	if cfg.Translator != nil {
+		if content := ev.GetMessage().GetContent(); content != "" {
+			userName := ev.GetUser().GetName()
+			translated, translateErr := cfg.Translator.Translate(ctx, userName, content)
+			switch {
+			case translateErr != nil:
+				logger.Warnf(ctx, "translation failed for %s: %v", msg.GetId(), translateErr)
+			case translated != content:
+				logger.Debugf(ctx, "translated [%s]: %q -> %q", userName, content, translated)
+				ev.Message.Content = translated
+			}
+		}
 	}
 
 	logger.Debugf(ctx, "injecting message id=%s user=%s: %s",
