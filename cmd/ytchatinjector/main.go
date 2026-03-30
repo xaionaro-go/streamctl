@@ -75,9 +75,14 @@ func main() {
 		UseRawMessage: *useRawMessage,
 	}
 	if *translateTo != "" {
+		resolved, err := resolveLLMConfig(*ollamaURL, *ollamaModel)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
+			os.Exit(1)
+		}
 		cfg.Translator = &Translator{
-			OllamaURL:  *ollamaURL,
-			Model:      *ollamaModel,
+			OllamaURL:  resolved.OllamaURL,
+			Model:      resolved.Model,
 			TargetLang: *translateTo,
 		}
 	}
