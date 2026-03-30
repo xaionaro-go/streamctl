@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
+	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 )
 
@@ -12,8 +13,8 @@ type ActiveStreamSourceIDsProvider interface {
 	ActiveStreamSourceIDs() ([]StreamSourceID, error)
 }
 
-type Publisher = streamplayer.Publisher
-type WaitPublisherChaner = streamplayer.WaitPublisherChaner
+type Publisher = sptypes.Publisher
+type WaitPublisherChaner = sptypes.WaitPublisherChaner
 type GetPortServerser = streamportserver.GetPortServerser
 
 type InitConfig struct {

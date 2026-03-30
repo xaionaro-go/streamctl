@@ -22,6 +22,7 @@ import (
 	"github.com/xaionaro-go/observability"
 	player "github.com/xaionaro-go/player/pkg/player/types"
 	"github.com/xaionaro-go/secret"
+	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
 	"github.com/xaionaro-go/xcontext"
@@ -35,17 +36,8 @@ const (
 	playerCheckInterval  = 100 * time.Millisecond
 )
 
-type Publisher interface {
-	ClosedChan() <-chan struct{} // TODO: can I remove this?
-}
-
-type WaitPublisherChaner interface {
-	WaitPublisherChan(
-		ctx context.Context,
-		streamSourceID streamtypes.StreamSourceID,
-		waitForNext bool,
-	) (<-chan Publisher, error)
-}
+type Publisher = sptypes.Publisher
+type WaitPublisherChaner = sptypes.WaitPublisherChaner
 
 type StreamServer interface {
 	WaitPublisherChaner
