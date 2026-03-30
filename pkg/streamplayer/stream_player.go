@@ -38,18 +38,6 @@ const (
 	playerCheckInterval    = 100 * time.Millisecond
 )
 
-type Publisher interface {
-	ClosedChan() <-chan struct{} // TODO: can I remove this?
-}
-
-type WaitPublisherChaner interface {
-	WaitPublisherChan(
-		ctx context.Context,
-		streamID streamtypes.StreamID,
-		waitForNext bool,
-	) (<-chan Publisher, error)
-}
-
 type StreamServer interface {
 	WaitPublisherChaner
 	streamportserver.GetPortServerser
@@ -378,11 +366,15 @@ func (p *StreamPlayerHandler) startObserver(
 
 		for {
 			select {
-			case pkt, ok := <-inputNode.OutputPacketCh:
+			case out, ok := <-inputNode.OutputCh:
 				if !ok {
 					return
 				}
-				if err := p.acknowledgeInputPacket(ctx, pkt); err != nil {
+				pkt := out.Packet
+				if pkt == nil {
+					continue
+				}
+				if err := p.acknowledgeInputPacket(ctx, *pkt); err != nil {
 					logger.Errorf(ctx, "unable to acknowledge a packet: %v", err)
 					return
 				}
@@ -413,7 +405,7 @@ func (p *StreamPlayerHandler) acknowledgeInputPacket(
 	}
 
 	var trackID int
-	if pkt.StreamIndex() == 0 {
+	if pkt.GetStreamIndex() == 0 {
 		trackID = 1
 	} else {
 		trackID = 2

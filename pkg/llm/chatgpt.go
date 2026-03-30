@@ -22,8 +22,9 @@ func NewChatGPT(
 	modelName string,
 	apiKey secret.String,
 ) (_ret *ChatGPT, _err error) {
-	logger.Debugf(ctx, "NewChatGPT(ctx, '%s', apiKey)", modelName)
-	defer func() { logger.Debugf(ctx, "/NewChatGPT(ctx, '%s', apiKey): %v", modelName, _err) }()
+	logger.Tracef(ctx, "NewChatGPT")
+	defer func() { logger.Tracef(ctx, "/NewChatGPT: %v", _err) }()
+
 	chatModel, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
 		Model:  modelName,
 		APIKey: apiKey.Get(),
@@ -31,6 +32,7 @@ func NewChatGPT(
 	if err != nil {
 		return nil, fmt.Errorf("unable to initialize the ChatGPT model '%s': %w", modelName, err)
 	}
+
 	return &ChatGPT{
 		Model: chatModel,
 	}, nil
@@ -43,7 +45,10 @@ func (gpt *ChatGPT) Close() error {
 func (gpt *ChatGPT) Generate(
 	ctx context.Context,
 	prompt string,
-) (string, error) {
+) (_ret string, _err error) {
+	logger.Tracef(ctx, "ChatGPT.Generate")
+	defer func() { logger.Tracef(ctx, "/ChatGPT.Generate: %v", _err) }()
+
 	r, err := gpt.Model.Generate(ctx, []*schema.Message{
 		{
 			Role:    schema.System,
@@ -57,5 +62,6 @@ func (gpt *ChatGPT) Generate(
 	if err != nil {
 		return "", fmt.Errorf("unable to generate text: %w", err)
 	}
+
 	return r.Content, nil
 }

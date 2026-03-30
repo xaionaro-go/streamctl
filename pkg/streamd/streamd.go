@@ -115,6 +115,9 @@ type StreamD struct {
 
 	lastShoutoutAtLocker sync.Mutex
 	lastShoutoutAt       map[config.ChatUserID]time.Time
+
+	chatListenerLocker  sync.Mutex
+	chatListenerCancels map[streamcontrol.PlatformName]context.CancelFunc
 }
 
 type imageHash uint64
@@ -153,7 +156,8 @@ func New(
 		Timers:         map[api.TimerID]*Timer{},
 		Options:        Options(options).Aggregate(),
 		ReadyChan:      make(chan struct{}),
-		lastShoutoutAt: map[config.ChatUserID]time.Time{},
+		lastShoutoutAt:              map[config.ChatUserID]time.Time{},
+		chatListenerCancels: map[streamcontrol.PlatformName]context.CancelFunc{},
 	}
 
 	// TODO: move this to Run()

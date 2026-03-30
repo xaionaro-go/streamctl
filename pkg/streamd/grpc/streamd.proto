@@ -92,6 +92,8 @@ service StreamD {
     rpc InjectChatMessage(InjectChatMessageRequest) returns (InjectChatMessageReply) {}
     rpc RemoveChatMessage(RemoveChatMessageRequest) returns (RemoveChatMessageReply) {}
     rpc BanUser(BanUserRequest) returns (BanUserReply) {}
+    rpc SetBuiltinChatListenerEnabled(SetBuiltinChatListenerEnabledRequest) returns (SetBuiltinChatListenerEnabledReply) {}
+    rpc IsBuiltinChatListenerEnabled(IsBuiltinChatListenerEnabledRequest) returns (IsBuiltinChatListenerEnabledReply) {}
 
     rpc Shoutout(ShoutoutRequest) returns (ShoutoutReply) {}
     rpc RaidTo(RaidToRequest) returns (RaidToReply) {}
@@ -838,4 +840,17 @@ message LLMGenerateRequest {
 }
 message LLMGenerateReply {
     string response = 1;
+}
+
+message SetBuiltinChatListenerEnabledRequest {
+    string platID = 1;
+    bool enabled = 2;
+}
+message SetBuiltinChatListenerEnabledReply {}
+
+message IsBuiltinChatListenerEnabledRequest {
+    string platID = 1;
+}
+message IsBuiltinChatListenerEnabledReply {
+    bool enabled = 1;
 }

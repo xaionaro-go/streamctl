@@ -38,12 +38,21 @@ func (d *StreamD) startListeningForChatMessages(
 	if err != nil {
 		return fmt.Errorf("unable to get the channel for chat messages of '%s': %w", platName, err)
 	}
-	observability.Go(ctx, func(ctx context.Context) {
-		defer logger.Debugf(ctx, "/startListeningForChatMessages(ctx, '%s')", platName)
+
+	listenerCtx, cancel := context.WithCancel(ctx)
+	d.chatListenerLocker.Lock()
+	if oldCancel := d.chatListenerCancels[platName]; oldCancel != nil {
+		oldCancel()
+	}
+	d.chatListenerCancels[platName] = cancel
+	d.chatListenerLocker.Unlock()
+
+	observability.Go(ctx, func(_ context.Context) {
+		defer logger.Debugf(listenerCtx, "/startListeningForChatMessages(ctx, '%s')", platName)
 		for {
 			select {
-			case <-ctx.Done():
-				logger.Debugf(ctx, "startListeningForChatMessages(ctx, '%s'): context is closed; %v", platName, ctx.Err())
+			case <-listenerCtx.Done():
+				logger.Debugf(ctx, "chat listener for '%s' stopped: %v", platName, listenerCtx.Err())
 				return
 			case ev, ok := <-ch:
 				if !ok {
@@ -298,4 +307,46 @@ func (d *StreamD) SendChatMessage(
 	}
 
 	return nil
+}
+
+func (d *StreamD) SetBuiltinChatListenerEnabled(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	enabled bool,
+) (_err error) {
+	logger.Debugf(ctx, "SetBuiltinChatListenerEnabled(ctx, '%s', %v)", platID, enabled)
+	defer func() { logger.Debugf(ctx, "/SetBuiltinChatListenerEnabled: %v", _err) }()
+
+	d.chatListenerLocker.Lock()
+	cancel := d.chatListenerCancels[platID]
+	d.chatListenerLocker.Unlock()
+
+	switch {
+	case !enabled && cancel != nil:
+		// Stop the listener — cancels context, which stops YouTube API polling.
+		cancel()
+		d.chatListenerLocker.Lock()
+		delete(d.chatListenerCancels, platID)
+		d.chatListenerLocker.Unlock()
+		logger.Debugf(ctx, "stopped chat listener for '%s'", platID)
+	case enabled && cancel == nil:
+		// Restart the listener.
+		if err := d.startListeningForChatMessages(ctx, platID); err != nil {
+			return fmt.Errorf("restart chat listener for '%s': %w", platID, err)
+		}
+		logger.Debugf(ctx, "restarted chat listener for '%s'", platID)
+	}
+
+	return nil
+}
+
+func (d *StreamD) IsBuiltinChatListenerEnabled(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+) (bool, error) {
+	logger.Debugf(ctx, "IsBuiltinChatListenerEnabled(ctx, '%s')", platID)
+
+	d.chatListenerLocker.Lock()
+	defer d.chatListenerLocker.Unlock()
+	return d.chatListenerCancels[platID] != nil, nil
 }

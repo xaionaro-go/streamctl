@@ -1238,7 +1238,7 @@ func (p *Panel) openAddOrEditRestreamWindow(
 			}
 		}
 	})
-	if fwd.Encode.OutputVideoTracks[0].Config.Codec == recoder.VideoCodecUndefined {
+	if fwd.Encode.OutputVideoTracks[0].Config.Codec == recoder.UndefinedVideoCodec {
 		recodingVideoCodecSelector.SetSelectedIndex(0)
 	} else {
 		recodingVideoCodecSelector.SetSelected(fwd.Encode.OutputVideoTracks[0].Config.Codec.String())
@@ -1274,7 +1274,7 @@ func (p *Panel) openAddOrEditRestreamWindow(
 			}
 		}
 	})
-	if fwd.Encode.OutputAudioTracks[0].Config.Codec == recoder.AudioCodecUndefined {
+	if fwd.Encode.OutputAudioTracks[0].Config.Codec == recoder.UndefinedAudioCodec {
 		recodingAudioCodecSelector.SetSelectedIndex(0)
 	} else {
 		recodingAudioCodecSelector.SetSelected(fwd.Encode.OutputAudioTracks[0].Config.Codec.String())

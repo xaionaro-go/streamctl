@@ -17,11 +17,10 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/avpipeline"
 	"github.com/xaionaro-go/avpipeline/codec"
-	"github.com/xaionaro-go/avpipeline/frame"
 	"github.com/xaionaro-go/avpipeline/kernel"
 	"github.com/xaionaro-go/avpipeline/kernel/boilerplate"
 	"github.com/xaionaro-go/avpipeline/node"
-	"github.com/xaionaro-go/avpipeline/packet"
+	"github.com/xaionaro-go/avpipeline/packetorframe"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/secret"
 	"github.com/xaionaro-go/streamctl/pkg/screenshot"
@@ -101,7 +100,7 @@ func (s *ScreenshoterWayland) Loop(
 
 	decoderNode := node.NewFromKernel(ctx, decoderKernel)
 	defer decoderNode.GetProcessor().Close(ctx)
-	inputNode.AddPushPacketsTo(ctx, decoderNode)
+	inputNode.AddPushTo(ctx, decoderNode)
 
 	var img image.Image
 	receiverNode := node.NewFromKernel(
@@ -109,21 +108,22 @@ func (s *ScreenshoterWayland) Loop(
 		boilerplate.NewFuncsToKernel(
 			ctx,
 			nil,
-			nil,
 			func(
 				ctx context.Context,
-				input frame.Input,
-				_ chan<- packet.Output,
-				_ chan<- frame.Output,
+				input packetorframe.InputUnion,
+				_ chan<- packetorframe.OutputUnion,
 			) error {
+				if input.Frame == nil {
+					return nil
+				}
 				var err error
 				if img == nil {
-					img, err = input.Data().GuessImageFormat()
+					img, err = input.Frame.Data().GuessImageFormat()
 					if err != nil {
 						return fmt.Errorf("unable to guess image format: %w", err)
 					}
 				}
-				err = input.Data().ToImage(img)
+				err = input.Frame.Data().ToImage(img)
 				if err != nil {
 					return fmt.Errorf("unable to convert frame to image: %w", err)
 				}
@@ -134,7 +134,7 @@ func (s *ScreenshoterWayland) Loop(
 		),
 	)
 	defer receiverNode.GetProcessor().Close(ctx)
-	decoderNode.AddPushFramesTo(ctx, receiverNode)
+	decoderNode.AddPushTo(ctx, receiverNode)
 
 	logger.Debugf(ctx, "starting the decoding loop")
 	errCh := make(chan node.Error, 100)

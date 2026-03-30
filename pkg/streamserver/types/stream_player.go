@@ -2,7 +2,6 @@ package types
 
 import (
 	player "github.com/xaionaro-go/player/pkg/player/types"
-	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 )
 
@@ -14,7 +13,7 @@ type StreamPlayer struct {
 }
 
 type StreamPlayerConfig struct {
-	DefaultStreamPlayerOptions streamplayer.Options
+	DefaultStreamPlayerOptions sptypes.Options
 }
 
 type StreamPlayerOption interface {
@@ -31,8 +30,8 @@ func (s StreamPlayerOptions) Config() StreamPlayerConfig {
 	return cfg
 }
 
-type StreamPlayerOptionDefaultOptions streamplayer.Options
+type StreamPlayerOptionDefaultOptions sptypes.Options
 
 func (opt StreamPlayerOptionDefaultOptions) apply(cfg *StreamPlayerConfig) {
-	cfg.DefaultStreamPlayerOptions = (streamplayer.Options)(opt)
+	cfg.DefaultStreamPlayerOptions = (sptypes.Options)(opt)
 }

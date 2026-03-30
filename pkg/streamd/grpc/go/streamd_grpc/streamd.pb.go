@@ -10028,6 +10028,182 @@ func (x *LLMGenerateReply) GetResponse() string {
 	return ""
 }
 
+type SetBuiltinChatListenerEnabledRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlatID        string                 `protobuf:"bytes,1,opt,name=platID,proto3" json:"platID,omitempty"`
+	Enabled       bool                   `protobuf:"varint,2,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetBuiltinChatListenerEnabledRequest) Reset() {
+	*x = SetBuiltinChatListenerEnabledRequest{}
+	mi := &file_streamd_proto_msgTypes[203]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetBuiltinChatListenerEnabledRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetBuiltinChatListenerEnabledRequest) ProtoMessage() {}
+
+func (x *SetBuiltinChatListenerEnabledRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_streamd_proto_msgTypes[203]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetBuiltinChatListenerEnabledRequest.ProtoReflect.Descriptor instead.
+func (*SetBuiltinChatListenerEnabledRequest) Descriptor() ([]byte, []int) {
+	return file_streamd_proto_rawDescGZIP(), []int{203}
+}
+
+func (x *SetBuiltinChatListenerEnabledRequest) GetPlatID() string {
+	if x != nil {
+		return x.PlatID
+	}
+	return ""
+}
+
+func (x *SetBuiltinChatListenerEnabledRequest) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+type SetBuiltinChatListenerEnabledReply struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetBuiltinChatListenerEnabledReply) Reset() {
+	*x = SetBuiltinChatListenerEnabledReply{}
+	mi := &file_streamd_proto_msgTypes[204]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetBuiltinChatListenerEnabledReply) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetBuiltinChatListenerEnabledReply) ProtoMessage() {}
+
+func (x *SetBuiltinChatListenerEnabledReply) ProtoReflect() protoreflect.Message {
+	mi := &file_streamd_proto_msgTypes[204]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetBuiltinChatListenerEnabledReply.ProtoReflect.Descriptor instead.
+func (*SetBuiltinChatListenerEnabledReply) Descriptor() ([]byte, []int) {
+	return file_streamd_proto_rawDescGZIP(), []int{204}
+}
+
+type IsBuiltinChatListenerEnabledRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlatID        string                 `protobuf:"bytes,1,opt,name=platID,proto3" json:"platID,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IsBuiltinChatListenerEnabledRequest) Reset() {
+	*x = IsBuiltinChatListenerEnabledRequest{}
+	mi := &file_streamd_proto_msgTypes[205]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IsBuiltinChatListenerEnabledRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IsBuiltinChatListenerEnabledRequest) ProtoMessage() {}
+
+func (x *IsBuiltinChatListenerEnabledRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_streamd_proto_msgTypes[205]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IsBuiltinChatListenerEnabledRequest.ProtoReflect.Descriptor instead.
+func (*IsBuiltinChatListenerEnabledRequest) Descriptor() ([]byte, []int) {
+	return file_streamd_proto_rawDescGZIP(), []int{205}
+}
+
+func (x *IsBuiltinChatListenerEnabledRequest) GetPlatID() string {
+	if x != nil {
+		return x.PlatID
+	}
+	return ""
+}
+
+type IsBuiltinChatListenerEnabledReply struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Enabled       bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IsBuiltinChatListenerEnabledReply) Reset() {
+	*x = IsBuiltinChatListenerEnabledReply{}
+	mi := &file_streamd_proto_msgTypes[206]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IsBuiltinChatListenerEnabledReply) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IsBuiltinChatListenerEnabledReply) ProtoMessage() {}
+
+func (x *IsBuiltinChatListenerEnabledReply) ProtoReflect() protoreflect.Message {
+	mi := &file_streamd_proto_msgTypes[206]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IsBuiltinChatListenerEnabledReply.ProtoReflect.Descriptor instead.
+func (*IsBuiltinChatListenerEnabledReply) Descriptor() ([]byte, []int) {
+	return file_streamd_proto_rawDescGZIP(), []int{206}
+}
+
+func (x *IsBuiltinChatListenerEnabledReply) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
 var File_streamd_proto protoreflect.FileDescriptor
 
 const file_streamd_proto_rawDesc = "" +
@@ -10536,7 +10712,15 @@ const file_streamd_proto_rawDesc = "" +
 	"\x12LLMGenerateRequest\x12\x16\n" +
 	"\x06prompt\x18\x01 \x01(\tR\x06prompt\".\n" +
 	"\x10LLMGenerateReply\x12\x1a\n" +
-	"\bresponse\x18\x01 \x01(\tR\bresponse*f\n" +
+	"\bresponse\x18\x01 \x01(\tR\bresponse\"X\n" +
+	"$SetBuiltinChatListenerEnabledRequest\x12\x16\n" +
+	"\x06platID\x18\x01 \x01(\tR\x06platID\x12\x18\n" +
+	"\aenabled\x18\x02 \x01(\bR\aenabled\"$\n" +
+	"\"SetBuiltinChatListenerEnabledReply\"=\n" +
+	"#IsBuiltinChatListenerEnabledRequest\x12\x16\n" +
+	"\x06platID\x18\x01 \x01(\tR\x06platID\"=\n" +
+	"!IsBuiltinChatListenerEnabledReply\x12\x18\n" +
+	"\aenabled\x18\x01 \x01(\bR\aenabled*f\n" +
 	"\fLoggingLevel\x12\b\n" +
 	"\x04none\x10\x00\x12\t\n" +
 	"\x05fatal\x10\x01\x12\t\n" +
@@ -10586,7 +10770,7 @@ const file_streamd_proto_rawDesc = "" +
 	"\x1aTEXT_FORMAT_TYPE_UNDEFINED\x10\x00\x12\x1a\n" +
 	"\x16TEXT_FORMAT_TYPE_PLAIN\x10\x01\x12\x1d\n" +
 	"\x19TEXT_FORMAT_TYPE_MARKDOWN\x10\x02\x12\x19\n" +
-	"\x15TEXT_FORMAT_TYPE_HTML\x10\x032\x9a8\n" +
+	"\x15TEXT_FORMAT_TYPE_HTML\x10\x032\x95:\n" +
 	"\aStreamD\x122\n" +
 	"\x04Ping\x12\x14.streamd.PingRequest\x1a\x12.streamd.PingReply\"\x00\x12S\n" +
 	"\x0fSetLoggingLevel\x12\x1f.streamd.SetLoggingLevelRequest\x1a\x1d.streamd.SetLoggingLevelReply\"\x00\x12S\n" +
@@ -10667,7 +10851,9 @@ const file_streamd_proto_rawDesc = "" +
 	"\x0fSendChatMessage\x12\x1f.streamd.SendChatMessageRequest\x1a\x1d.streamd.SendChatMessageReply\"\x00\x12Y\n" +
 	"\x11InjectChatMessage\x12!.streamd.InjectChatMessageRequest\x1a\x1f.streamd.InjectChatMessageReply\"\x00\x12Y\n" +
 	"\x11RemoveChatMessage\x12!.streamd.RemoveChatMessageRequest\x1a\x1f.streamd.RemoveChatMessageReply\"\x00\x12;\n" +
-	"\aBanUser\x12\x17.streamd.BanUserRequest\x1a\x15.streamd.BanUserReply\"\x00\x12>\n" +
+	"\aBanUser\x12\x17.streamd.BanUserRequest\x1a\x15.streamd.BanUserReply\"\x00\x12}\n" +
+	"\x1dSetBuiltinChatListenerEnabled\x12-.streamd.SetBuiltinChatListenerEnabledRequest\x1a+.streamd.SetBuiltinChatListenerEnabledReply\"\x00\x12z\n" +
+	"\x1cIsBuiltinChatListenerEnabled\x12,.streamd.IsBuiltinChatListenerEnabledRequest\x1a*.streamd.IsBuiltinChatListenerEnabledReply\"\x00\x12>\n" +
 	"\bShoutout\x12\x18.streamd.ShoutoutRequest\x1a\x16.streamd.ShoutoutReply\"\x00\x128\n" +
 	"\x06RaidTo\x12\x16.streamd.RaidToRequest\x1a\x14.streamd.RaidToReply\"\x00\x12D\n" +
 	"\n" +
@@ -10687,7 +10873,7 @@ func file_streamd_proto_rawDescGZIP() []byte {
 }
 
 var file_streamd_proto_enumTypes = make([]protoimpl.EnumInfo, 9)
-var file_streamd_proto_msgTypes = make([]protoimpl.MessageInfo, 203)
+var file_streamd_proto_msgTypes = make([]protoimpl.MessageInfo, 207)
 var file_streamd_proto_goTypes = []any{
 	(LoggingLevel)(0),                                   // 0: streamd.LoggingLevel
 	(Capability)(0),                                     // 1: streamd.Capability
@@ -10901,29 +11087,33 @@ var file_streamd_proto_goTypes = []any{
 	(*GetPeerIDsReply)(nil),                             // 209: streamd.GetPeerIDsReply
 	(*LLMGenerateRequest)(nil),                          // 210: streamd.LLMGenerateRequest
 	(*LLMGenerateReply)(nil),                            // 211: streamd.LLMGenerateReply
-	(*player_grpc.OpenRequest)(nil),                     // 212: player.OpenRequest
-	(*player_grpc.OpenReply)(nil),                       // 213: player.OpenReply
-	(*player_grpc.ProcessTitleRequest)(nil),             // 214: player.ProcessTitleRequest
-	(*player_grpc.ProcessTitleReply)(nil),               // 215: player.ProcessTitleReply
-	(*player_grpc.GetLinkRequest)(nil),                  // 216: player.GetLinkRequest
-	(*player_grpc.GetLinkReply)(nil),                    // 217: player.GetLinkReply
-	(*player_grpc.EndChanRequest)(nil),                  // 218: player.EndChanRequest
-	(*player_grpc.EndChanReply)(nil),                    // 219: player.EndChanReply
-	(*player_grpc.IsEndedRequest)(nil),                  // 220: player.IsEndedRequest
-	(*player_grpc.IsEndedReply)(nil),                    // 221: player.IsEndedReply
-	(*player_grpc.GetPositionRequest)(nil),              // 222: player.GetPositionRequest
-	(*player_grpc.GetPositionReply)(nil),                // 223: player.GetPositionReply
-	(*player_grpc.GetLengthRequest)(nil),                // 224: player.GetLengthRequest
-	(*player_grpc.GetLengthReply)(nil),                  // 225: player.GetLengthReply
-	(*player_grpc.SetSpeedRequest)(nil),                 // 226: player.SetSpeedRequest
-	(*player_grpc.SetSpeedReply)(nil),                   // 227: player.SetSpeedReply
-	(*player_grpc.SetPauseRequest)(nil),                 // 228: player.SetPauseRequest
-	(*player_grpc.SetPauseReply)(nil),                   // 229: player.SetPauseReply
-	(*player_grpc.StopRequest)(nil),                     // 230: player.StopRequest
-	(*player_grpc.StopReply)(nil),                       // 231: player.StopReply
-	(*player_grpc.CloseRequest)(nil),                    // 232: player.CloseRequest
-	(*player_grpc.CloseReply)(nil),                      // 233: player.CloseReply
-	(*chatwebhook_grpc.Event)(nil),                      // 234: chatwebhook.Event
+	(*SetBuiltinChatListenerEnabledRequest)(nil),        // 212: streamd.SetBuiltinChatListenerEnabledRequest
+	(*SetBuiltinChatListenerEnabledReply)(nil),          // 213: streamd.SetBuiltinChatListenerEnabledReply
+	(*IsBuiltinChatListenerEnabledRequest)(nil),         // 214: streamd.IsBuiltinChatListenerEnabledRequest
+	(*IsBuiltinChatListenerEnabledReply)(nil),           // 215: streamd.IsBuiltinChatListenerEnabledReply
+	(*player_grpc.OpenRequest)(nil),                     // 216: player.OpenRequest
+	(*player_grpc.OpenReply)(nil),                       // 217: player.OpenReply
+	(*player_grpc.ProcessTitleRequest)(nil),             // 218: player.ProcessTitleRequest
+	(*player_grpc.ProcessTitleReply)(nil),               // 219: player.ProcessTitleReply
+	(*player_grpc.GetLinkRequest)(nil),                  // 220: player.GetLinkRequest
+	(*player_grpc.GetLinkReply)(nil),                    // 221: player.GetLinkReply
+	(*player_grpc.EndChanRequest)(nil),                  // 222: player.EndChanRequest
+	(*player_grpc.EndChanReply)(nil),                    // 223: player.EndChanReply
+	(*player_grpc.IsEndedRequest)(nil),                  // 224: player.IsEndedRequest
+	(*player_grpc.IsEndedReply)(nil),                    // 225: player.IsEndedReply
+	(*player_grpc.GetPositionRequest)(nil),              // 226: player.GetPositionRequest
+	(*player_grpc.GetPositionReply)(nil),                // 227: player.GetPositionReply
+	(*player_grpc.GetLengthRequest)(nil),                // 228: player.GetLengthRequest
+	(*player_grpc.GetLengthReply)(nil),                  // 229: player.GetLengthReply
+	(*player_grpc.SetSpeedRequest)(nil),                 // 230: player.SetSpeedRequest
+	(*player_grpc.SetSpeedReply)(nil),                   // 231: player.SetSpeedReply
+	(*player_grpc.SetPauseRequest)(nil),                 // 232: player.SetPauseRequest
+	(*player_grpc.SetPauseReply)(nil),                   // 233: player.SetPauseReply
+	(*player_grpc.StopRequest)(nil),                     // 234: player.StopRequest
+	(*player_grpc.StopReply)(nil),                       // 235: player.StopReply
+	(*player_grpc.CloseRequest)(nil),                    // 236: player.CloseRequest
+	(*player_grpc.CloseReply)(nil),                      // 237: player.CloseReply
+	(*chatwebhook_grpc.Event)(nil),                      // 238: chatwebhook.Event
 }
 var file_streamd_proto_depIdxs = []int32{
 	0,   // 0: streamd.SetLoggingLevelRequest.loggingLevel:type_name -> streamd.LoggingLevel
@@ -10966,28 +11156,28 @@ var file_streamd_proto_depIdxs = []int32{
 	117, // 37: streamd.UpdateStreamPlayerRequest.config:type_name -> streamd.StreamPlayerConfig
 	117, // 38: streamd.ListStreamPlayersReply.players:type_name -> streamd.StreamPlayerConfig
 	117, // 39: streamd.GetStreamPlayerReply.config:type_name -> streamd.StreamPlayerConfig
-	212, // 40: streamd.StreamPlayerOpenRequest.request:type_name -> player.OpenRequest
-	213, // 41: streamd.StreamPlayerOpenReply.reply:type_name -> player.OpenReply
-	214, // 42: streamd.StreamPlayerProcessTitleRequest.request:type_name -> player.ProcessTitleRequest
-	215, // 43: streamd.StreamPlayerProcessTitleReply.reply:type_name -> player.ProcessTitleReply
-	216, // 44: streamd.StreamPlayerGetLinkRequest.request:type_name -> player.GetLinkRequest
-	217, // 45: streamd.StreamPlayerGetLinkReply.reply:type_name -> player.GetLinkReply
-	218, // 46: streamd.StreamPlayerEndChanRequest.request:type_name -> player.EndChanRequest
-	219, // 47: streamd.StreamPlayerEndChanReply.reply:type_name -> player.EndChanReply
-	220, // 48: streamd.StreamPlayerIsEndedRequest.request:type_name -> player.IsEndedRequest
-	221, // 49: streamd.StreamPlayerIsEndedReply.reply:type_name -> player.IsEndedReply
-	222, // 50: streamd.StreamPlayerGetPositionRequest.request:type_name -> player.GetPositionRequest
-	223, // 51: streamd.StreamPlayerGetPositionReply.reply:type_name -> player.GetPositionReply
-	224, // 52: streamd.StreamPlayerGetLengthRequest.request:type_name -> player.GetLengthRequest
-	225, // 53: streamd.StreamPlayerGetLengthReply.reply:type_name -> player.GetLengthReply
-	226, // 54: streamd.StreamPlayerSetSpeedRequest.request:type_name -> player.SetSpeedRequest
-	227, // 55: streamd.StreamPlayerSetSpeedReply.reply:type_name -> player.SetSpeedReply
-	228, // 56: streamd.StreamPlayerSetPauseRequest.request:type_name -> player.SetPauseRequest
-	229, // 57: streamd.StreamPlayerSetPauseReply.reply:type_name -> player.SetPauseReply
-	230, // 58: streamd.StreamPlayerStopRequest.request:type_name -> player.StopRequest
-	231, // 59: streamd.StreamPlayerStopReply.reply:type_name -> player.StopReply
-	232, // 60: streamd.StreamPlayerCloseRequest.request:type_name -> player.CloseRequest
-	233, // 61: streamd.StreamPlayerCloseReply.reply:type_name -> player.CloseReply
+	216, // 40: streamd.StreamPlayerOpenRequest.request:type_name -> player.OpenRequest
+	217, // 41: streamd.StreamPlayerOpenReply.reply:type_name -> player.OpenReply
+	218, // 42: streamd.StreamPlayerProcessTitleRequest.request:type_name -> player.ProcessTitleRequest
+	219, // 43: streamd.StreamPlayerProcessTitleReply.reply:type_name -> player.ProcessTitleReply
+	220, // 44: streamd.StreamPlayerGetLinkRequest.request:type_name -> player.GetLinkRequest
+	221, // 45: streamd.StreamPlayerGetLinkReply.reply:type_name -> player.GetLinkReply
+	222, // 46: streamd.StreamPlayerEndChanRequest.request:type_name -> player.EndChanRequest
+	223, // 47: streamd.StreamPlayerEndChanReply.reply:type_name -> player.EndChanReply
+	224, // 48: streamd.StreamPlayerIsEndedRequest.request:type_name -> player.IsEndedRequest
+	225, // 49: streamd.StreamPlayerIsEndedReply.reply:type_name -> player.IsEndedReply
+	226, // 50: streamd.StreamPlayerGetPositionRequest.request:type_name -> player.GetPositionRequest
+	227, // 51: streamd.StreamPlayerGetPositionReply.reply:type_name -> player.GetPositionReply
+	228, // 52: streamd.StreamPlayerGetLengthRequest.request:type_name -> player.GetLengthRequest
+	229, // 53: streamd.StreamPlayerGetLengthReply.reply:type_name -> player.GetLengthReply
+	230, // 54: streamd.StreamPlayerSetSpeedRequest.request:type_name -> player.SetSpeedRequest
+	231, // 55: streamd.StreamPlayerSetSpeedReply.reply:type_name -> player.SetSpeedReply
+	232, // 56: streamd.StreamPlayerSetPauseRequest.request:type_name -> player.SetPauseRequest
+	233, // 57: streamd.StreamPlayerSetPauseReply.reply:type_name -> player.SetPauseReply
+	234, // 58: streamd.StreamPlayerStopRequest.request:type_name -> player.StopRequest
+	235, // 59: streamd.StreamPlayerStopReply.reply:type_name -> player.StopReply
+	236, // 60: streamd.StreamPlayerCloseRequest.request:type_name -> player.CloseRequest
+	237, // 61: streamd.StreamPlayerCloseReply.reply:type_name -> player.CloseReply
 	165, // 62: streamd.OBSAction.itemShowHide:type_name -> streamd.OBSActionItemShowHide
 	166, // 63: streamd.OBSAction.windowCaptureSetSource:type_name -> streamd.OBSActionWindowCaptureSetSource
 	164, // 64: streamd.Action.noopRequest:type_name -> streamd.NoopRequest
@@ -11014,8 +11204,8 @@ var file_streamd_proto_depIdxs = []int32{
 	183, // 85: streamd.AddTriggerRuleRequest.rule:type_name -> streamd.TriggerRule
 	183, // 86: streamd.UpdateTriggerRuleRequest.rule:type_name -> streamd.TriggerRule
 	182, // 87: streamd.SubmitEventRequest.event:type_name -> streamd.Event
-	234, // 88: streamd.ChatMessage.content:type_name -> chatwebhook.Event
-	234, // 89: streamd.InjectChatMessageRequest.event:type_name -> chatwebhook.Event
+	238, // 88: streamd.ChatMessage.content:type_name -> chatwebhook.Event
+	238, // 89: streamd.InjectChatMessageRequest.event:type_name -> chatwebhook.Event
 	9,   // 90: streamd.StreamD.Ping:input_type -> streamd.PingRequest
 	11,  // 91: streamd.StreamD.SetLoggingLevel:input_type -> streamd.SetLoggingLevelRequest
 	13,  // 92: streamd.StreamD.GetLoggingLevel:input_type -> streamd.GetLoggingLevelRequest
@@ -11093,93 +11283,97 @@ var file_streamd_proto_depIdxs = []int32{
 	198, // 164: streamd.StreamD.InjectChatMessage:input_type -> streamd.InjectChatMessageRequest
 	200, // 165: streamd.StreamD.RemoveChatMessage:input_type -> streamd.RemoveChatMessageRequest
 	202, // 166: streamd.StreamD.BanUser:input_type -> streamd.BanUserRequest
-	204, // 167: streamd.StreamD.Shoutout:input_type -> streamd.ShoutoutRequest
-	206, // 168: streamd.StreamD.RaidTo:input_type -> streamd.RaidToRequest
-	208, // 169: streamd.StreamD.GetPeerIDs:input_type -> streamd.GetPeerIDsRequest
-	210, // 170: streamd.StreamD.LLMGenerate:input_type -> streamd.LLMGenerateRequest
-	10,  // 171: streamd.StreamD.Ping:output_type -> streamd.PingReply
-	12,  // 172: streamd.StreamD.SetLoggingLevel:output_type -> streamd.SetLoggingLevelReply
-	14,  // 173: streamd.StreamD.GetLoggingLevel:output_type -> streamd.GetLoggingLevelReply
-	16,  // 174: streamd.StreamD.GetConfig:output_type -> streamd.GetConfigReply
-	18,  // 175: streamd.StreamD.SetConfig:output_type -> streamd.SetConfigReply
-	20,  // 176: streamd.StreamD.SaveConfig:output_type -> streamd.SaveConfigReply
-	151, // 177: streamd.StreamD.SubscribeToConfigChanges:output_type -> streamd.ConfigChange
-	22,  // 178: streamd.StreamD.ResetCache:output_type -> streamd.ResetCacheReply
-	24,  // 179: streamd.StreamD.InitCache:output_type -> streamd.InitCacheReply
-	27,  // 180: streamd.StreamD.StartStream:output_type -> streamd.StartStreamReply
-	27,  // 181: streamd.StreamD.StartStreamByProfileName:output_type -> streamd.StartStreamReply
-	29,  // 182: streamd.StreamD.EndStream:output_type -> streamd.EndStreamReply
-	31,  // 183: streamd.StreamD.GetStreamStatus:output_type -> streamd.GetStreamStatusReply
-	35,  // 184: streamd.StreamD.IsBackendEnabled:output_type -> streamd.IsBackendEnabledReply
-	33,  // 185: streamd.StreamD.GetBackendInfo:output_type -> streamd.GetBackendInfoReply
-	153, // 186: streamd.StreamD.SubscribeToStreamsChanges:output_type -> streamd.StreamsChange
-	37,  // 187: streamd.StreamD.Restart:output_type -> streamd.RestartReply
-	39,  // 188: streamd.StreamD.SetTitle:output_type -> streamd.SetTitleReply
-	41,  // 189: streamd.StreamD.SetDescription:output_type -> streamd.SetDescriptionReply
-	43,  // 190: streamd.StreamD.ApplyProfile:output_type -> streamd.ApplyProfileReply
-	45,  // 191: streamd.StreamD.UpdateStream:output_type -> streamd.UpdateStreamReply
-	57,  // 192: streamd.StreamD.GetVariable:output_type -> streamd.GetVariableReply
-	59,  // 193: streamd.StreamD.GetVariableHash:output_type -> streamd.GetVariableHashReply
-	61,  // 194: streamd.StreamD.SetVariable:output_type -> streamd.SetVariableReply
-	63,  // 195: streamd.StreamD.SubscribeToVariable:output_type -> streamd.VariableChange
-	47,  // 196: streamd.StreamD.EXPERIMENTAL_ReinitStreamControllers:output_type -> streamd.EXPERIMENTAL_ReinitStreamControllersReply
-	55,  // 197: streamd.StreamD.SubscribeToOAuthRequests:output_type -> streamd.OAuthRequest
-	65,  // 198: streamd.StreamD.SubmitOAuthCode:output_type -> streamd.SubmitOAuthCodeReply
-	72,  // 199: streamd.StreamD.ListStreamServers:output_type -> streamd.ListStreamServersReply
-	74,  // 200: streamd.StreamD.StartStreamServer:output_type -> streamd.StartStreamServerReply
-	76,  // 201: streamd.StreamD.StopStreamServer:output_type -> streamd.StopStreamServerReply
-	155, // 202: streamd.StreamD.SubscribeToStreamServersChanges:output_type -> streamd.StreamServersChange
-	79,  // 203: streamd.StreamD.ListStreamDestinations:output_type -> streamd.ListStreamDestinationsReply
-	81,  // 204: streamd.StreamD.AddStreamDestination:output_type -> streamd.AddStreamDestinationReply
-	83,  // 205: streamd.StreamD.UpdateStreamDestination:output_type -> streamd.UpdateStreamDestinationReply
-	85,  // 206: streamd.StreamD.RemoveStreamDestination:output_type -> streamd.RemoveStreamDestinationReply
-	157, // 207: streamd.StreamD.SubscribeToStreamDestinationsChanges:output_type -> streamd.StreamDestinationsChange
-	88,  // 208: streamd.StreamD.AddIncomingStream:output_type -> streamd.AddIncomingStreamReply
-	90,  // 209: streamd.StreamD.RemoveIncomingStream:output_type -> streamd.RemoveIncomingStreamReply
-	92,  // 210: streamd.StreamD.ListIncomingStreams:output_type -> streamd.ListIncomingStreamsReply
-	159, // 211: streamd.StreamD.SubscribeToIncomingStreamsChanges:output_type -> streamd.IncomingStreamsChange
-	107, // 212: streamd.StreamD.ListStreamForwards:output_type -> streamd.ListStreamForwardsReply
-	109, // 213: streamd.StreamD.AddStreamForward:output_type -> streamd.AddStreamForwardReply
-	111, // 214: streamd.StreamD.UpdateStreamForward:output_type -> streamd.UpdateStreamForwardReply
-	113, // 215: streamd.StreamD.RemoveStreamForward:output_type -> streamd.RemoveStreamForwardReply
-	161, // 216: streamd.StreamD.SubscribeToStreamForwardsChanges:output_type -> streamd.StreamForwardsChange
-	115, // 217: streamd.StreamD.WaitForStreamPublisher:output_type -> streamd.StreamPublisher
-	119, // 218: streamd.StreamD.AddStreamPlayer:output_type -> streamd.AddStreamPlayerReply
-	121, // 219: streamd.StreamD.RemoveStreamPlayer:output_type -> streamd.RemoveStreamPlayerReply
-	123, // 220: streamd.StreamD.UpdateStreamPlayer:output_type -> streamd.UpdateStreamPlayerReply
-	125, // 221: streamd.StreamD.ListStreamPlayers:output_type -> streamd.ListStreamPlayersReply
-	127, // 222: streamd.StreamD.GetStreamPlayer:output_type -> streamd.GetStreamPlayerReply
-	163, // 223: streamd.StreamD.SubscribeToStreamPlayersChanges:output_type -> streamd.StreamPlayersChange
-	129, // 224: streamd.StreamD.StreamPlayerOpen:output_type -> streamd.StreamPlayerOpenReply
-	131, // 225: streamd.StreamD.StreamPlayerProcessTitle:output_type -> streamd.StreamPlayerProcessTitleReply
-	133, // 226: streamd.StreamD.StreamPlayerGetLink:output_type -> streamd.StreamPlayerGetLinkReply
-	135, // 227: streamd.StreamD.StreamPlayerEndChan:output_type -> streamd.StreamPlayerEndChanReply
-	137, // 228: streamd.StreamD.StreamPlayerIsEnded:output_type -> streamd.StreamPlayerIsEndedReply
-	139, // 229: streamd.StreamD.StreamPlayerGetPosition:output_type -> streamd.StreamPlayerGetPositionReply
-	141, // 230: streamd.StreamD.StreamPlayerGetLength:output_type -> streamd.StreamPlayerGetLengthReply
-	143, // 231: streamd.StreamD.StreamPlayerSetSpeed:output_type -> streamd.StreamPlayerSetSpeedReply
-	145, // 232: streamd.StreamD.StreamPlayerSetPause:output_type -> streamd.StreamPlayerSetPauseReply
-	147, // 233: streamd.StreamD.StreamPlayerStop:output_type -> streamd.StreamPlayerStopReply
-	149, // 234: streamd.StreamD.StreamPlayerClose:output_type -> streamd.StreamPlayerCloseReply
-	170, // 235: streamd.StreamD.AddTimer:output_type -> streamd.AddTimerReply
-	172, // 236: streamd.StreamD.RemoveTimer:output_type -> streamd.RemoveTimerReply
-	175, // 237: streamd.StreamD.ListTimers:output_type -> streamd.ListTimersReply
-	185, // 238: streamd.StreamD.ListTriggerRules:output_type -> streamd.ListTriggerRulesReply
-	187, // 239: streamd.StreamD.AddTriggerRule:output_type -> streamd.AddTriggerRuleReply
-	189, // 240: streamd.StreamD.RemoveTriggerRule:output_type -> streamd.RemoveTriggerRuleReply
-	191, // 241: streamd.StreamD.UpdateTriggerRule:output_type -> streamd.UpdateTriggerRuleReply
-	193, // 242: streamd.StreamD.SubmitEvent:output_type -> streamd.SubmitEventReply
-	195, // 243: streamd.StreamD.SubscribeToChatMessages:output_type -> streamd.ChatMessage
-	197, // 244: streamd.StreamD.SendChatMessage:output_type -> streamd.SendChatMessageReply
-	199, // 245: streamd.StreamD.InjectChatMessage:output_type -> streamd.InjectChatMessageReply
-	201, // 246: streamd.StreamD.RemoveChatMessage:output_type -> streamd.RemoveChatMessageReply
-	203, // 247: streamd.StreamD.BanUser:output_type -> streamd.BanUserReply
-	205, // 248: streamd.StreamD.Shoutout:output_type -> streamd.ShoutoutReply
-	207, // 249: streamd.StreamD.RaidTo:output_type -> streamd.RaidToReply
-	209, // 250: streamd.StreamD.GetPeerIDs:output_type -> streamd.GetPeerIDsReply
-	211, // 251: streamd.StreamD.LLMGenerate:output_type -> streamd.LLMGenerateReply
-	171, // [171:252] is the sub-list for method output_type
-	90,  // [90:171] is the sub-list for method input_type
+	212, // 167: streamd.StreamD.SetBuiltinChatListenerEnabled:input_type -> streamd.SetBuiltinChatListenerEnabledRequest
+	214, // 168: streamd.StreamD.IsBuiltinChatListenerEnabled:input_type -> streamd.IsBuiltinChatListenerEnabledRequest
+	204, // 169: streamd.StreamD.Shoutout:input_type -> streamd.ShoutoutRequest
+	206, // 170: streamd.StreamD.RaidTo:input_type -> streamd.RaidToRequest
+	208, // 171: streamd.StreamD.GetPeerIDs:input_type -> streamd.GetPeerIDsRequest
+	210, // 172: streamd.StreamD.LLMGenerate:input_type -> streamd.LLMGenerateRequest
+	10,  // 173: streamd.StreamD.Ping:output_type -> streamd.PingReply
+	12,  // 174: streamd.StreamD.SetLoggingLevel:output_type -> streamd.SetLoggingLevelReply
+	14,  // 175: streamd.StreamD.GetLoggingLevel:output_type -> streamd.GetLoggingLevelReply
+	16,  // 176: streamd.StreamD.GetConfig:output_type -> streamd.GetConfigReply
+	18,  // 177: streamd.StreamD.SetConfig:output_type -> streamd.SetConfigReply
+	20,  // 178: streamd.StreamD.SaveConfig:output_type -> streamd.SaveConfigReply
+	151, // 179: streamd.StreamD.SubscribeToConfigChanges:output_type -> streamd.ConfigChange
+	22,  // 180: streamd.StreamD.ResetCache:output_type -> streamd.ResetCacheReply
+	24,  // 181: streamd.StreamD.InitCache:output_type -> streamd.InitCacheReply
+	27,  // 182: streamd.StreamD.StartStream:output_type -> streamd.StartStreamReply
+	27,  // 183: streamd.StreamD.StartStreamByProfileName:output_type -> streamd.StartStreamReply
+	29,  // 184: streamd.StreamD.EndStream:output_type -> streamd.EndStreamReply
+	31,  // 185: streamd.StreamD.GetStreamStatus:output_type -> streamd.GetStreamStatusReply
+	35,  // 186: streamd.StreamD.IsBackendEnabled:output_type -> streamd.IsBackendEnabledReply
+	33,  // 187: streamd.StreamD.GetBackendInfo:output_type -> streamd.GetBackendInfoReply
+	153, // 188: streamd.StreamD.SubscribeToStreamsChanges:output_type -> streamd.StreamsChange
+	37,  // 189: streamd.StreamD.Restart:output_type -> streamd.RestartReply
+	39,  // 190: streamd.StreamD.SetTitle:output_type -> streamd.SetTitleReply
+	41,  // 191: streamd.StreamD.SetDescription:output_type -> streamd.SetDescriptionReply
+	43,  // 192: streamd.StreamD.ApplyProfile:output_type -> streamd.ApplyProfileReply
+	45,  // 193: streamd.StreamD.UpdateStream:output_type -> streamd.UpdateStreamReply
+	57,  // 194: streamd.StreamD.GetVariable:output_type -> streamd.GetVariableReply
+	59,  // 195: streamd.StreamD.GetVariableHash:output_type -> streamd.GetVariableHashReply
+	61,  // 196: streamd.StreamD.SetVariable:output_type -> streamd.SetVariableReply
+	63,  // 197: streamd.StreamD.SubscribeToVariable:output_type -> streamd.VariableChange
+	47,  // 198: streamd.StreamD.EXPERIMENTAL_ReinitStreamControllers:output_type -> streamd.EXPERIMENTAL_ReinitStreamControllersReply
+	55,  // 199: streamd.StreamD.SubscribeToOAuthRequests:output_type -> streamd.OAuthRequest
+	65,  // 200: streamd.StreamD.SubmitOAuthCode:output_type -> streamd.SubmitOAuthCodeReply
+	72,  // 201: streamd.StreamD.ListStreamServers:output_type -> streamd.ListStreamServersReply
+	74,  // 202: streamd.StreamD.StartStreamServer:output_type -> streamd.StartStreamServerReply
+	76,  // 203: streamd.StreamD.StopStreamServer:output_type -> streamd.StopStreamServerReply
+	155, // 204: streamd.StreamD.SubscribeToStreamServersChanges:output_type -> streamd.StreamServersChange
+	79,  // 205: streamd.StreamD.ListStreamDestinations:output_type -> streamd.ListStreamDestinationsReply
+	81,  // 206: streamd.StreamD.AddStreamDestination:output_type -> streamd.AddStreamDestinationReply
+	83,  // 207: streamd.StreamD.UpdateStreamDestination:output_type -> streamd.UpdateStreamDestinationReply
+	85,  // 208: streamd.StreamD.RemoveStreamDestination:output_type -> streamd.RemoveStreamDestinationReply
+	157, // 209: streamd.StreamD.SubscribeToStreamDestinationsChanges:output_type -> streamd.StreamDestinationsChange
+	88,  // 210: streamd.StreamD.AddIncomingStream:output_type -> streamd.AddIncomingStreamReply
+	90,  // 211: streamd.StreamD.RemoveIncomingStream:output_type -> streamd.RemoveIncomingStreamReply
+	92,  // 212: streamd.StreamD.ListIncomingStreams:output_type -> streamd.ListIncomingStreamsReply
+	159, // 213: streamd.StreamD.SubscribeToIncomingStreamsChanges:output_type -> streamd.IncomingStreamsChange
+	107, // 214: streamd.StreamD.ListStreamForwards:output_type -> streamd.ListStreamForwardsReply
+	109, // 215: streamd.StreamD.AddStreamForward:output_type -> streamd.AddStreamForwardReply
+	111, // 216: streamd.StreamD.UpdateStreamForward:output_type -> streamd.UpdateStreamForwardReply
+	113, // 217: streamd.StreamD.RemoveStreamForward:output_type -> streamd.RemoveStreamForwardReply
+	161, // 218: streamd.StreamD.SubscribeToStreamForwardsChanges:output_type -> streamd.StreamForwardsChange
+	115, // 219: streamd.StreamD.WaitForStreamPublisher:output_type -> streamd.StreamPublisher
+	119, // 220: streamd.StreamD.AddStreamPlayer:output_type -> streamd.AddStreamPlayerReply
+	121, // 221: streamd.StreamD.RemoveStreamPlayer:output_type -> streamd.RemoveStreamPlayerReply
+	123, // 222: streamd.StreamD.UpdateStreamPlayer:output_type -> streamd.UpdateStreamPlayerReply
+	125, // 223: streamd.StreamD.ListStreamPlayers:output_type -> streamd.ListStreamPlayersReply
+	127, // 224: streamd.StreamD.GetStreamPlayer:output_type -> streamd.GetStreamPlayerReply
+	163, // 225: streamd.StreamD.SubscribeToStreamPlayersChanges:output_type -> streamd.StreamPlayersChange
+	129, // 226: streamd.StreamD.StreamPlayerOpen:output_type -> streamd.StreamPlayerOpenReply
+	131, // 227: streamd.StreamD.StreamPlayerProcessTitle:output_type -> streamd.StreamPlayerProcessTitleReply
+	133, // 228: streamd.StreamD.StreamPlayerGetLink:output_type -> streamd.StreamPlayerGetLinkReply
+	135, // 229: streamd.StreamD.StreamPlayerEndChan:output_type -> streamd.StreamPlayerEndChanReply
+	137, // 230: streamd.StreamD.StreamPlayerIsEnded:output_type -> streamd.StreamPlayerIsEndedReply
+	139, // 231: streamd.StreamD.StreamPlayerGetPosition:output_type -> streamd.StreamPlayerGetPositionReply
+	141, // 232: streamd.StreamD.StreamPlayerGetLength:output_type -> streamd.StreamPlayerGetLengthReply
+	143, // 233: streamd.StreamD.StreamPlayerSetSpeed:output_type -> streamd.StreamPlayerSetSpeedReply
+	145, // 234: streamd.StreamD.StreamPlayerSetPause:output_type -> streamd.StreamPlayerSetPauseReply
+	147, // 235: streamd.StreamD.StreamPlayerStop:output_type -> streamd.StreamPlayerStopReply
+	149, // 236: streamd.StreamD.StreamPlayerClose:output_type -> streamd.StreamPlayerCloseReply
+	170, // 237: streamd.StreamD.AddTimer:output_type -> streamd.AddTimerReply
+	172, // 238: streamd.StreamD.RemoveTimer:output_type -> streamd.RemoveTimerReply
+	175, // 239: streamd.StreamD.ListTimers:output_type -> streamd.ListTimersReply
+	185, // 240: streamd.StreamD.ListTriggerRules:output_type -> streamd.ListTriggerRulesReply
+	187, // 241: streamd.StreamD.AddTriggerRule:output_type -> streamd.AddTriggerRuleReply
+	189, // 242: streamd.StreamD.RemoveTriggerRule:output_type -> streamd.RemoveTriggerRuleReply
+	191, // 243: streamd.StreamD.UpdateTriggerRule:output_type -> streamd.UpdateTriggerRuleReply
+	193, // 244: streamd.StreamD.SubmitEvent:output_type -> streamd.SubmitEventReply
+	195, // 245: streamd.StreamD.SubscribeToChatMessages:output_type -> streamd.ChatMessage
+	197, // 246: streamd.StreamD.SendChatMessage:output_type -> streamd.SendChatMessageReply
+	199, // 247: streamd.StreamD.InjectChatMessage:output_type -> streamd.InjectChatMessageReply
+	201, // 248: streamd.StreamD.RemoveChatMessage:output_type -> streamd.RemoveChatMessageReply
+	203, // 249: streamd.StreamD.BanUser:output_type -> streamd.BanUserReply
+	213, // 250: streamd.StreamD.SetBuiltinChatListenerEnabled:output_type -> streamd.SetBuiltinChatListenerEnabledReply
+	215, // 251: streamd.StreamD.IsBuiltinChatListenerEnabled:output_type -> streamd.IsBuiltinChatListenerEnabledReply
+	205, // 252: streamd.StreamD.Shoutout:output_type -> streamd.ShoutoutReply
+	207, // 253: streamd.StreamD.RaidTo:output_type -> streamd.RaidToReply
+	209, // 254: streamd.StreamD.GetPeerIDs:output_type -> streamd.GetPeerIDsReply
+	211, // 255: streamd.StreamD.LLMGenerate:output_type -> streamd.LLMGenerateReply
+	173, // [173:256] is the sub-list for method output_type
+	90,  // [90:173] is the sub-list for method input_type
 	90,  // [90:90] is the sub-list for extension type_name
 	90,  // [90:90] is the sub-list for extension extendee
 	0,   // [0:90] is the sub-list for field type_name
@@ -11240,7 +11434,7 @@ func file_streamd_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_streamd_proto_rawDesc), len(file_streamd_proto_rawDesc)),
 			NumEnums:      9,
-			NumMessages:   203,
+			NumMessages:   207,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

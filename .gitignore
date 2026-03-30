@@ -13,3 +13,7 @@ termux-packages
 priv
 .cache
 .ccache
+go.work*
+/streamcli
+/streampanel
+/ytchatinjector
