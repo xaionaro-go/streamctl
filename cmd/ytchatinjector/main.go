@@ -26,7 +26,21 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-const reconnectDelay = 5 * time.Second
+const (
+	reconnectDelay  = 5 * time.Second
+	tlsProbeTimeout = 3 * time.Second
+)
+
+// Config holds all runtime configuration for the chat bridge.
+type Config struct {
+	YTProxyAddr   string
+	StreamdAddr   string
+	Video         string
+	Channel       string
+	Hl            string
+	UseRawMessage bool
+	Translator    *Translator
+}
 
 func main() {
 	ytProxyAddr := pflag.String("yt-proxy-addr", "", "youtubeapiproxy gRPC address (host:port)")
@@ -35,6 +49,9 @@ func main() {
 	channel := pflag.String("channel", "", "channel URL, @handle, or channel ID to monitor for live streams")
 	hl := pflag.String("hl", "", "language for YouTube system messages (e.g. en, de, ja)")
 	useRawMessage := pflag.Bool("raw-message", false, "use TextMessageDetails instead of DisplayMessage")
+	translateTo := pflag.String("translate-to", "", "translate messages to this language using LLM (e.g. en, ru, ja)")
+	ollamaURL := pflag.String("ollama-url", "http://192.168.0.171:11434", "Ollama API URL")
+	ollamaModel := pflag.String("ollama-model", ollamaDefaultModel, "Ollama model for translation")
 	var logLevel logger.Level
 	pflag.Var(&logLevel, "log-level", "log level")
 	pflag.Parse()
@@ -52,7 +69,23 @@ func main() {
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 	defer cancel()
 
-	if err := run(ctx, *ytProxyAddr, *streamdAddr, *video, *channel, *hl, *useRawMessage); err != nil {
+	cfg := Config{
+		YTProxyAddr:   *ytProxyAddr,
+		StreamdAddr:   *streamdAddr,
+		Video:         *video,
+		Channel:       *channel,
+		Hl:            *hl,
+		UseRawMessage: *useRawMessage,
+	}
+	if *translateTo != "" {
+		cfg.Translator = &Translator{
+			OllamaURL:  *ollamaURL,
+			Model:      *ollamaModel,
+			TargetLang: *translateTo,
+		}
+	}
+
+	if err := run(ctx, cfg); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return
 		}
@@ -63,60 +96,55 @@ func main() {
 
 func run(
 	ctx context.Context,
-	ytProxyAddr string,
-	streamdAddr string,
-	video string,
-	channel string,
-	hl string,
-	useRawMessage bool,
+	cfg Config,
 ) (_err error) {
 	logger.Tracef(ctx, "run")
 	defer func() { logger.Tracef(ctx, "/run: %v", _err) }()
 
 	switch {
-	case ytProxyAddr == "":
+	case cfg.YTProxyAddr == "":
 		return fmt.Errorf("--yt-proxy-addr is required")
-	case streamdAddr == "":
+	case cfg.StreamdAddr == "":
 		return fmt.Errorf("--streamd-addr is required")
-	case video == "" && channel == "":
+	case cfg.Video == "" && cfg.Channel == "":
 		return fmt.Errorf("either --video or --channel is required")
-	case video != "" && channel != "":
+	case cfg.Video != "" && cfg.Channel != "":
 		return fmt.Errorf("--video and --channel are mutually exclusive")
 	}
 
-	ytConn, err := grpc.NewClient(ytProxyAddr,
+	ytConn, err := grpc.NewClient(cfg.YTProxyAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
-		return fmt.Errorf("connect to youtubeapiproxy at %s: %w", ytProxyAddr, err)
+		return fmt.Errorf("connect to youtubeapiproxy at %s: %w", cfg.YTProxyAddr, err)
 	}
 	defer ytConn.Close()
 
-	sdCreds := detectTransportCredentials(ctx, streamdAddr)
-	sdConn, err := grpc.NewClient(streamdAddr,
+	sdCreds := detectTransportCredentials(ctx, cfg.StreamdAddr)
+	sdConn, err := grpc.NewClient(cfg.StreamdAddr,
 		grpc.WithTransportCredentials(sdCreds),
 	)
 	if err != nil {
-		return fmt.Errorf("connect to streamd at %s: %w", streamdAddr, err)
+		return fmt.Errorf("connect to streamd at %s: %w", cfg.StreamdAddr, err)
 	}
 	defer sdConn.Close()
 
 	chatClient := ytgrpc.NewV3DataLiveChatMessageServiceClient(ytConn)
 	streamdClient := streamd_grpc.NewStreamDClient(sdConn)
 
-	if channel != "" {
-		return monitorChannel(ctx, ytConn, channel, func(ctx context.Context, liveChatID string) error {
-			return bridgeChat(ctx, chatClient, streamdClient, liveChatID, hl, useRawMessage)
+	if cfg.Channel != "" {
+		return monitorChannel(ctx, ytConn, cfg.Channel, func(ctx context.Context, liveChatID string) error {
+			return bridgeChat(ctx, chatClient, streamdClient, liveChatID, cfg)
 		})
 	}
 
-	liveChatID, err := resolveLiveChatID(ctx, ytConn, video)
+	liveChatID, err := resolveLiveChatID(ctx, ytConn, cfg.Video)
 	if err != nil {
-		return fmt.Errorf("resolve live chat ID for %q: %w", video, err)
+		return fmt.Errorf("resolve live chat ID for %q: %w", cfg.Video, err)
 	}
 	logger.Infof(ctx, "resolved live chat ID: %s", liveChatID)
 
-	return bridgeChat(ctx, chatClient, streamdClient, liveChatID, hl, useRawMessage)
+	return bridgeChat(ctx, chatClient, streamdClient, liveChatID, cfg)
 }
 
 // resolveLiveChatID determines the liveChatId from the user-provided target.
@@ -157,8 +185,7 @@ func bridgeChat(
 	chatClient ytgrpc.V3DataLiveChatMessageServiceClient,
 	streamdClient streamd_grpc.StreamDClient,
 	liveChatID string,
-	hl string,
-	useRawMessage bool,
+	cfg Config,
 ) (_err error) {
 	logger.Tracef(ctx, "bridgeChat")
 	defer func() { logger.Tracef(ctx, "/bridgeChat: %v", _err) }()
@@ -170,14 +197,13 @@ func bridgeChat(
 			return ctx.Err()
 		}
 
-		err := recvAndInject(ctx, chatClient, streamdClient, liveChatID, hl, useRawMessage, &pageToken)
+		err := recvAndInject(ctx, chatClient, streamdClient, liveChatID, cfg, &pageToken)
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 
 		switch {
 		case err == nil:
-			// Stream ended cleanly (EOF); reconnect.
 			logger.Debugf(ctx, "stream ended, reconnecting...")
 		default:
 			logger.Warnf(ctx, "stream error, reconnecting in %s: %v", reconnectDelay, err)
@@ -194,8 +220,7 @@ func recvAndInject(
 	chatClient ytgrpc.V3DataLiveChatMessageServiceClient,
 	streamdClient streamd_grpc.StreamDClient,
 	liveChatID string,
-	hl string,
-	useRawMessage bool,
+	cfg Config,
 	pageToken *string,
 ) (_err error) {
 	logger.Tracef(ctx, "recvAndInject")
@@ -203,7 +228,7 @@ func recvAndInject(
 
 	stream, err := chatClient.StreamList(ctx, &ytgrpc.LiveChatMessageListRequest{
 		LiveChatId: liveChatID,
-		Hl:         hl,
+		Hl:         cfg.Hl,
 		Part:       []string{"snippet", "authorDetails"},
 		PageToken:  *pageToken,
 	})
@@ -225,7 +250,19 @@ func recvAndInject(
 		}
 
 		for _, item := range resp.Items {
-			ev := convertMessage(ctx, item, useRawMessage)
+			ev := convertMessage(ctx, item, cfg.UseRawMessage)
+
+			if cfg.Translator != nil && ev.Message != nil && ev.Message.Content != "" {
+				translated, translateErr := cfg.Translator.Translate(ctx, ev.User.Name, ev.Message.Content)
+				switch {
+				case translateErr != nil:
+					logger.Warnf(ctx, "translation failed for %s: %v", item.Id, translateErr)
+				case translated != ev.Message.Content:
+					logger.Debugf(ctx, "translated [%s]: %q -> %q", ev.User.Name, ev.Message.Content, translated)
+					ev.Message.Content = translated
+				}
+			}
+
 			logger.Debugf(ctx, "injecting %s event from %s: %s",
 				ev.Type, ev.User.Name, messagePreview(&ev))
 
@@ -263,8 +300,6 @@ func sleep(ctx context.Context, d time.Duration) bool {
 	}
 }
 
-const tlsProbeTimeout = 3 * time.Second
-
 // detectTransportCredentials probes the server with a TLS handshake.
 // If the handshake succeeds, it returns TLS credentials (with InsecureSkipVerify
 // for self-signed certs). Otherwise it returns insecure plaintext credentials.
@@ -292,4 +327,3 @@ func detectTransportCredentials(
 		InsecureSkipVerify: true,
 	})
 }
-
