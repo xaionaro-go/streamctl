@@ -50,8 +50,9 @@ func main() {
 	hl := pflag.String("hl", "", "language for YouTube system messages (e.g. en, de, ja)")
 	useRawMessage := pflag.Bool("raw-message", false, "use TextMessageDetails instead of DisplayMessage")
 	translateTo := pflag.String("translate-to", "", "translate messages to this language using LLM (e.g. en, ru, ja)")
-	ollamaURL := pflag.String("ollama-url", "http://192.168.0.171:11434", "Ollama API URL")
-	ollamaModel := pflag.String("ollama-model", ollamaDefaultModel, "Ollama model for translation")
+	llmProvider := pflag.String("llm-provider", "http://192.168.0.171:11434", "LLM provider: Ollama URL, or streamdcfg:/path or streampanelcfg:/path")
+	llmModel := pflag.String("llm-model", llmDefaultModel, "LLM model for translation")
+	llmAPIKey := pflag.String("llm-api-key", "", "API key for LLM provider (overrides config)")
 	var logLevel logger.Level
 	pflag.Var(&logLevel, "log-level", "log level")
 	pflag.Parse()
@@ -78,13 +79,18 @@ func main() {
 		UseRawMessage: *useRawMessage,
 	}
 	if *translateTo != "" {
-		resolved, err := resolveLLMConfig(*ollamaURL, *ollamaModel)
+		resolved, err := resolveLLMConfig(ctx, *llmProvider, *llmModel)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
 			os.Exit(1)
 		}
+		apiKey := resolved.APIKey
+		if *llmAPIKey != "" {
+			apiKey = *llmAPIKey
+		}
 		cfg.Translator = &Translator{
-			OllamaURL:  resolved.OllamaURL,
+			APIURL:     resolved.APIURL,
+			APIKey:     apiKey,
 			Model:      resolved.Model,
 			TargetLang: *translateTo,
 		}
