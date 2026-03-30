@@ -19,6 +19,7 @@ const (
 func convertMessage(
 	ctx context.Context,
 	msg *ytgrpc.LiveChatMessage,
+	useRawMessage bool,
 ) streamcontrol.Event {
 	ev := streamcontrol.Event{
 		ID: streamcontrol.EventID(msg.GetId()),
@@ -41,10 +42,21 @@ func convertMessage(
 	ev.Type = eventTypeFromYT(snippet.Type)
 	ev.CreatedAt = parsePublishedAt(ctx, snippet.PublishedAt)
 
-	messageText := snippet.DisplayMessage
-	if messageText == "" {
+	var messageText string
+	switch {
+	case useRawMessage:
 		if td := snippet.GetTextMessageDetails(); td != nil {
 			messageText = td.MessageText
+		}
+		if messageText == "" {
+			messageText = snippet.DisplayMessage
+		}
+	default:
+		messageText = snippet.DisplayMessage
+		if messageText == "" {
+			if td := snippet.GetTextMessageDetails(); td != nil {
+				messageText = td.MessageText
+			}
 		}
 	}
 

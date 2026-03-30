@@ -34,6 +34,7 @@ func main() {
 	video := pflag.String("video", "", "video URL, video ID, or liveChatId")
 	channel := pflag.String("channel", "", "channel URL, @handle, or channel ID to monitor for live streams")
 	hl := pflag.String("hl", "", "language for YouTube system messages (e.g. en, de, ja)")
+	useRawMessage := pflag.Bool("raw-message", false, "use TextMessageDetails instead of DisplayMessage")
 	var logLevel logger.Level
 	pflag.Var(&logLevel, "log-level", "log level")
 	pflag.Parse()
@@ -51,7 +52,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 	defer cancel()
 
-	if err := run(ctx, *ytProxyAddr, *streamdAddr, *video, *channel, *hl); err != nil {
+	if err := run(ctx, *ytProxyAddr, *streamdAddr, *video, *channel, *hl, *useRawMessage); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return
 		}
@@ -67,6 +68,7 @@ func run(
 	video string,
 	channel string,
 	hl string,
+	useRawMessage bool,
 ) (_err error) {
 	logger.Tracef(ctx, "run")
 	defer func() { logger.Tracef(ctx, "/run: %v", _err) }()
@@ -104,7 +106,7 @@ func run(
 
 	if channel != "" {
 		return monitorChannel(ctx, ytConn, channel, func(ctx context.Context, liveChatID string) error {
-			return bridgeChat(ctx, chatClient, streamdClient, liveChatID, hl)
+			return bridgeChat(ctx, chatClient, streamdClient, liveChatID, hl, useRawMessage)
 		})
 	}
 
@@ -114,7 +116,7 @@ func run(
 	}
 	logger.Infof(ctx, "resolved live chat ID: %s", liveChatID)
 
-	return bridgeChat(ctx, chatClient, streamdClient, liveChatID, hl)
+	return bridgeChat(ctx, chatClient, streamdClient, liveChatID, hl, useRawMessage)
 }
 
 // resolveLiveChatID determines the liveChatId from the user-provided target.
@@ -156,6 +158,7 @@ func bridgeChat(
 	streamdClient streamd_grpc.StreamDClient,
 	liveChatID string,
 	hl string,
+	useRawMessage bool,
 ) (_err error) {
 	logger.Tracef(ctx, "bridgeChat")
 	defer func() { logger.Tracef(ctx, "/bridgeChat: %v", _err) }()
@@ -167,7 +170,7 @@ func bridgeChat(
 			return ctx.Err()
 		}
 
-		err := recvAndInject(ctx, chatClient, streamdClient, liveChatID, hl, &pageToken)
+		err := recvAndInject(ctx, chatClient, streamdClient, liveChatID, hl, useRawMessage, &pageToken)
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -192,6 +195,7 @@ func recvAndInject(
 	streamdClient streamd_grpc.StreamDClient,
 	liveChatID string,
 	hl string,
+	useRawMessage bool,
 	pageToken *string,
 ) (_err error) {
 	logger.Tracef(ctx, "recvAndInject")
@@ -221,7 +225,7 @@ func recvAndInject(
 		}
 
 		for _, item := range resp.Items {
-			ev := convertMessage(ctx, item)
+			ev := convertMessage(ctx, item, useRawMessage)
 			logger.Debugf(ctx, "injecting %s event from %s: %s",
 				ev.Type, ev.User.Name, messagePreview(&ev))
 
