@@ -10,6 +10,7 @@ import (
 
 func convertLiveChatMessage(
 	msg *ytgrpc.LiveChatMessage,
+	useRawMessage bool,
 ) (*chatwebhook_grpc.Event, error) {
 	snippet := msg.GetSnippet()
 	if snippet == nil {
@@ -22,7 +23,24 @@ func convertLiveChatMessage(
 	}
 
 	eventType := convertSnippetType(snippet.GetType())
-	displayMessage := snippet.GetDisplayMessage()
+
+	var messageText string
+	switch {
+	case useRawMessage:
+		if td := snippet.GetTextMessageDetails(); td != nil {
+			messageText = td.GetMessageText()
+		}
+		if messageText == "" {
+			messageText = snippet.GetDisplayMessage()
+		}
+	default:
+		messageText = snippet.GetDisplayMessage()
+		if messageText == "" {
+			if td := snippet.GetTextMessageDetails(); td != nil {
+				messageText = td.GetMessageText()
+			}
+		}
+	}
 
 	ev := &chatwebhook_grpc.Event{
 		Id:                msg.GetId(),
@@ -30,7 +48,7 @@ func convertLiveChatMessage(
 		EventType:         eventType,
 		User:              convertAuthor(msg.GetAuthorDetails()),
 		Message: &chatwebhook_grpc.Message{
-			Content:    displayMessage,
+			Content:    messageText,
 			FormatType: chatwebhook_grpc.TextFormatType_TEXT_FORMAT_TYPE_PLAIN,
 		},
 	}

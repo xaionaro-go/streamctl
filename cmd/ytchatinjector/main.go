@@ -33,6 +33,7 @@ func main() {
 	video := pflag.String("video", "", "video URL, video ID, or liveChatId")
 	channel := pflag.String("channel", "", "channel URL, @handle, or channel ID to monitor for live streams")
 	hl := pflag.String("hl", "", "language for YouTube system messages (e.g. en, de, ja)")
+	useRawMessage := pflag.Bool("raw-message", false, "use TextMessageDetails instead of DisplayMessage")
 	var logLevel logger.Level
 	pflag.Var(&logLevel, "log-level", "log level")
 	pflag.Parse()
@@ -51,7 +52,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 	defer cancel()
 
-	if err := run(ctx, *ytProxyAddr, *streamdAddr, *video, *channel, *hl); err != nil {
+	if err := run(ctx, *ytProxyAddr, *streamdAddr, *video, *channel, *hl, *useRawMessage); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return
 		}
@@ -67,6 +68,7 @@ func run(
 	video string,
 	channel string,
 	hl string,
+	useRawMessage bool,
 ) (_err error) {
 	logger.Tracef(ctx, "run")
 	defer func() { logger.Tracef(ctx, "/run: %v", _err) }()
@@ -104,7 +106,7 @@ func run(
 
 	if channel != "" {
 		return monitorChannel(ctx, ytConn, channel, func(ctx context.Context, liveChatID string) error {
-			return bridgeLoop(ctx, ytClient, sdClient, liveChatID, hl)
+			return bridgeLoop(ctx, ytClient, sdClient, liveChatID, hl, useRawMessage)
 		})
 	}
 
@@ -114,7 +116,7 @@ func run(
 	}
 	logger.Infof(ctx, "resolved live chat ID: %s", liveChatID)
 
-	return bridgeLoop(ctx, ytClient, sdClient, liveChatID, hl)
+	return bridgeLoop(ctx, ytClient, sdClient, liveChatID, hl, useRawMessage)
 }
 
 // resolveLiveChatID determines the liveChatId from the user-provided target.
@@ -156,6 +158,7 @@ func bridgeLoop(
 	sdClient streamd_grpc.StreamDClient,
 	liveChatID string,
 	hl string,
+	useRawMessage bool,
 ) (_err error) {
 	logger.Tracef(ctx, "bridgeLoop")
 	defer func() { logger.Tracef(ctx, "/bridgeLoop: %v", _err) }()
@@ -163,7 +166,7 @@ func bridgeLoop(
 	var nextPageToken string
 
 	for {
-		err := streamOnce(ctx, ytClient, sdClient, liveChatID, hl, &nextPageToken)
+		err := streamOnce(ctx, ytClient, sdClient, liveChatID, hl, useRawMessage, &nextPageToken)
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -187,6 +190,7 @@ func streamOnce(
 	sdClient streamd_grpc.StreamDClient,
 	liveChatID string,
 	hl string,
+	useRawMessage bool,
 	nextPageToken *string,
 ) (_err error) {
 	logger.Tracef(ctx, "streamOnce")
@@ -215,7 +219,7 @@ func streamOnce(
 		}
 
 		for _, msg := range resp.GetItems() {
-			if err := injectMessage(ctx, sdClient, msg); err != nil {
+			if err := injectMessage(ctx, sdClient, msg, useRawMessage); err != nil {
 				logger.Errorf(ctx, "unable to inject message %s: %v", msg.GetId(), err)
 			}
 		}
@@ -226,8 +230,9 @@ func injectMessage(
 	ctx context.Context,
 	sdClient streamd_grpc.StreamDClient,
 	msg *ytgrpc.LiveChatMessage,
+	useRawMessage bool,
 ) error {
-	ev, err := convertLiveChatMessage(msg)
+	ev, err := convertLiveChatMessage(msg, useRawMessage)
 	if err != nil {
 		return fmt.Errorf("unable to convert message: %w", err)
 	}
