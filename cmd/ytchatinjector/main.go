@@ -58,7 +58,7 @@ func main() {
 	pflag.Parse()
 
 	if logLevel == logger.LevelUndefined {
-		logLevel = logger.LevelWarning
+		logLevel = logger.LevelDebug
 	}
 	observability.LogLevelFilter.SetLevel(logLevel)
 
