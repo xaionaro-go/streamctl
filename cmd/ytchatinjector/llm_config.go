@@ -1,67 +1,84 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
 
+	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 	"github.com/xaionaro-go/xpath"
 )
 
 const (
-	streamdConfigPrefix      = "streamdcfg:"
-	streampanelConfigPrefix  = "streampanelcfg:"
+	streamdConfigPrefix     = "streamdcfg:"
+	streampanelConfigPrefix = "streampanelcfg:"
 )
 
-// ResolvedLLMConfig holds the resolved Ollama URL and model name.
+// ResolvedLLMConfig holds the resolved LLM API URL, key, and model.
 type ResolvedLLMConfig struct {
-	OllamaURL string
-	Model     string
+	APIURL string
+	APIKey string
+	Model  string
 }
 
-// resolveLLMConfig resolves the --ollama-url value.
-// If it starts with "streamdcfg:", it reads the LLM config from the
-// specified streampanel YAML config file. Otherwise it's used as a
-// direct Ollama URL.
+// resolveLLMConfig resolves the --llm-provider value.
+// If it starts with "streamdcfg:" or "streampanelcfg:", it reads the
+// LLM config from the specified YAML config file. Otherwise it's
+// used as a direct LLM API URL (Ollama or OpenAI-compatible).
 func resolveLLMConfig(
-	ollamaURL string,
-	ollamaModel string,
-) (ResolvedLLMConfig, error) {
+	ctx context.Context,
+	llmProvider string,
+	llmModel string,
+) (_ret ResolvedLLMConfig, _err error) {
+	logger.Tracef(ctx, "resolveLLMConfig")
+	defer func() { logger.Tracef(ctx, "/resolveLLMConfig: %v", _err) }()
+
 	var cfgPath string
 	switch {
-	case strings.HasPrefix(ollamaURL, streamdConfigPrefix):
-		cfgPath = strings.TrimPrefix(ollamaURL, streamdConfigPrefix)
-	case strings.HasPrefix(ollamaURL, streampanelConfigPrefix):
-		cfgPath = strings.TrimPrefix(ollamaURL, streampanelConfigPrefix)
+	case strings.HasPrefix(llmProvider, streamdConfigPrefix):
+		cfgPath = strings.TrimPrefix(llmProvider, streamdConfigPrefix)
+	case strings.HasPrefix(llmProvider, streampanelConfigPrefix):
+		cfgPath = strings.TrimPrefix(llmProvider, streampanelConfigPrefix)
 	default:
+		logger.Debugf(ctx, "using direct LLM URL: %s, model: %s", llmProvider, llmModel)
 		return ResolvedLLMConfig{
-			OllamaURL: ollamaURL,
-			Model:     ollamaModel,
+			APIURL: llmProvider,
+			Model:     llmModel,
 		}, nil
 	}
-	endpoint, err := readLLMEndpointFromConfig(cfgPath)
+
+	logger.Debugf(ctx, "reading LLM config from %q", cfgPath)
+
+	endpoint, err := readLLMEndpointFromConfig(ctx, cfgPath)
 	if err != nil {
 		return ResolvedLLMConfig{}, fmt.Errorf("read LLM config from %q: %w", cfgPath, err)
 	}
 
 	resolved := ResolvedLLMConfig{
-		OllamaURL: endpoint.APIURL,
-		Model:     endpoint.ModelName,
+		APIURL: endpoint.APIURL,
+		APIKey: endpoint.APIKey,
+		Model:  endpoint.ModelName,
 	}
 
 	// CLI flag overrides config value.
-	if ollamaModel != ollamaDefaultModel && ollamaModel != "" {
-		resolved.Model = ollamaModel
+	if llmModel != llmDefaultModel && llmModel != "" {
+		resolved.Model = llmModel
 	}
 
+	logger.Debugf(ctx, "resolved LLM config: url=%s, model=%s", resolved.APIURL, resolved.Model)
 	return resolved, nil
 }
 
 func readLLMEndpointFromConfig(
+	ctx context.Context,
 	cfgPath string,
-) (*config.LLMEndpoint, error) {
+) (_ *config.LLMEndpoint, _err error) {
+	logger.Tracef(ctx, "readLLMEndpointFromConfig")
+	defer func() { logger.Tracef(ctx, "/readLLMEndpointFromConfig: %v", _err) }()
+
 	expandedPath, err := xpath.Expand(cfgPath)
 	if err != nil {
 		return nil, fmt.Errorf("expand path %q: %w", cfgPath, err)
@@ -77,11 +94,24 @@ func readLLMEndpointFromConfig(
 		return nil, fmt.Errorf("parse %q: %w", expandedPath, err)
 	}
 
-	for _, endpoint := range cfg.LLM.Endpoints {
-		if endpoint != nil && endpoint.APIURL != "" {
-			return endpoint, nil
+	for name, endpoint := range cfg.LLM.Endpoints {
+		if endpoint == nil {
+			continue
 		}
+
+		// Default API URL for known providers.
+		if endpoint.APIURL == "" && endpoint.Provider == config.LLMProviderChatGPT {
+			endpoint.APIURL = "https://api.openai.com"
+		}
+
+		if endpoint.APIURL == "" {
+			continue
+		}
+
+		logger.Debugf(ctx, "using LLM endpoint %q: provider=%s, url=%s, model=%s",
+			name, endpoint.Provider, endpoint.APIURL, endpoint.ModelName)
+		return endpoint, nil
 	}
 
-	return nil, fmt.Errorf("no LLM endpoint with api_url found in %q", expandedPath)
+	return nil, fmt.Errorf("no usable LLM endpoint found in %q", expandedPath)
 }
