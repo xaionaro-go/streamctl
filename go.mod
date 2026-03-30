@@ -1,6 +1,6 @@
 module github.com/xaionaro-go/streamctl
 
-go 1.25.1
+go 1.25.5
 
 // The original go-yaml is very slow, using the improved version instead
 replace github.com/goccy/go-yaml v1.11.3 => github.com/yoelsusanto/go-yaml v0.0.0-20240324162521-2018c1ab915b
@@ -23,7 +23,7 @@ replace github.com/wlynxg/anet => github.com/BieHDC/anet v0.0.6-0.20241226223613
 
 replace github.com/nicklaw5/helix/v2 v2.30.1-0.20240715193454-0151ccccf980 => github.com/xaionaro-go/helix/v2 v2.0.0-20250309182928-f54c9d4c8a29
 
-replace github.com/asticode/go-astiav v0.36.0 => github.com/xaionaro-go/astiav v0.0.0-20251114192847-048826e6dc3a
+replace github.com/asticode/go-astiav v0.36.0 => github.com/xaionaro-go/astiav v0.0.0-20260301205541-c20ea06c4df3
 
 replace github.com/bluenviron/mediacommon/v2 v2.0.1-0.20250324151931-b8ce69d15d3d => github.com/xaionaro-go/mediacommon/v2 v2.0.0-20250420012906-03d6d69ac3b7
 
@@ -33,7 +33,7 @@ replace github.com/scorfly/gokick => github.com/xaionaro-go/gokick v0.0.0-202511
 
 replace github.com/Danny-Dasilva/CycleTLS => github.com/xaionaro-go/CycleTLS v0.0.0-20250923213111-aed0022ae7b5
 
-replace github.com/dexterlb/mpvipc => github.com/xaionaro-go/mpvipc v0.0.0-20251019230357-e0f534e5dde4
+replace github.com/dexterlb/mpvipc => github.com/xaionaro-go/mpvipc v0.0.0-20260215165911-70fd13382f02
 
 replace github.com/RomainMichau/cloudscraper_go => github.com/xaionaro-go/cloudscraper v0.0.0-20251019213127-d3687042cb55
 
@@ -241,7 +241,7 @@ require (
 	github.com/xaionaro-go/avcommon v0.0.0-20250823173020-6a2bb1e1f59d // indirect
 	github.com/xaionaro-go/avmediacodec v0.0.0-20250505012527-c819676502d8 // indirect
 	github.com/xaionaro-go/gorex v0.0.0-20241010205749-bcd59d639c4d // indirect
-	github.com/xaionaro-go/libsrt v0.0.0-20250505013920-61d894a3b7e9 // indirect
+	github.com/xaionaro-go/libsrt v0.0.0-20251231191024-483a9dd27df8 // indirect
 	github.com/xaionaro-go/ndk v0.0.0-20250420195304-361bb98583bf // indirect
 	github.com/xaionaro-go/proxy v0.0.0-20250525144747-579f5a891c15 // indirect
 	github.com/xaionaro-go/sockopt v0.0.0-20250823181757-5c02c9cd7b51 // indirect
@@ -320,8 +320,8 @@ require (
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
-	github.com/xaionaro-go/audio v0.0.0-20250426140416-6a9b3f1c8737
-	github.com/xaionaro-go/avpipeline v0.0.0-20251127193237-cf71d0de9957
+	github.com/xaionaro-go/audio v0.0.0-20260202195702-429dcb87c05c
+	github.com/xaionaro-go/avpipeline v0.0.0-20260308191537-b01cb7c551bf
 	github.com/xaionaro-go/buildvars v0.0.0-20250111161425-ed39f98139d0
 	github.com/xaionaro-go/datacounter v1.0.4
 	github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42
@@ -334,8 +334,8 @@ require (
 	github.com/xaionaro-go/object v0.0.0-20241026212449-753ce10ec94c
 	github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20241018162120-5faf4e7a684a
 	github.com/xaionaro-go/observability v0.0.0-20251102143534-3aeb2a25e57d
-	github.com/xaionaro-go/player v0.0.0-20251127204930-bb08c95234d2
-	github.com/xaionaro-go/recoder v0.0.0-20251127191808-ca52daa76971
+	github.com/xaionaro-go/player v0.0.0-20260202200119-7935ded39620
+	github.com/xaionaro-go/recoder v0.0.0-20260308185441-242f079aa5da
 	github.com/xaionaro-go/secret v0.0.0-20250111141743-ced12e1082c2
 	github.com/xaionaro-go/serializable v0.0.0-20250412140540-5ac572306599
 	github.com/xaionaro-go/timeapiio v0.0.0-20240915203246-b907cf699af3

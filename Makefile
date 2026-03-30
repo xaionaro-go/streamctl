@@ -256,6 +256,12 @@ streamcli-linux-amd64: builddir
 streamcli-linux-arm64: builddir
 	CGO_ENABLED=0 CGO_LDFLAGS="-static" GOOS=linux GOARCH=arm64 go build -o build/streamcli-linux-arm64 ./cmd/streamcli
 
+ytchatinjector-linux-amd64: builddir
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o build/ytchatinjector-linux-amd64 ./cmd/ytchatinjector
+
+ytchatinjector-linux-arm64: builddir
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o build/ytchatinjector-linux-arm64 ./cmd/ytchatinjector
+
 player-windows: windows-builddir windows-deps
 	PKG_CONFIG_PATH=$(WINDOWS_PKG_CONFIG_PATH) CGO_ENABLED=1 CGO_LDFLAGS="-static" CGO_CFLAGS="$(WINDOWS_CGO_FLAGS)" CC=x86_64-w64-mingw32-gcc GOOS=windows go build $(GOBUILD_FLAGS) -ldflags "$(LINKER_FLAGS_WINDOWS)" -o build/streampanel-windows-amd64/player.exe ./pkg/player/cmd/player/
 

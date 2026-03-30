@@ -2010,6 +2010,37 @@ func (grpc *GRPCServer) BanUser(
 	return &streamd_grpc.BanUserReply{}, nil
 }
 
+func (grpc *GRPCServer) SetBuiltinChatListenerEnabled(
+	ctx context.Context,
+	req *streamd_grpc.SetBuiltinChatListenerEnabledRequest,
+) (*streamd_grpc.SetBuiltinChatListenerEnabledReply, error) {
+	err := grpc.StreamD.SetBuiltinChatListenerEnabled(
+		ctx,
+		streamcontrol.PlatformName(req.GetPlatID()),
+		req.GetEnabled(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.SetBuiltinChatListenerEnabledReply{}, nil
+}
+
+func (grpc *GRPCServer) IsBuiltinChatListenerEnabled(
+	ctx context.Context,
+	req *streamd_grpc.IsBuiltinChatListenerEnabledRequest,
+) (*streamd_grpc.IsBuiltinChatListenerEnabledReply, error) {
+	enabled, err := grpc.StreamD.IsBuiltinChatListenerEnabled(
+		ctx,
+		streamcontrol.PlatformName(req.GetPlatID()),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.IsBuiltinChatListenerEnabledReply{
+		Enabled: enabled,
+	}, nil
+}
+
 func (grpc *GRPCServer) Shoutout(
 	ctx context.Context,
 	req *streamd_grpc.ShoutoutRequest,

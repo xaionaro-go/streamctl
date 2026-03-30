@@ -49,6 +49,10 @@ func (d *StreamD) startListeningForChatMessages(
 				if !ok {
 					return
 				}
+				if d.isBuiltinChatListenerDisabled(platName) {
+					logger.Tracef(ctx, "built-in chat listener for '%s' is disabled, dropping message", platName)
+					continue
+				}
 				func() {
 					msg := api.ChatMessage{
 						Event:    ev,
@@ -298,4 +302,36 @@ func (d *StreamD) SendChatMessage(
 	}
 
 	return nil
+}
+
+func (d *StreamD) isBuiltinChatListenerDisabled(
+	platID streamcontrol.PlatformName,
+) bool {
+	d.builtinChatListenerDisabledLocker.Lock()
+	defer d.builtinChatListenerDisabledLocker.Unlock()
+	return d.builtinChatListenerDisabled[platID]
+}
+
+func (d *StreamD) SetBuiltinChatListenerEnabled(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	enabled bool,
+) error {
+	logger.Debugf(ctx, "SetBuiltinChatListenerEnabled(ctx, '%s', %v)", platID, enabled)
+
+	d.builtinChatListenerDisabledLocker.Lock()
+	defer d.builtinChatListenerDisabledLocker.Unlock()
+	d.builtinChatListenerDisabled[platID] = !enabled
+	return nil
+}
+
+func (d *StreamD) IsBuiltinChatListenerEnabled(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+) (bool, error) {
+	logger.Debugf(ctx, "IsBuiltinChatListenerEnabled(ctx, '%s')", platID)
+
+	d.builtinChatListenerDisabledLocker.Lock()
+	defer d.builtinChatListenerDisabledLocker.Unlock()
+	return !d.builtinChatListenerDisabled[platID], nil
 }
