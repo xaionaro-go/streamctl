@@ -345,6 +345,15 @@ type StreamD interface {
 		reason string,
 		deadline time.Time,
 	) error
+	SetBuiltinChatListenerEnabled(
+		ctx context.Context,
+		platID streamcontrol.PlatformID,
+		enabled bool,
+	) error
+	IsBuiltinChatListenerEnabled(
+		ctx context.Context,
+		platID streamcontrol.PlatformID,
+	) (bool, error)
 	Shoutout(
 		ctx context.Context,
 		platID streamcontrol.PlatformID,

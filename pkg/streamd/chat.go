@@ -64,6 +64,10 @@ func (d *StreamD) processChatMessages(
 				logger.Debugf(ctx, "processChatMessages(ctx, '%s', '%s'): the channel is closed", platID, accountID)
 				return
 			}
+			if d.isBuiltinChatListenerDisabled(platID) {
+				logger.Tracef(ctx, "built-in chat listener for '%s' is disabled, dropping message", platID)
+				continue
+			}
 			func() {
 				msg := api.ChatMessage{
 					Event:    ev,
@@ -279,6 +283,36 @@ func (d *StreamD) BanUser(
 	}
 
 	return nil
+}
+
+func (d *StreamD) isBuiltinChatListenerDisabled(
+	platID streamcontrol.PlatformID,
+) bool {
+	d.builtinChatListenerDisabledLocker.Lock()
+	defer d.builtinChatListenerDisabledLocker.Unlock()
+	return d.builtinChatListenerDisabled[platID]
+}
+
+func (d *StreamD) SetBuiltinChatListenerEnabled(
+	ctx context.Context,
+	platID streamcontrol.PlatformID,
+	enabled bool,
+) error {
+	logger.Debugf(ctx, "SetBuiltinChatListenerEnabled(ctx, '%s', %v)", platID, enabled)
+	d.builtinChatListenerDisabledLocker.Lock()
+	defer d.builtinChatListenerDisabledLocker.Unlock()
+	d.builtinChatListenerDisabled[platID] = !enabled
+	return nil
+}
+
+func (d *StreamD) IsBuiltinChatListenerEnabled(
+	ctx context.Context,
+	platID streamcontrol.PlatformID,
+) (bool, error) {
+	logger.Debugf(ctx, "IsBuiltinChatListenerEnabled(ctx, '%s')", platID)
+	d.builtinChatListenerDisabledLocker.Lock()
+	defer d.builtinChatListenerDisabledLocker.Unlock()
+	return !d.builtinChatListenerDisabled[platID], nil
 }
 
 func (d *StreamD) SubscribeToChatMessages(

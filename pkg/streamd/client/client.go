@@ -2878,6 +2878,56 @@ func (c *Client) SendChatMessage(
 	return nil
 }
 
+func (c *Client) SetBuiltinChatListenerEnabled(
+	ctx context.Context,
+	platID streamcontrol.PlatformID,
+	enabled bool,
+) error {
+	_, err := withStreamDClient(ctx, c, func(
+		ctx context.Context,
+		client streamd_grpc.StreamDClient,
+		conn io.Closer,
+	) (*streamd_grpc.SetBuiltinChatListenerEnabledReply, error) {
+		return callWrapper(
+			ctx,
+			c,
+			client.SetBuiltinChatListenerEnabled,
+			&streamd_grpc.SetBuiltinChatListenerEnabledRequest{
+				PlatID:  string(platID),
+				Enabled: enabled,
+			},
+		)
+	})
+	if err != nil {
+		return fmt.Errorf("unable to query: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) IsBuiltinChatListenerEnabled(
+	ctx context.Context,
+	platID streamcontrol.PlatformID,
+) (bool, error) {
+	reply, err := withStreamDClient(ctx, c, func(
+		ctx context.Context,
+		client streamd_grpc.StreamDClient,
+		conn io.Closer,
+	) (*streamd_grpc.IsBuiltinChatListenerEnabledReply, error) {
+		return callWrapper(
+			ctx,
+			c,
+			client.IsBuiltinChatListenerEnabled,
+			&streamd_grpc.IsBuiltinChatListenerEnabledRequest{
+				PlatID: string(platID),
+			},
+		)
+	})
+	if err != nil {
+		return false, fmt.Errorf("unable to query: %w", err)
+	}
+	return reply.GetEnabled(), nil
+}
+
 func (c *Client) Shoutout(
 	ctx context.Context,
 	platID streamcontrol.PlatformID,

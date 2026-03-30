@@ -155,6 +155,25 @@ var (
 		Run:   chatPurge,
 	}
 
+	ChatDisableBuiltin = &cobra.Command{
+		Use:   "disable-builtin",
+		Short: "Disable built-in chat listener for a platform",
+		Args:  cobra.ExactArgs(0),
+		Run:   chatDisableBuiltin,
+	}
+	ChatEnableBuiltin = &cobra.Command{
+		Use:   "enable-builtin",
+		Short: "Enable built-in chat listener for a platform",
+		Args:  cobra.ExactArgs(0),
+		Run:   chatEnableBuiltin,
+	}
+	ChatBuiltinStatus = &cobra.Command{
+		Use:   "builtin-status",
+		Short: "Show built-in chat listener status for a platform",
+		Args:  cobra.ExactArgs(0),
+		Run:   chatBuiltinStatus,
+	}
+
 	LoggerLevel = logger.LevelWarning
 )
 
@@ -183,8 +202,17 @@ func init() {
 	Root.AddCommand(Chat)
 	Chat.AddCommand(ChatListen)
 	Chat.AddCommand(ChatPurge)
+	Chat.AddCommand(ChatDisableBuiltin)
+	Chat.AddCommand(ChatEnableBuiltin)
+	Chat.AddCommand(ChatBuiltinStatus)
 	ChatPurge.Flags().String("platform", "", "filter by platform ID")
 	ChatPurge.Flags().String("stream-id", "", "filter by stream ID")
+	ChatDisableBuiltin.PersistentFlags().String("platform", "", "platform ID")
+	_ = ChatDisableBuiltin.MarkPersistentFlagRequired("platform")
+	ChatEnableBuiltin.PersistentFlags().String("platform", "", "platform ID")
+	_ = ChatEnableBuiltin.MarkPersistentFlagRequired("platform")
+	ChatBuiltinStatus.PersistentFlags().String("platform", "", "platform ID")
+	_ = ChatBuiltinStatus.MarkPersistentFlagRequired("platform")
 
 	Root.PersistentFlags().Var(&LoggerLevel, "log-level", "")
 	Root.PersistentFlags().String("remote-addr", "localhost:3594", "the path to the config file")
@@ -454,6 +482,54 @@ func chatPurge(cmd *cobra.Command, args []string) {
 	count, err := streamD.PurgeChatMessages(ctx, platID, streamID)
 	assertNoError(ctx, err)
 	fmt.Printf("purged %d messages\n", count)
+}
+
+func chatDisableBuiltin(cmd *cobra.Command, args []string) {
+	ctx := cmd.Context()
+
+	remoteAddr, err := cmd.Flags().GetString("remote-addr")
+	assertNoError(ctx, err)
+	platform, err := cmd.Flags().GetString("platform")
+	assertNoError(ctx, err)
+
+	streamD, err := client.New(ctx, remoteAddr)
+	assertNoError(ctx, err)
+
+	err = streamD.SetBuiltinChatListenerEnabled(ctx, streamcontrol.PlatformID(platform), false)
+	assertNoError(ctx, err)
+	fmt.Printf("built-in chat listener for '%s' disabled\n", platform)
+}
+
+func chatEnableBuiltin(cmd *cobra.Command, args []string) {
+	ctx := cmd.Context()
+
+	remoteAddr, err := cmd.Flags().GetString("remote-addr")
+	assertNoError(ctx, err)
+	platform, err := cmd.Flags().GetString("platform")
+	assertNoError(ctx, err)
+
+	streamD, err := client.New(ctx, remoteAddr)
+	assertNoError(ctx, err)
+
+	err = streamD.SetBuiltinChatListenerEnabled(ctx, streamcontrol.PlatformID(platform), true)
+	assertNoError(ctx, err)
+	fmt.Printf("built-in chat listener for '%s' enabled\n", platform)
+}
+
+func chatBuiltinStatus(cmd *cobra.Command, args []string) {
+	ctx := cmd.Context()
+
+	remoteAddr, err := cmd.Flags().GetString("remote-addr")
+	assertNoError(ctx, err)
+	platform, err := cmd.Flags().GetString("platform")
+	assertNoError(ctx, err)
+
+	streamD, err := client.New(ctx, remoteAddr)
+	assertNoError(ctx, err)
+
+	enabled, err := streamD.IsBuiltinChatListenerEnabled(ctx, streamcontrol.PlatformID(platform))
+	assertNoError(ctx, err)
+	fmt.Printf("built-in chat listener for '%s': enabled=%v\n", platform, enabled)
 }
 
 func platformEventsInject(cmd *cobra.Command, args []string) {

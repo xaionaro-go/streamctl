@@ -114,6 +114,9 @@ type StreamD struct {
 
 	lastShoutoutAtLocker sync.Mutex
 	lastShoutoutAt       map[config.ChatUserID]time.Time
+
+	builtinChatListenerDisabledLocker sync.Mutex
+	builtinChatListenerDisabled       map[streamcontrol.PlatformID]bool
 }
 
 type imageHash uint64
@@ -152,8 +155,9 @@ func New(
 		},
 		Timers:         map[api.TimerID]*Timer{},
 		ReadyChan:      make(chan struct{}),
-		lastShoutoutAt: map[config.ChatUserID]time.Time{},
-		AccountMap:     make(Accounts),
+		lastShoutoutAt:              map[config.ChatUserID]time.Time{},
+		builtinChatListenerDisabled: map[streamcontrol.PlatformID]bool{},
+		AccountMap:                  make(Accounts),
 	}
 	d.StreamStatusCache = memoize.NewMemoizeData()
 	d.StreamsCache = memoize.NewMemoizeData()

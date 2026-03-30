@@ -400,4 +400,5 @@ require (
 	github.com/pion/webrtc/v3 v3.3.0 // indirect
 	github.com/tiendc/go-deepcopy v1.5.2
 	github.com/xaionaro-go/chatwebhook v0.0.0-20260104185322-4dc28c63093a
+	github.com/xaionaro-go/youtubeapiproxy v0.0.0
 )
