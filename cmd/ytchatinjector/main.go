@@ -32,6 +32,7 @@ func main() {
 	streamdAddr := pflag.String("streamd-addr", "", "streamd gRPC address (host:port)")
 	video := pflag.String("video", "", "video URL, video ID, or liveChatId")
 	channel := pflag.String("channel", "", "channel URL, @handle, or channel ID to monitor for live streams")
+	hl := pflag.String("hl", "", "language for YouTube system messages (e.g. en, de, ja)")
 	var logLevel logger.Level
 	pflag.Var(&logLevel, "log-level", "log level")
 	pflag.Parse()
@@ -50,7 +51,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 	defer cancel()
 
-	if err := run(ctx, *ytProxyAddr, *streamdAddr, *video, *channel); err != nil {
+	if err := run(ctx, *ytProxyAddr, *streamdAddr, *video, *channel, *hl); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return
 		}
@@ -65,6 +66,7 @@ func run(
 	streamdAddr string,
 	video string,
 	channel string,
+	hl string,
 ) (_err error) {
 	logger.Tracef(ctx, "run")
 	defer func() { logger.Tracef(ctx, "/run: %v", _err) }()
@@ -102,7 +104,7 @@ func run(
 
 	if channel != "" {
 		return monitorChannel(ctx, ytConn, channel, func(ctx context.Context, liveChatID string) error {
-			return bridgeLoop(ctx, ytClient, sdClient, liveChatID)
+			return bridgeLoop(ctx, ytClient, sdClient, liveChatID, hl)
 		})
 	}
 
@@ -112,7 +114,7 @@ func run(
 	}
 	logger.Infof(ctx, "resolved live chat ID: %s", liveChatID)
 
-	return bridgeLoop(ctx, ytClient, sdClient, liveChatID)
+	return bridgeLoop(ctx, ytClient, sdClient, liveChatID, hl)
 }
 
 // resolveLiveChatID determines the liveChatId from the user-provided target.
@@ -153,6 +155,7 @@ func bridgeLoop(
 	ytClient ytgrpc.V3DataLiveChatMessageServiceClient,
 	sdClient streamd_grpc.StreamDClient,
 	liveChatID string,
+	hl string,
 ) (_err error) {
 	logger.Tracef(ctx, "bridgeLoop")
 	defer func() { logger.Tracef(ctx, "/bridgeLoop: %v", _err) }()
@@ -160,7 +163,7 @@ func bridgeLoop(
 	var nextPageToken string
 
 	for {
-		err := streamOnce(ctx, ytClient, sdClient, liveChatID, &nextPageToken)
+		err := streamOnce(ctx, ytClient, sdClient, liveChatID, hl, &nextPageToken)
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -183,6 +186,7 @@ func streamOnce(
 	ytClient ytgrpc.V3DataLiveChatMessageServiceClient,
 	sdClient streamd_grpc.StreamDClient,
 	liveChatID string,
+	hl string,
 	nextPageToken *string,
 ) (_err error) {
 	logger.Tracef(ctx, "streamOnce")
@@ -190,6 +194,7 @@ func streamOnce(
 
 	req := &ytgrpc.LiveChatMessageListRequest{
 		LiveChatId: liveChatID,
+		Hl:         hl,
 		Part:       []string{"snippet", "authorDetails"},
 		PageToken:  *nextPageToken,
 	}
