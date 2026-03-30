@@ -38,18 +38,6 @@ const (
 	playerCheckInterval    = 100 * time.Millisecond
 )
 
-type Publisher interface {
-	ClosedChan() <-chan struct{} // TODO: can I remove this?
-}
-
-type WaitPublisherChaner interface {
-	WaitPublisherChan(
-		ctx context.Context,
-		streamID streamtypes.StreamID,
-		waitForNext bool,
-	) (<-chan Publisher, error)
-}
-
 type StreamServer interface {
 	WaitPublisherChaner
 	streamportserver.GetPortServerser

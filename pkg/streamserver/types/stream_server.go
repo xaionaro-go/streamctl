@@ -4,7 +4,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
+	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 )
 
@@ -12,12 +12,12 @@ type ActiveIncomingStreamIDser interface {
 	ActiveIncomingStreamIDs() ([]StreamID, error)
 }
 
-type Publisher = streamplayer.Publisher
-type WaitPublisherChaner = streamplayer.WaitPublisherChaner
+type Publisher = sptypes.Publisher
+type WaitPublisherChaner = sptypes.WaitPublisherChaner
 type GetPortServerser = streamportserver.GetPortServerser
 
 type InitConfig struct {
-	DefaultStreamPlayerOptions streamplayer.Options
+	DefaultStreamPlayerOptions sptypes.Options
 }
 
 type InitOption interface {
@@ -34,10 +34,10 @@ func (s InitOptions) Config() InitConfig {
 	return cfg
 }
 
-type InitOptionDefaultStreamPlayerOptions streamplayer.Options
+type InitOptionDefaultStreamPlayerOptions sptypes.Options
 
 func (opt InitOptionDefaultStreamPlayerOptions) apply(cfg *InitConfig) {
-	cfg.DefaultStreamPlayerOptions = (streamplayer.Options)(opt)
+	cfg.DefaultStreamPlayerOptions = (sptypes.Options)(opt)
 }
 
 type Sub interface {

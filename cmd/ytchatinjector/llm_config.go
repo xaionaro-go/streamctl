@@ -8,7 +8,7 @@ import (
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
-	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/config/llm"
 	"github.com/xaionaro-go/xpath"
 )
 
@@ -72,10 +72,16 @@ func resolveLLMConfig(
 	return resolved, nil
 }
 
+// configLLMOnly is a minimal struct that only parses the llm section
+// from the full streamd/streampanel config, avoiding heavy dependencies.
+type configLLMOnly struct {
+	LLM llm.Config `yaml:"llm"`
+}
+
 func readLLMEndpointFromConfig(
 	ctx context.Context,
 	cfgPath string,
-) (_ *config.LLMEndpoint, _err error) {
+) (_ *llm.Endpoint, _err error) {
 	logger.Tracef(ctx, "readLLMEndpointFromConfig")
 	defer func() { logger.Tracef(ctx, "/readLLMEndpointFromConfig: %v", _err) }()
 
@@ -89,7 +95,7 @@ func readLLMEndpointFromConfig(
 		return nil, fmt.Errorf("read %q: %w", expandedPath, err)
 	}
 
-	var cfg config.Config
+	var cfg configLLMOnly
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse %q: %w", expandedPath, err)
 	}
@@ -100,7 +106,7 @@ func readLLMEndpointFromConfig(
 		}
 
 		// Default API URL for known providers.
-		if endpoint.APIURL == "" && endpoint.Provider == config.LLMProviderChatGPT {
+		if endpoint.APIURL == "" && endpoint.Provider == llm.ProviderChatGPT {
 			endpoint.APIURL = "https://api.openai.com"
 		}
 
