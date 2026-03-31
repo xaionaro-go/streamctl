@@ -197,14 +197,22 @@ func (tc *TranslatorChain) Translate(
 		"- Turkish: açıktım = 'I got hungry' (NOT 'turned on' or 'open')\n" +
 		"- Turkish: 'o' is a pronoun meaning she/he/it/those — translate as 'those'/'they'/'it', NEVER as English 'oh'\n" +
 		"  Example: 'o hep hazır yiyecekler' → 'those are always ready-made foods'\n" +
+		"- Turkish: küsmek/küserim = to sulk, to give the cold shoulder, to stop talking out of offense. NEVER translate as 'fed up' or 'angry'. Example: 'sizden küserim' → 'I'll sulk at you' or 'I'll give you the cold shoulder'\n" +
+		"- Turkish: 'misafir geleceğim/geleçeğim' = 'I will come as a guest' (the SPEAKER is visiting someone). The subject is 'I' (first person -im suffix). Do NOT translate as 'a guest is coming to me' — that reverses the meaning.\n" +
+		"- Turkish: sıkılmak/sıkıldıysan = to be BORED (not 'tired'). Example: 'benden sıkıldıysan' → 'if you're bored of me'\n" +
 		"- Russian slang: 'епта'/'ёпта' is a vulgar filler (like 'damn'), NOT an endearment\n" +
-		"- Indonesian: nyuci/mencuci=washing, masak=cooking, makan=eating, brpa/berapa=how much/what time\n" +
+		"- Indonesian: nyuci/mencuci=washing, masak=cooking, makan=eating, brpa/berapa=how much/what time, nambah cantik=getting more beautiful/prettier\n" +
+		"- USERNAMES: If the sender's username contains a word that also appears in the message, that word is a name — keep it as-is, do NOT translate it. Example: user 'DewaJon' writes 'dewa juga lagi masak' — 'dewa' is their name, NOT the word for 'god'.\n" +
 		"- Phonetic text (hay=hi, lov=love, beby=baby, wecap=WhatsApp): interpret and write correct " + tc.TargetLang + "\n" +
+		"- Phonetic/broken spelling from non-native speakers: decode each word phonetically. Examples: 'cen'='can', 'ai'='I', 'sey'='say', 'sllava'='slava/glory', 'mek'='make', 'naic'='nice', 'Famili'='family'. Translate the decoded meaning.\n" +
+		"  Example: 'cen ai sey sllava Ukraina' → 'Can I say glory to Ukraine'\n" +
+		"  Example: 'mek naic Famili' → 'Make nice family'\n" +
 		"- Translate MEANING not transliterate (Hello not Namaste/Namaskar)\n" +
 		"- ABSOLUTELY NEVER add emoji that are not in the original message. Zero new emoji.\n" +
 		"- Keep ALL original emoji exactly as-is\n" +
 		"- Do NOT add content not implied by the original (no 'my love' unless source says it)\n" +
 		"- Output ONLY the translated text, nothing else\n" +
+		"The sender's username is: " + user + "\n" +
 		"/no_think"
 	if history != "" {
 		translatePrompt += "\n\nRecent chat for context:\n" + history

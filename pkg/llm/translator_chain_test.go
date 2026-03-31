@@ -255,6 +255,18 @@ func TestTranslate(t *testing.T) {
 			input:    "misafir geleçeğim",
 			notEqual: true,
 			contains: []string{"guest"},
+			check: func(t *testing.T, _, output string) {
+				lower := strings.ToLower(output)
+				// "misafir geleceğim" = "I will come as a guest" (I'm visiting)
+				// NOT "a guest is coming to me"
+				hasVisit := strings.Contains(lower, "i'll come") ||
+					strings.Contains(lower, "i will come") ||
+					strings.Contains(lower, "visit") ||
+					strings.Contains(lower, "i'm coming") ||
+					strings.Contains(lower, "i am coming")
+				assert.True(t, hasVisit,
+					"misafir geleceğim = 'I'll come as a guest', not 'guest coming to me': got %q", output)
+			},
 		},
 		{
 			name:     "Turkish yorulma means don't get tired",
@@ -278,6 +290,13 @@ func TestTranslate(t *testing.T) {
 				lower := strings.ToLower(output)
 				assert.NotContains(t, lower, "angry",
 					"küsmek means to sulk/be offended, not to get angry")
+				hasSulk := strings.Contains(lower, "sulk") ||
+					strings.Contains(lower, "offend") ||
+					strings.Contains(lower, "cold shoulder") ||
+					strings.Contains(lower, "stop talking") ||
+					strings.Contains(lower, "not speak")
+				assert.True(t, hasSulk,
+					"küsmek = to sulk/give cold shoulder, got %q", output)
 			},
 		},
 		{
@@ -370,8 +389,15 @@ func TestTranslate(t *testing.T) {
 			input:    "cen ai sey sllava Ukraina",
 			notEqual: true,
 			check: func(t *testing.T, input, output string) {
-				assert.NotEqual(t, strings.ToLower(input), strings.ToLower(output),
+				lower := strings.ToLower(output)
+				assert.NotEqual(t, strings.ToLower(input), lower,
 					"must not just change capitalization — should interpret phonetic English")
+				hasSay := strings.Contains(lower, "say") ||
+					strings.Contains(lower, "glory")
+				assert.True(t, hasSay,
+					"phonetic 'cen ai sey sllava' = 'can I say glory/slava': got %q", output)
+				assert.Contains(t, lower, "ukrain",
+					"must preserve Ukraine reference")
 			},
 		},
 		{
@@ -380,8 +406,15 @@ func TestTranslate(t *testing.T) {
 			input:    "mek naic Famili",
 			notEqual: true,
 			check: func(t *testing.T, input, output string) {
-				assert.NotEqual(t, strings.ToLower(input), strings.ToLower(output),
+				lower := strings.ToLower(output)
+				assert.NotEqual(t, strings.ToLower(input), lower,
 					"must not just change capitalization — should interpret as 'make nice family'")
+				hasMake := strings.Contains(lower, "make") ||
+					strings.Contains(lower, "creat")
+				assert.True(t, hasMake,
+					"'mek' = 'make': got %q", output)
+				assert.Contains(t, lower, "famil",
+					"must preserve family reference: got %q", output)
 			},
 		},
 
@@ -541,6 +574,12 @@ func TestTranslate(t *testing.T) {
 			input:    "dewa juga lagi masak ikan kambing",
 			notEqual: true,
 			contains: []string{"cook"},
+			check: func(t *testing.T, _, output string) {
+				lower := strings.ToLower(output)
+				// "dewa" is user's name (DewaJon), not "god"
+				assert.NotContains(t, lower, "god",
+					"'dewa' is user's name, not 'god': got %q", output)
+			},
 		},
 		{
 			name:     "Indonesian nyuci lagi",
