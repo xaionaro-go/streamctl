@@ -129,7 +129,8 @@ func (tc *TranslatorChain) Translate(
 		tc.addToHistory(ctx, user, message)
 		return message, nil
 	}
-	langCode = strings.TrimSpace(strings.ToLower(langCode))
+	langCode = normalizeLangCode(strings.TrimSpace(strings.ToLower(langCode)))
+	logger.Debugf(ctx, "language detection for [%s] %q: %q", user, message, langCode)
 
 	if langCode == targetCode {
 		tc.addToHistory(ctx, user, message)
@@ -171,7 +172,7 @@ func (tc *TranslatorChain) Translate(
 			confParts := strings.Fields(confResult)
 			confCode := ""
 			if len(confParts) >= 1 {
-				confCode = confParts[0]
+				confCode = normalizeLangCode(confParts[0])
 			}
 			lowConfidence := strings.HasSuffix(confResult, "low")
 			reclassifiedAsTarget := confCode == targetCode
@@ -401,4 +402,59 @@ func (tc *TranslatorChain) formatHistory(
 		fmt.Fprintf(&b, "<%s> %s\n", e.User, e.Message)
 	}
 	return b.String()
+}
+
+// langNameToCode maps common language names/variants to ISO 639-1 codes.
+var langNameToCode = map[string]string{
+	"english":    "en",
+	"turkish":    "tr",
+	"hindi":      "hi",
+	"french":     "fr",
+	"russian":    "ru",
+	"portuguese": "pt",
+	"indonesian": "id",
+	"arabic":     "ar",
+	"korean":     "ko",
+	"hebrew":     "he",
+	"spanish":    "es",
+	"german":     "de",
+	"italian":    "it",
+	"japanese":   "ja",
+	"chinese":    "zh",
+	"dutch":      "nl",
+	"polish":     "pl",
+	"swedish":    "sv",
+	"thai":       "th",
+	"vietnamese": "vi",
+	"greek":      "el",
+	"czech":      "cs",
+	"romanian":   "ro",
+	"hungarian":  "hu",
+	"filipino":   "tl",
+	"tagalog":    "tl",
+	"malay":      "ms",
+	"persian":    "fa",
+	"farsi":      "fa",
+	"ukrainian":  "uk",
+	"bengali":    "bn",
+	"tamil":      "ta",
+	"urdu":       "ur",
+	"albanian":   "sq",
+}
+
+// normalizeLangCode converts a language name or code to a 2-letter ISO 639-1 code.
+func normalizeLangCode(s string) string {
+	if len(s) == 2 {
+		return s
+	}
+	if code, ok := langNameToCode[s]; ok {
+		return code
+	}
+	// Try prefix match for partial names (e.g., "engl" → "english" → "en").
+	for name, code := range langNameToCode {
+		if strings.HasPrefix(name, s) || strings.HasPrefix(s, name) {
+			return code
+		}
+	}
+	return s
 }
