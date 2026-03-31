@@ -155,6 +155,22 @@ var (
 		Run:   chatPurge,
 	}
 
+	Player = &cobra.Command{
+		Use: "player",
+	}
+
+	PlayerList = &cobra.Command{
+		Use:  "list",
+		Args: cobra.ExactArgs(0),
+		Run:  playerList,
+	}
+
+	PlayerStatus = &cobra.Command{
+		Use:  "status",
+		Args: cobra.ExactArgs(0),
+		Run:  playerStatus,
+	}
+
 	LoggerLevel = logger.LevelWarning
 )
 
@@ -185,6 +201,11 @@ func init() {
 	Chat.AddCommand(ChatPurge)
 	ChatPurge.Flags().String("platform", "", "filter by platform ID")
 	ChatPurge.Flags().String("stream-id", "", "filter by stream ID")
+
+	Root.AddCommand(Player)
+	Player.AddCommand(PlayerList)
+	Player.AddCommand(PlayerStatus)
+	PlayerStatus.PersistentFlags().Bool("json", false, "use JSON output format")
 
 	Root.PersistentFlags().Var(&LoggerLevel, "log-level", "")
 	Root.PersistentFlags().String("remote-addr", "localhost:3594", "the path to the config file")
@@ -482,4 +503,107 @@ func platformEventsInject(cmd *cobra.Command, args []string) {
 
 	err = streamD.InjectPlatformEvent(ctx, platID, isLive, isPersistent, user, message)
 	assertNoError(ctx, err)
+}
+
+func playerList(cmd *cobra.Command, args []string) {
+	ctx := cmd.Context()
+
+	remoteAddr, err := cmd.Flags().GetString("remote-addr")
+	assertNoError(ctx, err)
+
+	streamD, err := client.New(ctx, remoteAddr)
+	assertNoError(ctx, err)
+
+	players, err := streamD.ListStreamPlayers(ctx)
+	assertNoError(ctx, err)
+
+	if len(players) == 0 {
+		fmt.Println("no stream players configured")
+		return
+	}
+
+	for _, p := range players {
+		status := "enabled"
+		if p.Disabled {
+			status = "disabled"
+		}
+		fmt.Printf("%-30s  type=%-6s  status=%s\n",
+			p.StreamID, p.PlayerType, status)
+	}
+}
+
+func playerStatus(cmd *cobra.Command, args []string) {
+	ctx := cmd.Context()
+
+	isJSON, err := cmd.Flags().GetBool("json")
+	assertNoError(ctx, err)
+
+	remoteAddr, err := cmd.Flags().GetString("remote-addr")
+	assertNoError(ctx, err)
+
+	streamD, err := client.New(ctx, remoteAddr)
+	assertNoError(ctx, err)
+
+	players, err := streamD.ListStreamPlayers(ctx)
+	assertNoError(ctx, err)
+
+	type playerStatusEntry struct {
+		StreamID string        `json:"stream_id"`
+		Type     string        `json:"type"`
+		Disabled bool          `json:"disabled"`
+		Position time.Duration `json:"position"`
+		Length   time.Duration `json:"length"`
+		Lag      time.Duration `json:"lag"`
+		Error    string        `json:"error,omitempty"`
+	}
+
+	entries := make([]playerStatusEntry, 0, len(players))
+	for _, p := range players {
+		entry := playerStatusEntry{
+			StreamID: string(p.StreamID),
+			Type:     string(p.PlayerType),
+			Disabled: p.Disabled,
+		}
+
+		pos, posErr := streamD.StreamPlayerGetPosition(ctx, p.StreamID)
+		length, lenErr := streamD.StreamPlayerGetLength(ctx, p.StreamID)
+
+		switch {
+		case posErr != nil:
+			entry.Error = fmt.Sprintf("get position: %v", posErr)
+		case lenErr != nil:
+			entry.Error = fmt.Sprintf("get length: %v", lenErr)
+		default:
+			entry.Position = pos
+			entry.Length = length
+			entry.Lag = length - pos
+		}
+
+		entries = append(entries, entry)
+	}
+
+	if isJSON {
+		b, err := json.Marshal(entries)
+		assertNoError(ctx, err)
+		fmt.Printf("%s\n", b)
+		return
+	}
+
+	if len(entries) == 0 {
+		fmt.Println("no stream players configured")
+		return
+	}
+
+	for _, e := range entries {
+		if e.Error != "" {
+			fmt.Printf("%-30s  type=%-6s  error=%s\n",
+				e.StreamID, e.Type, e.Error)
+			continue
+		}
+		fmt.Printf("%-30s  type=%-6s  pos=%-12s  len=%-12s  lag=%s\n",
+			e.StreamID, e.Type,
+			e.Position.Truncate(time.Millisecond),
+			e.Length.Truncate(time.Millisecond),
+			e.Lag.Truncate(time.Millisecond))
+	}
 }
