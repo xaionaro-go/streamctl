@@ -1573,7 +1573,7 @@ func (grpc *GRPCServer) StreamPlayerGetLength(
 	ctx context.Context,
 	req *streamd_grpc.StreamPlayerGetLengthRequest,
 ) (*streamd_grpc.StreamPlayerGetLengthReply, error) {
-	l, err := grpc.StreamD.StreamPlayerGetPosition(
+	l, err := grpc.StreamD.StreamPlayerGetLength(
 		ctx,
 		streamtypes.StreamID(req.GetStreamID()),
 	)
