@@ -700,6 +700,13 @@ func TestTranslate(t *testing.T) {
 			wantSame: true,
 		},
 
+		{
+			name:     "English all-loanwords unchanged",
+			user:     "JustForFun-World",
+			input:    "try your translate bot",
+			wantSame: true,
+		},
+
 		// --- Edge cases: numbers and dates ---
 		{
 			name:     "Numbers and shorthand unchanged",
@@ -834,4 +841,67 @@ func TestTranslate(t *testing.T) {
 			}
 		})
 	}
+
+	// Test English messages after heavy non-English history (production scenario).
+	// History contamination: Indonesian messages bias detection toward "id"
+	// for subsequent English messages.
+	t.Run("English after Indonesian history unchanged", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
+		defer cancel()
+
+		chain := newTestChain(t)
+
+		// Replay production history in order.
+		history := []struct{ user, msg string }{
+			{"Mrhero3000", "wait I'm first"},
+			{"Mrhero3000", "nice job"},
+			{"Mrhero3000", "how are you today"},
+			{"Mrhero3000", "I hope everyone doing alright"},
+			{"DewaJon-y6o", "Hay..vickey..."},
+			{"AlieshaWright-v5i", "Hi"},
+			{"ZekeriyaAlbayrak", "Merhaba Aşkım nasılsın"},
+			{"DewaJon-y6o", "vickey..kamu cantik sekali"},
+			{"Mrhero3000", "I'm grate thanks for asking how about you"},
+			{"mirseferbagirov5807", "hi,Viiiiikiii,my dear friend,how are you?"},
+			{"AlieshaWright-v5i", "I'm alright"},
+			{"ZekeriyaAlbayrak", "Çök güzelsın aşkım ve çök seks Sisin"},
+			{"DewaJon-y6o", "kamu nambah cantik"},
+			{"DanielDaniel-z8n9m", "u have whatsApp yes no"},
+			{"AlieshaWright-v5i", "Since we have no WiFi yet"},
+			{"AlieshaWright-v5i", "I'm at the new house"},
+			{"ZekeriyaAlbayrak", "Aşkim çök güzelsın aşkım benim"},
+			{"Mrhero3000", "yeah stay in the airport or if I get upgrade I'll fly with the passengers for free"},
+			{"Mrhero3000", "it's ok Aliesha I'll wait for the selfie"},
+			{"mirseferbagirov5807", "l dream a new life with your new house."},
+			{"Mrhero3000", "yeah translator if very cool job but it's annoying sometimes"},
+			{"DewaJon-y6o", "vickey..kamu nambah indah"},
+			{"Mrhero3000", "yeah in Ukraine 2 km land cost 5 thousand dollars"},
+			{"ZekeriyaAlbayrak", "Aşkimmmmmmmmmmmmmmmmmmmmmmm"},
+			{"JustForFun-World", "hai apa kabar?"},
+			{"JustForFun-World", "aku mencoba live di tiktok mam"},
+			{"JustForFun-World", "aku takut kalau di twitch hehe soalnya tidak fluent English"},
+			{"JustForFun-World", "iya juga sih ya aku maluu"},
+			{"JustForFun-World", "okay nanti aku coba"},
+		}
+		for _, h := range history {
+			_, err := chain.Translate(ctx, h.user, h.msg)
+			require.NoError(t, err)
+		}
+
+		// These English messages were misdetected as "id" in production.
+		englishMessages := []struct{ user, msg string }{
+			{"JustForFun-World", "try your translate bot"},
+			{"Mrhero3000", "it's pink"},
+			{"Mrhero3000", "I mean it's fun to help with something delicious"},
+			{"Mrhero3000", "maybe change the cycle and help each other to get the belly full with food"},
+			{"Mrhero3000", "just for fun I can't see the translation only VK so I'm sorry if I don't reply"},
+		}
+		for _, tc := range englishMessages {
+			result, err := chain.Translate(ctx, tc.user, tc.msg)
+			require.NoError(t, err)
+			t.Logf("[%s] %q → %q", tc.user, tc.msg, result)
+			assert.Equal(t, tc.msg, result,
+				"English message %q should be unchanged even with heavy non-English history", tc.msg)
+		}
+	})
 }
