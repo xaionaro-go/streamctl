@@ -429,6 +429,11 @@ func recvAndInject(
 		slots := make([]chan result, len(resp.Items))
 
 		for i, item := range resp.Items {
+			if s := item.GetSnippet(); s != nil {
+				logger.Debugf(ctx, "received yt event: id=%s type=%s user=%s msg=%q",
+					item.GetId(), s.GetType(), item.GetAuthorDetails().GetDisplayName(),
+					s.GetDisplayMessage())
+			}
 			slots[i] = make(chan result, 1)
 			i, item := i, item
 			observability.Go(ctx, func(ctx context.Context) {
