@@ -93,8 +93,11 @@ func (tc *TranslatorChain) Translate(
 	user string,
 	message string,
 ) (_ret string, _err error) {
+	translateStart := time.Now()
 	logger.Tracef(ctx, "TranslatorChain.Translate")
-	defer func() { logger.Tracef(ctx, "/TranslatorChain.Translate: %v", _err) }()
+	defer func() {
+		logger.Debugf(ctx, "TranslatorChain.Translate[%s] %q: %v", user, message, time.Since(translateStart).Round(time.Millisecond))
+	}()
 
 	// Two-step: detect language first, translate only if needed.
 	history := tc.formatHistory(ctx)
