@@ -21,6 +21,7 @@ type TranslatorChain struct {
 }
 
 const defaultCircuitBreakerThreshold = 3
+const defaultProviderTimeout = 30 * time.Second
 
 type ProviderWithSemaphore struct {
 	Provider                Provider
@@ -256,12 +257,12 @@ func (tc *TranslatorChain) callProvider(
 
 	callCtx := ctx
 	var cancel context.CancelFunc
-	if ps.Timeout > 0 {
-		callCtx, cancel = context.WithTimeout(ctx, ps.Timeout)
+	timeout := ps.Timeout
+	if timeout <= 0 {
+		timeout = defaultProviderTimeout
 	}
-	if cancel != nil {
-		defer cancel()
-	}
+	callCtx, cancel = context.WithTimeout(ctx, timeout)
+	defer cancel()
 
 	result, err := ps.Provider.Translate(callCtx, systemPrompt, userPrompt)
 	if err != nil {
