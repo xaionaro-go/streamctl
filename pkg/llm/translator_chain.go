@@ -103,7 +103,7 @@ func (tc *TranslatorChain) Translate(
 		"Detect the language of this chat message. Reply with ONLY the ISO 639-1 code "+
 			"(en, tr, hi, fr, ru, pt, id, ar, ko, he, etc).\n"+
 			"Rules:\n"+
-			"- %s with typos/slang/abbreviations (\"u\", \"yr\", \"duing\", \"spieck\", \"Indoneia\", \"fimaly\", \"gud\", \"nais\") → \"%s\"\n"+
+			"- %s with typos/slang/abbreviations (\"u\", \"yr\", \"duing\", \"spieck\", \"Indoneia\", \"fimaly\") → \"%s\"\n"+
 			"- CRITICAL: If the message has %s grammar structure (subject-verb-object) but misspelled words → \"%s\"\n"+
 			"  Examples: \"can you spieck Indoneia\" → \"%s\", \"Indian fimaly so beautiful\" → \"%s\"\n"+
 			"- Mixed with substantial non-%s → the non-%s language code\n"+
@@ -134,6 +134,58 @@ func (tc *TranslatorChain) Translate(
 	if langCode == targetCode {
 		tc.addToHistory(ctx, user, message)
 		return message, nil
+	}
+
+	// For single-word non-target detections, the classification can be
+	// wrong (e.g., "nais" classified as Indonesian when it's English
+	// internet slang for "nice"). Run a confidence check: if the model
+	// has LOW confidence, treat the word as target-language slang.
+	if len(strings.Fields(message)) == 1 {
+		confPrompt := fmt.Sprintf(
+			"You are a language detector for a live %s chat stream. Classify each message.\n"+
+				"Reply with EXACTLY this format: CODE CONFIDENCE\n"+
+				"Where CODE is ISO 639-1 and CONFIDENCE is HIGH or LOW.\n"+
+				"Use LOW when the word exists in multiple languages or could be informal %s.\n\n"+
+				"Examples:\n"+
+				"\"merhaba\" → tr HIGH\n"+
+				"\"noice\" → %s HIGH\n"+
+				"\"selam\" → tr HIGH\n"+
+				"\"okey\" → %s LOW\n"+
+				"\"keren\" → id HIGH\n"+
+				"\"gozel\" → tr HIGH\n"+
+				"\"lol\" → %s HIGH\n"+
+				"\"namaste\" → hi HIGH\n"+
+				"\"bonjur\" → fr HIGH\n"+
+				"\"kewl\" → %s LOW\n"+
+				"/no_think",
+			tc.TargetLang, tc.TargetLang,
+			targetCode, targetCode,
+			targetCode, targetCode,
+		)
+		if history != "" {
+			confPrompt += "\n\nRecent chat for context:\n" + history
+		}
+		confResult, confErr := tc.callFirstAvailableProvider(ctx, confPrompt, message)
+		if confErr == nil {
+			confResult = strings.TrimSpace(strings.ToLower(confResult))
+			confParts := strings.Fields(confResult)
+			confCode := ""
+			if len(confParts) >= 1 {
+				confCode = confParts[0]
+			}
+			lowConfidence := strings.HasSuffix(confResult, "low")
+			reclassifiedAsTarget := confCode == targetCode
+			// If two independent prompts disagree on the language,
+			// the word is genuinely ambiguous — default to target language
+			// in the context of this chat stream.
+			detectionsDisagree := confCode != "" && confCode != langCode
+			if reclassifiedAsTarget || lowConfidence || detectionsDisagree {
+				logger.Debugf(ctx, "confidence check for single-word %q: %q (originally %q), treating as %s (disagree=%v)",
+					message, confResult, langCode, tc.TargetLang, detectionsDisagree)
+				tc.addToHistory(ctx, user, message)
+				return message, nil
+			}
+		}
 	}
 
 	logger.Debugf(ctx, "detected language %q for [%s]: %q", langCode, user, message)
