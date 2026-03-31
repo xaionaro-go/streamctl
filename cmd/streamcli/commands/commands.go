@@ -12,6 +12,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -534,11 +535,16 @@ func playerList(cmd *cobra.Command, args []string) {
 		pos, posErr := streamD.StreamPlayerGetPosition(ctx, p.StreamID)
 		length, lenErr := streamD.StreamPlayerGetLength(ctx, p.StreamID)
 
+		firstErr := posErr
+		if firstErr == nil {
+			firstErr = lenErr
+		}
+
 		switch {
-		case posErr != nil:
-			entry.Error = fmt.Sprintf("get position: %v", posErr)
-		case lenErr != nil:
-			entry.Error = fmt.Sprintf("get length: %v", lenErr)
+		case firstErr != nil && strings.Contains(firstErr.Error(), "no player setup"):
+			entry.Error = "not running"
+		case firstErr != nil:
+			entry.Error = firstErr.Error()
 		default:
 			entry.Position = pos
 			entry.Length = length
