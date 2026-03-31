@@ -8,6 +8,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 )
@@ -128,9 +129,14 @@ func (tc *TranslatorChain) Translate(
 	logger.Debugf(ctx, "language detection for [%s] %q: isTarget=%v lang=%q (raw: %q)",
 		user, message, isTarget, langCode, detectResult)
 
-	if isTarget || langCode == targetCode {
+	// If detection says "target language" but the message contains known non-English
+	// vocabulary, override the detection and proceed with translation.
+	if (isTarget || langCode == targetCode) && !containsNonTargetVocabulary(message) {
 		tc.addToHistory(ctx, user, message)
 		return message, nil
+	}
+	if containsNonTargetVocabulary(message) {
+		isTarget = false
 	}
 
 	logger.Debugf(ctx, "detected language %q for [%s]: %q", langCode, user, message)
@@ -138,7 +144,10 @@ func (tc *TranslatorChain) Translate(
 	translatePrompt := "Translate this chat message to " + tc.TargetLang + ". " +
 		"The message may be mixed. Rules:\n" +
 		"- Translate ALL non-" + tc.TargetLang + " words to " + tc.TargetLang + "\n" +
-		"- Turkish endearments: aşkım/aşkim→my love, canım→my dear, güzel→beautiful\n" +
+		"- Turkish endearments: aşkım/aşkim→my love, canım→my dear/my soul, güzel→beautiful\n" +
+		"- Turkish: arkadaş/arkadaşım = friend/my friend (NOT 'dear' — 'dear' is canım)\n" +
+		"- Turkish: havalı/havalısın = cool/stylish (NOT 'beautiful' or 'great' or 'good' — beautiful=güzel)\n" +
+		"- Turkish imperatives: gönder/gonder = send (imperative, NOT past tense 'sent'). bana hediye gonder = send me a gift. Turkish bare verbs are commands/requests.\n" +
 		"- Turkish: açıktım = 'I got hungry' (NOT 'turned on' or 'open')\n" +
 		"- Turkish: 'o' is a pronoun meaning she/he/it/those — translate as 'those'/'they'/'it', NEVER as English 'oh'\n" +
 		"  Example: 'o hep hazır yiyecekler' → 'those are always ready-made foods'\n" +
@@ -200,6 +209,15 @@ func (tc *TranslatorChain) Translate(
 		}
 
 		ps.ConsecutiveFails.Store(0)
+
+		// If the "translation" is just spelling correction of the original
+		// (same words, fixed typos/capitalization/punctuation), return original unchanged.
+		if isSpellingCorrectionOnly(message, result) {
+			logger.Debugf(ctx, "translation of [%s] is spelling correction only, keeping original: %q -> %q",
+				user, message, result)
+			tc.addToHistory(ctx, user, message)
+			return message, nil
+		}
 
 		tc.addToHistory(ctx, user, message)
 
@@ -446,4 +464,174 @@ func parseDetectResult(raw string, targetCode string) (bool, string) {
 	}
 
 	return isTarget, langCode
+}
+
+// normalizeWord lowercases and strips leading/trailing punctuation from a word.
+func normalizeWord(w string) string {
+	w = strings.ToLower(w)
+	return strings.TrimFunc(w, func(r rune) bool {
+		return unicode.IsPunct(r) || unicode.IsSymbol(r)
+	})
+}
+
+// isLatinScript returns true if all letters in the string are Latin script.
+func isLatinScript(s string) bool {
+	for _, r := range s {
+		if unicode.IsLetter(r) && !unicode.In(r, unicode.Latin) {
+			return false
+		}
+	}
+	return true
+}
+
+// isSpellingCorrectionOnly returns true when the translation output is merely a
+// re-capitalized / re-punctuated version of the input with at most minor word changes,
+// which indicates the LLM "translated" broken English into slightly cleaned-up English
+// rather than translating from a genuinely foreign language.
+func isSpellingCorrectionOnly(input, output string) bool {
+	inWords := strings.Fields(input)
+	outWords := strings.Fields(output)
+
+	if len(inWords) == 0 || len(outWords) == 0 {
+		return false
+	}
+
+	// Special case: single-word input → single-word output, both Latin, same first letter,
+	// same length. This catches phonetic English slang like "nais"→"nice".
+	if len(inWords) == 1 && len(outWords) == 1 {
+		ni := normalizeWord(inWords[0])
+		no := normalizeWord(outWords[0])
+		if ni != "" && no != "" && isLatinScript(ni) && isLatinScript(no) &&
+			len(ni) == len(no) && ni[0] == no[0] {
+			return true
+		}
+		return false
+	}
+
+	// For multi-word messages: word counts must match for positional alignment.
+	if len(inWords) != len(outWords) {
+		return false
+	}
+
+	// Positional check: count exact matches and near-matches.
+	// A "spelling correction" has mostly exact matches with a few near-corrections.
+	// A "phonetic translation" has mostly near-matches (all words changed slightly).
+	exactMatches := 0
+	nearMatches := 0
+	farMismatches := 0
+
+	for i := 0; i < len(inWords); i++ {
+		ni := normalizeWord(inWords[i])
+		no := normalizeWord(outWords[i])
+		if ni == no || ni == "" || no == "" {
+			exactMatches++
+			continue
+		}
+		if editDistanceClose(ni, no) {
+			nearMatches++
+		} else {
+			farMismatches++
+		}
+	}
+
+	// If any word is completely different, it's a real translation.
+	if farMismatches > 0 {
+		return false
+	}
+
+	// If all words are near-matches (no exact matches), it's likely phonetic
+	// encoding (like "mek naic Famili" → "Make nice family"), not a spelling correction.
+	if exactMatches == 0 {
+		return false
+	}
+
+	// Has both exact matches AND near-matches, with no far mismatches.
+	// This is a spelling correction (mostly English with a few typos).
+	return true
+}
+
+// editDistanceClose returns true if two words are within edit distance 2 of each other.
+// Uses a simplified check: if the words share a long common prefix/suffix relative to their length.
+func editDistanceClose(a, b string) bool {
+	if a == b {
+		return true
+	}
+	la, lb := len(a), len(b)
+	if abs(la-lb) > 2 {
+		return false
+	}
+	// Simple check: compute edit distance with early termination.
+	return levenshtein(a, b) <= 2
+}
+
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+func min2(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func min3(a, b, c int) int {
+	return min2(min2(a, b), c)
+}
+
+// levenshtein computes the edit distance between two short strings.
+func levenshtein(a, b string) int {
+	la, lb := len(a), len(b)
+	if la == 0 {
+		return lb
+	}
+	if lb == 0 {
+		return la
+	}
+
+	prev := make([]int, lb+1)
+	curr := make([]int, lb+1)
+	for j := 0; j <= lb; j++ {
+		prev[j] = j
+	}
+	for i := 1; i <= la; i++ {
+		curr[0] = i
+		for j := 1; j <= lb; j++ {
+			cost := 1
+			if a[i-1] == b[j-1] {
+				cost = 0
+			}
+			curr[j] = min3(prev[j]+1, curr[j-1]+1, prev[j-1]+cost)
+		}
+		prev, curr = curr, prev
+	}
+	return prev[lb]
+}
+
+// nonTargetWords is a set of words/abbreviations from common non-English languages
+// that appear in chat and should force translation even if the rest of the message
+// looks English. These are words an English-only speaker would NOT understand.
+var nonTargetWords = map[string]bool{
+	// Indonesian/Malay common chat words and abbreviations
+	"brpa": true, "berapa": true, "makan": true, "masak": true,
+	"lagi": true, "cantik": true, "sayang": true, "blm": true,
+	"belum": true, "udah": true, "sudah": true, "dah": true,
+	"nyuci": true, "mencuci": true, "kamu": true, "aku": true,
+	"nambah": true, "indah": true, "sekali": true,
+}
+
+// containsNonTargetVocabulary checks if the message contains any known non-English
+// vocabulary words that should force translation.
+func containsNonTargetVocabulary(message string) bool {
+	words := strings.Fields(message)
+	for _, w := range words {
+		nw := normalizeWord(w)
+		if nonTargetWords[nw] {
+			return true
+		}
+	}
+	return false
 }

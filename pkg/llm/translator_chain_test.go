@@ -4,6 +4,7 @@ package llm
 
 import (
 	"context"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -794,6 +795,126 @@ func TestTranslate(t *testing.T) {
 					strings.Contains(lower, "how are you")
 				assert.True(t, hasGreeting,
 					"Hebrew greeting must be translated: got %q", output)
+			},
+		},
+
+		// --- Root Cause 1: English misdetected as Indonesian (HIGH) ---
+		{
+			name:     "English short informal it's pink unchanged",
+			user:     "Mrhero3000",
+			input:    "it's pink",
+			wantSame: true,
+		},
+		{
+			name:     "English common words fun to help unchanged",
+			user:     "Mrhero3000",
+			input:    "I mean it's fun to help with something delicious",
+			wantSame: true,
+		},
+		{
+			name:     "English with accented char à unchanged",
+			user:     "cooper-357",
+			input:    "have à very nice afternoon vickey and all here",
+			wantSame: true,
+		},
+		{
+			name:     "English I love your style unchanged",
+			user:     "ElJodedor212",
+			input:    "I love your style so free",
+			wantSame: true,
+		},
+		{
+			name:     "English Your next car unchanged",
+			user:     "ElJodedor212",
+			input:    "Your next car",
+			wantSame: true,
+		},
+		{
+			name:     "English Hi how are you doing unchanged",
+			user:     "cooper-357",
+			input:    "Hi how are you doing vickey",
+			wantSame: true,
+		},
+		{
+			name:     "English Your prices are good unchanged",
+			user:     "khaledinformationdz600",
+			input:    "Your prices are good",
+			wantSame: true,
+		},
+		{
+			name:     "English with Algeria mention unchanged",
+			user:     "khaledinformationdz600",
+			input:    "Your prices are good We have average prices in Algeria",
+			wantSame: true,
+		},
+
+		// --- Root Cause 3: Turkish imperative as past tense (MEDIUM) ---
+		{
+			name:     "Turkish imperative gonder means send not sent",
+			user:     "Zafer-l2t",
+			input:    "PTT bana hediye gonder",
+			notEqual: true,
+			contains: []string{"send"},
+			check: func(t *testing.T, _, output string) {
+				lower := strings.ToLower(output)
+				assert.NotContains(t, lower, "sent",
+					"gonder is imperative 'send', NOT past tense 'sent': got %q", output)
+			},
+		},
+
+		// --- Root Cause 4: Turkish vocabulary imprecision (MEDIUM) ---
+		{
+			name:     "Turkish arkadaşım means friend not dear",
+			user:     "Zafer-l2t",
+			input:    "merhaba arkadaşım nasılsın",
+			notEqual: true,
+			contains: []string{"friend"},
+			check: func(t *testing.T, _, output string) {
+				lower := strings.ToLower(output)
+				assert.NotContains(t, lower, "my dear",
+					"arkadaşım means 'my friend', NOT 'my dear' (dear=canım): got %q", output)
+			},
+		},
+		{
+			name:     "Turkish havalısın means cool or stylish",
+			user:     "Zafer-l2t",
+			input:    "bugun cok havalisin",
+			notEqual: true,
+			check: func(t *testing.T, _, output string) {
+				lower := strings.ToLower(output)
+				hasCool := strings.Contains(lower, "cool") ||
+					strings.Contains(lower, "stylish") ||
+					strings.Contains(lower, "fancy")
+				assert.True(t, hasCool,
+					"havali means 'cool/stylish/fancy', NOT 'great' or 'beautiful': got %q", output)
+				assert.NotContains(t, lower, "beautiful",
+					"havali is NOT 'beautiful' (beautiful=güzel): got %q", output)
+			},
+		},
+
+		// --- Root Cause 6: Added emoji (LOW) ---
+		{
+			name:     "Indonesian no emoji added by translator",
+			user:     "JustForFun-World",
+			input:    "aku lagi menyelesaikan quest tiktok jadi aku lanjut stream disana dulu, terima kasih! love and see you!",
+			notEqual: true,
+			check: func(t *testing.T, input, output string) {
+				// Collect emoji in input and output, verify output has no new emoji.
+				emojiRe := regexp.MustCompile(`[\x{1F600}-\x{1F64F}]|[\x{1F300}-\x{1F5FF}]|[\x{1F680}-\x{1F6FF}]|[\x{1F1E0}-\x{1F1FF}]|[\x{2600}-\x{26FF}]|[\x{2700}-\x{27BF}]|[\x{1F900}-\x{1F9FF}]|[\x{1FA00}-\x{1FA6F}]|[\x{1FA70}-\x{1FAFF}]|❤`)
+				inputEmoji := emojiRe.FindAllString(input, -1)
+				outputEmoji := emojiRe.FindAllString(output, -1)
+
+				// Build set of input emoji
+				inputSet := make(map[string]bool)
+				for _, e := range inputEmoji {
+					inputSet[e] = true
+				}
+
+				// Every emoji in output must exist in input
+				for _, e := range outputEmoji {
+					assert.True(t, inputSet[e],
+						"translator added emoji %q not present in original: got %q", e, output)
+				}
 			},
 		},
 	}
