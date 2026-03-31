@@ -100,93 +100,36 @@ func (tc *TranslatorChain) Translate(
 	targetCode := strings.ToLower(tc.TargetLang[:2])
 
 	detectPrompt := fmt.Sprintf(
-		"Detect the language of this chat message. Reply with ONLY the ISO 639-1 code "+
-			"(en, tr, hi, fr, ru, pt, id, ar, ko, he, etc).\n"+
-			"Rules:\n"+
-			"- %s with typos/slang/abbreviations (\"u\", \"yr\", \"duing\", \"spieck\", \"Indoneia\", \"fimaly\") → \"%s\"\n"+
-			"- CRITICAL: If the message has %s grammar structure (subject-verb-object) but misspelled words → \"%s\"\n"+
-			"  Examples: \"can you spieck Indoneia\" → \"%s\", \"Indian fimaly so beautiful\" → \"%s\"\n"+
-			"- Mixed with substantial non-%s → the non-%s language code\n"+
-			"- Emoji-only or unrecognizable → \"%s\"\n"+
-			"- Phonetic approximations by non-native speakers (\"hay\"=\"hi\", \"beby\"=\"baby\", \"lov\"=\"love\", \"wecap\"=\"WhatsApp\") with NO %s sentence structure → \"xx\"\n"+
-			"- Indonesian abbreviations (brpa=berapa, JM=jam, blm=belum, dah=sudah) → \"id\"\n"+
-			"- Indonesian informal (nyuci=mencuci/washing, masak=cooking) → \"id\"\n"+
+		"Classify this chat message. Reply with EXACTLY this format (no other text):\n"+
+			"IS_TARGET: YES or NO\n"+
+			"LANGUAGES: code1:confidence1, code2:confidence2, ...\n\n"+
+			"IS_TARGET means: is this message written primarily in %s?\n"+
+			"Answer YES for %s with typos, slang, abbreviations, or broken grammar.\n"+
+			"Answer NO if the message contains words from other languages that an %s-only speaker would NOT understand.\n\n"+
+			"Where confidence is 0.0 to 1.0. List up to 3 most likely ISO 639-1 language codes.\n\n"+
+			"Target language: %s (%s)\n"+
 			"/no_think",
+		tc.TargetLang, tc.TargetLang, tc.TargetLang,
 		tc.TargetLang, targetCode,
-		tc.TargetLang, targetCode,
-		targetCode, targetCode,
-		tc.TargetLang, tc.TargetLang,
-		targetCode,
-		tc.TargetLang,
 	)
 	if history != "" {
 		detectPrompt += "\n\nRecent chat:\n" + history
 	}
 
-	langCode, detectErr := tc.callFirstAvailableProvider(ctx, detectPrompt, message)
+	detectResult, detectErr := tc.callFirstAvailableProvider(ctx, detectPrompt, message)
 	if detectErr != nil {
 		logger.Warnf(ctx, "language detection failed: %v", detectErr)
 		tc.addToHistory(ctx, user, message)
 		return message, nil
 	}
-	langCode = normalizeLangCode(strings.TrimSpace(strings.ToLower(langCode)))
-	logger.Debugf(ctx, "language detection for [%s] %q: %q", user, message, langCode)
 
-	if langCode == targetCode {
+	isTarget, langCode := parseDetectResult(detectResult, targetCode)
+	logger.Debugf(ctx, "language detection for [%s] %q: isTarget=%v lang=%q (raw: %q)",
+		user, message, isTarget, langCode, detectResult)
+
+	if isTarget || langCode == targetCode {
 		tc.addToHistory(ctx, user, message)
 		return message, nil
-	}
-
-	// For single-word non-target detections, the classification can be
-	// wrong (e.g., "nais" classified as Indonesian when it's English
-	// internet slang for "nice"). Run a confidence check: if the model
-	// has LOW confidence, treat the word as target-language slang.
-	if len(strings.Fields(message)) == 1 {
-		confPrompt := fmt.Sprintf(
-			"You are a language detector for a live %s chat stream. Classify each message.\n"+
-				"Reply with EXACTLY this format: CODE CONFIDENCE\n"+
-				"Where CODE is ISO 639-1 and CONFIDENCE is HIGH or LOW.\n"+
-				"Use LOW when the word exists in multiple languages or could be informal %s.\n\n"+
-				"Examples:\n"+
-				"\"merhaba\" → tr HIGH\n"+
-				"\"noice\" → %s HIGH\n"+
-				"\"selam\" → tr HIGH\n"+
-				"\"okey\" → %s LOW\n"+
-				"\"keren\" → id HIGH\n"+
-				"\"gozel\" → tr HIGH\n"+
-				"\"lol\" → %s HIGH\n"+
-				"\"namaste\" → hi HIGH\n"+
-				"\"bonjur\" → fr HIGH\n"+
-				"\"kewl\" → %s LOW\n"+
-				"/no_think",
-			tc.TargetLang, tc.TargetLang,
-			targetCode, targetCode,
-			targetCode, targetCode,
-		)
-		if history != "" {
-			confPrompt += "\n\nRecent chat for context:\n" + history
-		}
-		confResult, confErr := tc.callFirstAvailableProvider(ctx, confPrompt, message)
-		if confErr == nil {
-			confResult = strings.TrimSpace(strings.ToLower(confResult))
-			confParts := strings.Fields(confResult)
-			confCode := ""
-			if len(confParts) >= 1 {
-				confCode = normalizeLangCode(confParts[0])
-			}
-			lowConfidence := strings.HasSuffix(confResult, "low")
-			reclassifiedAsTarget := confCode == targetCode
-			// If two independent prompts disagree on the language,
-			// the word is genuinely ambiguous — default to target language
-			// in the context of this chat stream.
-			detectionsDisagree := confCode != "" && confCode != langCode
-			if reclassifiedAsTarget || lowConfidence || detectionsDisagree {
-				logger.Debugf(ctx, "confidence check for single-word %q: %q (originally %q), treating as %s (disagree=%v)",
-					message, confResult, langCode, tc.TargetLang, detectionsDisagree)
-				tc.addToHistory(ctx, user, message)
-				return message, nil
-			}
-		}
 	}
 
 	logger.Debugf(ctx, "detected language %q for [%s]: %q", langCode, user, message)
@@ -457,4 +400,49 @@ func normalizeLangCode(s string) string {
 		}
 	}
 	return s
+}
+
+// parseDetectResult parses the structured detection output:
+//
+//	IS_TARGET: YES or NO
+//	LANGUAGES: en:0.95, tr:0.03, ...
+//
+// Returns (isTarget, topLanguageCode).
+func parseDetectResult(raw string, targetCode string) (bool, string) {
+	raw = strings.TrimSpace(raw)
+	lines := strings.Split(raw, "\n")
+
+	isTarget := false
+	langCode := ""
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		lower := strings.ToLower(line)
+
+		if strings.HasPrefix(lower, "is_target:") {
+			val := strings.TrimSpace(line[len("is_target:"):])
+			isTarget = strings.EqualFold(strings.TrimSpace(val), "YES")
+		}
+
+		if strings.HasPrefix(lower, "languages:") {
+			val := strings.TrimSpace(line[len("languages:"):])
+			// Parse "en:0.95, tr:0.03, ..."
+			parts := strings.Split(val, ",")
+			if len(parts) > 0 {
+				first := strings.TrimSpace(parts[0])
+				if idx := strings.Index(first, ":"); idx > 0 {
+					langCode = normalizeLangCode(strings.ToLower(first[:idx]))
+				} else {
+					langCode = normalizeLangCode(strings.ToLower(first))
+				}
+			}
+		}
+	}
+
+	// Fallback: if parsing failed, treat as target language (don't translate).
+	if langCode == "" {
+		return true, targetCode
+	}
+
+	return isTarget, langCode
 }
