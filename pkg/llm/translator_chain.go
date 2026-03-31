@@ -94,22 +94,128 @@ func (tc *TranslatorChain) Translate(
 	logger.Tracef(ctx, "TranslatorChain.Translate")
 	defer func() { logger.Tracef(ctx, "/TranslatorChain.Translate: %v", _err) }()
 
-	systemPrompt := fmt.Sprintf(
-		"You translate live chat messages to %s.\n\n"+
-			"Non-%s: translate MEANING to %s words. Do NOT transliterate. Do NOT use borrowed/loanwords.\n"+
-			"- Devanagari script → common %s words (NOT namaskar/namaste, those are loanwords)\n"+
-			"- Mixed messages: translate foreign parts, keep %s parts. "+
-			"Turkish endearments (sevgilim, canım, aşkım) → %s equivalents.\n\n"+
-			"%s: return EXACTLY unchanged. Never fix typos, grammar, spelling, or abbreviations.\n\n"+
-			"Output ONLY the result. Keep emoji.",
-		tc.TargetLang, tc.TargetLang, tc.TargetLang, tc.TargetLang, tc.TargetLang, tc.TargetLang, tc.TargetLang,
-	)
-
-	// Context in system prompt, message as user prompt — no XML tags
-	// (XML tags confuse small models into preserving content literally).
+	// Two-step: detect language first, translate only if needed.
 	history := tc.formatHistory(ctx)
+
+	targetCode := strings.ToLower(tc.TargetLang[:2])
+
+	detectPrompt := fmt.Sprintf(
+		"Detect the language of this chat message. Reply with ONLY the ISO 639-1 code "+
+			"(en, tr, hi, fr, ru, pt, id, ar, ko, he, etc).\n"+
+			"Rules:\n"+
+			"- %s with typos/slang/abbreviations (\"u\", \"yr\", \"duing\", \"spieck\", \"Indoneia\", \"fimaly\") → \"%s\"\n"+
+			"- CRITICAL: If the message has %s grammar structure (subject-verb-object) but misspelled words → \"%s\"\n"+
+			"  Examples: \"can you spieck Indoneia\" → \"%s\", \"Indian fimaly so beautiful\" → \"%s\"\n"+
+			"- Mixed with substantial non-%s → the non-%s language code\n"+
+			"- Emoji-only or unrecognizable → \"%s\"\n"+
+			"- Phonetic approximations by non-native speakers (\"hay\"=\"hi\", \"beby\"=\"baby\", \"lov\"=\"love\", \"wecap\"=\"WhatsApp\") with NO %s sentence structure → \"xx\"\n"+
+			"- Indonesian abbreviations (brpa=berapa, JM=jam, blm=belum, dah=sudah) → \"id\"\n"+
+			"- Indonesian informal (nyuci=mencuci/washing, masak=cooking) → \"id\"\n"+
+			"/no_think",
+		tc.TargetLang, targetCode,
+		tc.TargetLang, targetCode,
+		targetCode, targetCode,
+		tc.TargetLang, tc.TargetLang,
+		targetCode,
+		tc.TargetLang,
+	)
 	if history != "" {
-		systemPrompt += "\n\nRecent chat for context (do NOT translate):\n" + history
+		detectPrompt += "\n\nRecent chat:\n" + history
+	}
+
+	langCode, detectErr := tc.callFirstAvailableProvider(ctx, detectPrompt, message)
+	if detectErr != nil {
+		logger.Warnf(ctx, "language detection failed: %v", detectErr)
+		tc.addToHistory(ctx, user, message)
+		return message, nil
+	}
+	langCode = strings.TrimSpace(strings.ToLower(langCode))
+
+	if langCode == targetCode {
+		tc.addToHistory(ctx, user, message)
+		return message, nil
+	}
+
+	// For single-word non-target detections, the classification can be
+	// wrong (e.g., "nais" classified as Indonesian when it's English
+	// internet slang for "nice"). Run a confidence check: if the model
+	// has LOW confidence, treat the word as target-language slang.
+	if len(strings.Fields(message)) == 1 {
+		confPrompt := fmt.Sprintf(
+			"You are a language detector for a live %s chat stream. Classify each message.\n"+
+				"Reply with EXACTLY this format: CODE CONFIDENCE\n"+
+				"Where CODE is ISO 639-1 and CONFIDENCE is HIGH or LOW.\n"+
+				"Use LOW when the word exists in multiple languages or could be informal %s.\n\n"+
+				"Examples:\n"+
+				"\"merhaba\" → tr HIGH\n"+
+				"\"noice\" → %s HIGH\n"+
+				"\"selam\" → tr HIGH\n"+
+				"\"okey\" → %s LOW\n"+
+				"\"keren\" → id HIGH\n"+
+				"\"gozel\" → tr HIGH\n"+
+				"\"lol\" → %s HIGH\n"+
+				"\"namaste\" → hi HIGH\n"+
+				"\"bonjur\" → fr HIGH\n"+
+				"\"kewl\" → %s LOW\n"+
+				"/no_think",
+			tc.TargetLang, tc.TargetLang,
+			targetCode, targetCode,
+			targetCode, targetCode,
+		)
+		if history != "" {
+			confPrompt += "\n\nRecent chat for context:\n" + history
+		}
+		confResult, confErr := tc.callFirstAvailableProvider(ctx, confPrompt, message)
+		if confErr == nil {
+			confResult = strings.TrimSpace(strings.ToLower(confResult))
+			confParts := strings.Fields(confResult)
+			confCode := ""
+			if len(confParts) >= 1 {
+				confCode = confParts[0]
+			}
+			lowConfidence := strings.HasSuffix(confResult, "low")
+			reclassifiedAsTarget := confCode == targetCode
+			// If two independent prompts disagree on the language,
+			// the word is genuinely ambiguous — default to target language
+			// in the context of this chat stream.
+			detectionsDisagree := confCode != "" && confCode != langCode
+			if reclassifiedAsTarget || lowConfidence || detectionsDisagree {
+				logger.Debugf(ctx, "confidence check for single-word %q: %q (originally %q), treating as %s (disagree=%v)",
+					message, confResult, langCode, tc.TargetLang, detectionsDisagree)
+				tc.addToHistory(ctx, user, message)
+				return message, nil
+			}
+		}
+	}
+
+	logger.Debugf(ctx, "detected language %q for [%s]: %q", langCode, user, message)
+
+	translatePrompt := "Translate this chat message to " + tc.TargetLang + ". " +
+		"The message may be mixed. Rules:\n" +
+		"- Translate ALL non-" + tc.TargetLang + " words to " + tc.TargetLang + "\n" +
+		"- Turkish endearments: aşkım/aşkim→my love, canım→my dear, güzel→beautiful\n" +
+		"- Turkish: açıktım = 'I got hungry' (NOT 'turned on' or 'open')\n" +
+		"- Turkish: 'o' is a pronoun meaning she/he/it/those — translate as 'those'/'they'/'it', NEVER as English 'oh'\n" +
+		"  Example: 'o hep hazır yiyecekler' → 'those are always ready-made foods'\n" +
+		"- Turkish: küsmek/küserim = to sulk, to give the cold shoulder, to stop talking out of offense. NEVER translate as 'fed up' or 'angry'. Example: 'sizden küserim' → 'I'll sulk at you' or 'I'll give you the cold shoulder'\n" +
+		"- Turkish: 'misafir geleceğim/geleçeğim' = 'I will come as a guest' (the SPEAKER is visiting someone). The subject is 'I' (first person -im suffix). Do NOT translate as 'a guest is coming to me' — that reverses the meaning.\n" +
+		"- Turkish: sıkılmak/sıkıldıysan = to be BORED (not 'tired'). Example: 'benden sıkıldıysan' → 'if you're bored of me'\n" +
+		"- Russian slang: 'епта'/'ёпта' is a vulgar filler (like 'damn'), NOT an endearment\n" +
+		"- Indonesian: nyuci/mencuci=washing, masak=cooking, makan=eating, brpa/berapa=how much/what time, nambah cantik=getting more beautiful/prettier\n" +
+		"- USERNAMES: If the sender's username contains a word that also appears in the message, that word is a name — keep it as-is, do NOT translate it. Example: user 'DewaJon' writes 'dewa juga lagi masak' — 'dewa' is their name, NOT the word for 'god'.\n" +
+		"- Phonetic text (hay=hi, lov=love, beby=baby, wecap=WhatsApp): interpret and write correct " + tc.TargetLang + "\n" +
+		"- Phonetic/broken spelling from non-native speakers: decode each word phonetically. Examples: 'cen'='can', 'ai'='I', 'sey'='say', 'sllava'='slava/glory', 'mek'='make', 'naic'='nice', 'Famili'='family'. Translate the decoded meaning.\n" +
+		"  Example: 'cen ai sey sllava Ukraina' → 'Can I say glory to Ukraine'\n" +
+		"  Example: 'mek naic Famili' → 'Make nice family'\n" +
+		"- Translate MEANING not transliterate (Hello not Namaste/Namaskar)\n" +
+		"- ABSOLUTELY NEVER add emoji that are not in the original message. Zero new emoji.\n" +
+		"- Keep ALL original emoji exactly as-is\n" +
+		"- Do NOT add content not implied by the original (no 'my love' unless source says it)\n" +
+		"- Output ONLY the translated text, nothing else\n" +
+		"The sender's username is: " + user + "\n" +
+		"/no_think"
+	if history != "" {
+		translatePrompt += "\n\nRecent chat for context:\n" + history
 	}
 
 	userPrompt := message
@@ -140,7 +246,7 @@ func (tc *TranslatorChain) Translate(
 			continue
 		}
 
-		result, err := tc.callProvider(ctx, ps, systemPrompt, userPrompt)
+		result, err := tc.callProvider(ctx, ps, translatePrompt, userPrompt)
 		if err != nil {
 			ps.ConsecutiveFails.Add(1)
 			ps.LastFailTime.Store(time.Now().UnixNano())
@@ -225,6 +331,43 @@ func (tc *TranslatorChain) callProvider(
 	}
 
 	return strings.TrimSpace(result), nil
+}
+
+func (tc *TranslatorChain) callFirstAvailableProvider(
+	ctx context.Context,
+	systemPrompt string,
+	userPrompt string,
+) (_ret string, _err error) {
+	logger.Tracef(ctx, "TranslatorChain.callFirstAvailableProvider")
+	defer func() { logger.Tracef(ctx, "/TranslatorChain.callFirstAvailableProvider: %v", _err) }()
+
+	for i := range tc.Providers {
+		ps := &tc.Providers[i]
+		select {
+		case ps.Semaphore <- struct{}{}:
+		default:
+			continue
+		}
+		result, err := ps.Provider.Translate(ctx, systemPrompt, userPrompt)
+		<-ps.Semaphore
+		if err != nil {
+			continue
+		}
+		return strings.TrimSpace(result), nil
+	}
+
+	last := &tc.Providers[len(tc.Providers)-1]
+	select {
+	case last.Semaphore <- struct{}{}:
+		result, err := last.Provider.Translate(ctx, systemPrompt, userPrompt)
+		<-last.Semaphore
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(result), nil
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
 }
 
 func (tc *TranslatorChain) addToHistory(
