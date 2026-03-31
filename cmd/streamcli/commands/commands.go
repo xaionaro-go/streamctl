@@ -165,12 +165,6 @@ var (
 		Run:  playerList,
 	}
 
-	PlayerStatus = &cobra.Command{
-		Use:  "status",
-		Args: cobra.ExactArgs(0),
-		Run:  playerStatus,
-	}
-
 	LoggerLevel = logger.LevelWarning
 )
 
@@ -204,8 +198,7 @@ func init() {
 
 	Root.AddCommand(Player)
 	Player.AddCommand(PlayerList)
-	Player.AddCommand(PlayerStatus)
-	PlayerStatus.PersistentFlags().Bool("json", false, "use JSON output format")
+	PlayerList.PersistentFlags().Bool("json", false, "use JSON output format")
 
 	Root.PersistentFlags().Var(&LoggerLevel, "log-level", "")
 	Root.PersistentFlags().String("remote-addr", "localhost:3594", "the path to the config file")
@@ -508,33 +501,6 @@ func platformEventsInject(cmd *cobra.Command, args []string) {
 func playerList(cmd *cobra.Command, args []string) {
 	ctx := cmd.Context()
 
-	remoteAddr, err := cmd.Flags().GetString("remote-addr")
-	assertNoError(ctx, err)
-
-	streamD, err := client.New(ctx, remoteAddr)
-	assertNoError(ctx, err)
-
-	players, err := streamD.ListStreamPlayers(ctx)
-	assertNoError(ctx, err)
-
-	if len(players) == 0 {
-		fmt.Println("no stream players configured")
-		return
-	}
-
-	for _, p := range players {
-		status := "enabled"
-		if p.Disabled {
-			status = "disabled"
-		}
-		fmt.Printf("%-30s  type=%-6s  status=%s\n",
-			p.StreamID, p.PlayerType, status)
-	}
-}
-
-func playerStatus(cmd *cobra.Command, args []string) {
-	ctx := cmd.Context()
-
 	isJSON, err := cmd.Flags().GetBool("json")
 	assertNoError(ctx, err)
 
@@ -547,7 +513,7 @@ func playerStatus(cmd *cobra.Command, args []string) {
 	players, err := streamD.ListStreamPlayers(ctx)
 	assertNoError(ctx, err)
 
-	type playerStatusEntry struct {
+	type playerEntry struct {
 		StreamID string        `json:"stream_id"`
 		Type     string        `json:"type"`
 		Disabled bool          `json:"disabled"`
@@ -557,9 +523,9 @@ func playerStatus(cmd *cobra.Command, args []string) {
 		Error    string        `json:"error,omitempty"`
 	}
 
-	entries := make([]playerStatusEntry, 0, len(players))
+	entries := make([]playerEntry, 0, len(players))
 	for _, p := range players {
-		entry := playerStatusEntry{
+		entry := playerEntry{
 			StreamID: string(p.StreamID),
 			Type:     string(p.PlayerType),
 			Disabled: p.Disabled,
