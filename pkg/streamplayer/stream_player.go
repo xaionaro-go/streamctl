@@ -1016,6 +1016,15 @@ func (p *StreamPlayerHandler) controllerLoop(
 					return
 				}
 				time.Sleep(100 * time.Millisecond) // let it catch up at least a bit, before changing the speed back (to avoid flickering)
+				if !stalling && lag < p.Config.JitterBufMinDuration {
+					deficit := p.Config.JitterBufMinDuration - lag
+					if deficit > jitterBufDurationIncrease {
+						logger.Debugf(ctx,
+							"StreamPlayer[%s].controllerLoop: buffer %v below target %v, pending jitter buffer increase %v → %v",
+							p.StreamID, lag, p.Config.JitterBufMinDuration, jitterBufDurationIncrease, deficit)
+						jitterBufDurationIncrease = deficit
+					}
+				}
 				return
 			}
 			if jitterBufDurationIncrease > 0 {
