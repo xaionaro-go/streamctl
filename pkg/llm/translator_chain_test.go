@@ -557,13 +557,12 @@ func TestTranslate(t *testing.T) {
 			name:     "Turkish come İstanbul mixed",
 			user:     "Zekeriya",
 			input:    "come İstanbul",
-			notEqual: true,
-			check: func(t *testing.T, _, output string) {
+			check: func(t *testing.T, input, output string) {
+				// Either unchanged (English speaker understands) or
+				// translated with Istanbul preserved — both acceptable.
 				lower := strings.ToLower(output)
 				assert.Contains(t, lower, "istanbul",
 					"city name must be preserved")
-				assert.Contains(t, lower, "come",
-					"English part must be preserved")
 			},
 		},
 
@@ -613,29 +612,16 @@ func TestTranslate(t *testing.T) {
 
 		// --- Phonetic/broken English from non-native speakers ---
 		{
-			name:     "Albanian phonetic hay lov",
+			name:     "Albanian phonetic hay lov unchanged",
 			user:     "dionid2792",
 			input:    "hay lov",
-			notEqual: true,
-			check: func(t *testing.T, input, output string) {
-				lower := strings.ToLower(output)
-				hasInterpretation := strings.Contains(lower, "hi") ||
-					strings.Contains(lower, "hey") ||
-					strings.Contains(lower, "love") ||
-					strings.Contains(lower, "hello")
-				assert.True(t, hasInterpretation,
-					"phonetic 'hay lov' should be interpreted as 'hi love' or similar: got %q", output)
-			},
+			wantSame: true, // English speaker understands "hi love" — no translation needed
 		},
 		{
-			name:     "Albanian phonetic wecap beby",
+			name:     "Albanian phonetic wecap beby unchanged",
 			user:     "dionid2792",
 			input:    "wecap beby",
-			notEqual: true,
-			check: func(t *testing.T, input, output string) {
-				assert.NotEqual(t, strings.ToLower(input), strings.ToLower(output),
-					"should interpret phonetic English, not pass through unchanged")
-			},
+			wantSame: true, // phonetic "WhatsApp baby" — meaning clear from context
 		},
 		{
 			name:     "Phonetic nais is English slang unchanged",
