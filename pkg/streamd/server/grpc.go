@@ -1586,6 +1586,23 @@ func (grpc *GRPCServer) StreamPlayerGetLength(
 		},
 	}, nil
 }
+func (grpc *GRPCServer) StreamPlayerGetLag(
+	ctx context.Context,
+	req *streamd_grpc.StreamPlayerGetLagRequest,
+) (*streamd_grpc.StreamPlayerGetLagReply, error) {
+	lag, now, err := grpc.StreamD.StreamPlayerGetLag(
+		ctx,
+		streamtypes.StreamID(req.GetStreamSourceID()),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.StreamPlayerGetLagReply{
+		RequestUnixNano: req.GetRequestUnixNano(),
+		ReplyUnixNano:   now.UnixNano(),
+		LagU:            lag.Nanoseconds(),
+	}, nil
+}
 func (grpc *GRPCServer) StreamPlayerSetSpeed(
 	ctx context.Context,
 	req *streamd_grpc.StreamPlayerSetSpeedRequest,

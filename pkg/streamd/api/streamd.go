@@ -216,6 +216,10 @@ type StreamD interface {
 		ctx context.Context,
 		streamID StreamID,
 	) (time.Duration, error)
+	StreamPlayerGetLag(
+		ctx context.Context,
+		streamID StreamID,
+	) (time.Duration, time.Time, error)
 	StreamPlayerSetSpeed(
 		ctx context.Context,
 		streamID StreamID,

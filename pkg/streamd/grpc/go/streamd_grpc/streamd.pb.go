@@ -6667,6 +6667,118 @@ func (x *StreamPlayerGetLengthReply) GetReply() *player_grpc.GetLengthReply {
 	return nil
 }
 
+type StreamPlayerGetLagRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	StreamSourceID  string                 `protobuf:"bytes,1,opt,name=streamSourceID,proto3" json:"streamSourceID,omitempty"`
+	RequestUnixNano int64                  `protobuf:"varint,2,opt,name=requestUnixNano,proto3" json:"requestUnixNano,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *StreamPlayerGetLagRequest) Reset() {
+	*x = StreamPlayerGetLagRequest{}
+	mi := &file_streamd_proto_msgTypes[133]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamPlayerGetLagRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamPlayerGetLagRequest) ProtoMessage() {}
+
+func (x *StreamPlayerGetLagRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_streamd_proto_msgTypes[133]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamPlayerGetLagRequest.ProtoReflect.Descriptor instead.
+func (*StreamPlayerGetLagRequest) Descriptor() ([]byte, []int) {
+	return file_streamd_proto_rawDescGZIP(), []int{133}
+}
+
+func (x *StreamPlayerGetLagRequest) GetStreamSourceID() string {
+	if x != nil {
+		return x.StreamSourceID
+	}
+	return ""
+}
+
+func (x *StreamPlayerGetLagRequest) GetRequestUnixNano() int64 {
+	if x != nil {
+		return x.RequestUnixNano
+	}
+	return 0
+}
+
+type StreamPlayerGetLagReply struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	RequestUnixNano int64                  `protobuf:"varint,1,opt,name=requestUnixNano,proto3" json:"requestUnixNano,omitempty"`
+	ReplyUnixNano   int64                  `protobuf:"varint,2,opt,name=replyUnixNano,proto3" json:"replyUnixNano,omitempty"`
+	LagU            int64                  `protobuf:"varint,3,opt,name=lagU,proto3" json:"lagU,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *StreamPlayerGetLagReply) Reset() {
+	*x = StreamPlayerGetLagReply{}
+	mi := &file_streamd_proto_msgTypes[134]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamPlayerGetLagReply) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamPlayerGetLagReply) ProtoMessage() {}
+
+func (x *StreamPlayerGetLagReply) ProtoReflect() protoreflect.Message {
+	mi := &file_streamd_proto_msgTypes[134]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamPlayerGetLagReply.ProtoReflect.Descriptor instead.
+func (*StreamPlayerGetLagReply) Descriptor() ([]byte, []int) {
+	return file_streamd_proto_rawDescGZIP(), []int{134}
+}
+
+func (x *StreamPlayerGetLagReply) GetRequestUnixNano() int64 {
+	if x != nil {
+		return x.RequestUnixNano
+	}
+	return 0
+}
+
+func (x *StreamPlayerGetLagReply) GetReplyUnixNano() int64 {
+	if x != nil {
+		return x.ReplyUnixNano
+	}
+	return 0
+}
+
+func (x *StreamPlayerGetLagReply) GetLagU() int64 {
+	if x != nil {
+		return x.LagU
+	}
+	return 0
+}
+
 type StreamPlayerSetSpeedRequest struct {
 	state         protoimpl.MessageState       `protogen:"open.v1"`
 	StreamID      string                       `protobuf:"bytes,1,opt,name=streamID,proto3" json:"streamID,omitempty"`
@@ -6677,7 +6789,7 @@ type StreamPlayerSetSpeedRequest struct {
 
 func (x *StreamPlayerSetSpeedRequest) Reset() {
 	*x = StreamPlayerSetSpeedRequest{}
-	mi := &file_streamd_proto_msgTypes[133]
+	mi := &file_streamd_proto_msgTypes[135]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6689,7 +6801,7 @@ func (x *StreamPlayerSetSpeedRequest) String() string {
 func (*StreamPlayerSetSpeedRequest) ProtoMessage() {}
 
 func (x *StreamPlayerSetSpeedRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[133]
+	mi := &file_streamd_proto_msgTypes[135]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6702,7 +6814,7 @@ func (x *StreamPlayerSetSpeedRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamPlayerSetSpeedRequest.ProtoReflect.Descriptor instead.
 func (*StreamPlayerSetSpeedRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{133}
+	return file_streamd_proto_rawDescGZIP(), []int{135}
 }
 
 func (x *StreamPlayerSetSpeedRequest) GetStreamID() string {
@@ -6728,7 +6840,7 @@ type StreamPlayerSetSpeedReply struct {
 
 func (x *StreamPlayerSetSpeedReply) Reset() {
 	*x = StreamPlayerSetSpeedReply{}
-	mi := &file_streamd_proto_msgTypes[134]
+	mi := &file_streamd_proto_msgTypes[136]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6740,7 +6852,7 @@ func (x *StreamPlayerSetSpeedReply) String() string {
 func (*StreamPlayerSetSpeedReply) ProtoMessage() {}
 
 func (x *StreamPlayerSetSpeedReply) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[134]
+	mi := &file_streamd_proto_msgTypes[136]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6753,7 +6865,7 @@ func (x *StreamPlayerSetSpeedReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamPlayerSetSpeedReply.ProtoReflect.Descriptor instead.
 func (*StreamPlayerSetSpeedReply) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{134}
+	return file_streamd_proto_rawDescGZIP(), []int{136}
 }
 
 func (x *StreamPlayerSetSpeedReply) GetReply() *player_grpc.SetSpeedReply {
@@ -6773,7 +6885,7 @@ type StreamPlayerSetPauseRequest struct {
 
 func (x *StreamPlayerSetPauseRequest) Reset() {
 	*x = StreamPlayerSetPauseRequest{}
-	mi := &file_streamd_proto_msgTypes[135]
+	mi := &file_streamd_proto_msgTypes[137]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6785,7 +6897,7 @@ func (x *StreamPlayerSetPauseRequest) String() string {
 func (*StreamPlayerSetPauseRequest) ProtoMessage() {}
 
 func (x *StreamPlayerSetPauseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[135]
+	mi := &file_streamd_proto_msgTypes[137]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6798,7 +6910,7 @@ func (x *StreamPlayerSetPauseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamPlayerSetPauseRequest.ProtoReflect.Descriptor instead.
 func (*StreamPlayerSetPauseRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{135}
+	return file_streamd_proto_rawDescGZIP(), []int{137}
 }
 
 func (x *StreamPlayerSetPauseRequest) GetStreamID() string {
@@ -6824,7 +6936,7 @@ type StreamPlayerSetPauseReply struct {
 
 func (x *StreamPlayerSetPauseReply) Reset() {
 	*x = StreamPlayerSetPauseReply{}
-	mi := &file_streamd_proto_msgTypes[136]
+	mi := &file_streamd_proto_msgTypes[138]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6836,7 +6948,7 @@ func (x *StreamPlayerSetPauseReply) String() string {
 func (*StreamPlayerSetPauseReply) ProtoMessage() {}
 
 func (x *StreamPlayerSetPauseReply) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[136]
+	mi := &file_streamd_proto_msgTypes[138]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6849,7 +6961,7 @@ func (x *StreamPlayerSetPauseReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamPlayerSetPauseReply.ProtoReflect.Descriptor instead.
 func (*StreamPlayerSetPauseReply) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{136}
+	return file_streamd_proto_rawDescGZIP(), []int{138}
 }
 
 func (x *StreamPlayerSetPauseReply) GetReply() *player_grpc.SetPauseReply {
@@ -6869,7 +6981,7 @@ type StreamPlayerStopRequest struct {
 
 func (x *StreamPlayerStopRequest) Reset() {
 	*x = StreamPlayerStopRequest{}
-	mi := &file_streamd_proto_msgTypes[137]
+	mi := &file_streamd_proto_msgTypes[139]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6881,7 +6993,7 @@ func (x *StreamPlayerStopRequest) String() string {
 func (*StreamPlayerStopRequest) ProtoMessage() {}
 
 func (x *StreamPlayerStopRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[137]
+	mi := &file_streamd_proto_msgTypes[139]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6894,7 +7006,7 @@ func (x *StreamPlayerStopRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamPlayerStopRequest.ProtoReflect.Descriptor instead.
 func (*StreamPlayerStopRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{137}
+	return file_streamd_proto_rawDescGZIP(), []int{139}
 }
 
 func (x *StreamPlayerStopRequest) GetStreamID() string {
@@ -6920,7 +7032,7 @@ type StreamPlayerStopReply struct {
 
 func (x *StreamPlayerStopReply) Reset() {
 	*x = StreamPlayerStopReply{}
-	mi := &file_streamd_proto_msgTypes[138]
+	mi := &file_streamd_proto_msgTypes[140]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6932,7 +7044,7 @@ func (x *StreamPlayerStopReply) String() string {
 func (*StreamPlayerStopReply) ProtoMessage() {}
 
 func (x *StreamPlayerStopReply) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[138]
+	mi := &file_streamd_proto_msgTypes[140]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6945,7 +7057,7 @@ func (x *StreamPlayerStopReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamPlayerStopReply.ProtoReflect.Descriptor instead.
 func (*StreamPlayerStopReply) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{138}
+	return file_streamd_proto_rawDescGZIP(), []int{140}
 }
 
 func (x *StreamPlayerStopReply) GetReply() *player_grpc.StopReply {
@@ -6965,7 +7077,7 @@ type StreamPlayerCloseRequest struct {
 
 func (x *StreamPlayerCloseRequest) Reset() {
 	*x = StreamPlayerCloseRequest{}
-	mi := &file_streamd_proto_msgTypes[139]
+	mi := &file_streamd_proto_msgTypes[141]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6977,7 +7089,7 @@ func (x *StreamPlayerCloseRequest) String() string {
 func (*StreamPlayerCloseRequest) ProtoMessage() {}
 
 func (x *StreamPlayerCloseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[139]
+	mi := &file_streamd_proto_msgTypes[141]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6990,7 +7102,7 @@ func (x *StreamPlayerCloseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamPlayerCloseRequest.ProtoReflect.Descriptor instead.
 func (*StreamPlayerCloseRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{139}
+	return file_streamd_proto_rawDescGZIP(), []int{141}
 }
 
 func (x *StreamPlayerCloseRequest) GetStreamID() string {
@@ -7016,7 +7128,7 @@ type StreamPlayerCloseReply struct {
 
 func (x *StreamPlayerCloseReply) Reset() {
 	*x = StreamPlayerCloseReply{}
-	mi := &file_streamd_proto_msgTypes[140]
+	mi := &file_streamd_proto_msgTypes[142]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7028,7 +7140,7 @@ func (x *StreamPlayerCloseReply) String() string {
 func (*StreamPlayerCloseReply) ProtoMessage() {}
 
 func (x *StreamPlayerCloseReply) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[140]
+	mi := &file_streamd_proto_msgTypes[142]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7041,7 +7153,7 @@ func (x *StreamPlayerCloseReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamPlayerCloseReply.ProtoReflect.Descriptor instead.
 func (*StreamPlayerCloseReply) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{140}
+	return file_streamd_proto_rawDescGZIP(), []int{142}
 }
 
 func (x *StreamPlayerCloseReply) GetReply() *player_grpc.CloseReply {
@@ -7059,7 +7171,7 @@ type SubscribeToConfigChangesRequest struct {
 
 func (x *SubscribeToConfigChangesRequest) Reset() {
 	*x = SubscribeToConfigChangesRequest{}
-	mi := &file_streamd_proto_msgTypes[141]
+	mi := &file_streamd_proto_msgTypes[143]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7071,7 +7183,7 @@ func (x *SubscribeToConfigChangesRequest) String() string {
 func (*SubscribeToConfigChangesRequest) ProtoMessage() {}
 
 func (x *SubscribeToConfigChangesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[141]
+	mi := &file_streamd_proto_msgTypes[143]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7084,7 +7196,7 @@ func (x *SubscribeToConfigChangesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscribeToConfigChangesRequest.ProtoReflect.Descriptor instead.
 func (*SubscribeToConfigChangesRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{141}
+	return file_streamd_proto_rawDescGZIP(), []int{143}
 }
 
 type ConfigChange struct {
@@ -7095,7 +7207,7 @@ type ConfigChange struct {
 
 func (x *ConfigChange) Reset() {
 	*x = ConfigChange{}
-	mi := &file_streamd_proto_msgTypes[142]
+	mi := &file_streamd_proto_msgTypes[144]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7107,7 +7219,7 @@ func (x *ConfigChange) String() string {
 func (*ConfigChange) ProtoMessage() {}
 
 func (x *ConfigChange) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[142]
+	mi := &file_streamd_proto_msgTypes[144]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7120,7 +7232,7 @@ func (x *ConfigChange) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfigChange.ProtoReflect.Descriptor instead.
 func (*ConfigChange) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{142}
+	return file_streamd_proto_rawDescGZIP(), []int{144}
 }
 
 type SubscribeToStreamsChangesRequest struct {
@@ -7131,7 +7243,7 @@ type SubscribeToStreamsChangesRequest struct {
 
 func (x *SubscribeToStreamsChangesRequest) Reset() {
 	*x = SubscribeToStreamsChangesRequest{}
-	mi := &file_streamd_proto_msgTypes[143]
+	mi := &file_streamd_proto_msgTypes[145]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7143,7 +7255,7 @@ func (x *SubscribeToStreamsChangesRequest) String() string {
 func (*SubscribeToStreamsChangesRequest) ProtoMessage() {}
 
 func (x *SubscribeToStreamsChangesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[143]
+	mi := &file_streamd_proto_msgTypes[145]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7156,7 +7268,7 @@ func (x *SubscribeToStreamsChangesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscribeToStreamsChangesRequest.ProtoReflect.Descriptor instead.
 func (*SubscribeToStreamsChangesRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{143}
+	return file_streamd_proto_rawDescGZIP(), []int{145}
 }
 
 type StreamsChange struct {
@@ -7167,7 +7279,7 @@ type StreamsChange struct {
 
 func (x *StreamsChange) Reset() {
 	*x = StreamsChange{}
-	mi := &file_streamd_proto_msgTypes[144]
+	mi := &file_streamd_proto_msgTypes[146]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7179,7 +7291,7 @@ func (x *StreamsChange) String() string {
 func (*StreamsChange) ProtoMessage() {}
 
 func (x *StreamsChange) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[144]
+	mi := &file_streamd_proto_msgTypes[146]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7192,7 +7304,7 @@ func (x *StreamsChange) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamsChange.ProtoReflect.Descriptor instead.
 func (*StreamsChange) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{144}
+	return file_streamd_proto_rawDescGZIP(), []int{146}
 }
 
 type SubscribeToStreamServersChangesRequest struct {
@@ -7203,7 +7315,7 @@ type SubscribeToStreamServersChangesRequest struct {
 
 func (x *SubscribeToStreamServersChangesRequest) Reset() {
 	*x = SubscribeToStreamServersChangesRequest{}
-	mi := &file_streamd_proto_msgTypes[145]
+	mi := &file_streamd_proto_msgTypes[147]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7215,7 +7327,7 @@ func (x *SubscribeToStreamServersChangesRequest) String() string {
 func (*SubscribeToStreamServersChangesRequest) ProtoMessage() {}
 
 func (x *SubscribeToStreamServersChangesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[145]
+	mi := &file_streamd_proto_msgTypes[147]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7228,7 +7340,7 @@ func (x *SubscribeToStreamServersChangesRequest) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use SubscribeToStreamServersChangesRequest.ProtoReflect.Descriptor instead.
 func (*SubscribeToStreamServersChangesRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{145}
+	return file_streamd_proto_rawDescGZIP(), []int{147}
 }
 
 type StreamServersChange struct {
@@ -7239,7 +7351,7 @@ type StreamServersChange struct {
 
 func (x *StreamServersChange) Reset() {
 	*x = StreamServersChange{}
-	mi := &file_streamd_proto_msgTypes[146]
+	mi := &file_streamd_proto_msgTypes[148]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7251,7 +7363,7 @@ func (x *StreamServersChange) String() string {
 func (*StreamServersChange) ProtoMessage() {}
 
 func (x *StreamServersChange) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[146]
+	mi := &file_streamd_proto_msgTypes[148]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7264,7 +7376,7 @@ func (x *StreamServersChange) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamServersChange.ProtoReflect.Descriptor instead.
 func (*StreamServersChange) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{146}
+	return file_streamd_proto_rawDescGZIP(), []int{148}
 }
 
 type SubscribeToStreamDestinationsChangesRequest struct {
@@ -7275,7 +7387,7 @@ type SubscribeToStreamDestinationsChangesRequest struct {
 
 func (x *SubscribeToStreamDestinationsChangesRequest) Reset() {
 	*x = SubscribeToStreamDestinationsChangesRequest{}
-	mi := &file_streamd_proto_msgTypes[147]
+	mi := &file_streamd_proto_msgTypes[149]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7287,7 +7399,7 @@ func (x *SubscribeToStreamDestinationsChangesRequest) String() string {
 func (*SubscribeToStreamDestinationsChangesRequest) ProtoMessage() {}
 
 func (x *SubscribeToStreamDestinationsChangesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[147]
+	mi := &file_streamd_proto_msgTypes[149]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7300,7 +7412,7 @@ func (x *SubscribeToStreamDestinationsChangesRequest) ProtoReflect() protoreflec
 
 // Deprecated: Use SubscribeToStreamDestinationsChangesRequest.ProtoReflect.Descriptor instead.
 func (*SubscribeToStreamDestinationsChangesRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{147}
+	return file_streamd_proto_rawDescGZIP(), []int{149}
 }
 
 type StreamDestinationsChange struct {
@@ -7311,7 +7423,7 @@ type StreamDestinationsChange struct {
 
 func (x *StreamDestinationsChange) Reset() {
 	*x = StreamDestinationsChange{}
-	mi := &file_streamd_proto_msgTypes[148]
+	mi := &file_streamd_proto_msgTypes[150]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7323,7 +7435,7 @@ func (x *StreamDestinationsChange) String() string {
 func (*StreamDestinationsChange) ProtoMessage() {}
 
 func (x *StreamDestinationsChange) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[148]
+	mi := &file_streamd_proto_msgTypes[150]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7336,7 +7448,7 @@ func (x *StreamDestinationsChange) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamDestinationsChange.ProtoReflect.Descriptor instead.
 func (*StreamDestinationsChange) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{148}
+	return file_streamd_proto_rawDescGZIP(), []int{150}
 }
 
 type SubscribeToIncomingStreamsChangesRequest struct {
@@ -7347,7 +7459,7 @@ type SubscribeToIncomingStreamsChangesRequest struct {
 
 func (x *SubscribeToIncomingStreamsChangesRequest) Reset() {
 	*x = SubscribeToIncomingStreamsChangesRequest{}
-	mi := &file_streamd_proto_msgTypes[149]
+	mi := &file_streamd_proto_msgTypes[151]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7359,7 +7471,7 @@ func (x *SubscribeToIncomingStreamsChangesRequest) String() string {
 func (*SubscribeToIncomingStreamsChangesRequest) ProtoMessage() {}
 
 func (x *SubscribeToIncomingStreamsChangesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[149]
+	mi := &file_streamd_proto_msgTypes[151]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7372,7 +7484,7 @@ func (x *SubscribeToIncomingStreamsChangesRequest) ProtoReflect() protoreflect.M
 
 // Deprecated: Use SubscribeToIncomingStreamsChangesRequest.ProtoReflect.Descriptor instead.
 func (*SubscribeToIncomingStreamsChangesRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{149}
+	return file_streamd_proto_rawDescGZIP(), []int{151}
 }
 
 type IncomingStreamsChange struct {
@@ -7383,7 +7495,7 @@ type IncomingStreamsChange struct {
 
 func (x *IncomingStreamsChange) Reset() {
 	*x = IncomingStreamsChange{}
-	mi := &file_streamd_proto_msgTypes[150]
+	mi := &file_streamd_proto_msgTypes[152]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7395,7 +7507,7 @@ func (x *IncomingStreamsChange) String() string {
 func (*IncomingStreamsChange) ProtoMessage() {}
 
 func (x *IncomingStreamsChange) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[150]
+	mi := &file_streamd_proto_msgTypes[152]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7408,7 +7520,7 @@ func (x *IncomingStreamsChange) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IncomingStreamsChange.ProtoReflect.Descriptor instead.
 func (*IncomingStreamsChange) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{150}
+	return file_streamd_proto_rawDescGZIP(), []int{152}
 }
 
 type SubscribeToStreamForwardsChangesRequest struct {
@@ -7419,7 +7531,7 @@ type SubscribeToStreamForwardsChangesRequest struct {
 
 func (x *SubscribeToStreamForwardsChangesRequest) Reset() {
 	*x = SubscribeToStreamForwardsChangesRequest{}
-	mi := &file_streamd_proto_msgTypes[151]
+	mi := &file_streamd_proto_msgTypes[153]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7431,7 +7543,7 @@ func (x *SubscribeToStreamForwardsChangesRequest) String() string {
 func (*SubscribeToStreamForwardsChangesRequest) ProtoMessage() {}
 
 func (x *SubscribeToStreamForwardsChangesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[151]
+	mi := &file_streamd_proto_msgTypes[153]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7444,7 +7556,7 @@ func (x *SubscribeToStreamForwardsChangesRequest) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use SubscribeToStreamForwardsChangesRequest.ProtoReflect.Descriptor instead.
 func (*SubscribeToStreamForwardsChangesRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{151}
+	return file_streamd_proto_rawDescGZIP(), []int{153}
 }
 
 type StreamForwardsChange struct {
@@ -7455,7 +7567,7 @@ type StreamForwardsChange struct {
 
 func (x *StreamForwardsChange) Reset() {
 	*x = StreamForwardsChange{}
-	mi := &file_streamd_proto_msgTypes[152]
+	mi := &file_streamd_proto_msgTypes[154]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7467,7 +7579,7 @@ func (x *StreamForwardsChange) String() string {
 func (*StreamForwardsChange) ProtoMessage() {}
 
 func (x *StreamForwardsChange) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[152]
+	mi := &file_streamd_proto_msgTypes[154]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7480,7 +7592,7 @@ func (x *StreamForwardsChange) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamForwardsChange.ProtoReflect.Descriptor instead.
 func (*StreamForwardsChange) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{152}
+	return file_streamd_proto_rawDescGZIP(), []int{154}
 }
 
 type SubscribeToStreamPlayersChangesRequest struct {
@@ -7491,7 +7603,7 @@ type SubscribeToStreamPlayersChangesRequest struct {
 
 func (x *SubscribeToStreamPlayersChangesRequest) Reset() {
 	*x = SubscribeToStreamPlayersChangesRequest{}
-	mi := &file_streamd_proto_msgTypes[153]
+	mi := &file_streamd_proto_msgTypes[155]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7503,7 +7615,7 @@ func (x *SubscribeToStreamPlayersChangesRequest) String() string {
 func (*SubscribeToStreamPlayersChangesRequest) ProtoMessage() {}
 
 func (x *SubscribeToStreamPlayersChangesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[153]
+	mi := &file_streamd_proto_msgTypes[155]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7516,7 +7628,7 @@ func (x *SubscribeToStreamPlayersChangesRequest) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use SubscribeToStreamPlayersChangesRequest.ProtoReflect.Descriptor instead.
 func (*SubscribeToStreamPlayersChangesRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{153}
+	return file_streamd_proto_rawDescGZIP(), []int{155}
 }
 
 type StreamPlayersChange struct {
@@ -7527,7 +7639,7 @@ type StreamPlayersChange struct {
 
 func (x *StreamPlayersChange) Reset() {
 	*x = StreamPlayersChange{}
-	mi := &file_streamd_proto_msgTypes[154]
+	mi := &file_streamd_proto_msgTypes[156]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7539,7 +7651,7 @@ func (x *StreamPlayersChange) String() string {
 func (*StreamPlayersChange) ProtoMessage() {}
 
 func (x *StreamPlayersChange) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[154]
+	mi := &file_streamd_proto_msgTypes[156]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7552,7 +7664,7 @@ func (x *StreamPlayersChange) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamPlayersChange.ProtoReflect.Descriptor instead.
 func (*StreamPlayersChange) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{154}
+	return file_streamd_proto_rawDescGZIP(), []int{156}
 }
 
 type NoopRequest struct {
@@ -7563,7 +7675,7 @@ type NoopRequest struct {
 
 func (x *NoopRequest) Reset() {
 	*x = NoopRequest{}
-	mi := &file_streamd_proto_msgTypes[155]
+	mi := &file_streamd_proto_msgTypes[157]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7575,7 +7687,7 @@ func (x *NoopRequest) String() string {
 func (*NoopRequest) ProtoMessage() {}
 
 func (x *NoopRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[155]
+	mi := &file_streamd_proto_msgTypes[157]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7588,7 +7700,7 @@ func (x *NoopRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NoopRequest.ProtoReflect.Descriptor instead.
 func (*NoopRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{155}
+	return file_streamd_proto_rawDescGZIP(), []int{157}
 }
 
 type OBSActionItemShowHide struct {
@@ -7602,7 +7714,7 @@ type OBSActionItemShowHide struct {
 
 func (x *OBSActionItemShowHide) Reset() {
 	*x = OBSActionItemShowHide{}
-	mi := &file_streamd_proto_msgTypes[156]
+	mi := &file_streamd_proto_msgTypes[158]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7614,7 +7726,7 @@ func (x *OBSActionItemShowHide) String() string {
 func (*OBSActionItemShowHide) ProtoMessage() {}
 
 func (x *OBSActionItemShowHide) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[156]
+	mi := &file_streamd_proto_msgTypes[158]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7627,7 +7739,7 @@ func (x *OBSActionItemShowHide) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OBSActionItemShowHide.ProtoReflect.Descriptor instead.
 func (*OBSActionItemShowHide) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{156}
+	return file_streamd_proto_rawDescGZIP(), []int{158}
 }
 
 func (x *OBSActionItemShowHide) GetItemName() string {
@@ -7662,7 +7774,7 @@ type OBSActionWindowCaptureSetSource struct {
 
 func (x *OBSActionWindowCaptureSetSource) Reset() {
 	*x = OBSActionWindowCaptureSetSource{}
-	mi := &file_streamd_proto_msgTypes[157]
+	mi := &file_streamd_proto_msgTypes[159]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7674,7 +7786,7 @@ func (x *OBSActionWindowCaptureSetSource) String() string {
 func (*OBSActionWindowCaptureSetSource) ProtoMessage() {}
 
 func (x *OBSActionWindowCaptureSetSource) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[157]
+	mi := &file_streamd_proto_msgTypes[159]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7687,7 +7799,7 @@ func (x *OBSActionWindowCaptureSetSource) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OBSActionWindowCaptureSetSource.ProtoReflect.Descriptor instead.
 func (*OBSActionWindowCaptureSetSource) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{157}
+	return file_streamd_proto_rawDescGZIP(), []int{159}
 }
 
 func (x *OBSActionWindowCaptureSetSource) GetItemName() string {
@@ -7724,7 +7836,7 @@ type OBSAction struct {
 
 func (x *OBSAction) Reset() {
 	*x = OBSAction{}
-	mi := &file_streamd_proto_msgTypes[158]
+	mi := &file_streamd_proto_msgTypes[160]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7736,7 +7848,7 @@ func (x *OBSAction) String() string {
 func (*OBSAction) ProtoMessage() {}
 
 func (x *OBSAction) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[158]
+	mi := &file_streamd_proto_msgTypes[160]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7749,7 +7861,7 @@ func (x *OBSAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OBSAction.ProtoReflect.Descriptor instead.
 func (*OBSAction) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{158}
+	return file_streamd_proto_rawDescGZIP(), []int{160}
 }
 
 func (x *OBSAction) GetOBSActionOneOf() isOBSAction_OBSActionOneOf {
@@ -7809,7 +7921,7 @@ type Action struct {
 
 func (x *Action) Reset() {
 	*x = Action{}
-	mi := &file_streamd_proto_msgTypes[159]
+	mi := &file_streamd_proto_msgTypes[161]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7821,7 +7933,7 @@ func (x *Action) String() string {
 func (*Action) ProtoMessage() {}
 
 func (x *Action) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[159]
+	mi := &file_streamd_proto_msgTypes[161]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7834,7 +7946,7 @@ func (x *Action) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Action.ProtoReflect.Descriptor instead.
 func (*Action) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{159}
+	return file_streamd_proto_rawDescGZIP(), []int{161}
 }
 
 func (x *Action) GetActionOneof() isAction_ActionOneof {
@@ -7933,7 +8045,7 @@ type AddTimerRequest struct {
 
 func (x *AddTimerRequest) Reset() {
 	*x = AddTimerRequest{}
-	mi := &file_streamd_proto_msgTypes[160]
+	mi := &file_streamd_proto_msgTypes[162]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7945,7 +8057,7 @@ func (x *AddTimerRequest) String() string {
 func (*AddTimerRequest) ProtoMessage() {}
 
 func (x *AddTimerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[160]
+	mi := &file_streamd_proto_msgTypes[162]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7958,7 +8070,7 @@ func (x *AddTimerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddTimerRequest.ProtoReflect.Descriptor instead.
 func (*AddTimerRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{160}
+	return file_streamd_proto_rawDescGZIP(), []int{162}
 }
 
 func (x *AddTimerRequest) GetTriggerAtUnixNano() int64 {
@@ -7984,7 +8096,7 @@ type AddTimerReply struct {
 
 func (x *AddTimerReply) Reset() {
 	*x = AddTimerReply{}
-	mi := &file_streamd_proto_msgTypes[161]
+	mi := &file_streamd_proto_msgTypes[163]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7996,7 +8108,7 @@ func (x *AddTimerReply) String() string {
 func (*AddTimerReply) ProtoMessage() {}
 
 func (x *AddTimerReply) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[161]
+	mi := &file_streamd_proto_msgTypes[163]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8009,7 +8121,7 @@ func (x *AddTimerReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddTimerReply.ProtoReflect.Descriptor instead.
 func (*AddTimerReply) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{161}
+	return file_streamd_proto_rawDescGZIP(), []int{163}
 }
 
 func (x *AddTimerReply) GetTimerID() int64 {
@@ -8028,7 +8140,7 @@ type RemoveTimerRequest struct {
 
 func (x *RemoveTimerRequest) Reset() {
 	*x = RemoveTimerRequest{}
-	mi := &file_streamd_proto_msgTypes[162]
+	mi := &file_streamd_proto_msgTypes[164]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8040,7 +8152,7 @@ func (x *RemoveTimerRequest) String() string {
 func (*RemoveTimerRequest) ProtoMessage() {}
 
 func (x *RemoveTimerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[162]
+	mi := &file_streamd_proto_msgTypes[164]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8053,7 +8165,7 @@ func (x *RemoveTimerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveTimerRequest.ProtoReflect.Descriptor instead.
 func (*RemoveTimerRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{162}
+	return file_streamd_proto_rawDescGZIP(), []int{164}
 }
 
 func (x *RemoveTimerRequest) GetTimerID() int64 {
@@ -8071,7 +8183,7 @@ type RemoveTimerReply struct {
 
 func (x *RemoveTimerReply) Reset() {
 	*x = RemoveTimerReply{}
-	mi := &file_streamd_proto_msgTypes[163]
+	mi := &file_streamd_proto_msgTypes[165]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8083,7 +8195,7 @@ func (x *RemoveTimerReply) String() string {
 func (*RemoveTimerReply) ProtoMessage() {}
 
 func (x *RemoveTimerReply) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[163]
+	mi := &file_streamd_proto_msgTypes[165]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8096,7 +8208,7 @@ func (x *RemoveTimerReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveTimerReply.ProtoReflect.Descriptor instead.
 func (*RemoveTimerReply) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{163}
+	return file_streamd_proto_rawDescGZIP(), []int{165}
 }
 
 type Timer struct {
@@ -8110,7 +8222,7 @@ type Timer struct {
 
 func (x *Timer) Reset() {
 	*x = Timer{}
-	mi := &file_streamd_proto_msgTypes[164]
+	mi := &file_streamd_proto_msgTypes[166]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8122,7 +8234,7 @@ func (x *Timer) String() string {
 func (*Timer) ProtoMessage() {}
 
 func (x *Timer) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[164]
+	mi := &file_streamd_proto_msgTypes[166]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8135,7 +8247,7 @@ func (x *Timer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Timer.ProtoReflect.Descriptor instead.
 func (*Timer) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{164}
+	return file_streamd_proto_rawDescGZIP(), []int{166}
 }
 
 func (x *Timer) GetTimerID() int64 {
@@ -8167,7 +8279,7 @@ type ListTimersRequest struct {
 
 func (x *ListTimersRequest) Reset() {
 	*x = ListTimersRequest{}
-	mi := &file_streamd_proto_msgTypes[165]
+	mi := &file_streamd_proto_msgTypes[167]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8179,7 +8291,7 @@ func (x *ListTimersRequest) String() string {
 func (*ListTimersRequest) ProtoMessage() {}
 
 func (x *ListTimersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[165]
+	mi := &file_streamd_proto_msgTypes[167]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8192,7 +8304,7 @@ func (x *ListTimersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListTimersRequest.ProtoReflect.Descriptor instead.
 func (*ListTimersRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{165}
+	return file_streamd_proto_rawDescGZIP(), []int{167}
 }
 
 type ListTimersReply struct {
@@ -8204,7 +8316,7 @@ type ListTimersReply struct {
 
 func (x *ListTimersReply) Reset() {
 	*x = ListTimersReply{}
-	mi := &file_streamd_proto_msgTypes[166]
+	mi := &file_streamd_proto_msgTypes[168]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8216,7 +8328,7 @@ func (x *ListTimersReply) String() string {
 func (*ListTimersReply) ProtoMessage() {}
 
 func (x *ListTimersReply) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[166]
+	mi := &file_streamd_proto_msgTypes[168]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8229,7 +8341,7 @@ func (x *ListTimersReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListTimersReply.ProtoReflect.Descriptor instead.
 func (*ListTimersReply) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{166}
+	return file_streamd_proto_rawDescGZIP(), []int{168}
 }
 
 func (x *ListTimersReply) GetTimers() []*Timer {
@@ -8248,7 +8360,7 @@ type EventQueryAnd struct {
 
 func (x *EventQueryAnd) Reset() {
 	*x = EventQueryAnd{}
-	mi := &file_streamd_proto_msgTypes[167]
+	mi := &file_streamd_proto_msgTypes[169]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8260,7 +8372,7 @@ func (x *EventQueryAnd) String() string {
 func (*EventQueryAnd) ProtoMessage() {}
 
 func (x *EventQueryAnd) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[167]
+	mi := &file_streamd_proto_msgTypes[169]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8273,7 +8385,7 @@ func (x *EventQueryAnd) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EventQueryAnd.ProtoReflect.Descriptor instead.
 func (*EventQueryAnd) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{167}
+	return file_streamd_proto_rawDescGZIP(), []int{169}
 }
 
 func (x *EventQueryAnd) GetQueries() []*Event {
@@ -8292,7 +8404,7 @@ type EventQueryOr struct {
 
 func (x *EventQueryOr) Reset() {
 	*x = EventQueryOr{}
-	mi := &file_streamd_proto_msgTypes[168]
+	mi := &file_streamd_proto_msgTypes[170]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8304,7 +8416,7 @@ func (x *EventQueryOr) String() string {
 func (*EventQueryOr) ProtoMessage() {}
 
 func (x *EventQueryOr) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[168]
+	mi := &file_streamd_proto_msgTypes[170]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8317,7 +8429,7 @@ func (x *EventQueryOr) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EventQueryOr.ProtoReflect.Descriptor instead.
 func (*EventQueryOr) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{168}
+	return file_streamd_proto_rawDescGZIP(), []int{170}
 }
 
 func (x *EventQueryOr) GetQueries() []*Event {
@@ -8336,7 +8448,7 @@ type EventQueryNot struct {
 
 func (x *EventQueryNot) Reset() {
 	*x = EventQueryNot{}
-	mi := &file_streamd_proto_msgTypes[169]
+	mi := &file_streamd_proto_msgTypes[171]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8348,7 +8460,7 @@ func (x *EventQueryNot) String() string {
 func (*EventQueryNot) ProtoMessage() {}
 
 func (x *EventQueryNot) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[169]
+	mi := &file_streamd_proto_msgTypes[171]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8361,7 +8473,7 @@ func (x *EventQueryNot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EventQueryNot.ProtoReflect.Descriptor instead.
 func (*EventQueryNot) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{169}
+	return file_streamd_proto_rawDescGZIP(), []int{171}
 }
 
 func (x *EventQueryNot) GetQuery() *Event {
@@ -8386,7 +8498,7 @@ type EventWindowFocusChange struct {
 
 func (x *EventWindowFocusChange) Reset() {
 	*x = EventWindowFocusChange{}
-	mi := &file_streamd_proto_msgTypes[170]
+	mi := &file_streamd_proto_msgTypes[172]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8398,7 +8510,7 @@ func (x *EventWindowFocusChange) String() string {
 func (*EventWindowFocusChange) ProtoMessage() {}
 
 func (x *EventWindowFocusChange) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[170]
+	mi := &file_streamd_proto_msgTypes[172]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8411,7 +8523,7 @@ func (x *EventWindowFocusChange) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EventWindowFocusChange.ProtoReflect.Descriptor instead.
 func (*EventWindowFocusChange) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{170}
+	return file_streamd_proto_rawDescGZIP(), []int{172}
 }
 
 func (x *EventWindowFocusChange) GetHost() string {
@@ -8473,7 +8585,7 @@ type EventOBSSceneChange struct {
 
 func (x *EventOBSSceneChange) Reset() {
 	*x = EventOBSSceneChange{}
-	mi := &file_streamd_proto_msgTypes[171]
+	mi := &file_streamd_proto_msgTypes[173]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8485,7 +8597,7 @@ func (x *EventOBSSceneChange) String() string {
 func (*EventOBSSceneChange) ProtoMessage() {}
 
 func (x *EventOBSSceneChange) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[171]
+	mi := &file_streamd_proto_msgTypes[173]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8498,7 +8610,7 @@ func (x *EventOBSSceneChange) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EventOBSSceneChange.ProtoReflect.Descriptor instead.
 func (*EventOBSSceneChange) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{171}
+	return file_streamd_proto_rawDescGZIP(), []int{173}
 }
 
 func (x *EventOBSSceneChange) GetFrom() string {
@@ -8531,7 +8643,7 @@ type EventQuery struct {
 
 func (x *EventQuery) Reset() {
 	*x = EventQuery{}
-	mi := &file_streamd_proto_msgTypes[172]
+	mi := &file_streamd_proto_msgTypes[174]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8543,7 +8655,7 @@ func (x *EventQuery) String() string {
 func (*EventQuery) ProtoMessage() {}
 
 func (x *EventQuery) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[172]
+	mi := &file_streamd_proto_msgTypes[174]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8556,7 +8668,7 @@ func (x *EventQuery) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EventQuery.ProtoReflect.Descriptor instead.
 func (*EventQuery) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{172}
+	return file_streamd_proto_rawDescGZIP(), []int{174}
 }
 
 func (x *EventQuery) GetEventQueryOneOf() isEventQuery_EventQueryOneOf {
@@ -8658,7 +8770,7 @@ type Event struct {
 
 func (x *Event) Reset() {
 	*x = Event{}
-	mi := &file_streamd_proto_msgTypes[173]
+	mi := &file_streamd_proto_msgTypes[175]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8670,7 +8782,7 @@ func (x *Event) String() string {
 func (*Event) ProtoMessage() {}
 
 func (x *Event) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[173]
+	mi := &file_streamd_proto_msgTypes[175]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8683,7 +8795,7 @@ func (x *Event) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Event.ProtoReflect.Descriptor instead.
 func (*Event) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{173}
+	return file_streamd_proto_rawDescGZIP(), []int{175}
 }
 
 func (x *Event) GetEventOneOf() isEvent_EventOneOf {
@@ -8738,7 +8850,7 @@ type TriggerRule struct {
 
 func (x *TriggerRule) Reset() {
 	*x = TriggerRule{}
-	mi := &file_streamd_proto_msgTypes[174]
+	mi := &file_streamd_proto_msgTypes[176]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8750,7 +8862,7 @@ func (x *TriggerRule) String() string {
 func (*TriggerRule) ProtoMessage() {}
 
 func (x *TriggerRule) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[174]
+	mi := &file_streamd_proto_msgTypes[176]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8763,7 +8875,7 @@ func (x *TriggerRule) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TriggerRule.ProtoReflect.Descriptor instead.
 func (*TriggerRule) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{174}
+	return file_streamd_proto_rawDescGZIP(), []int{176}
 }
 
 func (x *TriggerRule) GetDescription() string {
@@ -8795,7 +8907,7 @@ type ListTriggerRulesRequest struct {
 
 func (x *ListTriggerRulesRequest) Reset() {
 	*x = ListTriggerRulesRequest{}
-	mi := &file_streamd_proto_msgTypes[175]
+	mi := &file_streamd_proto_msgTypes[177]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8807,7 +8919,7 @@ func (x *ListTriggerRulesRequest) String() string {
 func (*ListTriggerRulesRequest) ProtoMessage() {}
 
 func (x *ListTriggerRulesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[175]
+	mi := &file_streamd_proto_msgTypes[177]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8820,7 +8932,7 @@ func (x *ListTriggerRulesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListTriggerRulesRequest.ProtoReflect.Descriptor instead.
 func (*ListTriggerRulesRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{175}
+	return file_streamd_proto_rawDescGZIP(), []int{177}
 }
 
 type ListTriggerRulesReply struct {
@@ -8832,7 +8944,7 @@ type ListTriggerRulesReply struct {
 
 func (x *ListTriggerRulesReply) Reset() {
 	*x = ListTriggerRulesReply{}
-	mi := &file_streamd_proto_msgTypes[176]
+	mi := &file_streamd_proto_msgTypes[178]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8844,7 +8956,7 @@ func (x *ListTriggerRulesReply) String() string {
 func (*ListTriggerRulesReply) ProtoMessage() {}
 
 func (x *ListTriggerRulesReply) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[176]
+	mi := &file_streamd_proto_msgTypes[178]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8857,7 +8969,7 @@ func (x *ListTriggerRulesReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListTriggerRulesReply.ProtoReflect.Descriptor instead.
 func (*ListTriggerRulesReply) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{176}
+	return file_streamd_proto_rawDescGZIP(), []int{178}
 }
 
 func (x *ListTriggerRulesReply) GetRules() []*TriggerRule {
@@ -8876,7 +8988,7 @@ type AddTriggerRuleRequest struct {
 
 func (x *AddTriggerRuleRequest) Reset() {
 	*x = AddTriggerRuleRequest{}
-	mi := &file_streamd_proto_msgTypes[177]
+	mi := &file_streamd_proto_msgTypes[179]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8888,7 +9000,7 @@ func (x *AddTriggerRuleRequest) String() string {
 func (*AddTriggerRuleRequest) ProtoMessage() {}
 
 func (x *AddTriggerRuleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[177]
+	mi := &file_streamd_proto_msgTypes[179]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8901,7 +9013,7 @@ func (x *AddTriggerRuleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddTriggerRuleRequest.ProtoReflect.Descriptor instead.
 func (*AddTriggerRuleRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{177}
+	return file_streamd_proto_rawDescGZIP(), []int{179}
 }
 
 func (x *AddTriggerRuleRequest) GetRule() *TriggerRule {
@@ -8920,7 +9032,7 @@ type AddTriggerRuleReply struct {
 
 func (x *AddTriggerRuleReply) Reset() {
 	*x = AddTriggerRuleReply{}
-	mi := &file_streamd_proto_msgTypes[178]
+	mi := &file_streamd_proto_msgTypes[180]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8932,7 +9044,7 @@ func (x *AddTriggerRuleReply) String() string {
 func (*AddTriggerRuleReply) ProtoMessage() {}
 
 func (x *AddTriggerRuleReply) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[178]
+	mi := &file_streamd_proto_msgTypes[180]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8945,7 +9057,7 @@ func (x *AddTriggerRuleReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddTriggerRuleReply.ProtoReflect.Descriptor instead.
 func (*AddTriggerRuleReply) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{178}
+	return file_streamd_proto_rawDescGZIP(), []int{180}
 }
 
 func (x *AddTriggerRuleReply) GetRuleID() uint64 {
@@ -8964,7 +9076,7 @@ type RemoveTriggerRuleRequest struct {
 
 func (x *RemoveTriggerRuleRequest) Reset() {
 	*x = RemoveTriggerRuleRequest{}
-	mi := &file_streamd_proto_msgTypes[179]
+	mi := &file_streamd_proto_msgTypes[181]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8976,7 +9088,7 @@ func (x *RemoveTriggerRuleRequest) String() string {
 func (*RemoveTriggerRuleRequest) ProtoMessage() {}
 
 func (x *RemoveTriggerRuleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[179]
+	mi := &file_streamd_proto_msgTypes[181]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8989,7 +9101,7 @@ func (x *RemoveTriggerRuleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveTriggerRuleRequest.ProtoReflect.Descriptor instead.
 func (*RemoveTriggerRuleRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{179}
+	return file_streamd_proto_rawDescGZIP(), []int{181}
 }
 
 func (x *RemoveTriggerRuleRequest) GetRuleID() uint64 {
@@ -9007,7 +9119,7 @@ type RemoveTriggerRuleReply struct {
 
 func (x *RemoveTriggerRuleReply) Reset() {
 	*x = RemoveTriggerRuleReply{}
-	mi := &file_streamd_proto_msgTypes[180]
+	mi := &file_streamd_proto_msgTypes[182]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9019,7 +9131,7 @@ func (x *RemoveTriggerRuleReply) String() string {
 func (*RemoveTriggerRuleReply) ProtoMessage() {}
 
 func (x *RemoveTriggerRuleReply) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[180]
+	mi := &file_streamd_proto_msgTypes[182]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9032,7 +9144,7 @@ func (x *RemoveTriggerRuleReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveTriggerRuleReply.ProtoReflect.Descriptor instead.
 func (*RemoveTriggerRuleReply) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{180}
+	return file_streamd_proto_rawDescGZIP(), []int{182}
 }
 
 type UpdateTriggerRuleRequest struct {
@@ -9045,7 +9157,7 @@ type UpdateTriggerRuleRequest struct {
 
 func (x *UpdateTriggerRuleRequest) Reset() {
 	*x = UpdateTriggerRuleRequest{}
-	mi := &file_streamd_proto_msgTypes[181]
+	mi := &file_streamd_proto_msgTypes[183]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9057,7 +9169,7 @@ func (x *UpdateTriggerRuleRequest) String() string {
 func (*UpdateTriggerRuleRequest) ProtoMessage() {}
 
 func (x *UpdateTriggerRuleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[181]
+	mi := &file_streamd_proto_msgTypes[183]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9070,7 +9182,7 @@ func (x *UpdateTriggerRuleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateTriggerRuleRequest.ProtoReflect.Descriptor instead.
 func (*UpdateTriggerRuleRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{181}
+	return file_streamd_proto_rawDescGZIP(), []int{183}
 }
 
 func (x *UpdateTriggerRuleRequest) GetRuleID() uint64 {
@@ -9095,7 +9207,7 @@ type UpdateTriggerRuleReply struct {
 
 func (x *UpdateTriggerRuleReply) Reset() {
 	*x = UpdateTriggerRuleReply{}
-	mi := &file_streamd_proto_msgTypes[182]
+	mi := &file_streamd_proto_msgTypes[184]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9107,7 +9219,7 @@ func (x *UpdateTriggerRuleReply) String() string {
 func (*UpdateTriggerRuleReply) ProtoMessage() {}
 
 func (x *UpdateTriggerRuleReply) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[182]
+	mi := &file_streamd_proto_msgTypes[184]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9120,7 +9232,7 @@ func (x *UpdateTriggerRuleReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateTriggerRuleReply.ProtoReflect.Descriptor instead.
 func (*UpdateTriggerRuleReply) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{182}
+	return file_streamd_proto_rawDescGZIP(), []int{184}
 }
 
 type SubmitEventRequest struct {
@@ -9132,7 +9244,7 @@ type SubmitEventRequest struct {
 
 func (x *SubmitEventRequest) Reset() {
 	*x = SubmitEventRequest{}
-	mi := &file_streamd_proto_msgTypes[183]
+	mi := &file_streamd_proto_msgTypes[185]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9144,7 +9256,7 @@ func (x *SubmitEventRequest) String() string {
 func (*SubmitEventRequest) ProtoMessage() {}
 
 func (x *SubmitEventRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[183]
+	mi := &file_streamd_proto_msgTypes[185]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9157,7 +9269,7 @@ func (x *SubmitEventRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitEventRequest.ProtoReflect.Descriptor instead.
 func (*SubmitEventRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{183}
+	return file_streamd_proto_rawDescGZIP(), []int{185}
 }
 
 func (x *SubmitEventRequest) GetEvent() *Event {
@@ -9175,7 +9287,7 @@ type SubmitEventReply struct {
 
 func (x *SubmitEventReply) Reset() {
 	*x = SubmitEventReply{}
-	mi := &file_streamd_proto_msgTypes[184]
+	mi := &file_streamd_proto_msgTypes[186]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9187,7 +9299,7 @@ func (x *SubmitEventReply) String() string {
 func (*SubmitEventReply) ProtoMessage() {}
 
 func (x *SubmitEventReply) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[184]
+	mi := &file_streamd_proto_msgTypes[186]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9200,7 +9312,7 @@ func (x *SubmitEventReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitEventReply.ProtoReflect.Descriptor instead.
 func (*SubmitEventReply) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{184}
+	return file_streamd_proto_rawDescGZIP(), []int{186}
 }
 
 type SubscribeToChatMessagesRequest struct {
@@ -9213,7 +9325,7 @@ type SubscribeToChatMessagesRequest struct {
 
 func (x *SubscribeToChatMessagesRequest) Reset() {
 	*x = SubscribeToChatMessagesRequest{}
-	mi := &file_streamd_proto_msgTypes[185]
+	mi := &file_streamd_proto_msgTypes[187]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9225,7 +9337,7 @@ func (x *SubscribeToChatMessagesRequest) String() string {
 func (*SubscribeToChatMessagesRequest) ProtoMessage() {}
 
 func (x *SubscribeToChatMessagesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[185]
+	mi := &file_streamd_proto_msgTypes[187]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9238,7 +9350,7 @@ func (x *SubscribeToChatMessagesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscribeToChatMessagesRequest.ProtoReflect.Descriptor instead.
 func (*SubscribeToChatMessagesRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{185}
+	return file_streamd_proto_rawDescGZIP(), []int{187}
 }
 
 func (x *SubscribeToChatMessagesRequest) GetSinceUNIXNano() uint64 {
@@ -9267,7 +9379,7 @@ type ChatMessage struct {
 
 func (x *ChatMessage) Reset() {
 	*x = ChatMessage{}
-	mi := &file_streamd_proto_msgTypes[186]
+	mi := &file_streamd_proto_msgTypes[188]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9279,7 +9391,7 @@ func (x *ChatMessage) String() string {
 func (*ChatMessage) ProtoMessage() {}
 
 func (x *ChatMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[186]
+	mi := &file_streamd_proto_msgTypes[188]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9292,7 +9404,7 @@ func (x *ChatMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChatMessage.ProtoReflect.Descriptor instead.
 func (*ChatMessage) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{186}
+	return file_streamd_proto_rawDescGZIP(), []int{188}
 }
 
 func (x *ChatMessage) GetPlatID() string {
@@ -9326,7 +9438,7 @@ type SendChatMessageRequest struct {
 
 func (x *SendChatMessageRequest) Reset() {
 	*x = SendChatMessageRequest{}
-	mi := &file_streamd_proto_msgTypes[187]
+	mi := &file_streamd_proto_msgTypes[189]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9338,7 +9450,7 @@ func (x *SendChatMessageRequest) String() string {
 func (*SendChatMessageRequest) ProtoMessage() {}
 
 func (x *SendChatMessageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[187]
+	mi := &file_streamd_proto_msgTypes[189]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9351,7 +9463,7 @@ func (x *SendChatMessageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendChatMessageRequest.ProtoReflect.Descriptor instead.
 func (*SendChatMessageRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{187}
+	return file_streamd_proto_rawDescGZIP(), []int{189}
 }
 
 func (x *SendChatMessageRequest) GetPlatID() string {
@@ -9376,7 +9488,7 @@ type SendChatMessageReply struct {
 
 func (x *SendChatMessageReply) Reset() {
 	*x = SendChatMessageReply{}
-	mi := &file_streamd_proto_msgTypes[188]
+	mi := &file_streamd_proto_msgTypes[190]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9388,7 +9500,7 @@ func (x *SendChatMessageReply) String() string {
 func (*SendChatMessageReply) ProtoMessage() {}
 
 func (x *SendChatMessageReply) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[188]
+	mi := &file_streamd_proto_msgTypes[190]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9401,7 +9513,7 @@ func (x *SendChatMessageReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendChatMessageReply.ProtoReflect.Descriptor instead.
 func (*SendChatMessageReply) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{188}
+	return file_streamd_proto_rawDescGZIP(), []int{190}
 }
 
 type InjectChatMessageRequest struct {
@@ -9414,7 +9526,7 @@ type InjectChatMessageRequest struct {
 
 func (x *InjectChatMessageRequest) Reset() {
 	*x = InjectChatMessageRequest{}
-	mi := &file_streamd_proto_msgTypes[189]
+	mi := &file_streamd_proto_msgTypes[191]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9426,7 +9538,7 @@ func (x *InjectChatMessageRequest) String() string {
 func (*InjectChatMessageRequest) ProtoMessage() {}
 
 func (x *InjectChatMessageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[189]
+	mi := &file_streamd_proto_msgTypes[191]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9439,7 +9551,7 @@ func (x *InjectChatMessageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InjectChatMessageRequest.ProtoReflect.Descriptor instead.
 func (*InjectChatMessageRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{189}
+	return file_streamd_proto_rawDescGZIP(), []int{191}
 }
 
 func (x *InjectChatMessageRequest) GetPlatID() string {
@@ -9464,7 +9576,7 @@ type InjectChatMessageReply struct {
 
 func (x *InjectChatMessageReply) Reset() {
 	*x = InjectChatMessageReply{}
-	mi := &file_streamd_proto_msgTypes[190]
+	mi := &file_streamd_proto_msgTypes[192]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9476,7 +9588,7 @@ func (x *InjectChatMessageReply) String() string {
 func (*InjectChatMessageReply) ProtoMessage() {}
 
 func (x *InjectChatMessageReply) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[190]
+	mi := &file_streamd_proto_msgTypes[192]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9489,7 +9601,7 @@ func (x *InjectChatMessageReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InjectChatMessageReply.ProtoReflect.Descriptor instead.
 func (*InjectChatMessageReply) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{190}
+	return file_streamd_proto_rawDescGZIP(), []int{192}
 }
 
 type RemoveChatMessageRequest struct {
@@ -9502,7 +9614,7 @@ type RemoveChatMessageRequest struct {
 
 func (x *RemoveChatMessageRequest) Reset() {
 	*x = RemoveChatMessageRequest{}
-	mi := &file_streamd_proto_msgTypes[191]
+	mi := &file_streamd_proto_msgTypes[193]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9514,7 +9626,7 @@ func (x *RemoveChatMessageRequest) String() string {
 func (*RemoveChatMessageRequest) ProtoMessage() {}
 
 func (x *RemoveChatMessageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[191]
+	mi := &file_streamd_proto_msgTypes[193]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9527,7 +9639,7 @@ func (x *RemoveChatMessageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveChatMessageRequest.ProtoReflect.Descriptor instead.
 func (*RemoveChatMessageRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{191}
+	return file_streamd_proto_rawDescGZIP(), []int{193}
 }
 
 func (x *RemoveChatMessageRequest) GetPlatID() string {
@@ -9552,7 +9664,7 @@ type RemoveChatMessageReply struct {
 
 func (x *RemoveChatMessageReply) Reset() {
 	*x = RemoveChatMessageReply{}
-	mi := &file_streamd_proto_msgTypes[192]
+	mi := &file_streamd_proto_msgTypes[194]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9564,7 +9676,7 @@ func (x *RemoveChatMessageReply) String() string {
 func (*RemoveChatMessageReply) ProtoMessage() {}
 
 func (x *RemoveChatMessageReply) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[192]
+	mi := &file_streamd_proto_msgTypes[194]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9577,7 +9689,7 @@ func (x *RemoveChatMessageReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveChatMessageReply.ProtoReflect.Descriptor instead.
 func (*RemoveChatMessageReply) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{192}
+	return file_streamd_proto_rawDescGZIP(), []int{194}
 }
 
 type BanUserRequest struct {
@@ -9592,7 +9704,7 @@ type BanUserRequest struct {
 
 func (x *BanUserRequest) Reset() {
 	*x = BanUserRequest{}
-	mi := &file_streamd_proto_msgTypes[193]
+	mi := &file_streamd_proto_msgTypes[195]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9604,7 +9716,7 @@ func (x *BanUserRequest) String() string {
 func (*BanUserRequest) ProtoMessage() {}
 
 func (x *BanUserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[193]
+	mi := &file_streamd_proto_msgTypes[195]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9617,7 +9729,7 @@ func (x *BanUserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BanUserRequest.ProtoReflect.Descriptor instead.
 func (*BanUserRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{193}
+	return file_streamd_proto_rawDescGZIP(), []int{195}
 }
 
 func (x *BanUserRequest) GetPlatID() string {
@@ -9656,7 +9768,7 @@ type BanUserReply struct {
 
 func (x *BanUserReply) Reset() {
 	*x = BanUserReply{}
-	mi := &file_streamd_proto_msgTypes[194]
+	mi := &file_streamd_proto_msgTypes[196]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9668,7 +9780,7 @@ func (x *BanUserReply) String() string {
 func (*BanUserReply) ProtoMessage() {}
 
 func (x *BanUserReply) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[194]
+	mi := &file_streamd_proto_msgTypes[196]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9681,7 +9793,7 @@ func (x *BanUserReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BanUserReply.ProtoReflect.Descriptor instead.
 func (*BanUserReply) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{194}
+	return file_streamd_proto_rawDescGZIP(), []int{196}
 }
 
 type ShoutoutRequest struct {
@@ -9694,7 +9806,7 @@ type ShoutoutRequest struct {
 
 func (x *ShoutoutRequest) Reset() {
 	*x = ShoutoutRequest{}
-	mi := &file_streamd_proto_msgTypes[195]
+	mi := &file_streamd_proto_msgTypes[197]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9706,7 +9818,7 @@ func (x *ShoutoutRequest) String() string {
 func (*ShoutoutRequest) ProtoMessage() {}
 
 func (x *ShoutoutRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[195]
+	mi := &file_streamd_proto_msgTypes[197]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9719,7 +9831,7 @@ func (x *ShoutoutRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShoutoutRequest.ProtoReflect.Descriptor instead.
 func (*ShoutoutRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{195}
+	return file_streamd_proto_rawDescGZIP(), []int{197}
 }
 
 func (x *ShoutoutRequest) GetPlatID() string {
@@ -9744,7 +9856,7 @@ type ShoutoutReply struct {
 
 func (x *ShoutoutReply) Reset() {
 	*x = ShoutoutReply{}
-	mi := &file_streamd_proto_msgTypes[196]
+	mi := &file_streamd_proto_msgTypes[198]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9756,7 +9868,7 @@ func (x *ShoutoutReply) String() string {
 func (*ShoutoutReply) ProtoMessage() {}
 
 func (x *ShoutoutReply) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[196]
+	mi := &file_streamd_proto_msgTypes[198]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9769,7 +9881,7 @@ func (x *ShoutoutReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShoutoutReply.ProtoReflect.Descriptor instead.
 func (*ShoutoutReply) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{196}
+	return file_streamd_proto_rawDescGZIP(), []int{198}
 }
 
 type RaidToRequest struct {
@@ -9782,7 +9894,7 @@ type RaidToRequest struct {
 
 func (x *RaidToRequest) Reset() {
 	*x = RaidToRequest{}
-	mi := &file_streamd_proto_msgTypes[197]
+	mi := &file_streamd_proto_msgTypes[199]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9794,7 +9906,7 @@ func (x *RaidToRequest) String() string {
 func (*RaidToRequest) ProtoMessage() {}
 
 func (x *RaidToRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[197]
+	mi := &file_streamd_proto_msgTypes[199]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9807,7 +9919,7 @@ func (x *RaidToRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RaidToRequest.ProtoReflect.Descriptor instead.
 func (*RaidToRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{197}
+	return file_streamd_proto_rawDescGZIP(), []int{199}
 }
 
 func (x *RaidToRequest) GetPlatID() string {
@@ -9832,7 +9944,7 @@ type RaidToReply struct {
 
 func (x *RaidToReply) Reset() {
 	*x = RaidToReply{}
-	mi := &file_streamd_proto_msgTypes[198]
+	mi := &file_streamd_proto_msgTypes[200]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9844,7 +9956,7 @@ func (x *RaidToReply) String() string {
 func (*RaidToReply) ProtoMessage() {}
 
 func (x *RaidToReply) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[198]
+	mi := &file_streamd_proto_msgTypes[200]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9857,7 +9969,7 @@ func (x *RaidToReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RaidToReply.ProtoReflect.Descriptor instead.
 func (*RaidToReply) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{198}
+	return file_streamd_proto_rawDescGZIP(), []int{200}
 }
 
 type GetPeerIDsRequest struct {
@@ -9868,7 +9980,7 @@ type GetPeerIDsRequest struct {
 
 func (x *GetPeerIDsRequest) Reset() {
 	*x = GetPeerIDsRequest{}
-	mi := &file_streamd_proto_msgTypes[199]
+	mi := &file_streamd_proto_msgTypes[201]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9880,7 +9992,7 @@ func (x *GetPeerIDsRequest) String() string {
 func (*GetPeerIDsRequest) ProtoMessage() {}
 
 func (x *GetPeerIDsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[199]
+	mi := &file_streamd_proto_msgTypes[201]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9893,7 +10005,7 @@ func (x *GetPeerIDsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPeerIDsRequest.ProtoReflect.Descriptor instead.
 func (*GetPeerIDsRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{199}
+	return file_streamd_proto_rawDescGZIP(), []int{201}
 }
 
 type GetPeerIDsReply struct {
@@ -9905,7 +10017,7 @@ type GetPeerIDsReply struct {
 
 func (x *GetPeerIDsReply) Reset() {
 	*x = GetPeerIDsReply{}
-	mi := &file_streamd_proto_msgTypes[200]
+	mi := &file_streamd_proto_msgTypes[202]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9917,7 +10029,7 @@ func (x *GetPeerIDsReply) String() string {
 func (*GetPeerIDsReply) ProtoMessage() {}
 
 func (x *GetPeerIDsReply) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[200]
+	mi := &file_streamd_proto_msgTypes[202]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9930,7 +10042,7 @@ func (x *GetPeerIDsReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPeerIDsReply.ProtoReflect.Descriptor instead.
 func (*GetPeerIDsReply) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{200}
+	return file_streamd_proto_rawDescGZIP(), []int{202}
 }
 
 func (x *GetPeerIDsReply) GetPeerIDs() []string {
@@ -9949,7 +10061,7 @@ type LLMGenerateRequest struct {
 
 func (x *LLMGenerateRequest) Reset() {
 	*x = LLMGenerateRequest{}
-	mi := &file_streamd_proto_msgTypes[201]
+	mi := &file_streamd_proto_msgTypes[203]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9961,7 +10073,7 @@ func (x *LLMGenerateRequest) String() string {
 func (*LLMGenerateRequest) ProtoMessage() {}
 
 func (x *LLMGenerateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[201]
+	mi := &file_streamd_proto_msgTypes[203]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9974,7 +10086,7 @@ func (x *LLMGenerateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LLMGenerateRequest.ProtoReflect.Descriptor instead.
 func (*LLMGenerateRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{201}
+	return file_streamd_proto_rawDescGZIP(), []int{203}
 }
 
 func (x *LLMGenerateRequest) GetPrompt() string {
@@ -9993,7 +10105,7 @@ type LLMGenerateReply struct {
 
 func (x *LLMGenerateReply) Reset() {
 	*x = LLMGenerateReply{}
-	mi := &file_streamd_proto_msgTypes[202]
+	mi := &file_streamd_proto_msgTypes[204]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10005,7 +10117,7 @@ func (x *LLMGenerateReply) String() string {
 func (*LLMGenerateReply) ProtoMessage() {}
 
 func (x *LLMGenerateReply) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[202]
+	mi := &file_streamd_proto_msgTypes[204]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10018,7 +10130,7 @@ func (x *LLMGenerateReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LLMGenerateReply.ProtoReflect.Descriptor instead.
 func (*LLMGenerateReply) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{202}
+	return file_streamd_proto_rawDescGZIP(), []int{204}
 }
 
 func (x *LLMGenerateReply) GetResponse() string {
@@ -10038,7 +10150,7 @@ type SetBuiltinChatListenerEnabledRequest struct {
 
 func (x *SetBuiltinChatListenerEnabledRequest) Reset() {
 	*x = SetBuiltinChatListenerEnabledRequest{}
-	mi := &file_streamd_proto_msgTypes[203]
+	mi := &file_streamd_proto_msgTypes[205]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10050,7 +10162,7 @@ func (x *SetBuiltinChatListenerEnabledRequest) String() string {
 func (*SetBuiltinChatListenerEnabledRequest) ProtoMessage() {}
 
 func (x *SetBuiltinChatListenerEnabledRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[203]
+	mi := &file_streamd_proto_msgTypes[205]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10063,7 +10175,7 @@ func (x *SetBuiltinChatListenerEnabledRequest) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use SetBuiltinChatListenerEnabledRequest.ProtoReflect.Descriptor instead.
 func (*SetBuiltinChatListenerEnabledRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{203}
+	return file_streamd_proto_rawDescGZIP(), []int{205}
 }
 
 func (x *SetBuiltinChatListenerEnabledRequest) GetPlatID() string {
@@ -10088,7 +10200,7 @@ type SetBuiltinChatListenerEnabledReply struct {
 
 func (x *SetBuiltinChatListenerEnabledReply) Reset() {
 	*x = SetBuiltinChatListenerEnabledReply{}
-	mi := &file_streamd_proto_msgTypes[204]
+	mi := &file_streamd_proto_msgTypes[206]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10100,7 +10212,7 @@ func (x *SetBuiltinChatListenerEnabledReply) String() string {
 func (*SetBuiltinChatListenerEnabledReply) ProtoMessage() {}
 
 func (x *SetBuiltinChatListenerEnabledReply) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[204]
+	mi := &file_streamd_proto_msgTypes[206]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10113,7 +10225,7 @@ func (x *SetBuiltinChatListenerEnabledReply) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use SetBuiltinChatListenerEnabledReply.ProtoReflect.Descriptor instead.
 func (*SetBuiltinChatListenerEnabledReply) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{204}
+	return file_streamd_proto_rawDescGZIP(), []int{206}
 }
 
 type IsBuiltinChatListenerEnabledRequest struct {
@@ -10125,7 +10237,7 @@ type IsBuiltinChatListenerEnabledRequest struct {
 
 func (x *IsBuiltinChatListenerEnabledRequest) Reset() {
 	*x = IsBuiltinChatListenerEnabledRequest{}
-	mi := &file_streamd_proto_msgTypes[205]
+	mi := &file_streamd_proto_msgTypes[207]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10137,7 +10249,7 @@ func (x *IsBuiltinChatListenerEnabledRequest) String() string {
 func (*IsBuiltinChatListenerEnabledRequest) ProtoMessage() {}
 
 func (x *IsBuiltinChatListenerEnabledRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[205]
+	mi := &file_streamd_proto_msgTypes[207]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10150,7 +10262,7 @@ func (x *IsBuiltinChatListenerEnabledRequest) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use IsBuiltinChatListenerEnabledRequest.ProtoReflect.Descriptor instead.
 func (*IsBuiltinChatListenerEnabledRequest) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{205}
+	return file_streamd_proto_rawDescGZIP(), []int{207}
 }
 
 func (x *IsBuiltinChatListenerEnabledRequest) GetPlatID() string {
@@ -10169,7 +10281,7 @@ type IsBuiltinChatListenerEnabledReply struct {
 
 func (x *IsBuiltinChatListenerEnabledReply) Reset() {
 	*x = IsBuiltinChatListenerEnabledReply{}
-	mi := &file_streamd_proto_msgTypes[206]
+	mi := &file_streamd_proto_msgTypes[208]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10181,7 +10293,7 @@ func (x *IsBuiltinChatListenerEnabledReply) String() string {
 func (*IsBuiltinChatListenerEnabledReply) ProtoMessage() {}
 
 func (x *IsBuiltinChatListenerEnabledReply) ProtoReflect() protoreflect.Message {
-	mi := &file_streamd_proto_msgTypes[206]
+	mi := &file_streamd_proto_msgTypes[208]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10194,7 +10306,7 @@ func (x *IsBuiltinChatListenerEnabledReply) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use IsBuiltinChatListenerEnabledReply.ProtoReflect.Descriptor instead.
 func (*IsBuiltinChatListenerEnabledReply) Descriptor() ([]byte, []int) {
-	return file_streamd_proto_rawDescGZIP(), []int{206}
+	return file_streamd_proto_rawDescGZIP(), []int{208}
 }
 
 func (x *IsBuiltinChatListenerEnabledReply) GetEnabled() bool {
@@ -10534,7 +10646,14 @@ const file_streamd_proto_rawDesc = "" +
 	"\bstreamID\x18\x01 \x01(\tR\bstreamID\x122\n" +
 	"\arequest\x18\x02 \x01(\v2\x18.player.GetLengthRequestR\arequest\"J\n" +
 	"\x1aStreamPlayerGetLengthReply\x12,\n" +
-	"\x05reply\x18\x01 \x01(\v2\x16.player.GetLengthReplyR\x05reply\"l\n" +
+	"\x05reply\x18\x01 \x01(\v2\x16.player.GetLengthReplyR\x05reply\"m\n" +
+	"\x19StreamPlayerGetLagRequest\x12&\n" +
+	"\x0estreamSourceID\x18\x01 \x01(\tR\x0estreamSourceID\x12(\n" +
+	"\x0frequestUnixNano\x18\x02 \x01(\x03R\x0frequestUnixNano\"}\n" +
+	"\x17StreamPlayerGetLagReply\x12(\n" +
+	"\x0frequestUnixNano\x18\x01 \x01(\x03R\x0frequestUnixNano\x12$\n" +
+	"\rreplyUnixNano\x18\x02 \x01(\x03R\rreplyUnixNano\x12\x12\n" +
+	"\x04lagU\x18\x03 \x01(\x03R\x04lagU\"l\n" +
 	"\x1bStreamPlayerSetSpeedRequest\x12\x1a\n" +
 	"\bstreamID\x18\x01 \x01(\tR\bstreamID\x121\n" +
 	"\arequest\x18\x02 \x01(\v2\x17.player.SetSpeedRequestR\arequest\"H\n" +
@@ -10770,7 +10889,7 @@ const file_streamd_proto_rawDesc = "" +
 	"\x1aTEXT_FORMAT_TYPE_UNDEFINED\x10\x00\x12\x1a\n" +
 	"\x16TEXT_FORMAT_TYPE_PLAIN\x10\x01\x12\x1d\n" +
 	"\x19TEXT_FORMAT_TYPE_MARKDOWN\x10\x02\x12\x19\n" +
-	"\x15TEXT_FORMAT_TYPE_HTML\x10\x032\x95:\n" +
+	"\x15TEXT_FORMAT_TYPE_HTML\x10\x032\xf3:\n" +
 	"\aStreamD\x122\n" +
 	"\x04Ping\x12\x14.streamd.PingRequest\x1a\x12.streamd.PingReply\"\x00\x12S\n" +
 	"\x0fSetLoggingLevel\x12\x1f.streamd.SetLoggingLevelRequest\x1a\x1d.streamd.SetLoggingLevelReply\"\x00\x12S\n" +
@@ -10833,7 +10952,8 @@ const file_streamd_proto_rawDesc = "" +
 	"\x13StreamPlayerEndChan\x12#.streamd.StreamPlayerEndChanRequest\x1a!.streamd.StreamPlayerEndChanReply\"\x000\x01\x12_\n" +
 	"\x13StreamPlayerIsEnded\x12#.streamd.StreamPlayerIsEndedRequest\x1a!.streamd.StreamPlayerIsEndedReply\"\x00\x12k\n" +
 	"\x17StreamPlayerGetPosition\x12'.streamd.StreamPlayerGetPositionRequest\x1a%.streamd.StreamPlayerGetPositionReply\"\x00\x12e\n" +
-	"\x15StreamPlayerGetLength\x12%.streamd.StreamPlayerGetLengthRequest\x1a#.streamd.StreamPlayerGetLengthReply\"\x00\x12b\n" +
+	"\x15StreamPlayerGetLength\x12%.streamd.StreamPlayerGetLengthRequest\x1a#.streamd.StreamPlayerGetLengthReply\"\x00\x12\\\n" +
+	"\x12StreamPlayerGetLag\x12\".streamd.StreamPlayerGetLagRequest\x1a .streamd.StreamPlayerGetLagReply\"\x00\x12b\n" +
 	"\x14StreamPlayerSetSpeed\x12$.streamd.StreamPlayerSetSpeedRequest\x1a\".streamd.StreamPlayerSetSpeedReply\"\x00\x12b\n" +
 	"\x14StreamPlayerSetPause\x12$.streamd.StreamPlayerSetPauseRequest\x1a\".streamd.StreamPlayerSetPauseReply\"\x00\x12V\n" +
 	"\x10StreamPlayerStop\x12 .streamd.StreamPlayerStopRequest\x1a\x1e.streamd.StreamPlayerStopReply\"\x00\x12Y\n" +
@@ -10873,7 +10993,7 @@ func file_streamd_proto_rawDescGZIP() []byte {
 }
 
 var file_streamd_proto_enumTypes = make([]protoimpl.EnumInfo, 9)
-var file_streamd_proto_msgTypes = make([]protoimpl.MessageInfo, 207)
+var file_streamd_proto_msgTypes = make([]protoimpl.MessageInfo, 209)
 var file_streamd_proto_goTypes = []any{
 	(LoggingLevel)(0),                                   // 0: streamd.LoggingLevel
 	(Capability)(0),                                     // 1: streamd.Capability
@@ -11017,103 +11137,105 @@ var file_streamd_proto_goTypes = []any{
 	(*StreamPlayerGetPositionReply)(nil),                // 139: streamd.StreamPlayerGetPositionReply
 	(*StreamPlayerGetLengthRequest)(nil),                // 140: streamd.StreamPlayerGetLengthRequest
 	(*StreamPlayerGetLengthReply)(nil),                  // 141: streamd.StreamPlayerGetLengthReply
-	(*StreamPlayerSetSpeedRequest)(nil),                 // 142: streamd.StreamPlayerSetSpeedRequest
-	(*StreamPlayerSetSpeedReply)(nil),                   // 143: streamd.StreamPlayerSetSpeedReply
-	(*StreamPlayerSetPauseRequest)(nil),                 // 144: streamd.StreamPlayerSetPauseRequest
-	(*StreamPlayerSetPauseReply)(nil),                   // 145: streamd.StreamPlayerSetPauseReply
-	(*StreamPlayerStopRequest)(nil),                     // 146: streamd.StreamPlayerStopRequest
-	(*StreamPlayerStopReply)(nil),                       // 147: streamd.StreamPlayerStopReply
-	(*StreamPlayerCloseRequest)(nil),                    // 148: streamd.StreamPlayerCloseRequest
-	(*StreamPlayerCloseReply)(nil),                      // 149: streamd.StreamPlayerCloseReply
-	(*SubscribeToConfigChangesRequest)(nil),             // 150: streamd.SubscribeToConfigChangesRequest
-	(*ConfigChange)(nil),                                // 151: streamd.ConfigChange
-	(*SubscribeToStreamsChangesRequest)(nil),            // 152: streamd.SubscribeToStreamsChangesRequest
-	(*StreamsChange)(nil),                               // 153: streamd.StreamsChange
-	(*SubscribeToStreamServersChangesRequest)(nil),      // 154: streamd.SubscribeToStreamServersChangesRequest
-	(*StreamServersChange)(nil),                         // 155: streamd.StreamServersChange
-	(*SubscribeToStreamDestinationsChangesRequest)(nil), // 156: streamd.SubscribeToStreamDestinationsChangesRequest
-	(*StreamDestinationsChange)(nil),                    // 157: streamd.StreamDestinationsChange
-	(*SubscribeToIncomingStreamsChangesRequest)(nil),    // 158: streamd.SubscribeToIncomingStreamsChangesRequest
-	(*IncomingStreamsChange)(nil),                       // 159: streamd.IncomingStreamsChange
-	(*SubscribeToStreamForwardsChangesRequest)(nil),     // 160: streamd.SubscribeToStreamForwardsChangesRequest
-	(*StreamForwardsChange)(nil),                        // 161: streamd.StreamForwardsChange
-	(*SubscribeToStreamPlayersChangesRequest)(nil),      // 162: streamd.SubscribeToStreamPlayersChangesRequest
-	(*StreamPlayersChange)(nil),                         // 163: streamd.StreamPlayersChange
-	(*NoopRequest)(nil),                                 // 164: streamd.NoopRequest
-	(*OBSActionItemShowHide)(nil),                       // 165: streamd.OBSActionItemShowHide
-	(*OBSActionWindowCaptureSetSource)(nil),             // 166: streamd.OBSActionWindowCaptureSetSource
-	(*OBSAction)(nil),                                   // 167: streamd.OBSAction
-	(*Action)(nil),                                      // 168: streamd.Action
-	(*AddTimerRequest)(nil),                             // 169: streamd.AddTimerRequest
-	(*AddTimerReply)(nil),                               // 170: streamd.AddTimerReply
-	(*RemoveTimerRequest)(nil),                          // 171: streamd.RemoveTimerRequest
-	(*RemoveTimerReply)(nil),                            // 172: streamd.RemoveTimerReply
-	(*Timer)(nil),                                       // 173: streamd.Timer
-	(*ListTimersRequest)(nil),                           // 174: streamd.ListTimersRequest
-	(*ListTimersReply)(nil),                             // 175: streamd.ListTimersReply
-	(*EventQueryAnd)(nil),                               // 176: streamd.EventQueryAnd
-	(*EventQueryOr)(nil),                                // 177: streamd.EventQueryOr
-	(*EventQueryNot)(nil),                               // 178: streamd.EventQueryNot
-	(*EventWindowFocusChange)(nil),                      // 179: streamd.EventWindowFocusChange
-	(*EventOBSSceneChange)(nil),                         // 180: streamd.EventOBSSceneChange
-	(*EventQuery)(nil),                                  // 181: streamd.EventQuery
-	(*Event)(nil),                                       // 182: streamd.Event
-	(*TriggerRule)(nil),                                 // 183: streamd.TriggerRule
-	(*ListTriggerRulesRequest)(nil),                     // 184: streamd.ListTriggerRulesRequest
-	(*ListTriggerRulesReply)(nil),                       // 185: streamd.ListTriggerRulesReply
-	(*AddTriggerRuleRequest)(nil),                       // 186: streamd.AddTriggerRuleRequest
-	(*AddTriggerRuleReply)(nil),                         // 187: streamd.AddTriggerRuleReply
-	(*RemoveTriggerRuleRequest)(nil),                    // 188: streamd.RemoveTriggerRuleRequest
-	(*RemoveTriggerRuleReply)(nil),                      // 189: streamd.RemoveTriggerRuleReply
-	(*UpdateTriggerRuleRequest)(nil),                    // 190: streamd.UpdateTriggerRuleRequest
-	(*UpdateTriggerRuleReply)(nil),                      // 191: streamd.UpdateTriggerRuleReply
-	(*SubmitEventRequest)(nil),                          // 192: streamd.SubmitEventRequest
-	(*SubmitEventReply)(nil),                            // 193: streamd.SubmitEventReply
-	(*SubscribeToChatMessagesRequest)(nil),              // 194: streamd.SubscribeToChatMessagesRequest
-	(*ChatMessage)(nil),                                 // 195: streamd.ChatMessage
-	(*SendChatMessageRequest)(nil),                      // 196: streamd.SendChatMessageRequest
-	(*SendChatMessageReply)(nil),                        // 197: streamd.SendChatMessageReply
-	(*InjectChatMessageRequest)(nil),                    // 198: streamd.InjectChatMessageRequest
-	(*InjectChatMessageReply)(nil),                      // 199: streamd.InjectChatMessageReply
-	(*RemoveChatMessageRequest)(nil),                    // 200: streamd.RemoveChatMessageRequest
-	(*RemoveChatMessageReply)(nil),                      // 201: streamd.RemoveChatMessageReply
-	(*BanUserRequest)(nil),                              // 202: streamd.BanUserRequest
-	(*BanUserReply)(nil),                                // 203: streamd.BanUserReply
-	(*ShoutoutRequest)(nil),                             // 204: streamd.ShoutoutRequest
-	(*ShoutoutReply)(nil),                               // 205: streamd.ShoutoutReply
-	(*RaidToRequest)(nil),                               // 206: streamd.RaidToRequest
-	(*RaidToReply)(nil),                                 // 207: streamd.RaidToReply
-	(*GetPeerIDsRequest)(nil),                           // 208: streamd.GetPeerIDsRequest
-	(*GetPeerIDsReply)(nil),                             // 209: streamd.GetPeerIDsReply
-	(*LLMGenerateRequest)(nil),                          // 210: streamd.LLMGenerateRequest
-	(*LLMGenerateReply)(nil),                            // 211: streamd.LLMGenerateReply
-	(*SetBuiltinChatListenerEnabledRequest)(nil),        // 212: streamd.SetBuiltinChatListenerEnabledRequest
-	(*SetBuiltinChatListenerEnabledReply)(nil),          // 213: streamd.SetBuiltinChatListenerEnabledReply
-	(*IsBuiltinChatListenerEnabledRequest)(nil),         // 214: streamd.IsBuiltinChatListenerEnabledRequest
-	(*IsBuiltinChatListenerEnabledReply)(nil),           // 215: streamd.IsBuiltinChatListenerEnabledReply
-	(*player_grpc.OpenRequest)(nil),                     // 216: player.OpenRequest
-	(*player_grpc.OpenReply)(nil),                       // 217: player.OpenReply
-	(*player_grpc.ProcessTitleRequest)(nil),             // 218: player.ProcessTitleRequest
-	(*player_grpc.ProcessTitleReply)(nil),               // 219: player.ProcessTitleReply
-	(*player_grpc.GetLinkRequest)(nil),                  // 220: player.GetLinkRequest
-	(*player_grpc.GetLinkReply)(nil),                    // 221: player.GetLinkReply
-	(*player_grpc.EndChanRequest)(nil),                  // 222: player.EndChanRequest
-	(*player_grpc.EndChanReply)(nil),                    // 223: player.EndChanReply
-	(*player_grpc.IsEndedRequest)(nil),                  // 224: player.IsEndedRequest
-	(*player_grpc.IsEndedReply)(nil),                    // 225: player.IsEndedReply
-	(*player_grpc.GetPositionRequest)(nil),              // 226: player.GetPositionRequest
-	(*player_grpc.GetPositionReply)(nil),                // 227: player.GetPositionReply
-	(*player_grpc.GetLengthRequest)(nil),                // 228: player.GetLengthRequest
-	(*player_grpc.GetLengthReply)(nil),                  // 229: player.GetLengthReply
-	(*player_grpc.SetSpeedRequest)(nil),                 // 230: player.SetSpeedRequest
-	(*player_grpc.SetSpeedReply)(nil),                   // 231: player.SetSpeedReply
-	(*player_grpc.SetPauseRequest)(nil),                 // 232: player.SetPauseRequest
-	(*player_grpc.SetPauseReply)(nil),                   // 233: player.SetPauseReply
-	(*player_grpc.StopRequest)(nil),                     // 234: player.StopRequest
-	(*player_grpc.StopReply)(nil),                       // 235: player.StopReply
-	(*player_grpc.CloseRequest)(nil),                    // 236: player.CloseRequest
-	(*player_grpc.CloseReply)(nil),                      // 237: player.CloseReply
-	(*chatwebhook_grpc.Event)(nil),                      // 238: chatwebhook.Event
+	(*StreamPlayerGetLagRequest)(nil),                   // 142: streamd.StreamPlayerGetLagRequest
+	(*StreamPlayerGetLagReply)(nil),                     // 143: streamd.StreamPlayerGetLagReply
+	(*StreamPlayerSetSpeedRequest)(nil),                 // 144: streamd.StreamPlayerSetSpeedRequest
+	(*StreamPlayerSetSpeedReply)(nil),                   // 145: streamd.StreamPlayerSetSpeedReply
+	(*StreamPlayerSetPauseRequest)(nil),                 // 146: streamd.StreamPlayerSetPauseRequest
+	(*StreamPlayerSetPauseReply)(nil),                   // 147: streamd.StreamPlayerSetPauseReply
+	(*StreamPlayerStopRequest)(nil),                     // 148: streamd.StreamPlayerStopRequest
+	(*StreamPlayerStopReply)(nil),                       // 149: streamd.StreamPlayerStopReply
+	(*StreamPlayerCloseRequest)(nil),                    // 150: streamd.StreamPlayerCloseRequest
+	(*StreamPlayerCloseReply)(nil),                      // 151: streamd.StreamPlayerCloseReply
+	(*SubscribeToConfigChangesRequest)(nil),             // 152: streamd.SubscribeToConfigChangesRequest
+	(*ConfigChange)(nil),                                // 153: streamd.ConfigChange
+	(*SubscribeToStreamsChangesRequest)(nil),            // 154: streamd.SubscribeToStreamsChangesRequest
+	(*StreamsChange)(nil),                               // 155: streamd.StreamsChange
+	(*SubscribeToStreamServersChangesRequest)(nil),      // 156: streamd.SubscribeToStreamServersChangesRequest
+	(*StreamServersChange)(nil),                         // 157: streamd.StreamServersChange
+	(*SubscribeToStreamDestinationsChangesRequest)(nil), // 158: streamd.SubscribeToStreamDestinationsChangesRequest
+	(*StreamDestinationsChange)(nil),                    // 159: streamd.StreamDestinationsChange
+	(*SubscribeToIncomingStreamsChangesRequest)(nil),    // 160: streamd.SubscribeToIncomingStreamsChangesRequest
+	(*IncomingStreamsChange)(nil),                       // 161: streamd.IncomingStreamsChange
+	(*SubscribeToStreamForwardsChangesRequest)(nil),     // 162: streamd.SubscribeToStreamForwardsChangesRequest
+	(*StreamForwardsChange)(nil),                        // 163: streamd.StreamForwardsChange
+	(*SubscribeToStreamPlayersChangesRequest)(nil),      // 164: streamd.SubscribeToStreamPlayersChangesRequest
+	(*StreamPlayersChange)(nil),                         // 165: streamd.StreamPlayersChange
+	(*NoopRequest)(nil),                                 // 166: streamd.NoopRequest
+	(*OBSActionItemShowHide)(nil),                       // 167: streamd.OBSActionItemShowHide
+	(*OBSActionWindowCaptureSetSource)(nil),             // 168: streamd.OBSActionWindowCaptureSetSource
+	(*OBSAction)(nil),                                   // 169: streamd.OBSAction
+	(*Action)(nil),                                      // 170: streamd.Action
+	(*AddTimerRequest)(nil),                             // 171: streamd.AddTimerRequest
+	(*AddTimerReply)(nil),                               // 172: streamd.AddTimerReply
+	(*RemoveTimerRequest)(nil),                          // 173: streamd.RemoveTimerRequest
+	(*RemoveTimerReply)(nil),                            // 174: streamd.RemoveTimerReply
+	(*Timer)(nil),                                       // 175: streamd.Timer
+	(*ListTimersRequest)(nil),                           // 176: streamd.ListTimersRequest
+	(*ListTimersReply)(nil),                             // 177: streamd.ListTimersReply
+	(*EventQueryAnd)(nil),                               // 178: streamd.EventQueryAnd
+	(*EventQueryOr)(nil),                                // 179: streamd.EventQueryOr
+	(*EventQueryNot)(nil),                               // 180: streamd.EventQueryNot
+	(*EventWindowFocusChange)(nil),                      // 181: streamd.EventWindowFocusChange
+	(*EventOBSSceneChange)(nil),                         // 182: streamd.EventOBSSceneChange
+	(*EventQuery)(nil),                                  // 183: streamd.EventQuery
+	(*Event)(nil),                                       // 184: streamd.Event
+	(*TriggerRule)(nil),                                 // 185: streamd.TriggerRule
+	(*ListTriggerRulesRequest)(nil),                     // 186: streamd.ListTriggerRulesRequest
+	(*ListTriggerRulesReply)(nil),                       // 187: streamd.ListTriggerRulesReply
+	(*AddTriggerRuleRequest)(nil),                       // 188: streamd.AddTriggerRuleRequest
+	(*AddTriggerRuleReply)(nil),                         // 189: streamd.AddTriggerRuleReply
+	(*RemoveTriggerRuleRequest)(nil),                    // 190: streamd.RemoveTriggerRuleRequest
+	(*RemoveTriggerRuleReply)(nil),                      // 191: streamd.RemoveTriggerRuleReply
+	(*UpdateTriggerRuleRequest)(nil),                    // 192: streamd.UpdateTriggerRuleRequest
+	(*UpdateTriggerRuleReply)(nil),                      // 193: streamd.UpdateTriggerRuleReply
+	(*SubmitEventRequest)(nil),                          // 194: streamd.SubmitEventRequest
+	(*SubmitEventReply)(nil),                            // 195: streamd.SubmitEventReply
+	(*SubscribeToChatMessagesRequest)(nil),              // 196: streamd.SubscribeToChatMessagesRequest
+	(*ChatMessage)(nil),                                 // 197: streamd.ChatMessage
+	(*SendChatMessageRequest)(nil),                      // 198: streamd.SendChatMessageRequest
+	(*SendChatMessageReply)(nil),                        // 199: streamd.SendChatMessageReply
+	(*InjectChatMessageRequest)(nil),                    // 200: streamd.InjectChatMessageRequest
+	(*InjectChatMessageReply)(nil),                      // 201: streamd.InjectChatMessageReply
+	(*RemoveChatMessageRequest)(nil),                    // 202: streamd.RemoveChatMessageRequest
+	(*RemoveChatMessageReply)(nil),                      // 203: streamd.RemoveChatMessageReply
+	(*BanUserRequest)(nil),                              // 204: streamd.BanUserRequest
+	(*BanUserReply)(nil),                                // 205: streamd.BanUserReply
+	(*ShoutoutRequest)(nil),                             // 206: streamd.ShoutoutRequest
+	(*ShoutoutReply)(nil),                               // 207: streamd.ShoutoutReply
+	(*RaidToRequest)(nil),                               // 208: streamd.RaidToRequest
+	(*RaidToReply)(nil),                                 // 209: streamd.RaidToReply
+	(*GetPeerIDsRequest)(nil),                           // 210: streamd.GetPeerIDsRequest
+	(*GetPeerIDsReply)(nil),                             // 211: streamd.GetPeerIDsReply
+	(*LLMGenerateRequest)(nil),                          // 212: streamd.LLMGenerateRequest
+	(*LLMGenerateReply)(nil),                            // 213: streamd.LLMGenerateReply
+	(*SetBuiltinChatListenerEnabledRequest)(nil),        // 214: streamd.SetBuiltinChatListenerEnabledRequest
+	(*SetBuiltinChatListenerEnabledReply)(nil),          // 215: streamd.SetBuiltinChatListenerEnabledReply
+	(*IsBuiltinChatListenerEnabledRequest)(nil),         // 216: streamd.IsBuiltinChatListenerEnabledRequest
+	(*IsBuiltinChatListenerEnabledReply)(nil),           // 217: streamd.IsBuiltinChatListenerEnabledReply
+	(*player_grpc.OpenRequest)(nil),                     // 218: player.OpenRequest
+	(*player_grpc.OpenReply)(nil),                       // 219: player.OpenReply
+	(*player_grpc.ProcessTitleRequest)(nil),             // 220: player.ProcessTitleRequest
+	(*player_grpc.ProcessTitleReply)(nil),               // 221: player.ProcessTitleReply
+	(*player_grpc.GetLinkRequest)(nil),                  // 222: player.GetLinkRequest
+	(*player_grpc.GetLinkReply)(nil),                    // 223: player.GetLinkReply
+	(*player_grpc.EndChanRequest)(nil),                  // 224: player.EndChanRequest
+	(*player_grpc.EndChanReply)(nil),                    // 225: player.EndChanReply
+	(*player_grpc.IsEndedRequest)(nil),                  // 226: player.IsEndedRequest
+	(*player_grpc.IsEndedReply)(nil),                    // 227: player.IsEndedReply
+	(*player_grpc.GetPositionRequest)(nil),              // 228: player.GetPositionRequest
+	(*player_grpc.GetPositionReply)(nil),                // 229: player.GetPositionReply
+	(*player_grpc.GetLengthRequest)(nil),                // 230: player.GetLengthRequest
+	(*player_grpc.GetLengthReply)(nil),                  // 231: player.GetLengthReply
+	(*player_grpc.SetSpeedRequest)(nil),                 // 232: player.SetSpeedRequest
+	(*player_grpc.SetSpeedReply)(nil),                   // 233: player.SetSpeedReply
+	(*player_grpc.SetPauseRequest)(nil),                 // 234: player.SetPauseRequest
+	(*player_grpc.SetPauseReply)(nil),                   // 235: player.SetPauseReply
+	(*player_grpc.StopRequest)(nil),                     // 236: player.StopRequest
+	(*player_grpc.StopReply)(nil),                       // 237: player.StopReply
+	(*player_grpc.CloseRequest)(nil),                    // 238: player.CloseRequest
+	(*player_grpc.CloseReply)(nil),                      // 239: player.CloseReply
+	(*chatwebhook_grpc.Event)(nil),                      // 240: chatwebhook.Event
 }
 var file_streamd_proto_depIdxs = []int32{
 	0,   // 0: streamd.SetLoggingLevelRequest.loggingLevel:type_name -> streamd.LoggingLevel
@@ -11156,63 +11278,63 @@ var file_streamd_proto_depIdxs = []int32{
 	117, // 37: streamd.UpdateStreamPlayerRequest.config:type_name -> streamd.StreamPlayerConfig
 	117, // 38: streamd.ListStreamPlayersReply.players:type_name -> streamd.StreamPlayerConfig
 	117, // 39: streamd.GetStreamPlayerReply.config:type_name -> streamd.StreamPlayerConfig
-	216, // 40: streamd.StreamPlayerOpenRequest.request:type_name -> player.OpenRequest
-	217, // 41: streamd.StreamPlayerOpenReply.reply:type_name -> player.OpenReply
-	218, // 42: streamd.StreamPlayerProcessTitleRequest.request:type_name -> player.ProcessTitleRequest
-	219, // 43: streamd.StreamPlayerProcessTitleReply.reply:type_name -> player.ProcessTitleReply
-	220, // 44: streamd.StreamPlayerGetLinkRequest.request:type_name -> player.GetLinkRequest
-	221, // 45: streamd.StreamPlayerGetLinkReply.reply:type_name -> player.GetLinkReply
-	222, // 46: streamd.StreamPlayerEndChanRequest.request:type_name -> player.EndChanRequest
-	223, // 47: streamd.StreamPlayerEndChanReply.reply:type_name -> player.EndChanReply
-	224, // 48: streamd.StreamPlayerIsEndedRequest.request:type_name -> player.IsEndedRequest
-	225, // 49: streamd.StreamPlayerIsEndedReply.reply:type_name -> player.IsEndedReply
-	226, // 50: streamd.StreamPlayerGetPositionRequest.request:type_name -> player.GetPositionRequest
-	227, // 51: streamd.StreamPlayerGetPositionReply.reply:type_name -> player.GetPositionReply
-	228, // 52: streamd.StreamPlayerGetLengthRequest.request:type_name -> player.GetLengthRequest
-	229, // 53: streamd.StreamPlayerGetLengthReply.reply:type_name -> player.GetLengthReply
-	230, // 54: streamd.StreamPlayerSetSpeedRequest.request:type_name -> player.SetSpeedRequest
-	231, // 55: streamd.StreamPlayerSetSpeedReply.reply:type_name -> player.SetSpeedReply
-	232, // 56: streamd.StreamPlayerSetPauseRequest.request:type_name -> player.SetPauseRequest
-	233, // 57: streamd.StreamPlayerSetPauseReply.reply:type_name -> player.SetPauseReply
-	234, // 58: streamd.StreamPlayerStopRequest.request:type_name -> player.StopRequest
-	235, // 59: streamd.StreamPlayerStopReply.reply:type_name -> player.StopReply
-	236, // 60: streamd.StreamPlayerCloseRequest.request:type_name -> player.CloseRequest
-	237, // 61: streamd.StreamPlayerCloseReply.reply:type_name -> player.CloseReply
-	165, // 62: streamd.OBSAction.itemShowHide:type_name -> streamd.OBSActionItemShowHide
-	166, // 63: streamd.OBSAction.windowCaptureSetSource:type_name -> streamd.OBSActionWindowCaptureSetSource
-	164, // 64: streamd.Action.noopRequest:type_name -> streamd.NoopRequest
+	218, // 40: streamd.StreamPlayerOpenRequest.request:type_name -> player.OpenRequest
+	219, // 41: streamd.StreamPlayerOpenReply.reply:type_name -> player.OpenReply
+	220, // 42: streamd.StreamPlayerProcessTitleRequest.request:type_name -> player.ProcessTitleRequest
+	221, // 43: streamd.StreamPlayerProcessTitleReply.reply:type_name -> player.ProcessTitleReply
+	222, // 44: streamd.StreamPlayerGetLinkRequest.request:type_name -> player.GetLinkRequest
+	223, // 45: streamd.StreamPlayerGetLinkReply.reply:type_name -> player.GetLinkReply
+	224, // 46: streamd.StreamPlayerEndChanRequest.request:type_name -> player.EndChanRequest
+	225, // 47: streamd.StreamPlayerEndChanReply.reply:type_name -> player.EndChanReply
+	226, // 48: streamd.StreamPlayerIsEndedRequest.request:type_name -> player.IsEndedRequest
+	227, // 49: streamd.StreamPlayerIsEndedReply.reply:type_name -> player.IsEndedReply
+	228, // 50: streamd.StreamPlayerGetPositionRequest.request:type_name -> player.GetPositionRequest
+	229, // 51: streamd.StreamPlayerGetPositionReply.reply:type_name -> player.GetPositionReply
+	230, // 52: streamd.StreamPlayerGetLengthRequest.request:type_name -> player.GetLengthRequest
+	231, // 53: streamd.StreamPlayerGetLengthReply.reply:type_name -> player.GetLengthReply
+	232, // 54: streamd.StreamPlayerSetSpeedRequest.request:type_name -> player.SetSpeedRequest
+	233, // 55: streamd.StreamPlayerSetSpeedReply.reply:type_name -> player.SetSpeedReply
+	234, // 56: streamd.StreamPlayerSetPauseRequest.request:type_name -> player.SetPauseRequest
+	235, // 57: streamd.StreamPlayerSetPauseReply.reply:type_name -> player.SetPauseReply
+	236, // 58: streamd.StreamPlayerStopRequest.request:type_name -> player.StopRequest
+	237, // 59: streamd.StreamPlayerStopReply.reply:type_name -> player.StopReply
+	238, // 60: streamd.StreamPlayerCloseRequest.request:type_name -> player.CloseRequest
+	239, // 61: streamd.StreamPlayerCloseReply.reply:type_name -> player.CloseReply
+	167, // 62: streamd.OBSAction.itemShowHide:type_name -> streamd.OBSActionItemShowHide
+	168, // 63: streamd.OBSAction.windowCaptureSetSource:type_name -> streamd.OBSActionWindowCaptureSetSource
+	166, // 64: streamd.Action.noopRequest:type_name -> streamd.NoopRequest
 	25,  // 65: streamd.Action.startStreamRequest:type_name -> streamd.StartStreamRequest
 	26,  // 66: streamd.Action.startStreamByProfileNameRequest:type_name -> streamd.StartStreamByProfileNameRequest
 	28,  // 67: streamd.Action.endStreamRequest:type_name -> streamd.EndStreamRequest
-	167, // 68: streamd.Action.obsAction:type_name -> streamd.OBSAction
-	168, // 69: streamd.AddTimerRequest.action:type_name -> streamd.Action
-	168, // 70: streamd.Timer.action:type_name -> streamd.Action
-	173, // 71: streamd.ListTimersReply.timers:type_name -> streamd.Timer
-	182, // 72: streamd.EventQueryAnd.queries:type_name -> streamd.Event
-	182, // 73: streamd.EventQueryOr.queries:type_name -> streamd.Event
-	182, // 74: streamd.EventQueryNot.query:type_name -> streamd.Event
-	176, // 75: streamd.EventQuery.and:type_name -> streamd.EventQueryAnd
-	177, // 76: streamd.EventQuery.or:type_name -> streamd.EventQueryOr
-	178, // 77: streamd.EventQuery.not:type_name -> streamd.EventQueryNot
+	169, // 68: streamd.Action.obsAction:type_name -> streamd.OBSAction
+	170, // 69: streamd.AddTimerRequest.action:type_name -> streamd.Action
+	170, // 70: streamd.Timer.action:type_name -> streamd.Action
+	175, // 71: streamd.ListTimersReply.timers:type_name -> streamd.Timer
+	184, // 72: streamd.EventQueryAnd.queries:type_name -> streamd.Event
+	184, // 73: streamd.EventQueryOr.queries:type_name -> streamd.Event
+	184, // 74: streamd.EventQueryNot.query:type_name -> streamd.Event
+	178, // 75: streamd.EventQuery.and:type_name -> streamd.EventQueryAnd
+	179, // 76: streamd.EventQuery.or:type_name -> streamd.EventQueryOr
+	180, // 77: streamd.EventQuery.not:type_name -> streamd.EventQueryNot
 	7,   // 78: streamd.EventQuery.eventType:type_name -> streamd.EventType
-	182, // 79: streamd.EventQuery.event:type_name -> streamd.Event
-	180, // 80: streamd.Event.obsSceneChange:type_name -> streamd.EventOBSSceneChange
-	179, // 81: streamd.Event.windowFocusChange:type_name -> streamd.EventWindowFocusChange
-	181, // 82: streamd.TriggerRule.eventQuery:type_name -> streamd.EventQuery
-	168, // 83: streamd.TriggerRule.action:type_name -> streamd.Action
-	183, // 84: streamd.ListTriggerRulesReply.rules:type_name -> streamd.TriggerRule
-	183, // 85: streamd.AddTriggerRuleRequest.rule:type_name -> streamd.TriggerRule
-	183, // 86: streamd.UpdateTriggerRuleRequest.rule:type_name -> streamd.TriggerRule
-	182, // 87: streamd.SubmitEventRequest.event:type_name -> streamd.Event
-	238, // 88: streamd.ChatMessage.content:type_name -> chatwebhook.Event
-	238, // 89: streamd.InjectChatMessageRequest.event:type_name -> chatwebhook.Event
+	184, // 79: streamd.EventQuery.event:type_name -> streamd.Event
+	182, // 80: streamd.Event.obsSceneChange:type_name -> streamd.EventOBSSceneChange
+	181, // 81: streamd.Event.windowFocusChange:type_name -> streamd.EventWindowFocusChange
+	183, // 82: streamd.TriggerRule.eventQuery:type_name -> streamd.EventQuery
+	170, // 83: streamd.TriggerRule.action:type_name -> streamd.Action
+	185, // 84: streamd.ListTriggerRulesReply.rules:type_name -> streamd.TriggerRule
+	185, // 85: streamd.AddTriggerRuleRequest.rule:type_name -> streamd.TriggerRule
+	185, // 86: streamd.UpdateTriggerRuleRequest.rule:type_name -> streamd.TriggerRule
+	184, // 87: streamd.SubmitEventRequest.event:type_name -> streamd.Event
+	240, // 88: streamd.ChatMessage.content:type_name -> chatwebhook.Event
+	240, // 89: streamd.InjectChatMessageRequest.event:type_name -> chatwebhook.Event
 	9,   // 90: streamd.StreamD.Ping:input_type -> streamd.PingRequest
 	11,  // 91: streamd.StreamD.SetLoggingLevel:input_type -> streamd.SetLoggingLevelRequest
 	13,  // 92: streamd.StreamD.GetLoggingLevel:input_type -> streamd.GetLoggingLevelRequest
 	15,  // 93: streamd.StreamD.GetConfig:input_type -> streamd.GetConfigRequest
 	17,  // 94: streamd.StreamD.SetConfig:input_type -> streamd.SetConfigRequest
 	19,  // 95: streamd.StreamD.SaveConfig:input_type -> streamd.SaveConfigRequest
-	150, // 96: streamd.StreamD.SubscribeToConfigChanges:input_type -> streamd.SubscribeToConfigChangesRequest
+	152, // 96: streamd.StreamD.SubscribeToConfigChanges:input_type -> streamd.SubscribeToConfigChangesRequest
 	21,  // 97: streamd.StreamD.ResetCache:input_type -> streamd.ResetCacheRequest
 	23,  // 98: streamd.StreamD.InitCache:input_type -> streamd.InitCacheRequest
 	25,  // 99: streamd.StreamD.StartStream:input_type -> streamd.StartStreamRequest
@@ -11221,7 +11343,7 @@ var file_streamd_proto_depIdxs = []int32{
 	30,  // 102: streamd.StreamD.GetStreamStatus:input_type -> streamd.GetStreamStatusRequest
 	34,  // 103: streamd.StreamD.IsBackendEnabled:input_type -> streamd.IsBackendEnabledRequest
 	32,  // 104: streamd.StreamD.GetBackendInfo:input_type -> streamd.GetBackendInfoRequest
-	152, // 105: streamd.StreamD.SubscribeToStreamsChanges:input_type -> streamd.SubscribeToStreamsChangesRequest
+	154, // 105: streamd.StreamD.SubscribeToStreamsChanges:input_type -> streamd.SubscribeToStreamsChangesRequest
 	36,  // 106: streamd.StreamD.Restart:input_type -> streamd.RestartRequest
 	38,  // 107: streamd.StreamD.SetTitle:input_type -> streamd.SetTitleRequest
 	40,  // 108: streamd.StreamD.SetDescription:input_type -> streamd.SetDescriptionRequest
@@ -11237,28 +11359,28 @@ var file_streamd_proto_depIdxs = []int32{
 	71,  // 118: streamd.StreamD.ListStreamServers:input_type -> streamd.ListStreamServersRequest
 	73,  // 119: streamd.StreamD.StartStreamServer:input_type -> streamd.StartStreamServerRequest
 	75,  // 120: streamd.StreamD.StopStreamServer:input_type -> streamd.StopStreamServerRequest
-	154, // 121: streamd.StreamD.SubscribeToStreamServersChanges:input_type -> streamd.SubscribeToStreamServersChangesRequest
+	156, // 121: streamd.StreamD.SubscribeToStreamServersChanges:input_type -> streamd.SubscribeToStreamServersChangesRequest
 	78,  // 122: streamd.StreamD.ListStreamDestinations:input_type -> streamd.ListStreamDestinationsRequest
 	80,  // 123: streamd.StreamD.AddStreamDestination:input_type -> streamd.AddStreamDestinationRequest
 	82,  // 124: streamd.StreamD.UpdateStreamDestination:input_type -> streamd.UpdateStreamDestinationRequest
 	84,  // 125: streamd.StreamD.RemoveStreamDestination:input_type -> streamd.RemoveStreamDestinationRequest
-	156, // 126: streamd.StreamD.SubscribeToStreamDestinationsChanges:input_type -> streamd.SubscribeToStreamDestinationsChangesRequest
+	158, // 126: streamd.StreamD.SubscribeToStreamDestinationsChanges:input_type -> streamd.SubscribeToStreamDestinationsChangesRequest
 	87,  // 127: streamd.StreamD.AddIncomingStream:input_type -> streamd.AddIncomingStreamRequest
 	89,  // 128: streamd.StreamD.RemoveIncomingStream:input_type -> streamd.RemoveIncomingStreamRequest
 	91,  // 129: streamd.StreamD.ListIncomingStreams:input_type -> streamd.ListIncomingStreamsRequest
-	158, // 130: streamd.StreamD.SubscribeToIncomingStreamsChanges:input_type -> streamd.SubscribeToIncomingStreamsChangesRequest
+	160, // 130: streamd.StreamD.SubscribeToIncomingStreamsChanges:input_type -> streamd.SubscribeToIncomingStreamsChangesRequest
 	106, // 131: streamd.StreamD.ListStreamForwards:input_type -> streamd.ListStreamForwardsRequest
 	108, // 132: streamd.StreamD.AddStreamForward:input_type -> streamd.AddStreamForwardRequest
 	110, // 133: streamd.StreamD.UpdateStreamForward:input_type -> streamd.UpdateStreamForwardRequest
 	112, // 134: streamd.StreamD.RemoveStreamForward:input_type -> streamd.RemoveStreamForwardRequest
-	160, // 135: streamd.StreamD.SubscribeToStreamForwardsChanges:input_type -> streamd.SubscribeToStreamForwardsChangesRequest
+	162, // 135: streamd.StreamD.SubscribeToStreamForwardsChanges:input_type -> streamd.SubscribeToStreamForwardsChangesRequest
 	114, // 136: streamd.StreamD.WaitForStreamPublisher:input_type -> streamd.WaitForStreamPublisherRequest
 	118, // 137: streamd.StreamD.AddStreamPlayer:input_type -> streamd.AddStreamPlayerRequest
 	120, // 138: streamd.StreamD.RemoveStreamPlayer:input_type -> streamd.RemoveStreamPlayerRequest
 	122, // 139: streamd.StreamD.UpdateStreamPlayer:input_type -> streamd.UpdateStreamPlayerRequest
 	124, // 140: streamd.StreamD.ListStreamPlayers:input_type -> streamd.ListStreamPlayersRequest
 	126, // 141: streamd.StreamD.GetStreamPlayer:input_type -> streamd.GetStreamPlayerRequest
-	162, // 142: streamd.StreamD.SubscribeToStreamPlayersChanges:input_type -> streamd.SubscribeToStreamPlayersChangesRequest
+	164, // 142: streamd.StreamD.SubscribeToStreamPlayersChanges:input_type -> streamd.SubscribeToStreamPlayersChangesRequest
 	128, // 143: streamd.StreamD.StreamPlayerOpen:input_type -> streamd.StreamPlayerOpenRequest
 	130, // 144: streamd.StreamD.StreamPlayerProcessTitle:input_type -> streamd.StreamPlayerProcessTitleRequest
 	132, // 145: streamd.StreamD.StreamPlayerGetLink:input_type -> streamd.StreamPlayerGetLinkRequest
@@ -11266,114 +11388,116 @@ var file_streamd_proto_depIdxs = []int32{
 	136, // 147: streamd.StreamD.StreamPlayerIsEnded:input_type -> streamd.StreamPlayerIsEndedRequest
 	138, // 148: streamd.StreamD.StreamPlayerGetPosition:input_type -> streamd.StreamPlayerGetPositionRequest
 	140, // 149: streamd.StreamD.StreamPlayerGetLength:input_type -> streamd.StreamPlayerGetLengthRequest
-	142, // 150: streamd.StreamD.StreamPlayerSetSpeed:input_type -> streamd.StreamPlayerSetSpeedRequest
-	144, // 151: streamd.StreamD.StreamPlayerSetPause:input_type -> streamd.StreamPlayerSetPauseRequest
-	146, // 152: streamd.StreamD.StreamPlayerStop:input_type -> streamd.StreamPlayerStopRequest
-	148, // 153: streamd.StreamD.StreamPlayerClose:input_type -> streamd.StreamPlayerCloseRequest
-	169, // 154: streamd.StreamD.AddTimer:input_type -> streamd.AddTimerRequest
-	171, // 155: streamd.StreamD.RemoveTimer:input_type -> streamd.RemoveTimerRequest
-	174, // 156: streamd.StreamD.ListTimers:input_type -> streamd.ListTimersRequest
-	184, // 157: streamd.StreamD.ListTriggerRules:input_type -> streamd.ListTriggerRulesRequest
-	186, // 158: streamd.StreamD.AddTriggerRule:input_type -> streamd.AddTriggerRuleRequest
-	188, // 159: streamd.StreamD.RemoveTriggerRule:input_type -> streamd.RemoveTriggerRuleRequest
-	190, // 160: streamd.StreamD.UpdateTriggerRule:input_type -> streamd.UpdateTriggerRuleRequest
-	192, // 161: streamd.StreamD.SubmitEvent:input_type -> streamd.SubmitEventRequest
-	194, // 162: streamd.StreamD.SubscribeToChatMessages:input_type -> streamd.SubscribeToChatMessagesRequest
-	196, // 163: streamd.StreamD.SendChatMessage:input_type -> streamd.SendChatMessageRequest
-	198, // 164: streamd.StreamD.InjectChatMessage:input_type -> streamd.InjectChatMessageRequest
-	200, // 165: streamd.StreamD.RemoveChatMessage:input_type -> streamd.RemoveChatMessageRequest
-	202, // 166: streamd.StreamD.BanUser:input_type -> streamd.BanUserRequest
-	212, // 167: streamd.StreamD.SetBuiltinChatListenerEnabled:input_type -> streamd.SetBuiltinChatListenerEnabledRequest
-	214, // 168: streamd.StreamD.IsBuiltinChatListenerEnabled:input_type -> streamd.IsBuiltinChatListenerEnabledRequest
-	204, // 169: streamd.StreamD.Shoutout:input_type -> streamd.ShoutoutRequest
-	206, // 170: streamd.StreamD.RaidTo:input_type -> streamd.RaidToRequest
-	208, // 171: streamd.StreamD.GetPeerIDs:input_type -> streamd.GetPeerIDsRequest
-	210, // 172: streamd.StreamD.LLMGenerate:input_type -> streamd.LLMGenerateRequest
-	10,  // 173: streamd.StreamD.Ping:output_type -> streamd.PingReply
-	12,  // 174: streamd.StreamD.SetLoggingLevel:output_type -> streamd.SetLoggingLevelReply
-	14,  // 175: streamd.StreamD.GetLoggingLevel:output_type -> streamd.GetLoggingLevelReply
-	16,  // 176: streamd.StreamD.GetConfig:output_type -> streamd.GetConfigReply
-	18,  // 177: streamd.StreamD.SetConfig:output_type -> streamd.SetConfigReply
-	20,  // 178: streamd.StreamD.SaveConfig:output_type -> streamd.SaveConfigReply
-	151, // 179: streamd.StreamD.SubscribeToConfigChanges:output_type -> streamd.ConfigChange
-	22,  // 180: streamd.StreamD.ResetCache:output_type -> streamd.ResetCacheReply
-	24,  // 181: streamd.StreamD.InitCache:output_type -> streamd.InitCacheReply
-	27,  // 182: streamd.StreamD.StartStream:output_type -> streamd.StartStreamReply
-	27,  // 183: streamd.StreamD.StartStreamByProfileName:output_type -> streamd.StartStreamReply
-	29,  // 184: streamd.StreamD.EndStream:output_type -> streamd.EndStreamReply
-	31,  // 185: streamd.StreamD.GetStreamStatus:output_type -> streamd.GetStreamStatusReply
-	35,  // 186: streamd.StreamD.IsBackendEnabled:output_type -> streamd.IsBackendEnabledReply
-	33,  // 187: streamd.StreamD.GetBackendInfo:output_type -> streamd.GetBackendInfoReply
-	153, // 188: streamd.StreamD.SubscribeToStreamsChanges:output_type -> streamd.StreamsChange
-	37,  // 189: streamd.StreamD.Restart:output_type -> streamd.RestartReply
-	39,  // 190: streamd.StreamD.SetTitle:output_type -> streamd.SetTitleReply
-	41,  // 191: streamd.StreamD.SetDescription:output_type -> streamd.SetDescriptionReply
-	43,  // 192: streamd.StreamD.ApplyProfile:output_type -> streamd.ApplyProfileReply
-	45,  // 193: streamd.StreamD.UpdateStream:output_type -> streamd.UpdateStreamReply
-	57,  // 194: streamd.StreamD.GetVariable:output_type -> streamd.GetVariableReply
-	59,  // 195: streamd.StreamD.GetVariableHash:output_type -> streamd.GetVariableHashReply
-	61,  // 196: streamd.StreamD.SetVariable:output_type -> streamd.SetVariableReply
-	63,  // 197: streamd.StreamD.SubscribeToVariable:output_type -> streamd.VariableChange
-	47,  // 198: streamd.StreamD.EXPERIMENTAL_ReinitStreamControllers:output_type -> streamd.EXPERIMENTAL_ReinitStreamControllersReply
-	55,  // 199: streamd.StreamD.SubscribeToOAuthRequests:output_type -> streamd.OAuthRequest
-	65,  // 200: streamd.StreamD.SubmitOAuthCode:output_type -> streamd.SubmitOAuthCodeReply
-	72,  // 201: streamd.StreamD.ListStreamServers:output_type -> streamd.ListStreamServersReply
-	74,  // 202: streamd.StreamD.StartStreamServer:output_type -> streamd.StartStreamServerReply
-	76,  // 203: streamd.StreamD.StopStreamServer:output_type -> streamd.StopStreamServerReply
-	155, // 204: streamd.StreamD.SubscribeToStreamServersChanges:output_type -> streamd.StreamServersChange
-	79,  // 205: streamd.StreamD.ListStreamDestinations:output_type -> streamd.ListStreamDestinationsReply
-	81,  // 206: streamd.StreamD.AddStreamDestination:output_type -> streamd.AddStreamDestinationReply
-	83,  // 207: streamd.StreamD.UpdateStreamDestination:output_type -> streamd.UpdateStreamDestinationReply
-	85,  // 208: streamd.StreamD.RemoveStreamDestination:output_type -> streamd.RemoveStreamDestinationReply
-	157, // 209: streamd.StreamD.SubscribeToStreamDestinationsChanges:output_type -> streamd.StreamDestinationsChange
-	88,  // 210: streamd.StreamD.AddIncomingStream:output_type -> streamd.AddIncomingStreamReply
-	90,  // 211: streamd.StreamD.RemoveIncomingStream:output_type -> streamd.RemoveIncomingStreamReply
-	92,  // 212: streamd.StreamD.ListIncomingStreams:output_type -> streamd.ListIncomingStreamsReply
-	159, // 213: streamd.StreamD.SubscribeToIncomingStreamsChanges:output_type -> streamd.IncomingStreamsChange
-	107, // 214: streamd.StreamD.ListStreamForwards:output_type -> streamd.ListStreamForwardsReply
-	109, // 215: streamd.StreamD.AddStreamForward:output_type -> streamd.AddStreamForwardReply
-	111, // 216: streamd.StreamD.UpdateStreamForward:output_type -> streamd.UpdateStreamForwardReply
-	113, // 217: streamd.StreamD.RemoveStreamForward:output_type -> streamd.RemoveStreamForwardReply
-	161, // 218: streamd.StreamD.SubscribeToStreamForwardsChanges:output_type -> streamd.StreamForwardsChange
-	115, // 219: streamd.StreamD.WaitForStreamPublisher:output_type -> streamd.StreamPublisher
-	119, // 220: streamd.StreamD.AddStreamPlayer:output_type -> streamd.AddStreamPlayerReply
-	121, // 221: streamd.StreamD.RemoveStreamPlayer:output_type -> streamd.RemoveStreamPlayerReply
-	123, // 222: streamd.StreamD.UpdateStreamPlayer:output_type -> streamd.UpdateStreamPlayerReply
-	125, // 223: streamd.StreamD.ListStreamPlayers:output_type -> streamd.ListStreamPlayersReply
-	127, // 224: streamd.StreamD.GetStreamPlayer:output_type -> streamd.GetStreamPlayerReply
-	163, // 225: streamd.StreamD.SubscribeToStreamPlayersChanges:output_type -> streamd.StreamPlayersChange
-	129, // 226: streamd.StreamD.StreamPlayerOpen:output_type -> streamd.StreamPlayerOpenReply
-	131, // 227: streamd.StreamD.StreamPlayerProcessTitle:output_type -> streamd.StreamPlayerProcessTitleReply
-	133, // 228: streamd.StreamD.StreamPlayerGetLink:output_type -> streamd.StreamPlayerGetLinkReply
-	135, // 229: streamd.StreamD.StreamPlayerEndChan:output_type -> streamd.StreamPlayerEndChanReply
-	137, // 230: streamd.StreamD.StreamPlayerIsEnded:output_type -> streamd.StreamPlayerIsEndedReply
-	139, // 231: streamd.StreamD.StreamPlayerGetPosition:output_type -> streamd.StreamPlayerGetPositionReply
-	141, // 232: streamd.StreamD.StreamPlayerGetLength:output_type -> streamd.StreamPlayerGetLengthReply
-	143, // 233: streamd.StreamD.StreamPlayerSetSpeed:output_type -> streamd.StreamPlayerSetSpeedReply
-	145, // 234: streamd.StreamD.StreamPlayerSetPause:output_type -> streamd.StreamPlayerSetPauseReply
-	147, // 235: streamd.StreamD.StreamPlayerStop:output_type -> streamd.StreamPlayerStopReply
-	149, // 236: streamd.StreamD.StreamPlayerClose:output_type -> streamd.StreamPlayerCloseReply
-	170, // 237: streamd.StreamD.AddTimer:output_type -> streamd.AddTimerReply
-	172, // 238: streamd.StreamD.RemoveTimer:output_type -> streamd.RemoveTimerReply
-	175, // 239: streamd.StreamD.ListTimers:output_type -> streamd.ListTimersReply
-	185, // 240: streamd.StreamD.ListTriggerRules:output_type -> streamd.ListTriggerRulesReply
-	187, // 241: streamd.StreamD.AddTriggerRule:output_type -> streamd.AddTriggerRuleReply
-	189, // 242: streamd.StreamD.RemoveTriggerRule:output_type -> streamd.RemoveTriggerRuleReply
-	191, // 243: streamd.StreamD.UpdateTriggerRule:output_type -> streamd.UpdateTriggerRuleReply
-	193, // 244: streamd.StreamD.SubmitEvent:output_type -> streamd.SubmitEventReply
-	195, // 245: streamd.StreamD.SubscribeToChatMessages:output_type -> streamd.ChatMessage
-	197, // 246: streamd.StreamD.SendChatMessage:output_type -> streamd.SendChatMessageReply
-	199, // 247: streamd.StreamD.InjectChatMessage:output_type -> streamd.InjectChatMessageReply
-	201, // 248: streamd.StreamD.RemoveChatMessage:output_type -> streamd.RemoveChatMessageReply
-	203, // 249: streamd.StreamD.BanUser:output_type -> streamd.BanUserReply
-	213, // 250: streamd.StreamD.SetBuiltinChatListenerEnabled:output_type -> streamd.SetBuiltinChatListenerEnabledReply
-	215, // 251: streamd.StreamD.IsBuiltinChatListenerEnabled:output_type -> streamd.IsBuiltinChatListenerEnabledReply
-	205, // 252: streamd.StreamD.Shoutout:output_type -> streamd.ShoutoutReply
-	207, // 253: streamd.StreamD.RaidTo:output_type -> streamd.RaidToReply
-	209, // 254: streamd.StreamD.GetPeerIDs:output_type -> streamd.GetPeerIDsReply
-	211, // 255: streamd.StreamD.LLMGenerate:output_type -> streamd.LLMGenerateReply
-	173, // [173:256] is the sub-list for method output_type
-	90,  // [90:173] is the sub-list for method input_type
+	142, // 150: streamd.StreamD.StreamPlayerGetLag:input_type -> streamd.StreamPlayerGetLagRequest
+	144, // 151: streamd.StreamD.StreamPlayerSetSpeed:input_type -> streamd.StreamPlayerSetSpeedRequest
+	146, // 152: streamd.StreamD.StreamPlayerSetPause:input_type -> streamd.StreamPlayerSetPauseRequest
+	148, // 153: streamd.StreamD.StreamPlayerStop:input_type -> streamd.StreamPlayerStopRequest
+	150, // 154: streamd.StreamD.StreamPlayerClose:input_type -> streamd.StreamPlayerCloseRequest
+	171, // 155: streamd.StreamD.AddTimer:input_type -> streamd.AddTimerRequest
+	173, // 156: streamd.StreamD.RemoveTimer:input_type -> streamd.RemoveTimerRequest
+	176, // 157: streamd.StreamD.ListTimers:input_type -> streamd.ListTimersRequest
+	186, // 158: streamd.StreamD.ListTriggerRules:input_type -> streamd.ListTriggerRulesRequest
+	188, // 159: streamd.StreamD.AddTriggerRule:input_type -> streamd.AddTriggerRuleRequest
+	190, // 160: streamd.StreamD.RemoveTriggerRule:input_type -> streamd.RemoveTriggerRuleRequest
+	192, // 161: streamd.StreamD.UpdateTriggerRule:input_type -> streamd.UpdateTriggerRuleRequest
+	194, // 162: streamd.StreamD.SubmitEvent:input_type -> streamd.SubmitEventRequest
+	196, // 163: streamd.StreamD.SubscribeToChatMessages:input_type -> streamd.SubscribeToChatMessagesRequest
+	198, // 164: streamd.StreamD.SendChatMessage:input_type -> streamd.SendChatMessageRequest
+	200, // 165: streamd.StreamD.InjectChatMessage:input_type -> streamd.InjectChatMessageRequest
+	202, // 166: streamd.StreamD.RemoveChatMessage:input_type -> streamd.RemoveChatMessageRequest
+	204, // 167: streamd.StreamD.BanUser:input_type -> streamd.BanUserRequest
+	214, // 168: streamd.StreamD.SetBuiltinChatListenerEnabled:input_type -> streamd.SetBuiltinChatListenerEnabledRequest
+	216, // 169: streamd.StreamD.IsBuiltinChatListenerEnabled:input_type -> streamd.IsBuiltinChatListenerEnabledRequest
+	206, // 170: streamd.StreamD.Shoutout:input_type -> streamd.ShoutoutRequest
+	208, // 171: streamd.StreamD.RaidTo:input_type -> streamd.RaidToRequest
+	210, // 172: streamd.StreamD.GetPeerIDs:input_type -> streamd.GetPeerIDsRequest
+	212, // 173: streamd.StreamD.LLMGenerate:input_type -> streamd.LLMGenerateRequest
+	10,  // 174: streamd.StreamD.Ping:output_type -> streamd.PingReply
+	12,  // 175: streamd.StreamD.SetLoggingLevel:output_type -> streamd.SetLoggingLevelReply
+	14,  // 176: streamd.StreamD.GetLoggingLevel:output_type -> streamd.GetLoggingLevelReply
+	16,  // 177: streamd.StreamD.GetConfig:output_type -> streamd.GetConfigReply
+	18,  // 178: streamd.StreamD.SetConfig:output_type -> streamd.SetConfigReply
+	20,  // 179: streamd.StreamD.SaveConfig:output_type -> streamd.SaveConfigReply
+	153, // 180: streamd.StreamD.SubscribeToConfigChanges:output_type -> streamd.ConfigChange
+	22,  // 181: streamd.StreamD.ResetCache:output_type -> streamd.ResetCacheReply
+	24,  // 182: streamd.StreamD.InitCache:output_type -> streamd.InitCacheReply
+	27,  // 183: streamd.StreamD.StartStream:output_type -> streamd.StartStreamReply
+	27,  // 184: streamd.StreamD.StartStreamByProfileName:output_type -> streamd.StartStreamReply
+	29,  // 185: streamd.StreamD.EndStream:output_type -> streamd.EndStreamReply
+	31,  // 186: streamd.StreamD.GetStreamStatus:output_type -> streamd.GetStreamStatusReply
+	35,  // 187: streamd.StreamD.IsBackendEnabled:output_type -> streamd.IsBackendEnabledReply
+	33,  // 188: streamd.StreamD.GetBackendInfo:output_type -> streamd.GetBackendInfoReply
+	155, // 189: streamd.StreamD.SubscribeToStreamsChanges:output_type -> streamd.StreamsChange
+	37,  // 190: streamd.StreamD.Restart:output_type -> streamd.RestartReply
+	39,  // 191: streamd.StreamD.SetTitle:output_type -> streamd.SetTitleReply
+	41,  // 192: streamd.StreamD.SetDescription:output_type -> streamd.SetDescriptionReply
+	43,  // 193: streamd.StreamD.ApplyProfile:output_type -> streamd.ApplyProfileReply
+	45,  // 194: streamd.StreamD.UpdateStream:output_type -> streamd.UpdateStreamReply
+	57,  // 195: streamd.StreamD.GetVariable:output_type -> streamd.GetVariableReply
+	59,  // 196: streamd.StreamD.GetVariableHash:output_type -> streamd.GetVariableHashReply
+	61,  // 197: streamd.StreamD.SetVariable:output_type -> streamd.SetVariableReply
+	63,  // 198: streamd.StreamD.SubscribeToVariable:output_type -> streamd.VariableChange
+	47,  // 199: streamd.StreamD.EXPERIMENTAL_ReinitStreamControllers:output_type -> streamd.EXPERIMENTAL_ReinitStreamControllersReply
+	55,  // 200: streamd.StreamD.SubscribeToOAuthRequests:output_type -> streamd.OAuthRequest
+	65,  // 201: streamd.StreamD.SubmitOAuthCode:output_type -> streamd.SubmitOAuthCodeReply
+	72,  // 202: streamd.StreamD.ListStreamServers:output_type -> streamd.ListStreamServersReply
+	74,  // 203: streamd.StreamD.StartStreamServer:output_type -> streamd.StartStreamServerReply
+	76,  // 204: streamd.StreamD.StopStreamServer:output_type -> streamd.StopStreamServerReply
+	157, // 205: streamd.StreamD.SubscribeToStreamServersChanges:output_type -> streamd.StreamServersChange
+	79,  // 206: streamd.StreamD.ListStreamDestinations:output_type -> streamd.ListStreamDestinationsReply
+	81,  // 207: streamd.StreamD.AddStreamDestination:output_type -> streamd.AddStreamDestinationReply
+	83,  // 208: streamd.StreamD.UpdateStreamDestination:output_type -> streamd.UpdateStreamDestinationReply
+	85,  // 209: streamd.StreamD.RemoveStreamDestination:output_type -> streamd.RemoveStreamDestinationReply
+	159, // 210: streamd.StreamD.SubscribeToStreamDestinationsChanges:output_type -> streamd.StreamDestinationsChange
+	88,  // 211: streamd.StreamD.AddIncomingStream:output_type -> streamd.AddIncomingStreamReply
+	90,  // 212: streamd.StreamD.RemoveIncomingStream:output_type -> streamd.RemoveIncomingStreamReply
+	92,  // 213: streamd.StreamD.ListIncomingStreams:output_type -> streamd.ListIncomingStreamsReply
+	161, // 214: streamd.StreamD.SubscribeToIncomingStreamsChanges:output_type -> streamd.IncomingStreamsChange
+	107, // 215: streamd.StreamD.ListStreamForwards:output_type -> streamd.ListStreamForwardsReply
+	109, // 216: streamd.StreamD.AddStreamForward:output_type -> streamd.AddStreamForwardReply
+	111, // 217: streamd.StreamD.UpdateStreamForward:output_type -> streamd.UpdateStreamForwardReply
+	113, // 218: streamd.StreamD.RemoveStreamForward:output_type -> streamd.RemoveStreamForwardReply
+	163, // 219: streamd.StreamD.SubscribeToStreamForwardsChanges:output_type -> streamd.StreamForwardsChange
+	115, // 220: streamd.StreamD.WaitForStreamPublisher:output_type -> streamd.StreamPublisher
+	119, // 221: streamd.StreamD.AddStreamPlayer:output_type -> streamd.AddStreamPlayerReply
+	121, // 222: streamd.StreamD.RemoveStreamPlayer:output_type -> streamd.RemoveStreamPlayerReply
+	123, // 223: streamd.StreamD.UpdateStreamPlayer:output_type -> streamd.UpdateStreamPlayerReply
+	125, // 224: streamd.StreamD.ListStreamPlayers:output_type -> streamd.ListStreamPlayersReply
+	127, // 225: streamd.StreamD.GetStreamPlayer:output_type -> streamd.GetStreamPlayerReply
+	165, // 226: streamd.StreamD.SubscribeToStreamPlayersChanges:output_type -> streamd.StreamPlayersChange
+	129, // 227: streamd.StreamD.StreamPlayerOpen:output_type -> streamd.StreamPlayerOpenReply
+	131, // 228: streamd.StreamD.StreamPlayerProcessTitle:output_type -> streamd.StreamPlayerProcessTitleReply
+	133, // 229: streamd.StreamD.StreamPlayerGetLink:output_type -> streamd.StreamPlayerGetLinkReply
+	135, // 230: streamd.StreamD.StreamPlayerEndChan:output_type -> streamd.StreamPlayerEndChanReply
+	137, // 231: streamd.StreamD.StreamPlayerIsEnded:output_type -> streamd.StreamPlayerIsEndedReply
+	139, // 232: streamd.StreamD.StreamPlayerGetPosition:output_type -> streamd.StreamPlayerGetPositionReply
+	141, // 233: streamd.StreamD.StreamPlayerGetLength:output_type -> streamd.StreamPlayerGetLengthReply
+	143, // 234: streamd.StreamD.StreamPlayerGetLag:output_type -> streamd.StreamPlayerGetLagReply
+	145, // 235: streamd.StreamD.StreamPlayerSetSpeed:output_type -> streamd.StreamPlayerSetSpeedReply
+	147, // 236: streamd.StreamD.StreamPlayerSetPause:output_type -> streamd.StreamPlayerSetPauseReply
+	149, // 237: streamd.StreamD.StreamPlayerStop:output_type -> streamd.StreamPlayerStopReply
+	151, // 238: streamd.StreamD.StreamPlayerClose:output_type -> streamd.StreamPlayerCloseReply
+	172, // 239: streamd.StreamD.AddTimer:output_type -> streamd.AddTimerReply
+	174, // 240: streamd.StreamD.RemoveTimer:output_type -> streamd.RemoveTimerReply
+	177, // 241: streamd.StreamD.ListTimers:output_type -> streamd.ListTimersReply
+	187, // 242: streamd.StreamD.ListTriggerRules:output_type -> streamd.ListTriggerRulesReply
+	189, // 243: streamd.StreamD.AddTriggerRule:output_type -> streamd.AddTriggerRuleReply
+	191, // 244: streamd.StreamD.RemoveTriggerRule:output_type -> streamd.RemoveTriggerRuleReply
+	193, // 245: streamd.StreamD.UpdateTriggerRule:output_type -> streamd.UpdateTriggerRuleReply
+	195, // 246: streamd.StreamD.SubmitEvent:output_type -> streamd.SubmitEventReply
+	197, // 247: streamd.StreamD.SubscribeToChatMessages:output_type -> streamd.ChatMessage
+	199, // 248: streamd.StreamD.SendChatMessage:output_type -> streamd.SendChatMessageReply
+	201, // 249: streamd.StreamD.InjectChatMessage:output_type -> streamd.InjectChatMessageReply
+	203, // 250: streamd.StreamD.RemoveChatMessage:output_type -> streamd.RemoveChatMessageReply
+	205, // 251: streamd.StreamD.BanUser:output_type -> streamd.BanUserReply
+	215, // 252: streamd.StreamD.SetBuiltinChatListenerEnabled:output_type -> streamd.SetBuiltinChatListenerEnabledReply
+	217, // 253: streamd.StreamD.IsBuiltinChatListenerEnabled:output_type -> streamd.IsBuiltinChatListenerEnabledReply
+	207, // 254: streamd.StreamD.Shoutout:output_type -> streamd.ShoutoutReply
+	209, // 255: streamd.StreamD.RaidTo:output_type -> streamd.RaidToReply
+	211, // 256: streamd.StreamD.GetPeerIDs:output_type -> streamd.GetPeerIDsReply
+	213, // 257: streamd.StreamD.LLMGenerate:output_type -> streamd.LLMGenerateReply
+	174, // [174:258] is the sub-list for method output_type
+	90,  // [90:174] is the sub-list for method input_type
 	90,  // [90:90] is the sub-list for extension type_name
 	90,  // [90:90] is the sub-list for extension extendee
 	0,   // [0:90] is the sub-list for field type_name
@@ -11401,40 +11525,40 @@ func file_streamd_proto_init() {
 		(*VideoQuality_ConstantQuality)(nil),
 	}
 	file_streamd_proto_msgTypes[105].OneofWrappers = []any{}
-	file_streamd_proto_msgTypes[156].OneofWrappers = []any{}
-	file_streamd_proto_msgTypes[157].OneofWrappers = []any{}
-	file_streamd_proto_msgTypes[158].OneofWrappers = []any{
+	file_streamd_proto_msgTypes[158].OneofWrappers = []any{}
+	file_streamd_proto_msgTypes[159].OneofWrappers = []any{}
+	file_streamd_proto_msgTypes[160].OneofWrappers = []any{
 		(*OBSAction_ItemShowHide)(nil),
 		(*OBSAction_WindowCaptureSetSource)(nil),
 	}
-	file_streamd_proto_msgTypes[159].OneofWrappers = []any{
+	file_streamd_proto_msgTypes[161].OneofWrappers = []any{
 		(*Action_NoopRequest)(nil),
 		(*Action_StartStreamRequest)(nil),
 		(*Action_StartStreamByProfileNameRequest)(nil),
 		(*Action_EndStreamRequest)(nil),
 		(*Action_ObsAction)(nil),
 	}
-	file_streamd_proto_msgTypes[170].OneofWrappers = []any{}
-	file_streamd_proto_msgTypes[171].OneofWrappers = []any{}
-	file_streamd_proto_msgTypes[172].OneofWrappers = []any{
+	file_streamd_proto_msgTypes[172].OneofWrappers = []any{}
+	file_streamd_proto_msgTypes[173].OneofWrappers = []any{}
+	file_streamd_proto_msgTypes[174].OneofWrappers = []any{
 		(*EventQuery_And)(nil),
 		(*EventQuery_Or)(nil),
 		(*EventQuery_Not)(nil),
 		(*EventQuery_EventType)(nil),
 		(*EventQuery_Event)(nil),
 	}
-	file_streamd_proto_msgTypes[173].OneofWrappers = []any{
+	file_streamd_proto_msgTypes[175].OneofWrappers = []any{
 		(*Event_ObsSceneChange)(nil),
 		(*Event_WindowFocusChange)(nil),
 	}
-	file_streamd_proto_msgTypes[193].OneofWrappers = []any{}
+	file_streamd_proto_msgTypes[195].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_streamd_proto_rawDesc), len(file_streamd_proto_rawDesc)),
 			NumEnums:      9,
-			NumMessages:   207,
+			NumMessages:   209,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

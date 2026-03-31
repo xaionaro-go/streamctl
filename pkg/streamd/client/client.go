@@ -1960,6 +1960,40 @@ func (c *Client) StreamPlayerGetLength(
 	), nil
 }
 
+func (c *Client) StreamPlayerGetLag(
+	ctx context.Context,
+	streamID streamtypes.StreamID,
+) (time.Duration, time.Time, error) {
+	now := time.Now()
+	resp, err := withStreamDClient(ctx, c, func(
+		ctx context.Context,
+		client streamd_grpc.StreamDClient,
+		conn io.Closer,
+	) (*streamd_grpc.StreamPlayerGetLagReply, error) {
+		return callWrapper(
+			ctx,
+			c,
+			client.StreamPlayerGetLag,
+			&streamd_grpc.StreamPlayerGetLagRequest{
+				StreamSourceID: string(streamID),
+				RequestUnixNano: now.UnixNano(),
+			},
+		)
+	})
+	if err != nil {
+		return 0, time.Time{}, fmt.Errorf("unable to query: %w", err)
+	}
+	replyTime := unixNanoToTime(resp.GetReplyUnixNano())
+	return time.Nanosecond * time.Duration(resp.GetLagU()), replyTime, nil
+}
+
+func unixNanoToTime(unixNano int64) time.Time {
+	return time.Unix(
+		unixNano/time.Second.Nanoseconds(),
+		unixNano%time.Second.Nanoseconds(),
+	)
+}
+
 func (c *Client) StreamPlayerSetSpeed(
 	ctx context.Context,
 	streamID streamtypes.StreamID,

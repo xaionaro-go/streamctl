@@ -566,8 +566,6 @@ func playerList(cmd *cobra.Command, args []string) {
 		StreamID string        `json:"stream_id"`
 		Type     string        `json:"type"`
 		Disabled bool          `json:"disabled"`
-		Position time.Duration `json:"position"`
-		Length   time.Duration `json:"length"`
 		Lag      time.Duration `json:"lag"`
 		Error    string        `json:"error,omitempty"`
 	}
@@ -580,23 +578,15 @@ func playerList(cmd *cobra.Command, args []string) {
 			Disabled: p.Disabled,
 		}
 
-		pos, posErr := streamD.StreamPlayerGetPosition(ctx, p.StreamID)
-		length, lenErr := streamD.StreamPlayerGetLength(ctx, p.StreamID)
-
-		firstErr := posErr
-		if firstErr == nil {
-			firstErr = lenErr
-		}
+		lag, _, lagErr := streamD.StreamPlayerGetLag(ctx, p.StreamID)
 
 		switch {
-		case firstErr != nil && strings.Contains(firstErr.Error(), "no player setup"):
+		case lagErr != nil && strings.Contains(lagErr.Error(), "no player setup"):
 			entry.Error = "not running"
-		case firstErr != nil:
-			entry.Error = firstErr.Error()
+		case lagErr != nil:
+			entry.Error = lagErr.Error()
 		default:
-			entry.Position = pos
-			entry.Length = length
-			entry.Lag = length - pos
+			entry.Lag = lag
 		}
 
 		entries = append(entries, entry)
@@ -616,14 +606,12 @@ func playerList(cmd *cobra.Command, args []string) {
 
 	for _, e := range entries {
 		if e.Error != "" {
-			fmt.Printf("%-30s  type=%-6s  error=%s\n",
+			fmt.Printf("%-30s  type=%-6s  %s\n",
 				e.StreamID, e.Type, e.Error)
 			continue
 		}
-		fmt.Printf("%-30s  type=%-6s  pos=%-12s  len=%-12s  lag=%s\n",
+		fmt.Printf("%-30s  type=%-6s  lag=%s\n",
 			e.StreamID, e.Type,
-			e.Position.Truncate(time.Millisecond),
-			e.Length.Truncate(time.Millisecond),
 			e.Lag.Truncate(time.Millisecond))
 	}
 }
