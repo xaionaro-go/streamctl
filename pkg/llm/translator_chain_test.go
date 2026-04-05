@@ -917,6 +917,291 @@ func TestTranslate(t *testing.T) {
 				}
 			},
 		},
+
+		// =====================================================================
+		// Defects from /tmp/1.log analysis (2026-03-31)
+		// =====================================================================
+
+		// --- Missing translation: Russian transliteration detected as English ---
+		{
+			name:     "Russian transliterated im perviy must be translated",
+			user:     "Koorush-2",
+			input:    "im perviy 👍",
+			notEqual: true,
+			contains: []string{"first", "👍"},
+		},
+		{
+			name:     "Russian transliterated o ne perviy must be translated",
+			user:     "Koorush-2",
+			input:    "o ne perviy ☹️",
+			notEqual: true,
+			contains: []string{"first", "☹️"},
+		},
+
+		// --- Missing translation: full Cyrillic Russian detected as English ---
+		{
+			name:     "Russian Cyrillic а если буду писать misdetected as English",
+			user:     "Koorush-2",
+			input:    "а если буду писать на языке народа Нави? гугл тоже переведёт.? 😄",
+			notEqual: true,
+			contains: []string{"😄"},
+		},
+
+		// --- Missing translation: Indonesian detected as English ---
+		{
+			name:     "Indonesian ANDA DARI NEGERI KINCIR ANGIN must be translated",
+			user:     "waluyobraden4314",
+			input:    "ANDA DARI NEGERI KINCIR ANGIN",
+			notEqual: true,
+			check: func(t *testing.T, _, output string) {
+				lower := strings.ToLower(output)
+				hasWindmill := strings.Contains(lower, "windmill") ||
+					strings.Contains(lower, "wind")
+				assert.True(t, hasWindmill,
+					"NEGERI KINCIR ANGIN means 'country of windmills': got %q", output)
+			},
+		},
+		{
+			name:     "Indonesian ini aktif gk bot translatenya must be translated",
+			user:     "JustForFun-World",
+			input:    "ini aktif gk bot translatenya",
+			notEqual: true,
+			check: func(t *testing.T, _, output string) {
+				lower := strings.ToLower(output)
+				hasActive := strings.Contains(lower, "active") ||
+					strings.Contains(lower, "working") ||
+					strings.Contains(lower, "on")
+				assert.True(t, hasActive,
+					"'ini aktif gk' asks if something is active: got %q", output)
+			},
+		},
+		{
+			name:     "Indonesian keren cukup detail ya hasilnya must be translated",
+			user:     "JustForFun-World",
+			input:    "keren, cukup detail ya hasilnya?",
+			notEqual: true,
+			check: func(t *testing.T, _, output string) {
+				lower := strings.ToLower(output)
+				hasCool := strings.Contains(lower, "cool") ||
+					strings.Contains(lower, "nice") ||
+					strings.Contains(lower, "great") ||
+					strings.Contains(lower, "awesome")
+				assert.True(t, hasCool,
+					"'keren' means cool/awesome: got %q", output)
+				hasDetail := strings.Contains(lower, "detail")
+				assert.True(t, hasDetail,
+					"must mention detail: got %q", output)
+			},
+		},
+		{
+			name:     "Indonesian mixed hei bro gua dari negara must be translated",
+			user:     "JustForFun-World",
+			input:    "@waluyobraden4314 hei bro gua dari negara anda but jangan spam ya orang baik",
+			notEqual: true,
+			check: func(t *testing.T, _, output string) {
+				lower := strings.ToLower(output)
+				hasSpam := strings.Contains(lower, "spam")
+				assert.True(t, hasSpam,
+					"must mention spam: got %q", output)
+			},
+		},
+
+		// --- Missing translation: Turkish detected as English ---
+		{
+			name:     "Turkish Çök güzelsin Aşkim must be translated",
+			user:     "ZekeriyaAlbayrak",
+			input:    "Çök güzelsin Aşkim Hiiiiiiiiii Aşkim",
+			notEqual: true,
+			contains: []string{"beauti"},
+			check: func(t *testing.T, _, output string) {
+				lower := strings.ToLower(output)
+				hasEndearment := strings.Contains(lower, "love") ||
+					strings.Contains(lower, "darling") ||
+					strings.Contains(lower, "dear")
+				assert.True(t, hasEndearment,
+					"Aşkim must be translated to endearment: got %q", output)
+			},
+		},
+		{
+			name:     "Turkish hindi gibi düşünüyor must be translated",
+			user:     "IlkerSertdemir",
+			input:    "hindi gibi düşünüyor",
+			notEqual: true,
+			check: func(t *testing.T, _, output string) {
+				lower := strings.ToLower(output)
+				hasThink := strings.Contains(lower, "think")
+				assert.True(t, hasThink,
+					"düşünüyor means 'is thinking': got %q", output)
+			},
+		},
+
+		// --- Missing translation: German detected as English ---
+		{
+			name:     "German bist du Single must be translated",
+			user:     "peterpolaczek3198",
+			input:    "bist du Single",
+			notEqual: true,
+			check: func(t *testing.T, _, output string) {
+				lower := strings.ToLower(output)
+				hasSingle := strings.Contains(lower, "single")
+				assert.True(t, hasSingle,
+					"must mention single: got %q", output)
+			},
+		},
+
+		// --- Missing translation: French abbreviation detected as English ---
+		{
+			name:     "French slt abbreviation must be translated",
+			user:     "NardinAffe",
+			input:    "slt",
+			notEqual: true,
+			check: func(t *testing.T, _, output string) {
+				lower := strings.ToLower(output)
+				hasGreeting := strings.Contains(lower, "hi") ||
+					strings.Contains(lower, "hello") ||
+					strings.Contains(lower, "hey")
+				assert.True(t, hasGreeting,
+					"'slt' is French abbreviation for 'salut' (hi/hello): got %q", output)
+			},
+		},
+
+		// --- Missing translation: Russian transliterated kraciva detected as English ---
+		{
+			name:     "Russian transliterated kraciva must be translated",
+			user:     "BifinMichael",
+			input:    "kraciva",
+			notEqual: true,
+			check: func(t *testing.T, _, output string) {
+				lower := strings.ToLower(output)
+				hasBeautiful := strings.Contains(lower, "beauti")
+				assert.True(t, hasBeautiful,
+					"'kraciva' is Russian 'красива' meaning beautiful: got %q", output)
+			},
+		},
+
+		// --- Missing translation: Slavic khavla hospodu not translated ---
+		{
+			name:     "Slavic khavla hospodu must be translated",
+			user:     "BifinMichael",
+			input:    "khavla hospodu",
+			notEqual: true,
+			check: func(t *testing.T, _, output string) {
+				lower := strings.ToLower(output)
+				hasPraise := strings.Contains(lower, "praise") ||
+					strings.Contains(lower, "glory") ||
+					strings.Contains(lower, "lord") ||
+					strings.Contains(lower, "god")
+				assert.True(t, hasPraise,
+					"'khavla hospodu' means 'praise the Lord': got %q", output)
+			},
+		},
+
+		// --- Wrong translation: dobryi den means good day not good evening ---
+		{
+			name:     "Russian dobryi den means good day not evening",
+			user:     "Mrhero3000",
+			input:    "dobryi den",
+			notEqual: true,
+			check: func(t *testing.T, _, output string) {
+				lower := strings.ToLower(output)
+				hasDay := strings.Contains(lower, "day") ||
+					strings.Contains(lower, "afternoon")
+				assert.True(t, hasDay,
+					"'dobryi den' means 'good day/afternoon', NOT 'good evening': got %q", output)
+				assert.NotContains(t, lower, "evening",
+					"'den' means day, not evening: got %q", output)
+			},
+		},
+
+		// --- Wrong translation: harasho means good/fine not hello ---
+		{
+			name:     "Russian harasho means good not hello",
+			user:     "BifinMichael",
+			input:    "harasho",
+			notEqual: true,
+			check: func(t *testing.T, _, output string) {
+				lower := strings.ToLower(output)
+				hasGood := strings.Contains(lower, "good") ||
+					strings.Contains(lower, "fine") ||
+					strings.Contains(lower, "great") ||
+					strings.Contains(lower, "well") ||
+					strings.Contains(lower, "ok")
+				assert.True(t, hasGood,
+					"'harasho' is Russian 'хорошо' meaning good/fine/great: got %q", output)
+				assert.NotContains(t, lower, "hello",
+					"harasho does NOT mean hello: got %q", output)
+			},
+		},
+
+		// --- Wrong translation: shcho tse means what is this not what's up ---
+		{
+			name:     "Ukrainian shcho tse means what is this",
+			user:     "BifinMichael",
+			input:    "shcho tse",
+			notEqual: true,
+			check: func(t *testing.T, _, output string) {
+				lower := strings.ToLower(output)
+				hasWhat := strings.Contains(lower, "what is th") ||
+					strings.Contains(lower, "what's th")
+				assert.True(t, hasWhat,
+					"'shcho tse' is Ukrainian 'що це' meaning 'what is this/that': got %q", output)
+			},
+		},
+
+		// --- Unnecessary translation: mostly English with one French word ---
+		{
+			name:     "Mostly English hi Algérie should be unchanged",
+			user:     "khaledinformationdz600",
+			input:    "hi Algérie 👋🇩🇿 How are you, my sister?",
+			wantSame: true,
+		},
+
+		// --- Added content: emoji added by translator ---
+		{
+			name:     "Turkish selam hayırlı akşamlar no emoji added",
+			user:     "NecatiTombaş",
+			input:    "selam hayırlı akşamlar",
+			notEqual: true,
+			check: func(t *testing.T, input, output string) {
+				// Collect emoji in input and output, verify output has no new emoji.
+				emojiRe := regexp.MustCompile(`[\x{1F600}-\x{1F64F}]|[\x{1F300}-\x{1F5FF}]|[\x{1F680}-\x{1F6FF}]|[\x{1F1E0}-\x{1F1FF}]|[\x{2600}-\x{26FF}]|[\x{2700}-\x{27BF}]|[\x{1F900}-\x{1F9FF}]|[\x{1FA00}-\x{1FA6F}]|[\x{1FA70}-\x{1FAFF}]|❤`)
+				inputEmoji := emojiRe.FindAllString(input, -1)
+				outputEmoji := emojiRe.FindAllString(output, -1)
+				inputSet := make(map[string]bool)
+				for _, e := range inputEmoji {
+					inputSet[e] = true
+				}
+				for _, e := range outputEmoji {
+					assert.True(t, inputSet[e],
+						"translator added emoji %q not present in original: got %q", e, output)
+				}
+			},
+		},
+		{
+			name:     "Indonesian ANDA DARI KINCIR SNGIN BELANDA no emoji added",
+			user:     "waluyobraden4314",
+			input:    "ANDA DARI NEGERI KINCIR SNGIN BELANDA",
+			notEqual: true,
+			check: func(t *testing.T, input, output string) {
+				emojiRe := regexp.MustCompile(`[\x{1F600}-\x{1F64F}]|[\x{1F300}-\x{1F5FF}]|[\x{1F680}-\x{1F6FF}]|[\x{1F1E0}-\x{1F1FF}]|[\x{2600}-\x{26FF}]|[\x{2700}-\x{27BF}]|[\x{1F900}-\x{1F9FF}]|[\x{1FA00}-\x{1FA6F}]|[\x{1FA70}-\x{1FAFF}]|❤`)
+				inputEmoji := emojiRe.FindAllString(input, -1)
+				outputEmoji := emojiRe.FindAllString(output, -1)
+				inputSet := make(map[string]bool)
+				for _, e := range inputEmoji {
+					inputSet[e] = true
+				}
+				for _, e := range outputEmoji {
+					assert.True(t, inputSet[e],
+						"translator added emoji %q not present in original: got %q", e, output)
+				}
+				lower := strings.ToLower(output)
+				hasNetherlands := strings.Contains(lower, "netherlands") ||
+					strings.Contains(lower, "holland") ||
+					strings.Contains(lower, "dutch")
+				assert.True(t, hasNetherlands,
+					"BELANDA means Netherlands/Holland: got %q", output)
+			},
+		},
 	}
 
 	for _, tc := range cases {
