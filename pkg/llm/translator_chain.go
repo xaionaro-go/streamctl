@@ -158,13 +158,15 @@ func (tc *TranslatorChain) Translate(
 		"- Turkish: 'misafir geleceğim/geleçeğim' = 'I will come as a guest' (the SPEAKER is visiting someone). The subject is 'I' (first person -im suffix). Do NOT translate as 'a guest is coming to me' — that reverses the meaning.\n" +
 		"- Turkish: sıkılmak/sıkıldıysan = to be BORED (not 'tired'). Example: 'benden sıkıldıysan' → 'if you're bored of me'\n" +
 		"- Russian slang: 'епта'/'ёпта' is a vulgar filler (like 'damn'), NOT an endearment\n" +
+		"- Transliterated Russian/Ukrainian/Slavic: 'khavla hospodu' = 'praise the Lord' (хвала Господу). 'dobryi den' = 'good day' (добрый день, NOT evening). 'harasho'/'khorosho' = 'good/fine' (хорошо, NOT hello). 'kraciva'/'krasiva' = 'beautiful' (красива). 'perviy' = 'first' (первый). 'shcho tse' = 'what is this' (Ukrainian що це).\n" +
+		"- French abbreviations: 'slt' = 'salut' (hello/hi)\n" +
 		"- Indonesian: nyuci/mencuci=washing, masak=cooking, makan=eating, brpa/berapa=how much/what time, nambah cantik=getting more beautiful/prettier\n" +
 		"- USERNAMES: If the sender's username contains a word that also appears in the message, that word is a name — keep it as-is, do NOT translate it. Example: user 'DewaJon' writes 'dewa juga lagi masak' — 'dewa' is their name, NOT the word for 'god'.\n" +
 		"- Phonetic text (hay=hi, lov=love, beby=baby, wecap=WhatsApp): interpret and write correct " + tc.TargetLang + "\n" +
 		"- Phonetic/broken spelling from non-native speakers: decode each word phonetically. Examples: 'cen'='can', 'ai'='I', 'sey'='say', 'sllava'='slava/glory', 'mek'='make', 'naic'='nice', 'Famili'='family'. Translate the decoded meaning.\n" +
 		"  Example: 'cen ai sey sllava Ukraina' → 'Can I say glory to Ukraine'\n" +
 		"  Example: 'mek naic Famili' → 'Make nice family'\n" +
-		"- Translate MEANING not transliterate (Hello not Namaste/Namaskar)\n" +
+		"- Translate MEANING, NEVER transliterate. Hindi/Sanskrit नमस्कार/नमस्ते → 'Hello' (NEVER 'Namaskar' or 'Namaste'). Always use the English equivalent word.\n" +
 		"- ABSOLUTELY NEVER add emoji that are not in the original message. Zero new emoji.\n" +
 		"- Keep ALL original emoji exactly as-is\n" +
 		"- Do NOT add content not implied by the original (no 'my love' unless source says it)\n" +
@@ -624,6 +626,18 @@ var nonTargetWords = map[string]bool{
 	"belum": true, "udah": true, "sudah": true, "dah": true,
 	"nyuci": true, "mencuci": true, "kamu": true, "aku": true,
 	"nambah": true, "indah": true, "sekali": true,
+
+	// Russian/Ukrainian/Slavic transliterated words
+	"perviy": true, "pervyy": true, "pervy": true,
+	"khavla": true, "hospodu": true, "dobryi": true,
+	"harasho": true, "khorosho": true, "kraciva": true, "krasiva": true,
+	"shcho": true, "tse": true,
+
+	// French abbreviations
+	"slt": true,
+
+	// Phonetic/broken English from non-native speakers (not real English words)
+	"mek": true, "naic": true,
 }
 
 // containsNonTargetVocabulary checks if the message contains any known non-English

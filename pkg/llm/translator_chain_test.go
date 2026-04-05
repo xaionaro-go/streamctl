@@ -18,7 +18,7 @@ const testOllamaURLChain = "http://192.168.0.171:11434"
 func newTestChain(t *testing.T) *TranslatorChain {
 	t.Helper()
 	return NewTranslatorChain("English", 20, []ProviderEntry{{
-		Provider:    &OllamaProvider{APIURL: testOllamaURLChain, Model: "qwen3:30b-instruct"},
+		Provider:    &OllamaProvider{APIURL: testOllamaURLChain, Model: "qwen3.5:27b"},
 		Parallelism: 1,
 	}})
 }
