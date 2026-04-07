@@ -18,14 +18,55 @@ const (
 )
 
 type AppConfig struct {
-	YTProxyAddr  string            `yaml:"yt_proxy_addr"`
-	StreamdAddr  string            `yaml:"streamd_addr"`
-	Video        string            `yaml:"video"`
-	Channel      string            `yaml:"channel"`
-	DetectMethod string            `yaml:"detect_method"`
-	Hl           string            `yaml:"hl"`
-	RawMessage   bool              `yaml:"raw_message"`
-	Translation  TranslationConfig `yaml:"translation"`
+	StreamdAddr string            `yaml:"streamd_addr"`
+	Translation TranslationConfig `yaml:"translation"`
+	Platforms   []PlatformConfig  `yaml:"platforms"`
+}
+
+// PlatformConfig describes a single chat source. The Type field selects
+// which ChatSource implementation to create; remaining fields are
+// platform-specific and ignored when irrelevant.
+type PlatformConfig struct {
+	Type string `yaml:"type"` // "youtube", "twitch", "kick"
+
+	// YouTube fields.
+	ProxyAddr    string `yaml:"proxy_addr,omitempty"`
+	Video        string `yaml:"video,omitempty"`
+	DetectMethod string `yaml:"detect_method,omitempty"`
+	Hl           string `yaml:"hl,omitempty"`
+	RawMessage   bool   `yaml:"raw_message,omitempty"`
+
+	// Shared: YouTube uses this as the channel URL; Twitch uses it as the
+	// channel name.
+	Channel string `yaml:"channel,omitempty"`
+
+	// Kick fields.
+	ChatWebhookAddr string `yaml:"chat_webhook_addr,omitempty"`
+}
+
+// NewSource creates the ChatSource described by this PlatformConfig.
+func (pc PlatformConfig) NewSource() (ChatSource, error) {
+	switch pc.Type {
+	case "youtube":
+		return &YouTubeSource{
+			ProxyAddr:    pc.ProxyAddr,
+			Video:        pc.Video,
+			Channel:      pc.Channel,
+			DetectMethod: pc.DetectMethod,
+			Hl:           pc.Hl,
+			RawMessage:   pc.RawMessage,
+		}, nil
+	case "twitch":
+		return &TwitchSource{
+			Channel: pc.Channel,
+		}, nil
+	case "kick":
+		return &KickSource{
+			ChatWebhookAddr: pc.ChatWebhookAddr,
+		}, nil
+	default:
+		return nil, fmt.Errorf("unknown platform type %q", pc.Type)
+	}
 }
 
 type TranslationConfig struct {
@@ -80,8 +121,8 @@ func loadConfig(
 		cfg.Translation.ChatHistorySize = defaultChatHistorySize
 	}
 
-	logger.Debugf(ctx, "loaded config: yt_proxy=%s streamd=%s channel=%s video=%s providers=%d",
-		cfg.YTProxyAddr, cfg.StreamdAddr, cfg.Channel, cfg.Video, len(cfg.Translation.Providers))
+	logger.Debugf(ctx, "loaded config: streamd=%s platforms=%d providers=%d",
+		cfg.StreamdAddr, len(cfg.Platforms), len(cfg.Translation.Providers))
 
 	return cfg, nil
 }
@@ -89,26 +130,29 @@ func loadConfig(
 const sampleConfig = `# chatinjector configuration
 # See: https://github.com/xaionaro-go/streamctl/tree/main/cmd/chatinjector
 
-# youtubeapiproxy gRPC address
-yt_proxy_addr: "localhost:9090"
-
 # streamd gRPC address
 streamd_addr: "localhost:3594"
 
-# Monitor a channel for live streams (auto-detect)
-# channel: "https://www.youtube.com/@YourChannel"
+# Chat source platforms (at least one required).
+platforms:
+  # YouTube — requires youtubeapiproxy running at proxy_addr.
+  - type: youtube
+    proxy_addr: "localhost:9090"
+    # Monitor a channel for live streams (auto-detect):
+    # channel: "https://www.youtube.com/@YourChannel"
+    # Or connect to a specific video/liveChatId:
+    # video: "https://www.youtube.com/watch?v=VIDEO_ID"
+    detect_method: "search"
+    # hl: "en"
+    # raw_message: false
 
-# Or connect to a specific video/liveChatId
-# video: "https://www.youtube.com/watch?v=VIDEO_ID"
+  # Twitch — anonymous IRC, read-only.
+  # - type: twitch
+  #   channel: "xqc"
 
-# Detection method for channel monitoring: broadcasts, search, or html
-detect_method: "search"
-
-# YouTube display language for system messages
-# hl: "en"
-
-# Use raw TextMessageDetails instead of DisplayMessage
-# raw_message: false
+  # Kick — requires chatwebhook gRPC service.
+  # - type: kick
+  #   chat_webhook_addr: "localhost:9091"
 
 # Translation configuration (remove this section to disable)
 # translation:

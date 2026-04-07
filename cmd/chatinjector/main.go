@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/facebookincubator/go-belt"
@@ -255,14 +256,10 @@ func run(
 	defer func() { logger.Tracef(ctx, "/run: %v", _err) }()
 
 	switch {
-	case cfg.YTProxyAddr == "":
-		return fmt.Errorf("yt_proxy_addr is required")
 	case cfg.StreamdAddr == "":
 		return fmt.Errorf("streamd_addr is required")
-	case cfg.Video == "" && cfg.Channel == "":
-		return fmt.Errorf("either video or channel is required")
-	case cfg.Video != "" && cfg.Channel != "":
-		return fmt.Errorf("video and channel are mutually exclusive")
+	case len(cfg.Platforms) == 0:
+		return fmt.Errorf("at least one platform is required")
 	}
 
 	sdCreds := detectTransportCredentials(ctx, cfg.StreamdAddr)
@@ -274,25 +271,39 @@ func run(
 	}
 	defer sdConn.Close()
 
-	source := &YouTubeSource{
-		ProxyAddr:    cfg.YTProxyAddr,
-		Video:        cfg.Video,
-		Channel:      cfg.Channel,
-		DetectMethod: cfg.DetectMethod,
-		Hl:           cfg.Hl,
-		RawMessage:   cfg.RawMessage,
-	}
-
 	eng := &Engine{
 		StreamdClient: streamd_grpc.NewStreamDClient(sdConn),
 		Chain:         chain,
 	}
 
 	events := make(chan ChatEvent, 64)
-	var sourceErr error
+
+	var (
+		wg        sync.WaitGroup
+		sourceErr error
+		mu        sync.Mutex
+	)
+
+	for _, pc := range cfg.Platforms {
+		source, newErr := pc.NewSource()
+		if newErr != nil {
+			return fmt.Errorf("create source for platform %q: %w", pc.Type, newErr)
+		}
+
+		wg.Add(1)
+		observability.Go(ctx, func(ctx context.Context) {
+			defer wg.Done()
+			logger.Debugf(ctx, "starting source: %s", source.PlatformID())
+			if runErr := source.Run(ctx, events); runErr != nil {
+				mu.Lock()
+				sourceErr = errors.Join(sourceErr, runErr)
+				mu.Unlock()
+			}
+		})
+	}
 
 	observability.Go(ctx, func(ctx context.Context) {
-		sourceErr = source.Run(ctx, events)
+		wg.Wait()
 		close(events)
 	})
 
