@@ -3,13 +3,11 @@ package streamd
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"strings"
 	"time"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/observability"
-	"github.com/xaionaro-go/streamctl/pkg/clock"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
@@ -25,64 +23,93 @@ type ChatMessageStorage interface {
 	Load(ctx context.Context) error
 	Store(ctx context.Context) error
 	GetMessagesSince(context.Context, time.Time, uint) ([]api.ChatMessage, error)
-	PurgeMessages(ctx context.Context, platID *streamcontrol.PlatformID, streamID *streamcontrol.StreamID) (uint64, error)
 }
 
 func (d *StreamD) startListeningForChatMessages(
 	ctx context.Context,
-	platID streamcontrol.PlatformID,
-	accountID streamcontrol.AccountID,
-	ctrl streamcontrol.AbstractAccount,
-) {
-	logger.Debugf(ctx, "startListeningForChatMessages(ctx, %s, %s)", platID, accountID)
-	observability.Go(ctx, func(ctx context.Context) {
-		defer logger.Debugf(ctx, "/startListeningForChatMessages(ctx, %s, %s)", platID, accountID)
-		ch, err := ctrl.GetChatMessagesChan(ctx, streamcontrol.DefaultStreamID)
-		if err != nil {
-			logger.Errorf(ctx, "unable to get the channel for chat messages of '%s:%s': %v", platID, accountID, err)
-			return
-		}
+	platName streamcontrol.PlatformName,
+) error {
+	logger.Debugf(ctx, "startListeningForChatMessages(ctx, '%s')", platName)
 
-		d.processChatMessages(ctx, platID, accountID, "", ch)
+	if platCfg := d.Config.Backends[platName]; platCfg != nil && platCfg.DisableChatListener {
+		logger.Debugf(ctx, "chat listener is disabled for '%s'", platName)
+		return nil
+	}
+
+	ctrl, err := d.streamController(ctx, platName)
+	if err != nil {
+		return fmt.Errorf("unable to get the just initialized '%s': %w", platName, err)
+	}
+	ch, err := ctrl.GetChatMessagesChan(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to get the channel for chat messages of '%s': %w", platName, err)
+	}
+
+	listenerCtx, cancel := context.WithCancel(ctx)
+	d.chatListenerLocker.Lock()
+	if oldCancel := d.chatListenerCancels[platName]; oldCancel != nil {
+		oldCancel()
+	}
+	d.chatListenerCancels[platName] = cancel
+	d.chatListenerLocker.Unlock()
+
+	observability.Go(ctx, func(_ context.Context) {
+		defer logger.Debugf(listenerCtx, "/startListeningForChatMessages(ctx, '%s')", platName)
+		for {
+			select {
+			case <-listenerCtx.Done():
+				logger.Debugf(ctx, "chat listener for '%s' stopped: %v", platName, listenerCtx.Err())
+				return
+			case ev, ok := <-ch:
+				if !ok {
+					return
+				}
+				func() {
+					msg := api.ChatMessage{
+						Event:    ev,
+						IsLive:   true,
+						Platform: platName,
+					}
+					if err := d.processChatMessage(ctx, msg); err != nil {
+						logger.Errorf(ctx, "unable to process the chat message %#+v: %v", msg, err)
+					}
+				}()
+			}
+		}
 	})
+	return nil
 }
 
-func (d *StreamD) processChatMessages(
+func (d *StreamD) processChatMessage(
 	ctx context.Context,
-	platID streamcontrol.PlatformID,
-	accountID streamcontrol.AccountID,
-	streamID streamcontrol.StreamID,
-	ch <-chan streamcontrol.Event,
-) {
-	for {
-		select {
-		case <-ctx.Done():
-			logger.Debugf(ctx, "processChatMessages(ctx, '%s', '%s'): context is closed; %v", platID, accountID, ctx.Err())
-			return
-		case ev, ok := <-ch:
-			if !ok {
-				logger.Debugf(ctx, "processChatMessages(ctx, '%s', '%s'): the channel is closed", platID, accountID)
-				return
-			}
-			func() {
-				msg := api.ChatMessage{
-					Event:    ev,
-					IsLive:   true,
-					Platform: platID,
-					StreamID: streamID,
-				}
-				logger.Tracef(ctx, "received chat message: %#+v", msg)
-				defer logger.Tracef(ctx, "finished processing the chat message")
-				if err := d.ChatMessagesStorage.AddMessage(ctx, msg); err != nil {
-					logger.Errorf(ctx, "unable to add the message %#+v to the chat messages storage: %v", msg, err)
-				}
-				publishEvent(ctx, d.EventBus, msg)
-				if streamID == "" {
-					d.shoutoutIfNeeded(ctx, msg)
-				}
-			}()
-		}
+	msg api.ChatMessage,
+) error {
+	logger.Tracef(ctx, "processChatMessage")
+	defer logger.Tracef(ctx, "/processChatMessage")
+
+	if err := d.ChatMessagesStorage.AddMessage(ctx, msg); err != nil {
+		logger.Errorf(ctx, "unable to add the message to the chat messages storage: %v", err)
 	}
+
+	publishEvent(ctx, d.EventBus, msg)
+	d.shoutoutIfNeeded(ctx, msg)
+	return nil
+}
+
+func (d *StreamD) InjectChatMessage(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	ev streamcontrol.Event,
+) (_err error) {
+	logger.Debugf(ctx, "InjectChatMessage")
+	defer func() { logger.Debugf(ctx, "/InjectChatMessage: %v", _err) }()
+
+	msg := api.ChatMessage{
+		Event:    ev,
+		IsLive:   true,
+		Platform: platID,
+	}
+	return d.processChatMessage(ctx, msg)
 }
 
 func (d *StreamD) shoutoutIfNeeded(
@@ -149,57 +176,49 @@ func (d *StreamD) shoutoutIfNeeded(
 
 func (d *StreamD) shoutoutIfCan(
 	ctx context.Context,
-	platID streamcontrol.PlatformID,
+	platID streamcontrol.PlatformName,
 	userID streamcontrol.UserID,
 ) (_ret bool) {
 	logger.Debugf(ctx, "shoutoutIfCan('%s', '%s')", platID, userID)
 	defer logger.Debugf(ctx, "/shoutoutIfCan('%s', '%s')", platID, userID)
 
-	ctrls, err := d.StreamControllers(ctx, platID)
+	ctrl, err := d.streamController(ctx, platID)
 	if err != nil {
-		logger.Errorf(ctx, "unable to get stream controllers '%s': %v", platID, err)
+		logger.Errorf(ctx, "unable to get a stream controller '%s': %v", platID, err)
 		return false
 	}
 
-	anySuccess := false
-	for _, ctrl := range ctrls {
-		if !ctrl.IsCapable(ctx, streamcontrol.CapabilityShoutout) {
-			continue
-		}
-
-		err = ctrl.Shoutout(ctx, streamcontrol.DefaultStreamID, userID)
-		if err != nil {
-			logger.Errorf(ctx, "unable to shoutout '%s' at '%s': %v", userID, platID, err)
-			continue
-		}
-		anySuccess = true
+	if !ctrl.IsCapable(ctx, streamcontrol.CapabilityShoutout) {
+		logger.Errorf(ctx, "the controller '%s' does not support shoutouts", platID)
+		return false
 	}
 
-	if anySuccess {
-		userFullID := config.ChatUserID{
-			Platform: platID,
-			User:     userID,
-		}
-		d.lastShoutoutAt[userFullID] = clock.Get().Now()
+	err = ctrl.Shoutout(ctx, userID)
+	if err != nil {
+		logger.Errorf(ctx, "unable to shoutout '%s' at '%s': %v", userID, platID, err)
+		return false
 	}
-	return anySuccess
+	userFullID := config.ChatUserID{
+		Platform: platID,
+		User:     userID,
+	}
+	d.lastShoutoutAt[userFullID] = time.Now()
+	return true
 }
 
 func (d *StreamD) RemoveChatMessage(
 	ctx context.Context,
-	platID streamcontrol.PlatformID,
+	platID streamcontrol.PlatformName,
 	msgID streamcontrol.EventID,
 ) error {
-	ctrls, err := d.StreamControllers(ctx, platID)
+	ctrl, err := d.streamController(ctx, platID)
 	if err != nil {
-		return fmt.Errorf("unable to get stream controllers '%s': %w", platID, err)
+		return fmt.Errorf("unable to get stream controller '%s': %w", platID, err)
 	}
 
-	for _, ctrl := range ctrls {
-		err = ctrl.RemoveChatMessage(ctx, streamcontrol.DefaultStreamID, msgID)
-		if err != nil {
-			logger.Errorf(ctx, "unable to remove message '%s' on '%s': %v", msgID, platID, err)
-		}
+	err = ctrl.RemoveChatMessage(ctx, msgID)
+	if err != nil {
+		return fmt.Errorf("unable to remove message '%s' on '%s': %w", msgID, platID, err)
 	}
 
 	if err := d.ChatMessagesStorage.RemoveMessage(ctx, msgID); err != nil {
@@ -209,73 +228,21 @@ func (d *StreamD) RemoveChatMessage(
 	return nil
 }
 
-// InjectPlatformEvent forcefully injects a fake chat message into the system for debugging purposes.
-// The message will be added to the chat storage and published on the EventBus but won't be
-// forwarded to external platform controllers.
-func (d *StreamD) InjectPlatformEvent(
-	ctx context.Context,
-	platID streamcontrol.PlatformID,
-	isLive bool,
-	isPersistent bool,
-	user streamcontrol.User,
-	message string,
-) (_err error) {
-	logger.Debugf(ctx, "InjectPlatformEvent(ctx, '%s', %#+v, '%s')", platID, user, message)
-	defer func() {
-		logger.Debugf(ctx, "/InjectPlatformEvent(ctx, '%s', %#+v, '%s'): %v", platID, user, message, _err)
-	}()
-
-	msg := api.ChatMessage{
-		Event: streamcontrol.Event{
-			ID: streamcontrol.EventID(fmt.Sprintf("injected-%d-%d",
-				clock.Get().Now().UnixNano(),
-				rand.Uint64(),
-			)),
-			CreatedAt: clock.Get().Now(),
-			Type:      streamcontrol.EventTypeChatMessage,
-			User:      user,
-			Message: &streamcontrol.Message{
-				Content: message,
-				Format:  streamcontrol.TextFormatTypePlain,
-			},
-		},
-		IsLive:   isLive,
-		Platform: platID,
-	}
-
-	if isPersistent {
-		logger.Debug(ctx, "storing injected message to storage")
-		if err := d.ChatMessagesStorage.AddMessage(ctx, msg); err != nil {
-			logger.Errorf(ctx, "unable to add injected message to storage: %v", err)
-		}
-	}
-
-	// publish via EventBus so subscribers receive it
-	publishEvent(ctx, d.EventBus, msg)
-
-	// Try shoutout side-effects if configured
-	d.shoutoutIfNeeded(ctx, msg)
-
-	return nil
-}
-
 func (d *StreamD) BanUser(
 	ctx context.Context,
-	platID streamcontrol.PlatformID,
+	platID streamcontrol.PlatformName,
 	userID streamcontrol.UserID,
 	reason string,
 	deadline time.Time,
 ) error {
-	ctrls, err := d.StreamControllers(ctx, platID)
+	ctrl, err := d.streamController(ctx, platID)
 	if err != nil {
-		return fmt.Errorf("unable to get stream controllers '%s': %w", platID, err)
+		return fmt.Errorf("unable to get stream controller '%s': %w", platID, err)
 	}
 
-	for _, ctrl := range ctrls {
-		err = ctrl.BanUser(ctx, streamcontrol.DefaultStreamID, streamcontrol.UserID(userID), reason, deadline)
-		if err != nil {
-			logger.Errorf(ctx, "unable to ban user '%s' on '%s': %v", userID, platID, err)
-		}
+	err = ctrl.BanUser(ctx, streamcontrol.UserID(userID), reason, deadline)
+	if err != nil {
+		return fmt.Errorf("unable to ban user '%s' on '%s': %w", userID, platID, err)
 	}
 
 	return nil
@@ -285,12 +252,11 @@ func (d *StreamD) SubscribeToChatMessages(
 	ctx context.Context,
 	since time.Time,
 	limit uint64,
-	streamID *streamcontrol.StreamID,
 ) (_ret <-chan api.ChatMessage, _err error) {
-	logger.Tracef(ctx, "SubscribeToChatMessages(ctx, %v, %v, %v)", since, limit, streamID)
-	defer func() { logger.Tracef(ctx, "/SubscribeToChatMessages(ctx, %v, %v, %v): %p %v", since, limit, streamID, _ret, _err) }()
+	logger.Tracef(ctx, "SubscribeToChatMessages(ctx, %v, %v)", since, limit)
+	defer func() { logger.Tracef(ctx, "/SubscribeToChatMessages(ctx, %v, %v): %p %v", since, limit, _ret, _err) }()
 
-	ch, err := eventSubToChan(
+	return eventSubToChan(
 		ctx, d.EventBus, 1000,
 		func(ctx context.Context, outCh chan api.ChatMessage) {
 			logger.Tracef(ctx, "backfilling the channel")
@@ -301,9 +267,6 @@ func (d *StreamD) SubscribeToChatMessages(
 				return
 			}
 			for _, msg := range msgs {
-				if streamID != nil && msg.StreamID != *streamID {
-					continue
-				}
 				msg.IsLive = false
 				if debugSendArchiveMessagesAsLive {
 					msg.IsLive = true
@@ -321,39 +284,16 @@ func (d *StreamD) SubscribeToChatMessages(
 					break
 				}
 				if debugSendArchiveMessagesAsLive {
-					clock.Get().Sleep(5 * time.Second)
+					time.Sleep(5 * time.Second)
 				}
 			}
 		},
 	)
-	if err != nil {
-		return nil, err
-	}
-
-	if streamID == nil {
-		return ch, nil
-	}
-
-	filteredCh := make(chan api.ChatMessage, 1000)
-	observability.Go(ctx, func(ctx context.Context) {
-		defer close(filteredCh)
-		for msg := range ch {
-			if msg.StreamID != *streamID {
-				continue
-			}
-			select {
-			case <-ctx.Done():
-				return
-			case filteredCh <- msg:
-			}
-		}
-	})
-	return filteredCh, nil
 }
 
 func (d *StreamD) SendChatMessage(
 	ctx context.Context,
-	platID streamcontrol.PlatformID,
+	platID streamcontrol.PlatformName,
 	message string,
 ) (_err error) {
 	logger.Debugf(ctx, "SendChatMessage(ctx, '%s', '%s')", platID, message)
@@ -362,17 +302,57 @@ func (d *StreamD) SendChatMessage(
 		return nil
 	}
 
-	ctrls, err := d.StreamControllers(ctx, platID)
+	ctrl, err := d.streamController(ctx, platID)
 	if err != nil {
-		return fmt.Errorf("unable to get stream controllers for platform '%s': %w", platID, err)
+		return fmt.Errorf("unable to get stream controller for platform '%s': %w", platID, err)
 	}
 
-	for _, ctrl := range ctrls {
-		err = ctrl.SendChatMessage(ctx, streamcontrol.DefaultStreamID, message)
-		if err != nil {
-			logger.Errorf(ctx, "unable to send message '%s' to platform '%s': %v", message, platID, err)
-		}
+	err = ctrl.SendChatMessage(ctx, message)
+	if err != nil {
+		return fmt.Errorf("unable to send message '%s' to platform '%s': %w", message, platID, err)
 	}
 
 	return nil
+}
+
+func (d *StreamD) SetBuiltinChatListenerEnabled(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	enabled bool,
+) (_err error) {
+	logger.Debugf(ctx, "SetBuiltinChatListenerEnabled(ctx, '%s', %v)", platID, enabled)
+	defer func() { logger.Debugf(ctx, "/SetBuiltinChatListenerEnabled: %v", _err) }()
+
+	d.chatListenerLocker.Lock()
+	cancel := d.chatListenerCancels[platID]
+	d.chatListenerLocker.Unlock()
+
+	switch {
+	case !enabled && cancel != nil:
+		// Stop the listener — cancels context, which stops YouTube API polling.
+		cancel()
+		d.chatListenerLocker.Lock()
+		delete(d.chatListenerCancels, platID)
+		d.chatListenerLocker.Unlock()
+		logger.Debugf(ctx, "stopped chat listener for '%s'", platID)
+	case enabled && cancel == nil:
+		// Restart the listener.
+		if err := d.startListeningForChatMessages(ctx, platID); err != nil {
+			return fmt.Errorf("restart chat listener for '%s': %w", platID, err)
+		}
+		logger.Debugf(ctx, "restarted chat listener for '%s'", platID)
+	}
+
+	return nil
+}
+
+func (d *StreamD) IsBuiltinChatListenerEnabled(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+) (bool, error) {
+	logger.Debugf(ctx, "IsBuiltinChatListenerEnabled(ctx, '%s')", platID)
+
+	d.chatListenerLocker.Lock()
+	defer d.chatListenerLocker.Unlock()
+	return d.chatListenerCancels[platID] != nil, nil
 }

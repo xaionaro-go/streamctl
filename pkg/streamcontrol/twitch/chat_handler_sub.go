@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/joeyak/go-twitch-eventsub/v3"
 	twitcheventsub "github.com/joeyak/go-twitch-eventsub/v3"
 	"github.com/nicklaw5/helix/v2"
 	"github.com/xaionaro-go/observability"
@@ -78,19 +80,52 @@ func NewChatHandlerSub(
 
 	eventSubClient := twitcheventsub.NewClientWithUrl(urlString)
 
+	var reconnecting atomic.Bool
 	var errCallback func(ctx context.Context, err error)
 	errCallback = func(ctx context.Context, err error) {
 		logger.Errorf(ctx, "unable to read from the socket: %v", err)
-		go func() {
+		if !reconnecting.CompareAndSwap(false, true) {
+			logger.Debugf(ctx, "reconnect already in progress, skipping")
+			return
+		}
+		observability.Go(ctx, func(ctx context.Context) {
+			defer reconnecting.Store(false)
+
+			eventSubClient.Close()
+
+			const (
+				initialBackoff = time.Second
+				maxBackoff     = 30 * time.Second
+			)
+			backoff := initialBackoff
 			for {
-				err = eventSubClient.ConnectWithContext(ctx, errCallback)
-				if err == nil {
-					break
+				select {
+				case <-ctx.Done():
+					logger.Debugf(ctx, "context cancelled, stopping reconnect")
+					return
+				default:
 				}
-				time.Sleep(time.Second)
-				logger.Errorf(ctx, "unable to connect to '%s': %v", urlString, err)
+
+				connectErr := eventSubClient.ConnectWithContext(ctx, errCallback)
+				if connectErr == nil {
+					logger.Debugf(ctx, "reconnected to '%s'", urlString)
+					return
+				}
+				logger.Errorf(ctx, "unable to connect to '%s': %v; retrying in %v", urlString, connectErr, backoff)
+
+				select {
+				case <-ctx.Done():
+					logger.Debugf(ctx, "context cancelled during backoff, stopping reconnect")
+					return
+				case <-time.After(backoff):
+				}
+
+				backoff *= 2
+				if backoff > maxBackoff {
+					backoff = maxBackoff
+				}
 			}
-		}()
+		})
 	}
 	eventSubClient.OnEventAutomodMessageHold(func(event twitcheventsub.EventAutomodMessageHold, msg twitcheventsub.NotificationMessage) {
 		h.sendMessage(ctx, streamcontrol.Event{
@@ -357,10 +392,10 @@ func NewChatHandlerSub(
 				case twitcheventsub.SubChannelChatMessage:
 					continue
 				case twitcheventsub.SubConduitShardDisabled,
-					twitcheventsub.SubExtensionBitsTransactionCreate,
-					twitcheventsub.SubDropEntitlementGrant,
-					twitcheventsub.SubUserAuthorizationRevoke,
-					twitcheventsub.SubUserAuthorizationGrant:
+					twitch.SubExtensionBitsTransactionCreate,
+					twitch.SubDropEntitlementGrant,
+					twitch.SubUserAuthorizationRevoke,
+					twitch.SubUserAuthorizationGrant:
 					continue
 
 				}
@@ -369,7 +404,7 @@ func NewChatHandlerSub(
 					logger.Errorf(ctx, "unable to create a subscription (%#+v): %w", params, err)
 				}
 				if resp.ErrorMessage != "" {
-					logger.Warnf(ctx, "unable to subscribe to '%s': %q", chanName, resp.ErrorMessage)
+					logger.Warnf(ctx, "unable to subscribe to '%s': %v", chanName, err)
 					continue
 				}
 				logger.Debugf(ctx, "successfully subscribed to '%s'", chanName)
