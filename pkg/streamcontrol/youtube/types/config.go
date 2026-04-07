@@ -17,13 +17,12 @@ type OAuthHandler func(context.Context, oauthhandler.OAuthHandlerArgument) error
 type OAuth2Token = secret.Any[oauth2.Token]
 
 type PlatformSpecificConfig struct {
-	ChannelID            string
-	ClientID             string
-	ClientSecret         secret.String
-	Token                *OAuth2Token
-	DisableChatListener  bool
-	CustomOAuthHandler   OAuthHandler    `yaml:"-"`
-	GetOAuthListenPorts  func() []uint16 `yaml:"-"`
+	ChannelID           string
+	ClientID            string
+	ClientSecret        secret.String
+	Token               *OAuth2Token
+	CustomOAuthHandler  OAuthHandler    `yaml:"-"`
+	GetOAuthListenPorts func() []uint16 `yaml:"-"`
 }
 
 type Config = streamctl.PlatformConfig[PlatformSpecificConfig, StreamProfile]

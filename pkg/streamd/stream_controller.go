@@ -149,10 +149,11 @@ func newTwitch(
 	twitch, err := twitch.New(ctx, *platCfg,
 		func(c twitch.Config) error {
 			return saveCfgFunc(&streamcontrol.AbstractPlatformConfig{
-				Enable:         c.Enable,
-				Config:         c.Config,
-				StreamProfiles: streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
-				Custom:         c.Custom,
+				Enable:              c.Enable,
+				DisableChatListener: c.DisableChatListener,
+				Config:              c.Config,
+				StreamProfiles:      streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
+				Custom:              c.Custom,
 			})
 		},
 	)
@@ -193,10 +194,11 @@ func newKick(
 	kick, err := kick.New(ctx, *platCfg,
 		func(c kick.Config) error {
 			return saveCfgFunc(&streamcontrol.AbstractPlatformConfig{
-				Enable:         c.Enable,
-				Config:         c.Config,
-				StreamProfiles: streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
-				Custom:         c.Custom,
+				Enable:              c.Enable,
+				DisableChatListener: c.DisableChatListener,
+				Config:              c.Config,
+				StreamProfiles:      streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
+				Custom:              c.Custom,
 			})
 		},
 	)
@@ -239,10 +241,11 @@ func newYouTube(
 			logger.Debugf(ctx, "saveCfgFunc")
 			defer logger.Debugf(ctx, "saveCfgFunc")
 			return saveCfgFunc(&streamcontrol.AbstractPlatformConfig{
-				Enable:         c.Enable,
-				Config:         c.Config,
-				StreamProfiles: streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
-				Custom:         platCfg.Custom,
+				Enable:              c.Enable,
+				DisableChatListener: c.DisableChatListener,
+				Config:              c.Config,
+				StreamProfiles:      streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
+				Custom:              platCfg.Custom,
 			})
 		},
 	)

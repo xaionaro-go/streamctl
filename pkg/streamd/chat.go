@@ -38,6 +38,12 @@ func (d *StreamD) startListeningForChatMessages(
 	platName streamcontrol.PlatformName,
 ) error {
 	logger.Debugf(ctx, "startListeningForChatMessages(ctx, '%s')", platName)
+
+	if platCfg := d.Config.Backends[platName]; platCfg != nil && platCfg.DisableChatListener {
+		logger.Debugf(ctx, "chat listener is disabled for '%s'", platName)
+		return nil
+	}
+
 	ctrl, err := d.streamController(ctx, platName)
 	if err != nil {
 		return fmt.Errorf("unable to get the just initialized '%s': %w", platName, err)

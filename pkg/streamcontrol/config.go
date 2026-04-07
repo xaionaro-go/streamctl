@@ -88,10 +88,11 @@ type PlatformSpecificConfig interface {
 }
 
 type PlatformConfig[T PlatformSpecificConfig, S StreamProfile] struct {
-	Enable         *bool
-	Config         T
-	StreamProfiles StreamProfiles[S]
-	Custom         map[string]any
+	Enable              *bool
+	DisableChatListener bool `yaml:"disable_chat_listener" json:"DisableChatListener,omitempty"`
+	Config              T
+	StreamProfiles      StreamProfiles[S]
+	Custom              map[string]any
 }
 
 type ProfileName string
@@ -254,6 +255,7 @@ func (cfg *Config) UnmarshalYAML(b []byte) (_err error) {
 		}
 
 		(*cfg)[k].Enable = v.Enable
+		(*cfg)[k].DisableChatListener = v.DisableChatListener
 		(*cfg)[k].Custom = v.Custom
 		if (*cfg)[k].Enable == nil {
 			(*cfg)[k].Enable = ptr(true)
@@ -304,10 +306,11 @@ func ToAbstractPlatformConfig[T PlatformSpecificConfig, S StreamProfile](
 	platCfg *PlatformConfig[T, S],
 ) *AbstractPlatformConfig {
 	return &AbstractPlatformConfig{
-		Enable:         platCfg.Enable,
-		Config:         platCfg.Config,
-		StreamProfiles: ToAbstractStreamProfiles[S](platCfg.StreamProfiles),
-		Custom:         platCfg.Custom,
+		Enable:              platCfg.Enable,
+		DisableChatListener: platCfg.DisableChatListener,
+		Config:              platCfg.Config,
+		StreamProfiles:      ToAbstractStreamProfiles[S](platCfg.StreamProfiles),
+		Custom:              platCfg.Custom,
 	}
 }
 
@@ -319,10 +322,11 @@ func ConvertPlatformConfig[T PlatformSpecificConfig, S StreamProfile](
 		platCfg = &AbstractPlatformConfig{}
 	}
 	return &PlatformConfig[T, S]{
-		Enable:         platCfg.Enable,
-		Config:         GetPlatformSpecificConfig[T](ctx, platCfg.Config),
-		StreamProfiles: GetStreamProfiles[S](platCfg.StreamProfiles),
-		Custom:         platCfg.Custom,
+		Enable:              platCfg.Enable,
+		DisableChatListener: platCfg.DisableChatListener,
+		Config:              GetPlatformSpecificConfig[T](ctx, platCfg.Config),
+		StreamProfiles:      GetStreamProfiles[S](platCfg.StreamProfiles),
+		Custom:              platCfg.Custom,
 	}
 }
 
