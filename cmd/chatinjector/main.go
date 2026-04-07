@@ -271,8 +271,16 @@ func run(
 	}
 	defer sdConn.Close()
 
+	sdClient := streamd_grpc.NewStreamDClient(sdConn)
+
+	for i := range cfg.Platforms {
+		if err := cfg.Platforms[i].resolveCredentials(ctx, sdClient); err != nil {
+			return fmt.Errorf("resolve credentials for platform %q: %w", cfg.Platforms[i].Type, err)
+		}
+	}
+
 	eng := &Engine{
-		StreamdClient: streamd_grpc.NewStreamDClient(sdConn),
+		StreamdClient: sdClient,
 		Chain:         chain,
 	}
 
