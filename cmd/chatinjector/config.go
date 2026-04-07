@@ -9,6 +9,7 @@ import (
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/xpath"
 )
 
@@ -28,6 +29,10 @@ type AppConfig struct {
 // platform-specific and ignored when irrelevant.
 type PlatformConfig struct {
 	Type string `yaml:"type"` // "youtube", "twitch", "kick"
+
+	// Credentials specifies where to get platform auth tokens.
+	// "streamd" fetches from the streamd config; empty uses static fields.
+	Credentials string `yaml:"credentials,omitempty"`
 
 	// Sources specifies which source types to try, in order. If empty,
 	// the platform's default source is used. Example: ["eventsub", "irc"]
@@ -108,6 +113,100 @@ func (pc PlatformConfig) NewSource() (ChatSource, error) {
 	default:
 		return nil, fmt.Errorf("unknown platform type %q", pc.Type)
 	}
+}
+
+// streamdConfigForCredentials is a minimal struct for extracting platform
+// credentials from the streamd config YAML without importing the full
+// config types (avoiding circular dependencies).
+type streamdConfigForCredentials struct {
+	Backends map[string]struct {
+		Config map[string]interface{} `yaml:"config"`
+	} `yaml:"backends"`
+}
+
+// streamdConfigString extracts a string value from the parsed backend config map.
+func streamdConfigString(m map[string]interface{}, key string) string {
+	v, ok := m[key]
+	if !ok {
+		return ""
+	}
+	s, ok := v.(string)
+	if !ok {
+		return ""
+	}
+	return s
+}
+
+// resolveCredentials fetches platform credentials from streamd when
+// Credentials is set to "streamd". Updates the PlatformConfig fields
+// (ClientID, AccessToken, Channel, etc.) in place, without overriding
+// fields that are already set.
+func (pc *PlatformConfig) resolveCredentials(
+	ctx context.Context,
+	streamdClient streamd_grpc.StreamDClient,
+) (_err error) {
+	logger.Tracef(ctx, "resolveCredentials[%s]", pc.Type)
+	defer func() { logger.Tracef(ctx, "/resolveCredentials[%s]: %v", pc.Type, _err) }()
+
+	switch pc.Credentials {
+	case "":
+		return nil
+	case "streamd":
+	default:
+		return fmt.Errorf("unknown credentials source %q (supported: \"streamd\")", pc.Credentials)
+	}
+
+	reply, err := streamdClient.GetConfig(ctx, &streamd_grpc.GetConfigRequest{})
+	if err != nil {
+		return fmt.Errorf("GetConfig from streamd: %w", err)
+	}
+
+	var sdCfg streamdConfigForCredentials
+	if err := yaml.Unmarshal([]byte(reply.GetConfig()), &sdCfg); err != nil {
+		return fmt.Errorf("parse streamd config YAML: %w", err)
+	}
+
+	backendName := pc.Type
+	backend, ok := sdCfg.Backends[backendName]
+	if !ok {
+		return fmt.Errorf("backend %q not found in streamd config", backendName)
+	}
+
+	m := backend.Config
+	if m == nil {
+		return fmt.Errorf("backend %q has no config in streamd", backendName)
+	}
+
+	switch pc.Type {
+	case "twitch":
+		// goccy/go-yaml lowercases field names without yaml tags:
+		// ClientID -> "clientid", UserAccessToken -> "useraccesstoken", Channel -> "channel".
+		if pc.Channel == "" {
+			pc.Channel = streamdConfigString(m, "channel")
+		}
+		if pc.ClientID == "" {
+			pc.ClientID = streamdConfigString(m, "clientid")
+		}
+		if pc.AccessToken == "" {
+			pc.AccessToken = streamdConfigString(m, "useraccesstoken")
+		}
+	case "kick":
+		// Kick types have explicit yaml tags: "channel", "client_id", "user_access_token".
+		if pc.Channel == "" {
+			pc.Channel = streamdConfigString(m, "channel")
+		}
+	case "youtube":
+		// YouTube PlatformSpecificConfig has no yaml tags:
+		// ChannelID -> "channelid", ClientID -> "clientid".
+		if pc.Channel == "" {
+			pc.Channel = streamdConfigString(m, "channelid")
+		}
+	default:
+		return fmt.Errorf("credentials resolution not supported for platform %q", pc.Type)
+	}
+
+	logger.Debugf(ctx, "resolved credentials for %s from streamd (channel=%q)", pc.Type, pc.Channel)
+	return nil
 }
 
 type TranslationConfig struct {
@@ -191,7 +290,13 @@ platforms:
   # - type: twitch
   #   channel: "xqc"
 
-  # Twitch — with EventSub fallback to IRC.
+  # Twitch — with EventSub fallback to IRC, credentials from streamd.
+  # - type: twitch
+  #   channel: "xqc"
+  #   sources: ["eventsub", "irc"]  # try eventsub first, fall back to IRC
+  #   credentials: streamd            # fetch tokens from streamd (auto-refreshed)
+
+  # Twitch — with EventSub fallback to IRC, static credentials.
   # - type: twitch
   #   channel: "xqc"
   #   sources: ["eventsub", "irc"]  # try eventsub first, fall back to IRC
