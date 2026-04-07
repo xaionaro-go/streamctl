@@ -93,30 +93,39 @@ func NewChatHandlerSub(
 		}
 		observability.Go(ctx, func(ctx context.Context) {
 			defer reconnecting.Store(false)
-			const maxDelay = 30 * time.Second
-			delay := time.Second
+
+			eventSubClient.Close()
+
+			const (
+				initialBackoff = time.Second
+				maxBackoff     = 30 * time.Second
+			)
+			backoff := initialBackoff
 			for {
 				select {
 				case <-ctx.Done():
+					logger.Debugf(ctx, "context cancelled, stopping reconnect")
 					return
 				default:
 				}
 
-				err := eventSubClient.ConnectWithContext(ctx, errCallback)
-				if err == nil {
+				connectErr := eventSubClient.ConnectWithContext(ctx, errCallback)
+				if connectErr == nil {
+					logger.Debugf(ctx, "reconnected to '%s'", urlString)
 					return
 				}
+				logger.Errorf(ctx, "unable to connect to '%s': %v; retrying in %v", urlString, connectErr, backoff)
 
-				logger.Errorf(ctx, "unable to connect to '%s': %v; retrying in %v", urlString, err, delay)
 				select {
 				case <-ctx.Done():
+					logger.Debugf(ctx, "context cancelled during backoff, stopping reconnect")
 					return
-				case <-time.After(delay):
+				case <-time.After(backoff):
 				}
 
-				delay *= 2
-				if delay > maxDelay {
-					delay = maxDelay
+				backoff *= 2
+				if backoff > maxBackoff {
+					backoff = maxBackoff
 				}
 			}
 		})
