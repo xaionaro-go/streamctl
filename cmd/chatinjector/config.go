@@ -29,6 +29,10 @@ type AppConfig struct {
 type PlatformConfig struct {
 	Type string `yaml:"type"` // "youtube", "twitch", "kick"
 
+	// Sources specifies which source types to try, in order. If empty,
+	// the platform's default source is used. Example: ["eventsub", "irc"]
+	Sources []string `yaml:"sources,omitempty"`
+
 	// YouTube fields.
 	ProxyAddr    string `yaml:"proxy_addr,omitempty"`
 	Video        string `yaml:"video,omitempty"`
@@ -42,9 +46,33 @@ type PlatformConfig struct {
 
 	// Kick fields.
 	ChatWebhookAddr string `yaml:"chat_webhook_addr,omitempty"`
+
+	// Twitch auth (required for eventsub source).
+	ClientID    string `yaml:"client_id,omitempty"`
+	AccessToken string `yaml:"access_token,omitempty"`
+}
+
+// newTwitchSourceByName creates a single Twitch ChatSource by source name.
+func (pc PlatformConfig) newTwitchSourceByName(name string) (ChatSource, error) {
+	switch name {
+	case "eventsub":
+		return &TwitchEventSubSource{
+			Channel:     pc.Channel,
+			ClientID:    pc.ClientID,
+			AccessToken: pc.AccessToken,
+		}, nil
+	case "irc":
+		return &TwitchSource{
+			Channel: pc.Channel,
+		}, nil
+	default:
+		return nil, fmt.Errorf("unknown twitch source type %q", name)
+	}
 }
 
 // NewSource creates the ChatSource described by this PlatformConfig.
+// When multiple Sources are specified, a FallbackSource wraps them so that
+// failures cascade to the next source in the list.
 func (pc PlatformConfig) NewSource() (ChatSource, error) {
 	switch pc.Type {
 	case "youtube":
@@ -57,9 +85,22 @@ func (pc PlatformConfig) NewSource() (ChatSource, error) {
 			RawMessage:   pc.RawMessage,
 		}, nil
 	case "twitch":
-		return &TwitchSource{
-			Channel: pc.Channel,
-		}, nil
+		sources := pc.Sources
+		if len(sources) == 0 {
+			sources = []string{"irc"}
+		}
+		if len(sources) == 1 {
+			return pc.newTwitchSourceByName(sources[0])
+		}
+		var chatSources []ChatSource
+		for _, name := range sources {
+			src, err := pc.newTwitchSourceByName(name)
+			if err != nil {
+				return nil, err
+			}
+			chatSources = append(chatSources, src)
+		}
+		return &FallbackSource{Sources: chatSources}, nil
 	case "kick":
 		return &KickSource{
 			ChatWebhookAddr: pc.ChatWebhookAddr,
@@ -146,9 +187,16 @@ platforms:
     # hl: "en"
     # raw_message: false
 
-  # Twitch — anonymous IRC, read-only.
+  # Twitch — anonymous IRC, read-only (default).
   # - type: twitch
   #   channel: "xqc"
+
+  # Twitch — with EventSub fallback to IRC.
+  # - type: twitch
+  #   channel: "xqc"
+  #   sources: ["eventsub", "irc"]  # try eventsub first, fall back to IRC
+  #   client_id: "your_client_id"       # required for eventsub
+  #   access_token: "your_access_token" # required for eventsub
 
   # Kick — requires chatwebhook gRPC service.
   # - type: kick
