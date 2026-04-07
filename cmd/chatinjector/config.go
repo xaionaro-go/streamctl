@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	defaultConfigPath      = "~/.config/ytchatinjector/ytchatinjector.yaml"
+	defaultConfigPath      = "~/.config/chatinjector/chatinjector.yaml"
 	defaultChatHistorySize = 20
 )
 
@@ -86,8 +86,8 @@ func loadConfig(
 	return cfg, nil
 }
 
-const sampleConfig = `# ytchatinjector configuration
-# See: https://github.com/xaionaro-go/streamctl/tree/main/cmd/ytchatinjector
+const sampleConfig = `# chatinjector configuration
+# See: https://github.com/xaionaro-go/streamctl/tree/main/cmd/chatinjector
 
 # youtubeapiproxy gRPC address
 yt_proxy_addr: "localhost:9090"
