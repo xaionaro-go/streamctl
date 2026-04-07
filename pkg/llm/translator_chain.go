@@ -110,11 +110,14 @@ func (tc *TranslatorChain) Translate(
 			"LANGUAGES: code1:confidence1, code2:confidence2, ...\n\n"+
 			"IS_TARGET means: is this message written primarily in %s?\n"+
 			"Answer YES for %s with typos, slang, abbreviations, or broken grammar.\n"+
-			"Answer NO if the message contains words from other languages that an %s-only speaker would NOT understand.\n\n"+
+			"Answer NO if an %s-only speaker would NOT understand the overall meaning of the message.\n"+
+			"Foreign proper nouns (country names, city names, brand names) do not count — "+
+			"if the sentence structure and grammar are %s, answer YES even with a foreign proper noun in it.\n\n"+
 			"Where confidence is 0.0 to 1.0. List up to 3 most likely ISO 639-1 language codes.\n\n"+
 			"Target language: %s (%s)\n"+
 			"/no_think",
 		tc.TargetLang, tc.TargetLang, tc.TargetLang,
+		tc.TargetLang,
 		tc.TargetLang, targetCode,
 	)
 	if history != "" {

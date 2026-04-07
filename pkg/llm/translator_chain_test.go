@@ -1149,10 +1149,13 @@ func TestTranslate(t *testing.T) {
 		},
 
 		// --- Unnecessary translation: mostly English with one French word ---
+		// Production: LLM returned "IS_TARGET: NO  LANGUAGES: fr:0.95, ar:0.05, en:0.0"
+		// but the message is predominantly English; detection prompt now clarifies
+		// that foreign proper nouns (country names) don't change the primary language.
 		{
 			name:     "Mostly English hi Algérie should be unchanged",
 			user:     "khaledinformationdz600",
-			input:    "hi Algérie 👋🇩🇿 How are you, my sister?",
+			input:    "hi Algérie 👋🇩🇿How are you, my sister?",
 			wantSame: true,
 		},
 
