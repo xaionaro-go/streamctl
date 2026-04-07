@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/signal"
 	"strings"
@@ -18,13 +17,9 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/llm"
-	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
-	scgoconv "github.com/xaionaro-go/streamctl/pkg/streamcontrol/protobuf/goconv"
-	youtube "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
 	llmcfg "github.com/xaionaro-go/streamctl/pkg/streamd/config/llm"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/xpath"
-	"github.com/xaionaro-go/youtubeapiproxy/grpc/ytgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -37,7 +32,6 @@ const (
 	defaultOpenRouterURL = "https://openrouter.ai/api"
 	defaultZenURL        = "https://api.zen.ai"
 	defaultOpenAIURL     = "https://api.openai.com"
-	translationSeparator = " -文A-> "
 )
 
 func main() {
@@ -271,14 +265,6 @@ func run(
 		return fmt.Errorf("video and channel are mutually exclusive")
 	}
 
-	ytConn, err := grpc.NewClient(cfg.YTProxyAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	if err != nil {
-		return fmt.Errorf("connect to youtubeapiproxy at %s: %w", cfg.YTProxyAddr, err)
-	}
-	defer ytConn.Close()
-
 	sdCreds := detectTransportCredentials(ctx, cfg.StreamdAddr)
 	sdConn, err := grpc.NewClient(cfg.StreamdAddr,
 		grpc.WithTransportCredentials(sdCreds),
@@ -288,211 +274,30 @@ func run(
 	}
 	defer sdConn.Close()
 
-	chatClient := ytgrpc.NewV3DataLiveChatMessageServiceClient(ytConn)
-	streamdClient := streamd_grpc.NewStreamDClient(sdConn)
-
-	detectMethod := DetectMethod(cfg.DetectMethod)
-	if detectMethod == "" {
-		detectMethod = DetectMethodSearch
+	source := &YouTubeSource{
+		ProxyAddr:    cfg.YTProxyAddr,
+		Video:        cfg.Video,
+		Channel:      cfg.Channel,
+		DetectMethod: cfg.DetectMethod,
+		Hl:           cfg.Hl,
+		RawMessage:   cfg.RawMessage,
 	}
 
-	if cfg.Channel != "" {
-		return monitorChannel(ctx, ytConn, cfg.Channel, detectMethod, func(ctx context.Context, liveChatID string) error {
-			return bridgeChat(ctx, chatClient, streamdClient, liveChatID, cfg, chain)
-		})
+	eng := &Engine{
+		StreamdClient: streamd_grpc.NewStreamDClient(sdConn),
+		Chain:         chain,
 	}
 
-	liveChatID, err := resolveLiveChatID(ctx, ytConn, cfg.Video)
-	if err != nil {
-		return fmt.Errorf("resolve live chat ID for %q: %w", cfg.Video, err)
-	}
-	logger.Infof(ctx, "resolved live chat ID: %s", liveChatID)
+	events := make(chan ChatEvent, 64)
+	var sourceErr error
 
-	return bridgeChat(ctx, chatClient, streamdClient, liveChatID, cfg, chain)
-}
-
-// resolveLiveChatID determines the liveChatId from the user-provided target.
-// If the target looks like a video URL or video ID, it calls ResolveLiveChatId
-// on the admin service. Otherwise it assumes the target is already a liveChatId.
-func resolveLiveChatID(
-	ctx context.Context,
-	conn grpc.ClientConnInterface,
-	target string,
-) (_ret string, _err error) {
-	logger.Tracef(ctx, "resolveLiveChatID")
-	defer func() { logger.Tracef(ctx, "/resolveLiveChatID: %v", _err) }()
-
-	switch {
-	case strings.Contains(target, "youtube.com"),
-		strings.Contains(target, "youtu.be"),
-		strings.Contains(target, "://"):
-		// URL -- resolve via admin RPC.
-	case len(target) == 11:
-		// Likely a video ID (YouTube video IDs are 11 chars).
-	default:
-		return target, nil
-	}
-
-	adminClient := ytgrpc.NewAdminServiceClient(conn)
-	resp, err := adminClient.ResolveLiveChatId(ctx, &ytgrpc.ResolveLiveChatIdRequest{
-		VideoId: target,
+	observability.Go(ctx, func(ctx context.Context) {
+		sourceErr = source.Run(ctx, events)
+		close(events)
 	})
-	if err != nil {
-		return "", fmt.Errorf("ResolveLiveChatId RPC: %w", err)
-	}
 
-	return resp.LiveChatId, nil
-}
-
-func bridgeChat(
-	ctx context.Context,
-	chatClient ytgrpc.V3DataLiveChatMessageServiceClient,
-	streamdClient streamd_grpc.StreamDClient,
-	liveChatID string,
-	cfg AppConfig,
-	chain *llm.TranslatorChain,
-) (_err error) {
-	logger.Tracef(ctx, "bridgeChat")
-	defer func() { logger.Tracef(ctx, "/bridgeChat: %v", _err) }()
-
-	var pageToken string
-
-	for {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-
-		err := recvAndInject(ctx, chatClient, streamdClient, liveChatID, cfg, chain, &pageToken)
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-
-		switch {
-		case err == nil:
-			// Stream ended cleanly (EOF) — reconnect immediately to
-			// minimize latency between message batches.
-			logger.Debugf(ctx, "stream ended, reconnecting immediately")
-			continue
-		case isStreamEndedError(err):
-			// The live chat no longer exists (stream ended).
-			// Return so the caller (monitorChannel) can detect the next stream.
-			logger.Infof(ctx, "live chat ended: %v", err)
-			return nil
-		default:
-			logger.Warnf(ctx, "stream error, reconnecting in %s: %v", reconnectDelay, err)
-			if !sleep(ctx, reconnectDelay) {
-				return ctx.Err()
-			}
-		}
-	}
-}
-
-func recvAndInject(
-	ctx context.Context,
-	chatClient ytgrpc.V3DataLiveChatMessageServiceClient,
-	streamdClient streamd_grpc.StreamDClient,
-	liveChatID string,
-	cfg AppConfig,
-	chain *llm.TranslatorChain,
-	pageToken *string,
-) (_err error) {
-	logger.Tracef(ctx, "recvAndInject")
-	defer func() { logger.Tracef(ctx, "/recvAndInject: %v", _err) }()
-
-	stream, err := chatClient.StreamList(ctx, &ytgrpc.LiveChatMessageListRequest{
-		LiveChatId: liveChatID,
-		Hl:         cfg.Hl,
-		Part:       []string{"snippet", "authorDetails"},
-		PageToken:  *pageToken,
-	})
-	if err != nil {
-		return fmt.Errorf("StreamList: %w", err)
-	}
-
-	for {
-		resp, err := stream.Recv()
-		switch {
-		case errors.Is(err, io.EOF):
-			return nil
-		case err != nil:
-			return fmt.Errorf("stream recv: %w", err)
-		}
-
-		if resp.NextPageToken != "" {
-			*pageToken = resp.NextPageToken
-		}
-
-		// Translate concurrently, inject in order.
-		// Each message gets a done channel; a sequential loop
-		// waits for each in order and injects immediately.
-		type result struct {
-			ev   streamcontrol.Event
-			item *ytgrpc.LiveChatMessage
-		}
-		slots := make([]chan result, len(resp.Items))
-
-		for i, item := range resp.Items {
-			if s := item.GetSnippet(); s != nil {
-				logger.Debugf(ctx, "received yt event: id=%s type=%s user=%s msg=%q",
-					item.GetId(), s.GetType(), item.GetAuthorDetails().GetDisplayName(),
-					s.GetDisplayMessage())
-			}
-			slots[i] = make(chan result, 1)
-			i, item := i, item
-			observability.Go(ctx, func(ctx context.Context) {
-				// Guarantee the slot is always filled, even on panic.
-				sent := false
-				defer func() {
-					if !sent {
-						ev := convertMessage(ctx, item, cfg.RawMessage)
-						slots[i] <- result{ev: ev, item: item}
-					}
-				}()
-
-				ev := convertMessage(ctx, item, cfg.RawMessage)
-
-				if chain != nil && ev.Message != nil && ev.Message.Content != "" {
-					translated, translateErr := chain.Translate(ctx, ev.User.Name, ev.Message.Content)
-					switch {
-					case translateErr != nil:
-						logger.Warnf(ctx, "translation failed for %s: %v", item.Id, translateErr)
-					case translated != ev.Message.Content:
-						ev.Message.Content = ev.Message.Content + translationSeparator + translated
-					}
-				}
-
-				slots[i] <- result{ev: ev, item: item}
-				sent = true
-			})
-		}
-
-		for _, slot := range slots {
-			r := <-slot
-			logger.Debugf(ctx, "injecting %s event from %s: %s",
-				r.ev.Type, r.ev.User.Name, messagePreview(&r.ev))
-
-			_, injectErr := streamdClient.InjectChatMessage(ctx, &streamd_grpc.InjectChatMessageRequest{
-				PlatID: string(youtube.ID),
-				Event:  scgoconv.EventGo2GRPC(r.ev),
-			})
-			if injectErr != nil {
-				logger.Errorf(ctx, "InjectChatMessage failed for %s: %v", r.item.Id, injectErr)
-			}
-		}
-	}
-}
-
-func messagePreview(ev *streamcontrol.Event) string {
-	if ev.Message == nil {
-		return fmt.Sprintf("(%s)", ev.Type)
-	}
-
-	content := ev.Message.Content
-	if len(content) > messagePreviewMax {
-		content = content[:messagePreviewMax] + "..."
-	}
-
-	return content
+	engineErr := eng.Run(ctx, events)
+	return errors.Join(sourceErr, engineErr)
 }
 
 // isStreamEndedError returns true if the error indicates the live chat
