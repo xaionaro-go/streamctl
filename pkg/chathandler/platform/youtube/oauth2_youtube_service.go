@@ -17,6 +17,25 @@ func newOAuth2YouTubeService(
 	ctx context.Context,
 	cfg *ytpkg.Config,
 ) (*youtubesvc.Service, error) {
+	_, svc, err := newOAuth2TokenSourceAndService(ctx, cfg)
+	return svc, err
+}
+
+// hasOAuth2Credentials returns true if the config contains the required
+// OAuth2 fields: ClientID, ClientSecret, and a non-nil Token.
+func hasOAuth2Credentials(cfg *ytpkg.Config) bool {
+	return cfg.Config.ClientID != "" &&
+		cfg.Config.ClientSecret.Get() != "" &&
+		cfg.Config.Token != nil
+}
+
+// newOAuth2TokenSourceAndService creates both an oauth2.TokenSource (for gRPC
+// per-RPC credentials) and a YouTube Data API v3 service (for broadcast
+// discovery) from the config's OAuth2 credentials.
+func newOAuth2TokenSourceAndService(
+	ctx context.Context,
+	cfg *ytpkg.Config,
+) (oauth2.TokenSource, *youtubesvc.Service, error) {
 	oauthCfg := &oauth2.Config{
 		ClientID:     cfg.Config.ClientID,
 		ClientSecret: cfg.Config.ClientSecret.Get(),
@@ -32,16 +51,8 @@ func newOAuth2YouTubeService(
 
 	svc, err := youtubesvc.NewService(ctx, option.WithTokenSource(tokenSource))
 	if err != nil {
-		return nil, fmt.Errorf("create YouTube service with OAuth2: %w", err)
+		return nil, nil, fmt.Errorf("create YouTube service with OAuth2: %w", err)
 	}
 
-	return svc, nil
-}
-
-// hasOAuth2Credentials returns true if the config contains the required
-// OAuth2 fields: ClientID, ClientSecret, and a non-nil Token.
-func hasOAuth2Credentials(cfg *ytpkg.Config) bool {
-	return cfg.Config.ClientID != "" &&
-		cfg.Config.ClientSecret.Get() != "" &&
-		cfg.Config.Token != nil
+	return tokenSource, svc, nil
 }

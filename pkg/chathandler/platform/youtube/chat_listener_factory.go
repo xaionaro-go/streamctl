@@ -20,8 +20,8 @@ func init() {
 // Factory creates YouTube ChatListener instances.
 //
 // PACE mapping:
-//   - Primary: gRPC stream via youtubeapiproxy (requires YTProxyAddr),
-//     falls back to OAuth2-based polling when proxy is unavailable.
+//   - Primary: gRPC stream — via youtubeapiproxy when YTProxyAddr is set,
+//     or directly to youtube.googleapis.com:443 with OAuth2 per-RPC credentials.
 //   - Alternate: REST API polling (prefers APIKey, falls back to OAuth2).
 //   - Contingency: Obsolete JSON parser (auto-discovers via YTProxyAddr).
 //
@@ -66,7 +66,10 @@ func (Factory) CreateChatListener(
 	}
 }
 
-// createPrimaryListener tries gRPC stream first, then falls back to OAuth2 polling.
+// createPrimaryListener creates a gRPC stream listener. When YTProxyAddr is
+// set, it connects via youtubeapiproxy. Otherwise it connects directly to
+// youtube.googleapis.com:443 using OAuth2 per-RPC credentials. REST polling
+// is never used as Primary — it belongs in Alternate.
 func createPrimaryListener(
 	ctx context.Context,
 	cfg *ytpkg.Config,
@@ -74,23 +77,20 @@ func createPrimaryListener(
 	logger.Tracef(ctx, "createPrimaryListener")
 	defer func() { logger.Tracef(ctx, "/createPrimaryListener") }()
 
-	ytProxyAddr := cfg.Config.YTProxyAddr
-
-	// Prefer gRPC stream via youtubeapiproxy when available.
-	if ytProxyAddr != "" {
+	switch {
+	case cfg.Config.YTProxyAddr != "":
 		return createGRPCStreamListener(ctx, cfg)
-	}
 
-	// Fall back to OAuth2-based polling when proxy is unavailable.
-	if hasOAuth2Credentials(cfg) {
-		logger.Debugf(ctx, "no yt_proxy_addr; using OAuth2-based polling as primary listener")
-		return createOAuth2PollingListener(ctx, cfg)
-	}
+	case hasOAuth2Credentials(cfg):
+		logger.Debugf(ctx, "no yt_proxy_addr; using direct gRPC to %s with OAuth2 credentials", directGRPCHost)
+		return createGRPCStreamListener(ctx, cfg)
 
-	return nil, chathandler.ErrChatListenerMisconfigured{
-		PlatformName:  yttypes.ID,
-		ListenerType:  streamcontrol.ChatListenerPrimary,
-		MissingFields: []string{"yt_proxy_addr or OAuth2 credentials (ClientID, ClientSecret, Token)"},
+	default:
+		return nil, chathandler.ErrChatListenerMisconfigured{
+			PlatformName:  yttypes.ID,
+			ListenerType:  streamcontrol.ChatListenerPrimary,
+			MissingFields: []string{"yt_proxy_addr or OAuth2 credentials (ClientID, ClientSecret, Token)"},
+		}
 	}
 }
 
@@ -109,9 +109,9 @@ func createAlternateListener(
 		return createAPIKeyPollingListener(ctx, cfg)
 	}
 
-	// Fall back to OAuth2-based polling (only when Primary used gRPC,
-	// otherwise this would duplicate Primary).
-	if cfg.Config.YTProxyAddr != "" && hasOAuth2Credentials(cfg) {
+	// Fall back to OAuth2-based polling. Primary always uses gRPC (either
+	// via proxy or direct), so OAuth2 REST polling here never duplicates it.
+	if hasOAuth2Credentials(cfg) {
 		logger.Debugf(ctx, "no api_key; using OAuth2-based polling as alternate listener")
 		return createOAuth2PollingListener(ctx, cfg)
 	}
@@ -135,11 +135,24 @@ func createGRPCStreamListener(
 		detectMethod = DetectMethod(dm)
 	}
 
-	return &GRPCStreamListener{
+	l := &GRPCStreamListener{
 		YTProxyAddr:  cfg.Config.YTProxyAddr,
 		ChannelID:    cfg.Config.ChannelID,
 		DetectMethod: detectMethod,
-	}, nil
+	}
+
+	// Direct mode: build OAuth2 token source and YouTube service for
+	// broadcast discovery without youtubeapiproxy.
+	if l.YTProxyAddr == "" {
+		tokenSource, svc, err := newOAuth2TokenSourceAndService(ctx, cfg)
+		if err != nil {
+			return nil, fmt.Errorf("create OAuth2 credentials for direct gRPC: %w", err)
+		}
+		l.TokenSource = tokenSource
+		l.OAuth2Svc = svc
+	}
+
+	return l, nil
 }
 
 func createAPIKeyPollingListener(
