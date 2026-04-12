@@ -14,9 +14,9 @@ type Endpoint struct {
 type Provider string
 
 const (
-	UndefinedProvider      = Provider("")
-	ProviderChatGPT        = Provider("ChatGPT")
-	ProviderFasterWhisper  = Provider("faster-whisper")
+	UndefinedProvider     = Provider("")
+	ProviderChatGPT       = Provider("ChatGPT")
+	ProviderFasterWhisper = Provider("faster-whisper")
 )
 
 type Endpoints map[string]*Endpoint

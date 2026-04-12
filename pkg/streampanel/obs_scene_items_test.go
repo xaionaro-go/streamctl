@@ -16,11 +16,11 @@ import (
 type mockOBSServer struct {
 	obs_grpc.UnimplementedOBSServer
 
-	mu                       sync.Mutex
-	sceneItems               []*obs_grpc.SceneItem
-	setEnabledCalls          []setEnabledCall
-	getSceneItemListErr      error
-	setSceneItemEnabledErr   error
+	mu                     sync.Mutex
+	sceneItems             []*obs_grpc.SceneItem
+	setEnabledCalls        []setEnabledCall
+	getSceneItemListErr    error
+	setSceneItemEnabledErr error
 }
 
 type setEnabledCall struct {

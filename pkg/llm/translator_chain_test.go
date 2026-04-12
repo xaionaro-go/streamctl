@@ -28,9 +28,9 @@ func TestTranslate(t *testing.T) {
 		name     string
 		user     string
 		input    string
-		wantSame bool              // expect output == input (English, emoji-only)
-		contains []string          // output must contain all of these (case-insensitive)
-		notEqual bool              // output must differ from input
+		wantSame bool                                     // expect output == input (English, emoji-only)
+		contains []string                                 // output must contain all of these (case-insensitive)
+		notEqual bool                                     // output must differ from input
 		check    func(t *testing.T, input, output string) // custom check
 	}
 
@@ -64,9 +64,9 @@ func TestTranslate(t *testing.T) {
 			contains: []string{"love"},
 		},
 		{
-			name: "Hindi meaning not transliteration",
-			user: "tushar",
-			input: "नमस्कार ☺️",
+			name:     "Hindi meaning not transliteration",
+			user:     "tushar",
+			input:    "नमस्कार ☺️",
 			contains: []string{"hello", "☺️"},
 			check: func(t *testing.T, _, output string) {
 				assert.NotContains(t, output, "Namaste", "should translate meaning, not transliterate")
@@ -555,9 +555,9 @@ func TestTranslate(t *testing.T) {
 			},
 		},
 		{
-			name:     "Turkish come İstanbul mixed",
-			user:     "Zekeriya",
-			input:    "come İstanbul",
+			name:  "Turkish come İstanbul mixed",
+			user:  "Zekeriya",
+			input: "come İstanbul",
 			check: func(t *testing.T, input, output string) {
 				// Either unchanged (English speaker understands) or
 				// translated with Istanbul preserved — both acceptable.

@@ -182,6 +182,7 @@ func runStreamd(
 
 	var listener net.Listener
 	listener, _, streamdGRPC, obsGRPC, proxyGRPC = initGRPCServers(ctx, streamD, flags.ListenAddr)
+	streamD.GRPCListenAddr = listener.Addr().String()
 	streamdGRPCLocker.Unlock()
 
 	var configLocker xsync.Mutex

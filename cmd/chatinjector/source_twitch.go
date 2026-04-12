@@ -5,66 +5,52 @@ import (
 	"fmt"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/streamctl/pkg/chathandler"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
-	twitchpkg "github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
-	twitch "github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/types"
+	twitchtypes "github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/types"
 )
 
-// TwitchSource implements ChatSource using Twitch IRC (anonymous, read-only).
-// It connects to the public IRC endpoint and joins the specified channel,
-// forwarding chat messages as ChatEvents.
-//
-// For richer event support (subscriptions, cheers, raids, etc.), a future
-// enhancement could use EventSub via NewChatHandlerSub, which requires
-// OAuth credentials (client_id, client_secret, access_token).
-type TwitchSource struct {
-	// Channel is the Twitch channel name to join (e.g. "xqc").
-	Channel string
+// twitchSourceNameToListenerType maps chatinjector source names to
+// ChatListenerType values used by the shared factory.
+func twitchSourceNameToListenerType(name string) (streamcontrol.ChatListenerType, error) {
+	switch name {
+	case "eventsub":
+		return streamcontrol.ChatListenerPrimary, nil
+	case "irc":
+		return streamcontrol.ChatListenerContingency, nil
+	default:
+		return 0, fmt.Errorf("unknown twitch source type %q", name)
+	}
 }
 
-func (s *TwitchSource) PlatformID() streamcontrol.PlatformName {
-	return twitch.ID
-}
-
-// Run connects to Twitch IRC, joins the configured channel, and emits
-// ChatEvents until the context is cancelled or an unrecoverable error occurs.
-func (s *TwitchSource) Run(
+// newTwitchSourceFromFactory creates a ChatSource for Twitch using the shared
+// ChatListenerFactory. It does not perform internal fallback — callers
+// (newTwitchSources) handle fallback via FallbackSource.
+func newTwitchSourceFromFactory(
 	ctx context.Context,
-	events chan<- ChatEvent,
-) (_err error) {
-	logger.Tracef(ctx, "TwitchSource.Run")
-	defer func() { logger.Tracef(ctx, "/TwitchSource.Run: %v", _err) }()
+	pc PlatformConfig,
+	listenerType streamcontrol.ChatListenerType,
+) (ChatSource, error) {
+	logger.Tracef(ctx, "newTwitchSourceFromFactory(%s)", listenerType)
+	defer func() { logger.Tracef(ctx, "/newTwitchSourceFromFactory(%s)", listenerType) }()
 
-	if s.Channel == "" {
-		return fmt.Errorf("twitch channel is required")
+	factory := chathandler.GetChatListenerFactory(twitchtypes.ID)
+	if factory == nil {
+		return nil, fmt.Errorf("no ChatListenerFactory registered for %s", twitchtypes.ID)
 	}
 
-	handler, err := twitchpkg.NewChatHandlerIRC(ctx, s.Channel)
+	platCfg, err := toAbstractPlatformConfig(pc)
 	if err != nil {
-		return fmt.Errorf("create Twitch IRC handler for channel %q: %w", s.Channel, err)
+		return nil, err
 	}
-	defer handler.Close(ctx)
 
-	logger.Debugf(ctx, "connected to Twitch IRC channel %q", s.Channel)
-
-	msgCh := handler.MessagesChan()
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case ev, ok := <-msgCh:
-			if !ok {
-				logger.Debugf(ctx, "Twitch IRC message channel closed")
-				return nil
-			}
-			logger.Debugf(ctx, "received twitch event: id=%s type=%s user=%s msg=%q",
-				ev.ID, ev.Type, ev.User.Name, messageContent(ev))
-
-			select {
-			case events <- ChatEvent{Event: ev, Platform: twitch.ID}:
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}
+	listener, err := factory.CreateChatListener(ctx, platCfg, listenerType)
+	if err != nil {
+		return nil, fmt.Errorf("create twitch listener (%s): %w", listenerType, err)
 	}
+
+	return &ChatSourceFromListener{
+		Listener:     listener,
+		PlatformName: twitchtypes.ID,
+	}, nil
 }

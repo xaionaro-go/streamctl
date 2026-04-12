@@ -17,7 +17,9 @@ func (p *Panel) obsSetSceneItemEnabled(
 	enabled bool,
 ) (_err error) {
 	logger.Tracef(ctx, "obsSetSceneItemEnabled: scene=%s item=%d enabled=%v", sceneName, sceneItemID, enabled)
-	defer func() { logger.Tracef(ctx, "/obsSetSceneItemEnabled: scene=%s item=%d enabled=%v: %v", sceneName, sceneItemID, enabled, _err) }()
+	defer func() {
+		logger.Tracef(ctx, "/obsSetSceneItemEnabled: scene=%s item=%d enabled=%v: %v", sceneName, sceneItemID, enabled, _err)
+	}()
 
 	obsServer, obsServerClose, err := p.StreamD.OBS(ctx)
 	if obsServerClose != nil {

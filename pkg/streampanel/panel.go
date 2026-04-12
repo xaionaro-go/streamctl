@@ -109,10 +109,10 @@ type Panel struct {
 	twitchCheck  *widget.Check
 	kickCheck    *widget.Check
 
-	configPath           string
-	configCacheLocker    xsync.Mutex
-	configCache          *streamdconfig.Config
-	configCacheVersion   uint64 // incremented under configCacheLocker on every write
+	configPath         string
+	configCacheLocker  xsync.Mutex
+	configCache        *streamdconfig.Config
+	configCacheVersion uint64 // incremented under configCacheLocker on every write
 
 	setStatusFunc func(string)
 

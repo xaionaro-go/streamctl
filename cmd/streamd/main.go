@@ -27,6 +27,10 @@ import (
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/cmd/streamd/ui"
 	"github.com/xaionaro-go/streamctl/pkg/cert"
+	"github.com/xaionaro-go/streamctl/pkg/chathandler"
+	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/platform/kick"
+	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/platform/twitch"
+	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/platform/youtube"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
@@ -98,6 +102,10 @@ func main() {
 
 	ctx := context.Background()
 	ctx = logger.CtxWithLogger(ctx, l)
+
+	if chathandler.RunAsChatListenerIfRequested(ctx) {
+		return
+	}
 
 	secretsProvider := observability.NewStaticSecretsProvider()
 	ctx = observability.WithSecretsProvider(ctx, secretsProvider)
@@ -221,6 +229,8 @@ func main() {
 		if err != nil {
 			log.Fatalf("failed to listen: %v", err)
 		}
+
+		streamD.GRPCListenAddr = listener.Addr().String()
 
 		observability.Go(ctx, func(ctx context.Context) {
 			<-ctx.Done()

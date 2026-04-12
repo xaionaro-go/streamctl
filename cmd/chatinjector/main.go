@@ -24,6 +24,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+
+	// Register platform-specific ChatListenerFactory implementations.
+	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/platform/kick"
+	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/platform/twitch"
 )
 
 const (
@@ -293,7 +297,7 @@ func run(
 	)
 
 	for _, pc := range cfg.Platforms {
-		source, newErr := pc.NewSource()
+		source, newErr := pc.NewSource(ctx)
 		if newErr != nil {
 			return fmt.Errorf("create source for platform %q: %w", pc.Type, newErr)
 		}

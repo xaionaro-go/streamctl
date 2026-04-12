@@ -15,8 +15,13 @@ import (
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/cmd/streampanel/autoupdater"
 	"github.com/xaionaro-go/streamctl/pkg/buildvars"
+	"github.com/xaionaro-go/streamctl/pkg/chathandler"
+	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/platform/kick"
+	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/platform/twitch"
+	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/platform/youtube"
 	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/streamd"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel"
 	_ "github.com/xaionaro-go/streamctl/pkg/streamserver"
@@ -42,6 +47,10 @@ func main() {
 	}
 	ctx, cancelFunc := initRuntime(ctx, flags, ProcessNameMain)
 	defer cancelFunc()
+
+	if chathandler.RunAsChatListenerIfRequested(ctx) {
+		return
+	}
 
 	if flags.Subprocess != "" {
 		runSubprocess(ctx, flags.Subprocess)
@@ -111,6 +120,9 @@ func runPanel(
 			panel.StreamD,
 			flags.ListenAddr,
 		)
+		if concreteStreamD, ok := panel.StreamD.(*streamd.StreamD); ok {
+			concreteStreamD.GRPCListenAddr = listener.Addr().String()
+		}
 
 		// to erase an oauth request answered locally from "UnansweredOAuthRequests" in the GRPC server:
 		panel.OnInternallySubmittedOAuthCode = func(

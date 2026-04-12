@@ -124,11 +124,10 @@ type StreamD struct {
 	greetedUsersLocker sync.Mutex
 	greetedUsers       map[config.ChatUserID]struct{}
 
-	chatListenerLocker  sync.Mutex
-	chatListenerCancels map[streamcontrol.PlatformName]context.CancelFunc
+	GRPCListenAddr string
 
 	externalChatHandlerLocker sync.Mutex
-	externalChatHandlers      map[streamcontrol.PlatformName]*externalChatHandler
+	externalChatHandlers      map[chatHandlerKey]*externalChatHandler
 
 	// injectedEventIDs is a dedup guard for InjectChatMessage. During Level 2
 	// transitions both built-in and external handlers may briefly overlap,
@@ -174,8 +173,7 @@ func New(
 		ReadyChan:            make(chan struct{}),
 		lastShoutoutAt:       map[config.ChatUserID]time.Time{},
 		greetedUsers:         map[config.ChatUserID]struct{}{},
-		chatListenerCancels:  map[streamcontrol.PlatformName]context.CancelFunc{},
-		externalChatHandlers: map[streamcontrol.PlatformName]*externalChatHandler{},
+		externalChatHandlers: map[chatHandlerKey]*externalChatHandler{},
 	}
 
 	// TODO: move this to Run()

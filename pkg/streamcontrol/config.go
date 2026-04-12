@@ -88,11 +88,11 @@ type PlatformSpecificConfig interface {
 }
 
 type PlatformConfig[T PlatformSpecificConfig, S StreamProfile] struct {
-	Enable              *bool
-	DisableChatListener bool `yaml:"disable_chat_listener" json:"DisableChatListener,omitempty"`
-	Config              T
-	StreamProfiles      StreamProfiles[S]
-	Custom              map[string]any
+	Enable                   *bool
+	EnabledChatListenerTypes []ChatListenerType `yaml:"enabled_chat_listener_types" json:"EnabledChatListenerTypes"`
+	Config                   T
+	StreamProfiles           StreamProfiles[S]
+	Custom                   map[string]any
 }
 
 type ProfileName string
@@ -232,6 +232,31 @@ func (cfg *Config) UnmarshalYAML(b []byte) (_err error) {
 		)
 	}
 
+	// Migrate legacy disable_chat_listener field to enabled_chat_listener_types.
+	raw := map[PlatformName]map[string]any{}
+	if yamlErr := yaml.Unmarshal(b, &raw); yamlErr == nil {
+		for k, fields := range raw {
+			v, ok := t[k]
+			if !ok || v == nil {
+				continue
+			}
+			if v.EnabledChatListenerTypes != nil {
+				continue
+			}
+			disabled, hasOld := fields["disable_chat_listener"]
+			if !hasOld {
+				continue
+			}
+			if asBool, ok := disabled.(bool); ok {
+				if asBool {
+					v.EnabledChatListenerTypes = []ChatListenerType{}
+				} else {
+					v.EnabledChatListenerTypes = []ChatListenerType{ChatListenerPrimary}
+				}
+			}
+		}
+	}
+
 	if *cfg == nil {
 		*cfg = make(Config)
 	}
@@ -255,7 +280,7 @@ func (cfg *Config) UnmarshalYAML(b []byte) (_err error) {
 		}
 
 		(*cfg)[k].Enable = v.Enable
-		(*cfg)[k].DisableChatListener = v.DisableChatListener
+		(*cfg)[k].EnabledChatListenerTypes = v.EnabledChatListenerTypes
 		(*cfg)[k].Custom = v.Custom
 		if (*cfg)[k].Enable == nil {
 			(*cfg)[k].Enable = ptr(true)
@@ -306,11 +331,11 @@ func ToAbstractPlatformConfig[T PlatformSpecificConfig, S StreamProfile](
 	platCfg *PlatformConfig[T, S],
 ) *AbstractPlatformConfig {
 	return &AbstractPlatformConfig{
-		Enable:              platCfg.Enable,
-		DisableChatListener: platCfg.DisableChatListener,
-		Config:              platCfg.Config,
-		StreamProfiles:      ToAbstractStreamProfiles[S](platCfg.StreamProfiles),
-		Custom:              platCfg.Custom,
+		Enable:                   platCfg.Enable,
+		EnabledChatListenerTypes: platCfg.EnabledChatListenerTypes,
+		Config:                   platCfg.Config,
+		StreamProfiles:           ToAbstractStreamProfiles[S](platCfg.StreamProfiles),
+		Custom:                   platCfg.Custom,
 	}
 }
 
@@ -322,11 +347,11 @@ func ConvertPlatformConfig[T PlatformSpecificConfig, S StreamProfile](
 		platCfg = &AbstractPlatformConfig{}
 	}
 	return &PlatformConfig[T, S]{
-		Enable:              platCfg.Enable,
-		DisableChatListener: platCfg.DisableChatListener,
-		Config:              GetPlatformSpecificConfig[T](ctx, platCfg.Config),
-		StreamProfiles:      GetStreamProfiles[S](platCfg.StreamProfiles),
-		Custom:              platCfg.Custom,
+		Enable:                   platCfg.Enable,
+		EnabledChatListenerTypes: platCfg.EnabledChatListenerTypes,
+		Config:                   GetPlatformSpecificConfig[T](ctx, platCfg.Config),
+		StreamProfiles:           GetStreamProfiles[S](platCfg.StreamProfiles),
+		Custom:                   platCfg.Custom,
 	}
 }
 

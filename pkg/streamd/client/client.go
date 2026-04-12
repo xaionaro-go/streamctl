@@ -1975,7 +1975,7 @@ func (c *Client) StreamPlayerGetLag(
 			c,
 			client.StreamPlayerGetLag,
 			&streamd_grpc.StreamPlayerGetLagRequest{
-				StreamSourceID: string(streamID),
+				StreamSourceID:  string(streamID),
 				RequestUnixNano: now.UnixNano(),
 			},
 		)

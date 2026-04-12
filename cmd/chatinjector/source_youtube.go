@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
+	ytlistener "github.com/xaionaro-go/streamctl/pkg/chathandler/platform/youtube"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	youtube "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
 	"github.com/xaionaro-go/youtubeapiproxy/grpc/ytgrpc"
@@ -157,7 +158,14 @@ func (s *YouTubeSource) recvAndEmit(
 					snippet.GetDisplayMessage())
 			}
 
-			ev := convertMessage(ctx, item, s.RawMessage)
+			ev := ytlistener.ConvertGRPCMessage(ctx, item)
+
+			// When raw_message mode is enabled, prefer the raw
+			// TextMessageDetails text over the DisplayMessage used
+			// by the shared converter.
+			if s.RawMessage {
+				overrideWithRawMessageText(item, &ev)
+			}
 
 			select {
 			case events <- ChatEvent{Event: ev, Platform: youtube.ID}:
@@ -199,4 +207,30 @@ func resolveLiveChatID(
 	}
 
 	return resp.LiveChatId, nil
+}
+
+// overrideWithRawMessageText replaces the event's message content with the
+// raw TextMessageDetails text when available. The shared converter prefers
+// DisplayMessage (cleaned/formatted text); this function reverses that
+// preference for chatinjector's raw_message mode.
+func overrideWithRawMessageText(
+	msg *ytgrpc.LiveChatMessage,
+	ev *streamcontrol.Event,
+) {
+	snippet := msg.GetSnippet()
+	if snippet == nil {
+		return
+	}
+
+	td := snippet.GetTextMessageDetails()
+	if td == nil || td.MessageText == "" {
+		return
+	}
+
+	if ev.Message == nil {
+		ev.Message = &streamcontrol.Message{
+			Format: streamcontrol.TextFormatTypePlain,
+		}
+	}
+	ev.Message.Content = td.MessageText
 }

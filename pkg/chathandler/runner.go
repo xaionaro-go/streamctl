@@ -18,6 +18,12 @@ const (
 	defaultBaseBackoff   = time.Second
 	defaultMaxBackoff    = 30 * time.Second
 	defaultKeepaliveTime = 10 * time.Second
+
+	// minHealthyRuntime is the minimum duration a listener must run before
+	// its session is considered healthy. If the listener runs at least this
+	// long before failing, consecutiveFailures resets so that backoff
+	// starts from base again instead of continuing from a stale high value.
+	minHealthyRuntime = 30 * time.Second
 )
 
 // RunnerConfig configures the fallback chain runner.
@@ -56,23 +62,48 @@ func (c RunnerConfig) keepaliveTime() time.Duration {
 	return defaultKeepaliveTime
 }
 
-// Runner implements a two-method fallback chain for chat listening.
-// It reads events from the primary listener, falling back to the
-// secondary listener after MaxRetries consecutive failures with
-// exponential backoff. All transitions are logged at ERROR level
-// and a diagnostic event is injected into streamd.
+// Runner implements chat listening with retry and keepalive injection.
+//
+// Two modes:
+//   - Single-listener mode: Listener is set. Simple retry loop with backoff.
+//     No fallback switching. Used by per-PACE-type processes.
+//   - Legacy fallback mode: Primary is set, Listener is nil. Uses primary/fallback
+//     pair with automatic switching after MaxRetries consecutive failures.
 type Runner struct {
-	platform      streamcontrol.PlatformName
-	streamdClient streamd_grpc.StreamDClient
-	primary       ChatListener
-	fallback      ChatListener
-	config        RunnerConfig
+	Platform      streamcontrol.PlatformName
+	StreamdClient streamd_grpc.StreamDClient
+	Config        RunnerConfig
 
-	// fallbackActive tracks whether we are currently using the fallback listener.
-	fallbackActive atomic.Bool
+	// Single-listener mode fields.
+	Listener     ChatListener
+	ListenerType streamcontrol.ChatListenerType
+
+	// Legacy fallback mode fields (deprecated; use single-listener mode).
+	Primary        ChatListener
+	Fallback       ChatListener
+	FallbackActive atomic.Bool
 }
 
-// NewRunner creates a new fallback chain runner.
+// NewSingleListenerRunner creates a runner for a single listener type.
+// Used by per-PACE-type processes where each process handles exactly one listener.
+func NewSingleListenerRunner(
+	platform streamcontrol.PlatformName,
+	listenerType streamcontrol.ChatListenerType,
+	streamdClient streamd_grpc.StreamDClient,
+	listener ChatListener,
+	cfg RunnerConfig,
+) *Runner {
+	return &Runner{
+		Platform:      platform,
+		StreamdClient: streamdClient,
+		Config:        cfg,
+		Listener:      listener,
+		ListenerType:  listenerType,
+	}
+}
+
+// NewRunner creates a legacy fallback chain runner.
+// Deprecated: Use NewSingleListenerRunner for new code.
 func NewRunner(
 	platform streamcontrol.PlatformName,
 	streamdClient streamd_grpc.StreamDClient,
@@ -81,26 +112,77 @@ func NewRunner(
 	cfg RunnerConfig,
 ) *Runner {
 	return &Runner{
-		platform:      platform,
-		streamdClient: streamdClient,
-		primary:       primary,
-		fallback:      fallback,
-		config:        cfg,
+		Platform:      platform,
+		StreamdClient: streamdClient,
+		Config:        cfg,
+		Primary:       primary,
+		Fallback:      fallback,
 	}
 }
 
 // Run starts the main event loop. It blocks until ctx is cancelled.
 //
-// The loop:
-// 1. Starts the current listener (primary or fallback).
-// 2. Reads events and injects them into streamd via InjectChatMessage.
-// 3. When the event channel closes, increments the retry counter.
-// 4. After MaxRetries consecutive failures, switches to the other listener.
-// 5. Periodically sends keepalive events so streamd can detect liveness.
+// In single-listener mode (Listener != nil, primary == nil): simple retry loop
+// with exponential backoff. No fallback switching.
+//
+// In legacy fallback mode (primary != nil): switches between primary and fallback
+// after MaxRetries consecutive failures.
+//
+// Both modes inject keepalive events periodically for health monitoring.
 func (r *Runner) Run(ctx context.Context) (_err error) {
 	logger.Tracef(ctx, "Run")
 	defer func() { logger.Tracef(ctx, "/Run: %v", _err) }()
 
+	switch {
+	case r.Primary != nil:
+		return r.runLegacyFallbackLoop(ctx)
+	case r.Listener != nil:
+		return r.runSingleListenerLoop(ctx)
+	default:
+		return fmt.Errorf("no listener configured")
+	}
+}
+
+// runSingleListenerLoop retries the single listener with exponential backoff.
+func (r *Runner) runSingleListenerLoop(ctx context.Context) error {
+	consecutiveFailures := 0
+
+	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		logger.Debugf(ctx, "starting listener %q (%s) for %s",
+			r.Listener.Name(), r.ListenerType, r.Platform)
+
+		start := time.Now()
+		err := r.runListener(ctx, r.Listener)
+		if closeErr := r.Listener.Close(ctx); closeErr != nil {
+			logger.Warnf(ctx, "listener %q close error: %v", r.Listener.Name(), closeErr)
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		// Reset backoff when the listener ran long enough to be considered
+		// healthy — a failure after sustained uptime is not a rapid crash loop.
+		if time.Since(start) >= minHealthyRuntime {
+			consecutiveFailures = 0
+		}
+		consecutiveFailures++
+		logger.Warnf(ctx, "listener %q (%s) for %s stopped (failure %d): %v",
+			r.Listener.Name(), r.ListenerType, r.Platform, consecutiveFailures, err)
+
+		backoff := r.calculateBackoff(consecutiveFailures)
+		logger.Debugf(ctx, "retrying in %s", backoff)
+		if !sleep(ctx, backoff) {
+			return ctx.Err()
+		}
+	}
+}
+
+// runLegacyFallbackLoop implements the old primary/fallback switching behavior.
+func (r *Runner) runLegacyFallbackLoop(ctx context.Context) error {
 	consecutiveFailures := 0
 
 	for {
@@ -109,10 +191,10 @@ func (r *Runner) Run(ctx context.Context) (_err error) {
 		}
 
 		current := r.currentListener()
-		logger.Debugf(ctx, "starting listener %q for %s", current.Name(), r.platform)
+		logger.Debugf(ctx, "starting listener %q for %s", current.Name(), r.Platform)
 
+		start := time.Now()
 		err := r.runListener(ctx, current)
-		// Ensure resources are released after the listener stops.
 		if closeErr := current.Close(ctx); closeErr != nil {
 			logger.Warnf(ctx, "listener %q close error: %v", current.Name(), closeErr)
 		}
@@ -120,11 +202,14 @@ func (r *Runner) Run(ctx context.Context) (_err error) {
 			return ctx.Err()
 		}
 
+		if time.Since(start) >= minHealthyRuntime {
+			consecutiveFailures = 0
+		}
 		consecutiveFailures++
 		logger.Warnf(ctx, "listener %q for %s stopped (failure %d/%d): %v",
-			current.Name(), r.platform, consecutiveFailures, r.config.maxRetries(), err)
+			current.Name(), r.Platform, consecutiveFailures, r.Config.maxRetries(), err)
 
-		if consecutiveFailures >= r.config.maxRetries() {
+		if consecutiveFailures >= r.Config.maxRetries() {
 			r.switchListener(ctx, current.Name(), err)
 			consecutiveFailures = 0
 		}
@@ -139,14 +224,14 @@ func (r *Runner) Run(ctx context.Context) (_err error) {
 
 // IsFallbackActive returns whether the runner is currently using the fallback listener.
 func (r *Runner) IsFallbackActive() bool {
-	return r.fallbackActive.Load()
+	return r.FallbackActive.Load()
 }
 
 func (r *Runner) currentListener() ChatListener {
-	if r.fallbackActive.Load() {
-		return r.fallback
+	if r.FallbackActive.Load() {
+		return r.Fallback
 	}
-	return r.primary
+	return r.Primary
 }
 
 // switchListener transitions between primary and fallback.
@@ -156,8 +241,8 @@ func (r *Runner) switchListener(
 	failedName string,
 	failErr error,
 ) {
-	wasFallback := r.fallbackActive.Load()
-	r.fallbackActive.Store(!wasFallback)
+	wasFallback := r.FallbackActive.Load()
+	r.FallbackActive.Store(!wasFallback)
 
 	target := r.currentListener()
 
@@ -166,18 +251,18 @@ func (r *Runner) switchListener(
 		// Primary → Fallback
 		logger.Errorf(ctx,
 			"FALLBACK ACTIVATED: %s %s failed, switching to %s: %v",
-			r.platform, failedName, target.Name(), failErr)
+			r.Platform, failedName, target.Name(), failErr)
 		r.injectDiagnosticEvent(ctx, fmt.Sprintf(
 			"FALLBACK ACTIVATED: %s %s failed, switching to %s",
-			r.platform, failedName, target.Name()))
+			r.Platform, failedName, target.Name()))
 	case true:
 		// Fallback → Primary (recovery)
 		logger.Infof(ctx,
 			"PRIMARY RESTORED: %s %s reconnected, deactivating fallback %s",
-			r.platform, target.Name(), failedName)
+			r.Platform, target.Name(), failedName)
 		r.injectDiagnosticEvent(ctx, fmt.Sprintf(
 			"PRIMARY RESTORED: %s %s reconnected",
-			r.platform, target.Name()))
+			r.Platform, target.Name()))
 	}
 }
 
@@ -195,7 +280,7 @@ func (r *Runner) runListener(
 		return fmt.Errorf("listener %q failed to start: %w", listener.Name(), err)
 	}
 
-	keepaliveTicker := time.NewTicker(r.config.keepaliveTime())
+	keepaliveTicker := time.NewTicker(r.Config.keepaliveTime())
 	defer keepaliveTicker.Stop()
 
 	eventsReceived := false
@@ -222,19 +307,19 @@ func (r *Runner) injectEvent(
 	ctx context.Context,
 	ev streamcontrol.Event,
 ) {
-	_, err := r.streamdClient.InjectChatMessage(ctx, &streamd_grpc.InjectChatMessageRequest{
-		PlatID: string(r.platform),
+	_, err := r.StreamdClient.InjectChatMessage(ctx, &streamd_grpc.InjectChatMessageRequest{
+		PlatID: string(r.Platform),
 		Event:  scgoconv.EventGo2GRPC(ev),
 	})
 	if err != nil {
 		logger.Errorf(ctx, "InjectChatMessage failed for %s event %s: %v",
-			r.platform, ev.ID, err)
+			r.Platform, ev.ID, err)
 	}
 }
 
 func (r *Runner) injectKeepalive(ctx context.Context) {
 	keepaliveEv := streamcontrol.Event{
-		ID:        streamcontrol.EventID(fmt.Sprintf("keepalive-%s-%d", r.platform, time.Now().UnixNano())),
+		ID:        streamcontrol.EventID(fmt.Sprintf("keepalive-%s-%s-%d", r.ListenerType, r.Platform, time.Now().UnixNano())),
 		CreatedAt: time.Now(),
 		Type:      streamcontrol.EventTypeOther,
 		User: streamcontrol.User{
@@ -242,16 +327,16 @@ func (r *Runner) injectKeepalive(ctx context.Context) {
 			Name: "system",
 		},
 		Message: &streamcontrol.Message{
-			Content: fmt.Sprintf("[keepalive] chat-handler-%s alive", r.platform),
+			Content: fmt.Sprintf("[keepalive] chat-handler-%s/%s alive", r.Platform, r.ListenerType),
 			Format:  streamcontrol.TextFormatTypePlain,
 		},
 	}
-	_, err := r.streamdClient.InjectChatMessage(ctx, &streamd_grpc.InjectChatMessageRequest{
-		PlatID: string(r.platform),
+	_, err := r.StreamdClient.InjectChatMessage(ctx, &streamd_grpc.InjectChatMessageRequest{
+		PlatID: string(r.Platform),
 		Event:  scgoconv.EventGo2GRPC(keepaliveEv),
 	})
 	if err != nil {
-		logger.Warnf(ctx, "keepalive inject failed for %s: %v", r.platform, err)
+		logger.Warnf(ctx, "keepalive inject failed for %s: %v", r.Platform, err)
 	}
 }
 
@@ -260,7 +345,7 @@ func (r *Runner) injectDiagnosticEvent(
 	message string,
 ) {
 	diagEv := streamcontrol.Event{
-		ID:        streamcontrol.EventID(fmt.Sprintf("diag-%s-%d", r.platform, time.Now().UnixNano())),
+		ID:        streamcontrol.EventID(fmt.Sprintf("diag-%s-%d", r.Platform, time.Now().UnixNano())),
 		CreatedAt: time.Now(),
 		Type:      streamcontrol.EventTypeOther,
 		User: streamcontrol.User{
@@ -272,18 +357,18 @@ func (r *Runner) injectDiagnosticEvent(
 			Format:  streamcontrol.TextFormatTypePlain,
 		},
 	}
-	_, err := r.streamdClient.InjectChatMessage(ctx, &streamd_grpc.InjectChatMessageRequest{
-		PlatID: string(r.platform),
+	_, err := r.StreamdClient.InjectChatMessage(ctx, &streamd_grpc.InjectChatMessageRequest{
+		PlatID: string(r.Platform),
 		Event:  scgoconv.EventGo2GRPC(diagEv),
 	})
 	if err != nil {
-		logger.Errorf(ctx, "failed to inject diagnostic event for %s: %v", r.platform, err)
+		logger.Errorf(ctx, "failed to inject diagnostic event for %s: %v", r.Platform, err)
 	}
 }
 
 func (r *Runner) calculateBackoff(consecutiveFailures int) time.Duration {
-	base := r.config.baseBackoff()
-	maxB := r.config.maxBackoff()
+	base := r.Config.baseBackoff()
+	maxB := r.Config.maxBackoff()
 	backoff := base
 	for i := 1; i < consecutiveFailures; i++ {
 		backoff *= 2

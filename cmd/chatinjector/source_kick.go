@@ -5,79 +5,37 @@ import (
 	"fmt"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
-	chatwebhookclient "github.com/xaionaro-go/chatwebhook/pkg/grpc/client"
-	"github.com/xaionaro-go/chatwebhook/pkg/grpc/protobuf/go/chatwebhook_grpc"
+	"github.com/xaionaro-go/streamctl/pkg/chathandler"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
-	kick "github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick/types"
-	scgoconv "github.com/xaionaro-go/streamctl/pkg/streamcontrol/protobuf/goconv"
+	kicktypes "github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick/types"
 )
 
-// KickSource implements ChatSource by subscribing to a chatwebhook gRPC
-// service that relays Kick chat events.
-type KickSource struct {
-	// ChatWebhookAddr is the address of the chatwebhook gRPC server.
-	// Defaults to chatwebhookclient.DefaultServerAddress if empty.
-	ChatWebhookAddr string
-}
-
-func (s *KickSource) PlatformID() streamcontrol.PlatformName {
-	return kick.ID
-}
-
-// Run connects to the chatwebhook gRPC service, subscribes to Kick chat
-// events, and emits ChatEvents until the context is cancelled or the
-// event stream closes.
-func (s *KickSource) Run(
+// newKickSourceFromFactory creates a ChatSource for Kick using the shared
+// ChatListenerFactory.
+func newKickSourceFromFactory(
 	ctx context.Context,
-	events chan<- ChatEvent,
-) (_err error) {
-	logger.Tracef(ctx, "KickSource.Run")
-	defer func() { logger.Tracef(ctx, "/KickSource.Run: %v", _err) }()
+	pc PlatformConfig,
+) (ChatSource, error) {
+	logger.Tracef(ctx, "newKickSourceFromFactory")
+	defer func() { logger.Tracef(ctx, "/newKickSourceFromFactory") }()
 
-	addr := s.ChatWebhookAddr
-	if addr == "" {
-		addr = chatwebhookclient.DefaultServerAddress
+	factory := chathandler.GetChatListenerFactory(kicktypes.ID)
+	if factory == nil {
+		return nil, fmt.Errorf("no ChatListenerFactory registered for %s", kicktypes.ID)
 	}
 
-	client, err := chatwebhookclient.New(ctx, addr)
+	platCfg, err := toAbstractPlatformConfig(pc)
 	if err != nil {
-		return fmt.Errorf("create chatwebhook client at %q: %w", addr, err)
+		return nil, err
 	}
 
-	logger.Debugf(ctx, "subscribing to Kick chat via chatwebhook at %s", addr)
-
-	msgCh, err := client.GetMessagesChan(
-		ctx,
-		chatwebhook_grpc.PlatformID_platformIDKick,
-		"",
-	)
+	listener, err := factory.CreateChatListener(ctx, platCfg, streamcontrol.ChatListenerPrimary)
 	if err != nil {
-		return fmt.Errorf("subscribe to Kick chat messages: %w", err)
+		return nil, fmt.Errorf("create kick listener: %w", err)
 	}
 
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case grpcEv, ok := <-msgCh:
-			if !ok {
-				logger.Debugf(ctx, "Kick chat message channel closed")
-				return nil
-			}
-			if grpcEv == nil {
-				logger.Warnf(ctx, "received nil Kick event, skipping")
-				continue
-			}
-
-			ev := scgoconv.EventGRPC2Go(grpcEv)
-			logger.Debugf(ctx, "received kick event: id=%s type=%s user=%s msg=%q",
-				ev.ID, ev.Type, ev.User.Name, messageContent(ev))
-
-			select {
-			case events <- ChatEvent{Event: ev, Platform: kick.ID}:
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}
-	}
+	return &ChatSourceFromListener{
+		Listener:     listener,
+		PlatformName: kicktypes.ID,
+	}, nil
 }

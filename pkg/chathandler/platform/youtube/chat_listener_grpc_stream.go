@@ -1,4 +1,4 @@
-package main
+package youtube
 
 import (
 	"context"
@@ -13,25 +13,28 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// grpcStreamListener implements chathandler.ChatListener using youtubeapiproxy's
+// GRPCStreamListener implements chathandler.ChatListener using youtubeapiproxy's
 // gRPC StreamList RPC. This provides server-pushed chat messages instead of polling.
-type grpcStreamListener struct {
-	ytProxyAddr string
-	liveChatID  string
+type GRPCStreamListener struct {
+	YTProxyAddr string
+	LiveChatID  string
 	conn        *grpc.ClientConn
 	cancel      context.CancelFunc
 }
 
-func (l *grpcStreamListener) Name() string { return "YouTube-gRPC" }
+func (l *GRPCStreamListener) Name() string { return "YouTube-gRPC" }
 
-func (l *grpcStreamListener) Listen(
+func (l *GRPCStreamListener) Listen(
 	ctx context.Context,
-) (<-chan streamcontrol.Event, error) {
-	conn, err := grpc.NewClient(l.ytProxyAddr,
+) (_ <-chan streamcontrol.Event, _err error) {
+	logger.Tracef(ctx, "GRPCStreamListener.Listen")
+	defer func() { logger.Tracef(ctx, "/GRPCStreamListener.Listen: %v", _err) }()
+
+	conn, err := grpc.NewClient(l.YTProxyAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("connect to youtubeapiproxy at %s: %w", l.ytProxyAddr, err)
+		return nil, fmt.Errorf("connect to youtubeapiproxy at %s: %w", l.YTProxyAddr, err)
 	}
 	l.conn = conn
 
@@ -41,7 +44,7 @@ func (l *grpcStreamListener) Listen(
 	l.cancel = cancel
 
 	stream, err := chatClient.StreamList(streamCtx, &ytgrpc.LiveChatMessageListRequest{
-		LiveChatId: l.liveChatID,
+		LiveChatId: l.LiveChatID,
 		Part:       []string{"snippet", "authorDetails"},
 	})
 	if err != nil {
@@ -54,13 +57,13 @@ func (l *grpcStreamListener) Listen(
 
 	observability.Go(ctx, func(ctx context.Context) {
 		defer close(ch)
-		l.receiveLoop(ctx, stream, ch)
+		receiveLoop(ctx, stream, ch)
 	})
 
 	return ch, nil
 }
 
-func (l *grpcStreamListener) receiveLoop(
+func receiveLoop(
 	ctx context.Context,
 	stream ytgrpc.V3DataLiveChatMessageService_StreamListClient,
 	ch chan<- streamcontrol.Event,
@@ -77,7 +80,7 @@ func (l *grpcStreamListener) receiveLoop(
 		}
 
 		for _, item := range resp.Items {
-			ev := convertGRPCMessage(ctx, item)
+			ev := ConvertGRPCMessage(ctx, item)
 			select {
 			case ch <- ev:
 			case <-ctx.Done():
@@ -87,15 +90,17 @@ func (l *grpcStreamListener) receiveLoop(
 	}
 }
 
-func (l *grpcStreamListener) Close(_ context.Context) error {
+func (l *GRPCStreamListener) Close(_ context.Context) error {
 	if l.cancel != nil {
 		l.cancel()
 		l.cancel = nil
 	}
+
 	if l.conn != nil {
 		err := l.conn.Close()
 		l.conn = nil
 		return err
 	}
+
 	return nil
 }

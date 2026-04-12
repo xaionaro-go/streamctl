@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
+	"github.com/xaionaro-go/streamctl/pkg/chathandler"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/xpath"
 )
@@ -53,32 +55,20 @@ type PlatformConfig struct {
 	ChatWebhookAddr string `yaml:"chat_webhook_addr,omitempty"`
 
 	// Twitch auth (required for eventsub source).
-	ClientID    string `yaml:"client_id,omitempty"`
-	AccessToken string `yaml:"access_token,omitempty"`
-}
-
-// newTwitchSourceByName creates a single Twitch ChatSource by source name.
-func (pc PlatformConfig) newTwitchSourceByName(name string) (ChatSource, error) {
-	switch name {
-	case "eventsub":
-		return &TwitchEventSubSource{
-			Channel:     pc.Channel,
-			ClientID:    pc.ClientID,
-			AccessToken: pc.AccessToken,
-		}, nil
-	case "irc":
-		return &TwitchSource{
-			Channel: pc.Channel,
-		}, nil
-	default:
-		return nil, fmt.Errorf("unknown twitch source type %q", name)
-	}
+	ClientID     string `yaml:"client_id,omitempty"`
+	ClientSecret string `yaml:"client_secret,omitempty"`
+	AccessToken  string `yaml:"access_token,omitempty"`
 }
 
 // NewSource creates the ChatSource described by this PlatformConfig.
-// When multiple Sources are specified, a FallbackSource wraps them so that
-// failures cascade to the next source in the list.
-func (pc PlatformConfig) NewSource() (ChatSource, error) {
+// For Twitch and Kick, it delegates to the shared ChatListenerFactory
+// registered in pkg/chathandler/platform/. For YouTube, it uses the
+// chatinjector-specific source with channel monitoring and broadcast
+// discovery (not available in the shared factory).
+//
+// When multiple Sources are specified for Twitch, a FallbackSource wraps
+// them so failures cascade to the next source in the list.
+func (pc PlatformConfig) NewSource(ctx context.Context) (ChatSource, error) {
 	switch pc.Type {
 	case "youtube":
 		return &YouTubeSource{
@@ -90,29 +80,53 @@ func (pc PlatformConfig) NewSource() (ChatSource, error) {
 			RawMessage:   pc.RawMessage,
 		}, nil
 	case "twitch":
-		sources := pc.Sources
-		if len(sources) == 0 {
-			sources = []string{"irc"}
-		}
-		if len(sources) == 1 {
-			return pc.newTwitchSourceByName(sources[0])
-		}
-		var chatSources []ChatSource
-		for _, name := range sources {
-			src, err := pc.newTwitchSourceByName(name)
-			if err != nil {
-				return nil, err
-			}
-			chatSources = append(chatSources, src)
-		}
-		return &FallbackSource{Sources: chatSources}, nil
+		return newTwitchSources(ctx, pc)
 	case "kick":
-		return &KickSource{
-			ChatWebhookAddr: pc.ChatWebhookAddr,
-		}, nil
+		return newKickSourceFromFactory(ctx, pc)
 	default:
 		return nil, fmt.Errorf("unknown platform type %q", pc.Type)
 	}
+}
+
+// newTwitchSources creates one or more Twitch ChatSources based on the
+// configured source names, wrapping them in a FallbackSource when needed.
+func newTwitchSources(
+	ctx context.Context,
+	pc PlatformConfig,
+) (ChatSource, error) {
+	sources := pc.Sources
+	if len(sources) == 0 {
+		sources = []string{"irc"}
+	}
+
+	if len(sources) == 1 {
+		listenerType, err := twitchSourceNameToListenerType(sources[0])
+		if err != nil {
+			return nil, err
+		}
+		return newTwitchSourceFromFactory(ctx, pc, listenerType)
+	}
+
+	var chatSources []ChatSource
+	for _, name := range sources {
+		listenerType, err := twitchSourceNameToListenerType(name)
+		if err != nil {
+			return nil, err
+		}
+		src, err := newTwitchSourceFromFactory(ctx, pc, listenerType)
+		switch {
+		case err == nil:
+			chatSources = append(chatSources, src)
+		case errors.As(err, &chathandler.ErrChatListenerTypeNotImplemented{}):
+			logger.Warnf(ctx, "twitch source %q unavailable, skipping: %v", name, err)
+		default:
+			return nil, err
+		}
+	}
+	if len(chatSources) == 0 {
+		return nil, fmt.Errorf("no twitch sources available (tried %v)", sources)
+	}
+	return &FallbackSource{Sources: chatSources}, nil
 }
 
 // streamdConfigForCredentials is a minimal struct for extracting platform
@@ -187,6 +201,9 @@ func (pc *PlatformConfig) resolveCredentials(
 		if pc.ClientID == "" {
 			pc.ClientID = streamdConfigString(m, "clientid")
 		}
+		if pc.ClientSecret == "" {
+			pc.ClientSecret = streamdConfigString(m, "clientsecret")
+		}
 		if pc.AccessToken == "" {
 			pc.AccessToken = streamdConfigString(m, "useraccesstoken")
 		}
@@ -216,14 +233,14 @@ type TranslationConfig struct {
 }
 
 type ProviderConfig struct {
-	Type         string        `yaml:"type"` // ollama, openai, anthropic, claude-code, streamdcfg, streampanelcfg
-	APIURL       string        `yaml:"api_url"`
-	APIKey       string        `yaml:"api_key"`
-	Model        string        `yaml:"model"`
-	Parallelism  int           `yaml:"parallelism"`
-	MaxQueueSize int           `yaml:"max_queue_size"` // max pending translations waiting for this provider; 0 = no queueing
-	Timeout      time.Duration `yaml:"timeout"`        // per-request timeout; 0 means no timeout
-	ConfigPath   string        `yaml:"config_path"`    // for streamdcfg/streampanelcfg: path to YAML config
+	Type                    string        `yaml:"type"` // ollama, openai, anthropic, claude-code, streamdcfg, streampanelcfg
+	APIURL                  string        `yaml:"api_url"`
+	APIKey                  string        `yaml:"api_key"`
+	Model                   string        `yaml:"model"`
+	Parallelism             int           `yaml:"parallelism"`
+	MaxQueueSize            int           `yaml:"max_queue_size"`            // max pending translations waiting for this provider; 0 = no queueing
+	Timeout                 time.Duration `yaml:"timeout"`                   // per-request timeout; 0 means no timeout
+	ConfigPath              string        `yaml:"config_path"`               // for streamdcfg/streampanelcfg: path to YAML config
 	Effort                  string        `yaml:"effort"`                    // for claude-code: low, medium, high, max (default: low)
 	CircuitBreakerThreshold int64         `yaml:"circuit_breaker_threshold"` // consecutive failures to open circuit (default: 3)
 	CircuitBreakerCooldown  time.Duration `yaml:"circuit_breaker_cooldown"`  // cooldown before probing again (default: 30s)

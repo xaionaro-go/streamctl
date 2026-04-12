@@ -72,10 +72,12 @@ func (d *StreamD) reinitStreamControllers(ctx context.Context) error {
 			)
 			continue
 		}
-		err = d.startListeningForChatMessages(ctx, platName)
-		if err != nil {
-			logger.Errorf(ctx, "unable to initialize the reader of chat messages for '%s': %v", string(platName), err)
-			continue
+		if platName != obs.ID {
+			err = d.startChatListeners(ctx, platName)
+			if err != nil {
+				logger.Errorf(ctx, "unable to start chat listeners for '%s': %v", string(platName), err)
+				continue
+			}
 		}
 	}
 	return result.ErrorOrNil()
@@ -149,11 +151,11 @@ func newTwitch(
 	twitch, err := twitch.New(ctx, *platCfg,
 		func(c twitch.Config) error {
 			return saveCfgFunc(&streamcontrol.AbstractPlatformConfig{
-				Enable:              c.Enable,
-				DisableChatListener: c.DisableChatListener,
-				Config:              c.Config,
-				StreamProfiles:      streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
-				Custom:              c.Custom,
+				Enable:                   c.Enable,
+				EnabledChatListenerTypes: c.EnabledChatListenerTypes,
+				Config:                   c.Config,
+				StreamProfiles:           streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
+				Custom:                   c.Custom,
 			})
 		},
 	)
@@ -194,11 +196,11 @@ func newKick(
 	kick, err := kick.New(ctx, *platCfg,
 		func(c kick.Config) error {
 			return saveCfgFunc(&streamcontrol.AbstractPlatformConfig{
-				Enable:              c.Enable,
-				DisableChatListener: c.DisableChatListener,
-				Config:              c.Config,
-				StreamProfiles:      streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
-				Custom:              c.Custom,
+				Enable:                   c.Enable,
+				EnabledChatListenerTypes: c.EnabledChatListenerTypes,
+				Config:                   c.Config,
+				StreamProfiles:           streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
+				Custom:                   c.Custom,
 			})
 		},
 	)
@@ -241,11 +243,11 @@ func newYouTube(
 			logger.Debugf(ctx, "saveCfgFunc")
 			defer logger.Debugf(ctx, "saveCfgFunc")
 			return saveCfgFunc(&streamcontrol.AbstractPlatformConfig{
-				Enable:              c.Enable,
-				DisableChatListener: c.DisableChatListener,
-				Config:              c.Config,
-				StreamProfiles:      streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
-				Custom:              platCfg.Custom,
+				Enable:                   c.Enable,
+				EnabledChatListenerTypes: c.EnabledChatListenerTypes,
+				Config:                   c.Config,
+				StreamProfiles:           streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
+				Custom:                   platCfg.Custom,
 			})
 		},
 	)

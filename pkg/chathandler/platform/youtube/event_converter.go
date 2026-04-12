@@ -1,4 +1,4 @@
-package main
+package youtube
 
 import (
 	"context"
@@ -17,9 +17,9 @@ const (
 	microsPerUnit        = 1_000_000
 )
 
-// convertGRPCMessage converts a youtubeapiproxy gRPC LiveChatMessage to a
-// streamcontrol.Event. This mirrors the conversion in cmd/ytchatinjector/convert.go.
-func convertGRPCMessage(
+// ConvertGRPCMessage converts a youtubeapiproxy gRPC LiveChatMessage to a
+// streamcontrol.Event.
+func ConvertGRPCMessage(
 	ctx context.Context,
 	msg *ytgrpc.LiveChatMessage,
 ) streamcontrol.Event {
