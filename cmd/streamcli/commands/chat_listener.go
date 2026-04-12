@@ -127,6 +127,8 @@ func chatListenerEnable(cmd *cobra.Command, args []string) {
 
 	err = streamD.SetConfig(ctx, cfg)
 	assertNoError(ctx, err)
+	err = streamD.SaveConfig(ctx)
+	assertNoError(ctx, err)
 	fmt.Printf("enabled %s for %s\n", t, platName)
 }
 
@@ -167,6 +169,8 @@ func chatListenerDisable(cmd *cobra.Command, args []string) {
 	platCfg.EnabledChatListenerTypes = filtered
 
 	err = streamD.SetConfig(ctx, cfg)
+	assertNoError(ctx, err)
+	err = streamD.SaveConfig(ctx)
 	assertNoError(ctx, err)
 	fmt.Printf("disabled %s for %s\n", t, platName)
 }
