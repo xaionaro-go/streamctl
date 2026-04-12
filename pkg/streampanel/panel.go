@@ -1177,15 +1177,17 @@ func (p *Panel) getUpdatedStatus_backends_noLock(ctx context.Context) {
 		}
 		backendEnabled[backendID] = isEnabled
 	}
-	if backendEnabled[twitch.ID] {
-		p.twitchCheck.Enable()
-	}
-	if backendEnabled[kick.ID] {
-		p.kickCheck.Enable()
-	}
-	if backendEnabled[youtube.ID] {
-		p.youtubeCheck.Enable()
-	}
+	fyne.Do(func() {
+		if backendEnabled[twitch.ID] {
+			p.twitchCheck.Enable()
+		}
+		if backendEnabled[kick.ID] {
+			p.kickCheck.Enable()
+		}
+		if backendEnabled[youtube.ID] {
+			p.youtubeCheck.Enable()
+		}
+	})
 
 	if backendEnabled[obs.ID] {
 		observability.Call(ctx, func(ctx context.Context) {
@@ -1208,25 +1210,30 @@ func (p *Panel) getUpdatedStatus_backends_noLock(ctx context.Context) {
 			for _, scene := range sceneListResp.Scenes {
 				options = append(options, *scene.SceneName)
 			}
-			p.obsSelectScene.Options = options
 
-			if sceneListResp.CurrentProgramSceneName != p.obsSelectScene.Selected {
-				logger.Debugf(ctx, "the scene was changed from '%s' to '%s'", p.obsSelectScene.Selected, sceneListResp.CurrentProgramSceneName)
-				p.obsSelectScene.Selected = sceneListResp.CurrentProgramSceneName
-				p.obsSelectScene.Refresh()
-			}
+			currentScene := sceneListResp.CurrentProgramSceneName
+			fyne.Do(func() {
+				p.obsSelectScene.Options = options
+				if currentScene != p.obsSelectScene.Selected {
+					logger.Debugf(ctx, "the scene was changed from '%s' to '%s'", p.obsSelectScene.Selected, currentScene)
+					p.obsSelectScene.Selected = currentScene
+					p.obsSelectScene.Refresh()
+				}
+			})
 
-			p.refreshOBSSceneItems(ctx, obsServer, sceneListResp.CurrentProgramSceneName)
+			p.refreshOBSSceneItems(ctx, obsServer, currentScene)
 		})
 	} else {
 		if p.updateStreamClockHandler != nil {
 			p.updateStreamClockHandler.Close()
 			p.updateStreamClockHandler = nil
 		}
-		p.startStopButton.SetText(startStreamString())
-		p.startStopButton.Icon = theme.MediaRecordIcon()
-		p.startStopButton.Importance = widget.SuccessImportance
-		p.startStopButton.Disable()
+		fyne.Do(func() {
+			p.startStopButton.SetText(startStreamString())
+			p.startStopButton.Icon = theme.MediaRecordIcon()
+			p.startStopButton.Importance = widget.SuccessImportance
+			p.startStopButton.Disable()
+		})
 	}
 }
 
@@ -1250,18 +1257,34 @@ func (p *Panel) getUpdatedStatus_startStopStreamButton_noLock(ctx context.Contex
 		logger.Tracef(ctx, "obsStreamStatus == %#+v", obsStreamStatus)
 
 		if obsStreamStatus.IsActive {
-			p.startStopButton.Icon = theme.MediaStopIcon()
-			p.startStopButton.Importance = widget.DangerImportance
-			p.startStopButton.Enable()
-			if p.updateStreamClockHandler == nil {
+			needTimerHandler := p.updateStreamClockHandler == nil
+			var buttonText string
+			var startTimerAt time.Time
+			if needTimerHandler {
 				if obsStreamStatus.StartedAt == nil {
-					p.startStopButton.SetText("Stop stream")
+					buttonText = "Stop stream"
 				} else {
-					p.startStopButton.SetText("...")
+					buttonText = "..."
+					startTimerAt = *obsStreamStatus.StartedAt
 					logger.Debugf(ctx, "stream was already started at %s", obsStreamStatus.StartedAt.Format(time.RFC3339))
-					p.updateStreamClockHandler = newUpdateTimerHandler(p.startStopButton, *obsStreamStatus.StartedAt)
 				}
 			}
+
+			fyne.Do(func() {
+				p.startStopButton.Icon = theme.MediaStopIcon()
+				p.startStopButton.Importance = widget.DangerImportance
+				p.startStopButton.Enable()
+				if needTimerHandler {
+					if buttonText == "..." {
+						// newUpdateTimerHandler sets the button text and starts a
+						// background ticker that updates it, so we create it here
+						// on the main thread to avoid a race on the initial write.
+						p.updateStreamClockHandler = newUpdateTimerHandler(p.startStopButton, startTimerAt)
+					} else {
+						p.startStopButton.SetText(buttonText)
+					}
+				}
+			})
 			return
 		}
 	}
@@ -1270,41 +1293,56 @@ func (p *Panel) getUpdatedStatus_startStopStreamButton_noLock(ctx context.Contex
 		p.updateStreamClockHandler.Close()
 		p.updateStreamClockHandler = nil
 	}
-	p.startStopButton.SetText(startStreamString())
-	p.startStopButton.Icon = theme.MediaRecordIcon()
-	p.startStopButton.Importance = widget.SuccessImportance
+
+	shouldEnable := false
 
 	ytIsEnabled, err := p.StreamD.IsBackendEnabled(ctx, youtube.ID)
 	if err != nil {
 		logger.Error(ctx, fmt.Errorf("unable to check if YouTube is enabled: %v", err))
+		fyne.Do(func() {
+			p.startStopButton.SetText(startStreamString())
+			p.startStopButton.Icon = theme.MediaRecordIcon()
+			p.startStopButton.Importance = widget.SuccessImportance
+		})
 		return
 	}
 
 	if !ytIsEnabled || !p.youtubeCheck.Checked {
-		if obsIsEnabled {
-			p.startStopButton.Enable()
+		shouldEnable = obsIsEnabled
+	} else {
+		ytStreamStatus, err := p.StreamD.GetStreamStatus(ctx, youtube.ID)
+		if err != nil {
+			logger.Error(ctx, fmt.Errorf("unable to get stream status from YouTube: %v", err))
+			fyne.Do(func() {
+				p.startStopButton.SetText(startStreamString())
+				p.startStopButton.Icon = theme.MediaRecordIcon()
+				p.startStopButton.Importance = widget.SuccessImportance
+			})
+			return
 		}
-		return
+		logger.Tracef(ctx, "ytStreamStatus == %#+v", ytStreamStatus)
+
+		if d, ok := ytStreamStatus.CustomData.(youtube.StreamStatusCustomData); ok {
+			logger.Tracef(
+				ctx,
+				"len(d.UpcomingBroadcasts) == %d; len(d.Streams) == %d",
+				len(d.UpcomingBroadcasts),
+				len(d.Streams),
+			)
+			if len(d.UpcomingBroadcasts) != 0 {
+				shouldEnable = true
+			}
+		}
 	}
 
-	ytStreamStatus, err := p.StreamD.GetStreamStatus(ctx, youtube.ID)
-	if err != nil {
-		logger.Error(ctx, fmt.Errorf("unable to get stream status from YouTube: %v", err))
-		return
-	}
-	logger.Tracef(ctx, "ytStreamStatus == %#+v", ytStreamStatus)
-
-	if d, ok := ytStreamStatus.CustomData.(youtube.StreamStatusCustomData); ok {
-		logger.Tracef(
-			ctx,
-			"len(d.UpcomingBroadcasts) == %d; len(d.Streams) == %d",
-			len(d.UpcomingBroadcasts),
-			len(d.Streams),
-		)
-		if len(d.UpcomingBroadcasts) != 0 {
+	fyne.Do(func() {
+		p.startStopButton.SetText(startStreamString())
+		p.startStopButton.Icon = theme.MediaRecordIcon()
+		p.startStopButton.Importance = widget.SuccessImportance
+		if shouldEnable {
 			p.startStopButton.Enable()
 		}
-	}
+	})
 }
 
 func (p *Panel) createMainWindow(
@@ -2083,8 +2121,12 @@ func (p *Panel) setupStreamNoLock(ctx context.Context) {
 	if backendEnabled[obs.ID] {
 		obsIsActive := p.streamIsRunning(ctx, obs.ID)
 		if !obsIsActive {
-			p.startStopButton.Disable()
-			defer p.startStopButton.Enable()
+			fyne.Do(func() {
+				p.startStopButton.Disable()
+			})
+			defer fyne.Do(func() {
+				p.startStopButton.Enable()
+			})
 		}
 	}
 
@@ -2154,15 +2196,17 @@ func (p *Panel) setupStreamNoLock(ctx context.Context) {
 			deadline := time.Now().Add(waitFor)
 
 			p.streamMutex.Do(ctx, func() {
-				defer func() {
+				defer fyne.Do(func() {
 					p.startStopButton.SetText(startStreamString())
 					p.startStopButton.Icon = theme.MediaRecordIcon()
 					p.startStopButton.Importance = widget.SuccessImportance
 					p.startStopButton.Enable()
-				}()
-				p.startStopButton.Disable()
-				p.startStopButton.Icon = theme.ViewRefreshIcon()
-				p.startStopButton.Importance = widget.DangerImportance
+				})
+				fyne.Do(func() {
+					p.startStopButton.Disable()
+					p.startStopButton.Icon = theme.ViewRefreshIcon()
+					p.startStopButton.Importance = widget.DangerImportance
+				})
 
 				t := time.NewTicker(100 * time.Millisecond)
 				defer t.Stop()
@@ -2172,7 +2216,9 @@ func (p *Panel) setupStreamNoLock(ctx context.Context) {
 					if timeDiff < 0 {
 						return
 					}
-					p.startStopButton.SetText(fmt.Sprintf("%.1fs", timeDiff.Seconds()))
+					fyne.Do(func() {
+						p.startStopButton.SetText(fmt.Sprintf("%.1fs", timeDiff.Seconds()))
+					})
 				}
 			})
 		})
@@ -2188,19 +2234,30 @@ func (p *Panel) startStream(ctx context.Context) {
 		})
 	}()
 
+	// NOTE: Disabled() read is a race when called off the main thread,
+	// but it serves as a best-effort guard against double-start.
 	if p.startStopButton.Disabled() {
 		return
 	}
-	p.startStopButton.Disable()
-	defer p.startStopButton.Enable()
 
-	p.startStopButton.SetText("Starting stream...")
-	p.startStopButton.Icon = theme.MediaStopIcon()
-	p.startStopButton.Importance = widget.DangerImportance
+	fyne.Do(func() {
+		p.startStopButton.Disable()
+		p.startStopButton.SetText("Starting stream...")
+		p.startStopButton.Icon = theme.MediaStopIcon()
+		p.startStopButton.Importance = widget.DangerImportance
+	})
+	defer fyne.Do(func() {
+		p.startStopButton.Enable()
+	})
+
 	if p.updateStreamClockHandler != nil {
 		p.updateStreamClockHandler.Stop()
 	}
-	p.updateStreamClockHandler = newUpdateTimerHandler(p.startStopButton, time.Now())
+	// newUpdateTimerHandler sets button text and starts a background
+	// ticker — create via fyne.Do so the initial write is on the main thread.
+	fyne.Do(func() {
+		p.updateStreamClockHandler = newUpdateTimerHandler(p.startStopButton, time.Now())
+	})
 
 	isEnabled, err := p.StreamD.IsBackendEnabled(ctx, obs.ID)
 	if err != nil {
@@ -2225,7 +2282,9 @@ func (p *Panel) startStream(ctx context.Context) {
 		p.DisplayError(fmt.Errorf("unable to start the stream on YouTube: %w", err))
 	}
 
-	p.startStopButton.Refresh()
+	fyne.Do(func() {
+		p.startStopButton.Refresh()
+	})
 	p.afterStreamStart(ctx)
 }
 
@@ -2272,7 +2331,9 @@ func (p *Panel) doStopStream(ctx context.Context) {
 		backendEnabled[backendID] = isEnabled
 	}
 
-	p.startStopButton.Disable()
+	fyne.Do(func() {
+		p.startStopButton.Disable()
+	})
 
 	streamDCfg, err := p.GetStreamDConfig(ctx)
 	if err != nil {
@@ -2331,36 +2392,43 @@ func (p *Panel) doStopStream(ctx context.Context) {
 		if streamDCfg != nil {
 			obsCfg := streamcontrol.GetPlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile](ctx, streamDCfg.Backends, obs.ID)
 			if obsCfg.Config.SceneAfterStream.Name != "" {
-				p.startStopButton.SetText("Switching the scene")
+				fyne.Do(func() {
+					p.startStopButton.SetText("Switching the scene")
+				})
 				err := p.obsSetScene(ctx, obsCfg.Config.SceneAfterStream.Name)
 				if err != nil {
 					p.DisplayError(fmt.Errorf("unable to change the OBS scene: %w", err))
 				}
 			}
 			if obsCfg.Config.SceneAfterStream.Duration > 0 {
-				p.startStopButton.SetText(fmt.Sprintf("Holding the scene: %s", obsCfg.Config.SceneAfterStream.Duration))
+				fyne.Do(func() {
+					p.startStopButton.SetText(fmt.Sprintf("Holding the scene: %s", obsCfg.Config.SceneAfterStream.Duration))
+				})
 				time.Sleep(obsCfg.Config.SceneAfterStream.Duration)
 			}
 		}
 
-		p.startStopButton.SetText("Stopping OBS...")
+		fyne.Do(func() {
+			p.startStopButton.SetText("Stopping OBS...")
+		})
 		err := p.StreamD.EndStream(ctx, obs.ID)
 		if err != nil {
 			p.DisplayError(fmt.Errorf("unable to stop the stream on OBS: %w", err))
 		}
 	}
 
-	if backendEnabled[twitch.ID] {
-		p.twitchCheck.Enable()
-	}
-	if backendEnabled[kick.ID] {
-		p.kickCheck.Enable()
-	}
-	if backendEnabled[youtube.ID] {
-		p.youtubeCheck.Enable()
-	}
-
-	p.backgroundRenderer.Q <- func() { p.startStopButton.SetText("OnStopStream command...") }
+	fyne.Do(func() {
+		if backendEnabled[twitch.ID] {
+			p.twitchCheck.Enable()
+		}
+		if backendEnabled[kick.ID] {
+			p.kickCheck.Enable()
+		}
+		if backendEnabled[youtube.ID] {
+			p.youtubeCheck.Enable()
+		}
+		p.startStopButton.SetText("OnStopStream command...")
+	})
 
 	var platCfg *streamcontrol.AbstractPlatformConfig
 	p.configCacheLocker.Do(ctx, func() {
@@ -2370,11 +2438,12 @@ func (p *Panel) doStopStream(ctx context.Context) {
 		p.execCommand(ctx, onStreamStop, nil)
 	}
 
-	p.startStopButton.SetText(startStreamString())
-	p.startStopButton.Icon = theme.MediaRecordIcon()
-	p.startStopButton.Importance = widget.SuccessImportance
-
-	p.startStopButton.Refresh()
+	fyne.Do(func() {
+		p.startStopButton.SetText(startStreamString())
+		p.startStopButton.Icon = theme.MediaRecordIcon()
+		p.startStopButton.Importance = widget.SuccessImportance
+		p.startStopButton.Refresh()
+	})
 }
 
 func (p *Panel) onSetupStreamButton(ctx context.Context) {

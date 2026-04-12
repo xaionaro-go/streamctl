@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/widget"
 	"github.com/xaionaro-go/observability"
 )
@@ -46,8 +47,10 @@ func (h *updateTimerHandler) loop(ctx context.Context) {
 			return
 		case <-t.C:
 			timePassed := time.Since(h.startTS).Truncate(time.Second)
-			h.startStopButton.Text = timePassed.String()
-			h.startStopButton.Refresh()
+			text := timePassed.String()
+			fyne.Do(func() {
+				h.startStopButton.SetText(text)
+			})
 		}
 	}
 }
