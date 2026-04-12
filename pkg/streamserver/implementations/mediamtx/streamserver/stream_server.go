@@ -93,7 +93,7 @@ func (s *StreamServer) init(
 	s.isInitialized = true
 
 	cfg := s.config
-	logger.Debugf(ctx, "config == %#+v", *cfg)
+	logger.Tracef(ctx, "config == %#+v", *cfg)
 
 	s.pathManager = pathmanager.New(
 		toConfLoggerLevel(logger.Default().Level()),

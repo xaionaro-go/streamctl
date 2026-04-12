@@ -319,7 +319,7 @@ func GetPlatformConfig[T PlatformSpecificConfig, S StreamProfile](
 ) *PlatformConfig[T, S] {
 	platCfg, ok := cfg[id]
 	if !ok {
-		logger.Debugf(ctx, "config '%s' was not found in cfg: %#+v", id, cfg)
+		logger.Tracef(ctx, "config '%s' was not found in cfg: %#+v", id, cfg)
 		return nil
 	}
 

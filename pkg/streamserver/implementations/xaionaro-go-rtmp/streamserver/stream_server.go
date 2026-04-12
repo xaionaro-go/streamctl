@@ -82,7 +82,7 @@ func (s *StreamServer) init(
 	_ ...types.InitOption,
 ) (_err error) {
 	cfg := s.Config
-	logger.Debugf(ctx, "config == %#+v", *cfg)
+	logger.Tracef(ctx, "config == %#+v", *cfg)
 
 	for _, srv := range cfg.PortServers {
 		{

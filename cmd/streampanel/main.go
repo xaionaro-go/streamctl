@@ -106,8 +106,14 @@ func runPanel(
 		ctx = belt.WithField(ctx, "streamd_addr", panel.Config.RemoteStreamDAddr)
 	}
 
-	if !flags.SplitProcess && flags.ListenAddr != "" {
-		logger.Debugf(ctx, `!flags.SplitProcess && flags.ListenAddr != ""`)
+	if !flags.SplitProcess && panel.Config.RemoteStreamDAddr == "" {
+		listenAddr := flags.ListenAddr
+		if listenAddr == "" {
+			// Use a random port so chat handler subprocesses can connect
+			// to a local gRPC server even when --listen-addr is not set.
+			listenAddr = "localhost:0"
+		}
+		logger.Debugf(ctx, `!flags.SplitProcess && panel.Config.RemoteStreamDAddr == ""; listenAddr == %q`, listenAddr)
 
 		err := panel.LazyInitStreamD(ctx)
 		if err != nil {
@@ -118,7 +124,7 @@ func runPanel(
 		listener, grpcServer, streamdGRPC, _, _ := initGRPCServers(
 			ctx,
 			panel.StreamD,
-			flags.ListenAddr,
+			listenAddr,
 		)
 		if concreteStreamD, ok := panel.StreamD.(*streamd.StreamD); ok {
 			concreteStreamD.GRPCListenAddr = listener.Addr().String()

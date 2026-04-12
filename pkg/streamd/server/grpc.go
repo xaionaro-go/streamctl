@@ -242,7 +242,7 @@ func (grpc *GRPCServer) StartStream(
 	ctx context.Context,
 	req *streamd_grpc.StartStreamRequest,
 ) (*streamd_grpc.StartStreamReply, error) {
-	logger.Debugf(ctx, "grpc:StartStream: raw profile: %#+v", req.Profile)
+	logger.Tracef(ctx, "grpc:StartStream: raw profile: %#+v", req.Profile)
 	platID := streamcontrol.PlatformName(req.GetPlatID())
 
 	profile, err := goconv.ProfileGRPC2Go(

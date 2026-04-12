@@ -471,6 +471,10 @@ func (d *StreamD) StartExternalChatHandler(
 		logger.Debugf(ctx, "/StartExternalChatHandler(ctx, '%s', '%s', '%s'): %v", platName, listenerType, streamdAddr, _err)
 	}()
 
+	if streamdAddr == "" {
+		return fmt.Errorf("cannot start chat handler for '%s'/%s: GRPCListenAddr is not set (no gRPC server available)", platName, listenerType)
+	}
+
 	execPath, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("resolve own executable: %w", err)

@@ -62,7 +62,7 @@ func (s *StreamServer) Init(ctx context.Context) error {
 }
 func (s *StreamServer) initNoLock(ctx context.Context) error {
 	cfg := s.Config
-	logger.Debugf(ctx, "config == %#+v", *cfg)
+	logger.Tracef(ctx, "config == %#+v", *cfg)
 
 	for _, srv := range cfg.Servers {
 		err := s.startServer(ctx, srv.Type, srv.Listen)

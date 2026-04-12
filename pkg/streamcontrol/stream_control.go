@@ -74,7 +74,7 @@ func GetStreamProfile[T StreamProfile](
 	if err != nil {
 		return nil, fmt.Errorf("unable to serialize: %w: %#+v", err, v)
 	}
-	logger.Debugf(ctx, "JSON representation: <%s>", b)
+	logger.Tracef(ctx, "JSON representation: <%s>", b)
 	var profile T
 	err = json.Unmarshal(b, &profile)
 	if err != nil {

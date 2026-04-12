@@ -111,7 +111,7 @@ func newOBS(
 		return nil, ErrSkipBackend
 	}
 
-	logger.Debugf(ctx, "OBS config: %#+v", platCfg)
+	logger.Tracef(ctx, "OBS config: %#+v", platCfg)
 	obs, err := obs.New(ctx, *platCfg)
 	if err != nil {
 		return nil, fmt.Errorf("unable to initialize OBS client: %w", err)
@@ -145,7 +145,7 @@ func newTwitch(
 		return nil, ErrSkipBackend
 	}
 
-	logger.Debugf(ctx, "twitch config: %#+v", platCfg)
+	logger.Tracef(ctx, "twitch config: %#+v", platCfg)
 	platCfg.Config.CustomOAuthHandler = customOAuthHandler
 	platCfg.Config.GetOAuthListenPorts = getOAuthListenPorts
 	twitch, err := twitch.New(ctx, *platCfg,
@@ -190,7 +190,7 @@ func newKick(
 		return nil, ErrSkipBackend
 	}
 
-	logger.Debugf(ctx, "kick config: %#+v", platCfg)
+	logger.Tracef(ctx, "kick config: %#+v", platCfg)
 	platCfg.Config.CustomOAuthHandler = customOAuthHandler
 	platCfg.Config.GetOAuthListenPorts = getOAuthListenPorts
 	kick, err := kick.New(ctx, *platCfg,
@@ -235,7 +235,7 @@ func newYouTube(
 		return nil, ErrSkipBackend
 	}
 
-	logger.Debugf(ctx, "youtube config: %#+v", platCfg)
+	logger.Tracef(ctx, "youtube config: %#+v", platCfg)
 	platCfg.Config.CustomOAuthHandler = customOAuthHandler
 	platCfg.Config.GetOAuthListenPorts = getOAuthListenPorts
 	yt, err := youtube.New(ctx, *platCfg,
