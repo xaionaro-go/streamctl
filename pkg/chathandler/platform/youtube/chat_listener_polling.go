@@ -9,23 +9,30 @@ import (
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	ytpkg "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
-	"google.golang.org/api/option"
 	youtubesvc "google.golang.org/api/youtube/v3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 // PollingListener implements chathandler.ChatListener using YouTube Data API v3 polling.
-// When YTProxyAddr is set, it auto-discovers broadcasts via youtubeapiproxy.
-// Otherwise, a pre-configured LiveChatID is required.
+//
+// Broadcast discovery supports two modes (selected based on which fields are set):
+//   - gRPC proxy: when YTProxyAddr is set, discovers via youtubeapiproxy RPCs.
+//   - OAuth2 direct: when Service is set (no proxy), discovers via
+//     liveBroadcasts.list mine=true using the authenticated YouTube service.
+//
+// A pre-configured LiveChatID bypasses discovery entirely.
 type PollingListener struct {
-	APIKey       string
+	// Service is the YouTube Data API v3 service used for chat polling
+	// and (when YTProxyAddr is empty) for broadcast discovery.
+	Service *youtubesvc.Service
+
 	YTProxyAddr  string
 	ChannelID    string
 	DetectMethod DetectMethod
 
 	// LiveChatID and VideoID are optional pre-configured values.
-	// When empty, the listener auto-discovers via youtubeapiproxy.
+	// When empty, the listener auto-discovers broadcasts.
 	LiveChatID string
 	VideoID    string
 
@@ -42,20 +49,32 @@ func (l *PollingListener) Listen(
 	logger.Tracef(ctx, "PollingListener.Listen")
 	defer func() { logger.Tracef(ctx, "/PollingListener.Listen: %v", _err) }()
 
-	svc, err := youtubesvc.NewService(ctx, option.WithAPIKey(l.APIKey))
-	if err != nil {
-		return nil, fmt.Errorf("create YouTube service: %w", err)
-	}
-
 	listenCtx, cancel := context.WithCancel(ctx)
 	l.cancel = cancel
 
 	// Pre-configured liveChatID: use directly (no discovery loop).
 	if l.LiveChatID != "" {
-		return l.listenDirect(listenCtx, svc)
+		return l.listenDirect(listenCtx)
 	}
 
-	// Auto-discovery mode: discover, listen, re-discover loop.
+	// Auto-discovery via gRPC proxy when available.
+	if l.YTProxyAddr != "" {
+		return l.listenViaProxy(listenCtx, cancel)
+	}
+
+	// Auto-discovery via OAuth2 (liveBroadcasts.list mine=true).
+	ch := make(chan streamcontrol.Event, 64)
+	observability.Go(ctx, func(ctx context.Context) {
+		defer close(ch)
+		l.discoverAndPollLoopOAuth2(listenCtx, ch)
+	})
+	return ch, nil
+}
+
+func (l *PollingListener) listenViaProxy(
+	ctx context.Context,
+	cancel context.CancelFunc,
+) (<-chan streamcontrol.Event, error) {
 	conn, err := grpc.NewClient(l.YTProxyAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
@@ -69,7 +88,7 @@ func (l *PollingListener) Listen(
 
 	observability.Go(ctx, func(ctx context.Context) {
 		defer close(ch)
-		l.discoverAndPollLoop(listenCtx, conn, svc, ch)
+		l.discoverAndPollLoop(ctx, conn, ch)
 	})
 
 	return ch, nil
@@ -78,9 +97,8 @@ func (l *PollingListener) Listen(
 // listenDirect creates a single polling listener with pre-configured IDs.
 func (l *PollingListener) listenDirect(
 	ctx context.Context,
-	svc *youtubesvc.Service,
 ) (<-chan streamcontrol.Event, error) {
-	client := &APIKeyChatClient{Service: svc}
+	client := &APIKeyChatClient{Service: l.Service}
 
 	listener, err := ytpkg.NewChatListener(ctx, client, l.VideoID, l.LiveChatID)
 	if err != nil {
@@ -91,12 +109,11 @@ func (l *PollingListener) listenDirect(
 	return listener.MessagesChan(), nil
 }
 
-// discoverAndPollLoop discovers broadcasts and polls chat messages.
+// discoverAndPollLoop discovers broadcasts via gRPC proxy and polls chat messages.
 // When chat ends, re-discovers the next broadcast.
 func (l *PollingListener) discoverAndPollLoop(
 	ctx context.Context,
 	conn *grpc.ClientConn,
-	svc *youtubesvc.Service,
 	ch chan<- streamcontrol.Event,
 ) {
 	logger.Tracef(ctx, "discoverAndPollLoop")
@@ -107,7 +124,7 @@ func (l *PollingListener) discoverAndPollLoop(
 		detectMethod = DetectMethodBroadcasts
 	}
 
-	client := &APIKeyChatClient{Service: svc}
+	client := &APIKeyChatClient{Service: l.Service}
 
 	for {
 		if ctx.Err() != nil {
@@ -136,6 +153,48 @@ func (l *PollingListener) discoverAndPollLoop(
 		listener.Close(ctx)
 
 		logger.Debugf(ctx, "polling chat ended, will re-discover")
+	}
+}
+
+// discoverAndPollLoopOAuth2 discovers broadcasts using the YouTube Data API
+// directly (liveBroadcasts.list mine=true) and polls chat messages.
+// Used when no gRPC proxy is available.
+func (l *PollingListener) discoverAndPollLoopOAuth2(
+	ctx context.Context,
+	ch chan<- streamcontrol.Event,
+) {
+	logger.Tracef(ctx, "discoverAndPollLoopOAuth2")
+	defer func() { logger.Tracef(ctx, "/discoverAndPollLoopOAuth2") }()
+
+	client := &APIKeyChatClient{Service: l.Service}
+
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+
+		logger.Debugf(ctx, "discovering active broadcast via OAuth2...")
+		result, err := DiscoverBroadcastViaOAuth2(ctx, l.Service)
+		if err != nil {
+			logger.Debugf(ctx, "OAuth2 broadcast discovery ended: %v", err)
+			return
+		}
+
+		logger.Debugf(ctx, "polling chat for liveChatID=%s (video=%s)", result.LiveChatID, result.VideoID)
+
+		listener, err := ytpkg.NewChatListener(ctx, client, result.VideoID, result.LiveChatID)
+		if err != nil {
+			logger.Warnf(ctx, "create chat listener: %v", err)
+			if !sleepCtx(ctx, broadcastPollInterval) {
+				return
+			}
+			continue
+		}
+
+		forwardEvents(ctx, listener.MessagesChan(), ch)
+		listener.Close(ctx)
+
+		logger.Debugf(ctx, "OAuth2 polling chat ended, will re-discover")
 	}
 }
 

@@ -2,7 +2,6 @@ package twitch
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/chathandler"
@@ -70,14 +69,29 @@ func createEventSubListener(
 	clientSecret := cfg.Config.ClientSecret.Get()
 
 	if clientID == "" || clientSecret == "" || userAccessToken == "" {
-		return nil, chathandler.ErrChatListenerTypeNotImplemented{
-			PlatformName: twitchtypes.ID,
-			ListenerType: streamcontrol.ChatListenerPrimary,
+		var missing []string
+		if clientID == "" {
+			missing = append(missing, "ClientID")
+		}
+		if clientSecret == "" {
+			missing = append(missing, "ClientSecret")
+		}
+		if userAccessToken == "" {
+			missing = append(missing, "UserAccessToken")
+		}
+		return nil, chathandler.ErrChatListenerMisconfigured{
+			PlatformName:  twitchtypes.ID,
+			ListenerType:  streamcontrol.ChatListenerPrimary,
+			MissingFields: missing,
 		}
 	}
 
 	if channel == "" {
-		return nil, fmt.Errorf("twitch channel is required for EventSub")
+		return nil, chathandler.ErrChatListenerMisconfigured{
+			PlatformName:  twitchtypes.ID,
+			ListenerType:  streamcontrol.ChatListenerPrimary,
+			MissingFields: []string{"Channel"},
+		}
 	}
 
 	return &EventSubListener{
@@ -97,9 +111,10 @@ func createIRCListener(
 	defer func() { logger.Tracef(ctx, "/createIRCListener") }()
 	channel := cfg.Config.Channel
 	if channel == "" {
-		return nil, chathandler.ErrChatListenerTypeNotImplemented{
-			PlatformName: twitchtypes.ID,
-			ListenerType: streamcontrol.ChatListenerContingency,
+		return nil, chathandler.ErrChatListenerMisconfigured{
+			PlatformName:  twitchtypes.ID,
+			ListenerType:  streamcontrol.ChatListenerContingency,
+			MissingFields: []string{"Channel"},
 		}
 	}
 

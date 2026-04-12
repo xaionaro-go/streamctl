@@ -13,6 +13,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	kicktypes "github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick/types"
 	twitchtypes "github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/types"
+	yttypes "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
 	"github.com/xaionaro-go/xpath"
 )
 
@@ -82,9 +83,12 @@ func (o PlatformOverrideConfig) applyTo(
 		}
 	}
 
-	// Apply YouTube-specific overrides via Custom map.
-	if o.ProxyAddr != "" {
-		platCfg.Custom["yt_proxy_addr"] = o.ProxyAddr
+	// Apply YouTube-specific overrides.
+	if ytCfg, ok := platCfg.Config.(yttypes.PlatformSpecificConfig); ok {
+		if o.ProxyAddr != "" {
+			ytCfg.YTProxyAddr = o.ProxyAddr
+		}
+		platCfg.Config = ytCfg
 	}
 	if o.Video != "" {
 		platCfg.Custom["video_id"] = o.Video

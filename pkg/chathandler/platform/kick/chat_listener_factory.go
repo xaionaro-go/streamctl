@@ -80,9 +80,10 @@ func createObsoleteListener(
 	defer func() { logger.Tracef(ctx, "/createObsoleteListener") }()
 	channel := cfg.Config.Channel
 	if channel == "" {
-		return nil, chathandler.ErrChatListenerTypeNotImplemented{
-			PlatformName: kicktypes.ID,
-			ListenerType: streamcontrol.ChatListenerContingency,
+		return nil, chathandler.ErrChatListenerMisconfigured{
+			PlatformName:  kicktypes.ID,
+			ListenerType:  streamcontrol.ChatListenerContingency,
+			MissingFields: []string{"Channel"},
 		}
 	}
 
