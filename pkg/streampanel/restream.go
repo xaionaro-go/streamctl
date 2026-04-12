@@ -64,7 +64,7 @@ func (p *Panel) initRestreamPage(
 			p.DisplayError(err)
 			return
 		}
-		for range ch {
+		for {
 			var ok bool
 			select {
 			case _, ok = <-ch:

@@ -679,9 +679,9 @@ func (p *monitorPage) stopMonitor(
 	videoTrackIDs []uint,
 	audioTrackIDs []uint,
 ) (_err error) {
-	logger.Debugf(ctx, "stopMonitor(ctx, '%s', '%s')", streamDAddr, streamID, videoTrackIDs, audioTrackIDs)
+	logger.Debugf(ctx, "stopMonitor(ctx, '%s', '%s', %v, %v)", streamDAddr, streamID, videoTrackIDs, audioTrackIDs)
 	defer func() {
-		logger.Debugf(ctx, "/stopMonitor(ctx, '%s', '%s'): %v", streamDAddr, streamID, videoTrackIDs, audioTrackIDs, _err)
+		logger.Debugf(ctx, "/stopMonitor(ctx, '%s', '%s', %v, %v): %v", streamDAddr, streamID, videoTrackIDs, audioTrackIDs, _err)
 	}()
 
 	return xsync.DoR1(ctx, &p.monitorsLocker, func() error {
@@ -720,7 +720,7 @@ func (p *monitorPage) stopMonitorNoLock(
 	}
 	err = p.streamPlayers.Remove(ctx, playerStreamID)
 	if err != nil {
-		return fmt.Errorf("unable ")
+		return fmt.Errorf("unable to remove the stream player for '%s': %w", playerStreamID, err)
 	}
 
 	return nil

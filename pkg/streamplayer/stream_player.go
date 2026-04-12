@@ -505,7 +505,7 @@ func (p *StreamPlayerHandler) notifyStart(ctx context.Context) {
 			defer func() {
 				r := recover()
 				if r != nil {
-					logger.Error(ctx, "got panic during notification about a start: %v", r)
+					logger.Errorf(ctx, "got panic during notification about a start: %v", r)
 				}
 			}()
 
@@ -707,7 +707,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 					}
 					observability.Go(ctx, func(ctx context.Context) {
 						if err := p.openStream(ctx, restart); err != nil {
-							logger.Error(ctx, "unable to re-open the stream: %v", err)
+							logger.Errorf(ctx, "unable to re-open the stream: %v", err)
 							restart()
 						}
 					})
@@ -771,7 +771,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 		}
 	})
 	if err != nil {
-		logger.Error(ctx, "unable to access the player for setting it up for streaming: %v", err)
+		logger.Errorf(ctx, "unable to access the player for setting it up for streaming: %v", err)
 	}
 
 	observability.Go(ctx, func(ctx context.Context) {
@@ -1073,7 +1073,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 			curSpeed = setSpeed
 		})
 		if err != nil {
-			logger.Error(ctx, "unable to get the player: %v", err)
+			logger.Errorf(ctx, "unable to get the player: %v", err)
 			return
 		}
 	}

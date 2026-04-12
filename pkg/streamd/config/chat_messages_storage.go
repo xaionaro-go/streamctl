@@ -20,7 +20,7 @@ func (cfg *Config) GetChatMessageStorage(
 
 	path, err := xpath.Expand(DefaultChatMessagesPath)
 	if err != nil {
-		logger.Errorf(ctx, "unable to expand '%s': %w", DefaultChatMessagesPath, err)
+		logger.Errorf(ctx, "unable to expand '%s': %v", DefaultChatMessagesPath, err)
 		return ".streampanel.chat-messages"
 	}
 

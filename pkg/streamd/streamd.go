@@ -17,6 +17,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/eventbus"
+	"github.com/xaionaro-go/kickcom"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/player/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/chatmessagesstorage"
@@ -111,13 +112,28 @@ type StreamD struct {
 
 	obsRestarter *obsRestarter
 
-	llm *llm
+	llm       *llm
+	subtitler *subtitler
 
 	lastShoutoutAtLocker sync.Mutex
 	lastShoutoutAt       map[config.ChatUserID]time.Time
 
+	// greetedUsers tracks users who have already sent at least one chat
+	// message in this session. On the first message from a user we emit
+	// a synthetic EventTypeGreeting ("said hi") event.
+	greetedUsersLocker sync.Mutex
+	greetedUsers       map[config.ChatUserID]struct{}
+
 	chatListenerLocker  sync.Mutex
 	chatListenerCancels map[streamcontrol.PlatformName]context.CancelFunc
+
+	externalChatHandlerLocker sync.Mutex
+	externalChatHandlers      map[streamcontrol.PlatformName]*externalChatHandler
+
+	// injectedEventIDs is a dedup guard for InjectChatMessage. During Level 2
+	// transitions both built-in and external handlers may briefly overlap,
+	// producing duplicate events. Keys are EventIDs, values are insertion time.
+	injectedEventIDs xsync.Map[streamcontrol.EventID, time.Time]
 }
 
 type imageHash uint64
@@ -153,11 +169,13 @@ func New(
 		OBSState: OBSState{
 			VolumeMeters: map[string][][3]float64{},
 		},
-		Timers:         map[api.TimerID]*Timer{},
-		Options:        Options(options).Aggregate(),
-		ReadyChan:      make(chan struct{}),
-		lastShoutoutAt:              map[config.ChatUserID]time.Time{},
-		chatListenerCancels: map[streamcontrol.PlatformName]context.CancelFunc{},
+		Timers:               map[api.TimerID]*Timer{},
+		Options:              Options(options).Aggregate(),
+		ReadyChan:            make(chan struct{}),
+		lastShoutoutAt:       map[config.ChatUserID]time.Time{},
+		greetedUsers:         map[config.ChatUserID]struct{}{},
+		chatListenerCancels:  map[streamcontrol.PlatformName]context.CancelFunc{},
+		externalChatHandlers: map[streamcontrol.PlatformName]*externalChatHandler{},
 	}
 
 	// TODO: move this to Run()
@@ -232,6 +250,16 @@ func (d *StreamD) Run(ctx context.Context) (_ret error) { // TODO: delete the fe
 	d.UI.SetStatus("LLMs...")
 	if err := d.initLLMs(ctx); err != nil {
 		d.UI.DisplayError(fmt.Errorf("unable to initialize the LLMs: %w", err))
+	}
+
+	d.UI.SetStatus("Subtitles...")
+	if err := d.initSubtitles(ctx); err != nil {
+		d.UI.DisplayError(fmt.Errorf("unable to initialize subtitles: %w", err))
+	}
+
+	d.UI.SetStatus("OBS music toggle...")
+	if err := d.initObsMusicToggle(ctx); err != nil {
+		d.UI.DisplayError(fmt.Errorf("unable to initialize OBS music toggle: %w", err))
 	}
 
 	d.UI.SetStatus("Initializing UI...")
@@ -402,7 +430,7 @@ func (d *StreamD) InitCache(ctx context.Context) error {
 	observability.Go(ctx, func(ctx context.Context) {
 		defer wg.Done()
 		_changedCache := d.initTwitchData(ctx)
-		d.normalizeTwitchData()
+		d.normalizeTwitchData(ctx)
 		if _changedCache {
 			changedCache = true
 		}
@@ -412,7 +440,7 @@ func (d *StreamD) InitCache(ctx context.Context) error {
 	observability.Go(ctx, func(ctx context.Context) {
 		defer wg.Done()
 		_changedCache := d.initKickData(ctx)
-		d.normalizeKickData()
+		d.normalizeKickData(ctx)
 		if _changedCache {
 			changedCache = true
 		}
@@ -422,7 +450,7 @@ func (d *StreamD) InitCache(ctx context.Context) error {
 	observability.Go(ctx, func(ctx context.Context) {
 		defer wg.Done()
 		_changedCache := d.initYoutubeData(ctx)
-		d.normalizeYoutubeData()
+		d.normalizeYoutubeData(ctx)
 		if _changedCache {
 			changedCache = true
 		}
@@ -486,10 +514,14 @@ func (d *StreamD) initTwitchData(ctx context.Context) bool {
 	return true
 }
 
-func (d *StreamD) normalizeTwitchData() {
-	s := d.Cache.Twitch.Categories
-	sort.Slice(s, func(i, j int) bool {
-		return s[i].Name < s[j].Name
+func (d *StreamD) normalizeTwitchData(ctx context.Context) {
+	// Hold CacheLock during the entire read+sort to avoid a data race:
+	// sort.Slice mutates the shared underlying array in-place.
+	d.CacheLock.Do(ctx, func() {
+		s := d.Cache.Twitch.Categories
+		sort.Slice(s, func(i, j int) bool {
+			return s[i].Name < s[j].Name
+		})
 	})
 }
 
@@ -527,10 +559,21 @@ func (d *StreamD) initKickData(ctx context.Context) bool {
 	return true
 }
 
-func (d *StreamD) normalizeKickData() {
-	s := d.Cache.Kick.GetCategories()
-	sort.Slice(s, func(i, j int) bool {
-		return s[i].Name < s[j].Name
+func (d *StreamD) normalizeKickData(ctx context.Context) {
+	d.CacheLock.Do(ctx, func() {
+		original := d.Cache.Kick.GetCategories()
+		if len(original) == 0 {
+			return
+		}
+		// Copy before sorting: GetCategories() uses atomic loads that
+		// bypass CacheLock, so in-place sort would race with concurrent
+		// lock-free readers.
+		sorted := make([]kickcom.CategoryV1Short, len(original))
+		copy(sorted, original)
+		sort.Slice(sorted, func(i, j int) bool {
+			return sorted[i].Name < sorted[j].Name
+		})
+		d.Cache.Kick.SetCategories(sorted)
 	})
 }
 
@@ -552,7 +595,9 @@ func (d *StreamD) saveConfig(ctx context.Context) error {
 func (d *StreamD) ResetCache(ctx context.Context) (_err error) {
 	logger.Debugf(ctx, "ResetCache")
 	defer func() { logger.Debugf(ctx, "/ResetCache: %v", _err) }()
-	d.Cache = &cache.Cache{}
+	d.CacheLock.Do(ctx, func() {
+		d.Cache = &cache.Cache{}
+	})
 	return nil
 }
 
@@ -1014,7 +1059,8 @@ func (d *StreamD) getStreamStatus(
 		}
 
 		if c == nil {
-			return nil, fmt.Errorf("controller '%s' is not initialized", platID)
+			logger.Debugf(ctx, "no initialized controller found for platform '%s'; reporting as inactive", platID)
+			return &streamcontrol.StreamStatus{IsActive: false}, nil
 		}
 
 		return c.GetStreamStatus(d.ctxForController(ctx))
@@ -1351,7 +1397,7 @@ func (d *StreamD) listIncomingStreamsNoLock(
 
 	activeIncomingStreams, err := d.StreamServer.ActiveIncomingStreamIDs()
 	if err != nil {
-		logger.Errorf(ctx, "unable to get the list of active incoming streams: %w", err)
+		logger.Errorf(ctx, "unable to get the list of active incoming streams: %v", err)
 	}
 	isActive := map[types.StreamID]struct{}{}
 	for _, streamID := range activeIncomingStreams {

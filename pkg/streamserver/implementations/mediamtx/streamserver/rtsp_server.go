@@ -236,24 +236,24 @@ func (srv *RTSPServer) ListenAddr() string {
 	return srv.Server.Address
 }
 func (srv *RTSPServer) NumBytesConsumerWrote() uint64 {
-	result := uint64(0)
 	list, err := srv.Server.APIConnsList()
+	if err != nil {
+		return 0
+	}
+	var result uint64
 	for _, item := range list.Items {
 		result += item.BytesReceived
-	}
-	if err != nil {
-		panic(err)
 	}
 	return result
 }
 func (srv *RTSPServer) NumBytesProducerRead() uint64 {
-	result := uint64(0)
 	list, err := srv.Server.APIConnsList()
+	if err != nil {
+		return 0
+	}
+	var result uint64
 	for _, item := range list.Items {
 		result += item.BytesSent
-	}
-	if err != nil {
-		panic(err)
 	}
 	return result
 }

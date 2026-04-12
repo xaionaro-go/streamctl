@@ -369,7 +369,9 @@ func GetStreamProfiles[S StreamProfile](
 			s[k] = p
 		case RawMessage:
 			var v S
-			if err := json.Unmarshal(p, &v); err != nil {
+			// RawMessage stores raw YAML bytes (via UnmarshalYAML), not JSON.
+			// GetPlatformSpecificConfig correctly uses yaml.Unmarshal for the same data type.
+			if err := yaml.Unmarshal(p, &v); err != nil {
 				panic(err)
 			}
 			s[k] = v

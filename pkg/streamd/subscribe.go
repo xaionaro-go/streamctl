@@ -51,7 +51,7 @@ func autoResubscribe[T any](
 				if err == nil {
 					break
 				}
-				logger.Warnf(ctx, "unable to reconnect: %w")
+				logger.Warnf(ctx, "unable to reconnect: %v", err)
 				time.Sleep(time.Second)
 			}
 			restartCh <- struct{}{}

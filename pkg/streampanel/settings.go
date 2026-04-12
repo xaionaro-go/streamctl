@@ -112,6 +112,10 @@ func (p *Panel) openSettingsWindowNoLock(
 		streamDCfg.StreamServer.VideoPlayer.MPV.Path = s
 	}
 
+	// Declare chatGPTAPIKeyEntry before the save button closure so it can read
+	// the current text at save time. Initialized later when the form is built.
+	var chatGPTAPIKeyEntry *widget.Entry
+
 	cancelButton := widget.NewButtonWithIcon("Cancel", theme.CancelIcon(), func() {
 		w.Close()
 	})
@@ -136,9 +140,49 @@ func (p *Panel) openSettingsWindowNoLock(
 			config.CustomConfigKeyAfterStreamStart, afterStartStreamCommandEntry.Text)
 		obsCfg.SetCustomString(
 			config.CustomConfigKeyAfterStreamStop, afterStopStreamCommandEntry.Text)
-		streamDCfg.Backends[obs.ID] = streamcontrol.ToAbstractPlatformConfig(ctx, obsCfg)
 
-		if err := p.SetStreamDConfig(ctx, streamDCfg); err != nil {
+		// Re-read fresh config to avoid overwriting profiles or other changes
+		// made while the settings window was open.
+		freshCfg, err := p.GetStreamDConfig(ctx)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to re-read config for saving: %w", err))
+			w.Close()
+			return
+		}
+
+		// Merge OBS settings (Config + Custom) into fresh config, preserving fresh profiles.
+		if backendEnabled[obs.ID] {
+			freshOBSCfg := streamcontrol.GetPlatformConfig[obs.PlatformSpecificConfig, obs.StreamProfile](
+				ctx, freshCfg.Backends, obs.ID,
+			)
+			if freshOBSCfg != nil {
+				freshOBSCfg.Config = obsCfg.Config
+				freshOBSCfg.Custom = obsCfg.Custom
+				freshCfg.Backends[obs.ID] = streamcontrol.ToAbstractPlatformConfig(ctx, freshOBSCfg)
+			}
+		}
+
+		// Merge video player path.
+		freshCfg.StreamServer.VideoPlayer.MPV.Path = mpvPathEntry.Text
+
+		// Merge LLM API key.
+		apiKey := chatGPTAPIKeyEntry.Text
+		if apiKey != "" {
+			if freshCfg.LLM.Endpoints == nil {
+				freshCfg.LLM.Endpoints = make(streamdconfig.LLMEndpoints)
+			}
+			ep := freshCfg.LLM.Endpoints[hardcodedLLMEndpointName]
+			if ep == nil {
+				ep = &streamdconfig.LLMEndpoint{
+					Provider:  streamdconfig.LLMProviderChatGPT,
+					ModelName: "gpt-4o",
+				}
+				freshCfg.LLM.Endpoints[hardcodedLLMEndpointName] = ep
+			}
+			ep.APIKey = apiKey
+		}
+
+		if err := p.SetStreamDConfig(ctx, freshCfg); err != nil {
 			p.DisplayError(fmt.Errorf("unable to update the remote config: %w", err))
 		} else {
 			if err := p.StreamD.SaveConfig(ctx); err != nil {
@@ -183,11 +227,30 @@ func (p *Panel) openSettingsWindowNoLock(
 	}
 	updateLoggedInLabels()
 
-	onUpdateBackendConfig := func(platID streamcontrol.PlatformName, enable bool) {
+	// onUpdateBackendConfig saves a backend enable/disable or credential change
+	// using a fresh config snapshot to avoid overwriting concurrent changes.
+	// If newPlatCfgConfig is non-nil, it replaces the platform-specific config
+	// (e.g., login credentials) in the fresh snapshot before saving.
+	onUpdateBackendConfig := func(
+		platID streamcontrol.PlatformName,
+		enable bool,
+		newPlatCfgConfig streamcontrol.PlatformSpecificConfig,
+	) {
 		logger.Debugf(ctx, "backend '%s', enabled:%v", platID, enable)
-		streamDCfg.Backends[platID].Enable = ptr(enable)
 
-		if err := p.SetStreamDConfig(ctx, streamDCfg); err != nil {
+		// Re-read fresh config to avoid overwriting concurrent changes (e.g., profiles).
+		freshCfg, err := p.GetStreamDConfig(ctx)
+		if err != nil {
+			p.DisplayError(fmt.Errorf("unable to re-read config: %w", err))
+			return
+		}
+
+		if newPlatCfgConfig != nil {
+			freshCfg.Backends[platID].Config = newPlatCfgConfig
+		}
+		freshCfg.Backends[platID].Enable = ptr(enable)
+
+		if err := p.SetStreamDConfig(ctx, freshCfg); err != nil {
 			p.DisplayError(fmt.Errorf("unable to set the config: %w", err))
 			return
 		}
@@ -372,7 +435,7 @@ func (p *Panel) openSettingsWindowNoLock(
 		}
 	}
 
-	chatGPTAPIKeyEntry := widget.NewEntry()
+	chatGPTAPIKeyEntry = widget.NewEntry()
 	chatGPTAPIKeyEntry.OnSubmitted = func(s string) {
 		if streamDCfg.LLM.Endpoints == nil {
 			streamDCfg.LLM.Endpoints = make(streamdconfig.LLMEndpoints)
@@ -403,8 +466,12 @@ func (p *Panel) openSettingsWindowNoLock(
 								if s == BackendStatusCodeNotNow {
 									return
 								}
-								streamDCfg.Backends[obs.ID] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
-								onUpdateBackendConfig(obs.ID, s == BackendStatusCodeReady)
+								// Keep obsCfg connection fields in sync so the Save handler
+								// doesn't overwrite fresh credentials with stale ones.
+								obsCfg.Config.Host = platCfg.Config.Host
+								obsCfg.Config.Port = platCfg.Config.Port
+								obsCfg.Config.Password = platCfg.Config.Password
+								onUpdateBackendConfig(obs.ID, s == BackendStatusCodeReady, platCfg.Config)
 							}),
 							obsAlreadyLoggedIn,
 						),
@@ -415,8 +482,7 @@ func (p *Panel) openSettingsWindowNoLock(
 								if s == BackendStatusCodeNotNow {
 									return
 								}
-								streamDCfg.Backends[twitch.ID] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
-								onUpdateBackendConfig(twitch.ID, s == BackendStatusCodeReady)
+								onUpdateBackendConfig(twitch.ID, s == BackendStatusCodeReady, platCfg.Config)
 							}),
 							twitchAlreadyLoggedIn,
 						),
@@ -427,8 +493,7 @@ func (p *Panel) openSettingsWindowNoLock(
 								if s == BackendStatusCodeNotNow {
 									return
 								}
-								streamDCfg.Backends[kick.ID] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
-								onUpdateBackendConfig(kick.ID, s == BackendStatusCodeReady)
+								onUpdateBackendConfig(kick.ID, s == BackendStatusCodeReady, platCfg.Config)
 							}),
 							kickAlreadyLoggedIn,
 						),
@@ -439,8 +504,7 @@ func (p *Panel) openSettingsWindowNoLock(
 								if s == BackendStatusCodeNotNow {
 									return
 								}
-								streamDCfg.Backends[youtube.ID] = streamcontrol.ToAbstractPlatformConfig(ctx, platCfg)
-								onUpdateBackendConfig(youtube.ID, s == BackendStatusCodeReady)
+								onUpdateBackendConfig(youtube.ID, s == BackendStatusCodeReady, platCfg.Config)
 							}),
 							youtubeAlreadyLoggedIn,
 						),

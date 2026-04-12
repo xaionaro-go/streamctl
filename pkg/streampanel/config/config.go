@@ -124,9 +124,17 @@ func WriteConfigToPath(
 
 	logger.Tracef(ctx, "cfg.WriteTo: %s", spew.Sdump(cfg))
 	_, err = cfg.WriteTo(f)
-	f.Close()
 	if err != nil {
+		f.Close()
 		return fmt.Errorf("unable to write data to file '%s': %w", pathNew, err)
+	}
+	// Flush to disk before rename so the renamed file is never empty/partial on power loss.
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return fmt.Errorf("unable to sync data file '%s': %w", pathNew, err)
+	}
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("unable to close data file '%s': %w", pathNew, err)
 	}
 
 	backupDir := fmt.Sprintf("%s-backup", cfgPath)
@@ -147,7 +155,7 @@ func WriteConfigToPath(
 		logger.Debugf(ctx, "backup path: '%s'", pathBackup)
 		err = os.Rename(cfgPath, pathBackup)
 		if err != nil {
-			logger.Errorf(ctx, "cannot move '%s' to '%s': %w", cfgPath, pathBackup, err)
+			logger.Errorf(ctx, "cannot move '%s' to '%s': %v", cfgPath, pathBackup, err)
 		}
 	}
 

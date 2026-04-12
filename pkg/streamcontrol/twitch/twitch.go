@@ -983,7 +983,7 @@ func (t *Twitch) Shoutout(
 		UserIDs: []string{string(user.ID)},
 	})
 	if err != nil {
-		logger.Errorf(ctx, "unable to get streams info (userID: %v): %w", user.ID, err)
+		logger.Errorf(ctx, "unable to get streams info (userID: %v): %v", user.ID, err)
 		return t.sendShoutoutMessageWithoutChanInfo(ctx, *user)
 	}
 	if len(reply.Data.Streams) == 0 {

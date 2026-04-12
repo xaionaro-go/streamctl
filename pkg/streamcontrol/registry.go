@@ -110,13 +110,13 @@ func ConvertAbstractStreamProfiles(
 	s StreamProfiles[AbstractStreamProfile],
 	platID PlatformName,
 ) error {
-	var err *multierror.Error
+	var errs *multierror.Error
 	for k, v := range s {
-		var err error
-		s[k], err = ConvertStreamProfile(v, platID)
-		err = multierror.Append(err, err)
+		var convErr error
+		s[k], convErr = ConvertStreamProfile(v, platID)
+		errs = multierror.Append(errs, convErr)
 	}
-	return err.ErrorOrNil()
+	return errs.ErrorOrNil()
 }
 
 func ConvertStreamProfile(

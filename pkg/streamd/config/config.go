@@ -129,9 +129,17 @@ func WriteConfigToPath(
 		return fmt.Errorf("unable to open the data file '%s': %w", pathNew, err)
 	}
 	_, err = cfg.WriteTo(f)
-	f.Close()
 	if err != nil {
+		f.Close()
 		return fmt.Errorf("unable to write data to file '%s': %w", pathNew, err)
+	}
+	// Flush to disk before rename so the renamed file is never empty/partial on power loss.
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return fmt.Errorf("unable to sync data file '%s': %w", pathNew, err)
+	}
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("unable to close data file '%s': %w", pathNew, err)
 	}
 	err = os.Rename(pathNew, cfgPath)
 	if err != nil {

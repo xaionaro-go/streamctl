@@ -27,6 +27,7 @@ service StreamD {
     rpc SetTitle(SetTitleRequest) returns (SetTitleReply) {}
     rpc SetDescription(SetDescriptionRequest) returns (SetDescriptionReply) {}
     rpc ApplyProfile(ApplyProfileRequest) returns (ApplyProfileReply) {}
+    rpc ListStreamProfiles(ListStreamProfilesRequest) returns (ListStreamProfilesReply) {}
     rpc UpdateStream(UpdateStreamRequest) returns (UpdateStreamReply) {}
     rpc GetVariable(GetVariableRequest) returns(GetVariableReply) {}
     rpc GetVariableHash(GetVariableHashRequest) returns(GetVariableHashReply) {}
@@ -218,6 +219,15 @@ message ApplyProfileRequest {
     string profile = 2;
 }
 message ApplyProfileReply {}
+message StreamProfileEntry {
+    string name = 1;
+    string defaultTitle = 2;
+    string defaultDescription = 3;
+}
+message ListStreamProfilesRequest {}
+message ListStreamProfilesReply {
+    repeated StreamProfileEntry profiles = 1;
+}
 message UpdateStreamRequest {
     string platID = 1;
     string title = 2;

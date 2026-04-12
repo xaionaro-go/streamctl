@@ -467,7 +467,7 @@ func (k *Kick) getStreamStatusUsingNormalClient(
 	if chanInfo.Stream.StartTime != "" {
 		v, err := time.Parse(time.RFC3339Nano, chanInfo.Stream.StartTime)
 		if err != nil {
-			logger.Errorf(ctx, "unable to parse date '%s': %w", chanInfo.Stream.StartTime, err)
+			logger.Errorf(ctx, "unable to parse date '%s': %v", chanInfo.Stream.StartTime, err)
 		}
 		startedAt = &v
 	}
@@ -570,7 +570,7 @@ func (k *Kick) GetChatMessagesChan(
 		for {
 			err := k.prepare(ctx)
 			if err != nil {
-				logger.Errorf(ctx, "unable to get a prepared client: %w", err)
+				logger.Errorf(ctx, "unable to get a prepared client: %v", err)
 				time.Sleep(time.Second)
 				continue
 			}

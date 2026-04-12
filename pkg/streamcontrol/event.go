@@ -52,6 +52,8 @@ const (
 	EventTypeStreamOnline
 	EventTypeStreamOffline
 	EventTypeStreamInfoUpdate
+	EventTypeChannelPointRedemption
+	EventTypeGreeting
 	EventTypeOther
 )
 
@@ -79,12 +81,18 @@ func (t EventType) String() string {
 		return "subscription_new"
 	case EventTypeSubscriptionRenewed:
 		return "subscription_renewed"
+	case EventTypeGiftedSubscription:
+		return "gifted_subscription"
 	case EventTypeStreamOnline:
 		return "stream_online"
 	case EventTypeStreamOffline:
 		return "stream_offline"
 	case EventTypeStreamInfoUpdate:
 		return "stream_info_update"
+	case EventTypeChannelPointRedemption:
+		return "channel_point_redemption"
+	case EventTypeGreeting:
+		return "greeting"
 	case EventTypeOther:
 		return "other"
 	}

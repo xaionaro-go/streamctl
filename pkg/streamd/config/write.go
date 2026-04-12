@@ -28,7 +28,10 @@ func (cfg Config) WriteTo(
 	}
 
 	counter := datacounter.NewWriterCounter(w)
-	io.Copy(counter, bytes.NewReader(b))
+	_, err = io.Copy(counter, bytes.NewReader(b))
+	if err != nil {
+		return int64(counter.Count()), fmt.Errorf("unable to write serialized config: %w", err)
+	}
 	return int64(counter.Count()), nil
 }
 

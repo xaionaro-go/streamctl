@@ -111,9 +111,13 @@ func (d *StreamD) updateYoutubeBroadcasts(
 	return newLen != prevLen, nil
 }
 
-func (d *StreamD) normalizeYoutubeData() {
-	s := d.Cache.Youtube.Broadcasts
-	sort.Slice(s, func(i, j int) bool {
-		return s[i].Snippet.Title < s[j].Snippet.Title
+func (d *StreamD) normalizeYoutubeData(ctx context.Context) {
+	// Hold CacheLock during the entire read+sort to avoid a data race:
+	// sort.Slice mutates the shared underlying array in-place.
+	d.CacheLock.Do(ctx, func() {
+		s := d.Cache.Youtube.Broadcasts
+		sort.Slice(s, func(i, j int) bool {
+			return s[i].Snippet.Title < s[j].Snippet.Title
+		})
 	})
 }

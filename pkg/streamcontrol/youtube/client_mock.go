@@ -178,6 +178,26 @@ func (c *clientMock) DeleteChatMessage(
 	return fmt.Errorf("not implemented")
 }
 
+func (c *clientMock) InsertLiveChatMessage(
+	ctx context.Context,
+	msg *youtube.LiveChatMessage,
+	parts []string,
+) (_err error) {
+	logger.Tracef(ctx, "InsertLiveChatMessage")
+	defer func() { logger.Tracef(ctx, "/InsertLiveChatMessage: %v", _err) }()
+	return fmt.Errorf("not implemented")
+}
+
+func (c *clientMock) InsertLiveChatBan(
+	ctx context.Context,
+	ban *youtube.LiveChatBan,
+	parts []string,
+) (_err error) {
+	logger.Tracef(ctx, "InsertLiveChatBan")
+	defer func() { logger.Tracef(ctx, "/InsertLiveChatBan: %v", _err) }()
+	return fmt.Errorf("not implemented")
+}
+
 func (c *clientMock) GetLiveChatMessages(
 	ctx context.Context,
 	chatID string,

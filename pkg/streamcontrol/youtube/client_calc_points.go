@@ -209,6 +209,24 @@ func (c *ClientCalcPoints) DeleteChatMessage(
 	return c.Client.DeleteChatMessage(ctx, messageID)
 }
 
+func (c *ClientCalcPoints) InsertLiveChatMessage(
+	ctx context.Context,
+	msg *youtube.LiveChatMessage,
+	parts []string,
+) (_err error) {
+	defer func() { c.addUsedPointsIfNoError(ctx, 200, _err) }()
+	return c.Client.InsertLiveChatMessage(ctx, msg, parts)
+}
+
+func (c *ClientCalcPoints) InsertLiveChatBan(
+	ctx context.Context,
+	ban *youtube.LiveChatBan,
+	parts []string,
+) (_err error) {
+	defer func() { c.addUsedPointsIfNoError(ctx, 200, _err) }()
+	return c.Client.InsertLiveChatBan(ctx, ban, parts)
+}
+
 func (c *ClientCalcPoints) GetLiveChatMessages(
 	ctx context.Context,
 	chatID string,

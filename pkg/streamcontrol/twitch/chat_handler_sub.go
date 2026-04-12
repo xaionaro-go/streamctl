@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -79,19 +80,46 @@ func NewChatHandlerSub(
 
 	eventSubClient := twitcheventsub.NewClientWithUrl(urlString)
 
+	// reconnecting guards against multiple concurrent reconnect goroutines:
+	// each errCallback invocation would otherwise spawn a new goroutine,
+	// leading to a goroutine leak under rapid disconnect-reconnect cycles.
+	var reconnecting atomic.Bool
 	var errCallback func(ctx context.Context, err error)
 	errCallback = func(ctx context.Context, err error) {
 		logger.Errorf(ctx, "unable to read from the socket: %v", err)
-		go func() {
+		if !reconnecting.CompareAndSwap(false, true) {
+			logger.Debugf(ctx, "reconnect already in progress, skipping")
+			return
+		}
+		observability.Go(ctx, func(ctx context.Context) {
+			defer reconnecting.Store(false)
+			const maxDelay = 30 * time.Second
+			delay := time.Second
 			for {
-				err = eventSubClient.ConnectWithContext(ctx, errCallback)
-				if err == nil {
-					break
+				select {
+				case <-ctx.Done():
+					return
+				default:
 				}
-				time.Sleep(time.Second)
-				logger.Errorf(ctx, "unable to connect to '%s': %v", urlString, err)
+
+				err := eventSubClient.ConnectWithContext(ctx, errCallback)
+				if err == nil {
+					return
+				}
+
+				logger.Errorf(ctx, "unable to connect to '%s': %v; retrying in %v", urlString, err, delay)
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(delay):
+				}
+
+				delay *= 2
+				if delay > maxDelay {
+					delay = maxDelay
+				}
 			}
-		}()
+		})
 	}
 	eventSubClient.OnEventAutomodMessageHold(func(event twitcheventsub.EventAutomodMessageHold, msg twitcheventsub.NotificationMessage) {
 		h.sendMessage(ctx, streamcontrol.Event{
@@ -184,6 +212,26 @@ func NewChatHandlerSub(
 			},
 			Message: &streamcontrol.Message{
 				Content: fmt.Sprintf("%d viewers", event.Viewers),
+				Format:  streamcontrol.TextFormatTypePlain,
+			},
+		})
+	})
+	eventSubClient.OnEventChannelChannelPointsCustomRewardRedemptionAdd(func(event twitcheventsub.EventChannelChannelPointsCustomRewardRedemptionAdd, msg twitcheventsub.NotificationMessage) {
+		content := fmt.Sprintf("redeemed '%s' (%d pts)", event.Reward.Title, event.Reward.Cost)
+		if event.UserInput != "" {
+			content += ": " + event.UserInput
+		}
+		h.sendMessage(ctx, streamcontrol.Event{
+			ID:        streamcontrol.EventID(msg.Metadata.MessageID),
+			CreatedAt: msg.Metadata.MessageTimestamp,
+			Type:      streamcontrol.EventTypeChannelPointRedemption,
+			User: streamcontrol.User{
+				ID:   streamcontrol.UserID(event.UserID),
+				Slug: event.UserLogin,
+				Name: event.UserName,
+			},
+			Message: &streamcontrol.Message{
+				Content: content,
 				Format:  streamcontrol.TextFormatTypePlain,
 			},
 		})
@@ -337,7 +385,7 @@ func NewChatHandlerSub(
 			return
 		}
 
-		go func() {
+		observability.Go(ctx, func(ctx context.Context) {
 			for chanName, metadata := range eventMap {
 				params := &helix.EventSubSubscription{
 					Type:    string(chanName),
@@ -363,11 +411,10 @@ func NewChatHandlerSub(
 					twitch.SubUserAuthorizationRevoke,
 					twitch.SubUserAuthorizationGrant:
 					continue
-
 				}
 				resp, err := client.CreateEventSubSubscription(params)
 				if err != nil {
-					logger.Errorf(ctx, "unable to create a subscription (%#+v): %w", params, err)
+					logger.Errorf(ctx, "unable to create a subscription (%#+v): %v", params, err)
 				}
 				if resp.ErrorMessage != "" {
 					logger.Warnf(ctx, "unable to subscribe to '%s': %v", chanName, err)
@@ -375,7 +422,7 @@ func NewChatHandlerSub(
 				}
 				logger.Debugf(ctx, "successfully subscribed to '%s'", chanName)
 			}
-		}()
+		})
 	})
 
 	err = eventSubClient.ConnectWithContext(ctx, errCallback)

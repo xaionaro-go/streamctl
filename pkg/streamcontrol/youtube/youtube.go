@@ -15,7 +15,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/experimental/errmon"
 	"github.com/facebookincubator/go-belt/tool/logger"
@@ -49,7 +48,7 @@ type YouTube struct {
 	currentLiveBroadcastsLocker xsync.Mutex
 	currentLiveBroadcasts       []*youtube.LiveBroadcast
 
-	chatListeners map[string]*chatListener
+	chatListeners map[string]chatListener
 
 	messagesOutChan chan streamcontrol.Event
 }
@@ -61,7 +60,14 @@ const (
 	debugUseMockClient = false
 )
 
-type chatListener = ChatListenerOBSOLETE
+// chatListener is the common interface for YouTube chat polling implementations.
+// Both ChatListenerOBSOLETE (InnerTube scraper) and ChatListener (YouTube Data API)
+// satisfy this interface.
+type chatListener interface {
+	Close(ctx context.Context) error
+	MessagesChan() <-chan streamcontrol.Event
+	GetVideoID() string
+}
 
 func New(
 	ctx context.Context,
@@ -82,7 +88,7 @@ func New(
 		SaveConfigFunc: saveCfgFn,
 		CancelFunc:     cancelFn,
 
-		chatListeners: map[string]*chatListener{},
+		chatListeners: map[string]chatListener{},
 
 		messagesOutChan: make(chan streamcontrol.Event, 100),
 	}
@@ -678,7 +684,7 @@ func (yt *YouTube) StartStream(
 		return err
 	})
 	if err != nil {
-		logger.Error(ctx, "unable to delete other upcoming streams: %v", err)
+		logger.Errorf(ctx, "unable to delete other upcoming streams: %v", err)
 	}
 
 	var broadcasts []*youtube.LiveBroadcast
@@ -1003,19 +1009,19 @@ func (yt *YouTube) startChatListener(
 	logger.Debugf(ctx, "startChatListener(ctx, '%s':'%s')", videoID, chatID)
 	defer func() { logger.Debugf(ctx, "/startChatListener(ctx, '%s':'%s'): %v", videoID, chatID, _err) }()
 
-	_chatListener, err := NewChatListenerOBSOLETE(ctx, videoID, func(
+	listener, err := NewRedundantChatListener(ctx, yt.YouTubeClient, videoID, chatID, func(
 		ctx context.Context,
-		_chatListener *chatListener,
+		_chatListener *RedundantChatListener,
 	) {
 		yt.deleteChatListener(ctx, _chatListener)
 	})
 	if err != nil {
-		return fmt.Errorf("unable to initialize the chat listener instance: %w", err)
+		return fmt.Errorf("unable to start chat listeners for '%s': %w", videoID, err)
 	}
 
-	oldListener := xsync.DoR1(ctx, &yt.locker, func() *chatListener {
+	oldListener := xsync.DoR1(ctx, &yt.locker, func() chatListener {
 		oldListener := yt.chatListeners[broadcast.Id]
-		yt.chatListeners[broadcast.Id] = _chatListener
+		yt.chatListeners[broadcast.Id] = listener
 		return oldListener
 	})
 	if oldListener != nil {
@@ -1025,7 +1031,7 @@ func (yt *YouTube) startChatListener(
 	}
 
 	observability.Go(ctx, func(ctx context.Context) {
-		err := yt.processChatListener(ctx, _chatListener)
+		err := yt.processChatListener(ctx, listener)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			logger.Errorf(ctx, "unable to process the chat listener for '%s': %v", videoID, err)
 		}
@@ -1046,7 +1052,7 @@ func (yt *YouTube) deleteChatListenerByBroadcast(
 
 func (yt *YouTube) deleteChatListener(
 	ctx context.Context,
-	chatListener *chatListener,
+	chatListener chatListener,
 ) error {
 	err := chatListener.Close(ctx)
 	if err != nil {
@@ -1062,7 +1068,7 @@ func (yt *YouTube) deleteChatListener(
 
 func (yt *YouTube) processChatListener(
 	ctx context.Context,
-	chatListener *chatListener,
+	chatListener chatListener,
 ) (_err error) {
 	defer func() {
 		err := yt.deleteChatListener(ctx, chatListener)
@@ -1093,8 +1099,8 @@ func (yt *YouTube) processChatListener(
 func (yt *YouTube) getChatListener(
 	ctx context.Context,
 	broadcast *youtube.LiveBroadcast,
-) *chatListener {
-	return xsync.DoR1(ctx, &yt.locker, func() *chatListener {
+) chatListener {
+	return xsync.DoR1(ctx, &yt.locker, func() chatListener {
 		return yt.chatListeners[broadcast.Id]
 	})
 }
@@ -1420,7 +1426,11 @@ func (yt *YouTube) GetChatMessagesChan(
 					logger.Debugf(ctx, "the input channel is closed")
 					return
 				}
-				outCh <- ev
+				select {
+				case outCh <- ev:
+				case <-ctx.Done():
+					return
+				}
 			}
 		}
 	})
@@ -1434,24 +1444,23 @@ func (yt *YouTube) SendChatMessage(
 ) (_err error) {
 	logger.Debugf(ctx, "SendChatMessage(ctx, '%s')", message)
 	defer func() { logger.Debugf(ctx, "/SendChatMessage(ctx, '%s'): %v", message, _err) }()
+	// Uses LiveChatMessages.Insert (live chat API), not InsertCommentThread (video comments API).
 	return xsync.DoR1(ctx, &yt.currentLiveBroadcastsLocker, func() error {
 		var result *multierror.Error
 		for _, broadcast := range yt.currentLiveBroadcasts {
-			commentInfo := &youtube.CommentThread{
-				Snippet: &youtube.CommentThreadSnippet{
-					ChannelId: yt.Config.Config.ChannelID,
-					TopLevelComment: &youtube.Comment{
-						Snippet: &youtube.CommentSnippet{
-							TextOriginal: message,
-						},
+			chatMsg := &youtube.LiveChatMessage{
+				Snippet: &youtube.LiveChatMessageSnippet{
+					LiveChatId: broadcast.Snippet.LiveChatId,
+					Type:       "textMessageEvent",
+					TextMessageDetails: &youtube.LiveChatTextMessageDetails{
+						MessageText: message,
 					},
-					VideoId: broadcast.Id,
 				},
 			}
-			logger.Tracef(ctx, "commentInfo: %s", spew.Sdump(commentInfo))
-			err := yt.YouTubeClient.InsertCommentThread(ctx, commentInfo, []string{"snippet"})
+			err := yt.YouTubeClient.InsertLiveChatMessage(ctx, chatMsg, []string{"snippet"})
 			if err != nil {
-				result = multierror.Append(result, fmt.Errorf("unable to post the comment under video '%s': %w: %s", broadcast.Id, err, spew.Sdump(commentInfo)))
+				result = multierror.Append(result, fmt.Errorf(
+					"unable to send chat message to broadcast '%s': %w", broadcast.Id, err))
 			}
 		}
 		return result.ErrorOrNil()
@@ -1464,51 +1473,51 @@ func (yt *YouTube) RemoveChatMessage(
 ) (_err error) {
 	logger.Debugf(ctx, "RemoveChatMessage(ctx, '%s')", messageID)
 	defer func() { logger.Debugf(ctx, "/RemoveChatMessage(ctx, '%s'): %v", messageID, _err) }()
-	// TODO: The `messageID` value below is not a message ID, unfortunately.
-	//       It just contains the author and the message as a temporary solution.
-	//       Find a way to extract the message ID.
-
-	words := strings.SplitN(string(messageID), "/", 2)
-	if len(words) != 2 {
-		return fmt.Errorf("internal error: cannot split '%s' to author and message", messageID)
-	}
-	authorName := words[0]
-	message := words[1]
-
-	count := 0
-	for _, broadcast := range yt.currentLiveBroadcasts {
-		resp, err := yt.YouTubeClient.ListChatMessages(ctx, broadcast.Snippet.LiveChatId, []string{"snippet"})
-		if err != nil {
-			return fmt.Errorf("unable to get the list of current chat messages under livestream %s: %w", broadcast.Id, err)
-		}
-
-		for _, item := range resp.Items {
-			msgText := item.Snippet.TextMessageDetails.MessageText
-			msgAuthor := item.Snippet.AuthorChannelId
-			logger.Debugf(ctx, "comparing <%s|%s> with <%s|%s>", msgAuthor, msgText, authorName, message)
-			if msgText == message && msgAuthor == authorName {
-				count++
-				err := yt.YouTubeClient.DeleteChatMessage(ctx, string(messageID))
-				if err != nil {
-					return fmt.Errorf("unable to remove the message '%s': %w", messageID, err)
-				}
-			}
-		}
-	}
-
-	if count == 0 {
-		return fmt.Errorf("not found")
-	}
-
-	return nil
+	// messageID is the actual YouTube liveChatMessage.id, propagated through streamcontrol.Event.ID.
+	return yt.YouTubeClient.DeleteChatMessage(ctx, string(messageID))
 }
+
 func (yt *YouTube) BanUser(
 	ctx context.Context,
 	userID streamcontrol.UserID,
 	reason string,
 	deadline time.Time,
-) error {
-	return fmt.Errorf("not implemented, yet")
+) (_err error) {
+	logger.Debugf(ctx, "BanUser(ctx, '%s', '%s', %v)", userID, reason, deadline)
+	defer func() { logger.Debugf(ctx, "/BanUser(ctx, '%s'): %v", userID, _err) }()
+	return xsync.DoR1(ctx, &yt.currentLiveBroadcastsLocker, func() error {
+		var result *multierror.Error
+		for _, broadcast := range yt.currentLiveBroadcasts {
+			ban := &youtube.LiveChatBan{
+				Snippet: &youtube.LiveChatBanSnippet{
+					LiveChatId: broadcast.Snippet.LiveChatId,
+					BannedUserDetails: &youtube.ChannelProfileDetails{
+						ChannelId: string(userID),
+					},
+					Type: banType(deadline),
+				},
+			}
+			if !deadline.IsZero() {
+				dur := time.Until(deadline)
+				if dur > 0 {
+					ban.Snippet.BanDurationSeconds = uint64(dur.Seconds())
+				}
+			}
+			err := yt.YouTubeClient.InsertLiveChatBan(ctx, ban, []string{"snippet"})
+			if err != nil {
+				result = multierror.Append(result, fmt.Errorf(
+					"unable to ban user '%s' in broadcast '%s': %w", userID, broadcast.Id, err))
+			}
+		}
+		return result.ErrorOrNil()
+	})
+}
+
+func banType(deadline time.Time) string {
+	if deadline.IsZero() {
+		return "permanent"
+	}
+	return "temporary"
 }
 
 func (yt *YouTube) IsCapable(
@@ -1521,7 +1530,7 @@ func (yt *YouTube) IsCapable(
 	case streamcontrol.CapabilityDeleteChatMessage:
 		return true
 	case streamcontrol.CapabilityBanUser:
-		return false
+		return true
 	case streamcontrol.CapabilityShoutout:
 		return true
 	case streamcontrol.CapabilityIsChannelStreaming:
@@ -1561,7 +1570,7 @@ func (yt *YouTube) Shoutout(
 ) error {
 	resp, err := yt.YouTubeClient.Search(ctx, string(chanID), "", []string{"snippet"})
 	if err != nil {
-		logger.Errorf(ctx, "unable to get channel info ('%s'): %w", chanID, err)
+		logger.Errorf(ctx, "unable to get channel info ('%s'): %v", chanID, err)
 		return yt.shoutoutWithoutSearch(ctx, chanID)
 	}
 	if len(resp.Items) == 0 {

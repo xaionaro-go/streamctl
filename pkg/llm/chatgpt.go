@@ -21,14 +21,19 @@ func NewChatGPT(
 	ctx context.Context,
 	modelName string,
 	apiKey secret.String,
+	apiURL string,
 ) (_ret *ChatGPT, _err error) {
 	logger.Tracef(ctx, "NewChatGPT")
 	defer func() { logger.Tracef(ctx, "/NewChatGPT: %v", _err) }()
 
-	chatModel, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
+	cfg := &openai.ChatModelConfig{
 		Model:  modelName,
 		APIKey: apiKey.Get(),
-	})
+	}
+	if apiURL != "" {
+		cfg.BaseURL = apiURL
+	}
+	chatModel, err := openai.NewChatModel(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("unable to initialize the ChatGPT model '%s': %w", modelName, err)
 	}

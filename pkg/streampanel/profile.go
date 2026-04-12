@@ -921,7 +921,7 @@ func (p *Panel) onProfilesListSelect(
 	ctx := context.TODO()
 	p.setupStreamButton.Enable()
 
-	profileName := p.profilesOrder[id]
+	profileName := p.profilesOrderFiltered[id]
 	var profile Profile
 	p.configCacheLocker.Do(ctx, func() {
 		profile = getProfile(p.configCache, profileName)

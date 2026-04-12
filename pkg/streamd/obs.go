@@ -70,7 +70,9 @@ func (d *StreamD) initOBSBackend(ctx context.Context) error {
 		}
 	}
 	d.StreamControllers.OBS = obs
-	go d.listenOBSEvents(ctx, obs)
+	observability.Go(ctx, func(ctx context.Context) {
+		d.listenOBSEvents(ctx, obs)
+	})
 	return nil
 }
 

@@ -64,20 +64,20 @@ func main() {
 			func() {
 				f, err := os.OpenFile(*outputFile+"~", os.O_CREATE|os.O_WRONLY, 0644)
 				if err != nil {
-					logger.Error(ctx, "unable to open '%s'", *outputFile)
+					logger.Errorf(ctx, "unable to open '%s'", *outputFile)
 					return
 				}
 				defer f.Close()
 
 				err = png.Encode(f, img)
 				if err != nil {
-					logger.Errorf(ctx, "unable to encode the image to PNG: %w", err)
+					logger.Errorf(ctx, "unable to encode the image to PNG: %v", err)
 					return
 				}
 
 				err = os.Rename(*outputFile+"~", *outputFile)
 				if err != nil {
-					logger.Errorf(ctx, "unable to rename '%s~' to '%s': %w", *outputFile, *outputFile, err)
+					logger.Errorf(ctx, "unable to rename '%s~' to '%s': %v", *outputFile, *outputFile, err)
 					return
 				}
 			}()

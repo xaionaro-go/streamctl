@@ -35,6 +35,9 @@ func (d *StreamD) LLMGenerate(
 	ctx context.Context,
 	prompt string,
 ) (string, error) {
+	if d.llm == nil {
+		return "", fmt.Errorf("LLM subsystem not initialized yet")
+	}
 	return d.llm.Generate(ctx, prompt)
 }
 
@@ -74,9 +77,23 @@ func (l *llm) updateConfigNoLock(
 		return nil
 	}
 
-	backend, err := llms.NewChatGPT(xcontext.DetachDone(ctx), endpoint.ModelName, secret.New(endpoint.APIKey))
+	logger.Debugf(ctx, "initializing LLM: model=%q apiURL=%q", endpoint.ModelName, endpoint.APIURL)
+
+	// Use OllamaProvider when api_url points to an Ollama instance.
+	if endpoint.APIURL != "" {
+		l.backend = &ollamaLLMAdapter{
+			provider: &llms.OllamaProvider{
+				APIURL: endpoint.APIURL,
+				Model:  endpoint.ModelName,
+			},
+		}
+		logger.Debugf(ctx, "LLM initialized via OllamaProvider")
+		return nil
+	}
+
+	backend, err := llms.NewChatGPT(xcontext.DetachDone(ctx), endpoint.ModelName, secret.New(endpoint.APIKey), endpoint.APIURL)
 	if err != nil {
-		return fmt.Errorf("unable to initialize ")
+		return fmt.Errorf("unable to initialize ChatGPT model %q: %w", endpoint.ModelName, err)
 	}
 
 	l.backend = backend
@@ -101,4 +118,23 @@ func (l *llm) generateNoLock(
 	}
 
 	return l.backend.Generate(ctx, prompt)
+}
+
+// ollamaLLMAdapter adapts an llms.OllamaProvider (Provider interface)
+// to the llmtypes.LLM interface expected by streamd.
+type ollamaLLMAdapter struct {
+	provider *llms.OllamaProvider
+}
+
+const ollamaSystemPrompt = "You are a generator of texts that assists a streaming creator to increase the audience. You need to always answer only the resulting/required text itself that could be easily copy&paste-d."
+
+func (a *ollamaLLMAdapter) Generate(
+	ctx context.Context,
+	prompt string,
+) (string, error) {
+	return a.provider.Translate(ctx, ollamaSystemPrompt, prompt)
+}
+
+func (a *ollamaLLMAdapter) Close() error {
+	return nil
 }

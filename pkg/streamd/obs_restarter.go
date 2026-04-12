@@ -110,7 +110,7 @@ func (r *obsRestarter) checkOBSAndRestartIfNeeded(
 		defer closeFn()
 	}
 	if err != nil {
-		logger.Error(ctx, "unable to connect to OBS server: %v", err)
+		logger.Errorf(ctx, "unable to connect to OBS server: %v", err)
 		r.restartOBS(ctx, execCmd)
 		return
 	}

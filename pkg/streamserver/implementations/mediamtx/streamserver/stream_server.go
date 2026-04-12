@@ -176,7 +176,7 @@ func (s *StreamServer) PathNotReady(path defs.Path) {
 	s.streamsStatusLocker.Do(context.Background(), func() {
 		publisher := s.publishers[appKey]
 		if publisher == nil {
-			logger.Error(ctx, "there was no registered publisher for '%s'", appKey)
+			logger.Errorf(ctx, "there was no registered publisher for '%s'", appKey)
 			return
 		}
 

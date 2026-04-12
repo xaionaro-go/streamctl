@@ -9,19 +9,19 @@ var funcMap = map[string]interface{}{
 	"devnull": func(args ...any) string {
 		return ""
 	},
-	"httpGET": func(urlString string) string {
+	"httpGET": func(urlString string) (string, error) {
 		resp, err := http.Get(urlString)
 		if err != nil {
-			panic(err)
+			return "", err
 		}
 		defer resp.Body.Close()
 
 		b, err := io.ReadAll(resp.Body)
 		if err != nil {
-			panic(err)
+			return "", err
 		}
 
-		return string(b)
+		return string(b), nil
 	},
 	"httpGETIgnoreErrors": func(urlString string) string {
 		resp, err := http.Get(urlString)

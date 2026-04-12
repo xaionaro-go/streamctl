@@ -109,9 +109,10 @@ type Panel struct {
 	twitchCheck  *widget.Check
 	kickCheck    *widget.Check
 
-	configPath        string
-	configCacheLocker xsync.Mutex
-	configCache       *streamdconfig.Config
+	configPath           string
+	configCacheLocker    xsync.Mutex
+	configCache          *streamdconfig.Config
+	configCacheVersion   uint64 // incremented under configCacheLocker on every write
 
 	setStatusFunc func(string)
 
@@ -150,7 +151,8 @@ type Panel struct {
 	streamPlayersLocker              xsync.Mutex
 	streamPlayersUpdaterCanceller    context.CancelFunc
 
-	obsSelectScene *widget.Select
+	obsSelectScene         *widget.Select
+	obsSceneItemsContainer *fyne.Container
 
 	errorReportsLocker xsync.Mutex
 	errorReports       map[string]errorReport
@@ -1213,6 +1215,8 @@ func (p *Panel) getUpdatedStatus_backends_noLock(ctx context.Context) {
 				p.obsSelectScene.Selected = sceneListResp.CurrentProgramSceneName
 				p.obsSelectScene.Refresh()
 			}
+
+			p.refreshOBSSceneItems(ctx, obsServer, sceneListResp.CurrentProgramSceneName)
 		})
 	} else {
 		if p.updateStreamClockHandler != nil {
@@ -1611,6 +1615,7 @@ func (p *Panel) initMainWindow(
 			p.DisplayError(err)
 		}
 	})
+	p.obsSceneItemsContainer = container.NewVBox()
 	obsPage := container.NewBorder(
 		nil,
 		nil,
@@ -1618,6 +1623,9 @@ func (p *Panel) initMainWindow(
 		nil,
 		container.NewVBox(
 			container.NewHBox(widget.NewLabel("Scene:"), p.obsSelectScene),
+			widget.NewSeparator(),
+			widget.NewLabel("Scene Items:"),
+			p.obsSceneItemsContainer,
 		),
 	)
 
@@ -2371,7 +2379,9 @@ func (p *Panel) doStopStream(ctx context.Context) {
 
 func (p *Panel) onSetupStreamButton(ctx context.Context) {
 	ctx = xcontext.DetachDone(ctx)
-	p.setupStream(ctx)
+	observability.Go(ctx, func(ctx context.Context) {
+		p.setupStream(ctx)
+	})
 }
 
 func (p *Panel) onStartStopButton(ctx context.Context) {
@@ -2388,7 +2398,9 @@ func (p *Panel) onStartStopButton(ctx context.Context) {
 			"Are you sure you want to end the stream?",
 			func(b bool) {
 				if b {
-					p.stopStream(ctx)
+					observability.Go(ctx, func(ctx context.Context) {
+						p.stopStream(ctx)
+					})
 				}
 			},
 			p.mainWindow,
@@ -2400,7 +2412,9 @@ func (p *Panel) onStartStopButton(ctx context.Context) {
 			"Are you ready to start the stream?",
 			func(b bool) {
 				if b {
-					p.startStream(ctx)
+					observability.Go(ctx, func(ctx context.Context) {
+						p.startStream(ctx)
+					})
 				}
 			},
 			p.mainWindow,
@@ -2529,6 +2543,7 @@ func (p *Panel) SetStreamDConfig(
 		}
 
 		p.configCache = newCfg
+		p.configCacheVersion++
 		return nil
 	})
 }
@@ -2557,6 +2572,7 @@ func (p *Panel) localConfigCacheUpdater(ctx context.Context) (_err error) {
 
 	p.configCacheLocker.Do(ctx, func() {
 		p.configCache = newCfg
+		p.configCacheVersion++
 	})
 
 	observability.Go(ctx, func(ctx context.Context) {
@@ -2575,6 +2591,14 @@ func (p *Panel) localConfigCacheUpdater(ctx context.Context) (_err error) {
 				logger.Errorf(ctx, "the channel is closed")
 				return
 			}
+
+			// Snapshot the version before the slow backend call so we can
+			// detect if SetStreamDConfig ran concurrently.
+			var versionBefore uint64
+			p.configCacheLocker.Do(ctx, func() {
+				versionBefore = p.configCacheVersion
+			})
+
 			newCfg, err := p.StreamD.GetConfig(ctx)
 			if err != nil {
 				logger.Errorf(ctx, "unable to get the new config: %v", err)
@@ -2585,9 +2609,23 @@ func (p *Panel) localConfigCacheUpdater(ctx context.Context) (_err error) {
 				logger.Errorf(ctx, "unable to convert the config: %v", err)
 				continue
 			}
+
+			var skipped bool
 			p.configCacheLocker.Do(ctx, func() {
+				if p.configCacheVersion != versionBefore {
+					// Config was written by SetStreamDConfig while we were
+					// fetching from the backend. Our data may be stale; the
+					// next config change event will re-fetch.
+					skipped = true
+					return
+				}
 				p.configCache = newCfg
+				p.configCacheVersion++
 			})
+			if skipped {
+				logger.Debugf(ctx, "config cache was updated concurrently; skipping stale backend fetch")
+				continue
+			}
 			logger.Debugf(ctx, "updated the config cache")
 			observability.SecretsProviderFromCtx(ctx).(*observability.SecretsStaticProvider).ParseSecretsFrom(newCfg)
 			logger.Debugf(ctx, "updated the secrets")

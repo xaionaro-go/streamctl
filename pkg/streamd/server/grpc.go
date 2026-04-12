@@ -91,17 +91,14 @@ func (grpc *GRPCServer) Ping(
 func (grpc *GRPCServer) Close() error {
 	err := &multierror.Error{}
 	ctx := context.TODO()
-	hs := xsync.DoR1(
-		ctx,
-		&grpc.OAuthURLHandlerLocker,
-		func() oauthURLHandlers {
-			return grpc.OAuthURLHandlers
-		},
-	)
-	for listenPort, sender := range hs {
-		_ = sender // TODO: invent sender.Close()
-		delete(grpc.OAuthURLHandlers, listenPort)
-	}
+	grpc.OAuthURLHandlerLocker.Do(ctx, func() {
+		for listenPort, handlers := range grpc.OAuthURLHandlers {
+			for _, handler := range handlers {
+				handler.CancelFn()
+			}
+			delete(grpc.OAuthURLHandlers, listenPort)
+		}
+	})
 	return err.ErrorOrNil()
 }
 
@@ -475,6 +472,38 @@ func (grpc *GRPCServer) ApplyProfile(
 		)
 	}
 	return &streamd_grpc.ApplyProfileReply{}, nil
+}
+
+func (grpc *GRPCServer) ListStreamProfiles(
+	ctx context.Context,
+	req *streamd_grpc.ListStreamProfilesRequest,
+) (*streamd_grpc.ListStreamProfilesReply, error) {
+	cfg, err := grpc.StreamD.GetConfig(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get config: %w", err)
+	}
+
+	seen := map[streamcontrol.ProfileName]bool{}
+	var profiles []*streamd_grpc.StreamProfileEntry
+	for _, backend := range cfg.Backends {
+		for name := range backend.StreamProfiles {
+			if seen[name] {
+				continue
+			}
+			seen[name] = true
+			entry := &streamd_grpc.StreamProfileEntry{
+				Name: string(name),
+			}
+			if meta, ok := cfg.ProfileMetadata[name]; ok {
+				entry.DefaultTitle = meta.DefaultStreamTitle
+				entry.DefaultDescription = meta.DefaultStreamDescription
+			}
+			profiles = append(profiles, entry)
+		}
+	}
+	return &streamd_grpc.ListStreamProfilesReply{
+		Profiles: profiles,
+	}, nil
 }
 
 func (grpc *GRPCServer) UpdateStream(

@@ -116,8 +116,10 @@ func (l *ChatListener) listenLoop(ctx context.Context) (_err error) {
 				},
 			}
 			if item.Snippet.SuperChatDetails != nil {
-				msg.Paid.Currency = streamcontrol.CurrencyOther
-				msg.Paid.Amount = float64(item.Snippet.SuperChatDetails.AmountMicros) / 1000000
+				msg.Paid = &streamcontrol.Money{
+					Currency: parseCurrencyString(item.Snippet.SuperChatDetails.Currency),
+					Amount:   float64(item.Snippet.SuperChatDetails.AmountMicros) / 1000000,
+				}
 			}
 			select {
 			case l.messagesOutChan <- msg:
@@ -142,4 +144,19 @@ func (h *ChatListener) MessagesChan() <-chan streamcontrol.Event {
 
 func (h *ChatListener) GetVideoID() string {
 	return h.videoID
+}
+
+func parseCurrencyString(s string) streamcontrol.Currency {
+	switch s {
+	case "USD":
+		return streamcontrol.CurrencyUSD
+	case "EUR":
+		return streamcontrol.CurrencyEUR
+	case "GBP":
+		return streamcontrol.CurrencyGBP
+	case "JPY":
+		return streamcontrol.CurrencyJPY
+	default:
+		return streamcontrol.CurrencyOther
+	}
 }

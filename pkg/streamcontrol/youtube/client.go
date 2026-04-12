@@ -54,6 +54,8 @@ type client interface {
 	InsertCommentThread(ctx context.Context, t *youtube.CommentThread, parts []string) error
 	ListChatMessages(ctx context.Context, chatID string, parts []string) (*youtube.LiveChatMessageListResponse, error)
 	DeleteChatMessage(ctx context.Context, messageID string) error
+	InsertLiveChatMessage(ctx context.Context, msg *youtube.LiveChatMessage, parts []string) error
+	InsertLiveChatBan(ctx context.Context, ban *youtube.LiveChatBan, parts []string) error
 	Search(ctx context.Context, chanID string, eventType EventType, parts []string) (*youtube.SearchListResponse, error)
 }
 
@@ -318,6 +320,28 @@ func (c *clientV3) DeleteChatMessage(
 	defer func() { logger.Tracef(ctx, "/DeleteChatMessage: %v", _err) }()
 	do := c.Service.LiveChatMessages.Delete(messageID).Context(ctx).Do
 	return wrapRequest(ctx, c.RequestWrapper, do)
+}
+
+func (c *clientV3) InsertLiveChatMessage(
+	ctx context.Context,
+	msg *youtube.LiveChatMessage,
+	parts []string,
+) (_err error) {
+	logger.Tracef(ctx, "InsertLiveChatMessage")
+	defer func() { logger.Tracef(ctx, "/InsertLiveChatMessage: %v", _err) }()
+	do := c.Service.LiveChatMessages.Insert(parts, msg).Context(ctx).Do
+	return wrapRequestS(ctx, c.RequestWrapper, do)
+}
+
+func (c *clientV3) InsertLiveChatBan(
+	ctx context.Context,
+	ban *youtube.LiveChatBan,
+	parts []string,
+) (_err error) {
+	logger.Tracef(ctx, "InsertLiveChatBan")
+	defer func() { logger.Tracef(ctx, "/InsertLiveChatBan: %v", _err) }()
+	do := c.Service.LiveChatBans.Insert(parts, ban).Context(ctx).Do
+	return wrapRequestS(ctx, c.RequestWrapper, do)
 }
 
 func (c *clientV3) GetLiveChatMessages(

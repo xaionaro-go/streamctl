@@ -2,7 +2,6 @@ package youtube
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
@@ -10,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -18,7 +18,6 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
-	"github.com/xaionaro-go/xsync"
 )
 
 const youtubeWatchURLString = `https://www.youtube.com/watch`
@@ -64,15 +63,12 @@ type ChatListenerOBSOLETE struct {
 	wg               sync.WaitGroup
 	cancelFunc       context.CancelFunc
 	messagesOutChan  chan streamcontrol.Event
-
-	channelIDToName       map[string]streamcontrol.UserID
-	channelIDToNameLocker xsync.Mutex
 }
 
 func NewChatListenerOBSOLETE(
 	ctx context.Context,
 	videoID string,
-	onClose func(context.Context, *chatListener),
+	onClose func(context.Context, *ChatListenerOBSOLETE),
 ) (*ChatListenerOBSOLETE, error) {
 	if videoID == "" {
 		return nil, fmt.Errorf("video ID is empty")
@@ -92,7 +88,6 @@ func NewChatListenerOBSOLETE(
 		clientConfig:     cfg,
 		cancelFunc:       cancelFunc,
 		messagesOutChan:  make(chan streamcontrol.Event, 100),
-		channelIDToName:  map[string]streamcontrol.UserID{},
 	}
 	l.wg.Add(1)
 	observability.Go(ctx, func(ctx context.Context) {
@@ -143,16 +138,13 @@ func (l *ChatListenerOBSOLETE) listenLoop(ctx context.Context) (_err error) {
 
 		for _, msg := range msgs {
 			text, format := l.normalizeMessage(ctx, msg.Message)
-			userID := l.getUserID(ctx, sanitizeAuthorID(msg.AuthorID))
-			l.messagesOutChan <- streamcontrol.Event{
-				// TODO: find a way to extract the message ID,
-				//       in the mean while we we use a soft key for that:
-				ID:        streamcontrol.EventID(fmt.Sprintf("%s/%s", msg.AuthorName, msg.Message)),
+			channelID := streamcontrol.UserID(sanitizeAuthorID(msg.AuthorID))
+			ev := streamcontrol.Event{
+				ID:        streamcontrol.EventID(msg.ID),
 				CreatedAt: msg.Timestamp,
-				Type:      streamcontrol.EventTypeChatMessage,
 				User: streamcontrol.User{
-					ID:   userID,
-					Slug: string(userID),
+					ID:   channelID,
+					Slug: string(channelID),
 					Name: sanitizeAuthorName(msg.AuthorName),
 				},
 				Message: &streamcontrol.Message{
@@ -160,6 +152,22 @@ func (l *ChatListenerOBSOLETE) listenLoop(ctx context.Context) (_err error) {
 					Format:  format,
 				},
 			}
+
+			switch msg.Type {
+			case ytchat.ChatMessageTypeViewerEngagement:
+				ev.Type = streamcontrol.EventTypeGreeting
+			case ytchat.ChatMessageTypePaidMessage, ytchat.ChatMessageTypePaidSticker:
+				ev.Type = streamcontrol.EventTypeCheer
+				currency, amount := parsePurchaseAmountText(msg.PurchaseAmount)
+				ev.Paid = &streamcontrol.Money{
+					Currency: currency,
+					Amount:   amount,
+				}
+			default:
+				ev.Type = streamcontrol.EventTypeChatMessage
+			}
+
+			l.messagesOutChan <- ev
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
@@ -172,6 +180,50 @@ func sanitizeAuthorID(authorID string) string {
 func sanitizeAuthorName(authorName string) string {
 	r, _ := strings.CutPrefix(authorName, "@")
 	return r
+}
+
+// parsePurchaseAmountText parses YouTube SuperChat amount strings like "$2.00", "€5.00", "¥500"
+// into a currency and numeric amount.
+func parsePurchaseAmountText(s string) (streamcontrol.Currency, float64) {
+	s = strings.TrimSpace(s)
+	if len(s) == 0 {
+		return streamcontrol.CurrencyOther, 0
+	}
+
+	// Map leading currency symbols to Currency values.
+	// YouTube uses symbols like $, €, £, ¥ in purchaseAmountText.
+	// Multi-char prefixes (e.g. "R$") must be checked before single-char ones.
+	type prefix struct {
+		symbol   string
+		currency streamcontrol.Currency
+	}
+	prefixes := []prefix{
+		{"R$", streamcontrol.CurrencyOther},
+		{"$", streamcontrol.CurrencyUSD},
+		{"€", streamcontrol.CurrencyEUR},
+		{"£", streamcontrol.CurrencyGBP},
+		{"¥", streamcontrol.CurrencyJPY},
+	}
+
+	currency := streamcontrol.CurrencyOther
+	amountStr := s
+	for _, p := range prefixes {
+		if strings.HasPrefix(s, p.symbol) {
+			currency = p.currency
+			amountStr = strings.TrimPrefix(s, p.symbol)
+			break
+		}
+	}
+
+	// Remove thousands separators (commas) and spaces.
+	amountStr = strings.ReplaceAll(amountStr, ",", "")
+	amountStr = strings.TrimSpace(amountStr)
+
+	amount, err := strconv.ParseFloat(amountStr, 64)
+	if err != nil {
+		return currency, 0
+	}
+	return currency, amount
 }
 
 func (h *ChatListenerOBSOLETE) normalizeMessage(
@@ -196,60 +248,6 @@ func messageAsHTML(msg string) string {
 		link = html.EscapeString(link)
 		return fmt.Sprintf(`<img src="%s">`, link)
 	})
-}
-
-func (h *ChatListenerOBSOLETE) getUserID(
-	ctx context.Context,
-	authorID string,
-) (_ret streamcontrol.UserID) {
-	logger.Tracef(ctx, "getUserID(ctx, '%s')", authorID)
-	defer func() { logger.Tracef(ctx, "/getUserID(ctx, '%s'): %v", authorID, _ret) }()
-	return xsync.DoR1(ctx, &h.channelIDToNameLocker, func() streamcontrol.UserID {
-		if v, ok := h.channelIDToName[authorID]; ok {
-			return v
-		}
-
-		v, err := h.resolveChannelID(ctx, authorID)
-		if err != nil {
-			logger.Errorf(ctx, "unable to resolve channel ID '%s': %v", authorID, err)
-			return streamcontrol.UserID(authorID)
-		}
-
-		h.channelIDToName[authorID] = v
-		return v
-	})
-}
-
-func (h *ChatListenerOBSOLETE) resolveChannelID(
-	ctx context.Context,
-	authorID string,
-) (_ret streamcontrol.UserID, _err error) {
-	logger.Debugf(ctx, "resolveChannelID(ctx, '%s')", authorID)
-	defer func() { logger.Debugf(ctx, "/resolveChannelID(ctx, '%s'): %v %v", authorID, _ret, _err) }()
-
-	urlString := fmt.Sprintf("https://www.youtube.com/channel/%s", authorID)
-	initialDataBytes, _, err := ytchat.GetYTDataFromURL(urlString)
-	if err != nil {
-		return "", fmt.Errorf("unable to get data from '%s': %w", urlString, err)
-	}
-
-	type initialDataT struct {
-		Metadata struct {
-			ChannelMetadataRenderer struct {
-				VanityChannelURL string `json:"vanityChannelUrl"`
-			} `json:"channelMetadataRenderer"`
-		} `json:"metadata"`
-	}
-	var initialData initialDataT
-	if err := json.Unmarshal(initialDataBytes, &initialData); err != nil {
-		return "", fmt.Errorf("unable to JSON-unmarshal '%s': %w", initialDataBytes, err)
-	}
-
-	vanityURLString := initialData.Metadata.ChannelMetadataRenderer.VanityChannelURL
-	vanityURLParts := strings.Split(vanityURLString, "/")
-	channelSlug := vanityURLParts[len(vanityURLParts)-1]
-	channelSlug = strings.Trim(channelSlug, "@")
-	return streamcontrol.UserID(channelSlug), nil
 }
 
 func (h *ChatListenerOBSOLETE) Close(ctx context.Context) (_err error) {
