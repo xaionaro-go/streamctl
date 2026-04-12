@@ -44,6 +44,11 @@ import (
 const forceNetPProfOnAndroid = true
 
 func main() {
+	// Must run before pflag.Parse() — pflag rejects unknown --internal-chat-listener* flags.
+	if chathandler.RunAsChatListenerIfRequested(context.Background()) {
+		return
+	}
+
 	loggerLevel := logger.LevelWarning
 	pflag.Var(&loggerLevel, "log-level", "Log level")
 	logstashAddr := pflag.String(
@@ -102,10 +107,6 @@ func main() {
 
 	ctx := context.Background()
 	ctx = logger.CtxWithLogger(ctx, l)
-
-	if chathandler.RunAsChatListenerIfRequested(ctx) {
-		return
-	}
 
 	secretsProvider := observability.NewStaticSecretsProvider()
 	ctx = observability.WithSecretsProvider(ctx, secretsProvider)

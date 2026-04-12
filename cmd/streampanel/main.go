@@ -30,6 +30,11 @@ import (
 const forceNetPProfOnAndroid = true
 
 func main() {
+	// Must run before pflag.Parse() — pflag rejects unknown --internal-chat-listener* flags.
+	if chathandler.RunAsChatListenerIfRequested(context.Background()) {
+		return
+	}
+
 	err := child_process_manager.InitializeChildProcessManager()
 	if err != nil {
 		panic(err)
@@ -47,10 +52,6 @@ func main() {
 	}
 	ctx, cancelFunc := initRuntime(ctx, flags, ProcessNameMain)
 	defer cancelFunc()
-
-	if chathandler.RunAsChatListenerIfRequested(ctx) {
-		return
-	}
 
 	if flags.Subprocess != "" {
 		runSubprocess(ctx, flags.Subprocess)
