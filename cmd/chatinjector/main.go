@@ -7,20 +7,17 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strings"
-	"sync"
 	"time"
 
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/facebookincubator/go-belt/tool/logger/implementation/logrus"
-	"github.com/goccy/go-yaml"
 	"github.com/spf13/pflag"
 	"github.com/xaionaro-go/observability"
+	"github.com/xaionaro-go/streamctl/pkg/chathandler"
 	"github.com/xaionaro-go/streamctl/pkg/llm"
-	llmcfg "github.com/xaionaro-go/streamctl/pkg/streamd/config/llm"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
-	"github.com/xaionaro-go/xpath"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -28,10 +25,10 @@ import (
 	// Register platform-specific ChatListenerFactory implementations.
 	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/platform/kick"
 	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/platform/twitch"
+	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/platform/youtube"
 )
 
 const (
-	reconnectDelay       = 5 * time.Second
 	tlsProbeTimeout      = 3 * time.Second
 	messagePreviewMax    = 60
 	defaultOpenRouterURL = "https://openrouter.ai/api"
@@ -41,9 +38,17 @@ const (
 
 func main() {
 	configPath := pflag.String("config", defaultConfigPath, "path to YAML config file")
+	platformFlag := pflag.String("platform", "", "platform name (twitch, kick, youtube)")
+	listenerTypeFlag := pflag.String("listener-type", "primary", "PACE listener type (primary, alternate, contingency, emergency)")
+	streamdAddrFlag := pflag.String("streamd-addr", "", "streamd gRPC address (overrides config)")
 	var logLevel logger.Level
 	pflag.Var(&logLevel, "log-level", "log level")
 	pflag.Parse()
+
+	if *platformFlag == "" {
+		fmt.Fprintf(os.Stderr, "fatal: --platform is required\n")
+		os.Exit(1)
+	}
 
 	if logLevel == logger.LevelUndefined {
 		logLevel = logger.LevelDebug
@@ -64,6 +69,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	if *streamdAddrFlag != "" {
+		cfg.StreamdAddr = *streamdAddrFlag
+	}
+
+	platName := streamcontrol.PlatformName(*platformFlag)
+
+	listenerType, err := streamcontrol.ChatListenerTypeFromString(*listenerTypeFlag)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
+		os.Exit(1)
+	}
+
 	var chain *llm.TranslatorChain
 	if cfg.Translation.TargetLanguage != "" {
 		chain, err = buildTranslatorChain(ctx, cfg.Translation)
@@ -73,7 +90,7 @@ func main() {
 		}
 	}
 
-	if err := run(ctx, cfg, chain); err != nil {
+	if err := run(ctx, cfg, platName, listenerType, chain); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return
 		}
@@ -82,188 +99,18 @@ func main() {
 	}
 }
 
-func buildTranslatorChain(
-	ctx context.Context,
-	tc TranslationConfig,
-) (_ret *llm.TranslatorChain, _err error) {
-	logger.Tracef(ctx, "buildTranslatorChain")
-	defer func() { logger.Tracef(ctx, "/buildTranslatorChain: %v", _err) }()
-
-	var entries []llm.ProviderEntry
-
-	for _, pc := range tc.Providers {
-		expanded, err := expandProvider(ctx, pc)
-		if err != nil {
-			return nil, fmt.Errorf("create provider %q: %w", pc.Type, err)
-		}
-		entries = append(entries, expanded...)
-	}
-
-	if len(entries) == 0 {
-		return nil, fmt.Errorf("translation target_language is set but no providers configured")
-	}
-
-	logger.Debugf(ctx, "built translator chain with %d providers for language %q",
-		len(entries), tc.TargetLanguage)
-
-	return llm.NewTranslatorChain(tc.TargetLanguage, tc.ChatHistorySize, entries), nil
-}
-
-func expandProvider(
-	ctx context.Context,
-	pc ProviderConfig,
-) (_ret []llm.ProviderEntry, _err error) {
-	logger.Tracef(ctx, "expandProvider")
-	defer func() { logger.Tracef(ctx, "/expandProvider: %v", _err) }()
-
-	entry := func(p llm.Provider) []llm.ProviderEntry {
-		return []llm.ProviderEntry{{
-			Provider:                p,
-			Parallelism:             pc.Parallelism,
-			MaxQueueSize:            pc.MaxQueueSize,
-			Timeout:                 pc.Timeout,
-			CircuitBreakerThreshold: pc.CircuitBreakerThreshold,
-			CircuitBreakerCooldown:  pc.CircuitBreakerCooldown,
-		}}
-	}
-
-	switch pc.Type {
-	case "ollama":
-		return entry(&llm.OllamaProvider{APIURL: pc.APIURL, Model: pc.Model}), nil
-	case "openai":
-		return entry(&llm.OpenAIProvider{APIURL: pc.APIURL, APIKey: pc.APIKey, Model: pc.Model}), nil
-	case "openrouter":
-		apiURL := pc.APIURL
-		if apiURL == "" {
-			apiURL = defaultOpenRouterURL
-		}
-		return entry(&llm.OpenAIProvider{APIURL: apiURL, APIKey: pc.APIKey, Model: pc.Model}), nil
-	case "zen":
-		apiURL := pc.APIURL
-		if apiURL == "" {
-			apiURL = defaultZenURL
-		}
-		return entry(&llm.OpenAIProvider{APIURL: apiURL, APIKey: pc.APIKey, Model: pc.Model}), nil
-	case "anthropic":
-		return entry(&llm.AnthropicProvider{APIURL: pc.APIURL, APIKey: pc.APIKey, Model: pc.Model}), nil
-	case "claude-code":
-		return entry(&llm.ClaudeCodeProvider{Model: pc.Model, Effort: pc.Effort}), nil
-	case "streamdcfg", "streampanelcfg":
-		return importLLMProviders(ctx, pc.ConfigPath, pc.Parallelism, pc.Timeout)
-	default:
-		return nil, fmt.Errorf("unknown provider type %q", pc.Type)
-	}
-}
-
-// importLLMProviders reads LLM endpoints from a streamd or streampanel
-// config file and converts them into provider instances.
-func importLLMProviders(
-	ctx context.Context,
-	cfgPath string,
-	defaultParallelism int,
-	defaultTimeout time.Duration,
-) (_ret []llm.ProviderEntry, _err error) {
-	logger.Tracef(ctx, "importLLMProviders")
-	defer func() { logger.Tracef(ctx, "/importLLMProviders: %v", _err) }()
-
-	expandedPath, err := xpath.Expand(cfgPath)
-	if err != nil {
-		return nil, fmt.Errorf("expand path %q: %w", cfgPath, err)
-	}
-
-	data, err := os.ReadFile(expandedPath)
-	if err != nil {
-		return nil, fmt.Errorf("read %q: %w", expandedPath, err)
-	}
-
-	// Minimal struct to extract LLM config from either streamd or streampanel format.
-	type configLLMNested struct {
-		LLM llmcfg.Config `yaml:"llm"`
-	}
-	type configLLMOnly struct {
-		LLM            llmcfg.Config   `yaml:"llm"`
-		BuiltinStreamD configLLMNested `yaml:"streamd_builtin"`
-	}
-
-	var cfg configLLMOnly
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parse %q: %w", expandedPath, err)
-	}
-
-	// Merge endpoints from both top-level (streamd) and nested (streampanel) locations.
-	allEndpoints := llmcfg.Endpoints{}
-	for k, v := range cfg.LLM.Endpoints {
-		allEndpoints[k] = v
-	}
-	for k, v := range cfg.BuiltinStreamD.LLM.Endpoints {
-		allEndpoints[k] = v
-	}
-
-	logger.Debugf(ctx, "imported %d LLM endpoints from %q", len(allEndpoints), expandedPath)
-
-	par := defaultParallelism
-	if par <= 0 {
-		par = 1
-	}
-
-	var result []llm.ProviderEntry
-	for name, endpoint := range allEndpoints {
-		if endpoint == nil {
-			continue
-		}
-
-		logger.Debugf(ctx, "  endpoint %q: provider=%q api_url=%q model=%q",
-			name, endpoint.Provider, endpoint.APIURL, endpoint.ModelName)
-
-		p, err := endpointToProvider(endpoint)
-		if err != nil {
-			logger.Warnf(ctx, "skipping endpoint %q: %v", name, err)
-			continue
-		}
-
-		result = append(result, llm.ProviderEntry{Provider: p, Parallelism: par, Timeout: defaultTimeout})
-	}
-
-	return result, nil
-}
-
-func endpointToProvider(endpoint *llmcfg.Endpoint) (llm.Provider, error) {
-	switch endpoint.Provider {
-	case llmcfg.ProviderChatGPT:
-		apiURL := endpoint.APIURL
-		if apiURL == "" {
-			apiURL = defaultOpenAIURL
-		}
-		return &llm.OpenAIProvider{
-			APIURL: apiURL,
-			APIKey: endpoint.APIKey,
-			Model:  endpoint.ModelName,
-		}, nil
-	default:
-		if endpoint.APIURL == "" {
-			return nil, fmt.Errorf("unsupported provider %q with no api_url", endpoint.Provider)
-		}
-		// Treat unknown providers with a URL as Ollama-compatible.
-		return &llm.OllamaProvider{
-			APIURL: endpoint.APIURL,
-			Model:  endpoint.ModelName,
-		}, nil
-	}
-}
-
 func run(
 	ctx context.Context,
 	cfg AppConfig,
+	platName streamcontrol.PlatformName,
+	listenerType streamcontrol.ChatListenerType,
 	chain *llm.TranslatorChain,
 ) (_err error) {
 	logger.Tracef(ctx, "run")
 	defer func() { logger.Tracef(ctx, "/run: %v", _err) }()
 
-	switch {
-	case cfg.StreamdAddr == "":
-		return fmt.Errorf("streamd_addr is required")
-	case len(cfg.Platforms) == 0:
-		return fmt.Errorf("at least one platform is required")
+	if cfg.StreamdAddr == "" {
+		return fmt.Errorf("streamd_addr is required (set in config or via --streamd-addr)")
 	}
 
 	sdCreds := detectTransportCredentials(ctx, cfg.StreamdAddr)
@@ -277,10 +124,24 @@ func run(
 
 	sdClient := streamd_grpc.NewStreamDClient(sdConn)
 
-	for i := range cfg.Platforms {
-		if err := cfg.Platforms[i].resolveCredentials(ctx, sdClient); err != nil {
-			return fmt.Errorf("resolve credentials for platform %q: %w", cfg.Platforms[i].Type, err)
-		}
+	factory := chathandler.GetChatListenerFactory(platName)
+	if factory == nil {
+		return fmt.Errorf("no ChatListenerFactory registered for platform %q", platName)
+	}
+
+	platCfg, err := buildPlatformConfig(ctx, cfg, sdClient, platName)
+	if err != nil {
+		return fmt.Errorf("build platform config for %s: %w", platName, err)
+	}
+
+	listener, err := factory.CreateChatListener(ctx, platCfg, listenerType)
+	if err != nil {
+		return fmt.Errorf("create %s listener (%s): %w", platName, listenerType, err)
+	}
+
+	source := &ChatSourceFromListener{
+		Listener:     listener,
+		PlatformName: platName,
 	}
 
 	eng := &Engine{
@@ -290,66 +151,53 @@ func run(
 
 	events := make(chan ChatEvent, 64)
 
-	var (
-		wg        sync.WaitGroup
-		sourceErr error
-		mu        sync.Mutex
-	)
-
-	for _, pc := range cfg.Platforms {
-		source, newErr := pc.NewSource(ctx)
-		if newErr != nil {
-			return fmt.Errorf("create source for platform %q: %w", pc.Type, newErr)
-		}
-
-		wg.Add(1)
-		observability.Go(ctx, func(ctx context.Context) {
-			defer wg.Done()
-			logger.Debugf(ctx, "starting source: %s", source.PlatformID())
-			if runErr := source.Run(ctx, events); runErr != nil {
-				mu.Lock()
-				sourceErr = errors.Join(sourceErr, runErr)
-				mu.Unlock()
-			}
-		})
-	}
-
+	var sourceErr error
+	done := make(chan struct{})
 	observability.Go(ctx, func(ctx context.Context) {
-		wg.Wait()
+		defer close(done)
+		logger.Debugf(ctx, "starting source: %s (%s)", platName, listenerType)
+		sourceErr = source.Run(ctx, events)
 		close(events)
 	})
 
 	engineErr := eng.Run(ctx, events)
+	<-done
 	return errors.Join(sourceErr, engineErr)
 }
 
-// isStreamEndedError returns true if the error indicates the live chat
-// no longer exists (stream ended, chat disabled, etc.).
-func isStreamEndedError(err error) bool {
-	s := err.Error()
-	switch {
-	case strings.Contains(s, "FailedPrecondition"):
-		return true
-	case strings.Contains(s, "liveChatEnded"):
-		return true
-	case strings.Contains(s, "liveChatNotFound"):
-		return true
-	case strings.Contains(s, "liveChatDisabled"):
-		return true
-	default:
-		return false
-	}
-}
+// buildPlatformConfig constructs the AbstractPlatformConfig for the given
+// platform. It first tries FetchPlatformConfig from streamd. If that fails
+// or credentials are overridden in the local config, it uses the local
+// config values.
+func buildPlatformConfig(
+	ctx context.Context,
+	cfg AppConfig,
+	sdClient streamd_grpc.StreamDClient,
+	platName streamcontrol.PlatformName,
+) (_ *streamcontrol.AbstractPlatformConfig, _err error) {
+	logger.Tracef(ctx, "buildPlatformConfig[%s]", platName)
+	defer func() { logger.Tracef(ctx, "/buildPlatformConfig[%s]: %v", platName, _err) }()
 
-func sleep(ctx context.Context, d time.Duration) bool {
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-t.C:
-		return true
-	case <-ctx.Done():
-		return false
+	// Try fetching from streamd first.
+	platCfg, err := chathandler.FetchPlatformConfig(ctx, sdClient, platName)
+	if err != nil {
+		logger.Debugf(ctx, "FetchPlatformConfig failed for %s, using local config: %v", platName, err)
 	}
+
+	// Apply local overrides from config file.
+	localOverride, hasOverride := cfg.PlatformOverrides[string(platName)]
+	if hasOverride {
+		if platCfg == nil {
+			platCfg = &streamcontrol.AbstractPlatformConfig{}
+		}
+		platCfg = localOverride.applyTo(platCfg)
+	}
+
+	if platCfg == nil {
+		return nil, fmt.Errorf("no config available for platform %s (not in streamd, no local override)", platName)
+	}
+
+	return platCfg, nil
 }
 
 // detectTransportCredentials probes the server with a TLS handshake.

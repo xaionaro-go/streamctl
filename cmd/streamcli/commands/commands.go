@@ -135,21 +135,27 @@ var (
 	}
 
 	ChatDisableBuiltin = &cobra.Command{
-		Use:  "disable-builtin",
-		Args: cobra.ExactArgs(0),
-		Run:  chatDisableBuiltin,
+		Use:        "disable-builtin",
+		Short:      "[DEPRECATED] Use 'chat listener disable' instead",
+		Deprecated: "use 'chat listener disable <platform> primary' instead",
+		Args:       cobra.ExactArgs(0),
+		Run:        chatDisableBuiltin,
 	}
 
 	ChatEnableBuiltin = &cobra.Command{
-		Use:  "enable-builtin",
-		Args: cobra.ExactArgs(0),
-		Run:  chatEnableBuiltin,
+		Use:        "enable-builtin",
+		Short:      "[DEPRECATED] Use 'chat listener enable' instead",
+		Deprecated: "use 'chat listener enable <platform> primary' instead",
+		Args:       cobra.ExactArgs(0),
+		Run:        chatEnableBuiltin,
 	}
 
 	ChatBuiltinStatus = &cobra.Command{
-		Use:  "builtin-status",
-		Args: cobra.ExactArgs(0),
-		Run:  chatBuiltinStatus,
+		Use:        "builtin-status",
+		Short:      "[DEPRECATED] Use 'chat listener list' instead",
+		Deprecated: "use 'chat listener list <platform>' instead",
+		Args:       cobra.ExactArgs(0),
+		Run:        chatBuiltinStatus,
 	}
 
 	Player = &cobra.Command{

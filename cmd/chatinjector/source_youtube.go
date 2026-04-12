@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	ytlistener "github.com/xaionaro-go/streamctl/pkg/chathandler/platform/youtube"
@@ -15,6 +16,37 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
+
+const reconnectDelay = 5 * time.Second
+
+// isStreamEndedError returns true if the error indicates the live chat
+// no longer exists (stream ended, chat disabled, etc.).
+func isStreamEndedError(err error) bool {
+	s := err.Error()
+	switch {
+	case strings.Contains(s, "FailedPrecondition"):
+		return true
+	case strings.Contains(s, "liveChatEnded"):
+		return true
+	case strings.Contains(s, "liveChatNotFound"):
+		return true
+	case strings.Contains(s, "liveChatDisabled"):
+		return true
+	default:
+		return false
+	}
+}
+
+func sleep(ctx context.Context, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-t.C:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
 
 // YouTubeSource implements ChatSource by connecting to a youtubeapiproxy gRPC
 // server and streaming live-chat messages for a video or channel.

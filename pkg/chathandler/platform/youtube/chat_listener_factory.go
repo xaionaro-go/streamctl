@@ -17,9 +17,12 @@ func init() {
 // Factory creates YouTube ChatListener instances.
 //
 // PACE mapping:
-//   - Primary: gRPC stream via youtubeapiproxy (requires yt_proxy_addr in Custom config)
-//   - Alternate: REST API polling (requires API key in Custom config)
-//   - Contingency: Obsolete JSON parser via ChatListenerOBSOLETE (requires video_id)
+//   - Primary: gRPC stream via youtubeapiproxy (requires yt_proxy_addr)
+//   - Alternate: REST API polling (requires api_key; auto-discovers broadcasts via yt_proxy_addr)
+//   - Contingency: Obsolete JSON parser (auto-discovers broadcasts via yt_proxy_addr)
+//
+// All listeners auto-discover active broadcasts when yt_proxy_addr is configured.
+// Manual live_chat_id / video_id in Custom config are used as fallbacks.
 type Factory struct{}
 
 func (Factory) PlatformName() streamcontrol.PlatformName {
@@ -65,6 +68,7 @@ func createGRPCStreamListener(
 ) (chathandler.ChatListener, error) {
 	logger.Tracef(ctx, "createGRPCStreamListener")
 	defer func() { logger.Tracef(ctx, "/createGRPCStreamListener") }()
+
 	ytProxyAddr, ok := cfg.GetCustomString("yt_proxy_addr")
 	if !ok || ytProxyAddr == "" {
 		return nil, chathandler.ErrChatListenerTypeNotImplemented{
@@ -73,17 +77,18 @@ func createGRPCStreamListener(
 		}
 	}
 
-	liveChatID, ok := cfg.GetCustomString("live_chat_id")
-	if !ok || liveChatID == "" {
-		return nil, chathandler.ErrChatListenerTypeNotImplemented{
-			PlatformName: yttypes.ID,
-			ListenerType: streamcontrol.ChatListenerPrimary,
-		}
+	// ChannelID from typed config; used for search-based detection methods.
+	channelID := cfg.Config.ChannelID
+
+	detectMethod := DetectMethodBroadcasts
+	if dm, ok := cfg.GetCustomString("detect_method"); ok && dm != "" {
+		detectMethod = DetectMethod(dm)
 	}
 
 	return &GRPCStreamListener{
-		YTProxyAddr: ytProxyAddr,
-		LiveChatID:  liveChatID,
+		YTProxyAddr:  ytProxyAddr,
+		ChannelID:    channelID,
+		DetectMethod: detectMethod,
 	}, nil
 }
 
@@ -93,6 +98,7 @@ func createPollingListener(
 ) (chathandler.ChatListener, error) {
 	logger.Tracef(ctx, "createPollingListener")
 	defer func() { logger.Tracef(ctx, "/createPollingListener") }()
+
 	apiKey, ok := cfg.GetCustomString("api_key")
 	if !ok || apiKey == "" {
 		return nil, chathandler.ErrChatListenerTypeNotImplemented{
@@ -101,20 +107,30 @@ func createPollingListener(
 		}
 	}
 
-	liveChatID, ok := cfg.GetCustomString("live_chat_id")
-	if !ok || liveChatID == "" {
+	ytProxyAddr, _ := cfg.GetCustomString("yt_proxy_addr")
+	liveChatID, _ := cfg.GetCustomString("live_chat_id")
+	videoID, _ := cfg.GetCustomString("video_id")
+
+	// Need either a pre-set liveChatID or yt_proxy_addr for auto-discovery.
+	if liveChatID == "" && ytProxyAddr == "" {
 		return nil, chathandler.ErrChatListenerTypeNotImplemented{
 			PlatformName: yttypes.ID,
 			ListenerType: streamcontrol.ChatListenerAlternate,
 		}
 	}
 
-	videoID, _ := cfg.GetCustomString("video_id")
+	detectMethod := DetectMethodBroadcasts
+	if dm, ok := cfg.GetCustomString("detect_method"); ok && dm != "" {
+		detectMethod = DetectMethod(dm)
+	}
 
 	return &PollingListener{
-		APIKey:     apiKey,
-		LiveChatID: liveChatID,
-		VideoID:    videoID,
+		APIKey:       apiKey,
+		YTProxyAddr:  ytProxyAddr,
+		ChannelID:    cfg.Config.ChannelID,
+		DetectMethod: detectMethod,
+		LiveChatID:   liveChatID,
+		VideoID:      videoID,
 	}, nil
 }
 
@@ -124,15 +140,27 @@ func createObsoleteListener(
 ) (chathandler.ChatListener, error) {
 	logger.Tracef(ctx, "createObsoleteListener")
 	defer func() { logger.Tracef(ctx, "/createObsoleteListener") }()
-	videoID, ok := cfg.GetCustomString("video_id")
-	if !ok || videoID == "" {
+
+	ytProxyAddr, _ := cfg.GetCustomString("yt_proxy_addr")
+	videoID, _ := cfg.GetCustomString("video_id")
+
+	// Need either a pre-set videoID or yt_proxy_addr for auto-discovery.
+	if videoID == "" && ytProxyAddr == "" {
 		return nil, chathandler.ErrChatListenerTypeNotImplemented{
 			PlatformName: yttypes.ID,
 			ListenerType: streamcontrol.ChatListenerContingency,
 		}
 	}
 
+	detectMethod := DetectMethodBroadcasts
+	if dm, ok := cfg.GetCustomString("detect_method"); ok && dm != "" {
+		detectMethod = DetectMethod(dm)
+	}
+
 	return &ObsoleteJSONListener{
-		VideoID: videoID,
+		YTProxyAddr:  ytProxyAddr,
+		ChannelID:    cfg.Config.ChannelID,
+		DetectMethod: detectMethod,
+		VideoID:      videoID,
 	}, nil
 }

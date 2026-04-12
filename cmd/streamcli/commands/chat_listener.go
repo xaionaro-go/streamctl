@@ -8,14 +8,10 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/spf13/cobra"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/streamd/client"
 )
 
 var (
-	Chat = &cobra.Command{
-		Use:   "chat",
-		Short: "Chat-related commands",
-	}
-
 	ChatListener = &cobra.Command{
 		Use:   "listener",
 		Short: "Manage chat listener types per platform",
@@ -48,7 +44,6 @@ func init() {
 	ChatListener.AddCommand(ChatListenerEnable)
 	ChatListener.AddCommand(ChatListenerDisable)
 	Chat.AddCommand(ChatListener)
-	Root.AddCommand(Chat)
 }
 
 func isListenerTypeEnabled(
@@ -67,12 +62,24 @@ func isListenerTypeEnabled(
 	return false
 }
 
+func newStreamDClient(cmd *cobra.Command) *client.Client {
+	ctx := cmd.Context()
+	remoteAddr, err := cmd.Flags().GetString("remote-addr")
+	assertNoError(ctx, err)
+	streamD, err := client.New(ctx, remoteAddr)
+	assertNoError(ctx, err)
+	return streamD
+}
+
 func chatListenerList(cmd *cobra.Command, args []string) {
 	ctx := cmd.Context()
-	cfg := readConfig(ctx)
+	streamD := newStreamDClient(cmd)
 	platName := streamcontrol.PlatformName(args[0])
 
-	platCfg := cfg[platName]
+	cfg, err := streamD.GetConfig(ctx)
+	assertNoError(ctx, err)
+
+	platCfg := cfg.Backends[platName]
 	if platCfg == nil {
 		logger.Fatalf(ctx, "platform %q not found in config", platName)
 	}
@@ -90,18 +97,19 @@ func chatListenerList(cmd *cobra.Command, args []string) {
 
 func chatListenerEnable(cmd *cobra.Command, args []string) {
 	ctx := cmd.Context()
-	cfg := readConfig(ctx)
+	streamD := newStreamDClient(cmd)
 	platName := streamcontrol.PlatformName(args[0])
 
-	platCfg := cfg[platName]
+	cfg, err := streamD.GetConfig(ctx)
+	assertNoError(ctx, err)
+
+	platCfg := cfg.Backends[platName]
 	if platCfg == nil {
 		logger.Fatalf(ctx, "platform %q not found in config", platName)
 	}
 
 	t, err := streamcontrol.ChatListenerTypeFromString(args[1])
-	if err != nil {
-		logger.Panic(ctx, err)
-	}
+	assertNoError(ctx, err)
 
 	if isListenerTypeEnabled(platCfg.EnabledChatListenerTypes, t) {
 		logger.Infof(ctx, "listener type %q is already enabled for %q", t, platName)
@@ -117,24 +125,26 @@ func chatListenerEnable(cmd *cobra.Command, args []string) {
 
 	platCfg.EnabledChatListenerTypes = append(platCfg.EnabledChatListenerTypes, t)
 
-	assertNoError(ctx, saveConfig(ctx, cfg))
+	err = streamD.SetConfig(ctx, cfg)
+	assertNoError(ctx, err)
 	fmt.Printf("enabled %s for %s\n", t, platName)
 }
 
 func chatListenerDisable(cmd *cobra.Command, args []string) {
 	ctx := cmd.Context()
-	cfg := readConfig(ctx)
+	streamD := newStreamDClient(cmd)
 	platName := streamcontrol.PlatformName(args[0])
 
-	platCfg := cfg[platName]
+	cfg, err := streamD.GetConfig(ctx)
+	assertNoError(ctx, err)
+
+	platCfg := cfg.Backends[platName]
 	if platCfg == nil {
 		logger.Fatalf(ctx, "platform %q not found in config", platName)
 	}
 
 	t, err := streamcontrol.ChatListenerTypeFromString(args[1])
-	if err != nil {
-		logger.Panic(ctx, err)
-	}
+	assertNoError(ctx, err)
 
 	if !isListenerTypeEnabled(platCfg.EnabledChatListenerTypes, t) {
 		logger.Infof(ctx, "listener type %q is already disabled for %q", t, platName)
@@ -156,6 +166,7 @@ func chatListenerDisable(cmd *cobra.Command, args []string) {
 	}
 	platCfg.EnabledChatListenerTypes = filtered
 
-	assertNoError(ctx, saveConfig(ctx, cfg))
+	err = streamD.SetConfig(ctx, cfg)
+	assertNoError(ctx, err)
 	fmt.Printf("disabled %s for %s\n", t, platName)
 }
