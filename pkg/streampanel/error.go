@@ -12,7 +12,6 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 	"github.com/facebookincubator/go-belt/tool/logger"
-	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/consts"
 	"github.com/xaionaro-go/xsync"
 )
@@ -70,7 +69,10 @@ func (p *Panel) statusPanelSet(text string) {
 		newText = "status:  " + text
 	})
 	if panel != nil {
-		observability.GoSafe(ctx, func(ctx context.Context) {
+		// Fyne requires widget mutations on the main render thread.
+		// observability.GoSafe spawned a background goroutine, causing
+		// concurrent access panics in RichText.updateRowBounds.
+		fyne.Do(func() {
 			panel.SetText(newText)
 		})
 	}

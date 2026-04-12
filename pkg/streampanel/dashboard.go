@@ -189,7 +189,7 @@ func (w *dashboardWindow) renderStreamStatus(ctx context.Context) {
 			bwIn := float64(bytesInDiff) * 8 / tsDiff.Seconds() / 1000
 			bwOut := float64(bytesOutDiff) * 8 / tsDiff.Seconds() / 1000
 			newAppStatusText := fmt.Sprintf("%4.0fKb/s | %4.0fKb/s", bwIn, bwOut)
-			observability.Go(ctx, func(ctx context.Context) {
+			fyne.Do(func() {
 				w.appStatus.SetText(newAppStatusText)
 			})
 		}
@@ -201,55 +201,40 @@ func (w *dashboardWindow) renderStreamStatus(ctx context.Context) {
 	w.Panel.streamStatusLocker.Do(ctx, func() {
 		w.streamStatusLocker.Do(ctx, func() {
 			for platID, dst := range w.streamStatus {
-				observability.CallSafe(ctx, func(ctx context.Context) {
-					src := w.Panel.streamStatus[platID]
-					if src == nil {
-						logger.Debugf(ctx, "status for '%s' is not set", platID)
-						return
-					}
-					defer dst.Refresh()
+				src := w.Panel.streamStatus[platID]
+				if src == nil {
+					logger.Debugf(ctx, "status for '%s' is not set", platID)
+					continue
+				}
 
-					if !src.BackendIsEnabled {
-						observability.Go(ctx, func(ctx context.Context) {
-							dst.SetText("disabled")
-						})
-						return
-					}
+				var newImportance widget.Importance
+				var newText string
 
-					if src.BackendError != nil {
-						dst.Importance = widget.LowImportance
-						observability.Go(ctx, func(ctx context.Context) {
-							dst.SetText("error")
-						})
-						return
-					}
-
-					if !src.IsActive {
-						dst.Importance = widget.DangerImportance
-						observability.Go(ctx, func(ctx context.Context) {
-							dst.SetText("stopped")
-						})
-						return
-					}
-
-					dst.Importance = widget.SuccessImportance
-					if src.StartedAt == nil {
-						observability.Go(ctx, func(ctx context.Context) {
-							dst.SetText("started")
-						})
-						return
-					}
-
+				switch {
+				case !src.BackendIsEnabled:
+					newText = "disabled"
+				case src.BackendError != nil:
+					newImportance = widget.LowImportance
+					newText = "error"
+				case !src.IsActive:
+					newImportance = widget.DangerImportance
+					newText = "stopped"
+				case src.StartedAt == nil:
+					newImportance = widget.SuccessImportance
+					newText = "started"
+				default:
+					newImportance = widget.SuccessImportance
 					duration := time.Since(*src.StartedAt)
-
 					viewerCountString := ""
 					if src.ViewersCount != nil {
 						viewerCountString = fmt.Sprintf(" (%d)", *src.ViewersCount)
 					}
+					newText = fmt.Sprintf("%s%s", duration.Truncate(time.Second).String(), viewerCountString)
+				}
 
-					observability.Go(ctx, func(ctx context.Context) {
-						dst.SetText(fmt.Sprintf("%s%s", duration.Truncate(time.Second).String(), viewerCountString))
-					})
+				fyne.Do(func() {
+					dst.Importance = newImportance
+					dst.SetText(newText)
 				})
 			}
 		})
