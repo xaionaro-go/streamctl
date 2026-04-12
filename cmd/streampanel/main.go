@@ -15,7 +15,7 @@ import (
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/cmd/streampanel/autoupdater"
 	"github.com/xaionaro-go/streamctl/pkg/buildvars"
-	"github.com/xaionaro-go/streamctl/pkg/chathandler"
+	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/process"
 	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/platform/kick"
 	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/platform/twitch"
 	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/platform/youtube"
@@ -30,11 +30,6 @@ import (
 const forceNetPProfOnAndroid = true
 
 func main() {
-	// Must run before pflag.Parse() — pflag rejects unknown --internal-chat-listener* flags.
-	if chathandler.RunAsChatListenerIfRequested(context.Background()) {
-		return
-	}
-
 	err := child_process_manager.InitializeChildProcessManager()
 	if err != nil {
 		panic(err)
