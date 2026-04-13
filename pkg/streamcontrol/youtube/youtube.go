@@ -966,7 +966,7 @@ func (yt *YouTube) StartStream(
 				}
 			}
 			yt.currentLiveBroadcasts = append(yt.currentLiveBroadcasts, newBroadcast)
-			if !yt.Config.DisableChatListener {
+			if yt.Config.EnabledChatListenerTypes == nil || len(yt.Config.EnabledChatListenerTypes) > 0 {
 				err = yt.startChatListener(ctx, newBroadcast)
 				if err != nil {
 					logger.Errorf(ctx, "unable to start a chat listener for video '%s': %v", newBroadcast.Id, err)
@@ -1198,7 +1198,7 @@ func (yt *YouTube) GetStreamStatus(
 			if _, ok := ids[newBroadcast.Id]; ok {
 				continue
 			}
-			if !yt.Config.DisableChatListener {
+			if yt.Config.EnabledChatListenerTypes == nil || len(yt.Config.EnabledChatListenerTypes) > 0 {
 				err = yt.startChatListener(ctx, newBroadcast)
 				if err != nil {
 					logger.Errorf(ctx, "unable to start a chat listener for video '%s': %v", newBroadcast.Id, err)

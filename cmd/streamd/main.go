@@ -22,6 +22,12 @@ import (
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"github.com/spf13/pflag"
 	"github.com/xaionaro-go/eventbus"
+
+	// Register chat handler factories and subprocess entrypoint.
+	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/platform/kick"
+	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/platform/twitch"
+	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/platform/youtube"
+	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/process"
 	"github.com/xaionaro-go/grpcproxy/grpcproxyserver"
 	"github.com/xaionaro-go/grpcproxy/protobuf/go/proxy_grpc"
 	"github.com/xaionaro-go/obs-grpc-proxy/protobuf/go/obs_grpc"
@@ -273,6 +279,7 @@ func main() {
 		obs_grpc.RegisterOBSServer(grpcServer, obsGRPC)
 		proxy_grpc.RegisterNetworkProxyServer(grpcServer, grpcproxyserver.New())
 		streamd_grpc.RegisterStreamDServer(grpcServer, streamdGRPC)
+		streamD.GRPCListenAddr = listener.Addr().String()
 		l.Infof("started server at %s", *listenAddr)
 
 		grpcLocker.Unlock()

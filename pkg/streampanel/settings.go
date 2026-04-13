@@ -64,7 +64,7 @@ func (p *Panel) openSettingsWindowNoLock(
 	if backendEnabled[obs.ID] {
 		obsCfg = streamcontrol.GetPlatformConfig[obs.AccountConfig, obs.StreamProfile](ctx, streamDCfg.Backends, obs.ID)
 		if obsCfg != nil {
-			logger.Debugf(ctx, "current OBS config: %#+v", *obsCfg)
+			logger.Tracef(ctx, "current OBS config: %#+v", *obsCfg)
 		}
 	}
 
@@ -345,7 +345,7 @@ func (p *Panel) openSettingsWindowNoLock(
 			streamDCfg.LLM.Endpoints[hardcodedLLMEndpointName] = b
 		}
 		b.APIKey = s
-		logger.Debugf(ctx, "LLM config: %#+v", spew.Sdump(streamDCfg.LLM))
+		logger.Tracef(ctx, "LLM config: %#+v", spew.Sdump(streamDCfg.LLM))
 	}
 	chatGPTAPIKeyEntry.SetText(streamDCfg.LLM.Endpoints.GetAPIKey(hardcodedLLMEndpointName))
 

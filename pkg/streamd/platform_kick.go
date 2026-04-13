@@ -150,7 +150,8 @@ func (d *StreamD) initKickBackend(ctx context.Context) error {
 		xsync.DoA2(ctx, &d.AccountsLocker, func(fqID streamcontrol.AccountIDFullyQualified, abstract streamcontrol.AbstractAccount) {
 			d.AccountMap[fqID] = abstract
 		}, streamcontrol.NewAccountIDFullyQualified(kick.ID, id), abstractAccount)
-		d.startListeningForChatMessages(ctx, kick.ID, id, abstractAccount)
+		// Chat listeners are now managed centrally by reconcileChatListeners,
+		// which spawns external handler subprocesses after all backends are initialized.
 	}
 
 	return nil

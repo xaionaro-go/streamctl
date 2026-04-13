@@ -22,6 +22,7 @@ const (
 	EventTypeStreamOnline
 	EventTypeStreamOffline
 	EventTypeStreamInfoUpdate
+	EventTypeGreeting
 	EventTypeOther
 	endOfEventType
 )
@@ -58,6 +59,8 @@ func (t EventType) String() string {
 		return "stream_offline"
 	case EventTypeStreamInfoUpdate:
 		return "stream_info_update"
+	case EventTypeGreeting:
+		return "greeting"
 	case EventTypeOther:
 		return "other"
 	default:

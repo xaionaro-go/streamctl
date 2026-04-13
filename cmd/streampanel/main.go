@@ -13,10 +13,17 @@ import (
 	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/observability"
+
+	// Register chat handler factories and subprocess entrypoint.
+	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/platform/kick"
+	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/platform/twitch"
+	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/platform/youtube"
+	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/process"
 	"github.com/xaionaro-go/streamctl/cmd/streampanel/autoupdater"
 	"github.com/xaionaro-go/streamctl/pkg/buildvars"
 	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/streamd"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streampanel"
 	_ "github.com/xaionaro-go/streamctl/pkg/streamserver"
@@ -119,6 +126,9 @@ func runPanel(
 			panel.StreamD,
 			flags.ListenAddr,
 		)
+		if concreteStreamD, ok := panel.StreamD.(*streamd.StreamD); ok {
+			concreteStreamD.GRPCListenAddr = listener.Addr().String()
+		}
 
 		// to erase an oauth request answered locally from "UnansweredOAuthRequests" in the GRPC server:
 		panel.OnInternallySubmittedOAuthCode = func(

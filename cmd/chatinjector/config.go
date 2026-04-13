@@ -9,7 +9,11 @@ import (
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/goccy/go-yaml"
-	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
+	"github.com/xaionaro-go/streamctl/pkg/secret"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	kicktypes "github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick/types"
+	twitchtypes "github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/types"
+	yttypes "github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube/types"
 	"github.com/xaionaro-go/xpath"
 )
 
@@ -18,195 +22,79 @@ const (
 	defaultChatHistorySize = 20
 )
 
+// AppConfig is the chatinjector configuration. Platform selection and
+// listener type come from CLI flags (--platform, --listener-type), not
+// from the config file. The config provides streamd address, translation
+// settings, and optional per-platform credential/setting overrides.
 type AppConfig struct {
-	StreamdAddr string            `yaml:"streamd_addr"`
-	Translation TranslationConfig `yaml:"translation"`
-	Platforms   []PlatformConfig  `yaml:"platforms"`
+	StreamdAddr       string                            `yaml:"streamd_addr"`
+	Translation       TranslationConfig                 `yaml:"translation"`
+	PlatformOverrides map[string]PlatformOverrideConfig `yaml:"platform_overrides"`
 }
 
-// PlatformConfig describes a single chat source. The Type field selects
-// which ChatSource implementation to create; remaining fields are
-// platform-specific and ignored when irrelevant.
-type PlatformConfig struct {
-	Type string `yaml:"type"` // "youtube", "twitch", "kick"
-
-	// Credentials specifies where to get platform auth tokens.
-	// "streamd" fetches from the streamd config; empty uses static fields.
-	Credentials string `yaml:"credentials,omitempty"`
-
-	// Sources specifies which source types to try, in order. If empty,
-	// the platform's default source is used. Example: ["eventsub", "irc"]
-	Sources []string `yaml:"sources,omitempty"`
-
-	// YouTube fields.
-	ProxyAddr    string `yaml:"proxy_addr,omitempty"`
-	Video        string `yaml:"video,omitempty"`
-	DetectMethod string `yaml:"detect_method,omitempty"`
-	Hl           string `yaml:"hl,omitempty"`
-	RawMessage   bool   `yaml:"raw_message,omitempty"`
-
-	// Shared: YouTube uses this as the channel URL; Twitch uses it as the
-	// channel name.
-	Channel string `yaml:"channel,omitempty"`
+// PlatformOverrideConfig provides optional credential and setting overrides
+// for a platform. When present, these values supplement or replace what
+// FetchPlatformConfig retrieves from streamd.
+type PlatformOverrideConfig struct {
+	// Twitch fields.
+	Channel      string `yaml:"channel,omitempty"`
+	ClientID     string `yaml:"client_id,omitempty"`
+	ClientSecret string `yaml:"client_secret,omitempty"`
+	AccessToken  string `yaml:"access_token,omitempty"`
 
 	// Kick fields.
 	ChatWebhookAddr string `yaml:"chat_webhook_addr,omitempty"`
 
-	// Twitch auth (required for eventsub source).
-	ClientID    string `yaml:"client_id,omitempty"`
-	AccessToken string `yaml:"access_token,omitempty"`
+	// YouTube fields.
+	ProxyAddr string `yaml:"proxy_addr,omitempty"`
+	Video     string `yaml:"video,omitempty"`
 }
 
-// newTwitchSourceByName creates a single Twitch ChatSource by source name.
-func (pc PlatformConfig) newTwitchSourceByName(name string) (ChatSource, error) {
-	switch name {
-	case "eventsub":
-		return &TwitchEventSubSource{
-			Channel:     pc.Channel,
-			ClientID:    pc.ClientID,
-			AccessToken: pc.AccessToken,
-		}, nil
-	case "irc":
-		return &TwitchSource{
-			Channel: pc.Channel,
-		}, nil
-	default:
-		return nil, fmt.Errorf("unknown twitch source type %q", name)
+// applyTo merges override values into an existing AbstractPlatformConfig.
+// Fields that are already set in the override take precedence.
+func (o PlatformOverrideConfig) applyTo(
+	platCfg *streamcontrol.AbstractPlatformConfig,
+) *streamcontrol.AbstractPlatformConfig {
+	if platCfg.Custom == nil {
+		platCfg.Custom = map[string]any{}
 	}
-}
 
-// NewSource creates the ChatSource described by this PlatformConfig.
-// When multiple Sources are specified, a FallbackSource wraps them so that
-// failures cascade to the next source in the list.
-func (pc PlatformConfig) NewSource() (ChatSource, error) {
-	switch pc.Type {
-	case "youtube":
-		return &YouTubeSource{
-			ProxyAddr:    pc.ProxyAddr,
-			Video:        pc.Video,
-			Channel:      pc.Channel,
-			DetectMethod: pc.DetectMethod,
-			Hl:           pc.Hl,
-			RawMessage:   pc.RawMessage,
-		}, nil
-	case "twitch":
-		sources := pc.Sources
-		if len(sources) == 0 {
-			sources = []string{"irc"}
+	// Apply Twitch-specific overrides.
+	if twitchCfg, ok := platCfg.Config.(twitchtypes.AccountConfig); ok {
+		if o.Channel != "" {
+			twitchCfg.Channel = o.Channel
 		}
-		if len(sources) == 1 {
-			return pc.newTwitchSourceByName(sources[0])
+		if o.ClientID != "" {
+			twitchCfg.ClientID = o.ClientID
 		}
-		var chatSources []ChatSource
-		for _, name := range sources {
-			src, err := pc.newTwitchSourceByName(name)
-			if err != nil {
-				return nil, err
-			}
-			chatSources = append(chatSources, src)
+		if o.ClientSecret != "" {
+			twitchCfg.ClientSecret = secret.New(o.ClientSecret)
 		}
-		return &FallbackSource{Sources: chatSources}, nil
-	case "kick":
-		return &KickSource{
-			ChatWebhookAddr: pc.ChatWebhookAddr,
-		}, nil
-	default:
-		return nil, fmt.Errorf("unknown platform type %q", pc.Type)
-	}
-}
-
-// streamdConfigForCredentials is a minimal struct for extracting platform
-// credentials from the streamd config YAML without importing the full
-// config types (avoiding circular dependencies).
-type streamdConfigForCredentials struct {
-	Backends map[string]struct {
-		Config map[string]interface{} `yaml:"config"`
-	} `yaml:"backends"`
-}
-
-// streamdConfigString extracts a string value from the parsed backend config map.
-func streamdConfigString(m map[string]interface{}, key string) string {
-	v, ok := m[key]
-	if !ok {
-		return ""
-	}
-	s, ok := v.(string)
-	if !ok {
-		return ""
-	}
-	return s
-}
-
-// resolveCredentials fetches platform credentials from streamd when
-// Credentials is set to "streamd". Updates the PlatformConfig fields
-// (ClientID, AccessToken, Channel, etc.) in place, without overriding
-// fields that are already set.
-func (pc *PlatformConfig) resolveCredentials(
-	ctx context.Context,
-	streamdClient streamd_grpc.StreamDClient,
-) (_err error) {
-	logger.Tracef(ctx, "resolveCredentials[%s]", pc.Type)
-	defer func() { logger.Tracef(ctx, "/resolveCredentials[%s]: %v", pc.Type, _err) }()
-
-	switch pc.Credentials {
-	case "":
-		return nil
-	case "streamd":
-	default:
-		return fmt.Errorf("unknown credentials source %q (supported: \"streamd\")", pc.Credentials)
-	}
-
-	reply, err := streamdClient.GetConfig(ctx, &streamd_grpc.GetConfigRequest{})
-	if err != nil {
-		return fmt.Errorf("GetConfig from streamd: %w", err)
-	}
-
-	var sdCfg streamdConfigForCredentials
-	if err := yaml.Unmarshal([]byte(reply.GetConfig()), &sdCfg); err != nil {
-		return fmt.Errorf("parse streamd config YAML: %w", err)
-	}
-
-	backendName := pc.Type
-	backend, ok := sdCfg.Backends[backendName]
-	if !ok {
-		return fmt.Errorf("backend %q not found in streamd config", backendName)
-	}
-
-	m := backend.Config
-	if m == nil {
-		return fmt.Errorf("backend %q has no config in streamd", backendName)
-	}
-
-	switch pc.Type {
-	case "twitch":
-		// goccy/go-yaml lowercases field names without yaml tags:
-		// ClientID -> "clientid", UserAccessToken -> "useraccesstoken", Channel -> "channel".
-		if pc.Channel == "" {
-			pc.Channel = streamdConfigString(m, "channel")
+		if o.AccessToken != "" {
+			twitchCfg.UserAccessToken = secret.New(o.AccessToken)
 		}
-		if pc.ClientID == "" {
-			pc.ClientID = streamdConfigString(m, "clientid")
-		}
-		if pc.AccessToken == "" {
-			pc.AccessToken = streamdConfigString(m, "useraccesstoken")
-		}
-	case "kick":
-		// Kick types have explicit yaml tags: "channel", "client_id", "user_access_token".
-		if pc.Channel == "" {
-			pc.Channel = streamdConfigString(m, "channel")
-		}
-	case "youtube":
-		// YouTube PlatformSpecificConfig has no yaml tags:
-		// ChannelID -> "channelid", ClientID -> "clientid".
-		if pc.Channel == "" {
-			pc.Channel = streamdConfigString(m, "channelid")
-		}
-	default:
-		return fmt.Errorf("credentials resolution not supported for platform %q", pc.Type)
+		platCfg.Config = twitchCfg
 	}
 
-	logger.Debugf(ctx, "resolved credentials for %s from streamd (channel=%q)", pc.Type, pc.Channel)
-	return nil
+	// Apply Kick-specific overrides.
+	if _, ok := platCfg.Config.(kicktypes.AccountConfig); ok {
+		if o.ChatWebhookAddr != "" {
+			platCfg.Custom["chatwebhook_addr"] = o.ChatWebhookAddr
+		}
+	}
+
+	// Apply YouTube-specific overrides.
+	if ytCfg, ok := platCfg.Config.(yttypes.PlatformSpecificConfig); ok {
+		if o.ProxyAddr != "" {
+			ytCfg.YTProxyAddr = o.ProxyAddr
+		}
+		platCfg.Config = ytCfg
+	}
+	if o.Video != "" {
+		platCfg.Custom["video_id"] = o.Video
+	}
+
+	return platCfg
 }
 
 type TranslationConfig struct {
@@ -216,14 +104,14 @@ type TranslationConfig struct {
 }
 
 type ProviderConfig struct {
-	Type         string        `yaml:"type"` // ollama, openai, anthropic, claude-code, streamdcfg, streampanelcfg
-	APIURL       string        `yaml:"api_url"`
-	APIKey       string        `yaml:"api_key"`
-	Model        string        `yaml:"model"`
-	Parallelism  int           `yaml:"parallelism"`
-	MaxQueueSize int           `yaml:"max_queue_size"` // max pending translations waiting for this provider; 0 = no queueing
-	Timeout      time.Duration `yaml:"timeout"`        // per-request timeout; 0 means no timeout
-	ConfigPath   string        `yaml:"config_path"`    // for streamdcfg/streampanelcfg: path to YAML config
+	Type                    string        `yaml:"type"` // ollama, openai, anthropic, claude-code, streamdcfg, streampanelcfg
+	APIURL                  string        `yaml:"api_url"`
+	APIKey                  string        `yaml:"api_key"`
+	Model                   string        `yaml:"model"`
+	Parallelism             int           `yaml:"parallelism"`
+	MaxQueueSize            int           `yaml:"max_queue_size"`            // max pending translations waiting for this provider; 0 = no queueing
+	Timeout                 time.Duration `yaml:"timeout"`                   // per-request timeout; 0 means no timeout
+	ConfigPath              string        `yaml:"config_path"`               // for streamdcfg/streampanelcfg: path to YAML config
 	Effort                  string        `yaml:"effort"`                    // for claude-code: low, medium, high, max (default: low)
 	CircuitBreakerThreshold int64         `yaml:"circuit_breaker_threshold"` // consecutive failures to open circuit (default: 3)
 	CircuitBreakerCooldown  time.Duration `yaml:"circuit_breaker_cooldown"`  // cooldown before probing again (default: 30s)
@@ -261,51 +149,38 @@ func loadConfig(
 		cfg.Translation.ChatHistorySize = defaultChatHistorySize
 	}
 
-	logger.Debugf(ctx, "loaded config: streamd=%s platforms=%d providers=%d",
-		cfg.StreamdAddr, len(cfg.Platforms), len(cfg.Translation.Providers))
+	logger.Debugf(ctx, "loaded config: streamd=%s overrides=%d providers=%d",
+		cfg.StreamdAddr, len(cfg.PlatformOverrides), len(cfg.Translation.Providers))
 
 	return cfg, nil
 }
 
 const sampleConfig = `# chatinjector configuration
 # See: https://github.com/xaionaro-go/streamctl/tree/main/cmd/chatinjector
+#
+# Usage: chatinjector --platform twitch --listener-type primary --streamd-addr localhost:3594
+#
+# One platform, one listener type, one process. To run multiple, launch
+# multiple instances.
 
-# streamd gRPC address
+# streamd gRPC address (can also be set via --streamd-addr flag)
 streamd_addr: "localhost:3594"
 
-# Chat source platforms (at least one required).
-platforms:
-  # YouTube — requires youtubeapiproxy running at proxy_addr.
-  - type: youtube
-    proxy_addr: "localhost:9090"
-    # Monitor a channel for live streams (auto-detect):
-    # channel: "https://www.youtube.com/@YourChannel"
-    # Or connect to a specific video/liveChatId:
-    # video: "https://www.youtube.com/watch?v=VIDEO_ID"
-    detect_method: "search"
-    # hl: "en"
-    # raw_message: false
-
-  # Twitch — anonymous IRC, read-only (default).
-  # - type: twitch
-  #   channel: "xqc"
-
-  # Twitch — with EventSub fallback to IRC, credentials from streamd.
-  # - type: twitch
-  #   channel: "xqc"
-  #   sources: ["eventsub", "irc"]  # try eventsub first, fall back to IRC
-  #   credentials: streamd            # fetch tokens from streamd (auto-refreshed)
-
-  # Twitch — with EventSub fallback to IRC, static credentials.
-  # - type: twitch
-  #   channel: "xqc"
-  #   sources: ["eventsub", "irc"]  # try eventsub first, fall back to IRC
-  #   client_id: "your_client_id"       # required for eventsub
-  #   access_token: "your_access_token" # required for eventsub
-
-  # Kick — requires chatwebhook gRPC service.
-  # - type: kick
-  #   chat_webhook_addr: "localhost:9091"
+# Optional per-platform credential overrides. If omitted, credentials are
+# fetched from streamd via FetchPlatformConfig.
+# platform_overrides:
+#   twitch:
+#     channel: "xqc"
+#     client_id: "your_client_id"
+#     client_secret: "your_client_secret"
+#     access_token: "your_access_token"
+#
+#   kick:
+#     chat_webhook_addr: "localhost:9091"
+#
+#   youtube:
+#     proxy_addr: "localhost:9090"
+#     video: "VIDEO_ID_OR_URL"
 
 # Translation configuration (remove this section to disable)
 # translation:

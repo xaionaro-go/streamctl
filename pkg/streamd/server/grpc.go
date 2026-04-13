@@ -17,6 +17,7 @@ import (
 	"github.com/xaionaro-go/player/pkg/player/protobuf/go/player_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/secret"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	scgoconv "github.com/xaionaro-go/streamctl/pkg/streamcontrol/protobuf/goconv"
 	"github.com/xaionaro-go/streamctl/pkg/streamd"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
@@ -2046,6 +2047,46 @@ func (grpc *GRPCServer) SendChatMessage(
 		return nil, err
 	}
 	return &streamd_grpc.SendChatMessageReply{}, nil
+}
+
+func (grpc *GRPCServer) InjectPlatformEvent(
+	ctx context.Context,
+	req *streamd_grpc.InjectPlatformEventRequest,
+) (*streamd_grpc.InjectPlatformEventReply, error) {
+	grpcEv := req.GetMessage()
+	platID := streamcontrol.PlatformName(req.GetPlatID())
+
+	// When the underlying StreamD supports injectChatEvent (the concrete
+	// type), use it so that the full event ID is preserved for keepalive
+	// parsing and dedup. Otherwise fall back to the interface method which
+	// constructs a new event from decomposed fields.
+	if sd, ok := grpc.StreamD.(*streamd.StreamD); ok {
+		ev := scgoconv.EventGRPC2Go(grpcEv)
+		err := sd.InjectChatEvent(ctx, platID, req.GetIsLive(), ev)
+		if err != nil {
+			return nil, err
+		}
+		return &streamd_grpc.InjectPlatformEventReply{}, nil
+	}
+
+	user := scgoconv.UserGRPC2Go(grpcEv.GetUser())
+	var message string
+	if m := grpcEv.GetMessage(); m != nil {
+		message = m.GetContent()
+	}
+
+	err := grpc.StreamD.InjectPlatformEvent(
+		ctx,
+		streamcontrol.PlatformID(req.GetPlatID()),
+		req.GetIsLive(),
+		req.GetIsPersistent(),
+		user,
+		message,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &streamd_grpc.InjectPlatformEventReply{}, nil
 }
 
 func (grpc *GRPCServer) RemoveChatMessage(

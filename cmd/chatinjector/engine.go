@@ -106,12 +106,13 @@ func (e *Engine) processBatch(
 		logger.Debugf(ctx, "injecting %s event from %s: %s",
 			r.ev.Type, r.ev.User.Name, messagePreview(&r.ev))
 
-		_, injectErr := e.StreamdClient.InjectChatMessage(ctx, &streamd_grpc.InjectChatMessageRequest{
+		_, injectErr := e.StreamdClient.InjectPlatformEvent(ctx, &streamd_grpc.InjectPlatformEventRequest{
 			PlatID: r.platform,
-			Event:  scgoconv.EventGo2GRPC(r.ev),
+			IsLive: true,
+			Message: scgoconv.EventGo2GRPC(r.ev),
 		})
 		if injectErr != nil {
-			logger.Errorf(ctx, "InjectChatMessage failed for %s: %v", r.ev.ID, injectErr)
+			logger.Errorf(ctx, "InjectPlatformEvent failed for %s: %v", r.ev.ID, injectErr)
 		}
 	}
 }

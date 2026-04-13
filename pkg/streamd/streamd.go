@@ -114,6 +114,22 @@ type StreamD struct {
 
 	lastShoutoutAtLocker sync.Mutex
 	lastShoutoutAt       map[config.ChatUserID]time.Time
+
+	// greetedUsers tracks users who have already sent at least one chat
+	// message in this session. On the first message from a user we emit
+	// a synthetic EventTypeGreeting ("said hi") event.
+	greetedUsersLocker sync.Mutex
+	greetedUsers       map[config.ChatUserID]struct{}
+
+	GRPCListenAddr string
+
+	externalChatHandlerLocker sync.Mutex
+	externalChatHandlers      map[chatHandlerKey]*externalChatHandler
+
+	// injectedEventIDs is a dedup guard for InjectPlatformEvent. During
+	// transitions both built-in and external handlers may briefly overlap,
+	// producing duplicate events. Keys are EventIDs, values are insertion time.
+	injectedEventIDs xsync.Map[streamcontrol.EventID, time.Time]
 }
 
 type imageHash uint64
@@ -150,10 +166,12 @@ func New(
 		OBSState: OBSState{
 			VolumeMeters: map[string][][3]float64{},
 		},
-		Timers:         map[api.TimerID]*Timer{},
-		ReadyChan:      make(chan struct{}),
-		lastShoutoutAt: map[config.ChatUserID]time.Time{},
-		AccountMap:     make(Accounts),
+		Timers:               map[api.TimerID]*Timer{},
+		ReadyChan:            make(chan struct{}),
+		lastShoutoutAt:       map[config.ChatUserID]time.Time{},
+		greetedUsers:         map[config.ChatUserID]struct{}{},
+		externalChatHandlers: map[chatHandlerKey]*externalChatHandler{},
+		AccountMap:           make(Accounts),
 	}
 	d.StreamStatusCache = memoize.NewMemoizeData()
 	d.StreamsCache = memoize.NewMemoizeData()
@@ -568,6 +586,15 @@ func (d *StreamD) setConfig(ctx context.Context, cfg *config.Config) (_err error
 	if err := d.onUpdateConfig(ctx); err != nil {
 		logger.Errorf(ctx, "onUpdateConfig: %v", err)
 	}
+
+	// Reconcile chat listener processes to match newly updated config.
+	// Uses a detached context: the gRPC request context gets cancelled when
+	// the RPC response is sent, but handler spawning must outlive the RPC.
+	reconcileCtx := xcontext.DetachDone(ctx)
+	observability.Go(reconcileCtx, func(ctx context.Context) {
+		d.reconcileChatListeners(ctx)
+	})
+
 	return nil
 }
 

@@ -23,6 +23,14 @@ type PlatformSpecificConfig struct {
 	Token               *OAuth2Token
 	CustomOAuthHandler  OAuthHandler    `yaml:"-"`
 	GetOAuthListenPorts func() []uint16 `yaml:"-"`
+
+	// YTProxyAddr is the address of a youtubeapiproxy gRPC server.
+	// When set, chat listeners use it for broadcast discovery and streaming.
+	YTProxyAddr string `yaml:"yt_proxy_addr"`
+
+	// APIKey is a YouTube Data API v3 key for unauthenticated polling.
+	// Prefer OAuth2 credentials (ClientID+ClientSecret+Token) when available.
+	APIKey string `yaml:"api_key"`
 }
 
 type Config = streamctl.PlatformConfig[PlatformSpecificConfig, StreamProfile]

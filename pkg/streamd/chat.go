@@ -3,18 +3,121 @@ package streamd
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
 	"strings"
 	"time"
 
+	child_process_manager "github.com/AgustinSRG/go-child-process-manager"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/observability"
+	"github.com/xaionaro-go/streamctl/pkg/chathandler"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 )
 
+// chatPlatforms lists platforms that support chat listeners (all except OBS).
+var chatPlatforms = []streamcontrol.PlatformName{twitch.ID, kick.ID, youtube.ID}
+
+// reconcileChatListeners compares running chat handler processes against the
+// current config and starts/stops handlers to match. Called after config
+// updates so that CLI enable/disable commands take effect at runtime.
+func (d *StreamD) reconcileChatListeners(
+	ctx context.Context,
+) {
+	logger.Debugf(ctx, "reconcileChatListeners")
+	defer logger.Debugf(ctx, "/reconcileChatListeners")
+
+	for _, platName := range chatPlatforms {
+		platCfg := d.Config.Backends[platName]
+		enabledTypes := resolveEnabledChatListenerTypes(platCfg)
+
+		enabledSet := make(map[streamcontrol.ChatListenerType]struct{}, len(enabledTypes))
+		for _, lt := range enabledTypes {
+			enabledSet[lt] = struct{}{}
+		}
+
+		// Stop handlers for types no longer enabled.
+		d.stopDisabledChatHandlers(ctx, platName, enabledSet)
+
+		// Start handlers for newly enabled types.
+		for _, lt := range enabledTypes {
+			key := chatHandlerKey{
+				Platform:     platName,
+				ListenerType: lt,
+			}
+			if d.isHandlerRunning(key) {
+				continue
+			}
+			if err := d.StartExternalChatHandler(ctx, platName, lt, d.GRPCListenAddr); err != nil {
+				logger.Errorf(ctx, "reconcile: start chat handler for '%s'/%s: %v", platName, lt, err)
+			}
+		}
+	}
+}
+
+// stopDisabledChatHandlers cancels and removes handlers for a platform whose
+// listener type is not in enabledSet.
+func (d *StreamD) stopDisabledChatHandlers(
+	ctx context.Context,
+	platName streamcontrol.PlatformName,
+	enabledSet map[streamcontrol.ChatListenerType]struct{},
+) {
+	d.externalChatHandlerLocker.Lock()
+	defer d.externalChatHandlerLocker.Unlock()
+
+	for key, handler := range d.externalChatHandlers {
+		if key.Platform != platName {
+			continue
+		}
+		if _, ok := enabledSet[key.ListenerType]; ok {
+			continue
+		}
+		handler.cancelFunc()
+		delete(d.externalChatHandlers, key)
+		logger.Debugf(ctx, "reconcile: stopped chat handler for '%s'/%s", key.Platform, key.ListenerType)
+	}
+}
+
+// isHandlerRunning returns true if a handler exists for the given key.
+func (d *StreamD) isHandlerRunning(
+	key chatHandlerKey,
+) bool {
+	d.externalChatHandlerLocker.Lock()
+	defer d.externalChatHandlerLocker.Unlock()
+
+	_, ok := d.externalChatHandlers[key]
+	return ok
+}
+
+// resolveEnabledChatListenerTypes is the single source of truth for which
+// chat listener types should run for a platform. Returns nil when the
+// platform is disabled, unconfigured, or has no enabled types.
+func resolveEnabledChatListenerTypes(
+	platCfg *streamcontrol.AbstractPlatformConfig,
+) []streamcontrol.ChatListenerType {
+	switch {
+	case platCfg == nil:
+		return nil
+	case platCfg.Enable != nil && !*platCfg.Enable:
+		return nil
+	case platCfg.EnabledChatListenerTypes != nil:
+		return platCfg.EnabledChatListenerTypes
+	default:
+		return []streamcontrol.ChatListenerType{streamcontrol.ChatListenerPrimary}
+	}
+}
+
 const (
 	debugSendArchiveMessagesAsLive = false
+
+	// injectedEventIDTTL is how long event IDs are retained in the dedup
+	// cache. Must be longer than any plausible overlap during transitions.
+	injectedEventIDTTL = 5 * time.Minute
 )
 
 type ChatMessageStorage interface {
@@ -23,61 +126,6 @@ type ChatMessageStorage interface {
 	Load(ctx context.Context) error
 	Store(ctx context.Context) error
 	GetMessagesSince(context.Context, time.Time, uint) ([]api.ChatMessage, error)
-}
-
-func (d *StreamD) startListeningForChatMessages(
-	ctx context.Context,
-	platName streamcontrol.PlatformName,
-) error {
-	logger.Debugf(ctx, "startListeningForChatMessages(ctx, '%s')", platName)
-
-	if platCfg := d.Config.Backends[platName]; platCfg != nil && platCfg.DisableChatListener {
-		logger.Debugf(ctx, "chat listener is disabled for '%s'", platName)
-		return nil
-	}
-
-	ctrl, err := d.streamController(ctx, platName)
-	if err != nil {
-		return fmt.Errorf("unable to get the just initialized '%s': %w", platName, err)
-	}
-	ch, err := ctrl.GetChatMessagesChan(ctx)
-	if err != nil {
-		return fmt.Errorf("unable to get the channel for chat messages of '%s': %w", platName, err)
-	}
-
-	listenerCtx, cancel := context.WithCancel(ctx)
-	d.chatListenerLocker.Lock()
-	if oldCancel := d.chatListenerCancels[platName]; oldCancel != nil {
-		oldCancel()
-	}
-	d.chatListenerCancels[platName] = cancel
-	d.chatListenerLocker.Unlock()
-
-	observability.Go(ctx, func(_ context.Context) {
-		defer logger.Debugf(listenerCtx, "/startListeningForChatMessages(ctx, '%s')", platName)
-		for {
-			select {
-			case <-listenerCtx.Done():
-				logger.Debugf(ctx, "chat listener for '%s' stopped: %v", platName, listenerCtx.Err())
-				return
-			case ev, ok := <-ch:
-				if !ok {
-					return
-				}
-				func() {
-					msg := api.ChatMessage{
-						Event:    ev,
-						IsLive:   true,
-						Platform: platName,
-					}
-					if err := d.processChatMessage(ctx, msg); err != nil {
-						logger.Errorf(ctx, "unable to process the chat message %#+v: %v", msg, err)
-					}
-				}()
-			}
-		}
-	})
-	return nil
 }
 
 func (d *StreamD) processChatMessage(
@@ -92,24 +140,169 @@ func (d *StreamD) processChatMessage(
 	}
 
 	publishEvent(ctx, d.EventBus, msg)
+	d.greetIfNeeded(ctx, msg)
 	d.shoutoutIfNeeded(ctx, msg)
 	return nil
 }
 
-func (d *StreamD) InjectChatMessage(
+func (d *StreamD) InjectPlatformEvent(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
-	ev streamcontrol.Event,
+	isLive bool,
+	isPersistent bool,
+	user streamcontrol.User,
+	message string,
 ) (_err error) {
-	logger.Debugf(ctx, "InjectChatMessage")
-	defer func() { logger.Debugf(ctx, "/InjectChatMessage: %v", _err) }()
+	logger.Debugf(ctx, "InjectPlatformEvent")
+	defer func() { logger.Debugf(ctx, "/InjectPlatformEvent: %v", _err) }()
+
+	ev := streamcontrol.Event{
+		ID:        streamcontrol.EventID(fmt.Sprintf("injected-%d", time.Now().UnixNano())),
+		CreatedAt: time.Now(),
+		Type:      streamcontrol.EventTypeChatMessage,
+		User:      user,
+		Message: &streamcontrol.Message{
+			Content: message,
+			Format:  streamcontrol.TextFormatTypePlain,
+		},
+	}
+
+	return d.InjectChatEvent(ctx, platID, isLive, ev)
+}
+
+// InjectChatEvent is the shared injection path for both InjectPlatformEvent
+// (debug/manual injection) and the gRPC handler (external chat handler
+// subprocess messages). It handles keepalive parsing, dedup, and greeting
+// logic.
+func (d *StreamD) InjectChatEvent(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	isLive bool,
+	ev streamcontrol.Event,
+) error {
+	// Keepalive messages carry health info for a specific listener type.
+	// Format: "keepalive-<listenerType>-<platform>-<timestamp>"
+	// Only update the specific handler's health; don't store or display.
+	if key, ok := parseKeepaliveEventID(ev.ID, platID); ok {
+		d.recordExternalChatHandlerActivity(ctx, key)
+		logger.Tracef(ctx, "keepalive received from %s/%s, skipping processing", platID, key.ListenerType)
+		return nil
+	}
+
+	// Dedup guard: during transitions both built-in and external
+	// handlers may briefly overlap. Skip events already processed recently.
+	if _, alreadySeen := d.injectedEventIDs.LoadOrStore(ev.ID, time.Now()); alreadySeen {
+		logger.Debugf(ctx, "duplicate event %s from %s, skipping", ev.ID, platID)
+		return nil
+	}
+	d.cleanupInjectedEventIDs()
 
 	msg := api.ChatMessage{
 		Event:    ev,
-		IsLive:   true,
+		IsLive:   isLive,
 		Platform: platID,
 	}
 	return d.processChatMessage(ctx, msg)
+}
+
+// parseKeepaliveEventID extracts the chatHandlerKey from a keepalive event ID.
+// Returns false if the event ID is not a keepalive.
+// Keepalive format: "keepalive-<listenerType>-<platform>-<timestamp>"
+func parseKeepaliveEventID(
+	eventID streamcontrol.EventID,
+	platID streamcontrol.PlatformName,
+) (chatHandlerKey, bool) {
+	id := string(eventID)
+	if !strings.HasPrefix(id, "keepalive-") {
+		return chatHandlerKey{}, false
+	}
+
+	// Strip "keepalive-" prefix, then the next segment is the listener type.
+	rest := strings.TrimPrefix(id, "keepalive-")
+	dashIdx := strings.Index(rest, "-")
+	if dashIdx < 0 {
+		return chatHandlerKey{}, false
+	}
+
+	ltStr := rest[:dashIdx]
+	lt, err := streamcontrol.ChatListenerTypeFromString(ltStr)
+	if err != nil {
+		return chatHandlerKey{}, false
+	}
+
+	return chatHandlerKey{
+		Platform:     platID,
+		ListenerType: lt,
+	}, true
+}
+
+// cleanupInjectedEventIDs removes expired entries from the dedup cache.
+func (d *StreamD) cleanupInjectedEventIDs() {
+	cutoff := time.Now().Add(-injectedEventIDTTL)
+	d.injectedEventIDs.Range(func(id streamcontrol.EventID, insertedAt time.Time) bool {
+		if insertedAt.Before(cutoff) {
+			d.injectedEventIDs.Delete(id)
+		}
+		return true
+	})
+}
+
+// greetIfNeeded emits a synthetic EventTypeGreeting ("said hi") event
+// on the first live chat message from each user in this session,
+// unless the platform already delivered a real greeting (e.g. YouTube's
+// liveChatViewerEngagementMessageRenderer "said hi" button).
+func (d *StreamD) greetIfNeeded(
+	ctx context.Context,
+	msg api.ChatMessage,
+) {
+	if !msg.IsLive {
+		return
+	}
+
+	userID := config.ChatUserID{
+		Platform: msg.Platform,
+		User:     streamcontrol.UserID(strings.ToLower(string(msg.Event.User.ID))),
+	}
+
+	// Real platform greeting: record the user as greeted so we don't
+	// emit a redundant synthetic greeting when their first regular
+	// chat message arrives later.
+	switch msg.Event.Type {
+	case streamcontrol.EventTypeGreeting:
+		d.greetedUsersLocker.Lock()
+		d.greetedUsers[userID] = struct{}{}
+		d.greetedUsersLocker.Unlock()
+		return
+	case streamcontrol.EventTypeChatMessage:
+		// Fall through to synthetic greeting logic below.
+	default:
+		return
+	}
+
+	d.greetedUsersLocker.Lock()
+	_, alreadyGreeted := d.greetedUsers[userID]
+	if !alreadyGreeted {
+		d.greetedUsers[userID] = struct{}{}
+	}
+	d.greetedUsersLocker.Unlock()
+
+	if alreadyGreeted {
+		return
+	}
+
+	logger.Infof(ctx, "first message from %s on %s — emitting greeting", userID.User, msg.Platform)
+
+	greeting := api.ChatMessage{
+		Event: streamcontrol.Event{
+			ID:        streamcontrol.EventID(fmt.Sprintf("greeting-%s-%s-%d", msg.Platform, userID.User, time.Now().UnixNano())),
+			CreatedAt: msg.Event.CreatedAt,
+			Type:      streamcontrol.EventTypeGreeting,
+			User:      msg.Event.User,
+		},
+		IsLive:   true,
+		Platform: msg.Platform,
+	}
+	publishEvent(ctx, d.EventBus, greeting)
 }
 
 func (d *StreamD) shoutoutIfNeeded(
@@ -315,44 +508,280 @@ func (d *StreamD) SendChatMessage(
 	return nil
 }
 
+// SetBuiltinChatListenerEnabled is deprecated. Chat listeners now run as
+// external subprocess handlers managed by reconcileChatListeners /
+// StartExternalChatHandler. This method is retained as a no-op so that
+// existing gRPC callers do not break.
 func (d *StreamD) SetBuiltinChatListenerEnabled(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
 	enabled bool,
 ) (_err error) {
-	logger.Debugf(ctx, "SetBuiltinChatListenerEnabled(ctx, '%s', %v)", platID, enabled)
-	defer func() { logger.Debugf(ctx, "/SetBuiltinChatListenerEnabled: %v", _err) }()
-
-	d.chatListenerLocker.Lock()
-	cancel := d.chatListenerCancels[platID]
-	d.chatListenerLocker.Unlock()
-
-	switch {
-	case !enabled && cancel != nil:
-		// Stop the listener — cancels context, which stops YouTube API polling.
-		cancel()
-		d.chatListenerLocker.Lock()
-		delete(d.chatListenerCancels, platID)
-		d.chatListenerLocker.Unlock()
-		logger.Debugf(ctx, "stopped chat listener for '%s'", platID)
-	case enabled && cancel == nil:
-		// Restart the listener.
-		if err := d.startListeningForChatMessages(ctx, platID); err != nil {
-			return fmt.Errorf("restart chat listener for '%s': %w", platID, err)
-		}
-		logger.Debugf(ctx, "restarted chat listener for '%s'", platID)
-	}
-
+	logger.Warnf(ctx, "SetBuiltinChatListenerEnabled is deprecated (platform=%s, enabled=%v); builtin listeners have been removed", platID, enabled)
 	return nil
 }
 
+// IsBuiltinChatListenerEnabled is deprecated. Chat listeners now run as
+// external subprocess handlers. This method always returns false.
 func (d *StreamD) IsBuiltinChatListenerEnabled(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
 ) (bool, error) {
-	logger.Debugf(ctx, "IsBuiltinChatListenerEnabled(ctx, '%s')", platID)
+	logger.Warnf(ctx, "IsBuiltinChatListenerEnabled is deprecated (platform=%s); builtin listeners have been removed", platID)
+	return false, nil
+}
 
-	d.chatListenerLocker.Lock()
-	defer d.chatListenerLocker.Unlock()
-	return d.chatListenerCancels[platID] != nil, nil
+const (
+	// externalHandlerHealthTimeout is how long streamd waits without
+	// receiving an InjectPlatformEvent before declaring the handler dead.
+	externalHandlerHealthTimeout = 30 * time.Second
+
+	// externalHandlerRestartDelay is the delay before restarting a dead handler.
+	externalHandlerRestartDelay = 5 * time.Second
+)
+
+// StartExternalChatHandler spawns an external chat handler process for the
+// given platform and listener type. The process re-uses the current
+// executable with chat-listener flags so no separate binary is needed.
+func (d *StreamD) StartExternalChatHandler(
+	ctx context.Context,
+	platName streamcontrol.PlatformName,
+	listenerType streamcontrol.ChatListenerType,
+	streamdAddr string,
+) (_err error) {
+	logger.Debugf(ctx, "StartExternalChatHandler(ctx, '%s', '%s', '%s')", platName, listenerType, streamdAddr)
+	defer func() {
+		logger.Debugf(ctx, "/StartExternalChatHandler(ctx, '%s', '%s', '%s'): %v", platName, listenerType, streamdAddr, _err)
+	}()
+
+	if streamdAddr == "" {
+		return fmt.Errorf("cannot start chat handler for '%s'/%s: GRPCListenAddr is not set (no gRPC server available)", platName, listenerType)
+	}
+
+	execPath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("resolve own executable: %w", err)
+	}
+
+	key := chatHandlerKey{
+		Platform:     platName,
+		ListenerType: listenerType,
+	}
+
+	handlerCtx, cancel := context.WithCancel(ctx)
+
+	args := []string{
+		"--" + chathandler.FlagChatListenerMode,
+		"--" + chathandler.FlagChatListenerPlatform, string(platName),
+		"--" + chathandler.FlagChatListenerType, listenerType.String(),
+		"--" + chathandler.FlagChatListenerStreamdAddr, streamdAddr,
+	}
+
+	cmd := exec.CommandContext(handlerCtx, execPath, args...)
+	child_process_manager.ConfigureCommand(cmd)
+
+	if err := cmd.Start(); err != nil {
+		cancel()
+		return fmt.Errorf("start chat handler for '%s'/%s: %w", platName, listenerType, err)
+	}
+	child_process_manager.AddChildProcess(cmd.Process)
+
+	handler := &externalChatHandler{
+		cmd:        cmd,
+		cancelFunc: cancel,
+	}
+	handler.lastMessageTime.Store(time.Now().UnixNano())
+
+	d.registerExternalChatHandler(key, handler)
+
+	// Start health monitor on parent ctx (not handlerCtx). The monitor must
+	// survive handler replacement to complete restart. The isCurrentExternalHandler
+	// staleness guard prevents stale monitors from restarting replaced handlers.
+	observability.Go(ctx, func(ctx context.Context) {
+		d.monitorExternalChatHandler(ctx, key, streamdAddr, handler)
+	})
+
+	logger.Debugf(ctx, "started external chat handler for '%s'/%s (pid=%d)", platName, listenerType, cmd.Process.Pid)
+	return nil
+}
+
+// monitorExternalChatHandler watches the external handler process.
+// If it dies or stops sending messages, it attempts to restart the handler.
+func (d *StreamD) monitorExternalChatHandler(
+	ctx context.Context,
+	key chatHandlerKey,
+	streamdAddr string,
+	handler *externalChatHandler,
+) {
+	logger.Debugf(ctx, "monitorExternalChatHandler('%s'/%s)", key.Platform, key.ListenerType)
+	defer logger.Debugf(ctx, "/monitorExternalChatHandler('%s'/%s)", key.Platform, key.ListenerType)
+
+	// Wait for the process to exit in a separate goroutine.
+	processDone := make(chan error, 1)
+	observability.Go(ctx, func(_ context.Context) {
+		processDone <- handler.cmd.Wait()
+	})
+
+	ticker := time.NewTicker(externalHandlerHealthTimeout / 2)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case err := <-processDone:
+			logger.Errorf(ctx,
+				"chat handler '%s'/%s died (pid=%d): %v — will restart",
+				key.Platform, key.ListenerType, handler.cmd.Process.Pid, err)
+
+			if !sleep(ctx, externalHandlerRestartDelay) {
+				return
+			}
+			if !d.isCurrentExternalHandler(key, handler) {
+				logger.Debugf(ctx, "handler for '%s'/%s already replaced, skipping restart", key.Platform, key.ListenerType)
+				return
+			}
+			if restartErr := d.StartExternalChatHandler(ctx, key.Platform, key.ListenerType, streamdAddr); restartErr != nil {
+				logger.Errorf(ctx, "failed to restart chat handler for '%s'/%s: %v", key.Platform, key.ListenerType, restartErr)
+			}
+			return
+
+		case <-ticker.C:
+			lastMsg := time.Unix(0, handler.lastMessageTime.Load())
+			if time.Since(lastMsg) > externalHandlerHealthTimeout {
+				logger.Errorf(ctx,
+					"chat handler '%s'/%s unresponsive for %s — restarting",
+					key.Platform, key.ListenerType, time.Since(lastMsg).Round(time.Second))
+
+				handler.cancelFunc()
+				if !sleep(ctx, externalHandlerRestartDelay) {
+					return
+				}
+				if !d.isCurrentExternalHandler(key, handler) {
+					logger.Debugf(ctx, "handler for '%s'/%s already replaced, skipping restart", key.Platform, key.ListenerType)
+					return
+				}
+				if restartErr := d.StartExternalChatHandler(ctx, key.Platform, key.ListenerType, streamdAddr); restartErr != nil {
+					logger.Errorf(ctx, "failed to restart chat handler for '%s'/%s: %v", key.Platform, key.ListenerType, restartErr)
+				}
+				return
+			}
+		}
+	}
+}
+
+// recordExternalChatHandlerActivity updates the last-message timestamp
+// for the specific handler identified by key. Called from injectChatEvent
+// when a keepalive is received, so the health monitor knows the handler is alive.
+func (d *StreamD) recordExternalChatHandlerActivity(
+	ctx context.Context,
+	key chatHandlerKey,
+) {
+	d.externalChatHandlerLocker.Lock()
+	defer d.externalChatHandlerLocker.Unlock()
+
+	handler, ok := d.externalChatHandlers[key]
+	if !ok {
+		logger.Debugf(ctx, "recordExternalChatHandlerActivity: no handler for %s/%s", key.Platform, key.ListenerType)
+		return
+	}
+
+	handler.lastMessageTime.Store(time.Now().UnixNano())
+}
+
+// isCurrentExternalHandler returns true if the given handler is still the
+// active handler for the key. Used as a staleness guard before restart.
+func (d *StreamD) isCurrentExternalHandler(
+	key chatHandlerKey,
+	handler *externalChatHandler,
+) bool {
+	d.externalChatHandlerLocker.Lock()
+	defer d.externalChatHandlerLocker.Unlock()
+
+	return d.externalChatHandlers[key] == handler
+}
+
+// registerExternalChatHandler stores the handler in the map, cancelling any
+// previous handler for the same key.
+func (d *StreamD) registerExternalChatHandler(
+	key chatHandlerKey,
+	handler *externalChatHandler,
+) {
+	d.externalChatHandlerLocker.Lock()
+	defer d.externalChatHandlerLocker.Unlock()
+
+	if old, exists := d.externalChatHandlers[key]; exists {
+		old.cancelFunc()
+	}
+	d.externalChatHandlers[key] = handler
+}
+
+// StopExternalChatHandler stops all external chat handlers for the given
+// platform.
+func (d *StreamD) StopExternalChatHandler(
+	ctx context.Context,
+	platName streamcontrol.PlatformName,
+) {
+	logger.Debugf(ctx, "StopExternalChatHandler(ctx, '%s')", platName)
+
+	d.stopExternalChatHandlersForPlatform(ctx, platName)
+}
+
+// stopExternalChatHandlersForPlatform cancels and removes all handlers
+// matching the given platform.
+func (d *StreamD) stopExternalChatHandlersForPlatform(
+	ctx context.Context,
+	platName streamcontrol.PlatformName,
+) {
+	d.externalChatHandlerLocker.Lock()
+	defer d.externalChatHandlerLocker.Unlock()
+
+	for key, handler := range d.externalChatHandlers {
+		if key.Platform != platName {
+			continue
+		}
+		handler.cancelFunc()
+		delete(d.externalChatHandlers, key)
+		logger.Debugf(ctx, "stopped external chat handler for '%s'/%s", key.Platform, key.ListenerType)
+	}
+}
+
+// injectDiagnosticChatEvent injects a diagnostic system event into the chat
+// pipeline, making it visible to the operator in the chat UI.
+func (d *StreamD) injectDiagnosticChatEvent(
+	ctx context.Context,
+	platName streamcontrol.PlatformName,
+	message string,
+) {
+	msg := api.ChatMessage{
+		Event: streamcontrol.Event{
+			ID:        streamcontrol.EventID(fmt.Sprintf("diag-%s-%d", platName, time.Now().UnixNano())),
+			CreatedAt: time.Now(),
+			Type:      streamcontrol.EventTypeOther,
+			User: streamcontrol.User{
+				ID:   "system",
+				Name: "system",
+			},
+			Message: &streamcontrol.Message{
+				Content: fmt.Sprintf("[DIAGNOSTIC] %s", message),
+				Format:  streamcontrol.TextFormatTypePlain,
+			},
+		},
+		IsLive:   true,
+		Platform: platName,
+	}
+	if err := d.processChatMessage(ctx, msg); err != nil {
+		logger.Errorf(ctx, "failed to inject diagnostic event: %v", err)
+	}
+}
+
+func sleep(ctx context.Context, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-t.C:
+		return true
+	case <-ctx.Done():
+		return false
+	}
 }

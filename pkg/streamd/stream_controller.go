@@ -10,6 +10,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/object"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
@@ -72,12 +73,16 @@ func (d *StreamD) reinitStreamControllers(ctx context.Context) error {
 			)
 			continue
 		}
-		err = d.startListeningForChatMessages(ctx, platName)
-		if err != nil {
-			logger.Errorf(ctx, "unable to initialize the reader of chat messages for '%s': %v", string(platName), err)
-			continue
-		}
 	}
+
+	// Reconcile external chat handler subprocesses after all backends
+	// are initialized. This replaces the per-platform startListeningForChatMessages
+	// approach: external handlers connect back via gRPC and do not need
+	// per-account state.
+	observability.Go(ctx, func(ctx context.Context) {
+		d.reconcileChatListeners(ctx)
+	})
+
 	return result.ErrorOrNil()
 }
 
@@ -109,7 +114,7 @@ func newOBS(
 		return nil, ErrSkipBackend
 	}
 
-	logger.Debugf(ctx, "OBS config: %#+v", platCfg)
+	logger.Tracef(ctx, "OBS config: %#+v", platCfg)
 	obs, err := obs.New(ctx, *platCfg)
 	if err != nil {
 		return nil, fmt.Errorf("unable to initialize OBS client: %w", err)
@@ -143,14 +148,14 @@ func newTwitch(
 		return nil, ErrSkipBackend
 	}
 
-	logger.Debugf(ctx, "twitch config: %#+v", platCfg)
+	logger.Tracef(ctx, "twitch config: %#+v", platCfg)
 	platCfg.Config.CustomOAuthHandler = customOAuthHandler
 	platCfg.Config.GetOAuthListenPorts = getOAuthListenPorts
 	twitch, err := twitch.New(ctx, *platCfg,
 		func(c twitch.Config) error {
 			return saveCfgFunc(&streamcontrol.AbstractPlatformConfig{
 				Enable:              c.Enable,
-				DisableChatListener: c.DisableChatListener,
+				EnabledChatListenerTypes: c.EnabledChatListenerTypes,
 				Config:              c.Config,
 				StreamProfiles:      streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
 				Custom:              c.Custom,
@@ -188,14 +193,14 @@ func newKick(
 		return nil, ErrSkipBackend
 	}
 
-	logger.Debugf(ctx, "kick config: %#+v", platCfg)
+	logger.Tracef(ctx, "kick config: %#+v", platCfg)
 	platCfg.Config.CustomOAuthHandler = customOAuthHandler
 	platCfg.Config.GetOAuthListenPorts = getOAuthListenPorts
 	kick, err := kick.New(ctx, *platCfg,
 		func(c kick.Config) error {
 			return saveCfgFunc(&streamcontrol.AbstractPlatformConfig{
 				Enable:              c.Enable,
-				DisableChatListener: c.DisableChatListener,
+				EnabledChatListenerTypes: c.EnabledChatListenerTypes,
 				Config:              c.Config,
 				StreamProfiles:      streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
 				Custom:              c.Custom,
@@ -233,7 +238,7 @@ func newYouTube(
 		return nil, ErrSkipBackend
 	}
 
-	logger.Debugf(ctx, "youtube config: %#+v", platCfg)
+	logger.Tracef(ctx, "youtube config: %#+v", platCfg)
 	platCfg.Config.CustomOAuthHandler = customOAuthHandler
 	platCfg.Config.GetOAuthListenPorts = getOAuthListenPorts
 	yt, err := youtube.New(ctx, *platCfg,
@@ -242,7 +247,7 @@ func newYouTube(
 			defer logger.Debugf(ctx, "saveCfgFunc")
 			return saveCfgFunc(&streamcontrol.AbstractPlatformConfig{
 				Enable:              c.Enable,
-				DisableChatListener: c.DisableChatListener,
+				EnabledChatListenerTypes: c.EnabledChatListenerTypes,
 				Config:              c.Config,
 				StreamProfiles:      streamcontrol.ToAbstractStreamProfiles(c.StreamProfiles),
 				Custom:              platCfg.Custom,
