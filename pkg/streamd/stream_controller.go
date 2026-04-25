@@ -10,6 +10,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/xaionaro-go/object"
+	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/obs"
@@ -28,6 +29,11 @@ func (d *StreamD) EXPERIMENTAL_ReinitStreamControllers(ctx context.Context) (_er
 
 func (d *StreamD) reinitStreamControllers(ctx context.Context) error {
 	var result *multierror.Error
+	// Collect platforms that need chat listeners started after all
+	// backends are initialized. Spawning external chat handler processes
+	// synchronously in the init loop delays subsequent backend init
+	// (including OBS) and stream player startup, causing StartTimeout
+	// to be exceeded.
 	for _, platName := range []streamcontrol.PlatformName{
 		twitch.ID,
 		kick.ID,
@@ -72,14 +78,14 @@ func (d *StreamD) reinitStreamControllers(ctx context.Context) error {
 			)
 			continue
 		}
-		if platName != obs.ID {
-			err = d.startChatListeners(ctx, platName)
-			if err != nil {
-				logger.Errorf(ctx, "unable to start chat listeners for '%s': %v", string(platName), err)
-				continue
-			}
-		}
 	}
+
+	// Reconcile chat listeners asynchronously so subprocess spawning
+	// does not block the rest of the init pipeline.
+	observability.Go(ctx, func(ctx context.Context) {
+		d.reconcileChatListeners(ctx)
+	})
+
 	return result.ErrorOrNil()
 }
 

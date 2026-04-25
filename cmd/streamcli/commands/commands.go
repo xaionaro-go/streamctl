@@ -39,6 +39,7 @@ var (
 		Use: os.Args[0],
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			ctx := cmd.Context()
+			observability.LogLevelFilter.SetLevel(LoggerLevel)
 			l := logger.FromCtx(ctx).WithLevel(LoggerLevel)
 			ctx = logger.CtxWithLogger(ctx, l)
 			cmd.SetContext(ctx)

@@ -27,10 +27,10 @@ import (
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/cmd/streamd/ui"
 	"github.com/xaionaro-go/streamctl/pkg/cert"
-	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/process"
 	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/platform/kick"
 	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/platform/twitch"
 	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/platform/youtube"
+	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/process"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
@@ -206,12 +206,10 @@ func main() {
 			l.Fatalf("unable to initialize the streamd instance: %v", err)
 		}
 
-		observability.Go(ctx, func(ctx context.Context) {
-			if err = streamD.Run(ctx); err != nil {
-				l.Errorf("streamd returned an error: %v", err)
-			}
-		})
-
+		// Set up the gRPC server and listener BEFORE Run() so that
+		// GRPCListenAddr is available when startChatListeners reads it.
+		// Previously Run() raced with GRPCListenAddr assignment, causing
+		// chat handler spawns to fail with "GRPCListenAddr is not set".
 		cert, err := cert.GenerateSelfSignedForServer()
 		if err != nil {
 			logger.Panicf(ctx, "unable to generate the certificate: %v", err)
@@ -221,7 +219,6 @@ func main() {
 			Certificates: []tls.Certificate{cert},
 			NextProtos:   []string{"h2"},
 		})
-		//listener, err := net.Listen("tcp", *listenAddr)
 		if err != nil {
 			log.Fatalf("failed to listen: %v", err)
 		}
@@ -261,6 +258,15 @@ func main() {
 		proxy_grpc.RegisterNetworkProxyServer(grpcServer, grpcproxyserver.New())
 		streamd_grpc.RegisterStreamDServer(grpcServer, streamdGRPC)
 		l.Infof("started server at %s", *listenAddr)
+
+		// Run streamD.Run() in background so that the gRPC server can
+		// start serving on the main goroutine (preserving the grpcLocker
+		// unlock/lock pattern around Serve).
+		observability.Go(ctx, func(ctx context.Context) {
+			if runErr := streamD.Run(ctx); runErr != nil {
+				l.Errorf("streamd returned an error: %v", runErr)
+			}
+		})
 
 		grpcLocker.Unlock()
 		err = grpcServer.Serve(listener)

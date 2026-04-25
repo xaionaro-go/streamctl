@@ -12,11 +12,11 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/youtubeapiproxy/grpc/ytgrpc"
 	"golang.org/x/oauth2"
+	youtubesvc "google.golang.org/api/youtube/v3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	grpcoauth "google.golang.org/grpc/credentials/oauth"
-	youtubesvc "google.golang.org/api/youtube/v3"
 )
 
 const (
@@ -41,8 +41,8 @@ type GRPCStreamListener struct {
 	DetectMethod DetectMethod
 
 	// Direct mode fields (used when YTProxyAddr is empty).
-	TokenSource  oauth2.TokenSource
-	OAuth2Svc    *youtubesvc.Service
+	TokenSource oauth2.TokenSource
+	OAuth2Svc   *youtubesvc.Service
 
 	conn   *grpc.ClientConn
 	cancel context.CancelFunc

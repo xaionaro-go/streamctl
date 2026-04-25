@@ -27,8 +27,8 @@ const (
 // from the config file. The config provides streamd address, translation
 // settings, and optional per-platform credential/setting overrides.
 type AppConfig struct {
-	StreamdAddr       string                         `yaml:"streamd_addr"`
-	Translation       TranslationConfig              `yaml:"translation"`
+	StreamdAddr       string                            `yaml:"streamd_addr"`
+	Translation       TranslationConfig                 `yaml:"translation"`
 	PlatformOverrides map[string]PlatformOverrideConfig `yaml:"platform_overrides"`
 }
 

@@ -2,7 +2,6 @@ package streamd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -14,40 +13,97 @@ import (
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/chathandler"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
+	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/youtube"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/api"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/config"
 )
 
-// startChatListeners spawns one external chat handler process per enabled
-// listener type for the given platform.
-func (d *StreamD) startChatListeners(
+// chatPlatforms lists platforms that support chat listeners (all except OBS).
+var chatPlatforms = []streamcontrol.PlatformName{twitch.ID, kick.ID, youtube.ID}
+
+// reconcileChatListeners compares running chat handler processes against the
+// current config and starts/stops handlers to match. Called after config
+// updates so that CLI enable/disable commands take effect at runtime.
+func (d *StreamD) reconcileChatListeners(
 	ctx context.Context,
-	platName streamcontrol.PlatformName,
-) error {
-	logger.Debugf(ctx, "startChatListeners(ctx, '%s')", platName)
+) {
+	logger.Debugf(ctx, "reconcileChatListeners")
+	defer logger.Debugf(ctx, "/reconcileChatListeners")
 
-	platCfg := d.Config.Backends[platName]
-	enabledTypes := resolveEnabledChatListenerTypes(platCfg)
-	if len(enabledTypes) == 0 {
-		logger.Debugf(ctx, "no chat listener types enabled for '%s'", platName)
-		return nil
-	}
+	for _, platName := range chatPlatforms {
+		platCfg := d.Config.Backends[platName]
+		enabledTypes := resolveEnabledChatListenerTypes(platCfg)
 
-	var errs []error
-	for _, lt := range enabledTypes {
-		if err := d.StartExternalChatHandler(ctx, platName, lt, d.GRPCListenAddr); err != nil {
-			logger.Errorf(ctx, "start %v chat listener for %s: %v", lt, platName, err)
-			errs = append(errs, err)
+		enabledSet := make(map[streamcontrol.ChatListenerType]struct{}, len(enabledTypes))
+		for _, lt := range enabledTypes {
+			enabledSet[lt] = struct{}{}
+		}
+
+		// Stop handlers for types no longer enabled.
+		d.stopDisabledChatHandlers(ctx, platName, enabledSet)
+
+		// Start handlers for newly enabled types.
+		for _, lt := range enabledTypes {
+			key := chatHandlerKey{
+				Platform:     platName,
+				ListenerType: lt,
+			}
+			if d.isHandlerRunning(key) {
+				continue
+			}
+			if err := d.StartExternalChatHandler(ctx, platName, lt, d.GRPCListenAddr); err != nil {
+				logger.Errorf(ctx, "reconcile: start chat handler for '%s'/%s: %v", platName, lt, err)
+			}
 		}
 	}
-	return errors.Join(errs...)
 }
 
+// stopDisabledChatHandlers cancels and removes handlers for a platform whose
+// listener type is not in enabledSet.
+func (d *StreamD) stopDisabledChatHandlers(
+	ctx context.Context,
+	platName streamcontrol.PlatformName,
+	enabledSet map[streamcontrol.ChatListenerType]struct{},
+) {
+	d.externalChatHandlerLocker.Lock()
+	defer d.externalChatHandlerLocker.Unlock()
+
+	for key, handler := range d.externalChatHandlers {
+		if key.Platform != platName {
+			continue
+		}
+		if _, ok := enabledSet[key.ListenerType]; ok {
+			continue
+		}
+		handler.cancelFunc()
+		delete(d.externalChatHandlers, key)
+		logger.Debugf(ctx, "reconcile: stopped chat handler for '%s'/%s", key.Platform, key.ListenerType)
+	}
+}
+
+// isHandlerRunning returns true if a handler exists for the given key.
+func (d *StreamD) isHandlerRunning(
+	key chatHandlerKey,
+) bool {
+	d.externalChatHandlerLocker.Lock()
+	defer d.externalChatHandlerLocker.Unlock()
+
+	_, ok := d.externalChatHandlers[key]
+	return ok
+}
+
+// resolveEnabledChatListenerTypes is the single source of truth for which
+// chat listener types should run for a platform. Returns nil when the
+// platform is disabled, unconfigured, or has no enabled types.
 func resolveEnabledChatListenerTypes(
 	platCfg *streamcontrol.AbstractPlatformConfig,
 ) []streamcontrol.ChatListenerType {
 	switch {
 	case platCfg == nil:
+		return nil
+	case platCfg.Enable != nil && !*platCfg.Enable:
 		return nil
 	case platCfg.EnabledChatListenerTypes != nil:
 		return platCfg.EnabledChatListenerTypes
@@ -84,7 +140,6 @@ func (d *StreamD) processChatMessage(
 	}
 
 	publishEvent(ctx, d.EventBus, msg)
-	d.greetIfNeeded(ctx, msg)
 	d.shoutoutIfNeeded(ctx, msg)
 	return nil
 }
@@ -164,63 +219,6 @@ func (d *StreamD) cleanupInjectedEventIDs() {
 	})
 }
 
-// greetIfNeeded emits a synthetic EventTypeGreeting ("said hi") event
-// on the first live chat message from each user in this session,
-// unless the platform already delivered a real greeting (e.g. YouTube's
-// liveChatViewerEngagementMessageRenderer "said hi" button).
-func (d *StreamD) greetIfNeeded(
-	ctx context.Context,
-	msg api.ChatMessage,
-) {
-	if !msg.IsLive {
-		return
-	}
-
-	userID := config.ChatUserID{
-		Platform: msg.Platform,
-		User:     streamcontrol.UserID(strings.ToLower(string(msg.Event.User.ID))),
-	}
-
-	// Real platform greeting: record the user as greeted so we don't
-	// emit a redundant synthetic greeting when their first regular
-	// chat message arrives later.
-	switch msg.Event.Type {
-	case streamcontrol.EventTypeGreeting:
-		d.greetedUsersLocker.Lock()
-		d.greetedUsers[userID] = struct{}{}
-		d.greetedUsersLocker.Unlock()
-		return
-	case streamcontrol.EventTypeChatMessage:
-		// Fall through to synthetic greeting logic below.
-	default:
-		return
-	}
-
-	d.greetedUsersLocker.Lock()
-	_, alreadyGreeted := d.greetedUsers[userID]
-	if !alreadyGreeted {
-		d.greetedUsers[userID] = struct{}{}
-	}
-	d.greetedUsersLocker.Unlock()
-
-	if alreadyGreeted {
-		return
-	}
-
-	logger.Infof(ctx, "first message from %s on %s — emitting greeting", userID.User, msg.Platform)
-
-	greeting := api.ChatMessage{
-		Event: streamcontrol.Event{
-			ID:        streamcontrol.EventID(fmt.Sprintf("greeting-%s-%s-%d", msg.Platform, userID.User, time.Now().UnixNano())),
-			CreatedAt: msg.Event.CreatedAt,
-			Type:      streamcontrol.EventTypeGreeting,
-			User:      msg.Event.User,
-		},
-		IsLive:   true,
-		Platform: msg.Platform,
-	}
-	publishEvent(ctx, d.EventBus, greeting)
-}
 
 func (d *StreamD) shoutoutIfNeeded(
 	ctx context.Context,
