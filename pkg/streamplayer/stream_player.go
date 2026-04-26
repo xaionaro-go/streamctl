@@ -854,6 +854,8 @@ func (p *StreamPlayerHandler) controllerLoop(
 	lastDebugReportAt := time.Now()
 	curSpeed := float64(1)
 	prevNow := time.Now()
+	var prevSampledPos time.Duration
+	prevSampledAt := time.Now()
 	for {
 		if isClosed {
 			logger.Debug(ctx, "the player is closed, so closing the controllerLoop")
@@ -910,6 +912,15 @@ func (p *StreamPlayerHandler) controllerLoop(
 				rawAudioPTS, rawAudioPTSErr,
 				rawTimePos, rawTimePosErr,
 			)
+
+			wallDelta := now.Sub(prevSampledAt)
+			posDelta := pos - prevSampledPos
+			logger.Tracef(ctx,
+				"StreamPlayer[%s].controllerLoop: tick delta: wallDelta=%v posDelta=%v",
+				p.StreamID, wallDelta, posDelta,
+			)
+			prevSampledPos = pos
+			prevSampledAt = now
 
 			l := time.Duration(-1)
 			if mpv, ok := player.(interface {
