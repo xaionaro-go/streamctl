@@ -158,7 +158,7 @@ func (l *GRPCStreamListener) discoverBroadcast(
 	switch {
 	case !l.isDirectMode():
 		// Proxy mode: use AdminService RPCs via the proxy connection.
-		return DiscoverBroadcast(ctx, conn, l.ChannelID, detectMethod)
+		return DiscoverBroadcast(ctx, conn, l.ChannelID, detectMethod, true)
 
 	default:
 		// Direct mode: use YouTube Data API v3 via OAuth2.

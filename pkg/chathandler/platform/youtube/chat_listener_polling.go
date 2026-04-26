@@ -132,7 +132,7 @@ func (l *PollingListener) discoverAndPollLoop(
 		}
 
 		logger.Debugf(ctx, "discovering active broadcast for polling...")
-		result, err := DiscoverBroadcast(ctx, conn, l.ChannelID, detectMethod)
+		result, err := DiscoverBroadcast(ctx, conn, l.ChannelID, detectMethod, true)
 		if err != nil {
 			logger.Debugf(ctx, "broadcast discovery ended: %v", err)
 			return

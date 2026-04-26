@@ -100,7 +100,9 @@ func (l *ObsoleteJSONListener) discoverAndScrapeLoop(
 		}
 
 		logger.Debugf(ctx, "discovering active broadcast for obsolete scraper...")
-		result, err := DiscoverBroadcast(ctx, conn, l.ChannelID, detectMethod)
+		// OBSOLETE chat scraper only consumes VideoID; skip the
+		// ResolveLiveChatId proxy RPC.
+		result, err := DiscoverBroadcast(ctx, conn, l.ChannelID, detectMethod, false)
 		if err != nil {
 			logger.Debugf(ctx, "broadcast discovery ended: %v", err)
 			return

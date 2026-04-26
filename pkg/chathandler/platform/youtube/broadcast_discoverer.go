@@ -50,25 +50,29 @@ type BroadcastResult struct {
 
 // DiscoverBroadcast polls for an active broadcast on the channel using the
 // configured detection method. Returns as soon as one is found. Blocks until
-// a broadcast is detected or ctx is cancelled.
+// a broadcast is detected or ctx is cancelled. When needLiveChatID is false
+// the discoverer skips the ResolveLiveChatId proxy RPC; the OBSOLETE chat
+// scraper only needs the videoID, so paying that round-trip is wasted.
 func DiscoverBroadcast(
 	ctx context.Context,
 	conn grpc.ClientConnInterface,
 	channelID string,
 	detectMethod DetectMethod,
+	needLiveChatID bool,
 ) (_ BroadcastResult, _err error) {
 	logger.Tracef(ctx, "DiscoverBroadcast")
 	defer func() { logger.Tracef(ctx, "/DiscoverBroadcast: %v", _err) }()
 
 	adminClient := ytgrpc.NewAdminServiceClient(conn)
-	logger.Debugf(ctx, "polling for active broadcast (method: %s, channel: %q)", detectMethod, channelID)
+	logger.Debugf(ctx, "polling for active broadcast (method: %s, channel: %q, needLiveChatID: %t)",
+		detectMethod, channelID, needLiveChatID)
 
 	for {
 		if ctx.Err() != nil {
 			return BroadcastResult{}, ctx.Err()
 		}
 
-		result, err := detectLiveStream(ctx, adminClient, channelID, detectMethod)
+		result, err := detectLiveStream(ctx, adminClient, channelID, detectMethod, needLiveChatID)
 		if err == nil {
 			logger.Debugf(ctx, "discovered broadcast: liveChatID=%s videoID=%s", result.LiveChatID, result.VideoID)
 			return result, nil
@@ -86,17 +90,18 @@ func detectLiveStream(
 	adminClient ytgrpc.AdminServiceClient,
 	channelID string,
 	detectMethod DetectMethod,
+	needLiveChatID bool,
 ) (_ BroadcastResult, _err error) {
 	logger.Tracef(ctx, "detectLiveStream")
 	defer func() { logger.Tracef(ctx, "/detectLiveStream: %v", _err) }()
 
 	switch detectMethod {
 	case DetectMethodBroadcasts:
-		return detectViaBroadcasts(ctx, adminClient)
+		return detectViaBroadcasts(ctx, adminClient, needLiveChatID)
 	case DetectMethodSearch:
-		return detectViaSearch(ctx, adminClient, channelID)
+		return detectViaSearch(ctx, adminClient, channelID, needLiveChatID)
 	case DetectMethodHTML:
-		return detectViaHTML(ctx, adminClient, channelID)
+		return detectViaHTML(ctx, adminClient, channelID, needLiveChatID)
 	default:
 		return BroadcastResult{}, fmt.Errorf("unknown detect method: %q", detectMethod)
 	}
@@ -105,6 +110,7 @@ func detectLiveStream(
 func detectViaBroadcasts(
 	ctx context.Context,
 	adminClient ytgrpc.AdminServiceClient,
+	needLiveChatID bool,
 ) (_ BroadcastResult, _err error) {
 	logger.Tracef(ctx, "detectViaBroadcasts")
 	defer func() { logger.Tracef(ctx, "/detectViaBroadcasts: %v", _err) }()
@@ -131,8 +137,12 @@ func detectViaBroadcasts(
 		}
 	}
 
-	// Broadcasts exist but none have a liveChatId -- resolve via the first one.
 	videoID := resp.Broadcasts[0].VideoId
+	if !needLiveChatID {
+		return BroadcastResult{VideoID: videoID}, nil
+	}
+
+	// Broadcasts exist but none have a liveChatId -- resolve via the first one.
 	liveChatID, err := resolveVideoToChat(ctx, adminClient, videoID)
 	if err != nil {
 		return BroadcastResult{}, err
@@ -144,6 +154,7 @@ func detectViaSearch(
 	ctx context.Context,
 	adminClient ytgrpc.AdminServiceClient,
 	channelID string,
+	needLiveChatID bool,
 ) (_ BroadcastResult, _err error) {
 	logger.Tracef(ctx, "detectViaSearch")
 	defer func() { logger.Tracef(ctx, "/detectViaSearch: %v", _err) }()
@@ -164,6 +175,10 @@ func detectViaSearch(
 	videoID := resp.Videos[0].VideoId
 	logger.Debugf(ctx, "found live video via search: video=%s title=%q", videoID, resp.Videos[0].Title)
 
+	if !needLiveChatID {
+		return BroadcastResult{VideoID: videoID}, nil
+	}
+
 	liveChatID, err := resolveVideoToChat(ctx, adminClient, videoID)
 	if err != nil {
 		return BroadcastResult{}, err
@@ -175,6 +190,7 @@ func detectViaHTML(
 	ctx context.Context,
 	adminClient ytgrpc.AdminServiceClient,
 	channelID string,
+	needLiveChatID bool,
 ) (_ BroadcastResult, _err error) {
 	logger.Tracef(ctx, "detectViaHTML")
 	defer func() { logger.Tracef(ctx, "/detectViaHTML: %v", _err) }()
@@ -183,6 +199,10 @@ func detectViaHTML(
 	videoID, err := extractVideoIDFromPage(ctx, liveURL)
 	if err != nil {
 		return BroadcastResult{}, err
+	}
+
+	if !needLiveChatID {
+		return BroadcastResult{VideoID: videoID}, nil
 	}
 
 	liveChatID, err := resolveVideoToChat(ctx, adminClient, videoID)

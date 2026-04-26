@@ -39,7 +39,7 @@ func monitorChannel(
 			return ctx.Err()
 		}
 
-		result, err := ytlistener.DiscoverBroadcast(ctx, ytConn, channelTarget, detectMethod)
+		result, err := ytlistener.DiscoverBroadcast(ctx, ytConn, channelTarget, detectMethod, true)
 		if err != nil {
 			// DiscoverBroadcast only returns error on ctx cancellation.
 			return err
