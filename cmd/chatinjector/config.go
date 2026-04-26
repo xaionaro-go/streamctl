@@ -196,7 +196,7 @@ streamd_addr: "localhost:3594"
 #
 #     - type: ollama
 #       api_url: "http://localhost:11434"
-#       model: "qwen3:30b-instruct"
+#       model: "qwen3.5:9b-mxfp8"
 #       parallelism: 2
 #
 #     # - type: openai
