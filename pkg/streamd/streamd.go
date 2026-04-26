@@ -34,6 +34,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/memoize"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/ui"
+	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
@@ -1906,25 +1907,52 @@ func (d *StreamD) StreamPlayerGetLength(
 	}
 	return streamPlayer.GetLength(ctx)
 }
+// streamPlayerHandlerGetter is a local interface for concrete stream servers
+// that expose the StreamPlayerHandler.
+type streamPlayerHandlerGetter interface {
+	GetActiveStreamPlayerHandler(ctx context.Context, streamID streamtypes.StreamID) (*streamplayer.StreamPlayerHandler, error)
+}
+
 func (d *StreamD) StreamPlayerGetLag(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 ) (time.Duration, time.Time, error) {
 	now := time.Now()
-	streamPlayer, err := d.getActiveStreamPlayer(ctx, streamID)
+	var lag time.Duration
+	var sampledAt time.Time
+	var innerErr error
+	err := xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
+		if d.StreamServer == nil {
+			innerErr = fmt.Errorf("stream server is not initialized")
+			return innerErr
+		}
+		hg, ok := d.StreamServer.(streamPlayerHandlerGetter)
+		if !ok {
+			innerErr = fmt.Errorf("stream server does not support GetActiveStreamPlayerHandler")
+			return innerErr
+		}
+		handler, e := hg.GetActiveStreamPlayerHandler(ctx, streamID)
+		if e != nil {
+			innerErr = e
+			return e
+		}
+		l, s, e := handler.GetCachedLag(ctx)
+		if e != nil {
+			innerErr = e
+			return e
+		}
+		lag = l
+		sampledAt = s
+		return nil
+	})
 	if err != nil {
 		return 0, now, err
 	}
-	pos, err := streamPlayer.GetAudioPosition(ctx)
-	if err != nil {
-		return 0, now, fmt.Errorf("unable to get audio position: %w", err)
+	if sampledAt.IsZero() {
+		sampledAt = now
 	}
-	length, err := streamPlayer.GetLength(ctx)
-	if err != nil {
-		return 0, now, fmt.Errorf("unable to get stream length: %w", err)
-	}
-	lag := max(length-pos, 0)
-	return lag, now, nil
+	_ = innerErr
+	return lag, sampledAt, nil
 }
 func (d *StreamD) StreamPlayerSetSpeed(
 	ctx context.Context,

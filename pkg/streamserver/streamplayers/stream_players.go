@@ -307,6 +307,20 @@ func (s *StreamPlayers) GetActiveStreamPlayer(
 	return p.Player, nil
 }
 
+// GetActiveStreamPlayerHandler returns the full *StreamPlayerHandler for
+// streamID, exposing controller-level methods not on the player.Player
+// interface (e.g. GetCachedLag).
+func (s *StreamPlayers) GetActiveStreamPlayerHandler(
+	ctx context.Context,
+	streamID types.StreamID,
+) (*streamplayer.StreamPlayerHandler, error) {
+	p := s.StreamPlayers.Get(streamID)
+	if p == nil {
+		return nil, fmt.Errorf("there is no player setup for '%s'", streamID)
+	}
+	return p, nil
+}
+
 func (s *StreamPlayers) RemoveStreamPlayer(
 	ctx context.Context,
 	streamID types.StreamID,
