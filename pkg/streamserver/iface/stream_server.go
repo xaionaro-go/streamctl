@@ -2,6 +2,7 @@ package iface
 
 import (
 	"context"
+	"time"
 
 	"github.com/xaionaro-go/player/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
@@ -120,6 +121,10 @@ type StreamServer interface {
 		ctx context.Context,
 		streamID types.StreamID,
 	) (player.Player, error)
+	GetActiveStreamPlayerLag(
+		ctx context.Context,
+		streamID types.StreamID,
+	) (lag time.Duration, sampledAt time.Time, err error)
 
 	ListServers(ctx context.Context) []streamportserver.Server
 }

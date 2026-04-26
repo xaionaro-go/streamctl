@@ -34,7 +34,6 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/memoize"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/ui"
-	"github.com/xaionaro-go/streamctl/pkg/streamplayer"
 	sptypes "github.com/xaionaro-go/streamctl/pkg/streamplayer/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types"
@@ -1907,51 +1906,22 @@ func (d *StreamD) StreamPlayerGetLength(
 	}
 	return streamPlayer.GetLength(ctx)
 }
-// streamPlayerHandlerGetter is a local interface for concrete stream servers
-// that expose the StreamPlayerHandler.
-type streamPlayerHandlerGetter interface {
-	GetActiveStreamPlayerHandler(ctx context.Context, streamID streamtypes.StreamID) (*streamplayer.StreamPlayerHandler, error)
-}
-
 func (d *StreamD) StreamPlayerGetLag(
 	ctx context.Context,
 	streamID streamtypes.StreamID,
 ) (time.Duration, time.Time, error) {
-	now := time.Now()
-	var lag time.Duration
-	var sampledAt time.Time
-	var innerErr error
-	err := xsync.DoR1(ctx, &d.StreamServerLocker, func() error {
+	lag, sampledAt, err := xsync.DoR3(ctx, &d.StreamServerLocker, func() (time.Duration, time.Time, error) {
 		if d.StreamServer == nil {
-			innerErr = fmt.Errorf("stream server is not initialized")
-			return innerErr
+			return 0, time.Time{}, fmt.Errorf("stream server is not initialized")
 		}
-		hg, ok := d.StreamServer.(streamPlayerHandlerGetter)
-		if !ok {
-			innerErr = fmt.Errorf("stream server does not support GetActiveStreamPlayerHandler")
-			return innerErr
-		}
-		handler, e := hg.GetActiveStreamPlayerHandler(ctx, streamID)
-		if e != nil {
-			innerErr = e
-			return e
-		}
-		l, s, e := handler.GetCachedLag(ctx)
-		if e != nil {
-			innerErr = e
-			return e
-		}
-		lag = l
-		sampledAt = s
-		return nil
+		return d.StreamServer.GetActiveStreamPlayerLag(ctx, streamID)
 	})
 	if err != nil {
-		return 0, now, err
+		return 0, time.Now(), err
 	}
 	if sampledAt.IsZero() {
-		sampledAt = now
+		sampledAt = time.Now()
 	}
-	_ = innerErr
 	return lag, sampledAt, nil
 }
 func (d *StreamD) StreamPlayerSetSpeed(

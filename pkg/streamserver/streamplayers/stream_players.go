@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
@@ -319,6 +320,20 @@ func (s *StreamPlayers) GetActiveStreamPlayerHandler(
 		return nil, fmt.Errorf("there is no player setup for '%s'", streamID)
 	}
 	return p, nil
+}
+
+// GetActiveStreamPlayerLag returns the lag from the last controllerLoop tick
+// for the active player of streamID. Survives "audio-pts unavailable" states
+// because it uses the fallback-resolved position.
+func (s *StreamPlayers) GetActiveStreamPlayerLag(
+	ctx context.Context,
+	streamID types.StreamID,
+) (time.Duration, time.Time, error) {
+	p := s.StreamPlayers.Get(streamID)
+	if p == nil {
+		return 0, time.Time{}, fmt.Errorf("there is no player setup for '%s'", streamID)
+	}
+	return p.GetCachedLag(ctx)
 }
 
 func (s *StreamPlayers) RemoveStreamPlayer(
