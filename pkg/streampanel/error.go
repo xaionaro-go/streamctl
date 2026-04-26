@@ -23,8 +23,8 @@ type errorReport struct {
 }
 
 func (p *Panel) ReportError(err error) {
-	logger.Debugf(p.defaultContext, "ReportError('%v')", err)
-	defer logger.Debugf(p.defaultContext, "/ReportError('%v')", err)
+	logger.Tracef(p.defaultContext, "ReportError('%v')", err)
+	defer logger.Tracef(p.defaultContext, "/ReportError('%v')", err)
 	if err == nil {
 		return
 	}

@@ -105,7 +105,7 @@ func (p *Panel) onReceiveMessage(
 	ctx context.Context,
 	msg api.ChatMessage,
 ) {
-	logger.Debugf(ctx, "onReceiveMessage(ctx, %s)", spew.Sdump(msg))
+	logger.Tracef(ctx, "onReceiveMessage(ctx, %s)", spew.Sdump(msg))
 	defer func() { logger.Tracef(ctx, "/onReceiveMessage(ctx, %s)", spew.Sdump(msg)) }()
 	var prevLen int
 	var fullRefresh bool
@@ -201,7 +201,7 @@ func (p *Panel) getPlatformCapabilities(
 		return nil, fmt.Errorf("p.StreamD == nil")
 	}
 
-	logger.Debugf(ctx, "GetBackendInfo(ctx, '%s')", platID)
+	logger.Tracef(ctx, "GetBackendInfo(ctx, '%s')", platID)
 	info, err := p.StreamD.GetBackendInfo(ctx, platID, false)
 	if err != nil {
 		return nil, fmt.Errorf("GetBackendInfo returned error: %w", err)

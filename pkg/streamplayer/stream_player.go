@@ -878,6 +878,9 @@ func (p *StreamPlayerHandler) controllerLoop(
 		timeDelta := now.Sub(prevNow)
 		prevNow = now
 
+		// Default to Trace each iteration; elevate to Debug at most once per 10s
+		// so the loop doesn't spam Debug after the first elevation.
+		traceLogLevel = logger.LevelTrace
 		if time.Since(lastDebugReportAt) > 10*time.Second {
 			traceLogLevel = logger.LevelDebug
 			lastDebugReportAt = time.Now()

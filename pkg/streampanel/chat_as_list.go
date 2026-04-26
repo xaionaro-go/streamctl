@@ -212,7 +212,7 @@ type chatListItem struct {
 
 func (ui *chatUIAsList) listCreateItem() fyne.CanvasObject {
 	ctx := context.TODO()
-	logger.Debugf(ctx, "listCreateItem")
+	logger.Tracef(ctx, "listCreateItem")
 	defer func() { logger.Tracef(ctx, "/listCreateItem") }()
 
 	item := &chatListItem{
@@ -277,7 +277,7 @@ func (ui *chatUIAsList) listUpdateItem(
 	obj fyne.CanvasObject,
 ) {
 	ctx := context.TODO()
-	logger.Debugf(ctx, "listUpdateItem(%d, obj)", rowID)
+	logger.Tracef(ctx, "listUpdateItem(%d, obj)", rowID)
 	defer func() { logger.Tracef(ctx, "/listUpdateItem(%d, obj)", rowID) }()
 
 	var entryID int
