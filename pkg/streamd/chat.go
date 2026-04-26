@@ -241,14 +241,21 @@ func (d *StreamD) shoutoutIfNeeded(
 	d.lastShoutoutAtLocker.Lock()
 	defer d.lastShoutoutAtLocker.Unlock()
 
-	userID := config.ChatUserID{
-		Platform: msg.Platform,
-		User:     streamcontrol.UserID(strings.ToLower(string(msg.User.ID))),
+	mkID := func(s string) config.ChatUserID {
+		return config.ChatUserID{
+			Platform: msg.Platform,
+			User:     streamcontrol.UserID(strings.ToLower(s)),
+		}
 	}
-	userIDByName := config.ChatUserID{
-		Platform: msg.Platform,
-		User:     streamcontrol.UserID(strings.ToLower(string(msg.User.Name))),
+	// A configured "auto-shoutout" entry can match the numeric user id, the
+	// platform handle/slug, or the display name — different platforms surface
+	// different fields, so accept any of them.
+	candidates := []config.ChatUserID{
+		mkID(string(msg.User.ID)),
+		mkID(msg.User.Slug),
+		mkID(msg.User.Name),
 	}
+	userID := candidates[0]
 	lastShoutoutAt := d.lastShoutoutAt[userID]
 	logger.Debugf(ctx, "lastShoutoutAt(%#+v): %v", userID, lastShoutoutAt)
 	if v := time.Since(lastShoutoutAt); v < time.Hour {
@@ -267,22 +274,24 @@ func (d *StreamD) shoutoutIfNeeded(
 		if _candidate.Platform != msg.Platform {
 			continue
 		}
-		candidate := config.ChatUserID{
-			Platform: _candidate.Platform,
-			User:     streamcontrol.UserID(strings.ToLower(string(_candidate.User))),
+		candidate := mkID(string(_candidate.User))
+		for _, c := range candidates {
+			if c.User == "" {
+				continue
+			}
+			if candidate == c {
+				found = true
+				break
+			}
 		}
-		if candidate == userID {
-			found = true
-			break
-		}
-		if candidate == userIDByName {
-			found = true
+		if found {
 			break
 		}
 	}
 
 	if !found {
-		logger.Debugf(ctx, "'%s' not in the list for auto-shoutout at '%s'", userID.User, msg.Platform)
+		logger.Debugf(ctx, "user (id=%q slug=%q name=%q) not in the list for auto-shoutout at %q",
+			msg.User.ID, msg.User.Slug, msg.User.Name, msg.Platform)
 		return false
 	}
 
