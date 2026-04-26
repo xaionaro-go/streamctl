@@ -325,7 +325,7 @@ func (tc *TranslatorChain) callFirstAvailableProvider(
 		default:
 			continue
 		}
-		result, err := ps.Provider.Translate(ctx, systemPrompt, userPrompt)
+		result, err := tc.providerCallWithTimeout(ctx, ps, systemPrompt, userPrompt)
 		<-ps.Semaphore
 		if err != nil {
 			continue
@@ -336,7 +336,7 @@ func (tc *TranslatorChain) callFirstAvailableProvider(
 	last := &tc.Providers[len(tc.Providers)-1]
 	select {
 	case last.Semaphore <- struct{}{}:
-		result, err := last.Provider.Translate(ctx, systemPrompt, userPrompt)
+		result, err := tc.providerCallWithTimeout(ctx, last, systemPrompt, userPrompt)
 		<-last.Semaphore
 		if err != nil {
 			return "", err
@@ -345,6 +345,24 @@ func (tc *TranslatorChain) callFirstAvailableProvider(
 	case <-ctx.Done():
 		return "", ctx.Err()
 	}
+}
+
+// providerCallWithTimeout invokes Translate under the provider's configured
+// per-call timeout (defaultProviderTimeout when zero). Without this the
+// detection step could hang indefinitely on a misbehaving provider.
+func (tc *TranslatorChain) providerCallWithTimeout(
+	ctx context.Context,
+	ps *ProviderWithSemaphore,
+	systemPrompt string,
+	userPrompt string,
+) (string, error) {
+	timeout := ps.Timeout
+	if timeout <= 0 {
+		timeout = defaultProviderTimeout
+	}
+	callCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	return ps.Provider.Translate(callCtx, systemPrompt, userPrompt)
 }
 
 func (tc *TranslatorChain) addToHistory(
