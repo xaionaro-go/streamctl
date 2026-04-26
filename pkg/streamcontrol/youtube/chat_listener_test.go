@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 	"testing"
 	"time"
 
@@ -713,5 +714,117 @@ func TestParsePurchaseAmountText(t *testing.T) {
 			assert.Equal(t, tc.expectedCurrency, currency)
 			assert.InDelta(t, tc.expectedAmount, amount, 0.001)
 		})
+	}
+}
+
+// TestListenLoopErrorRetryFloor proves consecutive error retries respect the
+// minChatPollInterval floor regardless of the API returning rapid-fire errors.
+// Pre-fix the loop spun at HTTP-rate (~36/s observed in production logs).
+func TestListenLoopErrorRetryFloor(t *testing.T) {
+	orig := minChatPollInterval
+	minChatPollInterval = 50 * time.Millisecond
+	defer func() { minChatPollInterval = orig }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	const wantCalls = 4
+	var mu sync.Mutex
+	callTimes := make([]time.Time, 0, wantCalls)
+	done := make(chan struct{})
+
+	mock := &mockChatClient{
+		GetLiveChatMessagesFunc: func(ctx context.Context, chatID string, pageToken string, parts []string) (*youtube.LiveChatMessageListResponse, error) {
+			mu.Lock()
+			callTimes = append(callTimes, time.Now())
+			n := len(callTimes)
+			mu.Unlock()
+			if n >= wantCalls {
+				select {
+				case <-done:
+				default:
+					close(done)
+					cancel()
+				}
+			}
+			return nil, fmt.Errorf("simulated API error")
+		},
+	}
+
+	listener, err := NewChatListener(ctx, mock, "video-err", "chat-err")
+	require.NoError(t, err)
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("listener did not produce expected error retries in time")
+	}
+	for range listener.MessagesChan() {
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.GreaterOrEqual(t, len(callTimes), 2)
+	for i := 1; i < len(callTimes); i++ {
+		gap := callTimes[i].Sub(callTimes[i-1])
+		assert.GreaterOrEqualf(t, gap, minChatPollInterval-5*time.Millisecond,
+			"retry %d→%d gap %v must be ≥%v", i-1, i, gap, minChatPollInterval)
+	}
+}
+
+// TestListenLoopSuccessPollFloor proves that even when the API returns
+// PollingIntervalMillis=0 the listener still floors at minChatPollInterval.
+func TestListenLoopSuccessPollFloor(t *testing.T) {
+	orig := minChatPollInterval
+	minChatPollInterval = 50 * time.Millisecond
+	defer func() { minChatPollInterval = orig }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	const wantCalls = 4
+	var mu sync.Mutex
+	callTimes := make([]time.Time, 0, wantCalls)
+	done := make(chan struct{})
+
+	mock := &mockChatClient{
+		GetLiveChatMessagesFunc: func(ctx context.Context, chatID string, pageToken string, parts []string) (*youtube.LiveChatMessageListResponse, error) {
+			mu.Lock()
+			callTimes = append(callTimes, time.Now())
+			n := len(callTimes)
+			mu.Unlock()
+			if n >= wantCalls {
+				select {
+				case <-done:
+				default:
+					close(done)
+					cancel()
+				}
+			}
+			return &youtube.LiveChatMessageListResponse{
+				Items:                 nil,
+				PollingIntervalMillis: 0,
+			}, nil
+		},
+	}
+
+	listener, err := NewChatListener(ctx, mock, "video-poll", "chat-poll")
+	require.NoError(t, err)
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("listener did not produce expected polls in time")
+	}
+	for range listener.MessagesChan() {
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.GreaterOrEqual(t, len(callTimes), 2)
+	for i := 1; i < len(callTimes); i++ {
+		gap := callTimes[i].Sub(callTimes[i-1])
+		assert.GreaterOrEqualf(t, gap, minChatPollInterval-5*time.Millisecond,
+			"poll %d→%d gap %v must be ≥%v", i-1, i, gap, minChatPollInterval)
 	}
 }

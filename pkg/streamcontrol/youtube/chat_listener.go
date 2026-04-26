@@ -14,6 +14,14 @@ import (
 	"google.golang.org/api/youtube/v3"
 )
 
+// minChatPollInterval is the lower bound between liveChatMessages.list calls.
+// Sub-second polling burns daily quota with no signal value: chat is paginated
+// via NextPageToken, not push-driven.
+//
+// Declared as a var (rather than const) so tests can shrink it without paying
+// real wall-clock seconds per assertion.
+var minChatPollInterval = time.Second
+
 type ChatListener struct {
 	videoID    string
 	liveChatID string
@@ -77,22 +85,26 @@ func (l *ChatListener) listenLoop(ctx context.Context) (_err error) {
 		)
 		if err != nil {
 			gErr := &googleapi.Error{}
-			if !errors.As(err, &gErr) {
-				logger.Warnf(ctx, "unable to get chat messages: %v", err)
-				continue
-			}
-			for _, e := range gErr.Errors {
-				switch e.Reason {
-				case "liveChatEnded":
-					return ErrChatEnded{ChatID: l.liveChatID}
-				case "liveChatDisabled":
-					return ErrChatDisabled{ChatID: l.liveChatID}
-				case "liveChatNotFound":
-					return ErrChatNotFound{ChatID: l.liveChatID}
+			switch {
+			case errors.As(err, &gErr):
+				for _, e := range gErr.Errors {
+					switch e.Reason {
+					case "liveChatEnded":
+						return ErrChatEnded{ChatID: l.liveChatID}
+					case "liveChatDisabled":
+						return ErrChatDisabled{ChatID: l.liveChatID}
+					case "liveChatNotFound":
+						return ErrChatNotFound{ChatID: l.liveChatID}
+					}
 				}
+				b, _ := json.Marshal(err)
+				logger.Warnf(ctx, "unable to get chat messages: %v (%s)", err, b)
+			default:
+				logger.Warnf(ctx, "unable to get chat messages: %v", err)
 			}
-			b, _ := json.Marshal(err)
-			logger.Warnf(ctx, "unable to get chat messages: %v (%s)", err, b)
+			if !sleepCtx(ctx, minChatPollInterval) {
+				return ctx.Err()
+			}
 			continue
 		}
 
@@ -129,7 +141,23 @@ func (l *ChatListener) listenLoop(ctx context.Context) (_err error) {
 		}
 		pageToken = response.NextPageToken
 
-		time.Sleep(time.Millisecond * time.Duration(response.PollingIntervalMillis))
+		interval := max(time.Duration(response.PollingIntervalMillis)*time.Millisecond, minChatPollInterval)
+		if !sleepCtx(ctx, interval) {
+			return ctx.Err()
+		}
+	}
+}
+
+// sleepCtx blocks for d, returning early if ctx is cancelled. Returns true if
+// the full duration elapsed, false on cancellation.
+func sleepCtx(ctx context.Context, d time.Duration) bool {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
 	}
 }
 
