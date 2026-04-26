@@ -138,7 +138,10 @@ func (tc *TranslatorChain) Translate(
 	// Both signals must agree: the model said target AND the top language is target.
 	// Disagreement (e.g. IS_TARGET=YES but LANGUAGES top=pt) means the model treated
 	// foreign function words as proper nouns — proceed with translation.
-	if isTarget && langCode == targetCode && !containsNonTargetVocabulary(message) {
+	// Track whether we forced translation so we can skip the spelling-correction heuristic
+	// below (a real translation like "Oi"→"Hi" would otherwise be incorrectly discarded).
+	forcedTranslate := containsNonTargetVocabulary(message) || (isTarget && langCode != targetCode)
+	if !forcedTranslate && isTarget {
 		tc.addToHistory(ctx, user, message)
 		return message, nil
 	}
@@ -221,7 +224,9 @@ func (tc *TranslatorChain) Translate(
 
 		// If the "translation" is just spelling correction of the original
 		// (same words, fixed typos/capitalization/punctuation), return original unchanged.
-		if isSpellingCorrectionOnly(message, result) {
+		// Skip when translation was forced (non-target vocab or detect/lang disagreement) —
+		// a short real translation like "Oi"→"Hi" would otherwise be discarded as a typo fix.
+		if !forcedTranslate && isSpellingCorrectionOnly(message, result) {
 			logger.Debugf(ctx, "translation of [%s] is spelling correction only, keeping original: %q -> %q",
 				user, message, result)
 			tc.addToHistory(ctx, user, message)
@@ -415,6 +420,10 @@ var langNameToCode = map[string]string{
 
 // normalizeLangCode converts a language name or code to a 2-letter ISO 639-1 code.
 func normalizeLangCode(s string) string {
+	// Strip regional subtag: "pt-BR" → "pt", "zh-CN" → "zh".
+	if idx := strings.IndexByte(s, '-'); idx > 0 {
+		s = s[:idx]
+	}
 	if len(s) == 2 {
 		return s
 	}
