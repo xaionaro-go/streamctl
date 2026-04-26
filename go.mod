@@ -50,7 +50,7 @@ require (
 	github.com/spf13/cobra v1.8.1
 	github.com/xaionaro-go/eventbus v0.0.0-20250720144534-4670758005d9
 	github.com/xaionaro-go/logrustash v0.0.0-20240804141650-d48034780a5f // indirect
-	golang.org/x/oauth2 v0.34.0
+	golang.org/x/oauth2 v0.36.0
 	google.golang.org/api v0.254.0
 )
 
@@ -244,7 +244,7 @@ require (
 	github.com/xaionaro-go/avmediacodec v0.0.0-20250505012527-c819676502d8 // indirect
 	github.com/xaionaro-go/gorex v0.0.0-20241010205749-bcd59d639c4d // indirect
 	github.com/xaionaro-go/libsrt v0.0.0-20251231191024-483a9dd27df8 // indirect
-	github.com/xaionaro-go/ndk v0.0.0-20251109211112-251265903264 // indirect
+	github.com/xaionaro-go/ndk v0.0.0-20260309023337-691843bece17 // indirect
 	github.com/xaionaro-go/proxy v0.0.0-20250525144747-579f5a891c15 // indirect
 	github.com/xaionaro-go/sockopt v0.0.0-20250823181757-5c02c9cd7b51 // indirect
 	github.com/xaionaro-go/spinlock v0.0.0-20200518175509-30e6d1ce68a1 // indirect
@@ -265,16 +265,16 @@ require (
 	gocv.io/x/gocv v0.41.0 // indirect
 	golang.org/x/arch v0.12.0 // indirect
 	golang.org/x/exp v0.0.0-20250813145105-42675adae3e6 // indirect
-	golang.org/x/image v0.31.0 // indirect
-	golang.org/x/mod v0.31.0 // indirect
-	golang.org/x/net v0.49.0 // indirect
-	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/term v0.39.0 // indirect
+	golang.org/x/image v0.39.0 // indirect
+	golang.org/x/mod v0.34.0 // indirect
+	golang.org/x/net v0.52.0 // indirect
+	golang.org/x/sync v0.20.0 // indirect
+	golang.org/x/term v0.41.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
-	golang.org/x/tools v0.40.0 // indirect
+	golang.org/x/tools v0.43.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240716161551-93cc26a95ae9 // indirect
 	gonum.org/v1/plot v0.16.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260120174246-409b4a993575 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260311181403-84a4fc48630c // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	h12.io/socks v1.0.3 // indirect
@@ -319,12 +319,12 @@ require (
 	github.com/scorfly/gokick v1.11.0
 	github.com/sethvargo/go-password v0.3.1
 	github.com/shirou/gopsutil v3.21.11+incompatible
-	github.com/sirupsen/logrus v1.9.3
+	github.com/sirupsen/logrus v1.9.4
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
 	github.com/xaionaro-go/audio v0.0.0-20260202195702-429dcb87c05c
-	github.com/xaionaro-go/avpipeline v0.0.0-20260308191537-b01cb7c551bf
+	github.com/xaionaro-go/avpipeline v0.0.0-20260426114922-c67524a5781e
 	github.com/xaionaro-go/buildvars v0.0.0-20250111161425-ed39f98139d0
 	github.com/xaionaro-go/datacounter v1.0.4
 	github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42
@@ -338,7 +338,7 @@ require (
 	github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20241018162120-5faf4e7a684a
 	github.com/xaionaro-go/observability v0.0.0-20251102143534-3aeb2a25e57d
 	github.com/xaionaro-go/player v0.0.0-20260202200119-7935ded39620
-	github.com/xaionaro-go/recoder v0.0.0-20260308185441-242f079aa5da
+	github.com/xaionaro-go/recoder v0.0.0-20260426170850-173ba0855eab
 	github.com/xaionaro-go/secret v0.0.0-20250111141743-ced12e1082c2
 	github.com/xaionaro-go/serializable v0.0.0-20250412140540-5ac572306599
 	github.com/xaionaro-go/timeapiio v0.0.0-20240915203246-b907cf699af3
@@ -348,13 +348,13 @@ require (
 	github.com/xaionaro-go/xfyne v0.0.0-20250615190411-4c96281f6e25
 	github.com/xaionaro-go/xgrpc v0.0.0-20251102160837-04b13583739a
 	github.com/xaionaro-go/xlogrus v0.0.0-20250111150201-60557109545a
-	github.com/xaionaro-go/xpath v0.0.0-20250111145115-55f5728f643f
+	github.com/xaionaro-go/xpath v0.0.0-20260426170210-a0fce9eae3ad
 	github.com/xaionaro-go/xsync v0.0.0-20260103200624-2cd14b984747
 	github.com/yutopp/go-flv v0.3.1
-	golang.org/x/crypto v0.47.0
-	golang.org/x/sys v0.40.0
-	golang.org/x/text v0.33.0
-	google.golang.org/grpc v1.78.0
+	golang.org/x/crypto v0.49.0
+	golang.org/x/sys v0.42.0
+	golang.org/x/text v0.36.0
+	google.golang.org/grpc v1.80.0
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
