@@ -231,7 +231,7 @@ func (yt *YouTube) initNoLock(ctx context.Context) (_err error) {
 		}
 	}
 
-	yt.YouTubeClient = NewYouTubeClientCalcPoints(youtubeClient) // TODO: make this atomic
+	yt.YouTubeClient = NewYouTubeClientCalcPoints(ctx, youtubeClient, DefaultQuotaStatePath()) // TODO: make this atomic
 	return nil
 }
 

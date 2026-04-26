@@ -2,9 +2,12 @@ package youtube
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -25,20 +28,122 @@ func init() {
 	}
 }
 
+// quotaStateFileName is the filename written under the user's config dir
+// (e.g. ~/.config/wingout/) to persist YouTube Data API quota counters
+// across process restarts. The directory itself is shared with other
+// streamctl/streampanel state files; do not put YAML config here.
+const quotaStateFileName = "youtube_quota.json"
+
+// DefaultQuotaStatePath resolves to <UserConfigDir>/wingout/<quotaStateFileName>.
+// On Linux this is ~/.config/wingout/youtube_quota.json. Returns an empty string
+// (not an error) when the user config dir cannot be resolved — callers treat
+// "" as "do not persist", so a missing HOME does not crash the controller.
+func DefaultQuotaStatePath() string {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(configDir, "wingout", quotaStateFileName)
+}
+
+// quotaState is the on-disk shape. JSON keys are stable; rename = data loss.
+type quotaState struct {
+	UsedPoints      uint64    `json:"used_points"`
+	PreviousCheckAt time.Time `json:"previous_check_at"`
+}
+
 // see also: https://developers.google.com/youtube/v3/determine_quota_cost
 type ClientCalcPoints struct {
 	Client          client
 	UsedPoints      atomic.Uint64
 	CheckMutex      sync.Mutex
 	PreviousCheckAt time.Time
+	StatePath       string
 }
 
 var _ client = (*ClientCalcPoints)(nil)
 
-func NewYouTubeClientCalcPoints(client client) *ClientCalcPoints {
-	return &ClientCalcPoints{
-		Client: client,
+// NewYouTubeClientCalcPoints constructs a quota-tracking wrapper. When statePath
+// is non-empty, prior counters are loaded from disk and every successful API
+// call persists the new counter back to that file (atomic temp+rename). Pass
+// "" to disable persistence (test-only).
+func NewYouTubeClientCalcPoints(
+	ctx context.Context,
+	client client,
+	statePath string,
+) *ClientCalcPoints {
+	c := &ClientCalcPoints{
+		Client:    client,
+		StatePath: statePath,
 	}
+	if statePath == "" {
+		return c
+	}
+	switch err := c.loadStateLocked(); {
+	case err == nil:
+		logger.Infof(ctx, "loaded YouTube quota state from '%s': used=%d previous_check_at=%s",
+			statePath, c.UsedPoints.Load(), c.PreviousCheckAt.Format(time.RFC3339))
+	case errors.Is(err, os.ErrNotExist):
+		logger.Debugf(ctx, "YouTube quota state file '%s' does not exist yet; starting fresh", statePath)
+	default:
+		logger.Warnf(ctx, "unable to load YouTube quota state from '%s' (starting fresh): %v", statePath, err)
+	}
+	return c
+}
+
+// loadStateLocked reads the on-disk counter into the receiver. Caller need not
+// hold CheckMutex — this runs before the receiver escapes the constructor and
+// no goroutine can observe it concurrently.
+func (c *ClientCalcPoints) loadStateLocked() error {
+	data, err := os.ReadFile(c.StatePath)
+	if err != nil {
+		return err
+	}
+	var s quotaState
+	if err := json.Unmarshal(data, &s); err != nil {
+		return fmt.Errorf("decode quota state: %w", err)
+	}
+	c.UsedPoints.Store(s.UsedPoints)
+	c.PreviousCheckAt = s.PreviousCheckAt
+	return nil
+}
+
+// saveStateLocked writes the current counter atomically (temp file + rename).
+// Caller MUST hold CheckMutex. Creates the parent directory on first use.
+func (c *ClientCalcPoints) saveStateLocked() error {
+	if c.StatePath == "" {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(c.StatePath), 0o755); err != nil {
+		return fmt.Errorf("create state dir: %w", err)
+	}
+	data, err := json.Marshal(quotaState{
+		UsedPoints:      c.UsedPoints.Load(),
+		PreviousCheckAt: c.PreviousCheckAt,
+	})
+	if err != nil {
+		return fmt.Errorf("encode quota state: %w", err)
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(c.StatePath), filepath.Base(c.StatePath)+".tmp-*")
+	if err != nil {
+		return fmt.Errorf("create temp state file: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer func() {
+		// Best-effort cleanup if rename never succeeds.
+		_ = os.Remove(tmpName)
+	}()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("write temp state file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close temp state file: %w", err)
+	}
+	if err := os.Rename(tmpName, c.StatePath); err != nil {
+		return fmt.Errorf("rename temp state file: %w", err)
+	}
+	return nil
 }
 
 func getQuotaCutoffDate(t time.Time) string {
@@ -53,21 +158,31 @@ func (c *ClientCalcPoints) addUsedPointsIfNoError(
 	if err != nil {
 		return
 	}
-	v := c.UsedPoints.Add(uint64(points))
+	c.CheckMutex.Lock()
+	defer c.CheckMutex.Unlock()
+
+	// Rollover check must run BEFORE Add: otherwise the very call that
+	// crosses the day boundary loses its own point to the subsequent Store(0).
 	now := time.Now()
 	curDate := getQuotaCutoffDate(now)
+	prevDate := getQuotaCutoffDate(c.PreviousCheckAt)
+	if curDate != prevDate {
+		if !c.PreviousCheckAt.IsZero() {
+			// Suppress the misleading 'XXXX-XX-XX != 0000-12-31' line that fires
+			// on every cold start; treat fresh state as "no previous day yet".
+			logger.Infof(ctx, "new quota day in YouTube: '%s' != '%s'", curDate, prevDate)
+		}
+		c.UsedPoints.Store(0)
+	}
+	c.PreviousCheckAt = now
+	v := c.UsedPoints.Add(uint64(points))
 	if v > 5000 {
 		logger.Warnf(ctx, "now %d points were used", v)
 	} else {
 		logger.Tracef(ctx, "now %d points were used", v)
 	}
-	c.CheckMutex.Lock()
-	defer c.CheckMutex.Unlock()
-	prevDate := getQuotaCutoffDate(c.PreviousCheckAt)
-	c.PreviousCheckAt = now
-	if curDate != prevDate {
-		logger.Infof(ctx, "new quota day in YouTube: '%s' != '%s'", curDate, prevDate)
-		c.UsedPoints.Store(0)
+	if err := c.saveStateLocked(); err != nil {
+		logger.Warnf(ctx, "unable to persist YouTube quota state to '%s': %v", c.StatePath, err)
 	}
 }
 
