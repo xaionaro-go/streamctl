@@ -4,6 +4,7 @@ package llm
 
 import (
 	"context"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -17,8 +18,12 @@ const testOllamaURLChain = "http://192.168.0.171:11434"
 
 func newTestChain(t *testing.T) *TranslatorChain {
 	t.Helper()
+	model := os.Getenv("TEST_LLM_MODEL")
+	if model == "" {
+		model = "qwen3.5:27b"
+	}
 	return NewTranslatorChain("English", 20, []ProviderEntry{{
-		Provider:    &OllamaProvider{APIURL: testOllamaURLChain, Model: "qwen3.5:27b"},
+		Provider:    &OllamaProvider{APIURL: testOllamaURLChain, Model: model},
 		Parallelism: 1,
 	}})
 }

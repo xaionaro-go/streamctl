@@ -135,9 +135,10 @@ func (tc *TranslatorChain) Translate(
 	logger.Debugf(ctx, "language detection for [%s] %q: isTarget=%v lang=%q (raw: %q)",
 		user, message, isTarget, langCode, detectResult)
 
-	// If detection says "target language" but the message contains known non-English
-	// vocabulary, override the detection and proceed with translation.
-	if (isTarget || langCode == targetCode) && !containsNonTargetVocabulary(message) {
+	// Both signals must agree: the model said target AND the top language is target.
+	// Disagreement (e.g. IS_TARGET=YES but LANGUAGES top=pt) means the model treated
+	// foreign function words as proper nouns — proceed with translation.
+	if isTarget && langCode == targetCode && !containsNonTargetVocabulary(message) {
 		tc.addToHistory(ctx, user, message)
 		return message, nil
 	}
@@ -638,6 +639,15 @@ var nonTargetWords = map[string]bool{
 
 	// French abbreviations
 	"slt": true,
+
+	// Turkish endearments (often capitalized, mistaken for proper nouns by the detector)
+	"aşkım": true, "aşkim": true, "askim": true, "askım": true,
+	"canım": true, "canim": true,
+	"hayatım": true, "hayatim": true,
+	"güzelim": true, "guzelim": true,
+	"sevgilim": true,
+	"tatlım": true, "tatlim": true,
+	"birtanem": true, "birtanesi": true,
 
 	// Phonetic/broken English from non-native speakers (not real English words)
 	"mek": true, "naic": true,
