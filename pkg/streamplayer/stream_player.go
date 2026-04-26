@@ -86,6 +86,12 @@ type StreamPlayer struct {
 
 	WantSpeedAverage         *indicator.MAMA[float64]
 	CurrentJitterBufDuration time.Duration
+
+	// cachedPos, cachedLength, cachedSampledAt hold the last per-tick sample
+	// written by controllerLoop. Protected by PlayerLocker.
+	cachedPos       time.Duration
+	cachedLength    time.Duration
+	cachedSampledAt time.Time
 }
 
 type StreamPlayerHandler struct {
@@ -496,6 +502,21 @@ func (p *StreamPlayerHandler) Resetup(opts ...Option) {
 	for _, opt := range opts {
 		opt.Apply(&p.Config)
 	}
+}
+
+// GetCachedLag returns the lag from the last controllerLoop tick. Uses the
+// fallback-resolved position from audioPositionWithFallback and survives
+// post-EOF / no-audio "audio-pts unavailable" states.
+func (p *StreamPlayerHandler) GetCachedLag(ctx context.Context) (lag time.Duration, sampledAt time.Time, err error) {
+	err = xsync.DoR1(ctx, &p.PlayerLocker, func() error {
+		if p.cachedSampledAt.IsZero() {
+			return fmt.Errorf("no position sample available yet (controllerLoop has not ticked)")
+		}
+		lag = max(p.cachedLength-p.cachedPos, 0)
+		sampledAt = p.cachedSampledAt
+		return nil
+	})
+	return
 }
 
 func (p *StreamPlayerHandler) notifyStart(ctx context.Context) {
@@ -969,6 +990,11 @@ func (p *StreamPlayerHandler) controllerLoop(
 			}
 			prevLength = l
 
+			// Cache the latest resolved pos/length for GetCachedLag.
+			p.cachedPos = pos
+			p.cachedLength = l
+			p.cachedSampledAt = now
+
 			logger.Logf(ctx, traceLogLevel,
 				"StreamPlayer[%s].controllerLoop: now == %v, posUpdatedAt == %v, len == %v; pos == %v; jitterBuf == %v; readTimeout == %v",
 				p.StreamID, now, posUpdatedAt, l, pos, p.CurrentJitterBufDuration, p.Config.ReadTimeout,
@@ -1050,7 +1076,11 @@ func (p *StreamPlayerHandler) controllerLoop(
 							commitIncreaseNowDuration,
 							jitterBufDurationIncrease, jitterBufDurationIncreaseNew,
 						)
-						logger.Debugf(ctx,
+						level := logger.LevelDebug
+						if commitIncreaseNowDuration == 0 {
+							level = logger.LevelTrace
+						}
+						logger.Logf(ctx, level,
 							"StreamPlayer[%s].controllerLoop: jitter buffer increase committed: by=%v lastNoMovementDuration=%v posSource=%s pendingBefore=%v pendingAfter=%v",
 							p.StreamID,
 							commitIncreaseNowDuration,
