@@ -883,7 +883,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 
 		err := p.withPlayer(ctx, func(ctx context.Context, player player.Player) {
 			now := time.Now()
-			pos, err := audioPositionWithFallback(ctx, player)
+			pos, posSource, err := audioPositionWithFallback(ctx, player)
 			if err != nil {
 				logger.Errorf(ctx,
 					"StreamPlayer[%s].controllerLoop: unable to get the current position: %v",
@@ -897,6 +897,19 @@ func (p *StreamPlayerHandler) controllerLoop(
 				time.Sleep(time.Second)
 				return
 			}
+
+			// Diagnostic: query the unchosen clock too so we can see whether
+			// audio-pts and time-pos diverge during ~9 s stall events. Failure
+			// to obtain the secondary value is non-fatal — it only affects the
+			// trace line below, not the stall-detection logic.
+			rawAudioPTS, rawAudioPTSErr := player.GetAudioPosition(ctx)
+			rawTimePos, rawTimePosErr := player.GetPosition(ctx)
+			logger.Tracef(ctx,
+				"StreamPlayer[%s].controllerLoop: position sample: chosen=%v source=%s; rawAudioPTS=%v (err=%v); rawTimePos=%v (err=%v)",
+				p.StreamID, pos, posSource,
+				rawAudioPTS, rawAudioPTSErr,
+				rawTimePos, rawTimePosErr,
+			)
 
 			l := time.Duration(-1)
 			if mpv, ok := player.(interface {
@@ -960,12 +973,18 @@ func (p *StreamPlayerHandler) controllerLoop(
 			}
 
 			var stalling bool
+			var lastNoMovementDuration time.Duration
 			if pos != prevPos {
 				posUpdatedAt = now
 				prevPos = pos
 			} else {
 				stalling = true
-				noMovementDuration := now.Sub(posUpdatedAt)
+				lastNoMovementDuration = now.Sub(posUpdatedAt)
+				noMovementDuration := lastNoMovementDuration
+				logger.Tracef(ctx,
+					"StreamPlayer[%s].controllerLoop: stall tick: pos=%v prevPos=%v noMovementDuration=%v source=%s rawAudioPTS=%v rawTimePos=%v",
+					p.StreamID, pos, prevPos, noMovementDuration, posSource, rawAudioPTS, rawTimePos,
+				)
 				if noMovementDuration > p.Config.ReadTimeout {
 					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: now == %v, posUpdatedAt == %v, len == %v; pos == %v; readTimeout == %v, restarting", p.StreamID, now, posUpdatedAt, l, pos, p.Config.ReadTimeout)
 					jitterBufDurationIncrease = 0 // we are not sure why this happened, so not raising the latency without a good reason
@@ -975,7 +994,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 				minExtraBuf := noMovementDuration
 				if minExtraBuf > jitterBufDurationIncrease {
 					jitterBufDurationIncrease = minExtraBuf
-					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: no movement duration == %v, setting the jitterBufDurationIncrease to %v", p.StreamID, noMovementDuration, minExtraBuf)
+					logger.Debugf(ctx, "StreamPlayer[%s].controllerLoop: no movement duration == %v, setting the jitterBufDurationIncrease to %v (source=%s)", p.StreamID, noMovementDuration, minExtraBuf, posSource)
 				}
 			}
 
@@ -1015,6 +1034,14 @@ func (p *StreamPlayerHandler) controllerLoop(
 							"StreamPlayer[%s].controllerLoop: increasing the jitter buffer by %v (%v - %v)",
 							p.StreamID,
 							commitIncreaseNowDuration,
+							jitterBufDurationIncrease, jitterBufDurationIncreaseNew,
+						)
+						logger.Debugf(ctx,
+							"StreamPlayer[%s].controllerLoop: jitter buffer increase committed: by=%v lastNoMovementDuration=%v posSource=%s pendingBefore=%v pendingAfter=%v",
+							p.StreamID,
+							commitIncreaseNowDuration,
+							lastNoMovementDuration,
+							posSource,
 							jitterBufDurationIncrease, jitterBufDurationIncreaseNew,
 						)
 						increaseJitterBufferBy(commitIncreaseNowDuration)
