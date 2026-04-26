@@ -21,6 +21,7 @@ import (
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/player/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/chatmessagesstorage"
+	llms "github.com/xaionaro-go/streamctl/pkg/llm"
 	"github.com/xaionaro-go/streamctl/pkg/p2p"
 	"github.com/xaionaro-go/streamctl/pkg/repository"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -112,8 +113,9 @@ type StreamD struct {
 
 	obsRestarter *obsRestarter
 
-	llm       *llm
-	subtitler *subtitler
+	llm        *llm
+	subtitler  *subtitler
+	translator *llms.TranslatorChain
 
 	lastShoutoutAtLocker sync.Mutex
 	lastShoutoutAt       map[config.ChatUserID]time.Time
@@ -241,6 +243,11 @@ func (d *StreamD) Run(ctx context.Context) (_ret error) { // TODO: delete the fe
 	d.UI.SetStatus("LLMs...")
 	if err := d.initLLMs(ctx); err != nil {
 		d.UI.DisplayError(fmt.Errorf("unable to initialize the LLMs: %w", err))
+	}
+
+	d.UI.SetStatus("Translator...")
+	if err := d.initTranslator(ctx); err != nil {
+		d.UI.DisplayError(fmt.Errorf("unable to initialize the translator: %w", err))
 	}
 
 	d.UI.SetStatus("Subtitles...")

@@ -169,6 +169,13 @@ func (d *StreamD) InjectChatMessage(
 	}
 	d.cleanupInjectedEventIDs()
 
+	// Translate after dedup so each event hits the LLM at most once even when
+	// multiple chat-listener subprocesses overlap. The TranslatorChain is
+	// shared across goroutines (it serialises history access internally) and
+	// returns the original text when all providers fail, so this call cannot
+	// abort the inject path.
+	d.translateEventInPlace(ctx, &ev)
+
 	msg := api.ChatMessage{
 		Event:    ev,
 		IsLive:   true,
