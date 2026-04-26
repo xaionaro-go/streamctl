@@ -39,6 +39,8 @@ func EventTypeGo2GRPC(
 		return streamcontrol_grpc.PlatformEventType_platformEventTypeBan
 	case streamcontrol.EventTypeAutoModHold:
 		return streamcontrol_grpc.PlatformEventType_platformEventTypeAutoModHold
+	case streamcontrol.EventTypeChatMessageDeleted:
+		return streamcontrol_grpc.PlatformEventType_platformEventTypeChatMessageDeleted
 	case streamcontrol.EventTypeChannelPointRedemption:
 		return streamcontrol_grpc.PlatformEventType_platformEventTypeChannelPointRedemption
 	case streamcontrol.EventTypeGreeting:
@@ -81,6 +83,8 @@ func PlatformEventTypeGRPC2Go(
 		return streamcontrol.EventTypeBan
 	case streamcontrol_grpc.PlatformEventType_platformEventTypeAutoModHold:
 		return streamcontrol.EventTypeAutoModHold
+	case streamcontrol_grpc.PlatformEventType_platformEventTypeChatMessageDeleted:
+		return streamcontrol.EventTypeChatMessageDeleted
 	case streamcontrol_grpc.PlatformEventType_platformEventTypeChannelPointRedemption:
 		return streamcontrol.EventTypeChannelPointRedemption
 	case streamcontrol_grpc.PlatformEventType_platformEventTypeGreeting:

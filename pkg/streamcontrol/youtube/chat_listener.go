@@ -113,24 +113,42 @@ func (l *ChatListener) listenLoop(ctx context.Context) (_err error) {
 			if err != nil {
 				logger.Errorf(ctx, "unable to parse the timestamp '%s': %v", item.Snippet.PublishedAt, err)
 			}
-			msg := streamcontrol.Event{
-				ID:        streamcontrol.EventID(item.Id),
-				CreatedAt: publishedAt,
-				Type:      streamcontrol.EventTypeChatMessage,
-				User: streamcontrol.User{
-					ID:   streamcontrol.UserID(item.AuthorDetails.ChannelId),
-					Slug: item.AuthorDetails.ChannelId,
-					Name: item.AuthorDetails.DisplayName,
-				},
-				Message: &streamcontrol.Message{
-					Content: item.Snippet.DisplayMessage,
-					Format:  streamcontrol.TextFormatTypePlain,
-				},
-			}
-			if item.Snippet.SuperChatDetails != nil {
-				msg.Paid = &streamcontrol.Money{
-					Currency: parseCurrencyString(item.Snippet.SuperChatDetails.Currency),
-					Amount:   float64(item.Snippet.SuperChatDetails.AmountMicros) / 1000000,
+			var msg streamcontrol.Event
+			switch item.Snippet.Type {
+			case "messageDeletedEvent":
+				if item.Snippet.MessageDeletedDetails == nil {
+					logger.Warnf(ctx, "messageDeletedEvent without MessageDeletedDetails, skipping")
+					continue
+				}
+				deletedID := item.Snippet.MessageDeletedDetails.DeletedMessageId
+				// "delete-" prefix prevents dedup collision with the original
+				// chat message that still lives in the 5-minute Event ID cache.
+				msg = streamcontrol.Event{
+					ID:                streamcontrol.EventID("delete-" + deletedID),
+					CreatedAt:         publishedAt,
+					Type:              streamcontrol.EventTypeChatMessageDeleted,
+					ReferredMessageID: &deletedID,
+				}
+			default:
+				msg = streamcontrol.Event{
+					ID:        streamcontrol.EventID(item.Id),
+					CreatedAt: publishedAt,
+					Type:      streamcontrol.EventTypeChatMessage,
+					User: streamcontrol.User{
+						ID:   streamcontrol.UserID(item.AuthorDetails.ChannelId),
+						Slug: item.AuthorDetails.ChannelId,
+						Name: item.AuthorDetails.DisplayName,
+					},
+					Message: &streamcontrol.Message{
+						Content: item.Snippet.DisplayMessage,
+						Format:  streamcontrol.TextFormatTypePlain,
+					},
+				}
+				if item.Snippet.SuperChatDetails != nil {
+					msg.Paid = &streamcontrol.Money{
+						Currency: parseCurrencyString(item.Snippet.SuperChatDetails.Currency),
+						Amount:   float64(item.Snippet.SuperChatDetails.AmountMicros) / 1000000,
+					}
 				}
 			}
 			select {

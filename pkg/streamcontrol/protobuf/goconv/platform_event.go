@@ -34,6 +34,9 @@ func EventGo2GRPC(
 	if event.Tier != nil {
 		ev.Tier = ptr(string(*event.Tier))
 	}
+	if event.ReferredMessageID != nil {
+		ev.ReferredMessageID = ptr(*event.ReferredMessageID)
+	}
 	return ev
 }
 
@@ -78,6 +81,9 @@ func EventGRPC2Go(
 	}
 	if event.Tier != nil {
 		ev.Tier = ptr(streamcontrol.Tier(*event.Tier))
+	}
+	if event.ReferredMessageID != nil {
+		ev.ReferredMessageID = ptr(*event.ReferredMessageID)
 	}
 	return ev
 }

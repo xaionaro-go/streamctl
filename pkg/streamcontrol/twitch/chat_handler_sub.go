@@ -364,6 +364,23 @@ func NewChatHandlerSub(
 			},
 		})
 	})
+	eventSubClient.OnEventChannelChatMessageDelete(func(event twitcheventsub.EventChannelChatMessageDelete, msg twitcheventsub.NotificationMessage) {
+		logger.Tracef(ctx, "chat message deleted: %#+v", event)
+		deletedID := event.MessageId
+		// "delete-" prefix prevents dedup collision with the original chat
+		// message that still lives in the 5-minute Event ID cache.
+		h.sendMessage(ctx, streamcontrol.Event{
+			ID:        streamcontrol.EventID("delete-" + deletedID),
+			CreatedAt: msg.Metadata.MessageTimestamp,
+			Type:      streamcontrol.EventTypeChatMessageDeleted,
+			User: streamcontrol.User{
+				ID:   streamcontrol.UserID(event.TargetUserId),
+				Slug: event.TargetUserLogin,
+				Name: event.TargetUserName,
+			},
+			ReferredMessageID: &deletedID,
+		})
+	})
 
 	eventSubClient.OnWelcome(func(sessMsg twitcheventsub.WelcomeMessage) {
 		sessID := sessMsg.Payload.Session.ID

@@ -22,16 +22,17 @@ type Message struct {
 }
 
 type Event struct {
-	ID            EventID
-	CreatedAt     time.Time
-	ExpiresAt     *time.Time
-	Type          EventType
-	User          User
-	TargetUser    *User
-	TargetChannel *User
-	Message       *Message
-	Paid          *Money
-	Tier          *Tier
+	ID                EventID
+	CreatedAt         time.Time
+	ExpiresAt         *time.Time
+	Type              EventType
+	User              User
+	TargetUser        *User
+	TargetChannel     *User
+	Message           *Message
+	Paid              *Money
+	Tier              *Tier
+	ReferredMessageID *string
 }
 
 type EventType int
@@ -54,6 +55,7 @@ const (
 	EventTypeStreamInfoUpdate
 	EventTypeChannelPointRedemption
 	EventTypeGreeting
+	EventTypeChatMessageDeleted
 	EventTypeOther
 )
 
@@ -93,6 +95,8 @@ func (t EventType) String() string {
 		return "channel_point_redemption"
 	case EventTypeGreeting:
 		return "greeting"
+	case EventTypeChatMessageDeleted:
+		return "chat_message_deleted"
 	case EventTypeOther:
 		return "other"
 	}
