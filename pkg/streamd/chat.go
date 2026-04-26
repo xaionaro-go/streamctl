@@ -149,8 +149,8 @@ func (d *StreamD) InjectChatMessage(
 	platID streamcontrol.PlatformName,
 	ev streamcontrol.Event,
 ) (_err error) {
-	logger.Debugf(ctx, "InjectChatMessage")
-	defer func() { logger.Debugf(ctx, "/InjectChatMessage: %v", _err) }()
+	logger.Tracef(ctx, "InjectChatMessage")
+	defer func() { logger.Tracef(ctx, "/InjectChatMessage: %v", _err) }()
 
 	// Keepalive messages carry health info for a specific listener type.
 	// Format: "keepalive-<listenerType>-<platform>-<timestamp>"
