@@ -149,6 +149,15 @@ func runStreamd(
 		},
 	)
 
+	streamdExecPath, err := os.Executable()
+	if err != nil {
+		logger.Panicf(ctx, "resolve own executable: %v", err)
+	}
+	subIO, err := streamd.NewSubprocessIO(os.Stdout, os.Stderr, streamdExecPath)
+	if err != nil {
+		logger.Panicf(ctx, "configure subprocess IO: %v", err)
+	}
+
 	streamD, err := streamd.New(
 		cfg.BuiltinStreamD,
 		ui,
@@ -175,6 +184,8 @@ func runStreamd(
 		streamd.OptionP2PSetupClient(func(clientConn *grpc.ClientConn) error {
 			return nil
 		}),
+		streamd.OptionSubprocessIO(subIO),
+		streamd.OptionLogstashAddr(flags.LogstashAddr),
 	)
 	if err != nil {
 		logger.Panicf(ctx, "unable to initialize streamd: %v", err)

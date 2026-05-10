@@ -107,8 +107,9 @@ func (e *Engine) processBatch(
 			r.ev.Type, r.ev.User.Name, messagePreview(&r.ev))
 
 		_, injectErr := e.StreamdClient.InjectChatMessage(ctx, &streamd_grpc.InjectChatMessageRequest{
-			PlatID: r.platform,
-			Event:  scgoconv.EventGo2GRPC(r.ev),
+			PlatID:       r.platform,
+			Event:        scgoconv.EventGo2GRPC(r.ev),
+			ListenerType: streamcontrol.ChatListenerPrimary.String(),
 		})
 		if injectErr != nil {
 			logger.Errorf(ctx, "InjectChatMessage failed for %s: %v", r.ev.ID, injectErr)

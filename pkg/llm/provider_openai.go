@@ -20,6 +20,20 @@ func (p *OpenAIProvider) Name() string {
 	return fmt.Sprintf("openai(%s)", p.Model)
 }
 
+// TranslateWithMetadata satisfies Provider. OpenAI's /v1/chat/completions
+// response carries token counts (usage.prompt_tokens / completion_tokens)
+// but no per-stage timing breakdown, and we have not fetched the current
+// API spec for this PR. Returning nil keeps the implementation honest:
+// callers see "no timings available" rather than a fabricated subset.
+func (p *OpenAIProvider) TranslateWithMetadata(
+	ctx context.Context,
+	systemPrompt string,
+	userPrompt string,
+) (string, *TranslateMetadata, error) {
+	result, err := p.Translate(ctx, systemPrompt, userPrompt)
+	return result, nil, err
+}
+
 func (p *OpenAIProvider) Translate(
 	ctx context.Context,
 	systemPrompt string,

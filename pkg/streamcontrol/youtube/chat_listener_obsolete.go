@@ -58,11 +58,17 @@ func ytWatchURL(videoID string) *url.URL {
 // getting a quota for normal ChatListener.
 type ChatListenerOBSOLETE struct {
 	videoID          string
+	watchURL         *url.URL
 	continuationCode string
 	clientConfig     ytchat.YtCfg
 	wg               sync.WaitGroup
 	cancelFunc       context.CancelFunc
 	messagesOutChan  chan streamcontrol.Event
+
+	// scraper is the upstream-call seam that listenLoop and
+	// refreshContinuation drive. NewChatListenerOBSOLETE wires
+	// ytChatScraper{}; tests inject fakes.
+	scraper chatScraper
 }
 
 func NewChatListenerOBSOLETE(
@@ -76,18 +82,17 @@ func NewChatListenerOBSOLETE(
 
 	watchURL := ytWatchURL(videoID)
 
-	continuationCode, cfg, err := ytchat.ParseInitialData(watchURL.String())
-	if err != nil {
-		return nil, fmt.Errorf("unable to fetch the initial data for chat messages retrieval (URL: %s): %w", watchURL, err)
-	}
-
 	ctx, cancelFunc := context.WithCancel(ctx)
 	l := &ChatListenerOBSOLETE{
-		videoID:          videoID,
-		continuationCode: continuationCode,
-		clientConfig:     cfg,
-		cancelFunc:       cancelFunc,
-		messagesOutChan:  make(chan streamcontrol.Event, 100),
+		videoID:         videoID,
+		watchURL:        watchURL,
+		cancelFunc:      cancelFunc,
+		messagesOutChan: make(chan streamcontrol.Event, 100),
+		scraper:         ytChatScraper{},
+	}
+	if err := l.refreshContinuation(ctx); err != nil {
+		cancelFunc()
+		return nil, fmt.Errorf("unable to fetch the initial data for chat messages retrieval (URL: %s): %w", watchURL, err)
 	}
 	l.wg.Add(1)
 	observability.Go(ctx, func(ctx context.Context) {
@@ -107,31 +112,75 @@ func NewChatListenerOBSOLETE(
 	return l, nil
 }
 
-const chatFetchRetryInterval = time.Second
+const (
+	chatFetchRetryInterval = time.Second
+
+	// maxConsecutiveFetchFailures bounds the in-loop retry budget. A
+	// stale or server-rejected continuation that ParseInitialData keeps
+	// "successfully" returning verbatim cannot be recovered here — the
+	// listener exits so the upstream discoverAndScrapeLoop can
+	// re-discover the broadcast (and may pick a different videoID).
+	// Without this cap the loop hammers YouTube at 1 req/s indefinitely
+	// — observed on areion 2026-05-08 (3h, 6452 errors on a stale
+	// videoID).
+	maxConsecutiveFetchFailures = 5
+)
+
+// refreshContinuation re-fetches the watch page to obtain a fresh continuation
+// token and ytcfg. Used both at startup and after a fetch error: a stale or
+// server-rejected continuation (e.g. HTTP 400 INVALID_ARGUMENT) cannot be
+// recovered by retrying the same payload.
+func (l *ChatListenerOBSOLETE) refreshContinuation(ctx context.Context) error {
+	logger.Debugf(ctx, "refreshing continuation for %s", l.videoID)
+	continuationCode, cfg, err := l.scraper.ParseInitialData(l.watchURL.String())
+	if err != nil {
+		return err
+	}
+	l.continuationCode = continuationCode
+	l.clientConfig = cfg
+	return nil
+}
 
 func (l *ChatListenerOBSOLETE) listenLoop(ctx context.Context) (_err error) {
 	logger.Debugf(ctx, "listenLoop")
 	defer func() { logger.Debugf(ctx, "/listenLoop: %v", _err) }()
+	consecutiveFailures := 0
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
 		}
-		msgs, newContinuation, _, err := ytchat.FetchContinuationChat(l.continuationCode, l.clientConfig)
-		switch err {
-		case nil:
-		case ytchat.ErrLiveStreamOver:
+		msgs, newContinuation, _, err := l.scraper.FetchContinuationChat(l.continuationCode, l.clientConfig)
+		switch {
+		case err == nil:
+			consecutiveFailures = 0
+		case errors.Is(err, ytchat.ErrLiveStreamOver):
 			return err
 		default:
+			consecutiveFailures++
+			if consecutiveFailures >= maxConsecutiveFetchFailures {
+				return fmt.Errorf(
+					"giving up after %d consecutive fetch failures for %v; last error: %w",
+					consecutiveFailures, l.videoID, err,
+				)
+			}
 			logger.Errorf(
 				ctx,
-				"unable to get a continuation for %v: %v; retrying in %v",
+				"unable to get a continuation for %v (failure %d/%d): %v; refreshing and retrying in %v",
 				l.videoID,
+				consecutiveFailures,
+				maxConsecutiveFetchFailures,
 				err,
 				chatFetchRetryInterval,
 			)
 			time.Sleep(chatFetchRetryInterval)
+			if refreshErr := l.refreshContinuation(ctx); refreshErr != nil {
+				if errors.Is(refreshErr, ytchat.ErrStreamNotLive) {
+					return refreshErr
+				}
+				logger.Warnf(ctx, "unable to refresh continuation for %v (URL: %s): %v", l.videoID, l.watchURL, refreshErr)
+			}
 			continue
 		}
 		l.continuationCode = newContinuation

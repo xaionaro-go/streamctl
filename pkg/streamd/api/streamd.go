@@ -22,17 +22,24 @@ import (
 	sstypes "github.com/xaionaro-go/streamctl/pkg/streamserver/types"
 	"github.com/xaionaro-go/streamctl/pkg/streamserver/types/streamportserver"
 	"github.com/xaionaro-go/streamctl/pkg/streamtypes"
+	translator_grpc "github.com/xaionaro-go/streamctl/pkg/translator/grpc/go/translator_grpc"
 )
 
-type StreamD interface {
+type Lifecycle interface {
 	Run(ctx context.Context) error
 	SetLoggingLevel(ctx context.Context, level logger.Level) error
 	GetLoggingLevel(ctx context.Context) (logger.Level, error)
 	ResetCache(ctx context.Context) error
 	InitCache(ctx context.Context) error
+}
+
+type Config interface {
 	SaveConfig(ctx context.Context) error
 	GetConfig(ctx context.Context) (*config.Config, error)
 	SetConfig(ctx context.Context, cfg *config.Config) error
+}
+
+type Backends interface {
 	IsBackendEnabled(
 		ctx context.Context,
 		id streamcontrol.PlatformName,
@@ -78,6 +85,9 @@ type StreamD interface {
 		ctx context.Context,
 		platID streamcontrol.PlatformName,
 	) (*streamcontrol.StreamStatus, error)
+}
+
+type Variables interface {
 	GetVariable(ctx context.Context, key consts.VarKey) (VariableValue, error)
 	GetVariableHash(
 		ctx context.Context,
@@ -86,14 +96,20 @@ type StreamD interface {
 	) ([]byte, error)
 	SetVariable(ctx context.Context, key consts.VarKey, value VariableValue) error
 	SubscribeToVariable(ctx context.Context, key consts.VarKey) (<-chan VariableValue, error)
+}
 
+type OBS interface {
 	OBS(ctx context.Context) (obs_grpc.OBSServer, context.CancelFunc, error)
+}
 
+type OAuth interface {
 	SubmitOAuthCode(
 		context.Context,
 		*streamd_grpc.SubmitOAuthCodeRequest,
 	) (*streamd_grpc.SubmitOAuthCodeReply, error)
+}
 
+type Restream interface {
 	ListStreamServers(
 		ctx context.Context,
 	) ([]StreamServer, error)
@@ -166,7 +182,9 @@ type StreamD interface {
 		streamID StreamID,
 		waitForNext bool,
 	) (<-chan struct{}, error)
+}
 
+type Player interface {
 	AddStreamPlayer(
 		ctx context.Context,
 		streamID streamtypes.StreamID,
@@ -232,7 +250,9 @@ type StreamD interface {
 	) error
 	StreamPlayerStop(ctx context.Context, streamID StreamID) error
 	StreamPlayerClose(ctx context.Context, streamID StreamID) error
+}
 
+type Subscriptions interface {
 	SubscribeToConfigChanges(ctx context.Context) (<-chan DiffConfig, error)
 	SubscribeToStreamsChanges(ctx context.Context) (<-chan DiffStreams, error)
 	SubscribeToStreamServersChanges(
@@ -250,7 +270,9 @@ type StreamD interface {
 	SubscribeToStreamPlayersChanges(
 		ctx context.Context,
 	) (<-chan DiffStreamPlayers, error)
+}
 
+type Timers interface {
 	AddTimer(
 		ctx context.Context,
 		triggerAt time.Time,
@@ -258,7 +280,14 @@ type StreamD interface {
 	) (TimerID, error)
 	RemoveTimer(ctx context.Context, timerID TimerID) error
 	ListTimers(ctx context.Context) ([]Timer, error)
+}
 
+// TriggerRulesAPI is the sub-interface covering trigger-rule CRUD/listing
+// methods. It is named TriggerRulesAPI rather than TriggerRules because the
+// package already exposes a TriggerRules type alias (= config.TriggerRules)
+// that is the return type of ListTriggerRules and is referenced by external
+// callers.
+type TriggerRulesAPI interface {
 	AddTriggerRule(
 		ctx context.Context,
 		triggerRule *config.TriggerRule,
@@ -275,12 +304,16 @@ type StreamD interface {
 	ListTriggerRules(
 		ctx context.Context,
 	) (TriggerRules, error)
+}
 
+type Events interface {
 	SubmitEvent(
 		ctx context.Context,
 		event event.Event,
 	) error
+}
 
+type ChatModeration interface {
 	SubscribeToChatMessages(
 		ctx context.Context,
 		since time.Time,
@@ -294,8 +327,17 @@ type StreamD interface {
 	InjectChatMessage(
 		ctx context.Context,
 		platID streamcontrol.PlatformName,
+		listenerType streamcontrol.ChatListenerType,
 		ev streamcontrol.Event,
 	) error
+	ReportChatHandlerActivity(
+		ctx context.Context,
+		platID streamcontrol.PlatformName,
+		listenerType streamcontrol.ChatListenerType,
+	)
+	ReportTranslatorActivity(
+		ctx context.Context,
+	)
 	RemoveChatMessage(
 		ctx context.Context,
 		platID streamcontrol.PlatformName,
@@ -308,15 +350,6 @@ type StreamD interface {
 		reason string,
 		deadline time.Time,
 	) error
-	SetBuiltinChatListenerEnabled(
-		ctx context.Context,
-		platID streamcontrol.PlatformName,
-		enabled bool,
-	) error
-	IsBuiltinChatListenerEnabled(
-		ctx context.Context,
-		platID streamcontrol.PlatformName,
-	) (bool, error)
 	Shoutout(
 		ctx context.Context,
 		platID streamcontrol.PlatformName,
@@ -327,20 +360,152 @@ type StreamD interface {
 		platID streamcontrol.PlatformName,
 		userID streamcontrol.UserID,
 	) error
+}
 
+type P2P interface {
 	GetPeerIDs(ctx context.Context) ([]p2ptypes.PeerID, error)
 	DialPeerByID(
 		ctx context.Context,
 		peerID p2ptypes.PeerID,
 	) (StreamD, error)
+}
 
+type Net interface {
 	DialContext(
 		ctx context.Context,
 		network string,
 		addr string,
 	) (net.Conn, error)
+}
 
+type LLM interface {
 	LLMGenerate(ctx context.Context, prompt string) (string, error)
+}
+
+type Translator interface {
+	TranslatorStats(ctx context.Context) (*TranslatorStatsSnapshot, error)
+	TranslatorReload(ctx context.Context) (bool, error)
+	TranslatorEnable(ctx context.Context, targetLanguage string) error
+	TranslatorDisable(ctx context.Context) error
+	TranslatorRestart(ctx context.Context) error
+	TranslatorClearHistory(ctx context.Context) (droppedEntries int32, _ error)
+	TranslatorTranslate(
+		ctx context.Context,
+		user string,
+		message string,
+	) (result string, outcome string, latency time.Duration, _ error)
+	// TranslatorTranslateWithTimings is the full-fat counterpart to
+	// TranslatorTranslate: returns the optional per-call backend timings
+	// (Ollama populates them; OpenAI/Anthropic/ClaudeCode return nil) so
+	// streamcli can render a model-load / prompt-eval / generation
+	// breakdown for slow calls.
+	TranslatorTranslateWithTimings(
+		ctx context.Context,
+		user string,
+		message string,
+	) (result string, outcome string, latency time.Duration, timings *translator_grpc.TranslateTimings, _ error)
+	TranslatorTranslateViaProvider(
+		ctx context.Context,
+		user string,
+		message string,
+		providerName string,
+	) (result string, latency time.Duration, _ error)
+	// TranslatorTranslateViaProviderWithTimings is the full-fat counterpart
+	// to TranslatorTranslateViaProvider: returns the optional per-call
+	// backend timings.
+	TranslatorTranslateViaProviderWithTimings(
+		ctx context.Context,
+		user string,
+		message string,
+		providerName string,
+	) (result string, latency time.Duration, timings *translator_grpc.TranslateTimings, _ error)
+	TranslatorCompileTranslate(
+		ctx context.Context,
+		user string,
+		message string,
+	) (systemPrompt, userPrompt, targetLang, historySnapshot string, _ error)
+	TranslatorCompileLanguageDetect(
+		ctx context.Context,
+		message string,
+	) (systemPrompt, userPrompt, targetLang, historySnapshot string, _ error)
+	TranslatorQueueList(ctx context.Context) ([]TranslationQueueEntry, error)
+	TranslatorQueueFlush(ctx context.Context) (droppedEntries int32, _ error)
+}
+
+// TranslationQueueEntry is the externally visible shape of a job sitting in
+// streamd's translation queue. ID is the dedupKey.String() form computed by
+// computeDedupKey for the originating chat event; it is the same identifier
+// that the InjectChatMessage dedup gate keys on, so the operator can
+// correlate queue entries with replay/dump tooling.
+type TranslationQueueEntry struct {
+	ID         string
+	Platform   string
+	User       string
+	Message    string
+	EnqueuedAt time.Time
+}
+
+// TranslatorStatsSnapshot is the streamd-side observation of translator
+// state. Running carries the streamd subprocess registration boolean (false
+// when no translator subprocess is registered, e.g. translation disabled or
+// startup failed). SubprocessStats is nil when Running is false or when the
+// Stats RPC into the subprocess failed; in either case the queue counters
+// (which live in streamd, not the subprocess) are still populated.
+//
+// Single-disposition accounting fields (TotalOffered, TotalEnqueued,
+// TotalResolved, QueueFullAtEnqueue, OfferedWithTranslationDisabled,
+// Dispositions) live here, not on SubprocessStats: the chain-internal
+// counters reported by the translator subprocess are about per-provider
+// behaviour, while the streamd ledger is about per-job lifecycle. The two
+// ledgers are intentionally distinct — a job dropped by the chain still
+// counts as enqueued by streamd (it landed on the queue), and a job dropped
+// by the streamd-side queue full branch never reached the chain at all.
+//
+// Counter relationships:
+//
+//	TotalOffered  ==  TotalEnqueued
+//	             +    QueueFullAtEnqueue
+//	             +    OfferedWithTranslationDisabled
+//	TotalEnqueued ==  TotalResolved + InFlight
+//
+// where InFlight is derived (TotalEnqueued - TotalResolved) and is always
+// >= 0. At quiescence Dispositions sum to TotalResolved; mid-update the
+// difference is at most 1 in the direction Sum <= TotalResolved.
+type TranslatorStatsSnapshot struct {
+	Running                        bool
+	PID                            int32
+	SocketPath                     string
+	LastActivityUnixNano           int64
+	QueueLen                       uint32
+	QueueCap                       uint32
+	QueueDrops                     int64
+	TotalOffered                   int64
+	TotalEnqueued                  int64
+	TotalResolved                  int64
+	QueueFullAtEnqueue             int64
+	OfferedWithTranslationDisabled int64
+	Dispositions                   TranslationDispositionCounters
+	SubprocessStats                *translator_grpc.StatsReply
+}
+
+// TranslationDispositionCounters is the streamd-side per-disposition
+// histogram. Sum of all 12 fields equals TranslatorStatsSnapshot.TotalResolved
+// at quiescence (the partition invariant); mid-update the sum may lag by at
+// most one. See pkg/streamd/translation_disposition.go for the per-bucket
+// semantics.
+type TranslationDispositionCounters struct {
+	Translated                 int64
+	AlreadyTarget              int64
+	DetectFailed               int64
+	SpellingOnly               int64
+	AllProvidersFailed         int64
+	ChainSkippedQueueFull      int64
+	AbandonedOnDisable         int64
+	AbandonedOnSubprocessDeath int64
+	AbandonedOnShutdown        int64
+	Flushed                    int64
+	Leaked                     int64
+	EmptyOrSkipped             int64
 }
 
 type StreamPlayer = sstypes.StreamPlayer
@@ -429,3 +594,23 @@ type ChatMessage struct {
 }
 
 type VariableValue []byte
+
+type StreamD interface {
+	Lifecycle
+	Config
+	Backends
+	Variables
+	OBS
+	OAuth
+	Restream
+	Player
+	Subscriptions
+	Timers
+	TriggerRulesAPI
+	Events
+	ChatModeration
+	P2P
+	Net
+	LLM
+	Translator
+}

@@ -128,6 +128,19 @@ func (ui *chatUIAsList) Append(
 	ui.List.RefreshItem(itemIdx)
 }
 
+// Update is the in-place refresh path for an already-appended message. The
+// caller (Panel.applyChatMessageUpdate) has already replaced the entry in
+// MessagesHistory; List.RefreshItem will re-invoke listUpdateItem which
+// re-binds the row's segments to the new content. We deliberately do NOT
+// fire OnAdd here — see chatUIInterface.Update doc.
+func (ui *chatUIAsList) Update(
+	_ context.Context,
+	idx int,
+	_ api.ChatMessage,
+) {
+	ui.List.RefreshItem(idx)
+}
+
 func (ui *chatUIAsList) Remove(
 	ctx context.Context,
 	msg api.ChatMessage,

@@ -3,15 +3,13 @@ package streamd
 import (
 	"context"
 	"fmt"
-	"os"
-	"os/exec"
 	"strings"
 	"time"
 
-	child_process_manager "github.com/AgustinSRG/go-child-process-manager"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/chathandler"
+	"github.com/xaionaro-go/streamctl/pkg/dedup"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/kick"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch"
@@ -46,7 +44,7 @@ func (d *StreamD) reconcileChatListeners(
 
 		// Start handlers for newly enabled types.
 		for _, lt := range enabledTypes {
-			key := chatHandlerKey{
+			key := eventSource{
 				Platform:     platName,
 				ListenerType: lt,
 			}
@@ -85,7 +83,7 @@ func (d *StreamD) stopDisabledChatHandlers(
 
 // isHandlerRunning returns true if a handler exists for the given key.
 func (d *StreamD) isHandlerRunning(
-	key chatHandlerKey,
+	key eventSource,
 ) bool {
 	d.externalChatHandlerLocker.Lock()
 	defer d.externalChatHandlerLocker.Unlock()
@@ -115,13 +113,16 @@ func resolveEnabledChatListenerTypes(
 const (
 	debugSendArchiveMessagesAsLive = false
 
-	// injectedEventIDTTL is how long event IDs are retained in the dedup
-	// cache. Must be longer than any plausible overlap during Level 2 transitions.
-	injectedEventIDTTL = 5 * time.Minute
+	// injectedEventIDTTL aliases pkg/dedup.TTL so the streamd gate and the
+	// subprocess-runner gate (pkg/chathandler.Runner.seenIDs) share one
+	// authoritative source for retention. Must be longer than any plausible
+	// overlap during Level 2 (cross-source collapse) transitions.
+	injectedEventIDTTL = dedup.TTL
 )
 
 type ChatMessageStorage interface {
 	AddMessage(context.Context, api.ChatMessage) error
+	UpsertMessage(context.Context, api.ChatMessage) error
 	RemoveMessage(context.Context, streamcontrol.EventID) error
 	Load(ctx context.Context) error
 	Store(ctx context.Context) error
@@ -144,88 +145,328 @@ func (d *StreamD) processChatMessage(
 	return nil
 }
 
+// processChatMessageUpdate is the publish path for the translated variant of
+// an already-published message. It upserts the storage entry so the archive
+// holds the final form, then re-publishes through the EventBus so live
+// subscribers can replace their displayed copy. shoutoutIfNeeded is NOT
+// called: the shoutout fired on the raw publish; firing again on the update
+// would double up.
+func (d *StreamD) processChatMessageUpdate(
+	ctx context.Context,
+	msg api.ChatMessage,
+) error {
+	logger.Tracef(ctx, "processChatMessageUpdate")
+	defer logger.Tracef(ctx, "/processChatMessageUpdate")
+
+	if err := d.ChatMessagesStorage.UpsertMessage(ctx, msg); err != nil {
+		logger.Errorf(ctx, "unable to upsert the translated message: %v", err)
+	}
+	publishEvent(ctx, d.EventBus, msg)
+	return nil
+}
+
 func (d *StreamD) InjectChatMessage(
 	ctx context.Context,
 	platID streamcontrol.PlatformName,
+	listenerType streamcontrol.ChatListenerType,
 	ev streamcontrol.Event,
 ) (_err error) {
 	logger.Tracef(ctx, "InjectChatMessage")
 	defer func() { logger.Tracef(ctx, "/InjectChatMessage: %v", _err) }()
 
-	// Keepalive messages carry health info for a specific listener type.
-	// Format: "keepalive-<listenerType>-<platform>-<timestamp>"
-	// Only update the specific handler's health; don't store or display.
-	if key, ok := parseKeepaliveEventID(ev.ID, platID); ok {
-		d.recordExternalChatHandlerActivity(ctx, key)
-		logger.Tracef(ctx, "keepalive received from %s/%s, skipping processing", platID, key.ListenerType)
+	// Step 1: ID-level dedup. Multiple PACE listener subprocesses for the
+	// same (platform, listener-type) can briefly emit the same logical
+	// chat message in different ID formats. computeDedupKey collapses
+	// those onto a single key; the cleanup goroutine evicts old entries
+	// past injectedEventIDTTL.
+	key := computeDedupKey(ctx, platID, ev)
+	src := eventSource{Platform: platID, ListenerType: listenerType}
+
+	if _, alreadySeen := d.injectedEvents.LoadOrStore(key, time.Now()); alreadySeen {
+		logger.Debugf(ctx, "duplicate event %q from %s/%s (key=%s), skipping",
+			ev.ID, platID, listenerType, key)
 		return nil
 	}
 
-	// Dedup guard: during Level 2 transitions both built-in and external
-	// handlers may briefly overlap. Skip events already processed recently.
-	if _, alreadySeen := d.injectedEventIDs.LoadOrStore(ev.ID, time.Now()); alreadySeen {
-		logger.Debugf(ctx, "duplicate event %s from %s, skipping", ev.ID, platID)
-		return nil
-	}
-	d.cleanupInjectedEventIDs()
+	// Step 2: by content (cross-source collapse). Skipped when the event
+	// has no usable Message body — empty-content events collapse via the
+	// existing fingerprint-fallback path on Layer 1 already.
+	//
+	// CONDITIONAL-1 fix: getOrCreateFPEntry can return a pointer that the
+	// cleanup goroutine deletes from the outer map between Load and our
+	// Lock. After locking, re-check that the entry is still the live one
+	// for this fp; if not, retry with a freshly installed entry. One
+	// retry is sufficient — two consecutive deletions of the same fp
+	// inside one Inject call require a pathological cleanup storm, and
+	// even then we fall through to publish without collapse, which is
+	// safe (a duplicate publish is preferable to a corrupted index).
+	if ev.Message != nil && ev.Message.Content != "" {
+		fp := fingerprintEventForCollapse(platID, ev)
+		const maxRetries = 2
+		for retry := 0; retry < maxRetries; retry++ {
+			entry := d.getOrCreateFPEntry(fp)
+			entry.mu.Lock()
+			if current, ok := d.contentFingerprintIndex.Load(fp); !ok || current != entry {
+				// Cleanup deleted (or replaced) this entry between
+				// getOrCreateFPEntry and Lock. Re-acquire and retry.
+				entry.mu.Unlock()
+				continue
+			}
 
-	// Translate after dedup so each event hits the LLM at most once even when
-	// multiple chat-listener subprocesses overlap. The TranslatorChain is
-	// shared across goroutines (it serialises history access internally) and
-	// returns the original text when all providers fail, so this call cannot
-	// abort the inject path.
-	d.translateEventInPlace(ctx, &ev)
+			// Find OLDEST group whose source-set does NOT yet contain src.
+			// That's the group that this emission "completes" with src.
+			var target *sourceGroup
+			for _, g := range entry.groups {
+				if _, has := g.Sources[src]; !has {
+					target = g
+					break
+				}
+			}
+
+			if target != nil {
+				// Cross-source link: record src in the group. The
+				// linking key is already in injectedEvents from the
+				// Step 1 LoadOrStore above (that's how we got past
+				// the "alreadySeen" gate); no refresh is needed.
+				//
+				// REJECT-1 fix: capture every map-derived value into
+				// locals BEFORE Unlock so the Debugf below cannot read
+				// a Sources map that another concurrent linker is
+				// mutating after we release entry.mu.
+				target.Sources[src] = struct{}{}
+				targetKey := target.DedupKey
+				groupSize := len(target.Sources)
+				entry.mu.Unlock()
+				logger.Debugf(ctx, "cross-source content collapse: %s/%s key=%s onto %s (fp=%s, group_size=%d)",
+					platID, listenerType, key, targetKey, fp, groupSize)
+				return nil
+			}
+
+			// All groups already include src — this is a NEW logical event for src.
+			// Append a new group; fall through to publish.
+			entry.groups = append(entry.groups, &sourceGroup{
+				DedupKey:   key,
+				Sources:    map[eventSource]struct{}{src: {}},
+				InsertedAt: time.Now(),
+			})
+			entry.mu.Unlock()
+			break
+		}
+	}
 
 	msg := api.ChatMessage{
 		Event:    ev,
 		IsLive:   true,
 		Platform: platID,
 	}
-	return d.processChatMessage(ctx, msg)
+
+	// Raw-first: publish the untranslated message immediately so chat keeps
+	// flowing at network speed even when the translator is slow or down.
+	// The translation worker re-publishes the translated variant later via
+	// processChatMessageUpdate.
+	if err := d.processChatMessage(ctx, msg); err != nil {
+		return fmt.Errorf("process raw chat message: %w", err)
+	}
+
+	d.enqueueTranslation(ctx, translationJob{
+		id:         key,
+		platID:     platID,
+		msg:        msg,
+		enqueuedAt: time.Now(),
+	})
+	return nil
 }
 
-// parseKeepaliveEventID extracts the chatHandlerKey from a keepalive event ID.
-// Returns false if the event ID is not a keepalive.
-// Keepalive format: "keepalive-<listenerType>-<platform>-<timestamp>"
-func parseKeepaliveEventID(
-	eventID streamcontrol.EventID,
-	platID streamcontrol.PlatformName,
-) (chatHandlerKey, bool) {
-	id := string(eventID)
-	if !strings.HasPrefix(id, "keepalive-") {
-		return chatHandlerKey{}, false
+// enqueueTranslation hands a job to the translation worker. When the worker
+// is not running (translation disabled) the call is a no-op; when the
+// channel is full the call increments translationWorkerQueueDrops and
+// returns without blocking. Backpressure must NEVER block ingestion.
+//
+// Single-disposition accounting (sums hold at every instant):
+//   - totalOffered++ unconditionally at the top (every Inject reaches here).
+//   - nil-channel branch (translation disabled): bumps
+//     offered_with_translation_disabled; no acceptedJob is constructed.
+//   - successful channel send: totalEnqueued++; an *acceptedJob is constructed
+//     and the finalizer is armed AFTER the send so the queue-full path can
+//     drop the half-built struct without firing DispositionLeaked.
+//   - queue-full branch: bumps queue_full_at_enqueue; no acceptedJob is
+//     constructed (the job never became "enqueued").
+//
+// totalOffered == totalEnqueued + queueFullAtEnqueue + offeredWithTranslationDisabled
+// at every instant (the three branches are mutually exclusive).
+//
+// The translationQueueIndex is appended under translationQueueLocker BEFORE
+// the channel send so a concurrent TranslatorQueueList sees the job no
+// later than the worker can see it via the channel. The drop branch does
+// not touch the index — the job never entered the channel.
+func (d *StreamD) enqueueTranslation(
+	ctx context.Context,
+	job translationJob,
+) {
+	if d.translationDispositions != nil {
+		d.translationDispositions.totalOffered.Add(1)
 	}
-
-	// Strip "keepalive-" prefix, then the next segment is the listener type.
-	rest := strings.TrimPrefix(id, "keepalive-")
-	dashIdx := strings.Index(rest, "-")
-	if dashIdx < 0 {
-		return chatHandlerKey{}, false
-	}
-
-	ltStr := rest[:dashIdx]
-	lt, err := streamcontrol.ChatListenerTypeFromString(ltStr)
-	if err != nil {
-		return chatHandlerKey{}, false
-	}
-
-	return chatHandlerKey{
-		Platform:     platID,
-		ListenerType: lt,
-	}, true
-}
-
-// cleanupInjectedEventIDs removes expired entries from the dedup cache.
-func (d *StreamD) cleanupInjectedEventIDs() {
-	cutoff := time.Now().Add(-injectedEventIDTTL)
-	d.injectedEventIDs.Range(func(id streamcontrol.EventID, insertedAt time.Time) bool {
-		if insertedAt.Before(cutoff) {
-			d.injectedEventIDs.Delete(id)
+	if d.translationJobs == nil {
+		if d.translationDispositions != nil {
+			d.translationDispositions.offeredWithTranslationDisabled.Add(1)
 		}
-		return true
+		return
+	}
+	accepted := newAcceptedJob(
+		job.id, job.platID, job.msg, job.enqueuedAt,
+		d.translationDispositions,
+	)
+	d.translationQueueLocker.Lock()
+	d.translationQueueIndex = append(d.translationQueueIndex, accepted)
+	select {
+	case d.translationJobs <- accepted:
+		if d.translationDispositions != nil {
+			d.translationDispositions.totalEnqueued.Add(1)
+		}
+		d.translationQueueLocker.Unlock()
+		// Arm the leak finalizer AFTER the locker unlock so the critical
+		// section stays minimal. The trade-off is acceptable: `accepted`
+		// remains stack-rooted in this local through the next statement,
+		// so GC cannot collect it before SetFinalizer runs. The sub-
+		// microsecond window between unlock and SetFinalizer cannot lose
+		// a finalizer arming.
+		//
+		// (The queue-full default branch must NOT arm the finalizer; the
+		// half-built struct goes out of scope unreferenced and is freed
+		// without recording DispositionLeaked.)
+		accepted.armLeakFinalizer()
+	default:
+		// Channel full: roll back the index append and count the drop.
+		d.translationQueueIndex = d.translationQueueIndex[:len(d.translationQueueIndex)-1]
+		d.translationQueueLocker.Unlock()
+		d.translationWorkerQueueDrops.Add(1)
+		if d.translationDispositions != nil {
+			d.translationDispositions.queueFullAtEnqueue.Add(1)
+		}
+		logger.Debugf(ctx, "translation queue full; skipping translation for event %q", job.msg.ID)
+	}
+}
+
+// ReportChatHandlerActivity is the dedicated heartbeat path for external
+// chat handlers. It updates only the per-handler liveness timestamp and
+// does no other work, so a slow translation in InjectChatMessage cannot
+// stall the watchdog signal.
+func (d *StreamD) ReportChatHandlerActivity(
+	ctx context.Context,
+	platID streamcontrol.PlatformName,
+	listenerType streamcontrol.ChatListenerType,
+) {
+	logger.Tracef(ctx, "ReportChatHandlerActivity")
+	defer logger.Tracef(ctx, "/ReportChatHandlerActivity")
+
+	d.recordExternalChatHandlerActivity(ctx, eventSource{
+		Platform:     platID,
+		ListenerType: listenerType,
 	})
 }
 
+// ReportTranslatorActivity is the heartbeat path for the translator
+// subprocess. Like ReportChatHandlerActivity, it does only the timestamp
+// update so a slow Translate call cannot stall the watchdog signal.
+func (d *StreamD) ReportTranslatorActivity(
+	ctx context.Context,
+) {
+	logger.Tracef(ctx, "ReportTranslatorActivity")
+	defer logger.Tracef(ctx, "/ReportTranslatorActivity")
+
+	d.recordTranslatorActivity(ctx)
+}
+
+// injectedEventsCleanupInterval controls how often the dedup-cache
+// cleanup goroutine sweeps the map. Five passes per TTL keeps each
+// expired entry around for at most ~20% longer than the configured TTL,
+// which is fine for the dedup gate's purpose.
+const injectedEventsCleanupInterval = injectedEventIDTTL / 5
+
+// initInjectedEventsCleanup spawns the long-lived goroutine that evicts
+// entries past injectedEventIDTTL from the dedup cache. The goroutine
+// exits on ctx cancellation.
+func (d *StreamD) initInjectedEventsCleanup(
+	ctx context.Context,
+) (_err error) {
+	logger.Tracef(ctx, "initInjectedEventsCleanup")
+	defer func() { logger.Tracef(ctx, "/initInjectedEventsCleanup: %v", _err) }()
+
+	observability.Go(ctx, func(ctx context.Context) {
+		d.runInjectedEventsCleanup(ctx)
+	})
+	return nil
+}
+
+// runInjectedEventsCleanup drives the periodic eviction sweep. It is
+// expected to be invoked inside an observability.Go goroutine spawned by
+// initInjectedEventsCleanup.
+func (d *StreamD) runInjectedEventsCleanup(
+	ctx context.Context,
+) {
+	logger.Debugf(ctx, "runInjectedEventsCleanup")
+	defer logger.Debugf(ctx, "/runInjectedEventsCleanup")
+
+	t := time.NewTicker(injectedEventsCleanupInterval)
+	defer t.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+		cutoff := time.Now().Add(-injectedEventIDTTL)
+		d.injectedEvents.Range(func(k dedupKey, insertedAt time.Time) bool {
+			if insertedAt.Before(cutoff) {
+				d.injectedEvents.Delete(k)
+			}
+			return true
+		})
+		d.contentFingerprintIndex.Range(func(fp string, entry *fpEntry) bool {
+			entry.mu.Lock()
+			kept := entry.groups[:0]
+			for _, g := range entry.groups {
+				if g.InsertedAt.After(cutoff) || g.InsertedAt.Equal(cutoff) {
+					kept = append(kept, g)
+				}
+			}
+			entry.groups = kept
+			// CONDITIONAL-1 fix: keep the Delete inside the locked
+			// section. A concurrent InjectChatMessage that has already
+			// resolved this fpEntry pointer will block on entry.mu and
+			// then re-validate that the entry is still in the map
+			// (see InjectChatMessage Step 2). Deleting outside the lock
+			// would let the inject goroutine append to a stale entry
+			// and orphan the new group.
+			if len(entry.groups) == 0 {
+				d.contentFingerprintIndex.Delete(fp)
+			}
+			entry.mu.Unlock()
+			return true
+		})
+	}
+}
+
+// getOrCreateFPEntry returns the *fpEntry for the supplied fingerprint,
+// creating a fresh empty one (with no groups) on miss. Concurrent callers
+// that race on the same missing key all observe the same entry — the
+// LoadOrStore loser drops its `fresh` and uses the winner's pointer so
+// every code path mutates a single entry under entry.mu.
+//
+// CAVEAT: the returned pointer can be deleted from the outer map by the
+// cleanup goroutine BEFORE the caller acquires entry.mu. Callers MUST
+// re-validate, after locking, that the entry they hold is still the live
+// one for fp (Load(fp) → same pointer). Otherwise the caller risks
+// mutating an orphaned object that no later inject can see.
+func (d *StreamD) getOrCreateFPEntry(fp string) *fpEntry {
+	if e, ok := d.contentFingerprintIndex.Load(fp); ok {
+		return e
+	}
+	fresh := &fpEntry{}
+	actual, _ := d.contentFingerprintIndex.LoadOrStore(fp, fresh)
+	return actual
+}
 
 func (d *StreamD) shoutoutIfNeeded(
 	ctx context.Context,
@@ -439,38 +680,6 @@ func (d *StreamD) SendChatMessage(
 	return nil
 }
 
-// SetBuiltinChatListenerEnabled is deprecated. Chat listeners now run as
-// external subprocess handlers managed by startChatListeners /
-// StartExternalChatHandler. This method is retained as a no-op so that
-// existing gRPC callers do not break.
-func (d *StreamD) SetBuiltinChatListenerEnabled(
-	ctx context.Context,
-	platID streamcontrol.PlatformName,
-	enabled bool,
-) (_err error) {
-	logger.Warnf(ctx, "SetBuiltinChatListenerEnabled is deprecated (platform=%s, enabled=%v); builtin listeners have been removed", platID, enabled)
-	return nil
-}
-
-// IsBuiltinChatListenerEnabled is deprecated. Chat listeners now run as
-// external subprocess handlers. This method always returns false.
-func (d *StreamD) IsBuiltinChatListenerEnabled(
-	ctx context.Context,
-	platID streamcontrol.PlatformName,
-) (bool, error) {
-	logger.Warnf(ctx, "IsBuiltinChatListenerEnabled is deprecated (platform=%s); builtin listeners have been removed", platID)
-	return false, nil
-}
-
-const (
-	// externalHandlerHealthTimeout is how long streamd waits without
-	// receiving an InjectChatMessage before declaring the handler dead.
-	externalHandlerHealthTimeout = 30 * time.Second
-
-	// externalHandlerRestartDelay is the delay before restarting a dead handler.
-	externalHandlerRestartDelay = 5 * time.Second
-)
-
 // StartExternalChatHandler spawns an external chat handler process for the
 // given platform and listener type. The process re-uses the current
 // executable with chat-listener flags so no separate binary is needed.
@@ -489,33 +698,27 @@ func (d *StreamD) StartExternalChatHandler(
 		return fmt.Errorf("cannot start chat handler for '%s'/%s: GRPCListenAddr is not set (no gRPC server available)", platName, listenerType)
 	}
 
-	execPath, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("resolve own executable: %w", err)
-	}
-
-	key := chatHandlerKey{
+	key := eventSource{
 		Platform:     platName,
 		ListenerType: listenerType,
 	}
 
 	handlerCtx, cancel := context.WithCancel(ctx)
 
-	args := []string{
-		"--" + chathandler.FlagChatListenerMode,
-		"--" + chathandler.FlagChatListenerPlatform, string(platName),
-		"--" + chathandler.FlagChatListenerType, listenerType.String(),
-		"--" + chathandler.FlagChatListenerStreamdAddr, streamdAddr,
-	}
+	// Reads the live filter value (not the streamd flag default) so that
+	// runtime SetLoggerLevel changes are inherited by the next spawn after
+	// a restart.
+	args := chathandler.BuildChatListenerArgs(
+		platName, listenerType, streamdAddr,
+		observability.LogLevelFilter.GetLevel(),
+		d.Options.LogstashAddr,
+	)
 
-	cmd := exec.CommandContext(handlerCtx, execPath, args...)
-	child_process_manager.ConfigureCommand(cmd)
-
-	if err := cmd.Start(); err != nil {
+	cmd, err := d.Options.SubprocessIO.spawn(handlerCtx, args)
+	if err != nil {
 		cancel()
 		return fmt.Errorf("start chat handler for '%s'/%s: %w", platName, listenerType, err)
 	}
-	child_process_manager.AddChildProcess(cmd.Process)
 
 	handler := &externalChatHandler{
 		cmd:        cmd,
@@ -540,7 +743,7 @@ func (d *StreamD) StartExternalChatHandler(
 // If it dies or stops sending messages, it attempts to restart the handler.
 func (d *StreamD) monitorExternalChatHandler(
 	ctx context.Context,
-	key chatHandlerKey,
+	key eventSource,
 	streamdAddr string,
 	handler *externalChatHandler,
 ) {
@@ -553,7 +756,7 @@ func (d *StreamD) monitorExternalChatHandler(
 		processDone <- handler.cmd.Wait()
 	})
 
-	ticker := time.NewTicker(externalHandlerHealthTimeout / 2)
+	ticker := time.NewTicker(subprocessHealthTimeout / 2)
 	defer ticker.Stop()
 
 	for {
@@ -565,7 +768,7 @@ func (d *StreamD) monitorExternalChatHandler(
 				"chat handler '%s'/%s died (pid=%d): %v — will restart",
 				key.Platform, key.ListenerType, handler.cmd.Process.Pid, err)
 
-			if !sleep(ctx, externalHandlerRestartDelay) {
+			if !sleep(ctx, subprocessRestartDelay) {
 				return
 			}
 			if !d.isCurrentExternalHandler(key, handler) {
@@ -579,13 +782,13 @@ func (d *StreamD) monitorExternalChatHandler(
 
 		case <-ticker.C:
 			lastMsg := time.Unix(0, handler.lastMessageTime.Load())
-			if time.Since(lastMsg) > externalHandlerHealthTimeout {
+			if time.Since(lastMsg) > subprocessHealthTimeout {
 				logger.Errorf(ctx,
 					"chat handler '%s'/%s unresponsive for %s — restarting",
 					key.Platform, key.ListenerType, time.Since(lastMsg).Round(time.Second))
 
 				handler.cancelFunc()
-				if !sleep(ctx, externalHandlerRestartDelay) {
+				if !sleep(ctx, subprocessRestartDelay) {
 					return
 				}
 				if !d.isCurrentExternalHandler(key, handler) {
@@ -606,7 +809,7 @@ func (d *StreamD) monitorExternalChatHandler(
 // when a keepalive is received, so the health monitor knows the handler is alive.
 func (d *StreamD) recordExternalChatHandlerActivity(
 	ctx context.Context,
-	key chatHandlerKey,
+	key eventSource,
 ) {
 	d.externalChatHandlerLocker.Lock()
 	defer d.externalChatHandlerLocker.Unlock()
@@ -623,7 +826,7 @@ func (d *StreamD) recordExternalChatHandlerActivity(
 // isCurrentExternalHandler returns true if the given handler is still the
 // active handler for the key. Used as a staleness guard before restart.
 func (d *StreamD) isCurrentExternalHandler(
-	key chatHandlerKey,
+	key eventSource,
 	handler *externalChatHandler,
 ) bool {
 	d.externalChatHandlerLocker.Lock()
@@ -635,7 +838,7 @@ func (d *StreamD) isCurrentExternalHandler(
 // registerExternalChatHandler stores the handler in the map, cancelling any
 // previous handler for the same key.
 func (d *StreamD) registerExternalChatHandler(
-	key chatHandlerKey,
+	key eventSource,
 	handler *externalChatHandler,
 ) {
 	d.externalChatHandlerLocker.Lock()

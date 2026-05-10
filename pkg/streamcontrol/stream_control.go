@@ -133,7 +133,6 @@ type StreamControllerCommons interface {
 	EndStream(ctx context.Context) error
 	GetStreamStatus(ctx context.Context) (*StreamStatus, error)
 
-	GetChatMessagesChan(ctx context.Context) (<-chan Event, error)
 	SendChatMessage(ctx context.Context, message string) error
 	RemoveChatMessage(ctx context.Context, messageID EventID) error
 	BanUser(ctx context.Context, userID UserID, reason string, deadline time.Time) error
@@ -241,9 +240,6 @@ func (c *abstractStreamController) StreamProfileType() reflect.Type {
 	return c.StreamProfileTypeValue
 }
 
-func (c *abstractStreamController) GetChatMessagesChan(ctx context.Context) (<-chan Event, error) {
-	return c.StreamController.GetChatMessagesChan(ctx)
-}
 func (c *abstractStreamController) SendChatMessage(ctx context.Context, message string) error {
 	return c.StreamController.SendChatMessage(ctx, message)
 }

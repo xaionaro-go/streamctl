@@ -23,6 +23,20 @@ func (p *AnthropicProvider) Name() string {
 	return fmt.Sprintf("anthropic(%s)", p.Model)
 }
 
+// TranslateWithMetadata satisfies Provider. Anthropic's /v1/messages
+// response carries token usage but no per-stage timing breakdown, and we
+// have not fetched the current API spec for this PR. Returning nil keeps
+// the implementation honest: callers see "no timings available" rather
+// than a fabricated subset.
+func (p *AnthropicProvider) TranslateWithMetadata(
+	ctx context.Context,
+	systemPrompt string,
+	userPrompt string,
+) (string, *TranslateMetadata, error) {
+	result, err := p.Translate(ctx, systemPrompt, userPrompt)
+	return result, nil, err
+}
+
 func (p *AnthropicProvider) Translate(
 	ctx context.Context,
 	systemPrompt string,

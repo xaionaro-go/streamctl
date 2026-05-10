@@ -19,6 +19,7 @@ import (
 	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/platform/twitch"
 	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/platform/youtube"
 	_ "github.com/xaionaro-go/streamctl/pkg/chathandler/process"
+	_ "github.com/xaionaro-go/streamctl/pkg/translator/process"
 	"github.com/xaionaro-go/streamctl/pkg/mainprocess"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamd"

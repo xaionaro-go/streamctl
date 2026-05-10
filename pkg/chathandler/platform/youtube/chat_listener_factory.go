@@ -33,6 +33,14 @@ func (Factory) PlatformName() streamcontrol.PlatformName {
 	return yttypes.ID
 }
 
+// EventIDNormalizer satisfies chathandler.EventIDNormalizerProvider.
+// streamd uses it to collapse the three YouTube wrapper variants emitted
+// by the PACE listeners (gRPC stream, REST poll, innertube scrape) onto a
+// single canonical inner-ID for dedup.
+func (Factory) EventIDNormalizer() chathandler.EventIDNormalizer {
+	return youtubeEventIDNormalizer{}
+}
+
 func (Factory) SupportedChatListenerTypes() []streamcontrol.ChatListenerType {
 	return []streamcontrol.ChatListenerType{
 		streamcontrol.ChatListenerPrimary,

@@ -24,6 +24,18 @@ func (p *ClaudeCodeProvider) Name() string {
 	return "claude-code"
 }
 
+// TranslateWithMetadata satisfies Provider. The claude CLI wrapper does
+// not surface per-stage timing back to us (no JSON envelope to read), so
+// timings are nil for this backend.
+func (p *ClaudeCodeProvider) TranslateWithMetadata(
+	ctx context.Context,
+	systemPrompt string,
+	userPrompt string,
+) (string, *TranslateMetadata, error) {
+	result, err := p.Translate(ctx, systemPrompt, userPrompt)
+	return result, nil, err
+}
+
 func (p *ClaudeCodeProvider) Translate(
 	ctx context.Context,
 	systemPrompt string,

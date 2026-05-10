@@ -37,6 +37,7 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/server"
 	uiiface "github.com/xaionaro-go/streamctl/pkg/streamd/ui"
+	_ "github.com/xaionaro-go/streamctl/pkg/translator/process"
 	"github.com/xaionaro-go/xpath"
 	"google.golang.org/grpc"
 )
@@ -192,6 +193,16 @@ func main() {
 
 		ctx, _cancelFunc := context.WithCancel(ctx)
 		cancelFunc = _cancelFunc
+
+		streamdExecPath, err := os.Executable()
+		if err != nil {
+			l.Fatalf("resolve own executable: %v", err)
+		}
+		subIO, err := streamd.NewSubprocessIO(os.Stdout, os.Stderr, streamdExecPath)
+		if err != nil {
+			l.Fatalf("configure subprocess IO: %v", err)
+		}
+
 		streamD, err := streamd.New(
 			cfg,
 			_ui,
@@ -201,6 +212,8 @@ func main() {
 				return config.WriteConfigToPath(ctx, configPathExpanded, c)
 			},
 			belt.CtxBelt(ctx),
+			streamd.OptionSubprocessIO(subIO),
+			streamd.OptionLogstashAddr(*logstashAddr),
 		)
 		if err != nil {
 			l.Fatalf("unable to initialize the streamd instance: %v", err)

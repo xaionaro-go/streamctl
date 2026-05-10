@@ -161,6 +161,30 @@ func (ui *chatUIAsText) Append(
 	})
 }
 
+// Update is the in-place refresh path for an already-appended message. The
+// existing chatTextItem (keyed by message ID) is rebound to the supplied
+// msg's content; the rich-text segments live inside the item so the panel's
+// in-place edit propagates without rebuilding the whole list. OnAdd is NOT
+// fired — see chatUIInterface.Update doc.
+func (ui *chatUIAsText) Update(
+	ctx context.Context,
+	_ int,
+	msg api.ChatMessage,
+) {
+	ui.ItemLocker.Do(ctx, func() {
+		item, ok := ui.ItemsByMessageID[msg.ID]
+		if !ok {
+			logger.Warnf(ctx, "Update: no item for ID %q (Platform=%q) — falling back to Rebuild path", msg.ID, msg.Platform)
+			return
+		}
+		item.MessageSegment.Text = ""
+		if msg.Message != nil {
+			item.MessageSegment.Text = msg.Message.Content
+		}
+		ui.Text.Refresh()
+	})
+}
+
 func (ui *chatUIAsText) Remove(
 	ctx context.Context,
 	msg api.ChatMessage,

@@ -15,9 +15,7 @@ import (
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/hashicorp/go-multierror"
 	"github.com/nicklaw5/helix/v2"
-	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/streamctl/pkg/buildvars"
-	"github.com/xaionaro-go/streamctl/pkg/ringbuffer"
 	"github.com/xaionaro-go/streamctl/pkg/secret"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/twitch/auth"
@@ -25,19 +23,17 @@ import (
 )
 
 type Twitch struct {
-	closeCtx       context.Context
-	closeFn        context.CancelFunc
-	chatHandlerSub *ChatHandlerSub
-	chatHandlerIRC *ChatHandlerIRC
-	client         client
-	config         Config
-	broadcasterID  string
-	lazyInitOnce   sync.Once
-	saveCfgFn      func(Config) error
-	tokenLocker    xsync.Mutex
-	prepareLocker  xsync.Mutex
-	clientID       string
-	clientSecret   secret.String
+	closeCtx      context.Context
+	closeFn       context.CancelFunc
+	client        client
+	config        Config
+	broadcasterID string
+	lazyInitOnce  sync.Once
+	saveCfgFn     func(Config) error
+	tokenLocker   xsync.Mutex
+	prepareLocker xsync.Mutex
+	clientID      string
+	clientSecret  secret.String
 }
 
 const (
@@ -91,12 +87,6 @@ func New(
 		clientID:     clientID,
 		clientSecret: secret.New(clientSecret),
 	}
-
-	h, err := NewChatHandlerIRC(ctx, cfg.Config.Channel)
-	if err != nil {
-		return nil, fmt.Errorf("unable to initialize a chat handler for channel '%s': %w", cfg.Config.Channel, err)
-	}
-	t.chatHandlerIRC = h
 
 	client, err := t.getClient(ctx, oauthPorts[0])
 	if err != nil {
@@ -192,27 +182,7 @@ func (t *Twitch) prepareNoLock(ctx context.Context) error {
 		)
 	})
 
-	t.prepareChatListenerNoLock(ctx)
 	return err
-}
-
-func (t *Twitch) prepareChatListenerNoLock(ctx context.Context) {
-	if t.chatHandlerSub != nil {
-		return
-	}
-
-	var err error
-	t.chatHandlerSub, err = NewChatHandlerSub(
-		t.closeCtx, t.client, t.broadcasterID,
-		func(ctx context.Context) {
-			t.prepareLocker.Do(ctx, func() {
-				t.chatHandlerSub = nil
-			})
-		},
-	)
-	if err != nil {
-		logger.Errorf(ctx, "unable to initialize websockets based chat listener: %v", err)
-	}
 }
 
 func (t *Twitch) Close() error {
@@ -692,121 +662,6 @@ func (t *Twitch) GetAllCategories(
 	}
 
 	return allCategories, nil
-}
-
-func (t *Twitch) GetChatMessagesChan(
-	ctx context.Context,
-) (<-chan streamcontrol.Event, error) {
-	logger.Debugf(ctx, "GetChatMessagesChan")
-	defer func() { logger.Debugf(ctx, "/GetChatMessagesChan") }()
-
-	if err := t.prepare(ctx); err != nil {
-		logger.Errorf(ctx, "unable to prepare the client: %v", err)
-	}
-
-	outCh := make(chan streamcontrol.Event)
-	recentMsgIDs := ringbuffer.New[streamcontrol.EventID](10)
-
-	sendEvent := func(ev streamcontrol.Event) {
-		recentMsgIDs.Add(ev.ID)
-		select {
-		case outCh <- ev:
-		default:
-			logger.Warnf(ctx, "the queue is full, dropping message %#+v", ev)
-		}
-	}
-
-	alreadySeen := func(msgID streamcontrol.EventID) bool {
-		return recentMsgIDs.Contains(msgID)
-	}
-
-	observability.Go(ctx, func(ctx context.Context) {
-		defer func() {
-			logger.Debugf(ctx, "closing the messages channel")
-			close(outCh)
-		}()
-		var (
-			chSub <-chan streamcontrol.Event
-			chIRC <-chan streamcontrol.Event
-		)
-		t.prepareLocker.Do(ctx, func() {
-			if t.chatHandlerSub != nil {
-				chSub = t.chatHandlerSub.MessagesChan()
-			}
-			if t.chatHandlerIRC != nil {
-				chIRC = t.chatHandlerIRC.MessagesChan()
-			}
-		})
-		logger.Debugf(ctx, "chSub == %p; chIRC == %p", chSub, chIRC)
-		ticker := time.NewTicker(10 * time.Second)
-		defer ticker.Stop()
-		for {
-			if chSub == nil {
-				t.prepareLocker.Do(ctx, func() {
-					if t.chatHandlerSub == nil {
-						logger.Debugf(ctx, "the chat listener is closed, trying to reopen it")
-						t.prepareChatListenerNoLock(ctx)
-					}
-					if t.chatHandlerSub != nil {
-						chSub = t.chatHandlerSub.MessagesChan()
-					}
-				})
-			}
-			if chSub == nil && chIRC == nil {
-				logger.Debugf(ctx, "both channels are closed")
-				return
-			}
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				continue
-			case ev, ok := <-chSub:
-				if !ok {
-					chSub = nil
-					logger.Debugf(ctx, "the API receiver channel closed")
-					continue
-				}
-				logger.Tracef(ctx, "received a message from API: %#+v", ev)
-				if alreadySeen(ev.ID) {
-					logger.Tracef(ctx, "already seen message %s", ev.ID)
-					continue
-				}
-				sendEvent(ev)
-			case evIRC, ok := <-chIRC:
-				if !ok {
-					chIRC = nil
-					logger.Debugf(ctx, "the IRC receiver channel closed")
-					continue
-				}
-				logger.Tracef(ctx, "received a message from IRC: %#+v", evIRC)
-				if alreadySeen(evIRC.ID) {
-					logger.Tracef(ctx, "already seen message %s", evIRC.ID)
-					continue
-				}
-
-				// not previously seen message:
-				select {
-				case evSub, ok := <-chSub:
-					if !ok {
-						chSub = nil
-						break
-					}
-					logger.Tracef(ctx, "received a message from API: %#+v", evIRC)
-					sendEvent(evSub)
-					if alreadySeen(evIRC.ID) {
-						logger.Tracef(ctx, "the same message")
-						continue
-					}
-				case <-time.After(time.Second):
-					logger.Warnf(ctx, "received a message from IRC, but not from API")
-				}
-				sendEvent(evIRC)
-			}
-		}
-	})
-
-	return outCh, nil
 }
 
 func (t *Twitch) SendChatMessage(ctx context.Context, message string) (_ret error) {

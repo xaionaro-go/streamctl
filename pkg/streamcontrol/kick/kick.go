@@ -30,18 +30,15 @@ const (
 )
 
 type Kick struct {
-	CloseCtx               context.Context
-	CloseFn                context.CancelFunc
-	Channel                *kickcom.ChannelV1
-	Client                 *Client
-	ClientOBSOLETE         *kickclientobsolete.KickClientOBSOLETE
-	ChatHandler            ChatHandlerAbstract
-	ChatHandlerInitStarted bool
-	ChatHandlerLocker      xsync.CtxLocker
-	CurrentConfig          Config
-	CurrentConfigLocker    xsync.Mutex
-	SaveCfgFn              func(Config) error
-	PrepareLocker          xsync.Mutex
+	CloseCtx            context.Context
+	CloseFn             context.CancelFunc
+	Channel             *kickcom.ChannelV1
+	Client              *Client
+	ClientOBSOLETE      *kickclientobsolete.KickClientOBSOLETE
+	CurrentConfig       Config
+	CurrentConfigLocker xsync.Mutex
+	SaveCfgFn           func(Config) error
+	PrepareLocker       xsync.Mutex
 
 	lazyInitOnce         sync.Once
 	getAccessTokenLocker xsync.Mutex
@@ -71,12 +68,11 @@ func New(
 
 	ctx, closeFn := context.WithCancel(ctx)
 	k := &Kick{
-		CloseCtx:          ctx,
-		CloseFn:           closeFn,
-		ChatHandlerLocker: make(xsync.CtxLocker, 1),
-		CurrentConfig:     cfg,
-		ClientOBSOLETE:    clientOld,
-		SaveCfgFn:         saveCfgFn,
+		CloseCtx:       ctx,
+		CloseFn:        closeFn,
+		CurrentConfig:  cfg,
+		ClientOBSOLETE: clientOld,
+		SaveCfgFn:      saveCfgFn,
 	}
 	k.SetClient(client)
 	client.OnUserAccessTokenRefreshed(k.onUserAccessTokenRefreshed)
@@ -152,37 +148,6 @@ func (k *Kick) keepAliveLoop(
 			return
 		case <-t.C:
 		}
-	}
-}
-
-func (k *Kick) initChatHandlerNoLock(
-	ctx context.Context,
-) error {
-	chatHandler, err := k.newChatHandler(ctx)
-	if err == nil {
-		k.ChatHandler = chatHandler
-		return nil
-	}
-
-	for {
-		logger.Errorf(ctx, "unable to initialize chat handler: %v", err)
-		time.Sleep(time.Second)
-		select {
-		case <-k.CloseCtx.Done():
-			logger.Debugf(ctx, "initChatHandler: cancelled (case #1)")
-			return fmt.Errorf("k.CloseCtx is closed: %w", k.CloseCtx.Err())
-		case <-ctx.Done():
-			logger.Debugf(ctx, "initChatHandler: cancelled (case #2)")
-			return fmt.Errorf("ctx is closed: %w", ctx.Err())
-		default:
-		}
-		chatHandler, err = k.newChatHandler(ctx)
-		if err != nil {
-			logger.Debugf(ctx, "initChatHandler: unable to create a new chat handler: %v", err)
-			continue
-		}
-		k.ChatHandler = chatHandler
-		return nil
 	}
 }
 
@@ -498,141 +463,6 @@ func (k *Kick) GetAllCategories(
 	}
 
 	return *reply, nil
-}
-
-func (k *Kick) tryGetChatHandler(
-	ctx context.Context,
-) (ChatHandlerAbstract, error) {
-	return xsync.DoR2(ctx, &k.ChatHandlerLocker, func() (ChatHandlerAbstract, error) {
-		if k.ChatHandler != nil {
-			return k.ChatHandler, nil
-		}
-		k.startInitChatHandlerNoLock(ctx)
-		return nil, fmt.Errorf("chat handler is being initialized")
-	})
-}
-
-func (k *Kick) startInitChatHandlerNoLock(
-	ctx context.Context,
-) {
-	if k.ChatHandlerInitStarted {
-		return
-	}
-	k.ChatHandlerInitStarted = true
-	go func() {
-		defer func() { k.ChatHandlerInitStarted = false }()
-		err := k.initChatHandlerNoLock(ctx)
-		if err != nil {
-			logger.Errorf(ctx, "unable to initialize chat handler: %v", err)
-		}
-	}()
-}
-
-func (k *Kick) getChatHandler(
-	ctx context.Context,
-) ChatHandlerAbstract {
-	for {
-		chatHandler, err := k.tryGetChatHandler(ctx)
-		if err != nil {
-			logger.Errorf(ctx, "unable to get chat handler: %v", err)
-			time.Sleep(time.Second)
-			continue
-		}
-		if chatHandler != nil {
-			return chatHandler
-		}
-		logger.Warnf(ctx, "unable to get chat handler")
-		select {
-		case <-k.CloseCtx.Done():
-			return nil
-		case <-ctx.Done():
-			return nil
-		}
-	}
-}
-
-func (k *Kick) GetChatMessagesChan(
-	ctx context.Context,
-) (<-chan streamcontrol.Event, error) {
-	logger.Debugf(ctx, "GetChatMessagesChan")
-	defer func() { logger.Debugf(ctx, "/GetChatMessagesChan") }()
-
-	if err := k.prepare(ctx); err != nil {
-		return nil, fmt.Errorf("unable to get a prepared client: %w", err)
-	}
-
-	outCh := make(chan streamcontrol.Event)
-	observability.Go(ctx, func(ctx context.Context) {
-		defer func() {
-			logger.Debugf(ctx, "closing the messages channel")
-			close(outCh)
-		}()
-		for {
-			err := k.prepare(ctx)
-			if err != nil {
-				logger.Errorf(ctx, "unable to get a prepared client: %v", err)
-				time.Sleep(time.Second)
-				continue
-			}
-			break
-		}
-		logger.Debugf(ctx, "GetChatMessagesChan: client is ready")
-		for {
-			chatHandler := k.getChatHandler(ctx)
-			if chatHandler == nil {
-				logger.Debugf(ctx, "getting of chat handler was cancelled: %v %v", ctx.Err(), k.CloseCtx.Err())
-				return
-			}
-			msgCh, err := chatHandler.GetMessagesChan(ctx)
-			if err != nil {
-				logger.Errorf(ctx, "unable to get messages channel from chat handler: %v", err)
-				k.resetChatHandler(ctx)
-				time.Sleep(time.Second)
-				continue
-			}
-			logger.Tracef(ctx, "GetChatMessagesChan: waiting for a message")
-			select {
-			case <-k.CloseCtx.Done():
-				return
-			case <-ctx.Done():
-				return
-			case ev, ok := <-msgCh:
-				if !ok {
-					logger.Debugf(ctx, "the input channel is closed")
-					k.resetChatHandler(ctx)
-					continue
-				}
-				if ev.TargetChannel.Slug != k.Channel.Slug {
-					logger.Warnf(ctx, "skipping a message for another channel: %q != %q", ev.TargetChannel.Slug, k.Channel.Slug)
-					continue
-				}
-				logger.Tracef(ctx, "GetChatMessagesChan: received a message")
-				outCh <- ev
-			}
-		}
-	})
-
-	return outCh, nil
-}
-
-func (k *Kick) resetChatHandler(ctx context.Context) {
-	logger.Debugf(ctx, "resetChatHandler")
-	defer logger.Debugf(ctx, "/resetChatHandler")
-	k.ChatHandlerLocker.Do(ctx, func() {
-		if k.ChatHandler == nil {
-			return
-		}
-		h, ok := k.ChatHandler.(*ChatHandlerOBSOLETE)
-		if ok {
-			logger.Debugf(ctx, "closing existing chat handler")
-			if err := h.Close(ctx); err != nil {
-				logger.Errorf(ctx, "unable to close the chat handler: %v", err)
-			}
-			k.ChatHandler = nil
-		} else {
-			logger.Debugf(ctx, "chat handler does not require resetting")
-		}
-	})
 }
 
 func (k *Kick) SendChatMessage(ctx context.Context, message string) (_err error) {

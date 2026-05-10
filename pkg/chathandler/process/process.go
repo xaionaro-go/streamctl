@@ -12,9 +12,11 @@ import (
 	"os"
 	"strings"
 
+	"github.com/facebookincubator/go-belt"
 	"github.com/facebookincubator/go-belt/tool/logger"
 	"github.com/xaionaro-go/streamctl/pkg/chathandler"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
+	"github.com/xaionaro-go/streamctl/pkg/subproclog"
 )
 
 func init() {
@@ -22,10 +24,17 @@ func init() {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := subproclog.Setup(
+		context.Background(),
+		flagValue(chathandler.FlagChatListenerLogLevel),
+		flagValue(chathandler.FlagChatListenerLogstashAddr),
+		"streamd-chat-listener",
+	)
+	defer belt.Flush(ctx)
+
 	err := run(ctx)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "chat listener subprocess failed: %v\n", err)
+		logger.Errorf(ctx, "chat listener subprocess failed: %v", err)
 		os.Exit(1)
 	}
 	os.Exit(0)

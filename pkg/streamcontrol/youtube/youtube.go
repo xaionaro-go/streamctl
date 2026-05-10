@@ -25,7 +25,6 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/secret"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	"github.com/xaionaro-go/timeapiio"
-	"github.com/xaionaro-go/xcontext"
 	"github.com/xaionaro-go/xsync"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -47,10 +46,6 @@ type YouTube struct {
 
 	currentLiveBroadcastsLocker xsync.Mutex
 	currentLiveBroadcasts       []*youtube.LiveBroadcast
-
-	chatListeners map[string]chatListener
-
-	messagesOutChan chan streamcontrol.Event
 }
 
 var _ streamcontrol.StreamController[StreamProfile] = (*YouTube)(nil)
@@ -59,15 +54,6 @@ const (
 	copyThumbnail      = false
 	debugUseMockClient = false
 )
-
-// chatListener is the common interface for YouTube chat polling implementations.
-// Both ChatListenerOBSOLETE (InnerTube scraper) and ChatListener (YouTube Data API)
-// satisfy this interface.
-type chatListener interface {
-	Close(ctx context.Context) error
-	MessagesChan() <-chan streamcontrol.Event
-	GetVideoID() string
-}
 
 func New(
 	ctx context.Context,
@@ -87,10 +73,6 @@ func New(
 		Config:         cfg,
 		SaveConfigFunc: saveCfgFn,
 		CancelFunc:     cancelFn,
-
-		chatListeners: map[string]chatListener{},
-
-		messagesOutChan: make(chan streamcontrol.Event, 100),
 	}
 
 	err := yt.init(ctx)
@@ -972,12 +954,6 @@ func (yt *YouTube) StartStream(
 				}
 			}
 			yt.currentLiveBroadcasts = append(yt.currentLiveBroadcasts, newBroadcast)
-			if yt.Config.EnabledChatListenerTypes == nil || len(yt.Config.EnabledChatListenerTypes) > 0 {
-				err = yt.startChatListener(ctx, newBroadcast)
-				if err != nil {
-					logger.Errorf(ctx, "unable to start a chat listener for video '%s': %v", newBroadcast.Id, err)
-				}
-			}
 		}
 
 		return nil
@@ -996,115 +972,6 @@ func setProfile(broadcast *youtube.LiveBroadcast, profile StreamProfile) {
 	// Don't know how to set the tags :(
 }
 
-func (yt *YouTube) startChatListener(
-	ctx context.Context,
-	broadcast *youtube.LiveBroadcast,
-) (_err error) {
-	videoID := broadcast.Id
-	chatID := broadcast.Snippet.LiveChatId
-	ctx = belt.WithField(ctx, "video_id", videoID)
-	ctx = belt.WithField(ctx, "chat_id", chatID)
-	ctx = xcontext.DetachDone(ctx)
-
-	logger.Debugf(ctx, "startChatListener(ctx, '%s':'%s')", videoID, chatID)
-	defer func() { logger.Debugf(ctx, "/startChatListener(ctx, '%s':'%s'): %v", videoID, chatID, _err) }()
-
-	listener, err := NewRedundantChatListener(ctx, yt.YouTubeClient, videoID, chatID, func(
-		ctx context.Context,
-		_chatListener *RedundantChatListener,
-	) {
-		yt.deleteChatListener(ctx, _chatListener)
-	})
-	if err != nil {
-		return fmt.Errorf("unable to start chat listeners for '%s': %w", videoID, err)
-	}
-
-	oldListener := xsync.DoR1(ctx, &yt.locker, func() chatListener {
-		oldListener := yt.chatListeners[broadcast.Id]
-		yt.chatListeners[broadcast.Id] = listener
-		return oldListener
-	})
-	if oldListener != nil {
-		if err := oldListener.Close(ctx); err != nil {
-			logger.Debugf(ctx, "unable to close the old chat listener: %v", err)
-		}
-	}
-
-	observability.Go(ctx, func(ctx context.Context) {
-		err := yt.processChatListener(ctx, listener)
-		if err != nil && !errors.Is(err, context.Canceled) {
-			logger.Errorf(ctx, "unable to process the chat listener for '%s': %v", videoID, err)
-		}
-	})
-	return nil
-}
-
-func (yt *YouTube) deleteChatListenerByBroadcast(
-	ctx context.Context,
-	broadcast *youtube.LiveBroadcast,
-) error {
-	chatListener := yt.getChatListener(ctx, broadcast)
-	if chatListener == nil {
-		return nil
-	}
-	return yt.deleteChatListener(ctx, chatListener)
-}
-
-func (yt *YouTube) deleteChatListener(
-	ctx context.Context,
-	chatListener chatListener,
-) error {
-	err := chatListener.Close(ctx)
-	if err != nil {
-		logger.Warnf(ctx, "unable to close the chat listener for %s: %v", chatListener.GetVideoID(), err)
-	}
-	yt.locker.Do(ctx, func() {
-		if yt.chatListeners[chatListener.GetVideoID()] == chatListener {
-			delete(yt.chatListeners, chatListener.GetVideoID())
-		}
-	})
-	return nil
-}
-
-func (yt *YouTube) processChatListener(
-	ctx context.Context,
-	chatListener chatListener,
-) (_err error) {
-	defer func() {
-		err := yt.deleteChatListener(ctx, chatListener)
-		if err != nil {
-			logger.Errorf(ctx, "unable to delete the chat listener for '%s': %v", chatListener.GetVideoID(), err)
-		}
-	}()
-	defer func() {
-		logger.Debugf(ctx, "stopped listening for chat messages in '%s': %v", chatListener.GetVideoID(), _err)
-	}()
-	inChan := chatListener.MessagesChan()
-	for {
-		msg, ok := <-inChan
-		if !ok {
-			logger.Debugf(ctx, "the input channel got closed")
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case yt.messagesOutChan <- msg:
-		default:
-			logger.Errorf(ctx, "chat messages queue overflow, dropping a message")
-		}
-	}
-}
-
-func (yt *YouTube) getChatListener(
-	ctx context.Context,
-	broadcast *youtube.LiveBroadcast,
-) chatListener {
-	return xsync.DoR1(ctx, &yt.locker, func() chatListener {
-		return yt.chatListeners[broadcast.Id]
-	})
-}
-
 func (yt *YouTube) EndStream(
 	ctx context.Context,
 ) error {
@@ -1117,9 +984,6 @@ func (yt *YouTube) EndStream(
 	})
 
 	return yt.updateActiveBroadcasts(ctx, func(broadcast *youtube.LiveBroadcast) error {
-		if err := yt.deleteChatListenerByBroadcast(ctx, broadcast); err != nil {
-			logger.Warnf(ctx, "unable to delete the chat listener for %s: %v", broadcast.Id, err)
-		}
 		broadcast.ContentDetails.EnableAutoStop = true
 		broadcast.ContentDetails.MonitorStream.ForceSendFields = []string{"BroadcastStreamDelayMs"}
 		if _, ok := expectedVideoIDs[broadcast.Id]; !ok {
@@ -1203,12 +1067,6 @@ func (yt *YouTube) GetStreamStatus(
 		for _, newBroadcast := range activeBroadcasts {
 			if _, ok := ids[newBroadcast.Id]; ok {
 				continue
-			}
-			if yt.Config.EnabledChatListenerTypes == nil || len(yt.Config.EnabledChatListenerTypes) > 0 {
-				err = yt.startChatListener(ctx, newBroadcast)
-				if err != nil {
-					logger.Errorf(ctx, "unable to start a chat listener for video '%s': %v", newBroadcast.Id, err)
-				}
 			}
 		}
 		yt.currentLiveBroadcasts = activeBroadcasts
@@ -1403,39 +1261,6 @@ func (yt *YouTube) fixError(ctx context.Context, err error, counterPtr *int) boo
 	}
 
 	return false
-}
-
-func (yt *YouTube) GetChatMessagesChan(
-	ctx context.Context,
-) (<-chan streamcontrol.Event, error) {
-	logger.Debugf(ctx, "GetChatMessagesChan")
-	defer logger.Debugf(ctx, "/GetChatMessagesChan")
-
-	outCh := make(chan streamcontrol.Event)
-	observability.Go(ctx, func(ctx context.Context) {
-		defer func() {
-			logger.Debugf(ctx, "closing the messages channel")
-			close(outCh)
-		}()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case ev, ok := <-yt.messagesOutChan:
-				if !ok {
-					logger.Debugf(ctx, "the input channel is closed")
-					return
-				}
-				select {
-				case outCh <- ev:
-				case <-ctx.Done():
-					return
-				}
-			}
-		}
-	})
-
-	return outCh, nil
 }
 
 func (yt *YouTube) SendChatMessage(

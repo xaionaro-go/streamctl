@@ -1,0 +1,22 @@
+syntax = "proto3";
+package streamd;
+option go_package = "go/streamd_grpc";
+
+import "google/protobuf/descriptor.proto";
+
+// ProxyMode opts an RPC into protoc-gen-streamd-shim's autogen path.
+//
+// Setting `option (streamd.proxy) = AUTO;` on an RPC whose reply matches the
+// shape `{ string Error; <=1 scalar field; }` instructs the plugin to emit the
+// server proxy and client wrapper for that RPC, eliminating the per-RPC
+// boilerplate fan-out across pkg/streamd/server and pkg/streamd/client.
+enum ProxyMode {
+    PROXY_MODE_UNSPECIFIED = 0;
+    AUTO = 1;
+}
+
+extend google.protobuf.MethodOptions {
+    // 60001 is in the user-defined extension range (50000-99999) reserved by
+    // google.protobuf for non-published, project-local extensions.
+    optional ProxyMode proxy = 60001;
+}

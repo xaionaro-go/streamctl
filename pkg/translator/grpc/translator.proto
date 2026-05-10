@@ -1,0 +1,223 @@
+syntax = "proto3";
+package translator;
+option go_package = "go/translator_grpc";
+
+// Translator is the RPC interface streamd uses to call into a translator
+// subprocess. The subprocess owns the in-flight TranslatorChain and applies
+// configuration via Reconfigure; streamd retains no chain state of its own.
+//
+// Error semantics (uniform across every RPC on this service):
+//   - Application-level failures (no chain loaded yet, parse/build failure,
+//     provider-not-found, per-call provider error, payload rejected, etc.)
+//     are surfaced on the reply's in-band `error` field. The handler returns
+//     (reply, nil) so the gRPC status stays OK. Callers MUST always inspect
+//     reply.error even when the gRPC error is nil.
+//   - The gRPC error channel is reserved for transport-layer failures the
+//     caller cannot recover from at the application layer: network drops,
+//     codec errors, deadline exceeded, server panic. A non-nil gRPC error
+//     therefore means "the call did not complete on the server", never
+//     "the call completed but the request was rejected".
+//
+// Replies carry partial telemetry (e.g. latencyNanos) on per-call failures
+// so the caller can log timing for the failed attempt.
+service Translator {
+    // Translate forwards one chat message to the chain. The reply carries the
+    // translated text plus metadata describing the outcome so streamd can keep
+    // its observability counters in lock-step with the subprocess.
+    rpc Translate(TranslateRequest) returns (TranslateReply) {}
+
+    // Reconfigure swaps the active chain configuration. The subprocess MUST
+    // retain the old chain on error so in-flight calls and future Translate
+    // requests keep working until streamd retries with a fixed config.
+    rpc Reconfigure(ReconfigureRequest) returns (ReconfigureReply) {}
+
+    // Stats returns a snapshot of the chain-level and per-provider counters.
+    rpc Stats(StatsRequest) returns (StatsReply) {}
+
+    // Ping is the liveness probe. The subprocess answers immediately so the
+    // streamd-side supervisor can distinguish a hung subprocess from a slow
+    // translation.
+    rpc Ping(PingRequest) returns (PingReply) {}
+
+    // ClearHistory drops every recorded ChatHistoryEntry on the active chain.
+    // Returns the count of dropped entries. No-op (DroppedEntries=0) when no
+    // chain is loaded.
+    rpc ClearHistory(ClearHistoryRequest) returns (ClearHistoryReply) {}
+
+    // TranslateViaProvider bypasses the chain's detector + spelling-fallback
+    // pipeline and calls one specific provider's Translate directly. Used by
+    // ad-hoc replay tooling to compare a single provider's behaviour without
+    // the chain's outcome decisioning. The reply has no Outcome enum because
+    // there is no chain disposition to report — only success or error.
+    rpc TranslateViaProvider(TranslateViaProviderRequest) returns (TranslateViaProviderReply) {}
+
+    // CompileTranslate renders the system + user prompts the chain WOULD
+    // emit for a translation step, without calling any provider. Used by
+    // ad-hoc debug tooling that needs to inspect / pipe the prompts (e.g.
+    // to curl/jq) without burning a real Translate call. The reply's
+    // history_snapshot is the rendered string returned by the chain's
+    // formatHistory at RPC arrival time (uses historyMu); consecutive calls
+    // may differ as the chain progresses. Errors follow the in-band rule
+    // documented at the top of this service.
+    rpc CompileTranslate(CompileTranslateRequest) returns (CompileTranslateReply) {}
+
+    // CompileLanguageDetect renders the system + user prompts the chain
+    // WOULD emit for the language-detection step, without calling any
+    // provider. The reply's history_snapshot is the rendered string from
+    // formatHistory at RPC arrival time (uses historyMu); consecutive
+    // calls may differ as the chain progresses. The system prompt uses
+    // the deliberately asymmetric "Recent chat:" label (translate uses
+    // "Recent chat for context:") — observable on the wire. Errors follow
+    // the in-band rule documented at the top of this service.
+    rpc CompileLanguageDetect(CompileLanguageDetectRequest) returns (CompileLanguageDetectReply) {}
+}
+
+message TranslateRequest {
+    string user = 1;
+    string message = 2;
+}
+
+// Outcome enumerates the disposition the chain applied to one Translate call.
+// Values mirror the five return paths in pkg/llm/translator_chain.go.
+enum Outcome {
+    OUTCOME_UNSPECIFIED = 0;
+    OUTCOME_TRANSLATED = 1;            // a provider returned a real translation
+    OUTCOME_ALREADY_TARGET = 2;        // detector said "target lang", skipped translate
+    OUTCOME_DETECT_FAILED = 3;         // detection step errored, original kept
+    OUTCOME_SPELLING_ONLY = 4;         // translation collapsed to spelling correction
+    OUTCOME_ALL_PROVIDERS_FAILED = 5;  // every provider returned an error
+    OUTCOME_SKIPPED_QUEUE_FULL = 6;    // queue overflow on every provider (future work)
+}
+
+// TranslateTimings carries the optional per-call backend timing/token
+// breakdown surfaced by providers that expose it (Ollama as of this
+// writing). All fields are independently optional: a provider that only
+// populates a subset leaves the rest unset, and the operator-facing
+// renderer omits whatever is missing. int64 matches latencyNanos width.
+message TranslateTimings {
+    optional int64 totalDurationNanos = 1;
+    optional int64 loadDurationNanos = 2;
+    optional int64 promptEvalDurationNanos = 3;
+    optional int64 evalDurationNanos = 4;
+    optional int64 promptEvalTokens = 5;
+    optional int64 evalTokens = 6;
+}
+
+message TranslateReply {
+    string result = 1;
+    Outcome outcome = 2;
+    int64 latencyNanos = 3;
+    // error is the in-band, application-level failure channel for this RPC
+    // per the service comment above. Empty on success. When non-empty,
+    // result/outcome/latencyNanos may be partially populated (e.g. a
+    // provider error still sets latencyNanos for the failed attempt).
+    string error = 4;
+    // timings is the optional per-call backend timing/token breakdown from
+    // the provider that satisfied the call. Nil when the chain skipped or
+    // the provider does not populate it.
+    optional TranslateTimings timings = 5;
+}
+
+// ReconfigureRequest carries the YAML serialisation of streamd's
+// TranslationConfig (pkg/streamd/config.TranslationConfig). Sending the YAML
+// avoids leaking the streamd config schema into the proto file and lets us
+// add fields to the config without regenerating bindings.
+message ReconfigureRequest {
+    bytes configYaml = 1;
+}
+
+message ReconfigureReply {
+    // applied is true when the subprocess swapped to the new chain. When
+    // false, the caller MUST inspect error and keep the old chain active.
+    bool applied = 1;
+    // error follows the in-band semantics documented on the service.
+    string error = 2;
+}
+
+message StatsRequest {}
+
+message ProviderStats {
+    string name = 1;
+    int64 totalCalls = 2;
+    int64 totalSuccesses = 3;
+    int64 totalErrors = 4;
+    int64 totalTimeouts = 5;
+    int64 totalQueueRejections = 6;
+    int64 latencySumNanos = 7;
+    int64 latencyCount = 8;
+}
+
+message StatsReply {
+    int64 totalTranslated = 1;
+    int64 totalAlreadyTarget = 2;
+    int64 totalDetectFailed = 3;
+    int64 totalSpellingOnly = 4;
+    int64 totalAllProvidersFailed = 5;
+    int64 totalSkippedQueueFull = 6;
+    int64 latencySumNanos = 7;
+    int64 latencyCount = 8;
+    repeated ProviderStats providers = 9;
+}
+
+message PingRequest {}
+message PingReply {}
+
+message ClearHistoryRequest {}
+message ClearHistoryReply {
+    int32 droppedEntries = 1;
+}
+
+message TranslateViaProviderRequest {
+    string user = 1;
+    string message = 2;
+    string provider_name = 3;
+}
+message TranslateViaProviderReply {
+    string result = 1;
+    // error follows the in-band semantics documented on the service:
+    // populated for "no chain loaded", "provider not found", per-call
+    // provider failures.
+    string error = 2;
+    int64 latencyNanos = 3;
+    // timings is the optional per-call backend timing/token breakdown from
+    // the named provider. Nil when the provider does not populate it (or
+    // when the call did not reach a real Translate).
+    optional TranslateTimings timings = 4;
+}
+
+// CompileTranslateRequest carries the same per-message fields a real
+// Translate would carry; the subprocess uses them only to render the
+// prompts a Translate call would have produced.
+message CompileTranslateRequest {
+    string user = 1;
+    string message = 2;
+}
+message CompileTranslateReply {
+    string system_prompt = 1;
+    string user_prompt = 2;
+    string target_lang = 3;
+    // history_snapshot is the chain's history rendered by formatHistory
+    // at RPC arrival time (held under historyMu). It is a flat string in
+    // "<user> message\n" form, NOT a structured array.
+    string history_snapshot = 4;
+    // error follows the in-band semantics documented on the service.
+    string error = 5;
+}
+
+// CompileLanguageDetectRequest carries only `message`; the language-detect
+// step has no per-message `user`. Asymmetric on purpose so the request
+// shape matches what the chain step actually consumes.
+message CompileLanguageDetectRequest {
+    string message = 1;
+}
+message CompileLanguageDetectReply {
+    string system_prompt = 1;
+    string user_prompt = 2;
+    string target_lang = 3;
+    // history_snapshot is the chain's history rendered by formatHistory
+    // at RPC arrival time (held under historyMu). It is a flat string in
+    // "<user> message\n" form, NOT a structured array.
+    string history_snapshot = 4;
+    // error follows the in-band semantics documented on the service.
+    string error = 5;
+}

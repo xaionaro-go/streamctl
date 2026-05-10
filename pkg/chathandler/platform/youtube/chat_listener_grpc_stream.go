@@ -177,12 +177,17 @@ func (l *GRPCStreamListener) streamChat(
 	logger.Tracef(ctx, "streamChat(%s)", liveChatID)
 	defer func() { logger.Tracef(ctx, "/streamChat(%s)", liveChatID) }()
 
+	// pageToken is per-streamChat-invocation: a fresh discovery starts from
+	// "now" via empty string. It must persist across recvBatch reconnect-on-EOF
+	// iterations within a single streamChat call to avoid re-fetching the
+	// recent window every ~10s when YouTube closes the gRPC stream.
+	var pageToken string
 	for {
 		if ctx.Err() != nil {
 			return
 		}
 
-		err := l.recvBatch(ctx, chatClient, liveChatID, ch)
+		err := l.recvBatch(ctx, chatClient, liveChatID, &pageToken, ch)
 		if ctx.Err() != nil {
 			return
 		}
@@ -207,15 +212,20 @@ func (l *GRPCStreamListener) streamChat(
 }
 
 // recvBatch opens one StreamList call and forwards messages to ch.
+//
+// pageToken is read on entry and updated in place from each response's
+// NextPageToken so the next streamChat iteration resumes from the cursor.
 func (l *GRPCStreamListener) recvBatch(
 	ctx context.Context,
 	chatClient ytgrpc.V3DataLiveChatMessageServiceClient,
 	liveChatID string,
+	pageToken *string,
 	ch chan<- streamcontrol.Event,
 ) error {
 	stream, err := chatClient.StreamList(ctx, &ytgrpc.LiveChatMessageListRequest{
 		LiveChatId: liveChatID,
 		Part:       []string{"snippet", "authorDetails"},
+		PageToken:  *pageToken,
 	})
 	if err != nil {
 		return fmt.Errorf("StreamList: %w", err)
@@ -228,6 +238,12 @@ func (l *GRPCStreamListener) recvBatch(
 			return nil
 		case err != nil:
 			return fmt.Errorf("stream recv: %w", err)
+		}
+
+		// Empty next_page_token = no new cursor; keep prior.
+		// (Matches chatinjector; YouTube upstream behavior is authoritative.)
+		if resp.NextPageToken != "" {
+			*pageToken = resp.NextPageToken
 		}
 
 		for _, item := range resp.Items {

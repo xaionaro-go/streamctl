@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/facebookincubator/go-belt/tool/logger"
+	"github.com/xaionaro-go/observability"
+	"github.com/xaionaro-go/streamctl/pkg/dedup"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
 	scgoconv "github.com/xaionaro-go/streamctl/pkg/streamcontrol/protobuf/goconv"
 	"github.com/xaionaro-go/streamctl/pkg/streamd/grpc/go/streamd_grpc"
@@ -24,7 +26,23 @@ const (
 	// long before failing, consecutiveFailures resets so that backoff
 	// starts from base again instead of continuing from a stale high value.
 	minHealthyRuntime = 30 * time.Second
+
+	// seenIDsCap bounds the runner-side dedup set. The legitimate working
+	// set never exceeds the per-cycle event burst (a few hundred IDs); a
+	// 4096-entry cap is generous and keeps memory cost ~200KB.
+	seenIDsCap = 4096
+
+	// seenIDsTTL pulls the retention window from the shared pkg/dedup
+	// constant so the subprocess gate cannot drift away from streamd's
+	// injectedEvents gate (both reference dedup.TTL — see pkg/dedup/ttl.go).
+	seenIDsTTL = dedup.TTL
 )
+
+// injectTimeout is the per-call deadline applied to InjectChatMessage. It
+// must be shorter than the streamd-side externalHandlerHealthTimeout (30s)
+// so a slow inject cannot starve the heartbeat loop and trip the watchdog.
+// Declared as a var (not const) so tests can shorten it.
+var injectTimeout = 25 * time.Second
 
 // RunnerConfig configures the fallback chain runner.
 type RunnerConfig struct {
@@ -82,6 +100,22 @@ type Runner struct {
 	Primary        ChatListener
 	Fallback       ChatListener
 	FallbackActive atomic.Bool
+
+	// seenIDs short-circuits repeat ev.ID values before the gRPC inject call,
+	// stopping subprocess-side spam from listeners that re-emit the same
+	// event across long-poll cycles (e.g. youtube/contingency). Empty IDs
+	// bypass this gate; streamd's content-fingerprint fallback covers them.
+	//
+	// Defense-in-depth: this is the second of three dedup layers (listener
+	// cycle → THIS gate → streamd injectedEvents at pkg/streamd/chat.go's
+	// InjectChatMessage). The proper root-cause fix is in
+	// pkg/chathandler/platform/youtube/chat_listener_grpc_stream.go:recvBatch
+	// (~line 209), which currently does not thread
+	// LiveChatMessageListResponse.NextPageToken into the next
+	// LiveChatMessageListRequest.PageToken — every reconnect re-fetches the
+	// recent window. This gate stops the resulting IPC spam; the listener
+	// fix is tracked separately.
+	seenIDs *expiringSet[string]
 }
 
 // NewSingleListenerRunner creates a runner for a single listener type.
@@ -99,6 +133,7 @@ func NewSingleListenerRunner(
 		Config:        cfg,
 		Listener:      listener,
 		ListenerType:  listenerType,
+		seenIDs:       newExpiringSet[string](seenIDsCap, seenIDsTTL),
 	}
 }
 
@@ -117,6 +152,7 @@ func NewRunner(
 		Config:        cfg,
 		Primary:       primary,
 		Fallback:      fallback,
+		seenIDs:       newExpiringSet[string](seenIDsCap, seenIDsTTL),
 	}
 }
 
@@ -268,6 +304,10 @@ func (r *Runner) switchListener(
 
 // runListener starts the given listener and forwards events to streamd.
 // Returns when the event channel closes or ctx is cancelled.
+//
+// A sibling heartbeat goroutine drives ReportChatHandlerActivity on the
+// keepalive cadence so the streamd watchdog stays fed even when an
+// individual InjectChatMessage call blocks (e.g. slow LLM translation).
 func (r *Runner) runListener(
 	ctx context.Context,
 	listener ChatListener,
@@ -280,8 +320,9 @@ func (r *Runner) runListener(
 		return fmt.Errorf("listener %q failed to start: %w", listener.Name(), err)
 	}
 
-	keepaliveTicker := time.NewTicker(r.Config.keepaliveTime())
-	defer keepaliveTicker.Stop()
+	observability.Go(listenerCtx, func(ctx context.Context) {
+		r.runHeartbeatLoop(ctx)
+	})
 
 	eventsReceived := false
 	for {
@@ -297,8 +338,6 @@ func (r *Runner) runListener(
 			}
 			eventsReceived = true
 			r.injectEvent(ctx, ev)
-		case <-keepaliveTicker.C:
-			r.injectKeepalive(ctx)
 		}
 	}
 }
@@ -307,9 +346,16 @@ func (r *Runner) injectEvent(
 	ctx context.Context,
 	ev streamcontrol.Event,
 ) {
-	_, err := r.StreamdClient.InjectChatMessage(ctx, &streamd_grpc.InjectChatMessageRequest{
-		PlatID: string(r.Platform),
-		Event:  scgoconv.EventGo2GRPC(ev),
+	if ev.ID != "" && r.seenIDs.checkAndAdd(string(ev.ID)) {
+		logger.Debugf(ctx, "runner dedup: dropping repeat %s for %s/%s", ev.ID, r.Platform, r.ListenerType)
+		return
+	}
+	callCtx, cancel := context.WithTimeout(ctx, injectTimeout)
+	defer cancel()
+	_, err := r.StreamdClient.InjectChatMessage(callCtx, &streamd_grpc.InjectChatMessageRequest{
+		PlatID:       string(r.Platform),
+		Event:        scgoconv.EventGo2GRPC(ev),
+		ListenerType: r.ListenerType.String(),
 	})
 	if err != nil {
 		logger.Errorf(ctx, "InjectChatMessage failed for %s event %s: %v",
@@ -317,26 +363,35 @@ func (r *Runner) injectEvent(
 	}
 }
 
-func (r *Runner) injectKeepalive(ctx context.Context) {
-	keepaliveEv := streamcontrol.Event{
-		ID:        streamcontrol.EventID(fmt.Sprintf("keepalive-%s-%s-%d", r.ListenerType, r.Platform, time.Now().UnixNano())),
-		CreatedAt: time.Now(),
-		Type:      streamcontrol.EventTypeOther,
-		User: streamcontrol.User{
-			ID:   "system",
-			Name: "system",
-		},
-		Message: &streamcontrol.Message{
-			Content: fmt.Sprintf("[keepalive] chat-handler-%s/%s alive", r.Platform, r.ListenerType),
-			Format:  streamcontrol.TextFormatTypePlain,
-		},
+// runHeartbeatLoop periodically reports liveness via the dedicated
+// ReportChatHandlerActivity RPC. It is decoupled from the inject path so
+// a slow InjectChatMessage cannot stall the watchdog signal.
+func (r *Runner) runHeartbeatLoop(ctx context.Context) {
+	logger.Tracef(ctx, "runHeartbeatLoop")
+	defer logger.Tracef(ctx, "/runHeartbeatLoop")
+
+	ticker := time.NewTicker(r.Config.keepaliveTime())
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			r.sendHeartbeat(ctx)
+		}
 	}
-	_, err := r.StreamdClient.InjectChatMessage(ctx, &streamd_grpc.InjectChatMessageRequest{
-		PlatID: string(r.Platform),
-		Event:  scgoconv.EventGo2GRPC(keepaliveEv),
+}
+
+func (r *Runner) sendHeartbeat(ctx context.Context) {
+	callCtx, cancel := context.WithTimeout(ctx, r.Config.keepaliveTime())
+	defer cancel()
+	_, err := r.StreamdClient.ReportChatHandlerActivity(callCtx, &streamd_grpc.ReportChatHandlerActivityRequest{
+		PlatID:       string(r.Platform),
+		ListenerType: r.ListenerType.String(),
 	})
 	if err != nil {
-		logger.Warnf(ctx, "keepalive inject failed for %s: %v", r.Platform, err)
+		logger.Warnf(ctx, "heartbeat failed for %s/%s: %v", r.Platform, r.ListenerType, err)
 	}
 }
 
@@ -358,8 +413,9 @@ func (r *Runner) injectDiagnosticEvent(
 		},
 	}
 	_, err := r.StreamdClient.InjectChatMessage(ctx, &streamd_grpc.InjectChatMessageRequest{
-		PlatID: string(r.Platform),
-		Event:  scgoconv.EventGo2GRPC(diagEv),
+		PlatID:       string(r.Platform),
+		Event:        scgoconv.EventGo2GRPC(diagEv),
+		ListenerType: r.ListenerType.String(),
 	})
 	if err != nil {
 		logger.Errorf(ctx, "failed to inject diagnostic event for %s: %v", r.Platform, err)

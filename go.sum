@@ -1134,8 +1134,6 @@ github.com/volatiletech/strmangle v0.0.6 h1:AdOYE3B2ygRDq4rXDij/MMwq6KVK/pWAYxpC
 github.com/volatiletech/strmangle v0.0.6/go.mod h1:ycDvbDkjDvhC0NUU8w3fWwl5JEMTV56vTKXzR3GeR+0=
 github.com/x-cray/logrus-prefixed-formatter v0.5.2 h1:00txxvfBM9muc0jiLIEAkAcIMJzfthRT6usrui8uGmg=
 github.com/x-cray/logrus-prefixed-formatter v0.5.2/go.mod h1:2duySbKsL6M18s5GU7VPsoEPHyzalCE06qoARUCeBBE=
-github.com/xaionaro-bot/chatwebhook v0.0.0-20260409002539-2fa6c7129295 h1:IqEDmIDnczmXGL8Lh3T6tQSnwINrBI/k6EefnUdSN6Y=
-github.com/xaionaro-bot/chatwebhook v0.0.0-20260409002539-2fa6c7129295/go.mod h1:y6fX0jgyyfrjyj4QMRLAF/ieNHdWsccd2dcGlXNUPfI=
 github.com/xaionaro-bot/youtube-live-chat-downloader/v2 v2.0.0-20260409235026-1b58dab3e403 h1:IvyE6piUj4ULK/QZEDk8Iwe4zPD1ou/mwFRHXB3PhWs=
 github.com/xaionaro-bot/youtube-live-chat-downloader/v2 v2.0.0-20260409235026-1b58dab3e403/go.mod h1:skCvdVw1Gf9sVvlsPlE2xieWVQD8e+4GdGz/V9oSLVg=
 github.com/xaionaro-go/CycleTLS v0.0.0-20250923213111-aed0022ae7b5 h1:uJZoPvUCOVyOePKRbE9jBArxhQJnI5lKD/m9HWQVwRM=
@@ -1154,6 +1152,8 @@ github.com/xaionaro-go/avpipeline v0.0.0-20260426192150-5efc31d8d8a3 h1:HwDSN/sw
 github.com/xaionaro-go/avpipeline v0.0.0-20260426192150-5efc31d8d8a3/go.mod h1:cdF6yHhehGT+wcmWB8YJ7yCO/1jHQkCkvfT65BNoicY=
 github.com/xaionaro-go/buildvars v0.0.0-20250111161425-ed39f98139d0 h1:wwtHB1EZ7TlNavGKzAgCf598zWRfZCSpi1HTKDbjbwg=
 github.com/xaionaro-go/buildvars v0.0.0-20250111161425-ed39f98139d0/go.mod h1:mveFsRVHwcz4VBh+PozKgX2fXNRo/BQSiJil9VnxNII=
+github.com/xaionaro-go/chatwebhook v0.0.0-20260427090026-95da17af2861 h1:Sh92LZi1OYwwtkmD2Aj98nmV3R5zs1T98L1ObsVexFo=
+github.com/xaionaro-go/chatwebhook v0.0.0-20260427090026-95da17af2861/go.mod h1:y6fX0jgyyfrjyj4QMRLAF/ieNHdWsccd2dcGlXNUPfI=
 github.com/xaionaro-go/cloudscraper v0.0.0-20251019213127-d3687042cb55 h1:rHvnuVmqa9M+id2Q8e0V/csp0jDhXIBAAuCC76mBW8k=
 github.com/xaionaro-go/cloudscraper v0.0.0-20251019213127-d3687042cb55/go.mod h1:mFODbc87KEjFfERrFjmAGajGZOBQq+kzMd+2wsAZSHo=
 github.com/xaionaro-go/datacounter v1.0.4 h1:+QMZLmu73R5WGkQfUPwlXF/JFN+Weo4iuDZkiL2wVm8=

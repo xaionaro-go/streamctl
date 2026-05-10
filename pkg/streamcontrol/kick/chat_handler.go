@@ -13,17 +13,9 @@ import (
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol/protobuf/goconv"
 )
 
-type ChatHandlerAbstract interface {
-	GetMessagesChan(
-		ctx context.Context,
-	) (<-chan streamcontrol.Event, error)
-}
-
 type ChatHandler struct {
 	Client *chatwebhookclient.Client
 }
-
-var _ ChatHandlerAbstract = (*ChatHandler)(nil)
 
 func NewChatHandler(
 	ctx context.Context,
@@ -37,16 +29,6 @@ func NewChatHandler(
 	return &ChatHandler{
 		Client: client,
 	}, nil
-}
-
-func (k *Kick) newChatHandler(
-	ctx context.Context,
-) (*ChatHandler, error) {
-	c, err := chatwebhookclient.New(ctx, chatwebhookclient.DefaultServerAddress)
-	if err != nil {
-		return nil, fmt.Errorf("kick: failed to create chat webhook client: %w", err)
-	}
-	return NewChatHandler(ctx, c)
 }
 
 func (h *ChatHandler) GetMessagesChan(

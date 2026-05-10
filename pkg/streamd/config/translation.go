@@ -1,27 +1,17 @@
 package config
 
-import "time"
+import (
+	"github.com/xaionaro-go/streamctl/pkg/llm/translatorbuild"
+)
 
-// TranslationConfig configures the chat-message translator. When
-// TargetLanguage is empty translation is disabled.
-type TranslationConfig struct {
-	TargetLanguage  string                      `yaml:"target_language"`
-	ChatHistorySize int                         `yaml:"chat_history_size"`
-	Providers       []TranslationProviderConfig `yaml:"providers"`
-}
+// TranslationConfig is the YAML schema for the chat-message translator.
+// It is the canonical translatorbuild.Config type re-exported here so existing
+// streamd YAML config files (which embed translation: {...}) keep working
+// unchanged. Single source of truth — to add a field, edit
+// pkg/llm/translatorbuild/config.go.
+type TranslationConfig = translatorbuild.Config
 
 // TranslationProviderConfig matches cmd/chatinjector's ProviderConfig so the
 // same chain of fallback providers can be configured directly inside streamd.
-type TranslationProviderConfig struct {
-	Type                    string        `yaml:"type"` // ollama, openai, openrouter, zen, anthropic, claude-code, streamdcfg, streampanelcfg
-	APIURL                  string        `yaml:"api_url"`
-	APIKey                  string        `yaml:"api_key"`
-	Model                   string        `yaml:"model"`
-	Parallelism             int           `yaml:"parallelism"`
-	MaxQueueSize            int           `yaml:"max_queue_size"`
-	Timeout                 time.Duration `yaml:"timeout"`
-	ConfigPath              string        `yaml:"config_path"` // for streamdcfg/streampanelcfg
-	Effort                  string        `yaml:"effort"`      // for claude-code
-	CircuitBreakerThreshold int64         `yaml:"circuit_breaker_threshold"`
-	CircuitBreakerCooldown  time.Duration `yaml:"circuit_breaker_cooldown"`
-}
+// Re-exported alias for the canonical translatorbuild.ProviderConfig.
+type TranslationProviderConfig = translatorbuild.ProviderConfig

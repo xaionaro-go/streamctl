@@ -5,6 +5,7 @@ option go_package = "go/streamd_grpc";
 import "streamcontrol/streamcontrol.proto";
 import "chat/chatwebhook.proto";
 import "player/player.proto";
+import "streamd_options.proto";
 
 service StreamD {
     rpc Ping(PingRequest) returns (PingReply) {}
@@ -92,10 +93,10 @@ service StreamD {
     rpc SubscribeToChatMessages(SubscribeToChatMessagesRequest) returns (stream ChatMessage) {}
     rpc SendChatMessage(SendChatMessageRequest) returns (SendChatMessageReply) {}
     rpc InjectChatMessage(InjectChatMessageRequest) returns (InjectChatMessageReply) {}
+    rpc ReportChatHandlerActivity(ReportChatHandlerActivityRequest) returns (ReportChatHandlerActivityReply) {}
+    rpc ReportTranslatorActivity(ReportTranslatorActivityRequest) returns (ReportTranslatorActivityReply) {}
     rpc RemoveChatMessage(RemoveChatMessageRequest) returns (RemoveChatMessageReply) {}
     rpc BanUser(BanUserRequest) returns (BanUserReply) {}
-    rpc SetBuiltinChatListenerEnabled(SetBuiltinChatListenerEnabledRequest) returns (SetBuiltinChatListenerEnabledReply) {}
-    rpc IsBuiltinChatListenerEnabled(IsBuiltinChatListenerEnabledRequest) returns (IsBuiltinChatListenerEnabledReply) {}
 
     rpc Shoutout(ShoutoutRequest) returns (ShoutoutReply) {}
     rpc RaidTo(RaidToRequest) returns (RaidToReply) {}
@@ -103,6 +104,41 @@ service StreamD {
     rpc GetPeerIDs(GetPeerIDsRequest) returns (GetPeerIDsReply) {}
 
     rpc LLMGenerate(LLMGenerateRequest) returns (LLMGenerateReply) {}
+
+    // Translator* RPCs share a uniform error contract: application-level
+    // failures (translation disabled, subprocess not initialised, provider
+    // not found, queue empty, etc.) are surfaced via the in-band `error`
+    // field on the reply (handler returns (reply, nil)). The gRPC error
+    // channel is reserved for transport-layer failures (network drop,
+    // codec error, deadline exceeded, server panic). Callers MUST inspect
+    // reply.error even when the gRPC error is nil. This mirrors the rule
+    // documented on the Translator subprocess service in
+    // pkg/translator/grpc/translator.proto.
+    rpc TranslatorStats(TranslatorStatsRequest) returns (TranslatorStatsReply) {}
+    rpc TranslatorReload(TranslatorReloadRequest) returns (TranslatorReloadReply) {
+        option (streamd.proxy) = AUTO;
+    }
+    rpc TranslatorEnable(TranslatorEnableRequest) returns (TranslatorEnableReply) {}
+    rpc TranslatorDisable(TranslatorDisableRequest) returns (TranslatorDisableReply) {}
+    rpc TranslatorRestart(TranslatorRestartRequest) returns (TranslatorRestartReply) {}
+    rpc TranslatorClearHistory(TranslatorClearHistoryRequest) returns (TranslatorClearHistoryReply) {}
+    rpc TranslatorTranslate(TranslatorTranslateRequest) returns (TranslatorTranslateReply) {}
+    rpc TranslatorTranslateViaProvider(TranslatorTranslateViaProviderRequest) returns (TranslatorTranslateViaProviderReply) {}
+    // TranslatorCompileTranslate proxies the subprocess CompileTranslate RPC:
+    // returns the system + user prompts the chain WOULD emit for a Translate
+    // call, without invoking any provider. history_snapshot reflects chain
+    // history at RPC arrival; consecutive calls may differ as the chain
+    // progresses. Errors follow the in-band Translator* rule above.
+    rpc TranslatorCompileTranslate(TranslatorCompileTranslateRequest) returns (TranslatorCompileTranslateReply) {}
+    // TranslatorCompileLanguageDetect proxies the subprocess
+    // CompileLanguageDetect RPC: returns the system + user prompts the chain
+    // WOULD emit for the language-detection step. The system prompt uses the
+    // deliberately asymmetric "Recent chat:" label (translate uses "Recent
+    // chat for context:") — observable on the wire. Errors follow the
+    // in-band Translator* rule above.
+    rpc TranslatorCompileLanguageDetect(TranslatorCompileLanguageDetectRequest) returns (TranslatorCompileLanguageDetectReply) {}
+    rpc TranslatorQueueList(TranslatorQueueListRequest) returns (TranslatorQueueListReply) {}
+    rpc TranslatorQueueFlush(TranslatorQueueFlushRequest) returns (TranslatorQueueFlushReply) {}
 }
 
 message PingRequest {
@@ -822,8 +858,18 @@ message SendChatMessageReply {}
 message InjectChatMessageRequest {
     string platID = 1;
     chatwebhook.Event event = 2;
+    string listenerType = 3;
 }
 message InjectChatMessageReply {}
+
+message ReportChatHandlerActivityRequest {
+    string platID = 1;
+    string listenerType = 2;
+}
+message ReportChatHandlerActivityReply {}
+
+message ReportTranslatorActivityRequest {}
+message ReportTranslatorActivityReply {}
 
 message RemoveChatMessageRequest {
     string platID = 1;
@@ -862,15 +908,203 @@ message LLMGenerateReply {
     string response = 1;
 }
 
-message SetBuiltinChatListenerEnabledRequest {
-    string platID = 1;
-    bool enabled = 2;
-}
-message SetBuiltinChatListenerEnabledReply {}
+message TranslatorStatsRequest {}
 
-message IsBuiltinChatListenerEnabledRequest {
-    string platID = 1;
+message TranslatorProviderStats {
+    string name = 1;
+    int64 totalCalls = 2;
+    int64 totalSuccesses = 3;
+    int64 totalErrors = 4;
+    int64 totalTimeouts = 5;
+    int64 totalQueueRejections = 6;
+    int64 latencySumNanos = 7;
+    int64 latencyCount = 8;
 }
-message IsBuiltinChatListenerEnabledReply {
-    bool enabled = 1;
+
+// TranslationDispositionCounters is the streamd-side per-disposition
+// histogram. Sum of all 12 fields equals totalResolved on the parent
+// TranslatorStatsReply at quiescence (the partition invariant). See
+// pkg/streamd/translation_disposition.go for per-bucket semantics.
+message TranslationDispositionCounters {
+    int64 translated = 1;
+    int64 alreadyTarget = 2;
+    int64 detectFailed = 3;
+    int64 spellingOnly = 4;
+    int64 allProvidersFailed = 5;
+    int64 chainSkippedQueueFull = 6;
+    int64 abandonedOnDisable = 7;
+    int64 abandonedOnSubprocessDeath = 8;
+    int64 abandonedOnShutdown = 9;
+    int64 flushed = 10;
+    int64 leaked = 11;
+    int64 emptyOrSkipped = 12;
+}
+
+message TranslatorStatsReply {
+    bool running = 1;
+    int32 pid = 2;
+    string socketPath = 3;
+    int64 lastActivityUnixNano = 4;
+    uint32 queueLen = 10;
+    uint32 queueCap = 11;
+    int64 queueDrops = 12;
+    int64 totalTranslated = 20;
+    int64 totalAlreadyTarget = 21;
+    int64 totalDetectFailed = 22;
+    int64 totalSpellingOnly = 23;
+    int64 totalAllProvidersFailed = 24;
+    int64 totalSkippedQueueFull = 25;
+    int64 latencySumNanos = 26;
+    int64 latencyCount = 27;
+    repeated TranslatorProviderStats providers = 28;
+    // error follows the in-band semantics documented on the service: set
+    // when the streamd-side stats were assembled but the subprocess Stats
+    // RPC failed (queue counters still meaningful, SubprocessStats absent).
+    string error = 29;
+
+    // Single-disposition accounting:
+    //   totalOffered counts every event that reached enqueueTranslation.
+    //   totalEnqueued counts those that landed on the queue (successful
+    //     channel send). totalEnqueued - totalResolved == in-flight jobs.
+    //   totalResolved counts those whose Resolve has run (== sum of
+    //     dispositions at quiescence; mid-update Sum may lag by 1).
+    //   queueFullAtEnqueue + offeredWithTranslationDisabled are the two
+    //     outside-the-partition buckets that explain offered minus
+    //     enqueued.
+    int64 totalOffered = 30;
+    int64 totalResolved = 31;
+    int64 queueFullAtEnqueue = 32;
+    int64 offeredWithTranslationDisabled = 33;
+    TranslationDispositionCounters dispositions = 34;
+    int64 totalEnqueued = 35;
+}
+
+message TranslatorReloadRequest {}
+message TranslatorReloadReply {
+    bool applied = 1;
+    string error = 2;
+}
+
+message TranslatorEnableRequest {
+    string targetLanguage = 1;
+}
+message TranslatorEnableReply {
+    bool started = 1;
+    string error = 2;
+}
+
+message TranslatorDisableRequest {}
+message TranslatorDisableReply {
+    string error = 1;
+}
+
+message TranslatorRestartRequest {}
+message TranslatorRestartReply {
+    bool restarted = 1;
+    string error = 2;
+}
+
+message TranslatorClearHistoryRequest {}
+message TranslatorClearHistoryReply {
+    bool cleared = 1;
+    int32 droppedEntries = 2;
+    string error = 3;
+}
+
+// TranslatorTranslateTimings mirrors translator.TranslateTimings on the
+// streamd-facing surface so operators using `streamcli translator translate`
+// / `replay` can split a slow round-trip into model-load vs prompt-eval vs
+// generation. All fields independently optional. int64 matches latencyNanos
+// width.
+message TranslatorTranslateTimings {
+    optional int64 totalDurationNanos = 1;
+    optional int64 loadDurationNanos = 2;
+    optional int64 promptEvalDurationNanos = 3;
+    optional int64 evalDurationNanos = 4;
+    optional int64 promptEvalTokens = 5;
+    optional int64 evalTokens = 6;
+}
+
+message TranslatorTranslateRequest {
+    string user = 1;
+    string message = 2;
+}
+message TranslatorTranslateReply {
+    string result = 1;
+    string outcome = 2;
+    int64 latencyNanos = 3;
+    string error = 4;
+    // timings is the optional per-call backend timing/token breakdown from
+    // the provider that satisfied the call. Nil when the chain skipped or
+    // the provider does not populate it (e.g. OpenAI/Anthropic today).
+    optional TranslatorTranslateTimings timings = 5;
+}
+
+message TranslatorTranslateViaProviderRequest {
+    string user = 1;
+    string message = 2;
+    string provider_name = 3;
+}
+message TranslatorTranslateViaProviderReply {
+    string result = 1;
+    int64 latencyNanos = 2;
+    string error = 3;
+    // timings is the optional per-call backend timing/token breakdown from
+    // the named provider. Nil when the provider does not populate it.
+    optional TranslatorTranslateTimings timings = 4;
+}
+
+// TranslatorCompileTranslateRequest carries the same per-message fields a
+// real Translate would carry; the subprocess uses them to render the prompts
+// a Translate call would have produced.
+message TranslatorCompileTranslateRequest {
+    string user = 1;
+    string message = 2;
+}
+message TranslatorCompileTranslateReply {
+    string system_prompt = 1;
+    string user_prompt = 2;
+    string target_lang = 3;
+    // history_snapshot is the rendered string returned by the chain's
+    // formatHistory at RPC arrival time (held under historyMu) — flat
+    // "<user> message\n" lines, NOT a structured array.
+    string history_snapshot = 4;
+    string error = 5;
+}
+
+// TranslatorCompileLanguageDetectRequest carries only `message`; the
+// language-detect step has no per-message `user`. Asymmetric on purpose so
+// the request shape matches what the chain step actually consumes.
+message TranslatorCompileLanguageDetectRequest {
+    string message = 1;
+}
+message TranslatorCompileLanguageDetectReply {
+    string system_prompt = 1;
+    string user_prompt = 2;
+    string target_lang = 3;
+    // history_snapshot is the rendered string returned by the chain's
+    // formatHistory at RPC arrival time (held under historyMu) — flat
+    // "<user> message\n" lines, NOT a structured array.
+    string history_snapshot = 4;
+    string error = 5;
+}
+
+message TranslatorQueueEntry {
+    string id = 1;
+    string platform = 2;
+    string user = 3;
+    string message = 4;
+    int64 enqueuedAtUnixNano = 5;
+}
+
+message TranslatorQueueListRequest {}
+message TranslatorQueueListReply {
+    repeated TranslatorQueueEntry entries = 1;
+    string error = 2;
+}
+
+message TranslatorQueueFlushRequest {}
+message TranslatorQueueFlushReply {
+    int32 droppedEntries = 1;
+    string error = 2;
 }

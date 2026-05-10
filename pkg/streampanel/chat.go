@@ -37,6 +37,18 @@ type chatUIInterface interface {
 		ctx context.Context,
 		itemIdx int,
 	)
+	// Update is the in-place refresh path used when a previously-published
+	// message is re-published (e.g. the translation update from
+	// streamd/processChatMessageUpdate). The caller has already replaced
+	// MessagesHistory[idx] with msg; the implementation re-binds its UI
+	// segments to the new content. Implementations MUST NOT re-fire add-side
+	// notifications (sound, system notification, OnAdd callback) — those
+	// fired on the original Append.
+	Update(
+		ctx context.Context,
+		idx int,
+		msg api.ChatMessage,
+	)
 	GetTotalHeight(
 		ctx context.Context,
 	) float32
@@ -107,6 +119,16 @@ func (p *Panel) onReceiveMessage(
 ) {
 	logger.Tracef(ctx, "onReceiveMessage(ctx, %s)", spew.Sdump(msg))
 	defer func() { logger.Tracef(ctx, "/onReceiveMessage(ctx, %s)", spew.Sdump(msg)) }()
+
+	// Update path: an earlier publish carried the same (ID, Platform). Replace
+	// the stored entry and ask each chatUI to refresh its row in place. We
+	// MUST NOT re-fire the add-side notifications (sound, system notification,
+	// OnAdd) — those fired on the original Append.
+	if updateIdx := p.findExistingMessageIdx(ctx, msg); updateIdx >= 0 {
+		p.applyChatMessageUpdate(ctx, updateIdx, msg)
+		return
+	}
+
 	var prevLen int
 	var fullRefresh bool
 	for _, chatUI := range p.getChatUIs(ctx) {
@@ -182,6 +204,46 @@ func (p *Panel) onReceiveMessage(
 			}
 		})
 	})
+}
+
+// findExistingMessageIdx returns the index in MessagesHistory whose
+// (ID, Platform) pair matches msg, or -1 when no match exists. The (ID,
+// Platform) tuple is the identity, not ID alone — different platforms can
+// emit the same bare ID and must remain distinct.
+func (p *Panel) findExistingMessageIdx(
+	ctx context.Context,
+	msg api.ChatMessage,
+) int {
+	return xsync.DoR1(ctx, &p.MessagesHistoryLocker, func() int {
+		for i := range p.MessagesHistory {
+			if p.MessagesHistory[i].ID == msg.ID &&
+				p.MessagesHistory[i].Platform == msg.Platform {
+				return i
+			}
+		}
+		return -1
+	})
+}
+
+// applyChatMessageUpdate replaces MessagesHistory[idx] with msg under the
+// history lock and dispatches Update to every registered chatUI. The
+// notification side-effects (sound, system notification, OnAdd callback)
+// are intentionally skipped — those fired when the original message was
+// appended; firing them again on an in-place edit would double them.
+func (p *Panel) applyChatMessageUpdate(
+	ctx context.Context,
+	idx int,
+	msg api.ChatMessage,
+) {
+	p.MessagesHistoryLocker.Do(ctx, func() {
+		if idx < 0 || idx >= len(p.MessagesHistory) {
+			return
+		}
+		p.MessagesHistory[idx] = msg
+	})
+	for _, chatUI := range p.getChatUIs(ctx) {
+		chatUI.Update(ctx, idx, msg)
+	}
 }
 
 func (p *Panel) getPlatformCapabilities(

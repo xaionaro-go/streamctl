@@ -21,7 +21,6 @@ import (
 	"github.com/xaionaro-go/observability"
 	"github.com/xaionaro-go/player/pkg/player"
 	"github.com/xaionaro-go/streamctl/pkg/chatmessagesstorage"
-	llms "github.com/xaionaro-go/streamctl/pkg/llm"
 	"github.com/xaionaro-go/streamctl/pkg/p2p"
 	"github.com/xaionaro-go/streamctl/pkg/repository"
 	"github.com/xaionaro-go/streamctl/pkg/streamcontrol"
@@ -113,9 +112,73 @@ type StreamD struct {
 
 	obsRestarter *obsRestarter
 
-	llm        *llm
-	subtitler  *subtitler
-	translator *llms.TranslatorChain
+	llm       *llm
+	subtitler *subtitler
+
+	// runCtx is the daemon's lifetime context, captured at the top of
+	// Run(). RPC handlers that need to spawn long-lived background work
+	// (e.g. translator subprocess monitor) read this field explicitly
+	// and pass it as the lifeCtx parameter so the spawn outlives the
+	// request scope but still cancels on streamd shutdown. nil before
+	// Run() starts; any access from a code path reachable before Run
+	// must surface that as an error rather than silently fall back to a
+	// detached ctx — silent fallback was the regression 0022d11
+	// originally introduced when the lifeCtx parameter did not exist.
+	//
+	// Storing a context on a struct is normally an antipattern (see
+	// go-coding-style), but the rule targets request-scoped ctx
+	// smuggling. This field is the daemon's own lifetime ctx; callers
+	// reference it explicitly at the call site (no implicit smuggling
+	// inside helpers).
+	runCtx context.Context
+
+	// translatorLocker guards translatorSubprocess (registration, swap on
+	// restart, shutdown).
+	translatorLocker     sync.Mutex
+	translatorSubprocess *externalTranslator
+
+	// translationJobs is the bounded channel feeding the translation worker.
+	// nil when translation is disabled or not yet initialised; producers
+	// (enqueueTranslation) treat nil as "skip translation". A full channel
+	// also skips translation and increments translationWorkerQueueDrops so
+	// operators can correlate translation gaps with overload events.
+	//
+	// Channel carries *acceptedJob so each value owns a runtime-finalizer
+	// safety net for the single-disposition accounting model: every job the
+	// worker accepts must Resolve(disposition) exactly once before being
+	// garbage-collected.
+	translationJobs             chan *acceptedJob
+	translationWorkerQueueDrops atomic.Int64
+
+	// translationDispositions is the streamd-side ledger backing the
+	// single-disposition accounting model. Lazily allocated by
+	// setupTranslationWorker so the disabled-translation path keeps zero
+	// counters allocated. See pkg/streamd/translation_disposition.go.
+	translationDispositions *translationDispositionLedger
+
+	// disableInProgress is set by TranslatorDisable BEFORE
+	// stopTranslatorSubprocess and cleared after the disable reconcile is
+	// done. translateOneJob's nil-client / RPC-error branches read it to
+	// decide DispositionAbandonedOnDisable vs DispositionAbandonedOn-
+	// SubprocessDeath: an operator-driven disable must not be misread as a
+	// crash.
+	disableInProgress atomic.Bool
+
+	// translationQueueLocker guards translationQueueIndex. The index is a
+	// FIFO mirror of the contents of translationJobs maintained so that
+	// queue-inspection commands (TranslatorQueueList, TranslatorQueueFlush)
+	// can snapshot or drain the queue without ranging over the channel
+	// (which would consume jobs).
+	//
+	// Invariant: translationQueueIndex always reflects the jobs currently
+	// sitting in translationJobs, never lagging by more than one operation
+	// (the brief window between channel send and index append on enqueue,
+	// or between channel receive and index head-removal on dequeue). Drop
+	// path: when enqueueTranslation hits the select-default branch the
+	// index is NOT touched; when TranslatorQueueFlush drains the channel
+	// it clears the index in the same critical section.
+	translationQueueLocker sync.Mutex
+	translationQueueIndex  []*acceptedJob
 
 	lastShoutoutAtLocker sync.Mutex
 	lastShoutoutAt       map[config.ChatUserID]time.Time
@@ -123,12 +186,25 @@ type StreamD struct {
 	GRPCListenAddr string
 
 	externalChatHandlerLocker sync.Mutex
-	externalChatHandlers      map[chatHandlerKey]*externalChatHandler
+	externalChatHandlers      map[eventSource]*externalChatHandler
 
-	// injectedEventIDs is a dedup guard for InjectChatMessage. During Level 2
-	// transitions both built-in and external handlers may briefly overlap,
-	// producing duplicate events. Keys are EventIDs, values are insertion time.
-	injectedEventIDs xsync.Map[streamcontrol.EventID, time.Time]
+	// injectedEvents is the dedup guard for InjectChatMessage. Multiple
+	// PACE-tier listener subprocesses for the same platform can briefly
+	// emit the same logical chat message in different ID formats; the
+	// dedupKey collapses those onto a single entry (see
+	// computeDedupKey). Values are insertion time, used by
+	// runInjectedEventsCleanup to evict entries past injectedEventIDTTL.
+	injectedEvents xsync.Map[dedupKey, time.Time]
+
+	// contentFingerprintIndex maps content-fingerprint → *fpEntry, where
+	// each fpEntry holds a FIFO list of source-groups for that fingerprint.
+	// An emission links into the oldest group whose source-set does not yet
+	// contain the incoming (platform, listener-type) source; if every
+	// existing group already includes the source, a new group is opened
+	// (i.e., the emission is treated as a new logical event). The
+	// fingerprint includes Platform (see fingerprintEventForCollapse) so
+	// cross-platform same-content events do NOT collide here.
+	contentFingerprintIndex xsync.Map[string, *fpEntry]
 }
 
 type imageHash uint64
@@ -168,7 +244,7 @@ func New(
 		Options:              Options(options).Aggregate(),
 		ReadyChan:            make(chan struct{}),
 		lastShoutoutAt:       map[config.ChatUserID]time.Time{},
-		externalChatHandlers: map[chatHandlerKey]*externalChatHandler{},
+		externalChatHandlers: map[eventSource]*externalChatHandler{},
 	}
 
 	// TODO: move this to Run()
@@ -189,6 +265,12 @@ func (d *StreamD) Run(ctx context.Context) (_ret error) { // TODO: delete the fe
 	logger.Debugf(ctx, "StreamD.Run()")
 	defer func() { logger.Debugf(ctx, "/StreamD.Run(): %v", _ret) }()
 
+	// Publish the daemon-lifetime ctx so RPC-handler-spawned background
+	// work (e.g. translator subprocess monitor) can root itself on a ctx
+	// that survives a single request but still cancels on streamd
+	// shutdown. See StreamD.runCtx field doc.
+	d.runCtx = ctx
+
 	if !d.StreamServerLocker.ManualTryLock(ctx) {
 		return fmt.Errorf("somebody already locked StreamServerLocker")
 	}
@@ -202,6 +284,29 @@ func (d *StreamD) Run(ctx context.Context) (_ret error) { // TODO: delete the fe
 	err := d.secretsProviderUpdater(ctx)
 	if err != nil {
 		d.UI.DisplayError(fmt.Errorf("unable to initialize the secrets updater: %w", err))
+	}
+
+	// Translator init must run BEFORE EXPERIMENTAL_ReinitStreamControllers
+	// because that path launches reconcileChatListeners (in a detached
+	// goroutine) which spawns chat-listener subprocesses; those send
+	// InjectChatMessage which hands off to the translation worker. If the
+	// channel and the worker are not in place when the first call lands,
+	// translation is silently skipped for early messages.
+	//
+	// Order matters: setupTranslationWorker first so producers can land
+	// jobs, THEN spawn the subprocess and dial it. The worker tolerates a
+	// nil/closed conn — it snapshots the active conn under translatorLocker
+	// every iteration — but it cannot tolerate a missing channel.
+	// reconcileTranslator is the single gate: it reads
+	// d.Config.Translation.TargetLanguage, and on enabled it does
+	// setupTranslationWorker → StartTranslatorSubprocess → initTranslatorClient
+	// in the right order. Calling it at boot avoids duplicating the
+	// "translation enabled?" check in three different inner functions.
+	d.UI.SetStatus("Translator...")
+	// Boot-path: ctx IS the daemon-lifetime ctx (it's Run's own ctx),
+	// pass it as both the log ctx and the lifeCtx.
+	if err := d.reconcileTranslator(ctx, ctx); err != nil {
+		d.UI.DisplayError(fmt.Errorf("unable to initialize the translator: %w", err))
 	}
 
 	d.UI.SetStatus("Initializing streaming backends...")
@@ -235,6 +340,11 @@ func (d *StreamD) Run(ctx context.Context) (_ret error) { // TODO: delete the fe
 		d.UI.DisplayError(fmt.Errorf("unable to initialize the chat messages storage: %w", err))
 	}
 
+	d.UI.SetStatus("Chat dedup cleanup...")
+	if err := d.initInjectedEventsCleanup(ctx); err != nil {
+		d.UI.DisplayError(fmt.Errorf("unable to initialize the chat dedup cleanup: %w", err))
+	}
+
 	d.UI.SetStatus("OBS restarter...")
 	if err := d.initOBSRestarter(ctx); err != nil {
 		d.UI.DisplayError(fmt.Errorf("unable to initialize the OBS restarter: %w", err))
@@ -243,11 +353,6 @@ func (d *StreamD) Run(ctx context.Context) (_ret error) { // TODO: delete the fe
 	d.UI.SetStatus("LLMs...")
 	if err := d.initLLMs(ctx); err != nil {
 		d.UI.DisplayError(fmt.Errorf("unable to initialize the LLMs: %w", err))
-	}
-
-	d.UI.SetStatus("Translator...")
-	if err := d.initTranslator(ctx); err != nil {
-		d.UI.DisplayError(fmt.Errorf("unable to initialize the translator: %w", err))
 	}
 
 	d.UI.SetStatus("Subtitles...")

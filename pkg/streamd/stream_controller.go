@@ -247,7 +247,7 @@ func newYouTube(
 	yt, err := youtube.New(ctx, *platCfg,
 		func(c youtube.Config) error {
 			logger.Debugf(ctx, "saveCfgFunc")
-			defer logger.Debugf(ctx, "saveCfgFunc")
+			defer logger.Debugf(ctx, "/saveCfgFunc")
 			return saveCfgFunc(&streamcontrol.AbstractPlatformConfig{
 				Enable:                   c.Enable,
 				EnabledChatListenerTypes: c.EnabledChatListenerTypes,

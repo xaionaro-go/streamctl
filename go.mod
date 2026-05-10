@@ -39,8 +39,6 @@ replace github.com/RomainMichau/cloudscraper_go => github.com/xaionaro-go/clouds
 
 replace github.com/abhinavxd/youtube-live-chat-downloader/v2 => github.com/xaionaro-bot/youtube-live-chat-downloader/v2 v2.0.0-20260409235026-1b58dab3e403
 
-replace github.com/xaionaro-go/chatwebhook => github.com/xaionaro-bot/chatwebhook v0.0.0-20260409002539-2fa6c7129295
-
 require (
 	github.com/facebookincubator/go-belt v0.0.0-20250308011339-62fb7027b11f
 	github.com/go-git/go-billy/v5 v5.6.2
@@ -105,7 +103,7 @@ require (
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fredbi/uri v1.1.1 // indirect
 	github.com/friendsofgo/errors v0.9.2 // indirect
-	github.com/fsnotify/fsnotify v1.9.0 // indirect
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/fyne-io/gl-js v0.2.0 // indirect
 	github.com/fyne-io/glfw-js v0.3.0 // indirect
 	github.com/fyne-io/image v0.1.1 // indirect
@@ -239,12 +237,11 @@ require (
 	github.com/volatiletech/sqlboiler/v4 v4.16.2 // indirect
 	github.com/volatiletech/strmangle v0.0.6 // indirect
 	github.com/wlynxg/anet v0.0.6-0.20250109065809-5501d401a269 // indirect
-	github.com/xaionaro-go/androidetc v0.0.0-20250824193302-b7ecebb3b825 // indirect
-	github.com/xaionaro-go/avcommon v0.0.0-20250823173020-6a2bb1e1f59d // indirect
+	github.com/xaionaro-go/androidetc v0.0.0-20260428005202-900941e915dc // indirect
+	github.com/xaionaro-go/avcommon v0.0.0-20260429100510-04c3cc81dbad // indirect
 	github.com/xaionaro-go/avmediacodec v0.0.0-20250505012527-c819676502d8 // indirect
 	github.com/xaionaro-go/gorex v0.0.0-20241010205749-bcd59d639c4d // indirect
 	github.com/xaionaro-go/libsrt v0.0.0-20251231191024-483a9dd27df8 // indirect
-	github.com/xaionaro-go/ndk v0.0.0-20260309023337-691843bece17 // indirect
 	github.com/xaionaro-go/proxy v0.0.0-20250525144747-579f5a891c15 // indirect
 	github.com/xaionaro-go/spinlock v0.0.0-20200518175509-30e6d1ce68a1 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
@@ -322,8 +319,8 @@ require (
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
-	github.com/xaionaro-go/audio v0.0.0-20260202195702-429dcb87c05c
-	github.com/xaionaro-go/avpipeline v0.0.0-20260426192150-5efc31d8d8a3
+	github.com/xaionaro-go/audio v0.0.0-20260429100547-5ed907afeef0
+	github.com/xaionaro-go/avpipeline v0.0.0-20260429111240-c2ff41c0205c
 	github.com/xaionaro-go/buildvars v0.0.0-20250111161425-ed39f98139d0
 	github.com/xaionaro-go/datacounter v1.0.4
 	github.com/xaionaro-go/go-rtmp v0.0.0-20241009130244-1e3160f27f42
@@ -337,7 +334,7 @@ require (
 	github.com/xaionaro-go/obs-grpc-proxy v0.0.0-20241018162120-5faf4e7a684a
 	github.com/xaionaro-go/observability v0.0.0-20251102143534-3aeb2a25e57d
 	github.com/xaionaro-go/player v0.0.0-20260202200119-7935ded39620
-	github.com/xaionaro-go/recoder v0.0.0-20260426170850-173ba0855eab
+	github.com/xaionaro-go/recoder v0.0.0-20260429111414-86e02757f39a
 	github.com/xaionaro-go/secret v0.0.0-20250111141743-ced12e1082c2
 	github.com/xaionaro-go/serializable v0.0.0-20250412140540-5ac572306599
 	github.com/xaionaro-go/timeapiio v0.0.0-20240915203246-b907cf699af3
@@ -348,8 +345,8 @@ require (
 	github.com/xaionaro-go/xgrpc v0.0.0-20251102160837-04b13583739a
 	github.com/xaionaro-go/xlogrus v0.0.0-20250111150201-60557109545a
 	github.com/xaionaro-go/xpath v0.0.0-20260426170210-a0fce9eae3ad
-	github.com/xaionaro-go/xsync v0.0.0-20260103200624-2cd14b984747
-	github.com/xaionaro-go/youtubeapiproxy v0.0.0-20260426192456-ea3ce105c528
+	github.com/xaionaro-go/xsync v0.0.0-20260429100516-ddc6f6c4502b
+	github.com/xaionaro-go/youtubeapiproxy v0.0.0-20260429100455-2c932a299da5
 	github.com/yutopp/go-flv v0.3.1
 	golang.org/x/crypto v0.49.0
 	golang.org/x/sys v0.42.0
@@ -397,5 +394,5 @@ require (
 	github.com/pion/turn/v2 v2.1.6 // indirect
 	github.com/pion/webrtc/v3 v3.3.0 // indirect
 	github.com/tiendc/go-deepcopy v1.5.2
-	github.com/xaionaro-go/chatwebhook v0.0.0-20251102210754-fc155de0d2a9
+	github.com/xaionaro-go/chatwebhook v0.0.0-20260429100556-dbf2ae9ea604
 )

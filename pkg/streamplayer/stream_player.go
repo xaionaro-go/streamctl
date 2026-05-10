@@ -1062,7 +1062,7 @@ func (p *StreamPlayerHandler) controllerLoop(
 			logger.Logf(ctx, traceLogLevel, "StreamPlayer[%s].controllerLoop: speed == %v; lag == %v; protocol == %v; jitterBuf == %v", p.StreamID, curSpeed, lag, protocol, p.CurrentJitterBufDuration)
 
 			// [ lag < jitBuf ]
-			if enableSlowDown && protocol == streamtypes.ServerTypeRTMP && lag < p.CurrentJitterBufDuration {
+			if enableSlowDown && lag < p.CurrentJitterBufDuration {
 				if !stalling {
 					jitterBufDurationIncreaseNew := p.CurrentJitterBufDuration/2 - lag
 					if jitterBufDurationIncreaseNew < jitterBufDurationIncrease {
